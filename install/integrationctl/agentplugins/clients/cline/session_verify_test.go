@@ -315,3 +315,9 @@ func TestSessionNativeInventoryCancellationDuringFinalSourceRead(t *testing.T) {
 		t.Fatal("final source-read cancellation changed original source bytes or mode", err)
 	}
 }
+
+func (file cancelNativeSourceOnRead) ReadNoFollowBounded(path string, limit int64) ([]byte, os.FileMode, bool, error) {
+	file.cancel()
+	snapshot, err := nativeconfig.New().ReadExactFileBounded(path, limit)
+	return snapshot.Body, snapshot.Mode, snapshot.Exists, err
+}

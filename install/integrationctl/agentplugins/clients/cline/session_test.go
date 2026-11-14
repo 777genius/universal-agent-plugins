@@ -185,3 +185,12 @@ func TestSessionWholeFileRefusesForeignDisabledAndMalformedMembers(t *testing.T)
 		}
 	}
 }
+
+func (files *sessionReadIO) ReadNoFollowBounded(path string, limit int64) ([]byte, os.FileMode, bool, error) {
+	files.reads++
+	if files.beforeRead != nil {
+		files.beforeRead(files.reads)
+	}
+	file, err := nativeconfig.New().ReadExactFileBounded(path, limit)
+	return file.Body, file.Mode, file.Exists, err
+}

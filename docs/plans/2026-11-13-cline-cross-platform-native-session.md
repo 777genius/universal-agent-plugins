@@ -305,3 +305,68 @@ bridge boundary. The corrected contracts retain legal update, appended repair
 receipts and unchanged cold-marker controls. These are consumer checks, not new
 native acceptance; the Cline tools/call, authentication and model boundaries are
 unchanged.
+
+## 2026-11-14 — bounded reads of the original selected source (source review candidate)
+
+The candidate is based on `9278aed97af3278cc50f6423bea9bb738e5354c3`.
+It retains the peer's missing-FileIO refusal and regression from `4162c225`,
+the three platform metadata openers from `deadb577`, and the complete
+existing cancellation, inventory and foreign-byte tests. This is a source
+candidate; it has not been executed or published to the branch.
+
+The approved R1 is limited to ten paths: a bounded-reader implementation and
+focused tests in the existing nativeconfig owner; the existing Cline verifier;
+two private source/ancestry helpers and two focused test files; explicit bounded
+delegation on the two existing test readers; and this plan. The FileIO interface,
+persisted state and receipt schemas, native argv, consent boundary and other
+clients' reader behavior are unchanged.
+
+An optional `ReadNoFollowBounded` capability must be supplied by custom FileIO.
+Missing FileIO retains its original error before pathname access; an unsupported
+custom bounded reader also refuses before pathname access. There is no fallback
+to the unbounded method or to a default OS reader. The default implementation
+uses `atomicfile.ReadBoundedRegularFile` and joins original/final identity,
+mode, extent and mtime to return a consistent snapshot. Returned custom bytes are
+bounded, checked and copied.
+
+Cline starts one 30-second context before acquisition. It retains the original
+no-follow metadata handle and a readable handle for the same regular leaf,
+together with the complete original logical and resolved ancestor chains.
+Existing aliases are recorded rather than globally forbidden. Every named,
+rooted and held observation rejoins the original identity. The immediate parent
+keeps the peer's size/mtime checks; other ancestors retain identity and mode,
+without treating unrelated changes to their directory contents as ownership.
+The readable leaf is opened through the existing rooted, nonblocking atomicfile
+primitive. At most 1 MiB is read, and its exact bytes/mode are independently
+joined to the explicitly supplied bounded FileIO snapshot and the plan digest.
+
+Directory roots use an explicit terminal separator plus dot. This is grounded
+in the pinned Go 1.26.11 primary sources: root.go
+`80e655e4fbdac22c4cc2df31044cd9e4e594a4cb` preserves the final dot;
+root_openat.go `ee786176ce1fb66935f78a7ae87db365d8085619` traverses
+nonterminal components with rootOpenDir; root_unix.go
+`36db082e4f36d83b47cdb8d35d7ef8895f788ba5` uses O_DIRECTORY for
+that traversal, while root_windows.go
+`2c156bc63ac4eb5e892e43bdb839f9e066b91dd7` uses directory opens.
+The unchanged peer metadata openers remain in use. This does not opt Cline into
+the unqualified directoryidentity P1/UUID authority and does not add a lock.
+
+Ten new regression methods cover actual bounded OS snapshots, unsupported custom
+readers, inconsistent custom results and copied bytes, a supplied snapshot that
+disagrees with the actual held file, same-byte/same-mode/same-mtime replacement,
+a replacement ancestor retaining the original parent and file, and real FIFO
+substitution at directory acquisition plus rooted FIFO leaf refusal. The FIFO
+tests release only their own fixture FIFO if a blocking regression occurs.
+Existing real read1/read2 cancellation hooks delegate directly to the bounded
+owner method and remain meaningful. No native client is invoked by these unit
+fixtures.
+
+This remains ordinary cooperating-user execution. It does not atomically fence
+an arbitrary same-user writer between revalidation and the native client's own
+pathname open. No repair, restore, new trust, automatic approval, model call or
+qualification promotion is added. Close failures and cancellation still refuse.
+
+Local Go, gofmt, lint and regression execution are UNEXECUTED because the executor
+is unavailable. The older c605 managed results retain that original source;
+they do not qualify these changes. Independent source R2, actual current-source
+tests and all three native platforms remain required before final acceptance.
