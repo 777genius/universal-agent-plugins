@@ -114,6 +114,22 @@ def require_server_call(events, *, nonce, started, ended):
             "nonce": nonce, "method": "tools/call", "sessions_observed": len(sessions)}
 
 
+def fresh_native_model_events(before, after, *, nonce):
+    """Separate read-only prior inventories from the genuine selected model turn.
+
+    A pre-model call is never qualified. Original bytes must be an exact
+    prefix, and the model suffix must itself contain a fresh session with
+    initialize/list/call. The full unmodified log is retained for audit.
+    """
+    if type(nonce) is not str or not NONCE.fullmatch(nonce):
+        raise ValueError("invalid event nonce")
+    previous, complete = read_events(before), read_events(after)
+    if (any(row["nonce"] != nonce or row["method"] == "tools/call" for row in previous)
+            or not after.startswith(before) or len(complete) < len(previous)):
+        raise ValueError("stale/changed or pre-model MCP call evidence")
+    return after[len(before):]
+
+
 def require_unchanged_after_negative(before, after):
     """Prove no new events in a separate *already executed* native negative case.
 

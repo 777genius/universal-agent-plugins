@@ -19,7 +19,7 @@ import tempfile
 import project_native_research as native
 from native_client_research import run_probe
 from project_native_missing_call_proof import (
-    require_server_call, require_unchanged_after_negative,
+    require_server_call, require_unchanged_after_negative, fresh_native_model_events,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -377,6 +377,9 @@ def run(client, output, expected, *, preflight_only=False):
             print(client + ": source-built UAP and native MCP listing/removal verified; tools/call NOT qualified")
             return
 
+        # Discovery may have initialized the server before the model starts;
+        # retain those original bytes but never count them as model evidence.
+        before_model_events = events.read_bytes() if events.is_file() else b""
         start = utc()
         # Authorization is passed only to selected genuine agent sessions,
         # never to source builds, public UAP commands, or native inventories.
@@ -391,9 +394,10 @@ def run(client, output, expected, *, preflight_only=False):
         if server_only.encode() not in answer:
             raise ValueError("native model response did not carry server-only result")
         log = events.read_bytes() if events.is_file() else b""
-        observed = require_server_call(log, nonce=nonce, started=start, ended=end)
+        fresh_log = fresh_native_model_events(before_model_events, log, nonce=nonce)
+        observed = require_server_call(fresh_log, nonce=nonce, started=start, ended=end)
         from project_native_missing_call_proof import read_events
-        calls = [event["facts"] for event in read_events(log) if event["method"] == "tools/call"]
+        calls = [event["facts"] for event in read_events(fresh_log) if event["method"] == "tools/call"]
         if (len(calls) != 1 or calls[0].get("literal") != server_only
                 or calls[0].get("plugin_root") != str(selected_root)
                 or calls[0].get("revision") != "call-a"):
@@ -441,6 +445,8 @@ def run(client, output, expected, *, preflight_only=False):
             "original_vendor_archive_sha256": acquisition["sha256"],
             "server": server, "nonce": nonce,
             "server_events_sha256": digest(log),
+            "pre_model_readonly_events_bytes": len(before_model_events),
+            "model_events_sha256": digest(fresh_log),
             "server_call": observed,
             "client_model_returned_private_server_literal": True,
             "selected_project_a_uap_installed": True,

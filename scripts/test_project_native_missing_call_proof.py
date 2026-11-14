@@ -104,6 +104,26 @@ class NativeMissingCallProofTest(unittest.TestCase):
         rows[1] = {**rows[1], "facts": {"nonce": NONCE}}
         self.reject(rows)
 
+    def test_pre_model_inventory_never_counts_as_selected_model_call(self):
+        from project_native_missing_call_proof import fresh_native_model_events
+        # An already-listed server is permitted but cannot satisfy a new
+        # model session's required initialize -> list -> exactly-one call.
+        earlier = raw([row("initialize", pid=711, session="711-12345"),
+                       row("tools/list", pid=711, session="711-12345", sec=2)])
+        later = raw([dict(value, timestamp=(START + timedelta(seconds=i)).isoformat().replace("+00:00", "Z"))
+                     for i, value in enumerate(successful(), 3)])
+        self.assertEqual(fresh_native_model_events(earlier, earlier + later, nonce=NONCE), later)
+        self.assertEqual(require_server_call(later, nonce=NONCE, started=START, ended=END)["server_pid"], 712)
+        with self.assertRaises(ValueError):
+            fresh_native_model_events(earlier + later, earlier + later, nonce=NONCE)
+        with self.assertRaises(ValueError):
+            fresh_native_model_events(earlier, later, nonce=NONCE)
+        with self.assertRaises(ValueError):
+            fresh_native_model_events(earlier, earlier + later, nonce="b" * 32)
+        with self.assertRaises(ValueError):
+            require_server_call(fresh_native_model_events(earlier, earlier, nonce=NONCE),
+                                nonce=NONCE, started=START, ended=END)
+
     def test_failed_negative_control_refused(self):
         before = raw(successful())
         require_unchanged_after_negative(before, before)
