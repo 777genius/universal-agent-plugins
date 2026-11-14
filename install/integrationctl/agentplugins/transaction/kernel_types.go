@@ -55,6 +55,10 @@ type StateStore interface {
 
 type DirectoryMutation struct {
 	PublicationParentAuthority *domain.ProfileAuthority
+	// ExpectedPublication seals the original staged objects before releasing
+	// a descendant handle for a fresh standalone publication. It is transient;
+	// the directory journal retains the corresponding versioned proof.
+	ExpectedPublication dirswap.PreparedPublication
 	// Standalone retains an auxiliary directory receipt independently of the
 	// package binding. Only fresh publication is allowed; it never replaces a
 	// package or changes its materialization/native ownership.

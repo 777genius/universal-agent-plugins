@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"runtime"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"golang.org/x/sys/windows"
@@ -123,8 +122,16 @@ func sessionTokenOwnerSID(body []byte) (*windows.SID, error) {
 		value += fmt.Sprintf("-%d", binary.LittleEndian.Uint32(sid[8+4*index:]))
 	}
 	owner, err := windows.StringToSid(value)
-	if err != nil || !owner.IsValid() || !strings.EqualFold(owner.String(), value) {
+	if err != nil || owner == nil || !owner.IsValid() || owner.Len() != 8+4*count {
 		return nil, errors.Join(fmt.Errorf("hermes token default owner did not round-trip"), err)
+	}
+	if owner.IdentifierAuthority().Value != [6]byte(sid[2:8]) || int(owner.SubAuthorityCount()) != count {
+		return nil, fmt.Errorf("hermes token default owner components differ")
+	}
+	for index := range count {
+		if owner.SubAuthority(uint32(index)) != binary.LittleEndian.Uint32(sid[8+4*index:]) {
+			return nil, fmt.Errorf("hermes token default owner sub-authority differs")
+		}
 	}
 	return owner, nil
 }

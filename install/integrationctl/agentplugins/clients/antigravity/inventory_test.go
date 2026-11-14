@@ -443,3 +443,38 @@ func TestInventoryInitialPrerequisiteFallbackNeverSwallowsCancellation(t *testin
 		t.Fatal("initial missing-config fallback swallowed cancellation", err, runner.calls)
 	}
 }
+
+func TestInventoryUserRegistryLayoutPreservesSelectionWithoutInventingProvenance(t *testing.T) {
+	for _, provenance := range []string{"original", "absent", "foreign"} {
+		t.Run(provenance, func(t *testing.T) {
+			req, env, runner := inventoryFixture(t)
+			if provenance == "absent" {
+				req.Client.NativeConfigRoot = ""
+			}
+			if provenance == "foreign" {
+				req.Client.NativeConfigRoot = filepath.Join(t.TempDir(), ".gemini", "config")
+			}
+			beforeRoot, beforeNativeRoot := req.Client.ConfigRoot, req.Client.NativeConfigRoot
+			layout, ok := any(New()).(clients.UserNativeRegistryLayout)
+			if !ok || layout.UserNativeRegistry(req.Client) != beforeRoot || req.Client.NativeConfigRoot != beforeNativeRoot {
+				t.Fatal("User layout changed selection or invented original profile provenance")
+			}
+			req.VerifyOnly = true
+			if available := New().VerifierAvailable(req.Client, req.Plan, req.BackendExecutable); available != (provenance == "original") {
+				t.Fatal("User layout alone granted inventory authority", provenance, available)
+			}
+			outcome, err := New().Activate(t.Context(), env, req)
+			calls := 0
+			if provenance == "original" {
+				calls = 2
+			}
+			if err != nil || len(runner.calls) != calls || outcome.Activation != domain.ActivationPrepared ||
+				outcome.ActivationAttested || outcome.AuthenticationAttested {
+				t.Fatal("profile provenance changed read-only inventory qualification", outcome, err, runner.calls)
+			}
+			if provenance != "original" && strings.Contains(strings.Join(outcome.UserActions, " "), "enabled in CLI inventory") {
+				t.Fatal("unqualified profile manufactured native observation", outcome)
+			}
+		})
+	}
+}

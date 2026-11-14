@@ -21,6 +21,9 @@ func TestProjectRootMovedPreparedStageRetainsOwnedMarker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := prepared.sealForPublication(); err != nil {
+		t.Fatal(err)
+	}
 	moved := prepared.staging + "-moved"
 	if err := os.Rename(prepared.staging, moved); err != nil {
 		t.Fatal(err)

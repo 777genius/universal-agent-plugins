@@ -12,6 +12,9 @@ import (
 )
 
 func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutation) (domain.MutationReceipt, error) {
+	if err := validateExpectedPublication(mutation); err != nil {
+		return domain.MutationReceipt{}, err
+	}
 	mutation.PublicationParentAuthority = domain.CloneProfileAuthority(mutation.PublicationParentAuthority)
 	owners, err := kernel.mutationOwners(ctx, mutation.DesiredState, []DirectoryMutation{mutation})
 	if err != nil {
@@ -50,7 +53,8 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	if err != nil {
 		return domain.MutationReceipt{}, err
 	}
-	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{PublicationParentAuthority: parentAuthority, EnvironmentID: environmentID(mutation.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
+	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{PublicationParentAuthority: parentAuthority, ExpectedPublication: mutation.ExpectedPublication,
+		EnvironmentID: environmentID(mutation.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
 		OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
 		OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
 		RequireAbsent: mutation.RequireAbsent, VerifyActive: mutation.VerifyBefore,
@@ -109,6 +113,11 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 }
 
 func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGroup) ([]domain.MutationReceipt, error) {
+	for _, mutation := range group.Mutations {
+		if !mutation.ExpectedPublication.IsZero() {
+			return nil, fmt.Errorf("original publication proof cannot join a package group")
+		}
+	}
 	owners, err := kernel.mutationOwners(ctx, group.DesiredState, group.Mutations)
 	if err != nil {
 		return nil, err

@@ -127,3 +127,82 @@ func TestProjectSessionWindowsFreshHeldObjectsUseTokenOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestProjectSessionWindowsOwnerDecoderPreservesNumericComponents(t *testing.T) {
+	const header = strconv.IntSize / 8
+	for _, test := range []struct {
+		name      string
+		authority [6]byte
+		sub       []uint32
+	}{
+		{"authority-zero", [6]byte{}, []uint32{0}},
+		{"authority-decimal-max", [6]byte{0, 0, 255, 255, 255, 255}, []uint32{^uint32(0)}},
+		{"authority-hex-min", [6]byte{0, 1, 0, 0, 0, 0}, []uint32{0, ^uint32(0)}},
+		{"authority-max", [6]byte{255, 255, 255, 255, 255, 255}, []uint32{1, ^uint32(0)}},
+		{"subauthority-count-max", [6]byte{0, 0, 0, 0, 0, 5}, []uint32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, ^uint32(0)}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			body := make([]byte, header+8+4*len(test.sub))
+			var pinned runtime.Pinner
+			pinned.Pin(&body[0])
+			defer pinned.Unpin()
+			selected := uint64(reflect.ValueOf(body).Pointer()) + header
+			if header == 8 {
+				binary.LittleEndian.PutUint64(body[:header], selected)
+			} else {
+				binary.LittleEndian.PutUint32(body[:header], uint32(selected))
+			}
+			sid := body[header:]
+			sid[0], sid[1] = 1, byte(len(test.sub))
+			copy(sid[2:8], test.authority[:])
+			for index, value := range test.sub {
+				binary.LittleEndian.PutUint32(sid[8+4*index:], value)
+			}
+			owner, err := sessionTokenOwnerSID(body)
+			if err != nil || owner == nil || !owner.IsValid() || owner.Len() != len(sid) {
+				t.Fatalf("numeric owner did not round-trip: %v", err)
+			}
+			if owner.IdentifierAuthority().Value != test.authority || int(owner.SubAuthorityCount()) != len(test.sub) {
+				t.Fatal("numeric authority or count changed")
+			}
+			for index, want := range test.sub {
+				if owner.SubAuthority(uint32(index)) != want {
+					t.Fatalf("sub-authority %d changed", index)
+				}
+			}
+		})
+	}
+}
+
+func TestProjectSessionWindowsTokenOwnerRejectsUnreturnedSubauthority(t *testing.T) {
+	const header = strconv.IntSize / 8
+	queries := 0
+	_, err := sessionTokenDefaultOwner(0, func(_ windows.Token, class uint32, output *byte, capacity uint32, size *uint32) error {
+		queries++
+		if class != windows.TokenOwner {
+			t.Fatalf("queried token class %d", class)
+		}
+		*size = uint32(header + 12)
+		if output == nil {
+			return windows.ERROR_INSUFFICIENT_BUFFER
+		}
+		if capacity != *size {
+			t.Fatal("unexpected allocated extent")
+		}
+		body := unsafe.Slice(output, capacity)
+		selected := uint64(reflect.ValueOf(body).Pointer()) + header
+		if header == 8 {
+			binary.LittleEndian.PutUint64(body[:header], selected)
+		} else {
+			binary.LittleEndian.PutUint32(body[:header], uint32(selected))
+		}
+		sid := body[header:]
+		sid[0], sid[1], sid[7] = 1, 1, 5
+		binary.LittleEndian.PutUint32(sid[8:], 32)
+		*size = uint32(header + 8)
+		return nil
+	})
+	if err == nil || queries != 2 {
+		t.Fatalf("adopted allocated bytes outside returned extent: %v", err)
+	}
+}

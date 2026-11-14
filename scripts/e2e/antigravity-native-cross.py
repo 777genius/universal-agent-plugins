@@ -1333,23 +1333,87 @@ def admission_contracts():
                 with self.subTest(kind=kind), self.assertRaises(AssertionError):
                     public_user_result(json.dumps(changed), observed=True)
 
-        def test_public_cold_doctor_refuses_mutation_or_false_health(self):
-            data = {"read_only": True, "installation_count": 1, "open_operation_count": 0,
-                    "clients": [{"client_id": "antigravity", "status": "detected"}],
-                    "findings": [{"status": "degraded", "code": "activation_pending"}]}
-            packet = {"schema_version": 1, "command": "doctor", "result": "success", "data": data}
-            self.assertEqual(public_user_doctor_result(json.dumps(packet).encode()), data)
-            for name in ("command", "result", "read_only", "count", "open", "client", "drift"):
+        def test_public_cold_repair_joins_exact_saved_identity_and_native_observation(self):
+            installed = {"installation_id": "owned-installation"}
+            revision = {"version": "1.0.0", "tree_digest": "sha256:" + "a" * 64, "resolved_revision": "b" * 40}
+            binding = {"client_binding_id": "owned-binding", "client_id": "antigravity", "scope": "user",
+                       "activation": "prepared", "verification": "installation_verified", "authentication": "not_checked",
+                       "package_revision": revision}
+            pin = {"alias": "uap-cline-public-probe", "version": revision["version"], "tree_digest": revision["tree_digest"],
+                   "source": {"git": {"commit": revision["resolved_revision"]}}}
+            action = {"from_version": "1.0.0", "to_version": "1.0.0", "from_revision": "b" * 40,
+                      "from_digest": "sha256:" + "a" * 64, "component_support": [
+                          {"kind": "mcp_server", "name": "uap_public_probe", "support": "native"}],
+                      "alias": "uap-cline-public-probe", "client_id": "antigravity", "installation_id": "owned-installation",
+                      "binding_id": "owned-binding", "action": "repair", "package_digest": "sha256:" + "a" * 64, "revision": "b" * 40}
+            outcome = {"installation_id": "owned-installation", "client_id": "antigravity", "operation": "repair",
+                       "outcome": "unchanged", "manual_actions": [
+                           "The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading"]}
+            packet = {"schema_version": 1, "command": "agentplugins repair", "result": "success", "outcome": "completed",
+                      "actions": [action], "results": [outcome], "scope": "user", "scope_selection_reason": "explicit"}
+            self.assertEqual(public_user_cold_repair_result(json.dumps(packet).encode(), installed, binding, pin), packet)
+            # Synthetic mutations exercise the exact public DTO schema. They are not native evidence.
+            for name in ("command", "failure", "partial", "project", "inferred", "boolean-schema", "float-schema",
+                         "missing", "extra", "doctor-data", "duplicate-action", "duplicate-result", "action-iid",
+                         "result-iid", "binding", "alias", "client", "from-version", "to-version", "from-revision",
+                         "revision", "from-digest", "digest", "operation", "changed", "missing-observation",
+                         "disabled", "absent", "unknown-finding", "empty-finding", "reason", "next-action",
+                         "component-kind", "component-name", "component-support", "component-extra"):
                 changed = json.loads(json.dumps(packet))
-                if name == "command": changed["command"] = "add"
-                elif name == "result": changed["result"] = "failure"
-                elif name == "read_only": changed["data"]["read_only"] = False
-                elif name == "count": changed["data"]["installation_count"] = 0
-                elif name == "open": changed["data"]["open_operation_count"] = 1
-                elif name == "client": changed["data"]["clients"] = []
-                else: changed["data"]["findings"] = [{"status": "degraded", "code": "managed_directory_changed"}]
+                row, result = changed["actions"][0], changed["results"][0]
+                if name == "command": changed["command"] = "doctor"
+                elif name == "failure": changed["result"] = "failure"
+                elif name == "partial": changed["outcome"] = "partial"
+                elif name == "project": changed["scope"] = "project"
+                elif name == "inferred": changed["scope_selection_reason"] = "default"
+                elif name == "boolean-schema": changed["schema_version"] = True
+                elif name == "float-schema": changed["schema_version"] = 1.0
+                elif name == "missing": changed.pop("outcome")
+                elif name == "extra": changed["unknown"] = True
+                elif name == "doctor-data": changed["data"] = {"read_only": True, "installation_count": 1}
+                elif name == "duplicate-action": changed["actions"].append(dict(row))
+                elif name == "duplicate-result": changed["results"].append(dict(result))
+                elif name == "action-iid": row["installation_id"] = "foreign"
+                elif name == "result-iid": result["installation_id"] = "foreign"
+                elif name == "binding": row["binding_id"] = "foreign"
+                elif name == "alias": row["alias"] = "foreign"
+                elif name == "client": result["client_id"] = "cline"
+                elif name == "from-version": row["from_version"] = "2.0.0"
+                elif name == "to-version": row["to_version"] = "2.0.0"
+                elif name == "from-revision": row["from_revision"] = "c" * 40
+                elif name == "revision": row["revision"] = "c" * 40
+                elif name == "from-digest": row["from_digest"] = "sha256:" + "c" * 64
+                elif name == "digest": row["package_digest"] = "sha256:" + "c" * 64
+                elif name == "operation": result["operation"] = "add"
+                elif name == "changed": result["outcome"] = "changed"
+                elif name == "missing-observation": result["manual_actions"] = []
+                elif name == "disabled": result["manual_actions"] = ["The selected User plugin remains disabled; decide whether to enable it in Antigravity"]
+                elif name == "absent": result["manual_actions"] = ["The exact UAP-owned plugin is absent from native User inventory; inspect it in Antigravity"]
+                elif name == "unknown-finding": result["manual_actions"] = ["native_projection_not_checked"]
+                elif name == "empty-finding": result["manual_actions"] = [{}]
+                elif name == "reason": result["reason"] = "not checked"
+                elif name == "next-action": result["next_actions"] = [{"kind": "authenticate"}]
+                elif name == "component-kind": row["component_support"][0]["kind"] = "skill"
+                elif name == "component-name": row["component_support"][0]["name"] = "foreign"
+                elif name == "component-support": row["component_support"][0]["support"] = "projected"
+                else: row["component_support"][0]["unknown"] = True
                 with self.subTest(name=name), self.assertRaises(AssertionError):
-                    public_user_doctor_result(json.dumps(changed).encode())
+                    public_user_cold_repair_result(json.dumps(changed).encode(), installed, binding, pin)
+            for findings in ([], [{}], [{"code": "native_projection_not_checked"}], [{"code": "activation_pending"}]):
+                doctor = {"schema_version": 1, "command": "doctor", "result": "success", "data": {
+                    "read_only": True, "installation_count": 1, "open_operation_count": 0,
+                    "clients": [{"client_id": "antigravity", "status": "detected"}], "findings": findings}}
+                with self.subTest(doctor=findings), self.assertRaises(AssertionError):
+                    public_user_cold_repair_result(json.dumps(doctor).encode(), installed, binding, pin)
+            for key, value in (("scope", "project"), ("activation", "active"), ("verification", "not_checked"),
+                               ("authentication", "complete")):
+                changed = dict(binding, **{key: value})
+                with self.subTest(binding=key), self.assertRaises(AssertionError):
+                    public_user_cold_repair_result(json.dumps(packet).encode(), installed, changed, pin)
+            for raw in (b"null", b"[]", json.dumps(packet).encode() + b"{}",
+                        json.dumps(packet).replace('"schema_version": 1', '"schema_version": 1, "schema_version": 1').encode()):
+                with self.subTest(raw=raw[:32]), self.assertRaises((AssertionError, ValueError)):
+                    public_user_cold_repair_result(raw, installed, binding, pin)
 
         def test_public_user_state_replacement_after_real_read_refuses(self):
             with tempfile.TemporaryDirectory() as temporary:
@@ -2133,26 +2197,39 @@ def public_user_result(body, *, observed=False, enabled=True):
 
 
 
-def public_user_doctor_result(body):
-    """Admit read-only cold inspection, never imperative mutation of an environment-owned binding."""
+def public_user_cold_repair_result(body, installed, binding, pin):
+    """Join the fixed saved-owner repair DTO to the already held cold identity."""
     envelope = closed_config(body, limit=1 << 20)
-    if (type(envelope.get("schema_version")) is not int or envelope["schema_version"] != 1
-            or envelope.get("command") != "doctor" or envelope.get("result") != "success"
-            or type(envelope.get("data")) is not dict):
-        raise AssertionError("Cold observation is not a successful read-only doctor response")
-    data = envelope["data"]
-    clients, findings = data.get("clients"), data.get("findings")
-    if (data.get("read_only") is not True
-            or type(data.get("installation_count")) is not int or data["installation_count"] != 1
-            or type(data.get("open_operation_count")) is not int or data["open_operation_count"] != 0
-            or type(clients) is not list or not any(type(row) is dict and row.get("client_id") == "antigravity" for row in clients)
-            or type(findings) is not list):
-        raise AssertionError("Cold doctor did not inspect exactly one owned User installation")
-    unsafe = {"open_recovery_operations", "managed_directory_changed", "managed_target_mismatch",
-              "managed_integrity_check_failed", "native_projection_changed"}
-    if any(type(row) is not dict or row.get("code") in unsafe for row in findings):
-        raise AssertionError("Cold doctor reported managed-state drift or unreadable findings")
-    return data
+    try:
+        revision = binding["package_revision"]
+        installation_id, binding_id = installed["installation_id"], binding["client_binding_id"]
+        version, digest, commit, alias = pin["version"], pin["tree_digest"], pin["source"]["git"]["commit"], pin["alias"]
+        if (binding["client_id"] != "antigravity" or binding["scope"] != "user"
+                or binding["activation"] != "prepared" or binding["verification"] != "installation_verified"
+                or binding["authentication"] != "not_checked"
+                or revision["version"] != version or revision["tree_digest"] != digest or revision["resolved_revision"] != commit):
+            raise AssertionError("Cold repair changed the recorded Prepared User identity")
+    except (KeyError, TypeError):
+        raise AssertionError("Cold repair lacks the recorded source/binding identity") from None
+    if not all(type(value) is str and value for value in (installation_id, binding_id, version, digest, commit, alias)):
+        raise AssertionError("Cold repair identity is not exact nonempty text")
+    expected = {
+        "schema_version": 1, "command": "agentplugins repair", "result": "success", "outcome": "completed",
+        "scope": "user", "scope_selection_reason": "explicit",
+        "actions": [{
+            "from_version": version, "to_version": version, "from_revision": commit, "from_digest": digest,
+            "component_support": [{"kind": "mcp_server", "name": "uap_public_probe", "support": "native"}],
+            "alias": alias, "client_id": "antigravity", "installation_id": installation_id, "binding_id": binding_id,
+            "action": "repair", "package_digest": digest, "revision": commit,
+        }],
+        "results": [{
+            "installation_id": installation_id, "client_id": "antigravity", "operation": "repair", "outcome": "unchanged",
+            "manual_actions": ["The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading"],
+        }],
+    }
+    if (type(envelope) is not dict or type(envelope.get("schema_version")) is not int or envelope != expected):
+        raise AssertionError("Cold saved-owner repair did not prove the exact native User observation")
+    return envelope
 
 @contextlib.contextmanager
 def public_fixture(parent, executable_dir):
@@ -2416,7 +2493,7 @@ def public_user_cold_restore(runtime, executable_dir, parent):
             restored = public_binding_proof(env, "uap-cline-public-probe", runtime[4])
             if restored["data"][1]["public-retained-marker.txt"][7] != PUBLIC_MARKER: raise AssertionError("Cold marker differs")
             home_before = public_snapshot(Path(env["HOME"]))
-            public_user_doctor_result(public_uap(runtime, root, authority, "uap-cold-observe"))
+            public_user_cold_repair_result(public_uap(runtime, root, authority, "uap-cold-observe"), installed, binding, pin)
             public_preserved(restored, public_binding_proof(env, "uap-cline-public-probe", runtime[4]))
             if public_snapshot(Path(env["HOME"])) != home_before: raise AssertionError("Cold observation changed User profile")
             before = public_state_snapshot(root, state_root, runtime[4])

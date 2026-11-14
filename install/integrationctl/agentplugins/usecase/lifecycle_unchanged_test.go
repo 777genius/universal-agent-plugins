@@ -275,3 +275,50 @@ func TestAntigravityRealProviderRepeatRefusesForeignManifestBeforeNativeCommand(
 		t.Fatal("collision refusal changed foreign bytes or recorded ownership", loadErr, readErr)
 	}
 }
+
+func TestAntigravityPreparedIntactRepairObservesOnlyConfirmedQualifiedUser(t *testing.T) {
+	for _, condition := range []string{"confirmed", "preview", "unconfirmed", "missing-provenance", "foreign-provenance", "missing-config", "cleanup-unproved"} {
+		t.Run(condition, func(t *testing.T) {
+			fixture := antigravityReadFixture(t)
+			fixture.input.Scope = domain.ScopeUser
+			fixture.input.OperationID = "antigravity-intact-repair"
+			wantCalls, wantError := 0, false
+			switch condition {
+			case "confirmed":
+				wantCalls = 2
+			case "preview":
+				fixture.input.DryRun = true
+			case "unconfirmed":
+				fixture.input.Confirmed = false
+			case "missing-provenance":
+				fixture.input.Client.NativeConfigRoot = ""
+			case "foreign-provenance":
+				fixture.input.Client.NativeConfigRoot = filepath.Join(t.TempDir(), ".gemini", "config")
+			case "missing-config":
+				wantError = true
+				if err := os.Remove(filepath.Join(fixture.input.Client.ConfigRoot, "config.json")); err != nil {
+					t.Fatal(err)
+				}
+			case "cleanup-unproved":
+				fixture.runner.failed, wantCalls, wantError = true, 1, true
+			}
+			before, err := fixture.store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := fixture.service.Repair(t.Context(), fixture.input)
+			if (err != nil) != wantError || fixture.runner.calls != wantCalls || result.Mutated ||
+				result.Activation.Activation == domain.ActivationActive || result.Activation.ActivationAttested || result.Activation.AuthenticationAttested {
+				t.Fatal("intact repair crossed consent, original-profile or cleanup boundary", result, err, fixture.runner.calls)
+			}
+			if condition == "confirmed" && (result.Activation.Activation != domain.ActivationPrepared ||
+				!reflect.DeepEqual(result.Activation.UserActions, []string{"The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading"})) {
+				t.Fatal("confirmed intact repair skipped the real scoped verifier", result)
+			}
+			after, err := fixture.store.Load()
+			if err != nil || !reflect.DeepEqual(before, after) {
+				t.Fatal("read-only intact repair changed recorded state or receipts", err)
+			}
+		})
+	}
+}

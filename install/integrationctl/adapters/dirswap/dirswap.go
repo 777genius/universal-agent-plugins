@@ -75,6 +75,7 @@ type Receipt struct {
 }
 
 type Input struct {
+	ExpectedPublication        PreparedPublication
 	PublicationParentAuthority *directoryidentity.Authority
 	EnvironmentID              string
 	ProfileOwners              []ProfileOwner
@@ -425,8 +426,8 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 		}
 	}
 	parent := clonePublicationParent(input.PublicationParentAuthority)
-	if parent != nil && (!input.RequireAbsent || input.Remove) {
-		return Receipt{}, fmt.Errorf("publication parent requires a fresh swap")
+	if err := validatePublicationInputRole(input); err != nil {
+		return Receipt{}, err
 	}
 	if err := validatePublicationParent(ctx, parent, ownedBase, activePath, stagingPath); err != nil {
 		return Receipt{}, err
@@ -518,12 +519,9 @@ func (manager Manager) newReceipt(ctx context.Context, input Input) (Receipt, er
 	if activePath == backupPath || stagingPath == backupPath || activePath == quarantinePath || stagingPath == quarantinePath {
 		return Receipt{}, fmt.Errorf("directory swap paths must be distinct")
 	}
-	publishedIdentity, publishedDigest := "", ""
-	if operation == OperationSwap {
-		publishedIdentity, publishedDigest, err = publicationProof(stagingPath)
-		if err != nil {
-			return Receipt{}, fmt.Errorf("capture staged ownership: %w", err)
-		}
+	publishedIdentity, publishedDigest, err := publicationInputProof(input, stagingPath)
+	if err != nil {
+		return Receipt{}, fmt.Errorf("capture staged ownership: %w", err)
 	}
 	ownedBaseIdentity, err := physicalDirectoryIdentity(ownedBase)
 	if err != nil {
@@ -606,8 +604,8 @@ func (manager Manager) validateReceipt(receipt Receipt) error {
 	if receipt.HadActive && (receipt.BackupIdentity == "" || receipt.BackupDigest == "") {
 		return fmt.Errorf("original backup ownership proof unavailable")
 	}
-	if receipt.Operation == OperationSwap && (receipt.PublishedIdentity == "" || receipt.PublishedDigest == "") {
-		return fmt.Errorf("publication ownership proof unavailable")
+	if err := validatePublicationProof(receipt); err != nil {
+		return err
 	}
 	sum := sha256.Sum256([]byte(receipt.OperationID))
 	if receipt.BackupPath != filepath.Join(receipt.OwnedBase, ".agentplugins-backup-"+hex.EncodeToString(sum[:8])) ||
@@ -652,7 +650,7 @@ func (manager Manager) validateReceipt(receipt Receipt) error {
 			return fmt.Errorf("unsafe %s path: %w", label, err)
 		}
 	}
-	return nil
+	return validatePublicationObjectsRoles(receipt)
 }
 
 func validateStagingPath(ownedBase, stagingPath string) error {

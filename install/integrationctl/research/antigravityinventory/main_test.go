@@ -229,7 +229,7 @@ func TestPublicActionsHaveFixedSelectorsArgvPinsAndEnvironment(t *testing.T) {
 		"uap-update":          {"update", "uap-agy-native-smoke"}, "uap-repair": {"repair", "uap-agy-native-smoke"},
 		"uap-remove": {"remove", "uap-agy-native-smoke"}, "uap-saved-add": {"add", source},
 		"uap-cold-install": {"install", "--locked"}, "uap-cold-repeat": {"install", "--locked"},
-		"uap-cold-observe": {"doctor"},
+		"uap-cold-observe": {"repair", "uap-cline-public-probe"},
 	} {
 		req.Action, req.Selector = action, publicSelector(action)
 		if err := validateRequest(req); err != nil {
@@ -238,10 +238,6 @@ func TestPublicActionsHaveFixedSelectorsArgvPinsAndEnvironment(t *testing.T) {
 		tail := common
 		if action == "uap-cold-install" || action == "uap-cold-repeat" {
 			tail = []string{"--scope", "user", "--yes", "--format", "json"}
-		} else if action == "uap-cold-observe" {
-			// A saved environment install is read-only here; never add --no-save
-			// or supply mutation consent for the cold observation.
-			tail = []string{"--scope", "user", "--format", "json"}
 		}
 		want := append(append([]string{req.Binary}, args...), tail...)
 		if !slices.Equal(fixedArgv(req), want) {

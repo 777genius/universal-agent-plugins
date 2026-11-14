@@ -44,8 +44,12 @@ func (publisher ProjectRootPublisher) PublishProjectRoot(ctx context.Context, re
 	if err != nil {
 		return errors.Join(err, prepared.cleanup())
 	}
+	if err := prepared.sealForPublication(); err != nil {
+		return errors.Join(err, prepared.cleanup())
+	}
 	mutation := DirectoryMutation{
 		PublicationParentAuthority: parentAuthority,
+		ExpectedPublication:        prepared.expectedPublication,
 		Standalone:                 true, RequireAbsent: true,
 		OperationID: request.NativeAttempt.OperationID + "-root", Sequence: 1,
 		InstallationID: request.NativeAttempt.InstallationID, ClientBindingID: binding.ClientBindingID,

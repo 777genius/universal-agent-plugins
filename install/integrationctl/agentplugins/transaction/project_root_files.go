@@ -13,6 +13,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
@@ -80,6 +81,9 @@ func (held *heldNativeRoot) verifyNamed() error {
 }
 
 func (held *heldNativeRoot) verifyHeld() error {
+	if held.root == nil {
+		return fmt.Errorf("native root descendant handle was released for publication")
+	}
 	current, err := held.root.Stat(".")
 	if err != nil || !sameNativeRoot(held.info, current) {
 		return fmt.Errorf("native root held directory changed")
@@ -160,7 +164,9 @@ type preparedNativeRoot struct {
 	markerName                    string
 	markerBody                    []byte
 	markerInfo                    os.FileInfo
+	markerFile                    *os.File
 	writtenMarker                 []byte
+	expectedPublication           dirswap.PreparedPublication
 }
 
 func prepareNativeRoot(ctx context.Context, spec ports.NativeProjectRoot) (prepared *preparedNativeRoot, resultErr error) {
@@ -244,25 +250,26 @@ func (prepared *preparedNativeRoot) writeMarker() error {
 	if err != nil {
 		return err
 	}
+	prepared.markerFile = file
 	prepared.markerInfo, err = file.Stat()
 	if err != nil {
-		return errors.Join(err, file.Close())
+		return err
 	}
 	written, writeErr := file.Write(prepared.markerBody)
 	prepared.writtenMarker = append([]byte(nil), prepared.markerBody[:written]...)
 	if writeErr == nil && written != len(prepared.markerBody) {
 		writeErr = io.ErrShortWrite
 	}
-	if err := errors.Join(writeErr, file.Sync(), file.Close()); err != nil {
+	if err := errors.Join(writeErr, file.Sync(), prepared.captureWrittenMarker(file)); err != nil {
 		return err
 	}
 	return prepared.verifyNamed()
 }
 
 func (prepared *preparedNativeRoot) close() error {
-	var result error
-	if prepared.selected != nil && prepared.selected != prepared.staged {
-		result = prepared.selected.root.Close()
+	result := prepared.closeMarkerHandle()
+	if prepared.selected != nil && prepared.selected != prepared.staged && prepared.selected.root != nil {
+		result = errors.Join(result, prepared.selected.root.Close())
 	}
 	if prepared.staged != nil {
 		result = errors.Join(result, prepared.staged.root.Close())
@@ -276,6 +283,9 @@ func (prepared *preparedNativeRoot) cleanup() error {
 	}
 	if prepared.staged == nil || prepared.selected == nil {
 		return fmt.Errorf("unpublished staging identity unavailable; retained without adopting its contents")
+	}
+	if err := prepared.restoreOriginalSelected(); err != nil {
+		return err
 	}
 	if err := prepared.cleanupMarker(); err != nil {
 		return err
@@ -299,7 +309,7 @@ func (prepared *preparedNativeRoot) cleanupMarker() error {
 	root := prepared.selected
 	info, err := root.root.Lstat(prepared.markerName)
 	if os.IsNotExist(err) {
-		return nil
+		return prepared.closeMarkerHandle()
 	}
 	if err != nil || prepared.markerInfo == nil || !info.Mode().IsRegular() || !os.SameFile(prepared.markerInfo, info) {
 		return fmt.Errorf("unpublished marker ownership changed; retained")
@@ -308,7 +318,7 @@ func (prepared *preparedNativeRoot) cleanupMarker() error {
 	if err != nil || string(body) != string(prepared.writtenMarker) {
 		return errors.Join(err, fmt.Errorf("unpublished marker changed; retained"))
 	}
-	return prepared.removeMarker(info)
+	return errors.Join(prepared.removeMarker(info), prepared.closeMarkerHandle())
 }
 
 func (prepared *preparedNativeRoot) removeMarker(before os.FileInfo) error {

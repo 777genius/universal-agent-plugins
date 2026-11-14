@@ -1186,3 +1186,106 @@ refusal, descendant scratch refusal, byte mutation and same-byte inode replaceme
 The existing disabled-repeat public Go test is preserved byte-for-byte from the
 reviewed draft; it was not rerun for this Python-only reconciliation. No native
 command was executed, and none of the failed hosted runs becomes qualified.
+
+## 2026-11-14: confirmed saved-owner cold inventory correction
+
+The original `5ff83587` native runs failed on all three platforms at cold
+`add --no-save`: the restored installation already had a committed saved-owner
+receipt, so an imperative add without that typed owner correctly refused. The
+original first-refusal audit is
+`native-5ff-owned-originals/antigravity/independent-first-refusal-audit.json`,
+SHA256 `3c90526c931cd60797b0212d3db0413bb48b1bf78ace5ed358e6ba4c08766588`.
+Its native failure remains a failure.
+
+Peer commit `4cd5b613ae5948742231ed0e7babe67b9c3a1c81` replaced that command
+with `doctor`. Independent public-Cobra controls, with and without the exact
+installation selector, both returned success and preserved the original files
+while making **zero** native runner calls. The peer cold-doctor parser accepted
+both original outputs and five missing/unknown-observation counterexamples.
+The independent rejection receipt is
+`antigravity-peer-4cd-review/independent-r2.json`, SHA256
+`3f05951a8061df92a3414a99c949a615e856bace45a186663bb88689a6eb3617`.
+The actual doctor-control log is 5,526 bytes, SHA256
+`9bd6435a1e186f72f3b3fc999ac892dd8b37769258f483c9518cc04be340f55c`.
+A truthful recorded-state doctor result is not native inventory evidence.
+
+The same source also left the fixed-argv contract expecting the former add
+vector. Original `4cd5b6` Antigravity Linux/Windows job logs, Required, and
+Coverage show `TestPublicActionsHaveFixedSelectorsArgvPinsAndEnvironment`
+failing before the native collector. These are source-contract failures, not
+new native qualification. No run was rerun or cancelled for this correction.
+
+### Accepted R1 and bounded implementation
+
+The root reviewer accepted exactly nine existing paths. Antigravity now
+implements the existing `UserNativeRegistryLayout` capability and returns its
+unchanged selected ConfigRoot. This lets the existing CLI/SDK forwarding retain
+the detector's separately observed NativeConfigRoot. An empty or foreign native
+root still grants no inventory authority; no HOME or profile is fabricated.
+
+The existing read-only verification path also admits a confirmed, non-preview,
+materialized Prepared User binding when the existing scoped
+`canResumePreparedObservation` capability is available. It still sends
+`VerifyOnly` and uses the original saved-owner repair composition. No generic
+client-ID branch, lifecycle trait, public DTO, trust grant, native enablement or
+authentication path is added. SDK NoChange planning only omits staging resources;
+Apply still dispatches the existing repair use case.
+
+The cold helper now selects only
+`repair uap-cline-public-probe --target antigravity --scope user --yes --format json`.
+All other command vectors, Cline code, public/native deadlines, profile setup,
+source acquisition, child cleanup and artifact admission remain unchanged.
+The exact fixed-argv test is updated with that same repair selector.
+
+The cold collector admits the existing top-level dependency repair DTO from
+`deps_render.go`: exact command/scope, complete action and result sets, original
+installation and binding IDs, alias, before/after source revision and digest,
+the fixture's sole native MCP component, unchanged result and the single
+enabled-inventory guidance produced by the Antigravity verifier. Prepared,
+installation-verified and authentication-not-checked recorded state is joined
+to the held cold identity. A doctor envelope, missing or extra field, wrong
+owner/revision, disabled/absent/unknown inventory, extra result or promoted
+recorded lifecycle refuses. All pre-existing cold source, receipt, DATA,
+agreement-only transfer, full User preservation and locked-repeat assertions
+remain intact.
+
+### Evidence identity and outstanding execution
+
+The immutable original saved-owner Cobra repair RED is separate from the new
+tests in this patch. Original source SHA256:
+`0d05c4aa9caae106864e51b2bd1f3674a22cd38e12386388073ba5b4b19a322c`.
+Its 496-byte original log, SHA256
+`b12ce15500019e35db678af466a94d6a8d7045950ea6f8f81c1dad74c25424b6`,
+observed repair success with zero native calls, complete preservation, and no
+inventory guidance. That result established the missing observation path.
+
+The two runtime candidate bodies were recovered exactly from the held original
+source and complete patch, matching their previously recorded local SHA256s:
+`adapter.go` `9e47aef87ad12a4061ab291150e1ba4374ec7ce8e853857623bd70f7995f8fb5`;
+`lifecycle_observation.go`
+`3d06bac86b0d72f2212d0b79ddb256b7476a756d123c5a4d1b1a0f2977bd66a1`.
+The first local candidate build was killed in compilation, before test execution.
+Its log SHA256 is
+`1213c32b3c28753c0ae38e7269064c16d5eb5859274882d716b7eea19aedb9fc`.
+The authorized unchanged overlay attempt, session 76044, lost the executor;
+its result is **unknown**, and it has not been restarted.
+
+During that outage a new, explicitly unexecuted saved-owner fixture was authored
+from the current public test seams. It uses real source acquisition, typed
+EnvironmentAuthority, SDK, kernel and Cobra, with the existing inert scanner and
+runner. It does not fabricate persisted state or grant an allow assessment.
+Its identity is new and is not the original `0d05c4aa` RED. It checks ownerless
+add refusal, doctor zero-call controls, two exact repair observations, original
+source/receipt/binding/DATA/User bytes and file identities, and negative consent,
+profile, cleanup, disabled, native-absent and absent-config cases. Added use-case and adapter
+tests exercise the same scoped capability and preserve Project file-only rules.
+Synthetic collector mutations test the real DTO shape; they are not native
+runtime evidence.
+
+These newly authored Go/Python cases, formatting/lint, and the complete native
+candidate have **not** been executed locally while the executor is unavailable.
+Immutable source objects and a review commit are prepared for independent R2;
+no branch update is authorized by that preparation alone. Existing hosted
+contracts and genuine native runs must validate the eventual reviewed head.
+No new native, IDE-loading, MCP execution, trust, model or authentication
+qualification is claimed by this source correction.

@@ -286,9 +286,9 @@ func publicArgv(req request) []string {
 	case "saved-add":
 		args = append(args, "add", "https://github.com/777genius/universal-agent-plugins/tree/"+sourceCommit+"/repotests/testdata/agentplugins_native_probe")
 	case "cold-observe":
-		// The cold installation is environment-owned. Imperative add --no-save
-		// has no typed owner and must refuse; use the genuine read-only command.
-		return append(args, "doctor", "--scope", "user", "--format", "json")
+		// The cold installation retains its typed saved owner. Confirmed repair
+		// can observe the intact package without issuing an ownerless add.
+		args = append(args, "repair", publicSelector(req.Action))
 	case "cold-install", "cold-repeat":
 		return append(args, "install", "--locked", "--scope", "user", "--yes", "--format", "json")
 	default:

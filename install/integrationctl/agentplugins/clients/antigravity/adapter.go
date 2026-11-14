@@ -22,16 +22,17 @@ func New() *Adapter                  { return &Adapter{} }
 func (*Adapter) ID() domain.ClientID { return domain.ClientAntigravity }
 
 var (
-	_ clients.Adapter              = (*Adapter)(nil)
-	_ clients.HostDetector         = (*Adapter)(nil)
-	_ clients.ProfileResolver      = (*Adapter)(nil)
-	_ clients.TargetLayout         = (*Adapter)(nil)
-	_ clients.ProjectTargetLayout  = (*Adapter)(nil)
-	_ clients.NativeRegistryLayout = (*Adapter)(nil)
-	_ clients.SelectionReader      = (*Adapter)(nil)
-	_ clients.PlanPrecondition     = (*Adapter)(nil)
-	_ clients.PlanQualifier        = (*Adapter)(nil)
-	_ clients.PlanRefiner          = (*Adapter)(nil)
+	_ clients.Adapter                  = (*Adapter)(nil)
+	_ clients.HostDetector             = (*Adapter)(nil)
+	_ clients.ProfileResolver          = (*Adapter)(nil)
+	_ clients.TargetLayout             = (*Adapter)(nil)
+	_ clients.ProjectTargetLayout      = (*Adapter)(nil)
+	_ clients.NativeRegistryLayout     = (*Adapter)(nil)
+	_ clients.UserNativeRegistryLayout = (*Adapter)(nil)
+	_ clients.SelectionReader          = (*Adapter)(nil)
+	_ clients.PlanPrecondition         = (*Adapter)(nil)
+	_ clients.PlanQualifier            = (*Adapter)(nil)
+	_ clients.PlanRefiner              = (*Adapter)(nil)
 )
 
 func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
@@ -94,6 +95,12 @@ func (*Adapter) NativeRegistry(in clients.PlanInput) (string, string) {
 		return filepath.Join(in.TargetContext.ProjectRoot, ".agents"), in.Client.ExecutablePath
 	}
 	return in.Client.ConfigRoot, in.Client.ExecutablePath
+}
+
+// Keep the existing User layout while allowing callers to retain the detector's
+// separate original-profile provenance for read-only native inventory.
+func (*Adapter) UserNativeRegistry(client domain.DetectedClient) string {
+	return client.ConfigRoot
 }
 
 func (*Adapter) ProjectTargetRoot(_ domain.DetectedClient, _ domain.PackageMode, managedRoot string, target domain.TargetContext) (string, string, error) {
