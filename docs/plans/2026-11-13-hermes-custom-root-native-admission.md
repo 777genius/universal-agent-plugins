@@ -1948,8 +1948,10 @@ name is represented only by SHA256 over the domain separator
 `uap-hermes-public-bootstrap-member-v1\0` and its UTF-8/surrogatepass bytes.
 No raw member name, target, profile content, absolute path, or nonce is added
 to the detail. A strictly shaped ordinary file or directory row contributes
-only type, mode, byte count, and existing content digest; directory byte/hash
-fields are null. Invalid optional metadata is omitted.
+only type, mode and byte count; directory byte count is null. The private
+captured ledger retains its exact content hash for integrity validation, but
+no foreign file-content digest is exported: a deterministic digest could
+expose low-entropy data by offline guessing. Invalid optional metadata is omitted.
 
 The existing observer record gains this one optional nested field; old
 records keep their exact closed shape. Its validator requires the actual

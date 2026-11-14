@@ -2141,17 +2141,17 @@ def public_bootstrap_detail(value):
         require(first is None, "public bootstrap unexpected member without count")
     else:
         require(type(first) is dict and all(type(key) is str for key in first)
-                and set(first) == {"member_sha256", "type", "mode", "bytes", "sha256"},
+                and set(first) == {"member_sha256", "type", "mode", "bytes"},
                 "closed public bootstrap member")
         digest = lambda text: type(text) is str and re.fullmatch(r"[a-f0-9]{64}", text) is not None
         require(digest(first["member_sha256"]) and type(first["type"]) is str
                 and first["type"] in {"file", "directory"} and type(first["mode"]) is int
                 and 0 <= first["mode"] <= 0o7777, "public bootstrap member metadata")
         if first["type"] == "directory":
-            require(first["bytes"] is None and first["sha256"] is None, "public bootstrap directory content")
+            require(first["bytes"] is None, "public bootstrap directory content")
         else:
-            require(type(first["bytes"]) is int and 0 <= first["bytes"] <= LIMIT
-                    and digest(first["sha256"]), "public bootstrap file content metadata")
+            require(type(first["bytes"]) is int and 0 <= first["bytes"] <= LIMIT,
+                    "public bootstrap file metadata")
     return value
 
 
@@ -2181,7 +2181,7 @@ def capture_public_bootstrap(root, outer, rows, backups, allowed):
                     and all(type(row[key]) is int and 0 <= row[key] < 2**64 for key in ("device", "inode")),
                     "public bootstrap captured metadata")
             first = dict(member_sha256=hashlib.sha256(b"uap-hermes-public-bootstrap-member-v1\0" + encoded).hexdigest(),
-                         type=kind, mode=row["mode"], bytes=row.get("bytes"), sha256=row.get("sha256"))
+                         type=kind, mode=row["mode"], bytes=row.get("bytes"))
         predicate = ("both" if len(backups) > 5 and unknown else "backup-count" if len(backups) > 5
                      else "unmeasured-member")
         return public_bootstrap_detail(dict(scope=scope, predicate=predicate, member_count=len(rows),

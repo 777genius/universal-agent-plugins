@@ -3874,12 +3874,13 @@ class PublicBootstrapFailureDetailContracts(unittest.TestCase):
                         b"uap-hermes-public-bootstrap-member-v1\0" + name.encode("utf-8", "surrogatepass")).hexdigest())
                     self.assertEqual(first["type"], kind)
                     self.assertEqual(first["bytes"], len(b"PRIVATE BODY") if kind == "file" else None)
-                    self.assertEqual(first["sha256"], hashlib.sha256(b"PRIVATE BODY").hexdigest() if kind == "file" else None)
+                    self.assertNotIn("sha256", first)  # Never publish a deterministic fingerprint of foreign file contents.
                 else:
                     self.assertIsNone(detail["first_unmeasured"])
                 encoded = json.dumps(detail, sort_keys=True)
                 for raw in (private, self.nonce, "PRIVATE BODY", str(fixture[0]), ".uap-owner"):
                     self.assertNotIn(raw, encoded)
+                self.assertNotIn(hashlib.sha256(b"PRIVATE BODY").hexdigest(), encoded)
         self.assertIsNone(CASE["public_profile"](*self.fixture(backups=5)))
         fixture = self.fixture(unexpected=(("unknown", "file"),))
         prefix = fixture[0].relative_to(fixture[2]).as_posix()
@@ -3899,6 +3900,7 @@ class PublicBootstrapFailureDetailContracts(unittest.TestCase):
         for key, value in (("member_sha256", "F" * 64), ("member_sha256", self.nonce + "x"),
                            ("type", "link"), ("mode", True), ("mode", 0o10000), ("bytes", -1),
                            ("bytes", CASE["LIMIT"] + 1), ("bytes", True), ("sha256", None),
+                           ("sha256", "f" * 64),
                            ("target", "/PRIVATE"), ("member", "PRIVATE")):
             changed = copy.deepcopy(valid); changed["first_unmeasured"][key] = value; invalid.append(changed)
         changed = copy.deepcopy(valid); changed["first_unmeasured"]["type"] = "directory"; invalid.append(changed)
