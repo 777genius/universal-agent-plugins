@@ -1664,7 +1664,8 @@ class PublicLifecycleContracts(unittest.TestCase):
                         recipe = CASE["public_stdio_recipe"](project, pins["probe"], "original-nonce")
                         self.assertEqual(recipe, {"type": "stdio", "command": "hermes-mcp-probe" + suffix,
                             "args": [], "env": {"PATH": str(root), "UAP_TEST_ROOT": str(project),
-                            "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": "original-nonce"}})
+                            "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": "original-nonce",
+                            "UAP_TEST_HERMES_PUBLIC_PARENT": "1"}})
                         self.assertEqual(recipe["env"]["PATH"].split(os.pathsep), [str(root)])
                     self.assertEqual(CASE["public_runtime_pins"](pins), pins)
                     probe = Path(pins["probe"]["path"])
@@ -1961,7 +1962,12 @@ class PublicLifecycleContracts(unittest.TestCase):
                     and isinstance(node.value.func.value, ast.Name) and node.value.func.value.id == "records")
         # Execute the real command's protocol/profile join with original local
         # event bytes. Runtime execution is absent; this is not native evidence.
-        check = compile(ast.Module(body=command.body[start:stop], type_ignores=[]), CASE["__file__"], "exec")
+        helpers = [node for node in owner.body if isinstance(node, ast.FunctionDef)
+                   and node.name in {"spawn_capture", "spawn_preserved", "captured_events"}]
+        publish = next(node for node in command.body if isinstance(node, ast.Expr)
+                       and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Attribute)
+                       and isinstance(node.value.func.value, ast.Name) and node.value.func.value.id == "spawn_states")
+        check = compile(ast.Module(body=[*helpers, *command.body[start:stop], publish], type_ignores=[]), CASE["__file__"], "exec")
         with tempfile.TemporaryDirectory() as temporary:
             outer = Path(temporary).resolve(); selected = outer / "public-a/.hermes/uap-session"
             selected.mkdir(parents=True)
@@ -1970,14 +1976,42 @@ class PublicLifecycleContracts(unittest.TestCase):
             log = selected / "logs/mcp-stderr.log"; log.parent.mkdir(mode=0o700)
             data = outer / "public-a/.uap/plugin-data/owned"; data.mkdir(parents=True)
             events = data / "hermes-events.jsonl"; nonce = "c" * 64
+            target = outer / "public-a/.uap/managed/clients/hermes/owned"; target.mkdir(parents=True)
+            evidence = outer / "evidence"; evidence.mkdir()
+            code_root = outer / "bundle/hermes-agent"; code_root.mkdir(parents=True)
+            probe = outer / ("hermes-mcp-probe.exe" if os.name == "nt" else "hermes-mcp-probe")
+            launcher = target / "io.github.777genius.agentplugins/managed-stdio-v1" / ("agentplugins.exe" if os.name == "nt" else "agentplugins")
+            recipe = {"command": str(launcher), "args": ["--internal-stdio-v1", str(target), str(data), str(target),
+                      "plugin", "--argv-base64-v1", CASE["base64"].b64encode(probe.name.encode()).decode("ascii")]}
             namespace = dict(CASE, outer=outer, selected=selected, selected_prefix=selected.relative_to(outer).as_posix(),
                              scope="a", name="hermes-public-a", nonce=nonce, configs={"a": set()},
-                             proofs={"a": {"data": data}, "b": None}, previous={"a": {"data": data}, "b": None},
+                             proofs={"a": {"data": data, "target": target}, "b": None}, previous={"a": {"data": data, "target": target}, "b": None},
                              stdio_completed={"a": 0, "b": 0}, events_before={"a": [], "b": []}, test="stdio",
                              http_before={"a": [], "b": []}, probes={key: SimpleNamespace(methods=lambda: []) for key in ("a", "b")},
                              before=CASE["inventory"](outer))
-            rows = [dict(method=method, pid=42, session="42-123", nonce=nonce, timestamp="2026-11-13T23:50:00Z", facts=None)
+            system = CASE["sys"].platform
+            parent = 303 if system == "win32" else 101
+            namespace.update(projects={"a": selected.parent.parent, "b": outer / "public-b"},
+                             outer_authority=CASE["directory_identity"](outer),
+                             authorities={"a": CASE["directory_identity"](selected.parent.parent)},
+                             born={"a": (CASE["directory_identity"](selected), CASE["directory_identity"](selected.parent), {})},
+                             spawn_states={"a": None, "b": None}, native=True, inspect=False, expected_failure=False,
+                             args=["mcp", "test", "hermes-public-a-stdio"], label="public-stdio-a", evidence=evidence,
+                             argv=["inert-hermes", "mcp", "test", "hermes-public-a-stdio"], output=b"inert stdio success",
+                             code_root=code_root, code_authority=CASE["directory_identity"](code_root), install_id="a" * 12,
+                             servers={"hermes-public-a-stdio": recipe}, pins={"probe": {"path": str(probe)}})
+            rows = [dict(method=method, pid=42, session="42-123", nonce=nonce, timestamp="2026-11-13T23:50:00Z",
+                         facts={"kind": "hermes-public-parent-v1", "parent_pid": parent})
                     for method in ("initialize", "tools/list")]
+            entry = PublicSpawnLedgerContracts.entry(system, argv=" ".join([recipe["command"], *recipe["args"]]))
+            entry["pid"] = 303 if system == "win32" else 42
+            PublicSpawnLedgerContracts.write_pair(selected, entry)
+            streams = {"stdout": namespace["output"], "stderr": b""}
+            for suffix, body in streams.items(): (evidence / ("public-stdio-a." + suffix)).write_bytes(body)
+            (evidence / "public-stdio-a.status.json").write_bytes(json.dumps(dict(
+                argv=namespace["argv"], pid=101, exit=0, error=None,
+                streams={suffix: {"bytes": len(body), "sha256": CASE["hashlib"].sha256(body).hexdigest()}
+                         for suffix, body in streams.items()})).encode())
             events.write_bytes(b"".join(json.dumps(row).encode() + b"\n" for row in rows))
             body = b"\n2026-11-14 14:05:11,913 ===== starting MCP server 'hermes-public-a-stdio' =====\n"
             log.write_bytes(body.replace(b"\n", b"\r\n" if os.name == "nt" else b"\n")); log.chmod(0o644)
@@ -3682,8 +3716,11 @@ class PublicInspectLockContracts(unittest.TestCase):
                          projects=projects, pins={"uap": {"path": "inert-uap"}}, deadline=time.monotonic() + 60,
                          evidence=outer.parent, env={}, born={}, nonce="inert", bounded=bounded,
                          public_runtime_pins=lambda *args, **kwargs: None, public_continuity=lambda *args, **kwargs: None,
-                         public_stdio_events=lambda *args: [], probes={key: SimpleNamespace(methods=lambda: []) for key in projects})
-        exec(compile(ast.fix_missing_locations(ast.Module(body=[command], type_ignores=[])), CASE["__file__"], "exec"), namespace)
+                         public_stdio_events=lambda *args, **kwargs: [], spawn_states={key: None for key in projects},
+                         probes={key: SimpleNamespace(methods=lambda: []) for key in projects})
+        helpers = [node for node in owner.body if isinstance(node, ast.FunctionDef)
+                   and node.name in {"spawn_capture", "spawn_preserved", "captured_events"}]
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[*helpers, command], type_ignores=[])), CASE["__file__"], "exec"), namespace)
         return namespace["command"], calls
 
     def test_actual_control_writer_refresh_is_scoped_to_existing_inspect_calls(self):
@@ -4574,6 +4611,300 @@ class SourceUserFailureReadoutContracts(unittest.TestCase):
                 else:
                     self.assertEqual(lines, []); self.assertFalse((root / "upload").exists())
                 for name, body in bodies.items(): self.assertEqual((root / name).read_bytes(), body)
+
+
+
+class PublicSpawnLedgerContracts(unittest.TestCase):
+    @staticmethod
+    def arguments():
+        return ["/owned/agentplugins", "--internal-stdio-v1", "/owned/plugin", "/owned/data",
+                "/owned/plugin", "plugin", "--argv-base64-v1", "cHJvYmU="]
+
+    @staticmethod
+    def entry(system="linux", *, argv=None):
+        return dict(pid=303 if system == "win32" else 202, create_time=100.25, purpose="mcp-helper",
+                    install="a" * 12, spawner_pid=101, spawner_create=90.5, registered_at=101.75,
+                    argv=argv if argv is not None else " ".join(PublicSpawnLedgerContracts.arguments()),
+                    host="", port=None, profile="", hermes_home="", isolated=False,
+                    boot_start=None, spawner_boot=None, boot_id=None)
+
+    @staticmethod
+    def events(system="linux", *, session="202-new"):
+        parent = 303 if system == "win32" else 101
+        return [dict(method=method, pid=202, session=session, nonce="c" * 64,
+                     timestamp="2026-11-14T13:30:00Z",
+                     facts={"kind": "hermes-public-parent-v1", "parent_pid": parent})
+                for method in ("initialize", "tools/list")]
+
+    @staticmethod
+    def write_pair(root, entry):
+        ledger, lock = (root / name for name in CASE["PUBLIC_SPAWN_NAMES"])
+        ledger.write_bytes(json.dumps([entry], indent=2).encode()); ledger.chmod(0o600)
+        lock.write_bytes(b""); lock.chmod(0o644)
+        return ledger, lock
+
+    @staticmethod
+    def capture(root, outer, image=None, authorities=None):
+        image = CASE["inventory"](outer) if image is None else image
+        authorities = tuple(CASE["directory_identity"](path)
+                            for path in (outer, root.parent.parent, root.parent, root)) if authorities is None else authorities
+        return CASE["public_spawn_read"](root, outer, image, authorities)
+
+    def verify(self, entry, before, after, system="linux", *, body=None, **changes):
+        args = dict(body=json.dumps([entry]).encode() if body is None else body, before=before, after=after,
+                    nonce="c" * 64, native_pid=101, install_id="a" * 12, launcher_argv=self.arguments(),
+                    probe="/build/probe", system=system)
+        args.update(changes)
+        return CASE["public_spawn_entry"](**args)
+
+    def test_spawn_entry_joins_only_this_commands_new_pair_and_platform_parent(self):
+        for system in ("linux", "darwin", "win32"):
+            for argv in ([" ".join(self.arguments())] if system == "win32" else [" ".join(self.arguments()), "/build/probe"]):
+                with self.subTest(system=system, argv=argv):
+                    old = self.events(system, session="202-old")
+                    new = self.events(system)
+                    entry = self.entry(system, argv=argv)
+                    self.assertEqual(self.verify(entry, old, old + new, system), entry)
+        entry = self.entry()
+        entry.update(boot_start=75.25, spawner_boot=70.0, boot_id="01234567-89ab-cdef-0123-456789abcdef")
+        self.assertEqual(self.verify(entry, [], self.events()), entry)
+        with self.assertRaisesRegex(RuntimeError, "boot time"):
+            self.verify(entry, [], self.events("darwin"), "darwin")
+        with self.assertRaisesRegex(RuntimeError, "argv"):
+            self.verify(self.entry("win32", argv="/build/probe"), [], self.events("win32"), "win32")
+
+    def test_spawn_entry_refuses_foreign_members_types_defaults_and_unbounded_numbers(self):
+        import copy
+        changes = [
+            ("pid", True), ("pid", 0), ("pid", 2**32), ("pid", 101), ("pid", 203),
+            ("spawner_pid", True), ("spawner_pid", 102), ("purpose", "serve"), ("install", "b" * 12),
+            ("host", "localhost"), ("port", 0), ("profile", "foreign"), ("hermes_home", "/private"),
+            ("isolated", True), ("isolated", 0), ("create_time", 100), ("create_time", False),
+            ("create_time", float("nan")), ("create_time", float("inf")), ("spawner_create", -1.0),
+            ("registered_at", float(2**53)), ("boot_start", True), ("spawner_boot", "70.0"),
+            ("boot_id", "unknown"), ("argv", "prefix " + " ".join(self.arguments())),
+            ("argv", " ".join(self.arguments()) + " suffix"),
+        ]
+        for key, value in changes:
+            entry = self.entry(); entry[key] = value
+            with self.subTest(key=key, value=repr(value)), self.assertRaises(RuntimeError):
+                self.verify(entry, [], self.events())
+        valid = self.entry()
+        missing = copy.deepcopy(valid); missing.pop("host")
+        extra = dict(valid, unknown=False)
+        for value in ({}, [], [missing], [extra], [valid, valid]):
+            with self.subTest(schema=type(value).__name__), self.assertRaises(RuntimeError):
+                self.verify(valid, [], self.events(), body=json.dumps(value).encode())
+        duplicate = b'[{"pid": 1, ' + json.dumps(valid).encode()[1:] + b']'
+        with self.assertRaisesRegex(RuntimeError, "duplicate"):
+            self.verify(valid, [], self.events(), body=duplicate)
+        with self.assertRaisesRegex(RuntimeError, "bound"):
+            self.verify(valid, [], self.events(), body=json.dumps([valid]).encode() + b" " * 4096)
+        for overrides in ({"native_pid": True}, {"install_id": "z" * 12}, {"nonce": "c" * 63},
+                          {"launcher_argv": self.arguments() + ["extra"]}, {"probe": ""}):
+            with self.subTest(overrides=overrides), self.assertRaises(RuntimeError):
+                self.verify(valid, [], self.events(), **overrides)
+
+    def test_spawn_entry_refuses_prior_replayed_partial_or_foreign_event_pairs(self):
+        import copy
+        old, valid = self.events(session="202-old"), self.events()
+        for effect in ("no-new", "one", "extra", "prefix", "old-session", "nonce", "pid", "bool-pid",
+                       "parent", "bool-parent", "missing-parent", "extra-parent", "method", "extra-field", "timestamp"):
+            before, after = copy.deepcopy(old), copy.deepcopy(old + valid)
+            if effect == "no-new": after = copy.deepcopy(old)
+            elif effect == "one": after.pop()
+            elif effect == "extra": after += copy.deepcopy(valid)
+            elif effect == "prefix": after[0]["timestamp"] += "x"
+            elif effect == "old-session":
+                for row in after[-2:]: row["session"] = old[0]["session"]
+            elif effect == "nonce": after[-1]["nonce"] = "d" * 64
+            elif effect == "pid": after[-1]["pid"] = 999
+            elif effect == "bool-pid": after[-1]["pid"] = True
+            elif effect == "parent": after[-1]["facts"]["parent_pid"] = 999
+            elif effect == "bool-parent": after[-1]["facts"]["parent_pid"] = True
+            elif effect == "missing-parent": after[-1]["facts"] = None
+            elif effect == "extra-parent": after[-1]["facts"]["unknown"] = 0
+            elif effect == "method": after[-1]["method"] = "tools/call"
+            elif effect == "extra-field": after[-1]["unknown"] = 0
+            else: after[-1]["timestamp"] = 1
+            with self.subTest(effect=effect), self.assertRaises(RuntimeError):
+                self.verify(self.entry(), before, after)
+        wrong_windows = self.events("win32")
+        for row in wrong_windows: row["facts"]["parent_pid"] = 101
+        with self.assertRaisesRegex(RuntimeError, "process chain"):
+            self.verify(self.entry("win32"), [], wrong_windows, "win32")
+        reused_native = self.events("win32")
+        for row in reused_native: row["pid"] = 101
+        with self.assertRaisesRegex(RuntimeError, "process chain"):
+            self.verify(self.entry("win32"), [], reused_native, "win32")
+
+    def test_spawn_status_rejoins_exact_argv_pid_exit_and_both_complete_streams(self):
+        import copy
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence = Path(temporary).resolve(); label = "public-stdio-a"
+            argv = ["/captured/hermes", "mcp", "test", "hermes-public-a-stdio"]
+            stdout, stderr = b"native fixture stdout\n", b"native fixture stderr\n"
+            prefix = evidence / label
+            for suffix, body in (("stdout", stdout), ("stderr", stderr)):
+                prefix.with_suffix("." + suffix).write_bytes(body)
+            status = dict(argv=argv, pid=101, exit=0, error=None, streams={
+                suffix: {"bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+                for suffix, body in (("stdout", stdout), ("stderr", stderr))})
+            path = prefix.with_suffix(".status.json")
+            def write(value): path.write_bytes(json.dumps(value).encode())
+            write(status)
+            self.assertEqual(CASE["public_spawn_status"](evidence, label, argv, stdout), 101)
+            for effect in ("argv", "pid", "exit", "bool-exit", "error", "extra", "stream", "bytes", "hash"):
+                value = copy.deepcopy(status)
+                if effect == "argv": value["argv"][-1] = "foreign"
+                elif effect == "pid": value["pid"] = True
+                elif effect == "exit": value["exit"] = 1
+                elif effect == "bool-exit": value["exit"] = False
+                elif effect == "error": value["error"] = "timeout"
+                elif effect == "extra": value["unknown"] = 0
+                elif effect == "stream": value["streams"]["extra"] = {}
+                elif effect == "bytes": value["streams"]["stdout"]["bytes"] = True
+                else: value["streams"]["stderr"]["sha256"] = "0" * 64
+                write(value)
+                with self.subTest(effect=effect), self.assertRaises(RuntimeError):
+                    CASE["public_spawn_status"](evidence, label, argv, stdout)
+            write(status)
+            with self.assertRaises(RuntimeError):
+                CASE["public_spawn_status"](evidence, label, argv, stdout + b"x")
+            with self.assertRaisesRegex(RuntimeError, "role"):
+                CASE["public_spawn_status"](evidence, "public-http-a", argv, stdout)
+
+    def test_spawn_capture_rejoins_original_parent_before_any_body_read(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve(); root = outer / "public-a/.hermes/uap-session"
+            root.mkdir(parents=True)
+            self.write_pair(root, self.entry())
+            image = CASE["inventory"](outer)
+            authorities = tuple(CASE["directory_identity"](path) for path in (outer, root.parent.parent, root.parent, root))
+            receipt, bodies = self.capture(root, outer, image, authorities)
+            self.assertEqual(set(receipt), {"rows", "identities"})
+            self.assertEqual(bodies["spawn-ledger.json.lock"], b"")
+            original = {name: (root / name).read_bytes() for name in CASE["PUBLIC_SPAWN_NAMES"]}
+            root.parent.rename(root.parent.with_name("original-hermes"))
+            root.mkdir(parents=True)
+            self.write_pair(root, self.entry())
+            replacement = CASE["inventory"](outer)
+            with mock.patch.dict(CASE["public_spawn_read"].__globals__,
+                    ordinary_bytes=mock.Mock(side_effect=AssertionError("replacement body read"))), \
+                    self.assertRaisesRegex(RuntimeError, "original directory"):
+                self.capture(root, outer, replacement, authorities)
+            for name, body in original.items():
+                self.assertEqual((root.parent.with_name("original-hermes") / root.name / name).read_bytes(), body)
+                self.assertEqual((root / name).read_bytes(), body)
+
+    def test_spawn_capture_refuses_changed_partial_and_nonordinary_leaves(self):
+        import copy
+        for effect in ("missing-lock", "nonempty-lock", "oversize", "hash", "mode", "inode", "hardlink", "body"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer = Path(temporary).resolve(); root = outer / "public-a/.hermes/uap-session"
+                root.mkdir(parents=True); ledger, lock = self.write_pair(root, self.entry())
+                image = CASE["inventory"](outer)
+                authorities = tuple(CASE["directory_identity"](path) for path in (outer, root.parent.parent, root.parent, root))
+                prefix = root.relative_to(outer).as_posix()
+                if effect == "missing-lock": lock.unlink(); image = CASE["inventory"](outer)
+                elif effect == "nonempty-lock": lock.write_bytes(b"x"); image = CASE["inventory"](outer)
+                elif effect == "oversize": ledger.write_bytes(b" " * 4097); image = CASE["inventory"](outer)
+                elif effect == "hash": image[prefix + "/spawn-ledger.json"]["sha256"] = "0" * 64
+                elif effect == "mode": image[prefix + "/spawn-ledger.json"]["mode"] = 0o644
+                elif effect == "inode": image[prefix + "/spawn-ledger.json"]["inode"] += 1
+                elif effect == "hardlink": os.link(ledger, outer / "same-inode")
+                else: ledger.write_bytes(ledger.read_bytes().replace(b"mcp-helper", b"mcp-foreign"))
+                before = {path: path.read_bytes() for path in (ledger, lock) if path.exists()}
+                with self.assertRaises((RuntimeError, OSError)):
+                    self.capture(root, outer, image, authorities)
+                for path, body in before.items(): self.assertEqual(path.read_bytes(), body)
+
+    def test_spawn_continuity_keeps_lock_and_all_nonstdio_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve(); root = outer / "public-a/.hermes/uap-session"
+            root.mkdir(parents=True); ledger, lock = self.write_pair(root, self.entry())
+            original, _ = self.capture(root, outer)
+            CASE["public_spawn_continuity"](original, self.capture(root, outer)[0])
+            info = ledger.stat()
+            os.utime(ledger, ns=(info.st_atime_ns, info.st_mtime_ns + 2_000_000_000))
+            touched, _ = self.capture(root, outer)
+            self.assertEqual(original["rows"], touched["rows"])
+            with self.assertRaisesRegex(RuntimeError, "retained spawn"):
+                CASE["public_spawn_continuity"](original, touched)
+            temporary_ledger = root / "owned-next"
+            next_entry = self.entry(); next_entry["registered_at"] = 102.75
+            temporary_ledger.write_bytes(json.dumps([next_entry]).encode()); temporary_ledger.chmod(0o600)
+            os.replace(temporary_ledger, ledger)
+            replacement, bodies = self.capture(root, outer)
+            old = self.events(session="202-old")
+            self.verify(next_entry, old, old + self.events(), body=bodies["spawn-ledger.json"])
+            CASE["public_spawn_continuity"](original, replacement, stdio=True)
+            with self.assertRaises(RuntimeError):
+                CASE["public_spawn_continuity"](original, replacement)
+            lock.rename(outer / "original-lock")
+            lock.write_bytes(b""); lock.chmod(0o644)
+            changed_lock, _ = self.capture(root, outer)
+            with self.assertRaisesRegex(RuntimeError, "original spawn lock"):
+                CASE["public_spawn_continuity"](replacement, changed_lock, stdio=True)
+            self.assertEqual((outer / "original-lock").read_bytes(), b"")
+
+    def test_spawn_install_and_launcher_use_captured_bundle_and_complete_recipe(self):
+        import base64
+        import hashlib
+        import copy
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve(); code = outer / "bundle/hermes-agent"
+            code.mkdir(parents=True); (code.parent / "bin").mkdir()
+            native = code.parent / "bin" / ("hermes.exe" if os.name == "nt" else "hermes")
+            native.write_bytes(b"inert pinned launcher")
+            identity, install = CASE["public_spawn_install"](code, native)
+            self.assertEqual(identity, CASE["directory_identity"](code))
+            self.assertEqual(install, hashlib.sha256(str(code).lower().encode("utf-8", "replace")).hexdigest()[:12])
+            wrong = outer / "official-source"; wrong.mkdir()
+            with self.assertRaisesRegex(RuntimeError, "bundled code"):
+                CASE["public_spawn_install"](wrong, native)
+            proof = {"target": outer / "plugin", "data": outer / "data"}
+            probe = outer / ("hermes-mcp-probe.exe" if os.name == "nt" else "hermes-mcp-probe")
+            launcher = proof["target"] / "io.github.777genius.agentplugins/managed-stdio-v1" / ("agentplugins.exe" if os.name == "nt" else "agentplugins")
+            args = ["--internal-stdio-v1", str(proof["target"]), str(proof["data"]), str(proof["target"]),
+                    "plugin", "--argv-base64-v1", base64.b64encode(probe.name.encode()).decode("ascii")]
+            recipe = {"command": str(launcher), "args": args}
+            self.assertEqual(CASE["public_spawn_launcher"](proof, recipe, str(probe)), [str(launcher), *args])
+            for index in range(8):
+                value = copy.deepcopy(recipe)
+                if index == 0: value["command"] += "-foreign"
+                else: value["args"][index - 1] += "-foreign"
+                with self.subTest(index=index), self.assertRaisesRegex(RuntimeError, "launcher recipe"):
+                    CASE["public_spawn_launcher"](proof, value, str(probe))
+
+    def test_spawn_events_bind_captured_bytes_and_profile_does_not_accept_extra_names(self):
+        import copy
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve(); path = outer / "events"
+            rows = self.events()
+            path.write_bytes(b"".join(json.dumps(row).encode() + b"\n" for row in rows))
+            image = CASE["inventory"](outer)
+            self.assertEqual(CASE["public_stdio_events"](path, "c" * 64, captured=image["events"]), rows)
+            changed = copy.deepcopy(image["events"]); changed["sha256"] = "0" * 64
+            with self.assertRaisesRegex(RuntimeError, "captured image"):
+                CASE["public_stdio_events"](path, "c" * 64, captured=changed)
+            path.rename(outer / "original-events"); path.write_bytes((outer / "original-events").read_bytes())
+            with self.assertRaisesRegex(RuntimeError, "captured image"):
+                CASE["public_stdio_events"](path, "c" * 64, captured=image["events"])
+            root = outer / "public-a/.hermes/uap-session"; root.mkdir(parents=True)
+            marker = root / ".uap-owner"
+            marker.write_bytes(("uap-hermes-project-session-v1\n" + str(root.parent.parent) + "\n").encode()); marker.chmod(0o600)
+            self.write_pair(root, self.entry())
+            current = CASE["inventory"](outer); receipt, _ = self.capture(root, outer, current)
+            with self.assertRaisesRegex(RuntimeError, "unmeasured"):
+                CASE["public_profile"](root, current, outer, set())
+            CASE["public_profile"](root, current, outer, set(), spawn=receipt)
+            for name in ("spawn-ledger.json.corrupt", ".spawn-ledger.json.tmp"):
+                foreign = root / name; foreign.write_bytes(b"unmeasured"); foreign.chmod(0o600)
+                with self.subTest(name=name), self.assertRaisesRegex(RuntimeError, "unmeasured"):
+                    CASE["public_profile"](root, CASE["inventory"](outer), outer, set(), spawn=receipt)
+                self.assertEqual(foreign.read_bytes(), b"unmeasured"); foreign.unlink()
 
 
 if __name__ == "__main__":

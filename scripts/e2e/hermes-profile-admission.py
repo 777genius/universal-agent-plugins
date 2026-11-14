@@ -4,6 +4,7 @@ import base64
 import hashlib
 from contextlib import ExitStack, contextmanager
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -2301,7 +2302,167 @@ def public_stdio_log(root, row, server, sessions):
         datetime.strptime(match.group(1).decode("ascii"), "%Y-%m-%d %H:%M:%S,%f")
 
 
-def public_profile(root, image, outer, config_hashes, *, stdio=None):
+PUBLIC_SPAWN_NAMES = ("spawn-ledger.json", "spawn-ledger.json.lock")
+
+
+def public_spawn_install(root, native):
+    require(root.is_absolute() and root.resolve() == root and root.name == "hermes-agent"
+            and native.is_absolute() and native.resolve() == native
+            and native == root.parent / "bin" / ("hermes.exe" if artifacts.WINDOWS else "hermes"),
+            "public spawn captured bundled code root differs")
+    return directory_identity(root), hashlib.sha256(str(root).lower().encode("utf-8", "replace")).hexdigest()[:12]
+
+
+def public_spawn_rows(image, outer, root):
+    prefix = root.relative_to(outer).as_posix() + "/"
+    return {name: dict(image[prefix + name]) for name in PUBLIC_SPAWN_NAMES if prefix + name in image}
+
+
+def public_parent_facts(value):
+    require(type(value) is dict and set(value) == {"kind", "parent_pid"}
+            and value["kind"] == "hermes-public-parent-v1"
+            and type(value["parent_pid"]) is int and 0 < value["parent_pid"] < 2**32,
+            "public stdio original parent receipt differs")
+    return value["parent_pid"]
+
+
+def public_spawn_status(evidence, label, argv, stdout):
+    require(label in {"public-stdio-a", "public-stdio-b", "public-stdio-restart-a", "public-stdio-repaired-a"}
+            and type(argv) is list and len(argv) == 4 and argv[1:3] == ["mcp", "test"],
+            "public spawn command role differs")
+    prefix = evidence / label
+    value = public_json(ordinary_bytes(prefix.with_suffix(".status.json")))
+    require(type(value) is dict and set(value) == {"argv", "pid", "exit", "error", "streams"}
+            and value["argv"] == argv and type(value["pid"]) is int and 0 < value["pid"] < 2**32
+            and type(value["exit"]) is int and value["exit"] == 0 and value["error"] is None
+            and type(value["streams"]) is dict and set(value["streams"]) == {"stdout", "stderr"},
+            "public spawn command status differs")
+    for suffix in ("stdout", "stderr"):
+        body, stream = ordinary_bytes(prefix.with_suffix("." + suffix)), value["streams"][suffix]
+        require(type(stream) is dict and set(stream) == {"bytes", "sha256"}
+                and type(stream["bytes"]) is int and stream["bytes"] == len(body)
+                and stream["sha256"] == hashlib.sha256(body).hexdigest()
+                and (suffix != "stdout" or body == stdout), "public spawn command stream differs")
+    return value["pid"]
+
+
+def public_spawn_launcher(proof, recipe, probe):
+    target, data, executable = proof["target"], proof["data"], Path(probe)
+    launcher = target / "io.github.777genius.agentplugins/managed-stdio-v1" / ("agentplugins.exe" if artifacts.WINDOWS else "agentplugins")
+    expected = [str(launcher), "--internal-stdio-v1", str(target), str(data), str(target), "plugin",
+                "--argv-base64-v1", base64.b64encode(executable.name.encode()).decode("ascii")]
+    require(type(recipe) is dict and type(recipe.get("command")) is str and type(recipe.get("args")) is list
+            and [recipe["command"], *recipe["args"]] == expected, "public spawn managed launcher recipe differs")
+    return expected
+
+
+def public_spawn_continuity(previous, current, *, stdio=False):
+    if not stdio:
+        require(current == previous, "public retained spawn ledger or lock changed")
+    elif previous is not None:
+        lock = PUBLIC_SPAWN_NAMES[1]
+        require(all(current[field][lock] == previous[field][lock] for field in ("rows", "identities")),
+                "public stdio command replaced its original spawn lock")
+
+
+def public_spawn_entry(body, before, after, nonce, native_pid, install_id, launcher_argv, probe, system):
+    require(type(body) is bytes and 0 < len(body) <= 4096 and system in {"linux", "darwin", "win32"},
+            "public spawn ledger bound/platform differs")
+    entries = public_json(body)
+    fields = set("pid create_time purpose install spawner_pid spawner_create registered_at argv host port profile hermes_home isolated boot_start spawner_boot boot_id".split())
+    require(type(entries) is list and len(entries) == 1 and type(entries[0]) is dict
+            and set(entries[0]) == fields, "public spawn ledger schema or membership differs")
+    entry = entries[0]
+    require(type(native_pid) is int and 0 < native_pid < 2**32
+            and type(entry["pid"]) is int and 0 < entry["pid"] < 2**32
+            and type(entry["spawner_pid"]) is int and entry["spawner_pid"] == native_pid
+            and entry["pid"] != native_pid and entry["purpose"] == "mcp-helper"
+            and type(install_id) is str and re.fullmatch(r"[a-f0-9]{12}", install_id)
+            and entry["install"] == install_id and entry["host"] == entry["profile"] == entry["hermes_home"] == ""
+            and entry["port"] is None and entry["isolated"] is False, "public spawn ledger identity/defaults differ")
+    for key in ("create_time", "spawner_create", "registered_at"):
+        require(type(entry[key]) is float and math.isfinite(entry[key]) and 0 < entry[key] < 2**53,
+                "public spawn ledger time differs")
+    for key in ("boot_start", "spawner_boot"):
+        require(entry[key] is None or system == "linux" and type(entry[key]) is float
+                and math.isfinite(entry[key]) and 0 <= entry[key] < 2**53, "public spawn ledger boot time differs")
+    boot = entry["boot_id"]
+    require(boot is None or system == "linux" and type(boot) is str and re.fullmatch(
+        r"[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", boot),
+        "public spawn ledger boot identifier differs")
+    require(type(launcher_argv) is list and len(launcher_argv) == 8
+            and all(type(arg) is str and arg and "\0" not in arg for arg in launcher_argv)
+            and type(probe) is str and probe and "\0" not in probe
+            and type(entry["argv"]) is str and entry["argv"] in
+            ({" ".join(launcher_argv)} if system == "win32" else {" ".join(launcher_argv), probe}),
+            "public spawn ledger argv differs")
+    require(type(before) is list and type(after) is list and after[:len(before)] == before
+            and len(after) == len(before) + 2 and type(nonce) is str and re.fullmatch(r"[a-f0-9]{64}", nonce),
+            "public spawn ledger lacks this command's new events")
+    first, second = after[len(before):]
+    require(all(type(row) is dict for row in before + [first, second]), "public spawn event schema differs")
+    require([first.get("method"), second.get("method")] == ["initialize", "tools/list"]
+            and first.get("session") not in {row.get("session") for row in before},
+            "public spawn ledger reused a prior session")
+    parent = public_parent_facts(first.get("facts"))
+    for row in (first, second):
+        require(set(row) == {"method", "pid", "session", "nonce", "timestamp", "facts"}
+                and row["nonce"] == nonce and type(row["pid"]) is int and 0 < row["pid"] < 2**32
+                and type(row["session"]) is str and 0 < len(row["session"]) <= 128
+                and row["session"] == first["session"] and row["pid"] == first["pid"]
+                and type(row["timestamp"]) is str and 0 < len(row["timestamp"]) <= 40
+                and public_parent_facts(row["facts"]) == parent, "public spawn ledger event identity differs")
+    require((entry["pid"] == parent and first["pid"] not in {parent, native_pid}) if system == "win32" else
+            (entry["pid"] == first["pid"] and parent == native_pid), "public spawn ledger process chain differs")
+    return entry
+
+
+def public_spawn_read(root, outer, image, authorities):
+    require(root.relative_to(outer).as_posix() in {"public-a/.hermes/uap-session", "public-b/.hermes/uap-session"}
+            and len(authorities) == 4, "public spawn root authority differs")
+    rows = public_spawn_rows(image, outer, root)
+    require(set(rows) == set(PUBLIC_SPAWN_NAMES), "public spawn ledger pair is missing")
+    bodies, identities, held = {}, {}, []
+    with ExitStack() as handles:
+        parent = None
+        for path, authority in zip((outer, root.parent.parent, root.parent, root), authorities):
+            info = path.lstat() if parent is None or artifacts.WINDOWS else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+            require((info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid) == tuple(authority)
+                    and image.get(path.relative_to(outer).as_posix()) == {
+                        "type": "directory", "mode": stat.S_IMODE(info.st_mode), "device": info.st_dev, "inode": info.st_ino},
+                    "public spawn original directory differs")
+            descriptor = open_inventory_directory(path, None if artifacts.WINDOWS else parent)
+            handles.callback(os.close, descriptor)
+            opened = os.fstat(descriptor)
+            check_inventory_directory(info, opened, "public spawn held directory differs")
+            held.append((path, info, descriptor, opened, None if artifacts.WINDOWS else parent))
+            parent = descriptor
+        def verify():
+            for item in held:
+                verify_inventory_directory(*item)
+        try:
+            for name, maximum, mode in ((PUBLIC_SPAWN_NAMES[0], 4096, 0o600), (PUBLIC_SPAWN_NAMES[1], 0, 0o644)):
+                verify()
+                path, row = root / name, rows[name]
+                info = path.lstat() if artifacts.WINDOWS else os.stat(name, dir_fd=parent, follow_symlinks=False)
+                require(set(row) == {"type", "mode", "device", "inode", "bytes", "sha256"}
+                        and row["type"] == "file" and row["mode"] == (0o666 if artifacts.WINDOWS else mode)
+                        and type(row["bytes"]) is int and 0 <= row["bytes"] <= maximum
+                        and (info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode), info.st_size) ==
+                            (row["device"], row["inode"], row["mode"], row["bytes"])
+                        and (info.st_uid, info.st_gid) == tuple(authorities[-1])[-2:],
+                        "public spawn captured member differs")
+                body = ordinary_bytes(path, info, parent=None if artifacts.WINDOWS else parent)
+                require(len(body) == row["bytes"] and hashlib.sha256(body).hexdigest() == row["sha256"],
+                        "public spawn captured bytes differ")
+                bodies[name], identities[name] = body, stable_file(info)
+        finally:
+            verify()
+    require(bodies[PUBLIC_SPAWN_NAMES[1]] == b"", "public spawn lock is not empty")
+    return {"rows": rows, "identities": identities}, bodies
+
+
+def public_profile(root, image, outer, config_hashes, *, stdio=None, spawn=None):
     prefix = root.relative_to(outer).as_posix()
     rows = {name[len(prefix) + 1:]: row for name, row in profile_tree(image, prefix).items() if name != prefix}
     marker = ("uap-hermes-project-session-v1\n" + str(root.parent.parent) + "\n").encode()
@@ -2314,6 +2475,12 @@ def public_profile(root, image, outer, config_hashes, *, stdio=None):
         require("logs/mcp-stderr.log" in rows, "public stdio log is missing")
         public_stdio_log(root, rows["logs/mcp-stderr.log"], *stdio)
         files.add("logs/mcp-stderr.log")
+    if spawn is not None:
+        require(type(spawn) is dict and set(spawn) == {"rows", "identities"}
+                and set(spawn["rows"]) == set(spawn["identities"]) == set(PUBLIC_SPAWN_NAMES)
+                and all(spawn["rows"][name] == rows.get(name) for name in PUBLIC_SPAWN_NAMES),
+                "public spawn admission differs from captured image")
+        files.update(PUBLIC_SPAWN_NAMES)
     backups = {name for name in rows if re.fullmatch(r"backups/config/config\.yaml\.good\.[0-9]{8}-[0-9]{6}", name)}
     try:
         require(len(backups) <= 5 and set(rows) <= directories | files | backups, "public native bootstrap member is unmeasured")
@@ -2324,7 +2491,7 @@ def public_profile(root, image, outer, config_hashes, *, stdio=None):
         raise
     for name, row in rows.items():
         directory = name in directories
-        mode = 0o755 if name in {"backups", "backups/config"} else 0o700 if directory else 0o644 if name.startswith("logs/") else 0o600
+        mode = 0o755 if name in {"backups", "backups/config"} else 0o700 if directory else 0o644 if name.startswith("logs/") or name == "spawn-ledger.json.lock" else 0o600
         require(row["type"] == ("directory" if directory else "file") and
                 row["mode"] == ((0o777 if directory else 0o666) if os.name == "nt" else mode), "public native bootstrap metadata differs")
         if name == "config.yaml.agentplugins.lock": require(row["bytes"] == 0, "public config lock is not empty")
@@ -2332,10 +2499,18 @@ def public_profile(root, image, outer, config_hashes, *, stdio=None):
         if name in backups: require(row["sha256"] in config_hashes, "public native backup has unowned bytes")
 
 
-def public_stdio_events(path, nonce):
+def public_stdio_events(path, nonce, *, captured=None):
     if not path.exists():
+        require(captured is None, "public stdio captured events disappeared")
         return []
-    body = ordinary_bytes(path)
+    info = path.lstat()
+    body = ordinary_bytes(path, info)
+    if captured is not None:
+        require(type(captured) is dict and set(captured) == {"type", "mode", "device", "inode", "bytes", "sha256"}
+                and captured["type"] == "file"
+                and (info.st_dev, info.st_ino, stat.S_IMODE(info.st_mode), len(body), hashlib.sha256(body).hexdigest()) ==
+                    (captured["device"], captured["inode"], captured["mode"], captured["bytes"], captured["sha256"]),
+                "public stdio events differ from captured image")
     require(body.endswith(b"\n") and len(body.splitlines()) <= 32, "public stdio event bound")
     rows = [public_json(line) for line in body.splitlines()]
     require(len(rows) % 2 == 0, "public stdio exchange incomplete")
@@ -2346,7 +2521,8 @@ def public_stdio_events(path, nonce):
         sessions.add(first["session"])
         for row in (first, second):
             require(set(row) == {"method", "pid", "session", "nonce", "timestamp", "facts"}
-                    and row["nonce"] == nonce and row["facts"] is None and type(row["pid"]) is int and row["pid"] > 0
+                    and row["nonce"] == nonce and (row["facts"] is None or public_parent_facts(row["facts"]))
+                    and type(row["pid"]) is int and row["pid"] > 0
                     and row["session"] == first["session"] and row["pid"] == first["pid"]
                     and type(row["timestamp"]) is str and len(row["timestamp"]) <= 40, "public stdio event identity differs")
     return rows
@@ -2486,7 +2662,8 @@ def public_stdio_recipe(project, probe, nonce):
     executable = Path(probe["path"])
     return {"type": "stdio", "command": executable.name, "args": [], "env": {
         "PATH": str(executable.parent), "UAP_TEST_ROOT": str(project),
-        "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": nonce}}
+        "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": nonce,
+        "UAP_TEST_HERMES_PUBLIC_PARENT": "1"}}
 
 
 def public_lock_record(body):
@@ -2601,6 +2778,9 @@ def observe_public(probes):
     deadline = float(os.environ["HERMES_PROFILE_DEADLINE"])
     pins = public_json(os.environ["HERMES_PUBLIC_PINS"].encode())
     public_runtime_pins(pins)
+    code_root = Path(os.environ["HERMES_PROFILE_RUNTIME_ROOT"])
+    code_authority, install_id = public_spawn_install(code_root, Path(os.environ["HERMES_BIN"]))
+    outer_authority = directory_identity(outer)
     original = Path(public_json(ordinary_bytes(evidence / "profile-endpoints.json"))["original_native_root"])
     raw_final = public_json(ordinary_bytes(evidence / "original-user-final.json"))
     require(inventory(outer) == raw_final, "raw profile boundary changed before public lifecycle")
@@ -2634,6 +2814,7 @@ def observe_public(probes):
                  or key.endswith("foreign.txt") or "/skills/foreign" in key}
     configs, records, born, complete = {scope: set() for scope in projects}, [], {}, False
     stdio_completed = {scope: 0 for scope in projects}
+    spawn_states = {scope: None for scope in projects}
 
     def snapshot():
         image, bindings = public_snapshot(outer, projects, pins)
@@ -2648,6 +2829,28 @@ def observe_public(probes):
             selected = projects[scope] / ".hermes/uap-session"
             require((directory_identity(selected), directory_identity(selected.parent)) == identity[:2], "public retained root/parent changed")
         return image, bindings
+
+    def spawn_capture(scope, image):
+        require(scope in born, "public spawn root has no original receipt")
+        root = projects[scope] / ".hermes/uap-session"
+        identities = (outer_authority, authorities[scope], born[scope][1], born[scope][0])
+        return public_spawn_read(root, outer, image, identities)
+
+    def spawn_preserved(scope, image):
+        if spawn_states[scope] is None:
+            require(not public_spawn_rows(image, outer, projects[scope] / ".hermes/uap-session"),
+                    "public spawn files appeared outside an owned stdio command")
+        else:
+            public_spawn_continuity(spawn_states[scope], spawn_capture(scope, image)[0])
+
+    def captured_events(proof, image):
+        if proof is None:
+            return []
+        path = proof["data"] / "hermes-events.jsonl"
+        row = image.get(path.relative_to(outer).as_posix())
+        events = public_stdio_events(path, nonce, captured=row)
+        require(bool(events) == (row is not None), "public stdio event capture membership differs")
+        return events
 
     def authored(paths, change):
         nonlocal current, proofs
@@ -2667,7 +2870,9 @@ def observe_public(probes):
         project, name = projects[scope], "hermes-public-" + scope
         selected = project / ".hermes/uap-session"
         http_before = {key: list(probe.methods()) for key, probe in probes.items()}
-        events_before = {key: public_stdio_events(proof["data"] / "hermes-events.jsonl", nonce) if proof else [] for key, proof in previous.items()}
+        for key in projects:
+            spawn_preserved(key, before)
+        events_before = {key: captured_events(proof, before) for key, proof in previous.items()}
         argv = [os.environ["HERMES_BIN"], *args] if native else [pins["uap"]["path"], *args, "--target", "hermes", "--scope", "project", "--project-root", str(project)]
         if not native and not inspect: argv += ["--yes", "--format", "json"]
         with ExitStack() as handles:
@@ -2723,9 +2928,11 @@ def observe_public(probes):
             require(not servers and not (project / ".hermes/skills" / name).exists(), "public removal retained owned sources")
         http_after = {key: list(probe.methods()) for key, probe in probes.items()}
         protocol_join(http_before, http_after, scope if test == "http" else None, 1 if test == "http" else 0)
+        events_after = {}
         for key, proof in previous.items():
             retained = proofs[key] or proof
-            events = public_stdio_events(retained["data"] / "hermes-events.jsonl", nonce) if retained else []
+            events = captured_events(retained, after)
+            events_after[key] = events
             require(events[:len(events_before[key])] == events_before[key]
                     and len(events)-len(events_before[key]) == (2 if key == scope and test == "stdio" else 0), "public stdio dispatch differs")
             if retained is not None:
@@ -2733,13 +2940,30 @@ def observe_public(probes):
             if proof is not None and not (key == scope and test == "stdio"):
                 prefix = proof["data"].relative_to(outer).as_posix()
                 require(profile_tree(before, prefix) == profile_tree(after, prefix), "public operation changed retained data")
+        prospective = dict(spawn_states)
+        for key in projects:
+            if key != scope or test != "stdio":
+                spawn_preserved(key, after)
+                continue
+            require(native and not inspect and not expected_failure and previous[scope] is not None
+                    and args == ["mcp", "test", name + "-stdio"]
+                    and directory_identity(code_root) == code_authority,
+                    "public spawn current command/bundled code authority differs")
+            receipt, bodies = spawn_capture(scope, after)
+            launcher = public_spawn_launcher(previous[scope], servers[name + "-stdio"], pins["probe"]["path"])
+            public_spawn_entry(bodies[PUBLIC_SPAWN_NAMES[0]], events_before[scope], events_after[scope], nonce,
+                public_spawn_status(evidence, label, argv, output), install_id, launcher, pins["probe"]["path"], sys.platform)
+            public_spawn_continuity(spawn_states[scope], receipt, stdio=True)
+            prospective[scope] = receipt
         log_key = selected_prefix + "/logs/mcp-stderr.log"
         if test != "stdio":
             require(before.get(log_key) == after.get(log_key), "public non-stdio action changed the stdio log")
         if selected.exists():
-            public_profile(selected, after, outer, configs[scope], stdio=(name + "-stdio", stdio_completed[scope]))
+            public_profile(selected, after, outer, configs[scope], stdio=(name + "-stdio", stdio_completed[scope]),
+                           spawn=prospective[scope])
         records.append({"label": label, "scope": scope, "delta": delta,
                         "http_methods": http_after, "stdio_counts": {key: len(events_before[key]) for key in projects}})
+        spawn_states.update(prospective)
         current = after
         return output
 
@@ -2793,6 +3017,8 @@ def observe_public(probes):
             command("public-removed-test-" + scope, scope, ["mcp", "test", "hermes-public-" + scope + "-http"], native=True, expected_failure=True)
         public_cold(evidence, cold_tmp, env, pins, deadline, os.environ["EXPECTED_HEAD"], Path(os.environ["HERMES_BIN"]))
         after, _ = snapshot(); require(after == current and not list(cold_tmp.iterdir()), "cold fixture changed retained public/User tree")
+        for scope in projects:
+            spawn_preserved(scope, after)
         complete = True
     finally:
         write_json(evidence / "public-command-deltas.json", {"complete": complete, "commands": records, "root_authorities": born,

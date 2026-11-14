@@ -74,7 +74,23 @@ func contained(path string) (string, error) {
 	}
 	return parent, nil
 }
+func probeEventFacts(method string, value *facts) (any, error) {
+	if value != nil || os.Getenv("UAP_TEST_HERMES_PUBLIC_PARENT") != "1" ||
+		(method != "initialize" && method != "tools/list") {
+		return value, nil
+	}
+	parent := os.Getppid()
+	if parent <= 0 {
+		return nil, errors.New("Hermes public fixture parent is unavailable")
+	}
+	return map[string]any{"kind": "hermes-public-parent-v1", "parent_pid": parent}, nil
+}
+
 func event(method string, f *facts) error {
+	value, err := probeEventFacts(method, f)
+	if err != nil {
+		return err
+	}
 	path, err := contained(os.Getenv("UAP_TEST_EVENTS"))
 	if err != nil {
 		return err
@@ -91,7 +107,7 @@ func event(method string, f *facts) error {
 	if stat.Size() > 2<<20 {
 		return errors.New("fixture event limit")
 	}
-	return json.NewEncoder(file).Encode(map[string]any{"method": method, "pid": os.Getpid(), "session": session, "nonce": os.Getenv("UAP_TEST_NONCE"), "timestamp": time.Now().UTC().Format(time.RFC3339Nano), "facts": f})
+	return json.NewEncoder(file).Encode(map[string]any{"method": method, "pid": os.Getpid(), "session": session, "nonce": os.Getenv("UAP_TEST_NONCE"), "timestamp": time.Now().UTC().Format(time.RFC3339Nano), "facts": value})
 }
 func inspect(params json.RawMessage) (any, error) {
 	var p struct {

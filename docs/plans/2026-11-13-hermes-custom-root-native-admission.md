@@ -2230,3 +2230,132 @@ This two-path candidate has source and exact preimage/inverse checks only.
 Execution of the corrected method and current native workflows is still
 pending. The older 880d failure does not exercise the later source User
 readout or the official source bootstrap `-B` correction.
+
+
+### 2026-11-14 — prospective public stdio spawn-ledger evidence
+
+The original bundled macOS run at source
+`880d4c885191de21a8c64c0aeaead006fab06f6f`
+(run `43595758794`, job `132449810814`) remains a failed admission.
+Its closed first-refusal report reached `public-stdio-a` and
+`public_profile`: 22 selected-root members, one config backup, and two
+unmeasured members. The first was an ordinary 0600 file of 486 bytes.
+The report's domain-separated relative-name digest
+`171f4c723dfacb549c6650b433e39cab3cb614dbe559c070f56d4e3493f87bcf`
+matches the exact pinned vendor literal `spawn-ledger.json`.
+The original full log is 200,059 bytes, SHA-256
+`467da768bf8085635cf32916a0820671601f42dd4e68597115b738086b4dad39`.
+Artifact `14115072289` is 920 bytes, SHA-256
+`b1110a3e661c0659b17667a611d4ca3b402324ee319e3c00bab29499dc3fff8e`;
+its ZIP has not been decoded in this review. The second member's name,
+mode, and bytes are not established by that report.
+
+Pinned Hermes `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`
+registers each stdio child through `process_identity.register_child`.
+The sole ledger writer prunes on append, writes a fixed sixteen-field
+entry, and uses an empty `spawn-ledger.json.lock` sidecar. The pinned
+`pm.filesystem.lock_fd` implementation locks without writing a byte.
+Normal stdio retirement clears in-memory tracking; it does not remove or
+rewrite the machine ledger. These source facts support the following
+prospective, bounded oracle. They do not establish the old artifact's
+unobserved sidecar, current process ownership, process birth, or cleanup.
+
+The public fixture now opts in to one additional fact on its existing
+`initialize` and `tools/list` event records:
+`{"kind":"hermes-public-parent-v1","parent_pid":<positive integer>}`.
+Only exact `UAP_TEST_HERMES_PUBLIC_PARENT=1` selects it. All other
+values preserve null facts on these methods; the six top-level event
+fields, RPC sequence, replies, and existing `tools/call` facts remain
+unchanged. The existing real compiled-probe subprocess test exercises
+absence, empty, disabled, malformed, padded, and exact values. The
+bundled workflow explicitly runs that probe package's unit tests, with
+a 300-second command limit, on its existing three OS rows before the
+existing build. Its two existing path filters include the probe directory;
+jobs, acquisition pins, permissions, and native deadlines are unchanged.
+
+Admission reads only these two fixed names below the original
+receipt-owned `public-a/.hermes/uap-session` or
+`public-b/.hermes/uap-session` root. The complete already captured
+directory chain and file rows are joined before bytes are read. POSIX
+reads remain relative to held directory descriptors; Windows keeps the
+existing no-delete-sharing ancestry handles. Both files must be ordinary,
+single-link, same-owner objects with exact captured identity, size and
+SHA-256. The ledger is at most 4 KiB and exactly one JSON entry with the
+sixteen pinned fields. The lock must be empty, 0644 on POSIX or 0666 in
+the Windows stat domain; ledger mode is 0600 on POSIX or 0666 on Windows.
+Unknown, partial, corrupt, temporary, extra, or substituted members refuse.
+
+Every accepted row must join the current native command's exact status
+argv, positive PID, zero exit, absent error, and both complete stream
+receipts. It must also join exactly the two new events of that command,
+with the original nonce, new session, same event PID and parent fact.
+POSIX joins the ledger child to the probe PID and its parent to the native
+status PID. Windows joins the ledger child to the probe's observed parent;
+the probe remains a distinct child. The only allowed complete argv forms
+are the receipt-owned eight-token encoded managed launcher, and its
+one-token pinned probe after POSIX exec. There is no name-only, substring,
+argv-only Windows, or previous-session fallback.
+
+The expected installation ID uses the parent-selected bundled code path
+passed as `HERMES_PROFILE_RUNTIME_ROOT`, with its exact bundled bin sibling.
+That selection originates in the existing `runtime_before` payload
+contract. A fresh directory tuple records continuity within the public
+phase; it is not a persisted original receipt. The pre-existing complete
+`runtime_before`/`runtime_after` payload comparison still supplies the
+original immutable runtime check. The official source checkout is never
+substituted for the selected bundle's `__file__`-derived code root.
+
+The first owned stdio requires absence of both files in the preceding
+measured image. Later owned stdio may replace the single ledger row only
+after a current-command event/status join, while retaining the original
+lock's full metadata and bytes. All non-stdio commands, sibling commands,
+update, repair, removal, removed inventory, and the final cold check keep
+both accepted file rows and full captured stat identities unchanged.
+The accepted baseline advances only after all existing command/profile
+checks pass. Ledger PIDs, timestamps, pruning, and parent facts never
+authorize signalling, deletion, cleanup, or a production capability.
+
+The new Python contracts cover current versus replayed events, POSIX and
+Windows parent chains, all fixed schema/default/type bounds, exact
+command and stream joins, held original-parent substitution before body
+reads, changed/aliased/oversized/partial leaves, preserved sidecar identity,
+non-stdio metadata drift, complete launcher arguments, and unknown
+bootstrap members. Two existing test methods and the existing inspect
+command fixture receive only the required opt-in/ledger contexts; their
+previous attack sequences and assertions remain. The original completed
+stdio/removal test executes the real new guards and baseline update.
+No guards are omitted from its command AST.
+
+This candidate has source review only while the execution environment is
+unavailable. Go tests, Python tests, formatting, and a new genuine native
+replay have not run on these bytes. Existing primary-family, public-family,
+cold-recovery, full-source, original-User, sibling, and final admission
+checks remain mandatory. This change grants no production or native
+qualification and does not relax the separate source-runtime boundary.
+
+Two older prerequisite failures are separate from the ledger observation:
+macOS job `132449810970` ran 143 methods in 5.190 seconds with one failure
+and one skip; Windows job `132449810996` ran 143 methods in 13.511 seconds
+with one failure and four skips. Both used the authored invalid date
+2026-02-30 and reached a changed `ValueError` message before User/source
+capture. Their selected child interpreter was Python 3.14.9; the outer
+wrappers were respectively 3.15.2 and 3.12.10. The existing correction in
+`282995` is retained, without another fix or a native-pass claim.
+The corresponding raw-log SHA-256 values are
+`3ffc0605e1114b09d554bff7c339edcf50a58b8492babc841cd957fc8c37358f`
+(113,620 bytes) and
+`aba9d666a3287104354ee723f09b2af0d82ae9f7669eaed97d4cb4a08a0ae378`
+(134,694 bytes).
+
+
+The subsequently completed original Linux bundled job `132449811032`
+from the same `880d` run independently reached the same first predicate:
+22 members, one backup, two unmeasured members, with the same
+`171f4c72…` relative-name digest for a 0600 file of 514 bytes.
+Its raw log is 233,900 bytes, SHA-256
+`3be584d2df266ba55f7b87bb78bc80b6e55d803cbe0bad71afbdbb16a4431020`;
+artifact `14117135844` is 919 bytes, SHA-256
+`d82d58d9181ed8afc830b3d0992b53efd71caada855ed882b6a073ba1db619c3`.
+Independent evidence receipt `2ac527483bf85c70000734d50c50414da0f80039`
+records this source/metadata join. The ZIP is unread, the second member
+is still unknown, and final cleanup/admission remain unproved.

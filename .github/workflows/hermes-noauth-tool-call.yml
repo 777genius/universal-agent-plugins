@@ -11,6 +11,7 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     - scripts/e2e/hermes-noauth-tool-call.py
     - scripts/e2e/hermes-profile-admission.py
     - scripts/test_hermes_profile_admission.py
+    - repotests/testdata/agentplugins_native_probe/**
     - scripts/hermes_owned_build_cleanup.py
     - scripts/test_hermes_owned_build_cleanup.py
     - scripts/hermes_local_provider_fixture.py
@@ -34,6 +35,7 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     - scripts/e2e/hermes-noauth-tool-call.py
     - scripts/e2e/hermes-profile-admission.py
     - scripts/test_hermes_profile_admission.py
+    - repotests/testdata/agentplugins_native_probe/**
     - scripts/hermes_owned_build_cleanup.py
     - scripts/test_hermes_owned_build_cleanup.py
     - scripts/hermes_local_provider_fixture.py
@@ -308,6 +310,7 @@ jobs:
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=15).strip()
         assert head == os.environ['HERMES_NATIVE_UAP_HEAD']
         assert not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=normal'], timeout=15)
+        subprocess.run(['go', 'test', '-count=1', './repotests/testdata/agentplugins_native_probe'], check=True, timeout=300)
         subprocess.run(['go', 'build', '-o', str(binary), './cli/cmd/agentplugins'], check=True, timeout=300)
         subprocess.run(['go', 'test', '-c', '-o', str(cold), './cli/cmd/agentplugins'], check=True, timeout=300)
         subprocess.run(['go', 'build', '-o', str(probe), './repotests/testdata/agentplugins_native_probe'], check=True, timeout=300)
