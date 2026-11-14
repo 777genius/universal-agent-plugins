@@ -1,12 +1,18 @@
 package cline
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -49,11 +55,15 @@ type sessionObservationRunner struct {
 	err     error
 	bounded bool
 	cancel  context.CancelFunc
+	onRun   func()
 }
 
 func (runner *sessionObservationRunner) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	runner.command = command
 	_, runner.bounded = ctx.Deadline()
+	if runner.onRun != nil {
+		runner.onRun()
+	}
 	if runner.cancel != nil {
 		runner.cancel()
 	}
@@ -61,15 +71,23 @@ func (runner *sessionObservationRunner) Run(ctx context.Context, command legacyp
 }
 
 func TestSessionNativeInventoryExitAndCapability(t *testing.T) {
-	plan := clients.SessionPlan{Executable: "/native/cline", Directory: "/project", Servers: []string{"owned"},
-		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": "/project/mcp.json", "CLINE_NO_AUTO_UPDATE": "1"}}
-	good := []byte(`[{"name":"owned","path":"/project/mcp.json","transportType":"stdio","disabled":false}]`)
+	project := t.TempDir()
+	path := filepath.Join(project, "mcp.json")
+	owned := []byte(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/owned/probe","cwd":"/project"},"autoApprove":[]}}}`)
+	if err := os.WriteFile(path, owned, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	plan := clients.SessionPlan{Executable: "/native/cline", Directory: project, Servers: []string{"owned"},
+		ConfigDigest: fmt.Sprintf("%x", sha256.Sum256(owned)),
+		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
+	good := []byte(fmt.Sprintf(`[{"name":"owned","path":%q,"transportType":"stdio","disabled":false}]`, path))
+	config := nativeconfig.New()
 	// No real Cline executable is installed or launched in this regression.
 	// Revoked consent must prevent even the runner entry point from being called.
 	preCanceled, cancelBefore := context.WithCancel(context.Background())
 	cancelBefore()
 	preRunner := &sessionObservationRunner{result: legacyports.CommandResult{Stdout: good, CleanupComplete: true}}
-	if err := New().VerifySession(preCanceled, clients.Env{Runner: preRunner}, plan); !errors.Is(err, context.Canceled) {
+	if err := New().VerifySession(preCanceled, clients.Env{Runner: preRunner, NativeConfig: config}, plan); !errors.Is(err, context.Canceled) {
 		t.Fatalf("pre-canceled observation returned %v, want context.Canceled", err)
 	}
 	if preRunner.command.Argv != nil {
@@ -82,22 +100,75 @@ func TestSessionNativeInventoryExitAndCapability(t *testing.T) {
 		{legacyports.CommandResult{Stdout: []byte("Usage: cline"), CleanupComplete: true}, nil}, {legacyports.CommandResult{Stdout: make([]byte, (1<<20)+1), CleanupComplete: true}, nil},
 		{legacyports.CommandResult{Stdout: good}, nil}, {legacyports.CommandResult{Stdout: good, CleanupComplete: true, NoChildStarted: true}, nil}} {
 		runner := &sessionObservationRunner{result: failure.result, err: failure.err}
-		if err := New().VerifySession(context.Background(), clients.Env{Runner: runner}, plan); err == nil {
+		if err := New().VerifySession(context.Background(), clients.Env{Runner: runner, NativeConfig: config}, plan); err == nil {
 			t.Fatal("native failure accepted")
 		}
 	}
 	runner := &sessionObservationRunner{result: legacyports.CommandResult{Stdout: good, CleanupComplete: true}}
-	if err := New().VerifySession(context.Background(), clients.Env{Runner: runner}, plan); err != nil {
+	if err := New().VerifySession(context.Background(), clients.Env{Runner: runner, NativeConfig: config}, plan); err != nil {
 		t.Fatal(err)
 	}
-	if !runner.bounded || runner.command.StdoutLimitBytes != 1<<20 || runner.command.Dir != "/project" ||
-		!reflect.DeepEqual(runner.command.Argv, []string{"/native/cline", "--auto-approve", "false", "--cwd", "/project", "config", "mcp", "--json"}) {
+	if !runner.bounded || runner.command.StdoutLimitBytes != 1<<20 || runner.command.Dir != project ||
+		!reflect.DeepEqual(runner.command.Argv, []string{"/native/cline", "--auto-approve", "false", "--cwd", project, "config", "mcp", "--json"}) {
 		t.Fatalf("native observation changed scope or command: %+v", runner.command)
 	}
 	canceled, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	runner.cancel = cancel
-	if err := New().VerifySession(canceled, clients.Env{Runner: runner}, plan); !errors.Is(err, context.Canceled) {
+	if err := New().VerifySession(canceled, clients.Env{Runner: runner, NativeConfig: config}, plan); !errors.Is(err, context.Canceled) {
 		t.Fatalf("late cancellation admitted native inventory: %v", err)
+	}
+}
+
+func TestSessionNativeInventoryRefusesSelectedSourceChanges(t *testing.T) {
+	project := t.TempDir()
+	path := filepath.Join(project, "mcp.json")
+	baseline := []byte(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/owned/probe","cwd":"/project"},"autoApprove":[]}}}`)
+	foreign := []byte(`{"mcpServers":{"owned":{"transport":{"type":"stdio","command":"/foreign/probe","cwd":"/project"},"autoApprove":[]}}}`)
+	plan := clients.SessionPlan{Executable: "/native/cline", Directory: project, Servers: []string{"owned"},
+		ConfigDigest: fmt.Sprintf("%x", sha256.Sum256(baseline)),
+		Environment: map[string]string{"CLINE_MCP_SETTINGS_PATH": path, "CLINE_NO_AUTO_UPDATE": "1"}}
+	rows := []byte(fmt.Sprintf(`[{"name":"owned","path":%q,"transportType":"stdio","disabled":false}]`, path))
+	kernel := nativeconfig.New()
+	for _, mutation := range []string{"stale-before", "changed-during", "unchanged"} {
+		t.Run(mutation, func(t *testing.T) {
+			if err := os.WriteFile(path, baseline, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			runner := &sessionObservationRunner{result: legacyports.CommandResult{Stdout: rows, CleanupComplete: true}}
+			if mutation == "stale-before" {
+				if err := os.WriteFile(path, foreign, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if mutation == "changed-during" {
+				runner.onRun = func() {
+					if err := os.WriteFile(path, foreign, 0o600); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			err := New().VerifySession(t.Context(), clients.Env{Runner: runner, NativeConfig: kernel}, plan)
+			if mutation == "unchanged" {
+				if err != nil {
+					t.Fatal("unchanged owned config refused", err)
+				}
+			} else {
+				if err == nil {
+					t.Fatal("changed Project MCP command accepted from unchanged native inventory")
+				}
+				if mutation == "stale-before" && runner.command.Argv != nil {
+					t.Fatal("stale config reached native CLI inspection")
+				}
+			}
+			want := foreign
+			if mutation == "unchanged" {
+				want = baseline
+			}
+			body, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(body, want) {
+				t.Fatal("refused inspector restored or changed concurrent bytes", err)
+			}
+		})
 	}
 }

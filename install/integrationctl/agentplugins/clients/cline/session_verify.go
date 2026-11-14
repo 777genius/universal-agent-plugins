@@ -3,12 +3,15 @@ package cline
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -26,6 +29,10 @@ func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients
 	if env.Runner == nil {
 		return fmt.Errorf("cline native configuration observer unavailable")
 	}
+	before, err := sessionSourceSnapshot(env.NativeConfig, plan)
+	if err != nil {
+		return err
+	}
 	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	result, err := env.Runner.Run(bounded, legacyports.Command{
@@ -41,7 +48,32 @@ func (*Adapter) VerifySession(ctx context.Context, env clients.Env, plan clients
 	if result.ExitCode != 0 || len(result.Stdout) > 1<<20 || !result.CleanupComplete || result.NoChildStarted {
 		return fmt.Errorf("cline configuration inventory failed, exceeded its bound or did not prove process cleanup")
 	}
+	after, err := sessionSourceSnapshot(env.NativeConfig, plan)
+	if err != nil || after.Mode != before.Mode || !bytes.Equal(after.Body, before.Body) {
+		return fmt.Errorf("cline Project MCP source changed during native inspection: %w", errors.Join(err, nativeconfig.ErrConcurrentChange))
+	}
 	return verifySessionInventory(result.Stdout, plan.Environment["CLINE_MCP_SETTINGS_PATH"], plan.Servers)
+}
+
+// A native inventory can show the same path/server names after a foreign
+// command or tool approval is introduced. Rejoin owned bytes on both sides of
+// the read-only native process, not merely the inventory's projected names.
+func sessionSourceSnapshot(kernel nativeconfig.Kernel, plan clients.SessionPlan) (nativeconfig.FileSnapshot, error) {
+	path := plan.Environment["CLINE_MCP_SETTINGS_PATH"]
+	if path == "" || len(plan.ConfigDigest) != 64 {
+		return nativeconfig.FileSnapshot{}, fmt.Errorf("cline selected-source receipt is incomplete")
+	}
+	file, err := kernel.ReadExactFile(path)
+	if err != nil {
+		return nativeconfig.FileSnapshot{}, err
+	}
+	if !file.Exists || len(file.Body) > 1<<20 || fmt.Sprintf("%x", sha256.Sum256(file.Body)) != plan.ConfigDigest {
+		return nativeconfig.FileSnapshot{}, fmt.Errorf("cline selected-source bytes differ from their owned plan")
+	}
+	if err := exactSessionServers(file.Body, plan.Servers); err != nil {
+		return nativeconfig.FileSnapshot{}, err
+	}
+	return file, nil
 }
 
 func verifySessionInventory(body []byte, path string, names []string) error {
