@@ -148,7 +148,9 @@ def read_saved_record(path):
     require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
             and 0 <= before.st_size <= 1 << 20,
             "protected saved record must be a bounded single-link regular file")
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    # Windows os.read must not translate CRLF before the exact size/digest join.
+    flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+             | getattr(os, "O_NONBLOCK", 0))
     fd = os.open(path, flags)
     try:
         held = os.fstat(fd)
