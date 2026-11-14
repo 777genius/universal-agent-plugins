@@ -244,6 +244,36 @@ class SavedScopeTests(unittest.TestCase):
                     audit.checked_saved_removal(documents, "portable", case(), root)
 
 
+    def test_saved_removal_refuses_hardlinked_or_oversized_lock(self):
+        for variant in ("hardlink", "oversized"):
+            with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                manifest, lock = root / "uap.toml", root / "uap.lock"
+                manifest.write_text("schema_version = 1\\n[dependencies]\\n[targets]\\n", encoding="utf-8")
+                foreign = root / "foreign.lock"
+                foreign.write_text('{"lock_version":1,"packages":[]}', encoding="utf-8")
+                if variant == "hardlink":
+                    os.link(foreign, lock)
+                else:
+                    lock.write_bytes(b"x" * ((1 << 20) + 1))
+                with self.assertRaisesRegex(ValueError, "bounded single-link regular file"):
+                    audit.checked_saved_removal([manifest, lock], "portable", case(), root)
+
+    def test_saved_removal_refuses_symlinked_lock(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest, lock = root / "uap.toml", root / "uap.lock"
+            manifest.write_text("schema_version = 1\\n[dependencies]\\n[targets]\\n", encoding="utf-8")
+            foreign = root / "foreign.lock"
+            foreign.write_text('{"lock_version":1,"packages":[]}', encoding="utf-8")
+            try:
+                lock.symlink_to(foreign)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest("native symlink creation unavailable: " + str(error))
+            with self.assertRaisesRegex(ValueError, "bounded single-link regular file"):
+                audit.checked_saved_removal([manifest, lock], "portable", case(), root)
+
+
 class RefusalTests(unittest.TestCase):
     selected = {"distribution": "777genius/marketing-kit", "name": "marketing-kit"}
 

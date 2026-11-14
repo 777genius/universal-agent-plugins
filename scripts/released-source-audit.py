@@ -139,12 +139,12 @@ def protected_scope_snapshot(root, scope, native_root):
     return observed
 
 
-def protected_saved_record(path):
-    """Read one saved record through a held, bounded, no-follow descriptor."""
+def read_saved_record(path):
+    """Read owned manifest/lock/state bytes only after a held identity join."""
     try:
         before = path.lstat()
     except FileNotFoundError:
-        return None
+        return None, None
     require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
             and 0 <= before.st_size <= 1 << 20,
             "protected saved record must be a bounded single-link regular file")
@@ -167,18 +167,28 @@ def protected_saved_record(path):
         require(len(body) == before.st_size
                 and same(before, os.fstat(fd)) and same(before, path.lstat()),
                 "protected saved record changed during read")
-        return {"digest": digest(body), "mtime_ns": before.st_mtime_ns,
-                "inode": before.st_ino, "mode": before.st_mode}
+        return bytes(body), before
     finally:
         os.close(fd)
 
 
+def protected_saved_record(path):
+    body, before = read_saved_record(path)
+    if before is None:
+        return None
+    return {"digest": digest(body), "mtime_ns": before.st_mtime_ns,
+            "inode": before.st_ino, "mode": before.st_mode}
+
+
 def checked_saved_removal(documents, alias, case, root):
+    bodies = []
     for path in documents:
         in_case(path, root)
-        require(path.is_file(), "saved removal lost the manifest or lock")
-    manifest = tomllib.loads(documents[0].read_text(encoding="utf-8"))
-    locked = json.loads(documents[1].read_text(encoding="utf-8"))
+        body, _ = read_saved_record(path)
+        require(body is not None, "saved removal lost the manifest or lock")
+        bodies.append(body)
+    manifest = tomllib.loads(bodies[0].decode("utf-8"))
+    locked = json.loads(bodies[1].decode("utf-8"))
     dependencies, targets = manifest.get("dependencies", {}), manifest.get("targets", {})
     require(manifest.get("schema_version") == 1 and isinstance(dependencies, dict)
             and isinstance(targets, dict), "saved removal produced an invalid manifest")
