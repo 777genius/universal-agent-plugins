@@ -1,0 +1,44 @@
+name: One-time WebP source migration
+
+on:
+  push:
+    branches:
+      - chore/optimize-raster-webp-20261114
+    paths:
+      - .github/workflows/webp-source-migration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: true
+      - name: Install libwebp encoders
+        run: |
+          set -euo pipefail
+          sudo python3 scripts/ci_ubuntu_apt_mirrors.py
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq webp
+          cwebp -version
+          dwebp -version
+      - name: Convert tracked raster originals
+        run: |
+          set -euo pipefail
+          python3 scripts/migrate-raster-webp.py
+          node --check landing/scripts/prepare-webp-assets.mjs
+          node landing/scripts/prepare-webp-assets.mjs
+      - name: Commit converted WebP source assets
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- assets landing/assets README.md docs/design/restore-team/asset-provenance.json
+          git diff --cached --stat
+          test -n "$(git diff --cached --name-only)"
+          git commit -m "chore(assets): replace PNG originals with optimized WebP"
+          git push origin HEAD:refs/heads/chore/optimize-raster-webp-20261114
