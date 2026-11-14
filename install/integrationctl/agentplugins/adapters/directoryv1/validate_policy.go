@@ -57,9 +57,6 @@ func parseSemver(v string) ([3]uint64, error) {
 	}
 	return out, nil
 }
-func validClient(v domain.ClientID) bool {
-	return domain.IsSupportedClient(v)
-}
 func oneOf(v string, values ...string) bool {
 	for _, x := range values {
 		if v == x {

@@ -35,6 +35,8 @@ var (
 	_ clients.PlanRefiner              = (*Adapter)(nil)
 )
 
+// Both native scopes record selected MCP servers in mcp_config.json;
+// the portable mcp.json is deliberately not present after projection.
 func (*Adapter) ManagedMCPSelection() clients.SelectionLayout {
 	return clients.SelectionLayout{File: "mcp_config.json", Nested: true}
 }

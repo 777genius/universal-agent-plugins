@@ -830,9 +830,12 @@
           "extensions": "扩展"
         }
       },
-      "noCompatibleSignedRelease": "UAP 支持 {agent}，但此插件没有适用于所选安装范围的兼容签名版本。",
+      "noCompatibleSignedRelease": "此安装范围内没有适用于 {agent} 的目录版本。",
       "piPinnedProjectSource": "项目：使用此插件固定到具体 SHA 的 Git 源安装到 Pi（不是已签名的 Pi 目标）；CLI 会检查兼容性。",
-      "guidedChatgptSetup": "引导式 ChatGPT Web 设置；请在 ChatGPT 内完成连接。"
+      "guidedChatgptSetup": "引导式 ChatGPT Web 设置；请在 ChatGPT 内完成连接。",
+      "catalogReleasePending": "此插件尚未发布适用于 {agent} 的版本。",
+      "useComputerScope": "请为此插件选择“这台电脑”。",
+      "unsupportedPluginComponents": "{agent} 不支持此插件的所有组件。"
     },
     "authentication": {
       "not_required": "无需帐户",

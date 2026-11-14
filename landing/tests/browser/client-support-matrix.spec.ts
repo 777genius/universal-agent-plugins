@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { clientSupportRows } from '../../data/clientSupport.ts';
+import { clientIds } from '../../data/clientIds.generated.ts';
+import { hiddenPublicClientIds } from '../../data/clients.ts';
 import { hydrated, wording } from './i18n-state.helpers';
 
 test('home lists the complete scope matrix immediately before FAQ', async ({ page }) => {
@@ -8,7 +10,9 @@ test('home lists the complete scope matrix immediately before FAQ', async ({ pag
   const section = page.locator('#agent-support');
   const table = section.getByRole('table');
   await expect(table.locator('tbody tr')).toHaveCount(clientSupportRows.length);
-  expect(clientSupportRows).toHaveLength(16);
+  expect(clientSupportRows.map((row) => row.id).sort()).toEqual(
+    clientIds.filter((id) => !hiddenPublicClientIds.has(id)).sort(),
+  );
   await expect(table.getByRole('row', { name: /^VS Code / })).toHaveCount(0);
   const logos = table.locator('tbody th img');
   await expect(logos).toHaveCount(clientSupportRows.length);
