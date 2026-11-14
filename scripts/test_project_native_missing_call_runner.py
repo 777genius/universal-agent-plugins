@@ -96,11 +96,17 @@ class RealClientRunnerContractTest(unittest.TestCase):
         nonce = "c" * 32
         config = project / (".cursor/mcp.json" if client == "cursor" else ".mcp.json")
         config.parent.mkdir(parents=True, exist_ok=True)
+        if client == "qoder":
+            selected_command, selected_args = str(probe), ["call-fixture"]
+        else:
+            selected_command, selected_args = str(executable), ["--internal-stdio-v1", str(active)]
         members = {
             "foreign_keep": {"command": "/usr/bin/true", "args": []},
-            name: {"type": "stdio", "command": str(executable),
-                   "args": ["--internal-stdio-v1", str(active)],
-                   "env": {"UAP_TEST_NONCE": nonce, "UAP_TEST_EVENTS": str(events)}}
+            name: {"type": "stdio", "command": selected_command,
+                   "args": selected_args,
+                   "env": {"UAP_TEST_NONCE": nonce, "UAP_TEST_EVENTS": str(events),
+                           "PLUGIN_ROOT": str(active),
+                           "PLUGIN_DATA": str(project / ".uap" / "plugin-data" / active.name)}}
         }
         config.write_text(json.dumps({"mcpServers": members}))
         return project, name, nonce, events, installer, source_probe, active, config
@@ -110,6 +116,22 @@ class RealClientRunnerContractTest(unittest.TestCase):
             with self.subTest(client=client), tempfile.TemporaryDirectory() as temp:
                 p, name, nonce, events, installer, probe, active, _ = self.fake_project(Path(temp), client)
                 self.assertEqual(installed_config(client, p, name, nonce, events, installer, probe), active)
+
+    def test_qoder_project_refuses_cursor_helper_or_foreign_executable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project, name, nonce, events, installer, probe, active, path = self.fake_project(Path(temp), "qoder")
+            doc = json.loads(path.read_text())
+            doc["mcpServers"][name]["command"] = str(active / "io.github.777genius.agentplugins" / "managed-stdio-v1" / "agentplugins")
+            doc["mcpServers"][name]["args"] = ["--internal-stdio-v1", str(active)]
+            path.write_text(json.dumps(doc))
+            with self.assertRaises(ValueError):
+                installed_config("qoder", project, name, nonce, events, installer, probe)
+            doc["mcpServers"][name]["command"] = str(probe)
+            doc["mcpServers"][name]["args"] = ["call-fixture"]
+            doc["mcpServers"][name]["env"]["PLUGIN_DATA"] = str(Path(temp) / "foreign-data")
+            path.write_text(json.dumps(doc))
+            with self.assertRaises(ValueError):
+                installed_config("qoder", project, name, nonce, events, installer, probe)
 
     def test_foreign_source_substitution_refused(self):
         with tempfile.TemporaryDirectory() as temp:

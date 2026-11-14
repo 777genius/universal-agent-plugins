@@ -184,21 +184,42 @@ def installed_config(client, project, name, nonce, events, installer, probe):
             or env.get("UAP_TEST_EVENTS") != str(events)):
         raise ValueError("different MCP source or nonce selected")
     command, arguments = selected.get("command"), selected.get("args")
-    if not isinstance(command, str) or not isinstance(arguments, list) or arguments[:1] != ["--internal-stdio-v1"]:
-        raise ValueError("UAP-managed stdio transport not selected")
+    if not isinstance(command, str) or not isinstance(arguments, list):
+        raise ValueError("UAP-managed stdio transport fields missing")
     executable = Path(command)
     if not executable.is_absolute() or not executable.is_file() or executable.is_symlink():
-        raise ValueError("managed wrapper executable differs")
+        raise ValueError("Qoder/Cursor selected MCP executable differs")
     managed = project / ".uap" / "managed" / "clients" / client
-    if managed not in executable.parents or executable.name != "agentplugins":
-        raise ValueError("wrapper not inside the owned Project installation")
-    if digest(executable.read_bytes()) != digest(installer.read_bytes()):
-        raise ValueError("managed wrapper differs from source-built UAP")
-    active = executable.parents[2]
+    # Qoder's native config codec uses ApplyStdioDataContract, which resolves
+    # ./bin/probe to its owned absolute package path. Cursor instead launches
+    # the copied managed-stdio-v1 helper. These are different supported
+    # client-specific shapes; admitting a wrapper for Qoder would hide
+    # wrong-client substitution in the actual E2E.
+    if client == "qoder":
+        active = executable.parent.parent
+        if (executable != active / "bin" / "probe"
+                or arguments != ["call-fixture"] or active.parent != managed):
+            raise ValueError("Qoder native direct-stdio path or arguments differ")
+    elif client == "cursor":
+        if (arguments[:1] != ["--internal-stdio-v1"]
+                or executable.name != "agentplugins"
+                or executable.parent.name != "managed-stdio-v1"
+                or executable.parent.parent.name != "io.github.777genius.agentplugins"):
+            raise ValueError("Cursor owned stdio wrapper identity differs")
+        active = executable.parents[2]
+        if active.parent != managed or digest(executable.read_bytes()) != digest(installer.read_bytes()):
+            raise ValueError("Cursor copied launcher differs from source-built UAP")
+    else:
+        raise ValueError("unsupported selected MCP client")
     actual_probe = active / "bin" / "probe"
     if (not actual_probe.is_file() or actual_probe.is_symlink()
             or digest(actual_probe.read_bytes()) != digest(probe.read_bytes())):
         raise ValueError("owned MCP probe differs from source-built fixture")
+    if env.get("PLUGIN_ROOT") != str(active):
+        raise ValueError("managed MCP PLUGIN_ROOT differs")
+    data = project / ".uap" / "plugin-data" / active.name
+    if env.get("PLUGIN_DATA") != str(data):
+        raise ValueError("managed MCP PLUGIN_DATA differs")
     return active
 
 
