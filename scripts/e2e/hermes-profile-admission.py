@@ -333,7 +333,8 @@ def payload_links(root, records, deadline, source=None):
     lookup = {Path(name): record for name, record in records.items()}
     spellings = {Path(name): name for name in records} if source is not None else {}
     require(len(lookup) == len(records), "ambiguous payload path spelling")
-    def parts(target):
+    def parts(target, member, record):
+        original_target = target
         extended = artifacts.WINDOWS and target.startswith("\\\\?\\")
         if extended:
             target = target[4:]
@@ -343,14 +344,19 @@ def payload_links(root, records, deadline, source=None):
                 and path.drive[1] == ":"), "payload device namespace link")
         require(not path.drive or path.is_absolute(), "payload drive-relative link")
         if path.is_absolute():
-            require(path.is_relative_to(root), "payload link escapes runtime")
+            try:
+                require(path.is_relative_to(root), "payload link escapes runtime")
+            except RuntimeError as error:
+                if source is not None:
+                    source_payload_refusal(error, member, record, target=original_target)
+                raise
             return True, list(path.relative_to(root).parts)
         return False, list(path.parts)
 
     for name, record in records.items():
         if record["type"] != "link":
             continue
-        absolute, tail = parts(record["target"])
+        absolute, tail = parts(record["target"], name, record)
         pending = ([] if absolute else list(Path(name).parent.parts)) + tail
         resolved, count = [], 0
         while pending:
@@ -370,7 +376,8 @@ def payload_links(root, records, deadline, source=None):
             if selected["type"] == "link":
                 count += 1
                 require(count <= PAYLOAD_DEPTH, "payload link cycle/depth")
-                absolute, tail = parts(selected["target"])
+                member = spellings[Path(*resolved)] if source is not None else ""
+                absolute, tail = parts(selected["target"], member, selected)
                 resolved = [] if absolute else resolved[:-1]
                 pending = tail + pending
             elif pending:
@@ -432,6 +439,79 @@ def payload_hardlink_closure(records, deadline, source=None):
             source_hardlink_boundary(names, source)
 
 
+def source_payload_refusal(error, member, record, *, bytes_read=None, target=None):
+    """Attach captured metadata only; an unsuccessful observation is no authority."""
+    try:
+        identity = record["identity"]
+        require(type(identity) is tuple and len(identity) in (9, 12) and type(member) is str
+                and ":" not in member and "\\" not in member
+                and all(part not in ("", ".", "..") for part in member.split("/")), "source refusal metadata shape")
+        numbers = dict(device=identity[0], inode=identity[1], mode=identity[2], links=identity[3], bytes=identity[4],
+                       uid=identity[-2], gid=identity[-1], attributes=identity[8] if len(identity) == 12 else None,
+                       reparse_tag=identity[9] if len(identity) == 12 else None)
+        bounded = lambda value: value if type(value) is int and 0 <= value < 2**64 else None
+        encoded = member.encode("utf-8", "surrogatepass")
+        target_bytes = target.encode("utf-8", "surrogatepass") if target is not None else None
+        value = dict(schema_version=1, measurement_only=True, admission_qualified=False,
+                     operation="file-read" if bytes_read is not None else "absolute-link-target",
+                     member=member if len(json.dumps(member, ensure_ascii=True).encode("ascii")) <= 512 else None,
+                     member_sha256=hashlib.sha256(encoded).hexdigest(), hash_encoding="utf-8-surrogatepass",
+                     metadata={key: bounded(number) for key, number in numbers.items()},
+                     integer_saturated=any(number is not None and bounded(number) is None for number in numbers.values()),
+                     bytes_read=bounded(bytes_read), errno=bounded(getattr(error, "errno", None)),
+                     winerror=bounded(getattr(error, "winerror", None)),
+                     target_sha256=hashlib.sha256(target_bytes).hexdigest() if target_bytes is not None else None,
+                     target_bytes=len(target_bytes) if target_bytes is not None else None)
+        source_refusal_document(json.dumps(dict(value, nonce="0" * 64, stage="observer-profile-snapshot")).encode())
+        error.source_payload_refusal = value
+    except (AttributeError, KeyError, IndexError, TypeError, ValueError, UnicodeError, RuntimeError):
+        pass  # The original exception, including its errno and traceback, wins.
+
+
+def source_refusal_document(body):
+    require(type(body) is bytes and 0 < len(body) <= 2048, "source refusal evidence bound")
+    value = census_document(body)
+    require(type(value) is dict and set(value) == set("schema_version measurement_only admission_qualified nonce stage operation member member_sha256 hash_encoding metadata integer_saturated bytes_read errno winerror target_sha256 target_bytes".split()), "closed source refusal schema")
+    digest = lambda text: type(text) is str and re.fullmatch(r"[0-9a-f]{64}", text) is not None
+    number = lambda item: type(item) is int and 0 <= item < 2**64
+    require(type(value["schema_version"]) is int and value["schema_version"] == 1
+            and value["measurement_only"] is True and value["admission_qualified"] is False and digest(value["nonce"])
+            and value["stage"] in ("parent-before-observer", "observer-profile-initial", "observer-profile-snapshot", "parent-after-settlement")
+            and value["operation"] in ("file-read", "absolute-link-target") and value["hash_encoding"] == "utf-8-surrogatepass"
+            and type(value["integer_saturated"]) is bool and digest(value["member_sha256"]), "source refusal identity differs")
+    member, metadata = value["member"], value["metadata"]
+    require(member is None or (type(member) is str and ":" not in member and "\\" not in member
+            and all(part not in ("", ".", "..") for part in member.split("/"))
+            and len(json.dumps(member, ensure_ascii=True).encode("ascii")) <= 512
+            and hashlib.sha256(member.encode("utf-8", "surrogatepass")).hexdigest() == value["member_sha256"]), "source refusal member differs")
+    require(type(metadata) is dict and set(metadata) == set("device inode mode links bytes uid gid attributes reparse_tag".split())
+            and all(number(item) or item is None for item in metadata.values())
+            and (value["integer_saturated"] or all(number(metadata[key]) for key in ("device", "inode", "mode", "links", "bytes", "uid", "gid"))), "source refusal metadata differs")
+    require(all(value[key] is None or number(value[key]) for key in ("bytes_read", "errno", "winerror", "target_bytes")), "source refusal counters differ")
+    if value["operation"] == "file-read":
+        require(number(value["bytes_read"]) and number(metadata["bytes"])
+                and value["bytes_read"] <= metadata["bytes"] <= PAYLOAD_BYTES
+                and value["target_sha256"] is None and value["target_bytes"] is None, "source read refusal differs")
+    else:
+        require(all(value[key] is None for key in ("bytes_read", "errno", "winerror"))
+                and digest(value["target_sha256"]) and number(value["target_bytes"]) and 0 < value["target_bytes"] <= 16384, "source link refusal differs")
+    return value
+
+
+def retain_source_refusal(error, evidence, expected, nonce, stage):
+    try:
+        observed = getattr(error, "source_payload_refusal", None)
+        if observed is None:
+            return
+        value = dict(observed, nonce=nonce, stage=stage)
+        source_refusal_document(json.dumps(value).encode() + b"\n")
+        with held_census_evidence(evidence, expected) as (descriptor, verify):
+            verify()
+            write_census_member(evidence / "source-payload-refusal.json", value, None if artifacts.WINDOWS else descriptor)
+    except (OSError, TypeError, ValueError, RuntimeError):
+        pass  # First O_EXCL record only; unavailable diagnostics never mask refusal.
+
+
 def payload_hash_files(root, records, expected, deadline, source=None):
     """Rejoin the metadata-first authority through held ancestors before bytes."""
     children, documents = {}, {}
@@ -481,7 +561,12 @@ def payload_hash_files(root, records, expected, deadline, source=None):
             overlap = max((len(value) for value in sentinels), default=1) - 1
             while size <= info.st_size:
                 require(time.monotonic() < deadline, "payload scan deadline")
-                chunk = os.read(descriptor, min(LIMIT, info.st_size + 1 - size))
+                try:
+                    chunk = os.read(descriptor, min(LIMIT, info.st_size + 1 - size))
+                except OSError as error:
+                    if source is not None:
+                        source_payload_refusal(error, name, record, bytes_read=size)
+                    raise
                 if not chunk:
                     break
                 size += len(chunk)
@@ -1425,9 +1510,10 @@ def observe_profiles(probes):
     inputs = source_inputs(Path(os.environ["RUNNER_TEMP"]).resolve(), BASE["source_root"]()) if source_capture else None
     require(inputs is None or original == inputs["original"], "native source default User differs before fixture preparation")
     sentinels, authored = user_fixture_content(nonce)
-    preparation = None
+    preparation, evidence_authority = None, None
     if source_capture:
-        preparation = read_source_preparation(evidence, json.loads(os.environ["HERMES_CENSUS_EVIDENCE_ID"]), nonce,
+        evidence_authority = json.loads(os.environ["HERMES_CENSUS_EVIDENCE_ID"])
+        preparation = read_source_preparation(evidence, evidence_authority, nonce,
                                               os.environ["HERMES_SOURCE_PREPARATION_SHA256"])
         require(directory_identity(outer) == tuple(preparation["outer_identity"]), "original source outer changed before Project setup")
         retained = preparation["installer_preimages"]
@@ -1475,7 +1561,12 @@ def observe_profiles(probes):
         if layout is None:
             return inventory(outer)
         deadline = time.monotonic() + 120
-        snapshot = payload_snapshot(outer, outer_identity, deadline, source=layout)
+        try:
+            snapshot = payload_snapshot(outer, outer_identity, deadline, source=layout)
+        except (OSError, RuntimeError) as error:
+            retain_source_refusal(error, evidence, evidence_authority, nonce,
+                                  "observer-profile-initial" if initial else "observer-profile-snapshot")
+            raise
         if initial:
             require_source_user_baseline(source_user_digest(snapshot["_records"], layout["user"], deadline), preparation["prepared_user"])
         return snapshot["ledger"]
@@ -2148,23 +2239,32 @@ COMMANDS |= ({"public-" + prefix + scope for prefix in ("git-", "add-", "run-", 
 MEMBERS = ({name + suffix for name in COMMANDS for suffix in (".stdout", ".stderr", ".status.json")}
            | {"original-user-baseline.json", "original-user-final.json", "source-guards.json", "profile-endpoints.json",
               "profile-command-deltas.json", "bootstrap-census-request.json", "bootstrap-census.json", "source-user-preparation.json",
+              "source-payload-refusal.json",
               "profile-admission.json", "lifecycle.stdout", "lifecycle.stderr", "owned-start-gate",
               "public-endpoints.json", "public-command-deltas.json", "cold-restore.json"})
 
 
-def admit_evidence(directory):
-    total = 0
-    for path in directory.iterdir():
-        info = path.lstat()
-        require(path.name in MEMBERS and stat.S_ISREG(info.st_mode) and info.st_nlink == 1
-                and info.st_size <= LIMIT, "closed admission evidence member refused")
-        total += info.st_size
-        require(total <= 16 << 20, "admission evidence aggregate bound")
-        if path.name in ("bootstrap-census-request.json", "bootstrap-census.json"):
-            require(info.st_size <= 16 << 10, "census evidence bound")
-            validate_census_member(path.name, ordinary_bytes(path, info))
-        elif path.name == "source-user-preparation.json":
-            source_preparation_document(ordinary_bytes(path, info))
+def admit_evidence(directory, *, failure=None):
+    try:
+        total = 0
+        for path in directory.iterdir():
+            info = path.lstat()
+            require(path.name in MEMBERS and stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+                    and info.st_size <= LIMIT, "closed admission evidence member refused")
+            total += info.st_size
+            require(total <= 16 << 20, "admission evidence aggregate bound")
+            if path.name in ("bootstrap-census-request.json", "bootstrap-census.json"):
+                require(info.st_size <= 16 << 10, "census evidence bound")
+                validate_census_member(path.name, ordinary_bytes(path, info))
+            elif path.name == "source-user-preparation.json":
+                source_preparation_document(ordinary_bytes(path, info))
+            elif path.name == "source-payload-refusal.json":
+                require(info.st_size <= 2048, "source refusal evidence bound")
+                source_refusal_document(ordinary_bytes(path, info))
+    except BaseException:
+        if failure is not None:
+            raise RuntimeError("original Hermes refusal retained; evidence publication refused") from failure
+        raise
 
 
 def census_readout(value):
@@ -2189,7 +2289,7 @@ def stage_evidence(directory):
     pending = directory / (".upload-pending-" + secrets.token_hex(16))
     pending.mkdir(mode=0o700)
     pending_identity = directory_identity(pending)
-    census = None
+    census, source_refusal, source_proof = None, None, None
     try:
         for name, expected in sorted(sources.items()):
             body = ordinary_bytes(directory / name, expected)
@@ -2199,8 +2299,16 @@ def stage_evidence(directory):
                     census = value
             elif name == "source-user-preparation.json":
                 source_preparation_document(body)
+            elif name == "source-payload-refusal.json":
+                source_refusal = source_refusal_document(body)
+            elif name == "profile-admission.json" and "source-payload-refusal.json" in sources:
+                source_proof = public_json(body)
             with (pending / name).open("xb") as stream:
                 stream.write(body)
+        if source_refusal is not None:
+            require(type(source_proof) is dict and source_proof.get("nonce") == source_refusal["nonce"]
+                    and source_proof.get("runtime_distribution") == "source" and source_proof.get("status") == "failed"
+                    and all(source_proof.get(key) is False for key in ("capture_complete", "admission_qualified", "production_project_mcp", "vendor_authentication", "real_model_inference", "tools_call", "source_install_custom_root_qualified", "source_bootstrap_recovery_qualified")), "source refusal proof differs")
         require(directory_identity(directory) == identity
                 and {path.name for path in directory.iterdir()} == set(sources) | {pending.name},
                 "evidence directory/membership changed before publication")
@@ -2364,6 +2472,8 @@ def run():
                          cold_restore={"source": cold["source_head"], "commands": len(cold["commands"]), "sha256": sha(evidence / "cold-restore.json")})
     except BaseException as error:
         failure = error
+        if source_capture and native_started is None:
+            retain_source_refusal(error, evidence, evidence_authority, nonce, "parent-before-observer")
         if type(error) is PayloadHardlinkRefusal and native_started is None and error.diagnostic is not None:
             proof["payload_hardlink_refusal"] = error.diagnostic
         proof.update(status="failed", error=type(error).__name__ + ": " + str(error)[:300])
@@ -2449,6 +2559,8 @@ def run():
                     require(runtime_after == runtime_before, "immutable bundled runtime changed")
         except BaseException as error:
             failure = failure or error
+            if source_capture and process_settled:
+                retain_source_refusal(error, evidence, evidence_authority, nonce, "parent-after-settlement")
             proof.update(status="failed", runtime_error=type(error).__name__ + ": " + str(error)[:300])
         finally:
             if payload_descriptor is not None:
@@ -2459,7 +2571,7 @@ def run():
         require(evidence.resolve() == evidence and not evidence.is_symlink()
                 and (evidence.stat().st_dev, evidence.stat().st_ino, evidence.stat().st_mode) == evidence_identity,
                 "evidence directory identity changed")
-        admit_evidence(evidence)
+        admit_evidence(evidence, failure=failure)
         proof.update(source_after=BASE["source_identity"](checkout), hermes_source_after=BASE["source_identity"](official_source),
                      streams={p.name: {"bytes": p.stat().st_size, "sha256": hashlib.sha256(ordinary_bytes(p)).hexdigest()} for p in evidence.iterdir() if p.is_file()})
         if proof["source_after"] != before or proof["hermes_source_after"] != official:

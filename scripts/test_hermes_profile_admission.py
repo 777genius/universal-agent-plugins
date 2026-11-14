@@ -1891,6 +1891,168 @@ class SourceRuntimeContracts(unittest.TestCase):
         import time
         return CASE["payload_snapshot"](outer, CASE["directory_identity"](outer), time.monotonic() + 10, source=policy)
 
+    def test_source_read_refusal_preserves_original_error_offset_and_closed_fd(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, _, _, source, policy = self.fixture(temporary)
+            wanted = source / "owned.py"; before = wanted.stat()
+            for capture_source in (policy, None):
+                with self.subTest(source=capture_source is not None):
+                    error, reads, original = PermissionError(13, "inert read refusal"), [], os.read
+                    def fail_read(fd, count):
+                        info = os.fstat(fd)
+                        if (info.st_dev, info.st_ino) != (before.st_dev, before.st_ino):
+                            return original(fd, count)
+                        reads.append(fd)
+                        if len(reads) == 1:
+                            return original(fd, 3)
+                        raise error
+                    with mock.patch.object(os, "read", side_effect=fail_read), self.assertRaises(PermissionError) as refused:
+                        CASE["payload_snapshot"](outer, CASE["directory_identity"](outer), time.monotonic() + 10, source=capture_source)
+                    self.assertIs(refused.exception, error); self.assertEqual(error.errno, 13)
+                    self.assertEqual(len(reads), 2)
+                    with self.assertRaises(OSError): os.fstat(reads[-1])
+                    observed = getattr(error, "source_payload_refusal", None)
+                    if capture_source is None:
+                        self.assertIsNone(observed)
+                    else:
+                        self.assertIsNotNone(observed, "original source read failure lacks member metadata")
+                        self.assertEqual((observed["member"], observed["bytes_read"], observed["errno"]),
+                                         (wanted.relative_to(outer).as_posix(), 3, 13))
+                        self.assertEqual(observed["metadata"]["bytes"], before.st_size)
+
+    def test_source_absolute_link_refusal_names_the_intermediate_captured_member(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, _, _, _, policy = self.fixture(temporary)
+            captured = self.capture(outer, policy)["_records"]
+            origin, nested = policy["tools"] + "/origin", policy["tools"] + "/nested"
+            captured[origin] = {"type": "link", "target": "nested", "identity": captured[policy["tools"] + "/python"]["identity"]}
+            captured[nested] = {**captured[origin], "target": str(outer.parent / "PRIVATE-TARGET")}
+            with mock.patch.object(os, "read", side_effect=AssertionError("outside body read")), \
+                    mock.patch.object(os, "open", side_effect=AssertionError("outside target opened")), \
+                    mock.patch.object(Path, "resolve", side_effect=AssertionError("outside target traversed")), \
+                    self.assertRaisesRegex(RuntimeError, "^payload link escapes runtime$") as refused:
+                CASE["payload_links"](outer, captured, time.monotonic() + 5, source=policy)
+            observed = getattr(refused.exception, "source_payload_refusal", None)
+            self.assertIsNotNone(observed, "original source link failure lacks member metadata")
+            self.assertEqual(observed["member"], nested)
+            self.assertEqual(observed["operation"], "absolute-link-target")
+            self.assertNotIn("PRIVATE-TARGET", json.dumps(observed))
+
+    def refusal(self, root, member="user/runtime/member", *, identity=None):
+        leaf = root / "private-body"; leaf.write_bytes(b"NEVER-PUBLISH-THIS-BODY")
+        error = PermissionError(13, "original refusal")
+        CASE["source_payload_refusal"](error, member, {"identity": identity or CASE["stable_file"](leaf.stat())}, bytes_read=0)
+        return error
+
+    def test_source_refusal_has_bounded_names_integers_and_no_additional_reads(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); error = self.refusal(root)
+            identity = CASE["stable_file"]((root / "private-body").stat())
+            for member in ("user/é.py", "user/" + chr(0xDCFF), "user/" + "x" * 600):
+                with mock.patch.object(os, "read", side_effect=AssertionError("diagnostic read")), \
+                        mock.patch.object(os, "open", side_effect=AssertionError("diagnostic open")), \
+                        mock.patch.object(Path, "lstat", side_effect=AssertionError("diagnostic restat")):
+                    CASE["source_payload_refusal"](error, member, {"identity": identity}, bytes_read=0)
+                value = dict(error.source_payload_refusal, nonce="a" * 64, stage="parent-before-observer")
+                encoded = json.dumps(value).encode()
+                self.assertLessEqual(len(encoded), 2048); CASE["source_refusal_document"](encoded)
+                self.assertEqual(value["member"], member if len(json.dumps(member).encode()) <= 512 else None)
+                self.assertEqual(value["member_sha256"], hashlib.sha256(member.encode("utf-8", "surrogatepass")).hexdigest())
+            large = list(identity); large[1] = 1 << 20000
+            observed = self.refusal(root, identity=tuple(large)).source_payload_refusal
+            self.assertIsNone(observed["metadata"]["inode"]); self.assertTrue(observed["integer_saturated"])
+            for member in ("/outside", "../outside", "C:/outside", "bad\\name"):
+                self.assertFalse(hasattr(self.refusal(root, member), "source_payload_refusal"))
+
+    def test_source_refusal_publication_keeps_first_error_and_original_directory_authority(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); evidence = root / "evidence"; evidence.mkdir()
+            error = self.refusal(root); expected = CASE["directory_identity"](evidence)
+            retain = lambda: CASE["retain_source_refusal"](error, evidence, expected, "a" * 64, "observer-profile-initial")
+            retain(); member = evidence / "source-payload-refusal.json"; first = member.read_bytes()
+            error.source_payload_refusal["errno"] = 5
+            retain(); self.assertEqual(member.read_bytes(), first)
+            member.unlink()
+            with mock.patch.dict(CASE["retain_source_refusal"].__globals__, {"write_census_member": mock.Mock(side_effect=OSError("inert writer failed"))}):
+                with self.assertRaises(PermissionError) as refused:
+                    try: raise error
+                    except PermissionError:
+                        retain()
+                        raise
+                self.assertIs(refused.exception, error); self.assertFalse(member.exists())
+            evidence.rename(root / "original-evidence"); evidence.mkdir()
+            with mock.patch.dict(CASE["retain_source_refusal"].__globals__, {"write_census_member": mock.Mock()}) as scope:
+                retain(); scope["write_census_member"].assert_not_called()
+            self.assertFalse(member.exists()); self.assertFalse(list((root / "original-evidence").iterdir()))
+            with mock.patch.dict(os.environ, {"HERMES_PROFILE_SOURCE_CAPTURE": "1"}):
+                inert = CASE["safe_failure_evidence"](root, "process-cleanup-unproved")
+            self.assertEqual({path.name for path in (inert / "upload").iterdir()}, {"profile-admission.json"})
+
+    def test_source_refusal_stage_joins_copied_failed_source_proof_and_never_partial_upload(self):
+        flags = ("capture_complete", "admission_qualified", "production_project_mcp", "vendor_authentication", "real_model_inference",
+                 "tools_call", "source_install_custom_root_qualified", "source_bootstrap_recovery_qualified")
+        for change in ("valid", "nonce", "bundled", "success", "unknown", "duplicate", "boolean", "stage", "operation",
+                       "metadata-extra", "negative", "offset", "target", "bound", "second-read", *flags):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); evidence = root / "evidence"; evidence.mkdir()
+                error = self.refusal(root)
+                CASE["retain_source_refusal"](error, evidence, CASE["directory_identity"](evidence), "a" * 64, "parent-before-observer")
+                member = evidence / "source-payload-refusal.json"; value = json.loads(member.read_bytes())
+                proof = dict.fromkeys(flags, False)
+                proof.update(nonce="a" * 64, runtime_distribution="source", status="failed")
+                if change == "nonce": proof["nonce"] = "b" * 64
+                if change == "bundled": proof["runtime_distribution"] = "bundled"
+                if change == "success": proof["status"] = "passed"
+                if change in flags: proof[change] = True
+                if change == "unknown": value["private"] = "forbidden"
+                if change == "boolean": value["metadata"]["inode"] = True
+                if change == "stage": value["stage"] = "unreviewed"
+                if change == "operation": value["operation"] = "open"
+                if change == "metadata-extra": value["metadata"]["secret"] = "forbidden"
+                if change == "negative": value["metadata"]["links"] = -1
+                if change == "offset": value["bytes_read"] = value["metadata"]["bytes"] + 1
+                if change == "target": value["target_sha256"] = "b" * 64
+                body = json.dumps(value).encode()
+                if change == "duplicate": body = body[:-1] + b',"nonce":"' + b"a" * 64 + b'"}'
+                if change == "bound": body = b" " * 2049
+                member.write_bytes(body); CASE["write_json"](evidence / "profile-admission.json", proof)
+                actual, reads = CASE["ordinary_bytes"], []
+                def read(path, expected=None):
+                    reads.append(path.name)
+                    if change == "second-read" and reads.count(member.name) == 2:
+                        raise RuntimeError("late diagnostic read refused")
+                    return actual(path, expected)
+                with mock.patch.dict(CASE["stage_evidence"].__globals__, {"ordinary_bytes": read, "EVIDENCE_CLOSED": False}) as scope:
+                    if change == "valid":
+                        CASE["stage_evidence"](evidence)
+                        self.assertEqual((evidence / "upload" / member.name).read_bytes(), body)
+                        self.assertEqual(reads.count("profile-admission.json"), 1, "nonce join reopened the proof")
+                        self.assertTrue(scope["EVIDENCE_CLOSED"])
+                    else:
+                        with self.assertRaises(RuntimeError): CASE["stage_evidence"](evidence)
+                        self.assertFalse(scope["EVIDENCE_CLOSED"]); self.assertFalse((evidence / "upload").exists())
+                        self.assertFalse(list(evidence.glob(".upload-pending-*")))
+                    if change == "second-read": self.assertEqual(reads.count(member.name), 2)
+
+    def test_partial_source_refusal_write_retains_original_cause_and_withholds_upload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); evidence = root / "evidence"; evidence.mkdir()
+            original = self.refusal(root)
+            def partial(path, value, parent=None):
+                with path.open("xb") as stream: stream.write(b"{")
+                raise OSError("inert partial writer refusal")
+            with mock.patch.dict(CASE["retain_source_refusal"].__globals__, write_census_member=partial):
+                CASE["retain_source_refusal"](original, evidence, CASE["directory_identity"](evidence), "a" * 64, "observer-profile-initial")
+            with self.assertRaisesRegex(RuntimeError, "original Hermes refusal retained") as refused:
+                CASE["admit_evidence"](evidence, failure=original)
+            self.assertIs(refused.exception.__cause__, original)
+            with self.assertRaises(json.JSONDecodeError): CASE["admit_evidence"](evidence)
+            self.assertEqual((evidence / "source-payload-refusal.json").read_bytes(), b"{")
+            self.assertFalse((evidence / "upload").exists()); self.assertFalse(list(evidence.glob(".upload-pending-*")))
+
     def test_full_partition_covers_user_outside_pm_and_exact_protected_rows(self):
         with tempfile.TemporaryDirectory() as temporary:
             _, outer, user, original, source, policy = self.fixture(temporary)

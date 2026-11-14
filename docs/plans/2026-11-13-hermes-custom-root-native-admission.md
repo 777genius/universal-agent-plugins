@@ -1358,3 +1358,50 @@ because the filesystem guard refused first; the audit does not invent either.
 The complete bundled runtime was unchanged and cleanup completed. This narrow
 oracle correction changes no limits, production registration, native bootstrap
 policy or qualification flags. New native evidence remains required.
+
+### Source-v3 read and absolute-link refusal diagnostics
+
+Run `43535108885` at `2b557b30e57206485aa35b79986da2ecff75f691` produced two
+different source-only refusals. Windows job `132262352093`, artifact `14089868523`
+(9,766 bytes, SHA-256 `d33ba823747fac62e4ff237609cd19c55fabda5eee80c847d992dd10265e3c93`),
+failed on `os.read` with `PermissionError` during the observer's initial payload
+capture. macOS job `132262352082`, artifact `14090174800` (847 bytes, SHA-256
+`4850505e39d77da46abfa9bde76294a282f75b4083760dd29b74acd4d04b7807`), refused an
+absolute intermediate link target before the observer started. Both original
+ZIPs passed CRC and source joins; neither retained the offending member.
+
+The collector now attaches an observation to those original exceptions using
+only the member name and metadata already captured by the existing reader.
+The original exception, traceback, file-descriptor cleanup and refusal remain.
+Nested-link diagnostics name the actual intermediate link. They retain only
+the target's UTF-8-surrogatepass digest and byte count, never its absolute text.
+The file-read observation records the completed byte count and bounded OS error
+numbers. Relative names have a 512-byte ASCII-JSON ceiling, otherwise a digest
+and null name; captured numeric metadata uses uint64 or null with saturation.
+This records no file body, environment value or new ownership authority.
+
+One fixed `source-payload-refusal.json` member is limited to 2 KiB. The existing
+held evidence-directory writer creates it with `O_EXCL`; later failures cannot
+overwrite it. Both admission and staging enforce its closed schema. Staging
+joins the two already-read bodies to the same nonce and failed, source-only,
+unqualified `profile-admission.json`; it does not reopen that proof. Existing
+process settlement, evidence identity, membership, second-read and atomic
+publication checks remain. Unknown process cleanup still publishes only the
+separate inert failure envelope. A partial diagnostic is neither repaired nor
+deleted: publication refuses, retaining the original failure as its cause.
+
+Two new inert contracts first failed on the old code because the actual owned
+FD read failure and captured intermediate-link refusal lost their member facts.
+A real partial-write regression separately reproduced replacement of the
+original cause by a JSON error. After the narrow changes, all 92 profile
+contracts and all 16 owned-build cleanup contracts passed locally on Linux,
+with no skips; all 86 previous profile test bodies are AST-identical to `12ed`.
+The tests cover original exception identity, closed FDs, no additional payload
+access, fixed source scope, exact staged nonce/flags, integer and name bounds,
+replaced evidence directories, first-write preservation and no partial upload.
+These are diagnostic contract results, not native Windows/macOS acceptance.
+
+The Windows immutable-install digest change and the separate Linux prepared-User
+baseline refusal remain unexplained by this metadata-only amendment. No baseline
+is adopted, link or read allowance added, source repaired, or qualification
+promoted. Each original stays failed; new genuine source evidence is required.
