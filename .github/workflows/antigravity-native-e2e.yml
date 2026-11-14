@@ -138,6 +138,8 @@ jobs:
           $installerSHA = (Get-FileHash -LiteralPath $env:UAP_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
           $suffix = if ($IsWindows) { '.exe' } else { '' }
           $helper = Join-Path $env:RUNNER_TEMP ('agy-user-admission' + $suffix)
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./clients/antigravity
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity adapter contracts failed' }
           go -C install/integrationctl test ./research/antigravityinventory -count=1
           if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge contracts failed' }
           go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA -X main.installerSHA=$installerSHA" -o $helper ./research/antigravityinventory
@@ -265,6 +267,8 @@ jobs:
           $installerSHA = (Get-FileHash -LiteralPath $env:UAP_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
           $suffix = if ($IsWindows) { '.exe' } else { '' }
           $helper = Join-Path $env:RUNNER_TEMP ('agy-user-admission' + $suffix)
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./clients/antigravity
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity adapter contracts failed' }
           go -C install/integrationctl test ./research/antigravityinventory -count=1
           if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge contracts failed' }
           go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA -X main.installerSHA=$installerSHA" -o $helper ./research/antigravityinventory
@@ -389,6 +393,8 @@ jobs:
           $installerSHA = (Get-FileHash -LiteralPath $env:UAP_BIN -Algorithm SHA256).Hash.ToLowerInvariant()
           $suffix = if ($IsWindows) { '.exe' } else { '' }
           $helper = Join-Path $env:RUNNER_TEMP ('agy-user-admission' + $suffix)
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./clients/antigravity
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity adapter contracts failed' }
           go -C install/integrationctl test ./research/antigravityinventory -count=1
           if ($LASTEXITCODE -ne 0) { throw 'Antigravity bridge contracts failed' }
           go -C install/integrationctl build -ldflags "-X main.sourceCommit=$commit -X main.sourceTree=$tree -X main.nativeSHA=$nativeSHA -X main.installerSHA=$installerSHA" -o $helper ./research/antigravityinventory

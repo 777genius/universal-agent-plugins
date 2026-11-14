@@ -99,6 +99,9 @@ func TestHermesScopedSkillAddRepeatRepairRemove(t *testing.T) {
 			if err := os.Remove(f.skill); err != nil {
 				t.Fatal(err)
 			}
+			if err := applyHermesSkills(t, f, f.objects, f.objects); err == nil || err.Error() != `managed project skill "document" changed outside agentplugins` {
+				t.Fatalf("repair must refuse a present partial skill: %v", err)
+			}
 			if err := os.Remove(filepath.Dir(f.skill)); err != nil {
 				t.Fatal(err)
 			}

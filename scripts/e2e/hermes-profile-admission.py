@@ -3207,7 +3207,8 @@ def observe_public(probes):
                 and proofs["a"]["data"] == prior["data"], "public changed update lost revision or retained data")
         selected_skill = projects["a"] / ".hermes/skills/hermes-public-a/SKILL.md"
         selected_config = proofs["a"]["selected"] / "config.yaml"
-        authored([selected_skill, selected_config], lambda: (selected_skill.unlink(), selected_config.unlink()))
+        authored([selected_skill, selected_skill.parent, selected_config],
+                 lambda: (selected_skill.unlink(), selected_skill.parent.rmdir(), selected_config.unlink()))
         command("public-repair-a", "a", ["repair", "hermes-public-a"])
         require(ordinary_bytes(selected_skill) == ordinary_bytes(skill), "public missing repair did not restore recorded Skill")
         command("public-repaired-run-a", "a", ["run", "--inspect", "--confirm-client-start"], inspect=True)

@@ -2807,3 +2807,49 @@ Both source files remained unchanged during execution. This closes composition
 and local contracts; the ordinary native workflows must still exercise these
 exact changes. Earlier successful User tool calls and earlier failed Project
 captures retain their original source identities and do not qualify this union.
+
+
+### Follow-up: author a genuinely missing exact-owned Skill for public repair
+
+The final `55bf868cb98bb07a9b7ba24dfb9abfa63090818b` harness removed only the
+selected Skill's `SKILL.md` before `public-repair-a`, leaving its directory
+present. The existing component ownership verifier distinguishes an absent
+owned directory from a present directory whose digest changed. It correctly
+refuses the latter, including an empty directory after the file was removed.
+This is a local fixture mismatch; it is not a proven explanation of any earlier
+native `bounded-command-failed: public-repair-a` result.
+
+The unchanged existing `TestHermesScopedSkillAddRepeatRepairRemove/project`
+passed locally. An isolated Go overlay removing only its three-line parent
+`os.Remove` then failed at the exact existing ownership guard:
+`managed project skill "document" changed outside agentplugins`.
+The source files remained unchanged during that counterexample. The paired
+receipt SHA-256 is
+`2fcda15eb85a565a43e3387d9a81e38faad21cd6f0676955b6cc5d3dac983d4e`;
+control log `fabd4562fc2d2dcff3f4a766a8b3e2a4d6df3cec731cf9d4665a5f4a3baf684b`,
+expected-failure log `2043e4da3fee656ad25889303f8905459cd13a4947420c2119a19742e4e1731a`.
+
+The repair fixture now unlinks that exact owned file, removes its exact parent
+with nonrecursive `rmdir()`, and then unlinks the selected config. Its existing
+`authored()` record declares exactly those three paths. The original full
+inventory comparison still requires precisely that changed set. Directory rows
+record identity and mode without timestamps, so no ancestor allowance is added.
+An unexpected child makes `rmdir()` fail before the config unlink or an authored
+success record. All original User, sibling, source, native-runtime, foreign-file,
+deadline, nonce, settlement and qualification checks remain unchanged.
+
+The existing Go lifecycle method now first requires the concrete ownership
+refusal while the partial directory still exists, then performs its original
+parent removal and successful missing-object repair. Both User and Project
+scopes, the retained foreign sentinel, the separate foreign-edit refusal, and
+the A/B isolation test remain in place. No product ownership rule changed.
+
+On the exact candidate, the full Hermes adapter package passed all 33 top-level
+methods and 101 test events with no skips or failures (wrapper 4.934 seconds;
+log SHA-256 `537276d90fbcf572029866f321f98fc97ac42c15bb6a5c730b589a86d2bb6b10`).
+The byte-identical 187-method Python contract suite passed 180 methods with the
+same seven Windows-only skips (10.631 seconds; log SHA-256
+`915375947ebf3b885e5322d7b3dc96891e7d03030be88620d51ed42234220c7b`).
+These are local checks on the three-path correction. Cold native execution on
+a subsequent published commit remains required; no source or bundled admission
+is promoted by this fixture correction.

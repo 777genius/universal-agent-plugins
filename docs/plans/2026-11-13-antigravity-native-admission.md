@@ -2146,3 +2146,90 @@ owner/DATA state, every retained public/native case, all three OSes and the
 original archive/source/stream joins. Final-head Required/security and guarded
 merge/postmerge checks remain required. No native tools/call, IDE activation,
 release or support-level promotion is inferred from these local results.
+
+
+## 2026-11-14: source 55bf native closure and missing OS adapter execution
+
+The ordinary source commit `55bf868cb98bb07a9b7ba24dfb9abfa63090818b`
+(tree `130c1540bc934a39bd7f2497370a580588de581d`) completed all three native
+jobs in [run 43620023537](https://github.com/777genius/universal-agent-plugins/actions/runs/43620023537).
+These results belong to that source. The release-only aggregate
+`132529270759` was skipped and is not counted as native success.
+
+| Platform | Successful job | Original artifact | Outer ZIP SHA-256 | Inner receipts SHA-256 |
+| --- | --- | --- | --- | --- |
+| macos | `132523405166` | `14123938906` | `7c0a3c7ff6ed77e254c31be460b3f51f37fc1e22d66b3395fd5d5c2b25800600` | `8be376bf04073c7d9fa8e03f01d8565513630f7015556e5bc3c9d0bfe5814e9d` |
+| windows | `132523405366` | `14124505960` | `0f073f153b3af6065e5a7e36f3c2e50e8d04f03a1ebc2491671c2c31a9de7459` | `dab1df8e49cbc2f93f318e788fa05962fb0ff8052598ff483e4853c0f280d7d5` |
+| linux | `132523405459` | `14124546800` | `2ef490f35a2759559e66637b9dcc28823ccd8f3bdd059f12dabc8d67de0ffa36` | `52962527dca99c2c8c0bd930675993c6527ec1b5273fd5666aa49476fb2ef213` |
+
+Each downloaded original passed the outer digest/size, both ZIP CRCs, exact
+76-member closure, all 78 request/receipt frame and 64 stream joins, exact
+source/tree/runtime pins, 14 direct slots, 23 public slots and all capture
+completion flags. Public slot 14 now exits zero with `mutated=false`,
+`Prepared` and `installation_verified`; its installation, physical artifact,
+source/package and retained DATA identities join the original owner. Its
+user guidance matches the following independently decoded six-field selected
+inventory row. All three actual rows report the Boolean `enabled=true`;
+this observation does not infer what a future native row will report.
+
+The two missing-config sidecar commands have their original common deadline,
+exit zero, completed cleanup and empty stderr. Both post-command ledgers equal
+the original 44-member baseline and the config leaf remains absent. The exact
+source harness also completes the full HOME before/after check around public
+slot 14 before taking the sidecar baseline. That HOME check is an executed
+harness gate; a separate pre-slot-14 HOME snapshot is not an archive member.
+The four original refusal slots 16, 18, 20 and 22 still exit one; every other
+public slot exits zero, including the retained saved and cold lifecycle cases.
+All seven sidecar qualification flags remain false. The native logs report
+`public_user_refusals=4` and `public_user_missing_config_observed=true`.
+Linux and macOS execute all 53 Python contracts with no skips. Windows executes
+51 successfully and retains two existing POSIX chmod-domain skips:
+`test_scanner_initial_posix_mode_is_exact_before_hashing` and
+`test_scanner_same_inode_mode_race_refuses_before_read`.
+IDE activation, live MCP execution,
+vendor authentication, model inference and release qualification remain
+unobserved by this run.
+
+The offline audit receipts and decoded job logs are retained under
+`/tmp/antig-55-originals`; their hashes are:
+
+| Platform | Audit JSON SHA-256 | Native job log SHA-256 |
+| --- | --- | --- |
+| macos | `9753d2f74576a8382febb72aa31898c2c69413fd1c4a1800f56953a5a437676b` | `ad3a282f065394ff076c4d5fc4b658a742c9e87ebcc1e7c5fece91f2f962b779` |
+| windows | `3c2db298d4a3ff9e8eaafdf7c845c8f559db2565a68f1a1e349753f22103d5a9` | `e7d4c5bcde8b99a05fd577412f9bea1065d9b5a50dc1f6f1f13aad52da880d61` |
+| linux | `80e95f0d446a8b15567ad1493cc53c9aa9b84ba07e8cd4a5affd62dc8da28fde` | `9e88dc8ad0aa853f6d1ceb3de1ba3fcb5d280dfcd1c570325025588967f47d3b` |
+
+### Required Go coverage correction in the existing native steps
+
+Review found that the source-55 native jobs execute the Go admission bridge
+package and the 53 Python contracts, but do not execute
+`clients/antigravity/inventory_test.go`. Core fast's existing cross-platform
+`project-contracts` command includes `clients/...`, but its
+`-run 'Test(TargetContext|Project|...)'` selection excludes `TestInventory*`.
+The full adapter package's already recorded local 41 top-level / 141 event
+execution is Linux evidence. It cannot establish the Windows-specific
+held-parent rename-prevention controls or native macOS adapter-test execution.
+
+Root and independent review approved exactly two lines before the existing
+bridge test in each of the three existing source-only PowerShell steps:
+
+```powershell
+go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./clients/antigravity
+if ($LASTEXITCODE -ne 0) { throw 'Antigravity adapter contracts failed' }
+```
+
+The existing exact-head checkout, pinned Go 1.26.11, source-only condition,
+release branches, jobs, triggers and bridge/native guards remain unchanged.
+The command executes the full adapter package, including
+`TestInventoryMissingConfigParentLeaseRefusesReplacementBeforeNative` and
+`TestInventoryMissingConfigParentRaceRetainsOriginalAuthority`. Their existing
+Windows branch accepts only the actual attempted rename's sharing error 32,
+unchanged original authority/bytes and absent destination, followed by the
+same rename succeeding after lease release. This proves prevention separately
+from a completed replacement; it does not skip either parent test. The
+POSIX-only FIFO fixture retains its explicit Windows platform skip.
+
+This two-line insertion at three existing call sites changes no Go or Python
+implementation or test source. The new command's native Windows/macOS results,
+and the final composed commit's ordinary native jobs, remain pending. The
+source-55 originals above do not substitute for those later results.
