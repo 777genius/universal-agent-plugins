@@ -25,12 +25,6 @@
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-standard-7257FF)](https://agentskills.io/specification)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
-Install and manage plugins and Skills across your AI agents with one CLI.
-Share `uap.toml` (package list) and `uap.lock` (exact versions) to restore your
-setup on another computer or with your team.
-
-**More than a one-time installer:** UAP combines a [searchable plugin directory](https://universal-agent-plugins.com/plugins/), independent [Agent Skills](https://universal-agent-plugins.com/agent-skills/) (no `plugin.json` wrapper needed), native multi-agent installation, managed repair/removal, portable dependency locks, and [Go/TypeScript SDKs](https://universal-agent-plugins.com/docs/en/sdk/). Review [product capabilities and release boundaries](docs/PRODUCT_CAPABILITIES.md) for evidence and limitations.
-
 [Documentation](https://universal-agent-plugins.com/docs/) ·
 [Browse plugins](https://universal-agent-plugins.com/plugins/) ·
 [Build a plugin](#build-plugins)
@@ -38,6 +32,12 @@ setup on another computer or with your team.
 <p align="center">
 <a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
 </p>
+
+Install and manage plugins and Skills across your AI agents with one CLI.
+Share `uap.toml` (package list) and `uap.lock` (exact versions) to restore your
+setup on another computer or with your team.
+
+**More than a one-time installer:** UAP combines a [searchable plugin directory](https://universal-agent-plugins.com/plugins/), independent [Agent Skills](https://universal-agent-plugins.com/agent-skills/), native multi-agent installation, managed repair/removal, portable dependency locks, and [Go/TypeScript SDKs](https://universal-agent-plugins.com/docs/en/sdk/). Review [product capabilities and release boundaries](docs/PRODUCT_CAPABILITIES.md) for evidence and limitations.
 
 <p align="center">
   <img src="assets/uap-how-it-works.webp" width="1200" alt="How UAP works: find plugins and skills, choose computer or project scope, install with UAP built on Agent Plugins 1.0 and Agent Skills, use with AI agents, and manage updates, repair, removal, restoration and sharing" />
