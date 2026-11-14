@@ -173,8 +173,7 @@ test('project defaults to CLI detection and preserves manual project targets', (
   state.updateAutoDetect(false);
   assert.equal(state.autoDetect.value, false);
   state.updateTargets(['codex', 'cursor']);
-  assert.equal(state.resolution.value.distribution, undefined);
-  state.updateTargets(['codex']);
+  assert.deepEqual(state.targets.value, ['codex'], 'Explicit eligible choice replaces the unsupported saved placeholder');
   assert.equal(unref(state.resolution).distribution?.targets[0]?.authentication, 'required');
   assert.match(
     pluginCommands(data(), state.targets.value, true, state.scope.value).add,
@@ -371,7 +370,9 @@ for (const [scope, client] of [['user', 'hermes'], ['project', 'pi']] as const) 
     assert.equal(state.availability.value, undefined);
     assert.equal(state.resolution.value.distribution, undefined);
     assert.equal(unref(state.pinnedSourceCommands), undefined);
-    state.updateTargets([scope === 'user' ? 'cursor' : 'codex']);
+    const replacement = scope === 'user' ? 'cursor' : 'codex';
+    state.updateTargets([client, replacement]);
+    assert.deepEqual(state.targets.value, [replacement], 'The picker includes the retained checked option');
     assert.equal(state.scope.value, scope);
     assert.equal(state.autoDetect.value, false);
     assert.equal(unref(state.availability)?.kind, 'signed');

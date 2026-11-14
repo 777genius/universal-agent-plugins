@@ -92,6 +92,22 @@ test('source requests stay exclusive when adding another source or a signed peer
   assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'antigravity'], ['pi'], 'project'), ['antigravity']);
 });
 
+test('withdrawn source choices yield only to an explicitly added eligible replacement', () => {
+  const plugin = fixture();
+  plugin.distributions[0]!.releases[0]!.blocking_clients.push('pi');
+  for (const scope of ['user', 'project'] as const) {
+    assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi'], ['pi'], scope), ['pi']);
+    assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'codex'], ['pi', 'codex'], scope), ['pi', 'codex'],
+      'An existing unavailable group is never silently replaced');
+    assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'chatgptweb'], ['pi'], scope), ['pi', 'chatgptweb'],
+      'An unavailable added target cannot trigger recovery');
+    const recovered = reconcilePluginSourceTargets(plugin, ['pi', 'codex'], ['pi'], scope);
+    assert.deepEqual(recovered, ['codex']);
+    assert.equal(pluginInstallAvailability(plugin, recovered, scope)?.kind, 'signed');
+    assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'antigravity'], ['pi'], scope), ['antigravity']);
+  }
+});
+
 test('canonical aliases and non-saved clients never gain a source fallback', () => {
   const plugin = fixture();
   plugin.distributions[0]!.releases[0]!.targets = [{

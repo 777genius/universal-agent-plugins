@@ -76,11 +76,19 @@ export function reconcilePluginSourceTargets(
   scope: InstallScope = 'user',
 ): InstallTargetID[] {
   if (next.length < 2) return next;
-  const sources = next.filter(target => pluginInstallAvailability(plugin, [target], scope)?.kind === 'pinned_git');
-  if (!sources.length) return next;
+  const availability = new Map(next.map(target =>
+    [target, pluginInstallAvailability(plugin, [target], scope)?.kind]));
+  // Keep withdrawn choices visible until the user adds an eligible replacement.
+  // Picker events include both the old checked option and the newly added one.
+  const addedAvailable = next.some(target => !previous.includes(target) && availability.get(target));
+  const candidates = addedAvailable
+    ? next.filter(target => !previous.includes(target) || availability.get(target))
+    : next;
+  const sources = candidates.filter(target => availability.get(target) === 'pinned_git');
+  if (!sources.length) return candidates;
   const addedSource = sources.find(target => !previous.includes(target));
   if (addedSource) return [addedSource];
-  const signed = next.filter(target => !sources.includes(target));
+  const signed = candidates.filter(target => !sources.includes(target));
   return signed.length ? signed : [sources[0]!];
 }
 

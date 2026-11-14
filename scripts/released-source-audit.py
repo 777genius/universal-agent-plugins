@@ -17,6 +17,7 @@ import re
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 import urllib.request
 import zipfile
 from datetime import datetime, timezone
@@ -259,6 +260,47 @@ def state_file(root, scope):
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"installations": []}
 
 
+def protected_scope_snapshot(root, scope, native_root):
+    """Observe the other native profile and its saved, mutable environment."""
+    documents = root / ("project" if scope == "user" else "uap-data")
+    state = documents / ".uap" if scope == "user" else documents
+    files = [documents / "uap.toml", documents / "uap.lock"]
+    files += [state / name for name in ("state-v2.json", "mutation.lock", "environment.lock")]
+    directories = [native_root, *[state / name for name in
+                   ("managed", "operations-v2", "plugin-data", "installer-tmp", "clients")]]
+    for path in [*files, *directories]:
+        in_case(path, root)
+    # The content store, acquisition and signed-feed/security caches are shared.
+    # They are deliberately absent from these scope-owned paths.
+    observed = {"directories": live.scoped_snapshot(directories), "files": {}}
+    for path in files:
+        require(not path.exists() or path.is_file(), "protected saved record is not a regular file")
+        observed["files"][path.relative_to(root).as_posix()] = (
+            {"digest": digest(path.read_bytes()), "mtime_ns": path.stat().st_mtime_ns,
+             "inode": path.stat().st_ino, "mode": path.stat().st_mode} if path.exists() else None)
+    return observed
+
+
+def checked_saved_removal(documents, alias, case, root):
+    for path in documents:
+        in_case(path, root)
+        require(path.is_file(), "saved removal lost the manifest or lock")
+    manifest = tomllib.loads(documents[0].read_text(encoding="utf-8"))
+    locked = json.loads(documents[1].read_text(encoding="utf-8"))
+    dependencies, targets = manifest.get("dependencies", {}), manifest.get("targets", {})
+    require(manifest.get("schema_version") == 1 and isinstance(dependencies, dict)
+            and isinstance(targets, dict), "saved removal produced an invalid manifest")
+    require(alias not in dependencies, "remove retained a saved dependency")
+    require(all(isinstance(aliases, list) and alias not in aliases for aliases in targets.values()),
+            "remove retained a saved target assignment")
+    packages = locked.get("packages")
+    require(locked.get("lock_version") == 1 and isinstance(packages, list), "saved removal produced an invalid lock")
+    source_key = f'github:{case["source"]["repository"].lower()}:{case["source"]["path"]}'
+    require(all(isinstance(package, dict) and package.get("alias") != alias
+                and package.get("source_key") != source_key for package in packages),
+            "remove retained a locked package")
+
+
 def checked_binding(state, case):
     installations = state.get("installations", [])
     require(len(installations) == 1, "expected one saved installation")
@@ -439,13 +481,15 @@ def run_case(binary, case, root, executable, npm=None):
                       "copied_ui_command": copied if operation in ("add", "update", "repair", "remove") else None, **result})
         for path in sentinels:
             require(live.preserved_regular_text(path, "unmanaged source audit neighbor\n", root), "foreign state changed")
+        require(protected_scope_snapshot(root, case["scope"], protected_root) == protected,
+                operation + " changed the other scope")
         if success:
             require(result["exit_code"] == 0 and not result.get("timeout") and isinstance(parsed, dict), operation + " did not complete")
         return parsed, result
 
     selected_root = native_root if case["scope"] == "user" else project_native
     protected_root = project_native if case["scope"] == "user" else native_root
-    protected = live.snapshot([protected_root])
+    protected = protected_scope_snapshot(root, case["scope"], protected_root)
     before = live.snapshot([selected_root])
     try:
         _, added = run("add", case["selector"], case["expected"] != "dependency-refusal")
@@ -476,7 +520,9 @@ def run_case(binary, case, root, executable, npm=None):
             require(repaired["installation_id"] == installation["installation_id"], "repair changed saved identity")
             require(live.snapshot([selected_root]) == native_after, "healthy repair changed native files")
             run("remove", receipt["alias"])
-            run("list")
+            listed, _ = run("list")
+            require(listed.get("data", {}).get("installations") == [], "removed package is still listed")
+            checked_saved_removal(documents, receipt["alias"], case, root)
             require(not any(item.get("clients") for item in state_file(root, case["scope"]).get("installations", [])), "remove retained a native binding")
             require(not locator.exists(), "remove retained the managed package")
             cleanup = checked_native_cleanup(selected_root, case, binding, root)
@@ -484,7 +530,7 @@ def run_case(binary, case, root, executable, npm=None):
                        "activation_observed": [binding["activation"], updated_binding["activation"], repaired_binding["activation"]],
                        "native_files_after_add": len(native_after), "native_cleanup": cleanup,
                        "update": "immutable-no-change", "repair": "healthy-repair"}
-        require(live.snapshot([protected_root]) == protected, "other scope changed")
+        require(protected_scope_snapshot(root, case["scope"], protected_root) == protected, "other scope changed")
         if npm:
             require(checked_npm_installation(root, env, npm["target"], npm["reference"], npm["installer"]) == npm_evidence,
                     "public npm identity changed during lifecycle")

@@ -310,3 +310,34 @@ plus desktop/mobile UI and denial/scope regressions. The independent reviewer
 approved this narrower implementation boundary; queued or failed runs still
 cannot qualify it. Estimated additional UI changes: 180–300 production LOC
 and 150–260 test LOC, complexity 5/10, reliability 8/10, confidence 8/10.
+
+### Acceptance-driven corrections: repair, cold rendering and scope isolation
+
+The actual published 0.1.108 binary passed the Pi Windows source lifecycle,
+but Antigravity Windows reached `repair` and failed with
+`no_supported_components`. Antigravity's projection writes `mcp_config.json`;
+its missing existing `SelectionReader` implementation made intact-package
+repair look for `mcp.json`. Fix that adapter through the existing seam and
+extend real native User/Project acceptance to cover healthy repair, alongside
+MCP-only installer and verified-staging regressions. Track the narrow change
+in `2026-11-14-antigravity-managed-mcp-repair.md` in its own reviewed PR.
+An updated source tree cannot qualify the immutable 0.1.108 public binary.
+The public npm command and its release, commit and package-integrity pins must
+move together only after an actually qualified fixed release is published.
+
+Hosted page generation also exposed a cold-render ordering error: agent pages
+read Directory status before awaiting their registry projection. The fix
+awaits that existing initialization and makes the page regression enforce the
+ordering. Independent review approved it. A separate reviewed picker fix lets
+an explicitly added available agent replace a withdrawn saved choice, while
+preserving the choice until the user acts. The full frontend suite now passes
+550 tests; production generation/browser acceptance still requires its own
+successful final-head run.
+
+External audit review identified missing observations, now covered by strict
+regressions: compare the other native and saved scope after every command,
+including manifest, lock and mutable state, while excluding shared caches;
+after removal, parse the manifest and lock and inspect the real list result.
+A later removal cannot conceal an earlier cross-scope write, and native-file
+cleanup alone cannot prove saved removal. These strengthen the acceptance
+criteria; the known 0.1.108 repair failure remains a failed qualification.
