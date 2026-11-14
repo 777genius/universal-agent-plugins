@@ -23,12 +23,18 @@ class GlobalLifecycleContracts(unittest.TestCase):
 
     def build_receipt(self):
         value = {"schema_version": 1, "source_commit": "a" * 40, "source_tree": "b" * 40,
-                 "environment": "original-hosted-build; GOTOOLCHAIN=local", "commands": [], "streams": {}}
-        for role, path in (("go", "/hosted/go"), ("installer", "/owned/agentplugins")):
+                 "environment": case.private_go.ENVIRONMENT, "commands": [], "streams": {}}
+        for role, path in (("go", "/owned/build-toolchain/go/bin/go"), ("installer", "/owned/agentplugins")):
             value[role] = dict(path=path, bytes=8, sha256="c" * 64, uid=os.getuid(), gid=os.getgid(), mode=0o755)
+        value["go"].update(bytes=case.private_go.GO_BYTES, sha256=case.private_go.GO_SHA256)
+        value["toolchain"] = dict(schema_version=1, url=case.private_go.URL, archive_bytes=case.private_go.ARCHIVE_BYTES,
+            archive_sha256=case.private_go.ARCHIVE_SHA256, catalog_sha256=case.private_go.CATALOG_SHA256,
+            members=case.private_go.MEMBERS, directories=case.private_go.DIRECTORIES, payload_bytes=case.private_go.PAYLOAD,
+            root="/owned/build-toolchain", original_root=[1, 2, case.stat.S_IFDIR | 0o700, os.getuid(), os.getgid()],
+            verifications=6, cleanup_proved=True)
         for label, args in (("build-go-version", ["version"]),
                             ("build-uap", ["build", "-o", "/owned/agentplugins", "./cli/cmd/agentplugins"])):
-            row = dict(probe=label, argv=["/hosted/go", *args], cwd=str(case.base.shared.SOURCE),
+            row = dict(probe=label, argv=[value["go"]["path"], *args], cwd=str(case.base.shared.SOURCE),
                        exit=0, error=None, elapsed_seconds=0.01)
             for kind in ("stdout", "stderr"):
                 body = b"go version go1.26.11 linux/amd64\n" if (label, kind) == ("build-go-version", "stdout") else b""
@@ -37,6 +43,23 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 value["streams"][name] = base64.b64encode(body).decode()
             value["commands"].append(row)
         return value
+
+    def selected_private_compiler(self, go):
+        """Only replace artifact selection in the existing pin/build contracts."""
+        @contextmanager
+        def selected(ctx):
+            receipt = self.build_receipt()["toolchain"]
+            path = go.parents[2]
+            receipt.update(root=str(path), cleanup_proved=False, verifications=1)
+            def verify(): receipt["verifications"] += 1
+            ctx.global_build_cleanup_proved = False
+            try:
+                yield SimpleNamespace(go=go, path=path, receipt=receipt, verify=verify)
+            finally:
+                verify()
+                receipt["cleanup_proved"] = True
+                ctx.global_build_cleanup_proved = True
+        return selected
 
     def completed_summary(self):
         first = ("source-commit", "source-tree", "source-clean", "git-init-a", "git-init-b", "git-init-c") + case.base.METADATA_PROBES
@@ -782,7 +805,8 @@ class GlobalLifecycleContracts(unittest.TestCase):
     def test_build_commands_are_separate_bounded_original_receipts(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
-            go, installer = root / "go", root / "installer"
+            go, installer = root / "build-toolchain/go/bin/go", root / "installer"
+            go.parent.mkdir(parents=True)
             go.write_bytes(b"inert-go"); go.chmod(0o755)
             ctx = SimpleNamespace(summary=dict(source_commit="a" * 40, source_tree="b" * 40, commands=[]),
                                   budget=SimpleNamespace(check=lambda: 20), private=root, identities={},
@@ -790,6 +814,9 @@ class GlobalLifecycleContracts(unittest.TestCase):
             def run(argv, cwd, environment, _output, label, **kwargs):
                 self.assertEqual(environment.get("HOME"), os.environ.get("HOME"))
                 self.assertEqual(environment["GOTOOLCHAIN"], "local")
+                self.assertEqual(environment["GOROOT"], str(root / "build-toolchain/go"))
+                self.assertEqual(environment["GOENV"], "off")
+                self.assertEqual(environment["PATH"], str(go.parent) + ":/usr/bin:/bin")
                 self.assertEqual((kwargs["timeout"], kwargs["limit"], kwargs["memory_only"]),
                                  (10 if label == "build-go-version" else 20, 1 << 20, True))
                 receipt = self.build_receipt()
@@ -798,7 +825,8 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 bodies = [base64.b64decode(receipt["streams"][label + "." + kind + ".log"]) for kind in ("stdout", "stderr")]
                 if label == "build-uap": installer.write_bytes(b"inert-built-cli"); installer.chmod(0o755)
                 return record, *bodies
-            with mock.patch.object(case.shutil, "which", return_value=str(go)):
+            with mock.patch.object(case.private_go, "prepared", self.selected_private_compiler(go)), \
+                    mock.patch.multiple(case.private_go, GO_BYTES=8, GO_SHA256=case.sha(b"inert-go")):
                 with mock.patch.object(case.base.shared, "run_probe", side_effect=run) as execute:
                     pin = case.build_installer(ctx, installer)
                     self.assertEqual(pin, (15, hashlib.sha256(b"inert-built-cli").hexdigest()))
@@ -825,7 +853,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 before = go.lstat(); expected = {name: getattr(before, name) for name in fields}
                 ctx = SimpleNamespace(summary={}, budget=SimpleNamespace(check=lambda: 20))
                 metadata = {}
-                with mock.patch.object(case.shutil, "which", return_value=str(go)), \
+                with mock.patch.object(case.private_go, "prepared", self.selected_private_compiler(go)), \
                         mock.patch.object(case.base.shared.artifacts, "open_member", side_effect=AssertionError("refused file opened")) as opened, \
                         mock.patch.object(case.os, "read", side_effect=AssertionError("refused bytes read")) as read, \
                         mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("refused process started")) as probe:
@@ -837,7 +865,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 if effect == "owner": self.assertEqual(metadata, expected)
                 else:
                     self.assertEqual(ctx.summary, {"global_build_authority": {
-                        "schema_version": 1, "role": "resolved-host-go", "selected_lstat": expected,
+                        "schema_version": 1, "role": "verified-private-go", "selected_lstat": expected,
                         "expected_owner": {"uid": before.st_uid, "gid": before.st_gid}, "initial_pin_lstat": expected},
                         "global_build_authority_refusal": {
                             "role": "go", "predicate": {"mode": "mode", "links": "single-link", "empty": "size",
@@ -857,7 +885,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
             def changed(path, budget, **kwargs):
                 path.chmod(0o700)
                 return pin(path, budget, **kwargs)
-            with mock.patch.object(case.shutil, "which", return_value=str(go)), \
+            with mock.patch.object(case.private_go, "prepared", self.selected_private_compiler(go)), \
                     mock.patch.object(case, "installer_pin", side_effect=changed), \
                     mock.patch.object(case.base.shared.artifacts, "open_member", side_effect=AssertionError("refused file opened")) as opened:
                 with self.assertRaisesRegex(ValueError, "prebuilt installer authority"):
@@ -918,7 +946,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
             state = dict(phase="preparation", reason="capture-incomplete", deadline=float(case.base.time.monotonic() + 10))
             ctx = SimpleNamespace(summary=self.refused_build_summary(), budget=SimpleNamespace(check=lambda: 20),
                                   private=root, identities={}, process_cleanup_proved=True, global_readout_state=state)
-            with mock.patch.object(case.shutil, "which", return_value=str(go)):
+            with mock.patch.object(case.private_go, "prepared", self.selected_private_compiler(go)):
                 with mock.patch.object(case.base.shared, "run_probe") as execute, mock.patch.object(case.base.shared.artifacts, "open_member") as opened:
                     with self.assertRaises(case.ExecutableAuthorityRefusal) as caught: case.build_installer(ctx, installer)
             execute.assert_not_called(); opened.assert_not_called()
@@ -948,7 +976,7 @@ class GlobalLifecycleContracts(unittest.TestCase):
                 record["argv"], record["cwd"] = argv, str(cwd)
                 if label == "build-uap": installer.write_bytes(b"inert-built-cli"); installer.chmod(0o700)
                 return record, *(base64.b64decode(receipt["streams"][label + "." + kind + ".log"]) for kind in ("stdout", "stderr"))
-            with mock.patch.object(case.shutil, "which", return_value=str(go)):
+            with mock.patch.object(case.private_go, "prepared", self.selected_private_compiler(go)):
                 with mock.patch.object(case.base.shared, "run_probe", side_effect=run) as execute:
                     with self.assertRaises(case.ExecutableAuthorityRefusal) as caught: case.build_installer(ctx, installer)
             self.assertEqual(execute.call_count, 2)

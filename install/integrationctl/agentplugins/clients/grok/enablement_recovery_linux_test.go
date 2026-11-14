@@ -90,8 +90,8 @@ func newEnablementFixture(t *testing.T) enablementFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := enablementRecord{Version: 1, Action: "enable", OperationID: "op-fixture", InstallationID: installationID, BindingID: bindingID,
-		ProjectRoot: project, UserRoot: user, ArtifactPath: artifact, PackageDigest: packageDigest,
+	record := enablementRecord{Version: 2, Action: "enable", OperationID: "op-fixture", InstallationID: installationID, BindingID: bindingID,
+		ProjectRoot: project, UserRoot: user, UserParentAuthority: enablementFixtureParent(t, user), ArtifactPath: artifact, PackageDigest: packageDigest,
 		PluginID: id, PluginName: name, Edit: edit}
 	before, err := state.Load()
 	if err != nil {
@@ -131,7 +131,7 @@ func (fixture enablementFixture) attempt(t *testing.T, applied, committed bool) 
 
 // recoverPrototypeRecords exercises the private member-journal codec only.
 // Public Recover refuses these records: they cannot recover native auxiliary
-// effects or establish the original User parent after a cold restart.
+// effects even when the private record preserves its original User parent.
 func recoverPrototypeRecords(ctx context.Context, recovery EnablementRecovery) error {
 	entries, err := recovery.recordNames()
 	if err != nil {

@@ -760,6 +760,7 @@ def run(output, *, collector=collect, recipe="private"):
         with shared.Budget(seconds) as budget:
             readout_state["deadline"] = budget.deadline
             ctx = AdmissionContext(output, summary, budget)
+            if recipe == "ordinary-global": ctx.global_build_cleanup_proved = True
             ctx.original_output_identity = identity
             held_cleanup = {path: root_identity(path) for path in (ctx.home, ctx.private, ctx.output, output / "tmp", *ctx.projects.values())}
             readout_state["phase"] = "source"
@@ -804,6 +805,8 @@ def run(output, *, collector=collect, recipe="private"):
         require(root_identity(output) == identity, "outer root replaced")
         try:
             require((ctx is None or ctx.process_cleanup_proved) and probes_settled, "owned process/probe cleanup unproved")
+            require(recipe != "ordinary-global" or ctx is None or getattr(ctx, "global_build_cleanup_proved", None) is True,
+                    "private Go build cleanup unproved")
             diagnostics = getattr(ctx, "known_file_diagnostics", None)
             if diagnostics is not None:
                 try:

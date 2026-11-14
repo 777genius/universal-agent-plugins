@@ -15,6 +15,7 @@ import shutil
 import stat
 
 import devin_ordinary_metadata_admission as ordinary
+import devin_global_toolchain as private_go
 
 base = ordinary.base
 NAME, SKILL = "uap-devin-global", "uap-global-marker"
@@ -235,26 +236,36 @@ def closed_build_authority_refusal(summary, state):
 
 
 def build_installer(ctx, installer):
-    """Two bounded hosted build commands; no claim about the runner's build HOME."""
+    """Two unchanged bounded commands with one complete private pinned GOROOT."""
     parent = installer.parent
     base.require(installer.is_absolute() and parent.resolve(strict=True) == parent
                  and not installer.exists() and not installer.is_symlink(), "fresh installer output required")
     parent_identity = base.root_identity(parent)
-    go = Path(shutil.which("go") or "").resolve(strict=True)
+    with private_go.prepared(ctx) as compiler:
+        pin = build_with_compiler(ctx, installer, parent_identity, compiler)
+    ctx.identities[installer] = pin[1]
+    validate_build_receipt(ctx.summary["global_build_receipt"], ctx.summary)
+    return pin
+
+
+def build_with_compiler(ctx, installer, parent_identity, compiler):
+    go, parent = compiler.go, installer.parent
     go_info = go.lstat()
-    go_owner = (go_info.st_uid, go_info.st_gid)  # setup-go may expose a root-owned toolchain.
-    authority = {"schema_version": 1, "role": "resolved-host-go", "selected_lstat": installer_metadata(go_info),
+    go_owner = (os.getuid(), os.getgid())
+    authority = {"schema_version": 1, "role": "verified-private-go", "selected_lstat": installer_metadata(go_info),
                  "expected_owner": {"uid": go_owner[0], "gid": go_owner[1]}, "initial_pin_lstat": {}}
     ctx.summary["global_build_authority"] = authority
     go_pin = build_executable_pin(ctx, go, "go", owner=go_owner, metadata=authority["initial_pin_lstat"])
     receipt = {"schema_version": 1, "source_commit": ctx.summary["source_commit"],
-               "source_tree": ctx.summary["source_tree"], "environment": "original-hosted-build; GOTOOLCHAIN=local",
+               "source_tree": ctx.summary["source_tree"], "environment": private_go.ENVIRONMENT,
                "go": {"path": str(go), "bytes": go_pin[0], "sha256": go_pin[1], "uid": go_owner[0], "gid": go_owner[1], "mode": 0o755},
-               "installer": None, "commands": [], "streams": {}}
+               "installer": None, "commands": [], "streams": {}, "toolchain": compiler.receipt}
     ctx.summary["global_build_receipt"] = receipt
-    environment = dict(os.environ, GOTOOLCHAIN="local")
+    environment = dict(os.environ, GOTOOLCHAIN="local", GOENV="off", GOROOT=str(compiler.path / "go"),
+                       PATH=str(go.parent) + ":/usr/bin:/bin")
     for label, arguments, timeout in (("build-go-version", ["version"], 10),
                                      ("build-uap", ["build", "-o", str(installer), "./cli/cmd/agentplugins"], 240)):
+        compiler.verify()
         base.require(base.root_identity(parent) == parent_identity
                      and build_executable_pin(ctx, go, "go", owner=go_owner) == go_pin, "build authority changed")
         if label == "build-uap":
@@ -272,20 +283,19 @@ def build_installer(ctx, installer):
                      "Global bounded build command failed")
         if label == "build-go-version":
             base.require(stdout == b"go version go1.26.11 linux/amd64\n" and not stderr, "Global exact Go version")
+        compiler.verify()
     base.require(base.root_identity(parent) == parent_identity and build_executable_pin(ctx, go, "go", owner=go_owner) == go_pin,
                  "build authority changed")
     pin = build_executable_pin(ctx, installer, "installer")
     receipt["installer"] = {"path": str(installer), "bytes": pin[0], "sha256": pin[1],
                             "uid": os.getuid(), "gid": os.getgid(), "mode": 0o755}
-    ctx.identities[installer], ctx.identities[go] = pin[1], go_pin[1]
-    validate_build_receipt(receipt, ctx.summary)
     return pin
 
 
 def validate_build_receipt(value, summary):
     base.require(type(value) is dict and set(value) == {"schema_version", "source_commit", "source_tree", "environment",
-                 "go", "installer", "commands", "streams"} and type(value["schema_version"]) is int
-                 and value["schema_version"] == 1 and value["environment"] == "original-hosted-build; GOTOOLCHAIN=local"
+                 "go", "installer", "commands", "streams", "toolchain"} and type(value["schema_version"]) is int
+                 and value["schema_version"] == 1 and value["environment"] == private_go.ENVIRONMENT
                  and all(type(value[key]) is str and re.fullmatch("[0-9a-f]{40}", value[key])
                          and value[key] == summary.get(key) for key in ("source_commit", "source_tree")),
                  "Global build source witness")
@@ -300,6 +310,7 @@ def validate_build_receipt(value, summary):
                      "Global build executable witness")
     base.require((value["installer"]["uid"], value["installer"]["gid"]) == (os.getuid(), os.getgid()),
                  "Global build installer owner")
+    private_go.validate_receipt(value["toolchain"], value["go"])
     labels = ("build-go-version", "build-uap")
     records, streams = value["commands"], value["streams"]
     base.require(type(records) is list and len(records) == 2 and type(streams) is dict

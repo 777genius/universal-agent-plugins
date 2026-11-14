@@ -180,3 +180,63 @@ combined held-lock native readback, successful exact public Project lifecycle
 including MCP where qualified, original User lifecycle audit, independent code
 review, final branch CI, merge and post-merge checks. This document records the
 reviewable candidate, not completion of those gates.
+
+## 2026-11-14 private cold-parent correction
+
+The public safety refusal introduced in `ef8968d` remains in force:
+`SupportsPluginEnablement` is false, direct activation/removal refuse native
+effects, and public recovery does not acknowledge incomplete auxiliary-effect
+recovery. The first ACP exchange still lacks a durable record for all startup
+writes. No native qualification follows from this correction.
+
+Private member records now use version 2 and require the existing immutable
+`directoryidentity.Authority` for the original User parent. The prototype
+captures it from a no-follow held directory before the first inventory exchange;
+the value includes the complete canonical ancestry. Completion and rollback
+revalidate that same value before config writes, state decisions and committed
+journal mutations. Journal publication, footer append/truncate and record unlink
+retain the existing held-operation-directory and held-leaf joins. Moving the
+original config and native lock leaves into a replacement parent does not grant
+that replacement recovery authority.
+
+The existing 32 KiB whole-record bound, strict unique JSON decoding, record hash,
+finite footer, whole-state digests and exact config CAS remain. Version 1,
+missing/null parent authority and a different canonical root fail closed, with
+no recapture or migration. An empty unpublished stage still has no native-effect
+authority; only its existing held-namespace cleanup is retained. A complete
+unpublished record must pass the new parent join before cleanup. No public state
+schema, ownership object, configuration body or credential is added.
+
+The portable ExactFile CAS and directoryidentity algorithms do not claim atomic
+exclusion of an external rename after their final observation. The public guard
+therefore remains unchanged; the separate first-exchange and readback auxiliary
+write scenarios remain unresolved. New low-level tests exercise cold recovery
+through a newly constructed state store, all original enable/remove durable
+boundaries, same-leaf parent substitution, late replacement before writes, record
+publication/footer/unlink boundaries, and pre-inventory capture. The three
+published public-guard attack regressions are retained.
+
+### Prepared removal on non-Linux hosts (2026-11-14)
+
+The original Terminal UI run `43559930375` on head `5ff83587` failed
+its existing composed Grok removal tests on macOS (job `132341201150`)
+and Windows (job `132341201030`). Both original logs name the unsupported
+enablement journal as the first removal refusal. These were prepared packages
+without owned enabled-membership records; the ordinary removal core had created
+a fresh native-attempt identifier. Linux distinguishes a missing journal from
+an existing record, whereas the non-Linux stub refused even that absence check.
+
+The non-Linux read entrypoint now validates the operation ID and uses the
+existing anchored, non-following, nonblocking path opener solely to establish
+actual absence. It returns the original error unchanged. Any existing ordinary
+record is closed and remains unsupported; no record body is read. Directories,
+leaf or ancestor aliases, and unknown errors do not become absence. The caller
+continues to require no enabled ownership before ordinary removal may proceed.
+An owned enabled membership with a missing record still fails. Journal writes,
+recovery, explicit enablement and enabled-member removal remain unqualified.
+
+Focused non-Linux regressions cover prepared versus owned absence, preservation
+of existing file/directory records, dangling leaf and missing-leaf ancestor
+aliases, and invalid operation IDs. The original cross-platform CLI journeys
+remain required; Linux compilation or source review does not qualify their
+macOS or Windows execution.

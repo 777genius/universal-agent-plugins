@@ -785,5 +785,320 @@ class NativeProfileContracts(unittest.TestCase):
             profile_case.stdout_for_help(changed)
 
 
+class DelegatedPublicationTests(unittest.TestCase):
+    """Inert outer-admission receipts only; no native journey is manufactured."""
+    def setUp(self):
+        import grok_project_protocol_service as service
+        self.service = service
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.budget = service.shared.Budget(900)
+        self.inputs = service.Inputs(self.budget)
+        self.addCleanup(self.inputs.close)
+        self.expected = dict(source_commit="a" * 40, source_tree="b" * 40,
+                             installer_sha256="c" * 64, probe_sha256="d" * 64)
+        self.env = dict(GITHUB_RUN_ID="123", GITHUB_RUN_ATTEMPT="1", GITHUB_EVENT_NAME="pull_request")
+
+    def evidence(self, case, passed=False):
+        value = {"schema_version": 1, **self.expected, "passed": passed, "commands": [],
+            "stages": [{"stage": name} for name in self.service.STAGES] if passed else [],
+            "vendor_authentication_used": False, "unmanaged_project_owned_enablement_qualified": passed}
+        if not passed:
+            value["error"] = "ValueError: inert original refusal"
+        if case == "grok-protocol":
+            value.update(model_invoked=False, grok_tools_call_qualified=False, transport="stdio")
+            if passed:
+                value.update(native_doctor_initialize_and_list_qualified=True, direct_installed_config_tools_call_qualified=True)
+        else:
+            value.update(github_run_id="123", github_run_attempt="1", github_event="pull_request", platform="Linux-x86_64",
+                actual_model_used=False, scripted_local_provider=True, grok_native_tools_call_qualified=passed)
+        return value
+
+    def admit(self, value, case="grok-noauth", exit_code=1, error=None):
+        return self.service.admit_evidence(json.dumps(value).encode(), case, {"exit": exit_code, "error": error},
+                                          self.expected, self.env, self.budget)
+
+    def test_literal_case_flags_source_exit_and_stage_prefix_are_joined(self):
+        for case in self.service.CASE_FIELDS:
+            negative = self.evidence(case)
+            self.assertFalse(self.admit(negative, case))
+            positive = self.evidence(case, True)
+            self.assertTrue(self.admit(positive, case, 0))
+            for change in ({"passed": True}, {"passed": 0}, {"vendor_authentication_used": 0},
+                    {"source_commit": "e" * 40}, {"installer_sha256": "e" * 64}, {"source_tree": "e" * 40},
+                    {"probe_sha256": "e" * 64}, {"unknown": False}, {"unmanaged_project_owned_enablement_qualified": True},
+                    {"stages": [{"stage": "unknown"}]}, {"error": ""}, {"schema_version": True}):
+                with self.subTest(case=case, change=change), self.assertRaises(ValueError):
+                    self.admit({**negative, **change}, case)
+            for bad_exit, error in ((0, None), (True, None), (2, None), (1, "capture incomplete")):
+                with self.assertRaises(ValueError):
+                    self.admit(negative, case, bad_exit, error)
+            for change in ({"error": "later failure"}, {"stages": []}, {"unmanaged_project_owned_enablement_qualified": False}):
+                with self.assertRaises(ValueError):
+                    self.admit({**positive, **change}, case, 0)
+        negative = self.evidence("grok-noauth")
+        for change in ({"grok_native_tools_call_qualified": True}, {"actual_model_used": True}, {"scripted_local_provider": 1},
+                       {"github_run_id": "other"}, {"github_run_attempt": "2"}, {"github_event": "push"}, {"platform": "other"}):
+            with self.assertRaises(ValueError):
+                self.admit({**negative, **change})
+
+    def test_dual_original_streams_require_exact_bytes_digests_types_names_and_unique_labels(self):
+        row = dict(probe="inert-version", argv=["/inert/grok", "--version"], cwd="/inert/project", error=None,
+                   exit=0, elapsed_seconds=0.01)
+        for name, body in (("stdout", b"inert original output\n"), ("stderr", b"")):
+            row.update({name: body.decode(), name + "_base64": base64.b64encode(body).decode(),
+                name + "_bytes": len(body), name + "_sha256": hashlib.sha256(body).hexdigest(),
+                name + "_file": "inert-version." + name + ".log"})
+        value = self.evidence("grok-noauth")
+        value["commands"] = [row]
+        self.assertFalse(self.admit(value))
+        for field, changed in (("stdout_bytes", True), ("stdout_sha256", "0" * 64), ("stdout", "changed"),
+                ("stdout_file", "foreign.log"), ("elapsed_seconds", True), ("elapsed_seconds", 901),
+                ("exit", True), ("argv", ["/inert", "bad\x00"]), ("cwd", "relative"), ("unknown", False)):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.admit({**value, "commands": [{**row, field: changed}]})
+        with self.assertRaises(ValueError):
+            self.admit({**value, "commands": [row, row]})
+
+    def test_held_file_replacement_and_moved_outer_ancestor_refuse_before_read(self):
+        parent = self.root / "outer" / "inner"
+        parent.mkdir(parents=True)
+        path = parent / "source"
+        path.write_bytes(b"inert exact source")
+        path.chmod(0o600)
+        self.inputs.pin(path, ((os.getuid(), os.getgid()),), 1024)
+        held = self.inputs.files[path][0]
+        position = os.lseek(held, 0, os.SEEK_CUR)
+        (self.root / "outer").rename(self.root / "moved")
+        (self.root / "outer").mkdir()
+        (self.root / "moved" / "inner").rename(self.root / "outer" / "inner")
+        with self.assertRaisesRegex(ValueError, "ancestry changed"):
+            self.inputs.read(path)
+        self.assertEqual(os.lseek(held, 0, os.SEEK_CUR), position)
+        self.assertEqual(path.read_bytes(), b"inert exact source")
+
+    def publication_fixture(self):
+        output = self.root / "output"
+        output.mkdir(mode=0o700)
+        self.inputs.directory(output)
+        sink = self.root / "github-output"
+        sink.write_bytes(b"")
+        sink.chmod(0o600)
+        descriptor = os.open(sink, os.O_RDWR | os.O_APPEND)
+        self.addCleanup(os.close, descriptor)
+        identity = self.service.file_identity(os.fstat(descriptor))
+        body = json.dumps(self.evidence("grok-noauth")).encode()
+        receipt = {"delegated_service": {"closed": True, "forced_stop": False, "forced_kill": False},
+                   "native_passed": False, "evidence_sha256": hashlib.sha256(body).hexdigest()}
+        return output, sink, body, receipt, (descriptor, identity, b"")
+
+    def test_only_clean_closure_publishes_exact_original_negative_bytes_and_literal_grant(self):
+        output, sink, body, receipt, held = self.publication_fixture()
+        with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(sink)}):
+            self.service.publish(output, body, receipt, self.inputs, held)
+        self.assertEqual((output / "upload/evidence.json").read_bytes(), body)
+        self.assertEqual(json.loads((output / "upload/delegation.json").read_bytes()), receipt)
+        self.assertEqual(sink.read_bytes(), b"native_passed=false\npublication=admitted\n")
+        self.assertFalse(json.loads(body)["passed"])
+
+    def test_unclean_service_and_expired_original_budget_create_no_upload_or_grant(self):
+        output, sink, body, receipt, held = self.publication_fixture()
+        with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(sink)}):
+            for key, changed in (("closed", False), ("closed", 1), ("forced_stop", True), ("forced_kill", True)):
+                bad = copy.deepcopy(receipt)
+                bad["delegated_service"][key] = changed
+                with self.assertRaises(ValueError):
+                    self.service.publish(output, body, bad, self.inputs, held)
+                self.assertFalse((output / "upload").exists())
+            self.budget.deadline = 0
+            with self.assertRaises(Exception):
+                self.service.publish(output, body, receipt, self.inputs, held)
+        self.assertFalse((output / "upload").exists())
+        self.assertEqual(sink.read_bytes(), b"")
+
+    def test_output_ancestor_replacement_and_sink_replacement_preserve_foreign_members_without_grant(self):
+        output, sink, body, receipt, held = self.publication_fixture()
+        moved = self.root / "moved-output"
+        output.rename(moved)
+        output.mkdir(mode=0o700)
+        (output / "foreign").write_bytes(b"must remain")
+        with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(sink)}), self.assertRaises(ValueError):
+            self.service.publish(output, body, receipt, self.inputs, held)
+        self.assertEqual((output / "foreign").read_bytes(), b"must remain")
+        self.assertFalse((output / "upload").exists())
+        self.assertEqual(sink.read_bytes(), b"")
+
+    def test_short_or_expired_workflow_grant_restores_only_its_own_exact_tail(self):
+        _, sink, _, _, held = self.publication_fixture()
+        original_write = os.write
+        def short(descriptor, body):
+            return original_write(descriptor, body[:-1])
+        with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(sink)}), mock.patch.object(os, "write", side_effect=short):
+            with self.assertRaisesRegex(ValueError, "incomplete"):
+                self.service.workflow_output(*held, self.inputs, False)
+        self.assertEqual(sink.read_bytes(), b"")
+        held = (held[0], self.service.file_identity(os.fstat(held[0])), b"")
+        def expire(descriptor, body):
+            count = original_write(descriptor, body)
+            self.budget.deadline = 0
+            return count
+        with mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(sink)}), mock.patch.object(os, "write", side_effect=expire):
+            with self.assertRaises(Exception):
+                self.service.workflow_output(*held, self.inputs, False)
+        self.assertEqual(sink.read_bytes(), b"")
+
+    def test_new_launcher_does_not_forward_parent_sink_secrets_or_loader_controls(self):
+        ambient = {**self.env, "GITHUB_OUTPUT": "/private/output", "XAI_API_KEY": "secret", "PYTHONPATH": "/foreign", "LD_PRELOAD": "foreign"}
+        with mock.patch.dict(os.environ, ambient):
+            env = self.service.child_environment(self.root, "a" * 40)
+        self.assertEqual(set(env), self.service.runtime.GROK_ENV)
+        self.assertTrue(all(key not in env for key in ("GITHUB_OUTPUT", "XAI_API_KEY", "PYTHONPATH", "LD_PRELOAD")))
+
+    def test_actual_parent_keeps_child_private_until_clean_completion_and_returns_original_negative(self):
+        import io
+        for scenario in ("clean-negative", "unclean", "transport", "changed-source", "changed-input", "sink-replaced",
+                         "sink-after-grant", "sink-same-size", "foreign-tail", "child-extra", "late-budget", "late-close"):
+            with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(dir=self.root) as temporary:
+                root = Path(temporary).resolve()
+                tools = root / "tools"
+                tools.mkdir()
+                installer, probe = tools / "agentplugins", tools / "probe"
+                for path in (installer, probe):
+                    path.write_bytes(b"inert never executed " + path.name.encode())
+                    path.chmod(0o700)
+                sink = root / "github-output"
+                sink.write_bytes(b"")
+                sink.chmod(0o600)
+                output = root / "output"
+                source_root = root / "source"
+                script = source_root / "scripts/grok_noauth_call_e2e.py"
+                script.parent.mkdir(parents=True)
+                script.write_bytes(b"inert owned script; never executed")
+                script.chmod(0o600)
+                evidence = self.evidence("grok-noauth")
+                evidence.update(installer_sha256=hashlib.sha256(installer.read_bytes()).hexdigest(),
+                                probe_sha256=hashlib.sha256(probe.read_bytes()).hexdigest())
+                body = json.dumps(evidence).encode()
+                def service(ctx, case, selected, env, destination, origin):
+                    self.assertEqual((case, selected[1:], destination), ("grok-noauth", (installer, probe), output))
+                    self.assertEqual(ctx.budget.deadline, origin / 1e9 + 900)
+                    self.assertEqual(sink.read_bytes(), b"")
+                    self.assertFalse((output / "upload").exists())
+                    self.assertNotIn("GITHUB_OUTPUT", env)
+                    (output / "child").mkdir(mode=0o700)
+                    (output / "child/evidence.json").write_bytes(body)
+                    (output / "child/evidence.json").chmod(0o600)
+                    if scenario == "child-extra":
+                        (output / "child/foreign.txt").write_bytes(b"unknown child member")
+                    if scenario == "changed-input":
+                        installer.write_bytes(b"changed inert input")
+                    if scenario == "sink-replaced":
+                        sink.rename(root / "original-sink")
+                        sink.write_bytes(b"foreign bytes must stay")
+                    if scenario == "transport":
+                        raise ValueError("inert secret must not reach console")
+                    ctx.summary["delegated_service"] = dict(closed=scenario != "unclean", forced_stop=False, forced_kill=False)
+                    return dict(exit=1, error=None), b"", b""
+                def source(_ctx, phase):
+                    return dict(source_commit=("e" if scenario == "changed-source" and phase == "after" else "a") * 40,
+                                source_tree="b" * 40)
+                env = {**self.env, "GITHUB_OUTPUT": str(sink), "EXPECTED_COMMIT": "a" * 40,
+                       "GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted",
+                       "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}
+                original_pin = self.service.Inputs.pin
+                original_close = self.service.Inputs.close
+                original_exit = self.service.shared.Budget.__exit__
+                original_write = os.write
+                python = Path("/usr/bin/python3").resolve()
+                def pin(owner, path, owners, maximum, **flags):
+                    if path == python:
+                        # This host's interpreter is not a hosted-runner proof.
+                        # The native launch is inert; only its fixed pin request
+                        # is admitted at this outer-control-flow test boundary.
+                        self.assertEqual((owners, maximum, flags), (((0, 0),), 64 << 20, {"executable": True}))
+                        return "e" * 64
+                    return original_pin(owner, path, owners, maximum, **flags)
+                def write(descriptor, content):
+                    count = original_write(descriptor, content)
+                    if scenario == "sink-after-grant":
+                        sink.rename(root / "granted-original")
+                        sink.write_bytes(b"native_passed=true\npublication=admitted\nforeign=preserve\n")
+                    elif scenario == "foreign-tail":
+                        original_write(descriptor, b"foreign=preserve\n")
+                    elif scenario == "sink-same-size":
+                        current = sink.read_bytes()
+                        sink.write_bytes(b"X" + current[1:])
+                    return count
+                def exit_budget(budget, *args):
+                    result = original_exit(budget, *args)
+                    if scenario == "late-budget":
+                        self.assertIn(b"publication=admitted", sink.read_bytes())
+                        raise self.service.shared.legacy.CollectorDeadline("inert late deadline")
+                    return result
+                def close(owner):
+                    original_close(owner)
+                    if scenario == "late-close":
+                        self.assertIn(b"publication=admitted", sink.read_bytes())
+                        raise OSError("inert late close refusal")
+                with mock.patch.dict(os.environ, env), mock.patch.object(self.service.runtime, "cline_host"), \
+                        mock.patch.object(self.service.shared.native, "require_hosted"), \
+                        mock.patch.object(self.service.runtime, "SOURCE", source_root), \
+                        mock.patch.object(self.service.Inputs, "pin", pin), \
+                        mock.patch.object(self.service.Inputs, "close", close), \
+                        mock.patch.object(self.service.shared.Budget, "__exit__", exit_budget), \
+                        mock.patch.object(os, "write", side_effect=write), \
+                        mock.patch.object(self.service, "source_identity", side_effect=source), \
+                        mock.patch.object(self.service.runtime, "grok_service", side_effect=service), \
+                        mock.patch.object(sys, "executable", "/usr/bin/python3"), \
+                        mock.patch.object(sys, "stdout", new_callable=io.StringIO) as console, \
+                        mock.patch.object(self.service, "admit_evidence", wraps=self.service.admit_evidence) as admitted:
+                    result = self.service.run("grok-noauth", installer, probe, output)
+                self.assertNotIn("secret", console.getvalue())
+                if scenario == "clean-negative":
+                    self.assertEqual(result, 0)  # transport/admission, not native success
+                    self.assertEqual((output / "upload/evidence.json").read_bytes(), body)
+                    self.assertEqual(sink.read_bytes(), b"native_passed=false\npublication=admitted\n")
+                    self.assertEqual(admitted.call_count, 1)
+                else:
+                    self.assertEqual(result, 1)
+                    # Even a copied/foreign stale grant cannot pass the actual
+                    # workflow's independent successful-launcher-outcome guard.
+                    upload = result == 0 and b"publication=admitted\n" in sink.read_bytes().splitlines(keepends=True)
+                    self.assertFalse(upload)
+                    if scenario not in ("sink-after-grant", "sink-same-size", "foreign-tail", "late-close"):
+                        self.assertNotIn(b"publication=admitted", sink.read_bytes())
+                    if scenario in ("unclean", "transport", "changed-source", "changed-input", "child-extra"):
+                        self.assertEqual(admitted.call_count, 0)
+                    if scenario == "sink-replaced":
+                        self.assertEqual(sink.read_bytes(), b"foreign bytes must stay")
+                    if scenario in ("sink-after-grant", "foreign-tail"):
+                        self.assertTrue(sink.read_bytes().endswith(b"foreign=preserve\n"))
+                    if scenario == "sink-same-size":
+                        self.assertTrue(sink.read_bytes().startswith(b"Xative_passed=false\n"))
+
+    def test_both_actual_workflow_verdicts_keep_negative_native_result_and_stale_grants_failed(self):
+        import subprocess
+        workflow_root = Path(__file__).resolve().parents[1] / ".github/workflows"
+        condition = "if: ${{ always() && steps.grok_native.outcome == 'success' && steps.grok_native.outputs.publication == 'admitted' }}"
+        for name in ("grok-project-protocol.yml", "grok-noauth-call.yml"):
+            text = (workflow_root / name).read_text()
+            self.assertEqual(text.count(condition), 1)
+            final = text.split("      - name: Require the original native result to pass\n")[1]
+            self.assertIn("        if: ${{ always() }}\n", final)
+            script = final.split("        run: |\n")[1]
+            script = "\n".join(line[10:] for line in script.splitlines() if line.strip())
+            self.assertEqual(script.splitlines(), ['test "$GROK_LAUNCH_OUTCOME" = success',
+                'test "$GROK_PUBLICATION" = admitted', 'test "$GROK_NATIVE_PASSED" = true'])
+            for outcome, publication, passed in (("success", "admitted", "true"), ("success", "admitted", "false"),
+                    ("failure", "admitted", "true"), ("failure", "admitted", "false"), ("success", "", "true"),
+                    ("skipped", "admitted", "true"), ("success", "admitted", "1")):
+                result = subprocess.run(["/bin/bash", "--noprofile", "--norc", "-e", "-c", script],
+                    env={"PATH": "/usr/bin:/bin", "GROK_LAUNCH_OUTCOME": outcome, "GROK_PUBLICATION": publication,
+                         "GROK_NATIVE_PASSED": passed}, capture_output=True, timeout=2, check=False)
+                self.assertEqual(result.returncode == 0, (outcome, publication, passed) == ("success", "admitted", "true"))
+                self.assertEqual((result.stdout, result.stderr), (b"", b""))
+
+
 if __name__ == "__main__":
     unittest.main()

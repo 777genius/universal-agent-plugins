@@ -5,6 +5,7 @@ valid artifact never changes a failed test into a passed qualification.
 """
 import argparse
 import base64
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from urllib.parse import urlencode
 import hashlib
@@ -83,6 +84,12 @@ CLINE_ENV = frozenset("HOME USERPROFILE XDG_CONFIG_HOME XDG_CACHE_HOME XDG_STATE
     "AGENTPLUGINS_LINTAI_ARCHIVE_SHA256 AGENTPLUGINS_CLINE_BIN AGENTPLUGINS_PROJECT_NATIVE_IDENTITY "
     "AGENTPLUGINS_PROJECT_NATIVE_OUTPUT AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT PLUGIN_KIT_AI_REPO_ROOT".split())
 CLINE_UNIT = re.compile(r"uap-cline-project-[0-9a-f]{32}\.service\Z")
+GROK_SCRIPTS = {"grok-protocol": "grok_project_protocol_e2e.py", "grok-noauth": "grok_noauth_call_e2e.py"}
+GROK_ENV = frozenset("HOME PATH LANG LC_ALL NO_COLOR TERM TMPDIR RUNNER_TEMP GIT_CONFIG_GLOBAL "
+    "GIT_CONFIG_NOSYSTEM GIT_TERMINAL_PROMPT PYTHONDONTWRITEBYTECODE GITHUB_ACTIONS RUNNER_ENVIRONMENT "
+    "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED EXPECTED_COMMIT GITHUB_RUN_ID GITHUB_RUN_ATTEMPT GITHUB_EVENT_NAME".split())
+SERVICE_UNITS = {"cline": CLINE_UNIT, **{case: re.compile(r"uap-" + case + r"-[0-9a-f]{32}\.service\Z")
+                                        for case in GROK_SCRIPTS}}
 
 
 def strict_json(body):
@@ -2077,9 +2084,46 @@ def cline_service_argv(tests, env, output, unit, uid, gid, origin_ns):
             "-test.run=^TestAgentpluginsClineNativeProjectCompleteCycle$", "-test.count=1", "-test.v", "-test.timeout=180s"]
 
 
+def grok_service_argv(case, inputs, env, output, unit, uid, gid, origin_ns):
+    if (case not in GROK_SCRIPTS or not SERVICE_UNITS[case].fullmatch(unit)
+            or type(uid) is not int or uid <= 0 or type(gid) is not int or gid <= 0
+            or type(origin_ns) is not int or origin_ns <= 0 or set(env) != GROK_ENV
+            or any(not isinstance(value, str) or len(value) > 4096 or any(c in value for c in "\x00\r\n") for value in env.values())
+            or env["PATH"] != "/usr/bin:/bin" or env["GITHUB_ACTIONS"] != "true"
+            or env["RUNNER_ENVIRONMENT"] != "github-hosted" or env["AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED"] != "1"
+            or type(inputs) is not tuple or len(inputs) != 3
+            or any(not path.is_absolute() or path.resolve() != path for path in (*inputs, output))
+            or SOURCE == output or SOURCE in output.parents):
+        raise ValueError("closed Grok delegated service arguments required")
+    fixed = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "NO_COLOR": "1", "TERM": "dumb",
+             "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1", "GIT_TERMINAL_PROMPT": "0",
+             "PYTHONDONTWRITEBYTECODE": "1", "HOME": str(output / "home"),
+             "TMPDIR": str(output / "tmp"), "RUNNER_TEMP": str(output / "tmp")}
+    if (any(env[key] != value for key, value in fixed.items())
+            or not re.fullmatch(r"[0-9a-f]{40}", env["EXPECTED_COMMIT"])
+            or not re.fullmatch(r"[1-9][0-9]{0,19}", env["GITHUB_RUN_ID"])
+            or not re.fullmatch(r"[1-9][0-9]{0,4}", env["GITHUB_RUN_ATTEMPT"])
+            or env["GITHUB_EVENT_NAME"] not in ("pull_request", "push", "workflow_dispatch")):
+        raise ValueError("closed Grok service environment differs")
+    remaining = (origin_ns + 900_000_000_000 - time.monotonic_ns()) // 1_000_000_000
+    if not 15 < remaining <= 900:
+        raise ValueError("Grok original service deadline exhausted")
+    python, installer, probe = inputs
+    return ["/usr/bin/sudo", "-n", "/usr/bin/systemd-run", "--unit=" + unit, "--wait", "--pipe", "--collect", "--quiet",
+            "--service-type=exec", "--expand-environment=no", "--uid=" + str(uid), "--gid=" + str(gid), "--property=Delegate=yes",
+            "--property=NoNewPrivileges=yes", "--property=KillMode=control-group", "--property=RuntimeMaxSec=" + str(remaining) + "s",
+            "--property=TimeoutStopSec=30s", "--working-directory=" + str(output), "/usr/bin/env", "-i",
+            *(key + "=" + env[key] for key in sorted(env)), str(python), "-B", str(SOURCE / "scripts" / GROK_SCRIPTS[case]),
+            "--installer", str(installer), "--probe", str(probe), "--output", str(output / "child")]
+
+
 def cline_unit_state(body, unit):
-    if not CLINE_UNIT.fullmatch(unit):
-        raise ValueError("unregistered Cline unit")
+    return _service_unit_state(body, unit, "cline")
+
+
+def _service_unit_state(body, unit, case):
+    if case not in SERVICE_UNITS or not SERVICE_UNITS[case].fullmatch(unit):
+        raise ValueError("unregistered delegated unit")
     rows = body.decode("ascii", "strict").splitlines()
     value = {}
     for row in rows:
@@ -2097,8 +2141,12 @@ def cline_unit_state(body, unit):
 
 
 def cline_cgroup_empty(unit, uid):
-    if not CLINE_UNIT.fullmatch(unit):
-        raise ValueError("unregistered Cline cgroup")
+    return _service_cgroup_empty(unit, uid, "cline")
+
+
+def _service_cgroup_empty(unit, uid, case):
+    if case not in SERVICE_UNITS or not SERVICE_UNITS[case].fullmatch(unit):
+        raise ValueError("unregistered delegated cgroup")
     parent = Path("/sys/fs/cgroup/system.slice")
     if parent.resolve() != parent:
         raise ValueError("cgroup parent alias refused")
@@ -2141,6 +2189,19 @@ def cline_service(ctx, tests, env, output):
     The existing Go OS supervisor still discovers and admits its actual cgroup.
     There is no supplied delegation-root override or replacement child launcher.
     """
+    return _delegated_service(ctx, "cline", tests, env, output)
+
+
+def grok_service(ctx, case, inputs, env, output, origin_ns):
+    if (case not in GROK_SCRIPTS or type(origin_ns) is not int or origin_ns <= 0
+            or ctx.budget.deadline != origin_ns / 1e9 + 900):
+        raise ValueError("Grok requires its original whole-journey deadline")
+    return _delegated_service(ctx, case, inputs, env, output, origin_ns)
+
+
+def _delegated_service(ctx, case, inputs, env, output, origin_ns=None):
+    if case not in SERVICE_UNITS:
+        raise ValueError("unregistered delegated service")
     cline_host()
     uid, gid = os.getuid(), os.getgid()
     held = {}
@@ -2157,7 +2218,7 @@ def cline_service(ctx, tests, env, output):
                     or hashlib.sha256(ordinary_bytes(path, 32 << 20, owners=(0,))).hexdigest() != digest):
                 raise ValueError("Cline service system executable changed")
     system_env = {"PATH": "/usr/bin:/bin", "LANG": "C", "SYSTEMD_PAGER": "cat", "SYSTEMD_COLORS": "0"}
-    unit = "uap-cline-project-" + secrets.token_hex(16) + ".service"
+    unit = ("uap-cline-project-" if case == "cline" else "uap-" + case + "-") + secrets.token_hex(16) + ".service"
     def query(label):
         unchanged()
         record, stdout, stderr = ctx.command(label, ["/usr/bin/systemctl", "--no-pager", "--no-ask-password", "show",
@@ -2165,58 +2226,63 @@ def cline_service(ctx, tests, env, output):
         unchanged()
         if record["exit"] != 0 or stderr:
             raise ValueError("exact owned unit query failed")
-        return cline_unit_state(stdout, unit)
-    state = query("cline-service-absent")
-    if state["LoadState"] != "not-found" or not cline_cgroup_empty(unit, uid):
+        return _service_unit_state(stdout, unit, case)
+    def empty():
+        return _service_cgroup_empty(unit, uid, case)
+    state = query(case + "-service-absent")
+    if state["LoadState"] != "not-found" or not empty():
         raise ValueError("fresh Cline unit already exists")
-    record, stdout, stderr = ctx.command("cline-systemd-version", ["/usr/bin/systemd-run", "--version"], output, system_env, 5)
+    record, stdout, stderr = ctx.command(case + "-systemd-version", ["/usr/bin/systemd-run", "--version"], output, system_env, 5)
     unchanged()
     if record["exit"] != 0 or stderr or not re.match(rb"systemd 255(?: \([^\r\n]*\))?\n", stdout):
         raise ValueError("reviewed systemd 255 host required")
     receipt = {"unit": unit, "uid": uid, "gid": gid, "forced_stop": False, "forced_kill": False,
                "closed": False, "system_executables": {str(path): digest for path, (_, digest) in held.items()}}
     ctx.summary["delegated_service"] = receipt
-    origin = time.monotonic_ns()
-    argv = cline_service_argv(tests, env, output, unit, uid, gid, origin)
+    origin = time.monotonic_ns() if case == "cline" else origin_ns
+    seconds = 180 if case == "cline" else 900
+    argv = (cline_service_argv(inputs, env, output, unit, uid, gid, origin) if case == "cline"
+            else grok_service_argv(case, inputs, env, output, unit, uid, gid, origin))
     receipt["original_start_monotonic_ns"] = origin
     result, problem = None, None
-    with shared.Budget(180 - (time.monotonic_ns() - origin) / 1e9) as budget:
+    lifetime = shared.Budget(180 - (time.monotonic_ns() - origin) / 1e9) if case == "cline" else nullcontext(ctx.budget)
+    with lifetime as budget:
         ctx.budget = budget
         try:
-            # Five seconds for the capture group to reap and ten for exact
-            # service cleanup remain within this original 180-second origin.
-            result = ctx.command("runtime-test", argv, output, system_env, 165 - (time.monotonic_ns() - origin) / 1e9)
+            # The original deadline includes five seconds for capture reaping
+            # and ten for exact service cleanup. Cline remains 180/165 seconds.
+            result = ctx.command("runtime-test", argv, output, system_env, seconds - 15 - (time.monotonic_ns() - origin) / 1e9)
         except Exception as error:
             problem = error
         finally:
             try:
-                state = query("cline-service-state")
-                closed = state["ActiveState"] in ("inactive", "failed") and cline_cgroup_empty(unit, uid)
+                state = query(case + "-service-state")
+                closed = state["ActiveState"] in ("inactive", "failed") and empty()
             except Exception as error:
                 closed, problem = False, problem or error
             if not closed:
                 receipt["forced_stop"] = True
                 try:
                     unchanged()
-                    ctx.command("cline-service-stop", ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "--no-ask-password",
+                    ctx.command(case + "-service-stop", ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "--no-ask-password",
                                 "--no-block", "stop", unit], output, system_env, 1)
-                    pause_end = min(origin / 1e9 + 172, time.monotonic() + 0.2)
-                    while time.monotonic() < pause_end and not cline_cgroup_empty(unit, uid):
+                    pause_end = min(origin / 1e9 + seconds - 8, time.monotonic() + 0.2)
+                    while time.monotonic() < pause_end and not empty():
                         time.sleep(0.02)
-                    closed = cline_cgroup_empty(unit, uid)
+                    closed = empty()
                 except Exception as error:
                     problem = problem or error
                 if not closed:
                     receipt["forced_kill"] = True
                     try:
                         unchanged()
-                        ctx.command("cline-service-kill", ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "--no-ask-password",
+                        ctx.command(case + "-service-kill", ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "--no-ask-password",
                                     "kill", "--kill-whom=all", "--signal=SIGKILL", unit], output, system_env, 1)
                     except Exception as error:
                         problem = problem or error
                 try:
-                    state = query("cline-service-final-state")
-                    closed = state["ActiveState"] in ("inactive", "failed") and cline_cgroup_empty(unit, uid)
+                    state = query(case + "-service-final-state")
+                    closed = state["ActiveState"] in ("inactive", "failed") and empty()
                 except Exception as error:
                     problem = problem or error
             receipt["closed"] = closed
@@ -2224,7 +2290,7 @@ def cline_service(ctx, tests, env, output):
             shared.verify_files(ctx.identities, budget)
             if not closed or receipt["forced_stop"] or receipt["forced_kill"]:
                 problem = ValueError("Cline service required forced cleanup or retained descendants")
-            if time.monotonic_ns() - origin >= 180_000_000_000:
+            if time.monotonic_ns() - origin >= seconds * 1_000_000_000:
                 problem = ValueError("Cline original service deadline exhausted")
     if problem is not None:
         raise problem

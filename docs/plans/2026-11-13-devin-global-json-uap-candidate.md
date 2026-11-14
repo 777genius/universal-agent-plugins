@@ -728,3 +728,66 @@ no-follow open/hash/identity tail and existing build receipt validator; all
 other prior production functions are unchanged except the explicit build,
 pin and completion diagnostic joins. The module still contains the same
 three `lstat` call sites. No Go or native process was run for this follow-up.
+
+### Measured Go dependency refusal and private complete toolchain
+
+The original [f42 Global run](https://github.com/777genius/universal-agent-plugins/actions/runs/43548342317)
+and the later [5ff Global run](https://github.com/777genius/universal-agent-plugins/actions/runs/43559930011)
+now identify the first pre-read refusal. Both selected Go executables have
+mode `0777`, while regular-file type, one link, selected owner and the
+15,548,742-byte size pass. The later original also contains the exact closed
+`role=go`, `predicate=mode` diagnostic. Each capture contains only six source/Git
+commands, twelve joined original streams and the 234 acquired Devin file pins;
+no Go build or native Global lifecycle ran. The setup-go log identifies its
+existing `1.26.11/x64` cache. These facts do not establish why that cache has
+those permissions or explain earlier captures without the metadata record.
+
+The Global build now acquires a fresh complete private Go distribution from
+`https://dl.google.com/go/go1.26.11.linux-amd64.tar.gz`. The
+[official download JSON](https://go.dev/dl/?mode=json&include=all) publishes
+66,999,944 bytes and SHA256
+`9849f4e04ee35303714e34fbc3ac8ab44ea3e448a95aa182f91e3b9b79c710ec`.
+The bounded extractor verifies that complete input before parsing, then checks
+all 16,715 members, 1,667 directories, 232,821,816 payload bytes and canonical
+catalog SHA256
+`d5e5ce38823a38bf7be2a4481d19431d4c8a9f5f6b328895239ffac385aa0c78`.
+The two measured Unicode `issue27836.dir/Þfoo.go` and `Þmain.go` PAX `path`
+headers require their exact singleton maps. Other PAX fields, links, sparse
+entries, special files, duplicate names and traversal remain refusals. The
+generic 8,192-member archive limit is unchanged.
+
+Only freshly created owned files receive the official `0755`/`0644` modes.
+The existing installer pin keeps its exact `0755`, owner, single-link,
+no-follow, streaming hash and held/named stability checks. No shared setup-go
+file is selected or modified. The existing two bounded `go version` and
+`go build` commands use the private full GOROOT, `GOTOOLCHAIN=local`,
+`GOENV=off` and an explicit private-bin PATH. Their raw stream/source joins
+remain in the build receipt together with compact archive/catalog, original
+root and exact cleanup facts. The Go executable pin is
+`95499375c24b610cdc9e3684cec920174ec4c4f3f66d35b4332107f0f7d3d27d`.
+
+The original output ancestry and stage are held throughout the build.
+Descriptor-relative traversal retains at most 32 original ancestors and
+bounded depth-15 member chains; it never holds one descriptor per archive
+member. Whole-tree identity/hash checks run before execution, around both
+commands and before removal. Each removed member rejoins its original held
+parent and recorded identity. The distribution is removed before native
+fixture authoring or its protected baseline. Shared build HOME and module/cache
+behavior keep the existing hosted-build scope.
+
+The ordinary-global context initializes a transient cleanup proof explicitly.
+The private helper clears it before the first creation effect, and restores it
+only after original-parent and named-absence proof. Partial extraction,
+identity drift or unsettled process cleanup retain the stage and prevent every
+generic owned deletion and raw publication. Missing or nonboolean proof fails
+closed. Other recipes retain their existing cleanup contract.
+
+Local contracts exercise real private files with inert tar inputs and inert
+build responses, including interruption immediately after mkdir, partial writes,
+parent/root/leaf substitution, hash/mode/link drift, restrictive umask, full
+receipt rejection and the actual shared cleanup fence. A separate read-only
+input audit materialized the complete official archive, verified the full
+catalog and removed only its exact private tree with no Go or native execution.
+The final source must still pass the genuine Global workflow and original
+artifact review; none of these dependency checks attests authentication, model
+or MCP execution.

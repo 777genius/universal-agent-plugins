@@ -412,7 +412,7 @@ func kiroUserCommitSource(t *testing.T, transport *projectJourneyTransport, cont
 	projectJourneyGit(t, transport.repo, "add", ".")
 	projectJourneyGit(t, transport.repo, "commit", "-m", "select inert User components")
 	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")
-	archive, archiveErr := exec.CommandContext(t.Context(), "git", "-C", transport.repo, "archive", "--format=zip", "--prefix=provider-wrapper/", "HEAD").Output()
+	archive, archiveErr := exec.CommandContext(t.Context(), "git", "-c", "core.autocrlf=false", "-C", transport.repo, "archive", "--format=zip", "--prefix=provider-wrapper/", "HEAD").Output()
 	if archiveErr != nil || len(archive) > 1<<20 {
 		t.Fatal("create bounded owned User archive", archiveErr)
 	}

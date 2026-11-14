@@ -1681,3 +1681,81 @@ The combined 115-method Python suite passed on Linux (114 executed, one existing
 Windows-only lease contract skipped). This verifies the composed collector and
 inert fixtures; Windows execution and genuine source/bundled native outcomes
 remain separate required evidence, with no new qualification from these tests.
+
+### 2026-11-14 — join the public PLUGIN_DATA locator to CLI composition
+
+The completed bundled macOS and Linux jobs of run `43559083280` at exact
+checkout/head `c5b94a6157391974de6c3ce3178ec197b15a74a1` retain one closed
+failure summary each. Original artifact `14100980339` is 771 bytes with SHA-256
+`a813e0b1515a33d10ab7289f1da79d229d833c5d5ababcf5f563661b2cf6778c`;
+artifact `14100501544` is 770 bytes with SHA-256
+`6b920a18f83db4db3c71a90b09e10c1b5cb141f88eb336ce49b2c81340ee7743`.
+Both source/nonce-joined diagnostics identify `public-add-a`,
+`public_binding` (function line 1903), and the retained data receipt predicate
+at line 1965. The primary observer family settled; public-family cleanup was
+not proved. The original raw public state and command output remain withheld.
+
+The public Cobra composition selects `<project>/.uap` as its state namespace
+and `plugin-data` as the PLUGIN_DATA base (`cli/cmd/agentplugins/compose.go`);
+`PluginDataManager.EnsureData` appends the physical artifact ID and writes the
+complete receipt. The installer default uses the same base, and
+`bindDataReceipt` retains the produced receipt. The collector and its inert
+fixture instead expected `.uap/data`. That incorrect expected locator rejects
+a legitimate public receipt before reading its marker.
+
+The collector now requires exactly
+`<project>/.uap/plugin-data/<physical-artifact-id>`. Its fixture uses that same
+production namespace. It does not accept both paths or follow a locator from
+state as a new authority. Existing binding, physical artifact, scope, state,
+marker, publication ancestry and package/source checks remain intact. No
+production writer, cleanup rule, budget or qualification flag changes.
+
+An inert replay of the original function rejects the production-shaped
+receipt with `public retained data receipt differs`; the corrected function
+accepts it. The new contract also rejects mutually matching state and marker
+at the old `.uap/data` root, a foreign root or a sibling Project's data root,
+and rejects a changed marker at the selected root. Wrong-root markers are
+never read. These contracts are not a reconstruction of withheld native state
+and do not establish a successful bundled or cold lifecycle. The next ordinary
+native run must still close every public stage and its original cleanup proof.
+
+### 2026-11-14 — retain the first ordinary source-profile bound refusal
+
+Original source artifacts `14100548260` (Linux, 13,705 bytes, SHA-256
+`b7a6b4e7e232de4e81eac43c0afdb54eadc8de0ad705e023e619a0a8f62f9dac`)
+and `14100478450` (Windows, 14,102 bytes, SHA-256
+`210d2da437ffe4fc81a3629a9cb897af0d9a59e1217b2178bf3e756c2d50ecce`)
+belong to the same exact `c5b94a6157391974de6c3ce3178ec197b15a74a1`
+source run. Both reach the genuine first `config-path-a` command, which exits
+zero and reports the selected A configuration path. Its retained stderr reports
+dependency preparation for that data root. The next capture fails with the
+original `source ordinary profile bound` predicate in `source_ledger`; the
+parent's settled capture fails at the same bound. These originals do not retain
+the offending member or distinguish the ordinary-member count from file size.
+They do not prove a cache location or authorize another large-tree partition.
+
+The existing first-refusal record now has one additional closed operation,
+`ordinary-profile-bound`. It is attached during the same sorted ledger pass,
+using the already captured member record and ordinary counter. It reports the
+relative member (or its digest when the existing 512-byte representation bound
+would be exceeded), typed metadata, selected A/B, original User or other fixture
+scope, object kind, ordinary count, and the exact failing count/file-size
+predicate. The decoder cross-checks the represented path and scope, mode and
+kind, counter and unchanged limits. No file contents, native raw error message,
+new read, walk or independently selected baseline supplies these fields.
+
+The original RuntimeError and traceback remain the outcome. The existing
+2-KiB closed record, source/nonce/stream joins, original held evidence authority,
+exclusive first write and failed-source upload rules also apply. File-read and
+absolute-link refusal documents retain their existing closed schemas and byte
+representation. The scan deadline, 2,048 ordinary-member and 1-MiB ordinary-file
+limits, source/runtime partitions, link and hardlink closure, cleanup rules and
+all false qualification flags remain unchanged. In particular, this change
+does not exclude leases or add an inferred cache subtree to runtime authority.
+
+Inert contracts exercise all four scopes and each count/file-size predicate
+without filesystem reads, reject false or mismatched metadata and bounds, and
+preserve the first record and original exception across a second failure or
+replacement of the evidence directory. Successful decoding is diagnostic only;
+genuine source bootstrap, repeat/restart and recovery still require the complete
+native result under the original guards.

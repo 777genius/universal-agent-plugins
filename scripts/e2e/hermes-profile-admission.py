@@ -453,7 +453,22 @@ def payload_hardlink_closure(records, deadline, source=None):
             source_hardlink_boundary(names, source)
 
 
-def source_payload_refusal(error, member, record, *, bytes_read=None, target=None):
+def source_bound_scope(member):
+    for scope, root in (("selected-a", "project-a/.uap/hermes-runtime"),
+                        ("selected-b", "project-b/.uap/hermes-runtime"), ("original-user", "user")):
+        if below(member, root):
+            return scope
+    return "fixture-other"
+
+
+def source_bound_predicate(kind, size, count):
+    count_failed, size_failed = count > 2048, kind == "file" and size > LIMIT
+    if count_failed and size_failed:
+        return "count-and-file-bytes"
+    return "count" if count_failed else "file-bytes" if size_failed else None
+
+
+def source_payload_refusal(error, member, record, *, bytes_read=None, target=None, profile_bound=None):
     """Attach captured metadata only; an unsuccessful observation is no authority."""
     try:
         identity = record["identity"]
@@ -467,7 +482,8 @@ def source_payload_refusal(error, member, record, *, bytes_read=None, target=Non
         encoded = member.encode("utf-8", "surrogatepass")
         target_bytes = target.encode("utf-8", "surrogatepass") if target is not None else None
         value = dict(schema_version=1, measurement_only=True, admission_qualified=False,
-                     operation="file-read" if bytes_read is not None else "absolute-link-target",
+                     operation="ordinary-profile-bound" if profile_bound is not None else
+                               "file-read" if bytes_read is not None else "absolute-link-target",
                      member=member if len(json.dumps(member, ensure_ascii=True).encode("ascii")) <= 512 else None,
                      member_sha256=hashlib.sha256(encoded).hexdigest(), hash_encoding="utf-8-surrogatepass",
                      metadata={key: bounded(number) for key, number in numbers.items()},
@@ -476,6 +492,8 @@ def source_payload_refusal(error, member, record, *, bytes_read=None, target=Non
                      winerror=bounded(getattr(error, "winerror", None)),
                      target_sha256=hashlib.sha256(target_bytes).hexdigest() if target_bytes is not None else None,
                      target_bytes=len(target_bytes) if target_bytes is not None else None)
+        if profile_bound is not None:
+            value["profile_bound"] = dict(profile_bound)
         source_refusal_document(json.dumps(dict(value, nonce="0" * 64, stage="observer-profile-snapshot")).encode())
         error.source_payload_refusal = value
     except (AttributeError, KeyError, IndexError, TypeError, ValueError, UnicodeError, RuntimeError):
@@ -485,13 +503,16 @@ def source_payload_refusal(error, member, record, *, bytes_read=None, target=Non
 def source_refusal_document(body):
     require(type(body) is bytes and 0 < len(body) <= 2048, "source refusal evidence bound")
     value = census_document(body)
-    require(type(value) is dict and set(value) == set("schema_version measurement_only admission_qualified nonce stage operation member member_sha256 hash_encoding metadata integer_saturated bytes_read errno winerror target_sha256 target_bytes".split()), "closed source refusal schema")
+    fields = set("schema_version measurement_only admission_qualified nonce stage operation member member_sha256 hash_encoding metadata integer_saturated bytes_read errno winerror target_sha256 target_bytes".split())
+    if type(value) is dict and value.get("operation") == "ordinary-profile-bound":
+        fields.add("profile_bound")
+    require(type(value) is dict and set(value) == fields, "closed source refusal schema")
     digest = lambda text: type(text) is str and re.fullmatch(r"[0-9a-f]{64}", text) is not None
     number = lambda item: type(item) is int and 0 <= item < 2**64
     require(type(value["schema_version"]) is int and value["schema_version"] == 1
             and value["measurement_only"] is True and value["admission_qualified"] is False and digest(value["nonce"])
             and value["stage"] in ("parent-before-observer", "observer-profile-initial", "observer-profile-snapshot", "parent-after-settlement")
-            and value["operation"] in ("file-read", "absolute-link-target") and value["hash_encoding"] == "utf-8-surrogatepass"
+            and value["operation"] in ("file-read", "absolute-link-target", "ordinary-profile-bound") and value["hash_encoding"] == "utf-8-surrogatepass"
             and type(value["integer_saturated"]) is bool and digest(value["member_sha256"]), "source refusal identity differs")
     member, metadata = value["member"], value["metadata"]
     require(member is None or (type(member) is str and ":" not in member and "\\" not in member
@@ -506,9 +527,27 @@ def source_refusal_document(body):
         require(number(value["bytes_read"]) and number(metadata["bytes"])
                 and value["bytes_read"] <= metadata["bytes"] <= PAYLOAD_BYTES
                 and value["target_sha256"] is None and value["target_bytes"] is None, "source read refusal differs")
-    else:
+    elif value["operation"] == "absolute-link-target":
         require(all(value[key] is None for key in ("bytes_read", "errno", "winerror"))
                 and digest(value["target_sha256"]) and number(value["target_bytes"]) and 0 < value["target_bytes"] <= 16384, "source link refusal differs")
+    else:
+        bound = value["profile_bound"]
+        require(type(bound) is dict and set(bound) == {"scope", "kind", "ordinary_count", "predicate"}
+                and bound["scope"] in ("selected-a", "selected-b", "original-user", "fixture-other")
+                and (member is None or bound["scope"] == source_bound_scope(member))
+                and bound["kind"] in ("file", "directory", "link")
+                and number(bound["ordinary_count"]) and 0 < bound["ordinary_count"] <= PAYLOAD_MEMBERS
+                and number(metadata["mode"]) and number(metadata["bytes"]) and metadata["bytes"] <= PAYLOAD_BYTES
+                and ((bound["kind"] == "link" and
+                      (stat.S_ISLNK(metadata["mode"]) or (number(metadata["attributes"]) and metadata["attributes"] & 0x400
+                       and metadata["reparse_tag"] in (0xA0000003, 0xA000000C))))
+                     or (bound["kind"] != "link" and not (metadata["attributes"] or 0) & 0x400
+                         and stat.S_IFMT(metadata["mode"]) == {"file": stat.S_IFREG, "directory": stat.S_IFDIR}[bound["kind"]])),
+                "source ordinary refusal observation differs")
+        require(bound["predicate"] in ("count", "file-bytes", "count-and-file-bytes")
+                and bound["predicate"] == source_bound_predicate(bound["kind"], metadata["bytes"], bound["ordinary_count"])
+                and all(value[key] is None for key in ("bytes_read", "errno", "winerror", "target_sha256", "target_bytes")),
+                "source ordinary refusal predicate differs")
     return value
 
 
@@ -821,8 +860,14 @@ def source_ledger(records, source, deadline):
         matches = [root for root in partitions if below(name, root)] if name not in source["protected"] else []
         if not matches:
             ordinary += 1
-            require(ordinary <= 2048 and (record["type"] != "file" or record["identity"][4] <= LIMIT),
-                    "source ordinary profile bound")
+            try:
+                require(ordinary <= 2048 and (record["type"] != "file" or record["identity"][4] <= LIMIT),
+                        "source ordinary profile bound")
+            except RuntimeError as error:
+                source_payload_refusal(error, name, record, profile_bound=dict(
+                    scope=source_bound_scope(name), kind=record["type"], ordinary_count=ordinary,
+                    predicate=source_bound_predicate(record["type"], record["identity"][4], ordinary)))
+                raise
             ledger[name] = record
             continue
         prefix = max(matches, key=len)
@@ -1961,7 +2006,7 @@ def public_binding(project, name):
             managed_digest=hashlib.sha256(marker).hexdigest(), protection_class="owned")]
             and ordinary_bytes(selected / ".uap-owner") == marker, "public root marker differs")
     data = installed["data_receipts"][binding["data_receipt_id"]]
-    data_path = project / ".uap/data" / physical
+    data_path = project / ".uap/plugin-data" / physical
     require(len(installed["data_receipts"]) == 1 and data.get("data_receipt_id") == binding["data_receipt_id"]
             and data.get("physical_backend_id") == physical and data.get("scope") == "project" and data.get("state") == "owned"
             and data.get("locator") == str(data_path)

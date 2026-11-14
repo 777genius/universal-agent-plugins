@@ -48,6 +48,9 @@ func (recovery EnablementRecovery) recoverRecord(ctx context.Context, operationI
 	if err != nil {
 		return err
 	}
+	if err := record.revalidateParent(); err != nil {
+		return err
+	}
 	state, err := recovery.State.Load()
 	if err != nil {
 		return err
@@ -117,6 +120,9 @@ func (recovery EnablementRecovery) finishRecord(before, desired domain.StateFile
 	if err := recovery.requireState(before); err != nil {
 		return err
 	}
+	if err := record.revalidateParent(); err != nil {
+		return err
+	}
 	// Also re-save an already visible decision: a previous state rename may
 	// have succeeded while its directory durability confirmation failed.
 	disposition, err := recovery.State.PersistStateDecisionWithDisposition(before, desired)
@@ -138,11 +144,17 @@ func (recovery EnablementRecovery) requireState(expected domain.StateFileV2) err
 }
 
 func (recovery EnablementRecovery) rollbackRecord(record enablementRecord, before, desired domain.StateFileV2) (resultErr error) {
+	if err := record.revalidateParent(); err != nil {
+		return err
+	}
 	release, err := lockNativeEnablement(record.UserRoot)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, release()) }()
+	if err := record.revalidateParent(); err != nil {
+		return err
+	}
 	file, err := recovery.Kernel.BeginExactFile(filepath.Join(record.UserRoot, "config.toml"))
 	if err != nil {
 		return err
@@ -161,7 +173,7 @@ func (recovery EnablementRecovery) rollbackRecord(record enablementRecord, befor
 	if err := recovery.requireState(before); err != nil {
 		return err
 	}
-	if err := file.Apply(predecessor); err != nil {
+	if err := record.applyConfig(file, predecessor); err != nil {
 		return err
 	}
 	record, err = recovery.clearDecision(record)

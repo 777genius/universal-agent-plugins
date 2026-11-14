@@ -14,7 +14,7 @@ func (recovery EnablementRecovery) appendDecision(record enablementRecord, diges
 	if err != nil {
 		return err
 	}
-	journal, err := recovery.openJournal()
+	journal, err := recovery.openRecordJournal(record)
 	if err != nil {
 		return err
 	}
@@ -45,6 +45,9 @@ func (recovery EnablementRecovery) appendDecision(record enablementRecord, diges
 	if err := journal.point("decision_written"); err != nil {
 		return err
 	}
+	if err := journal.joinFile(name, file, info); err != nil {
+		return err
+	}
 	if err := file.Sync(); err != nil {
 		return err
 	}
@@ -62,10 +65,13 @@ func (recovery EnablementRecovery) appendDecision(record enablementRecord, diges
 // A rollback removes its non-committed footer before clearing the attempt.
 // Therefore a crash after the state restore can always clean a plain record.
 func (recovery EnablementRecovery) clearDecision(record enablementRecord) (result enablementRecord, resultErr error) {
+	if err := record.revalidateParent(); err != nil {
+		return record, err
+	}
 	if len(record.footer) == 0 {
 		return record, nil
 	}
-	journal, err := recovery.openJournal()
+	journal, err := recovery.openRecordJournal(record)
 	if err != nil {
 		return record, err
 	}
@@ -90,6 +96,9 @@ func (recovery EnablementRecovery) clearDecision(record enablementRecord) (resul
 		return record, err
 	}
 	if err := journal.point("decision_cleared"); err != nil {
+		return record, err
+	}
+	if err := journal.joinFile(name, file, info); err != nil {
 		return record, err
 	}
 	if err := file.Sync(); err != nil {

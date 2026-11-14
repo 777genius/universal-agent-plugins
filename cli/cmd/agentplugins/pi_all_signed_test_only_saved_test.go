@@ -14,6 +14,40 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// requirePiTestOnlySavedReceiptBindings ties every active managed receipt to
+// the exact installed node and owned Pi binding. Counts alone can pass with
+// orphaned, duplicate, or foreign-scope receipts.
+func requirePiTestOnlySavedReceiptBindings(t *testing.T, state domain.StateFileV2, scope domain.InstallScope, expected int) {
+	t.Helper()
+	installed := make(map[string]domain.Installation, expected)
+	for _, node := range state.Installations {
+		if node.InstallationID == "" {
+			t.Fatal("saved installation has no durable identity")
+		}
+		if _, duplicate := installed[node.InstallationID]; duplicate {
+			t.Fatal("duplicate saved installation identity")
+		}
+		installed[node.InstallationID] = node
+	}
+	seen := make(map[string]bool, expected)
+	for _, receipt := range state.EnvironmentReceipts {
+		node, exists := installed[receipt.InstallationID]
+		if !exists || seen[receipt.InstallationID] || receipt.ClientID != "pi" ||
+			receipt.ClientBindingID == "" || receipt.PackageDigest != node.Source.TreeDigest {
+			t.Fatal("saved Pi environment receipt is orphaned, duplicated, or bound to a different package")
+		}
+		binding, exists := node.Clients[receipt.ClientBindingID]
+		if !exists || binding.ClientBindingID != receipt.ClientBindingID ||
+			binding.ClientID != "pi" || binding.Scope != string(scope) {
+			t.Fatal("saved Pi environment receipt has no matching scoped native binding")
+		}
+		seen[receipt.InstallationID] = true
+	}
+	if len(seen) != expected || len(installed) != expected {
+		t.Fatal("saved Pi receipts do not cover every installed dependency exactly once")
+	}
+}
+
 // This is one disposable, independently keyed TEST-only signed v1 snapshot.
 // Its two upstream grants use deliberately SYNTHETIC materialization evidence.
 // Positive saved installs here can never authorize real publisher signatures.
@@ -88,6 +122,7 @@ func TestPiAllSignedTestOnlySavedMarketplace(t *testing.T) {
 					}
 					installedIDs[id] = true
 				}
+				requirePiTestOnlySavedReceiptBindings(t, state, scope, expected)
 				if len(installedIDs) != expected || !installedIDs[distribution.ID] {
 					t.Fatalf("%s: exact saved source closure is incomplete", name)
 				}
@@ -113,6 +148,7 @@ func TestPiAllSignedTestOnlySavedMarketplace(t *testing.T) {
 				if len(replayed.Installations) != expected || len(replayed.EnvironmentReceipts) != expected {
 					t.Fatalf("%s: locked replay lost immutable saved dependencies", name)
 				}
+				requirePiTestOnlySavedReceiptBindings(t, replayed, scope, expected)
 				// A receipt count alone cannot detect a changed source, release, or feed.
 				// Compare immutable installed identities, not mutable timestamps.
 				for _, previous := range state.Installations {

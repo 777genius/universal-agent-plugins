@@ -1767,7 +1767,7 @@ class PublicLifecycleContracts(unittest.TestCase):
         project, name = root / 'public-a', 'hermes-public-a'
         installation = '00000000-0000-4000-8000-000000000001'
         physical = name + '-' + hashlib.sha256(installation.encode()).hexdigest()[:12]
-        target, selected, data = project / '.uap/managed/clients/hermes' / physical, project / '.hermes/uap-session', project / '.uap/data' / physical
+        target, selected, data = project / '.uap/managed/clients/hermes' / physical, project / '.hermes/uap-session', project / '.uap/plugin-data' / physical
         for path in (target, selected, data): path.mkdir(parents=True)
         selected.chmod(0o700)
         def write(path, body, mode=0o600):
@@ -1806,6 +1806,49 @@ class PublicLifecycleContracts(unittest.TestCase):
                                                 publication_parent_authority=self.parent_authority(selected.parent),client_binding_id='binding', after_digest='native-root-v1:'+'a'*64)])
         state_path=project/'.uap/state-v2.json';write(state_path,json.dumps(state).encode())
         return project, state_path, state, launcher, {'uap':dict(bytes=len(runtime),sha256=hashlib.sha256(runtime).hexdigest(),identity=list(CASE['stable_file'](launcher.stat())))}
+
+    def test_public_data_locator_requires_the_production_project_namespace(self):
+        import copy
+        for effect in ("valid", "legacy", "foreign", "sibling", "marker"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer = Path(temporary).resolve()
+                project, state_path, state, _, _ = self.fixture(outer)
+                installed = state["installations"][0]
+                binding = installed["clients"]["binding"]
+                data = installed["data_receipts"][binding["data_receipt_id"]]
+                expected = project / ".uap/plugin-data" / binding["physical_artifact_id"]
+                self.assertEqual(data["locator"], str(expected))
+                if effect in ("legacy", "foreign", "sibling"):
+                    alternate = {
+                        "legacy": project / ".uap/data" / binding["physical_artifact_id"],
+                        "foreign": outer / "foreign-data",
+                        "sibling": outer / "public-b/.uap/plugin-data" / binding["physical_artifact_id"],
+                    }[effect]
+                    alternate.parent.mkdir(parents=True, exist_ok=True)
+                    expected.rename(alternate)
+                    data["locator"] = str(alternate)
+                    (alternate / ".agentplugins-data-owner.json").write_bytes(json.dumps(data).encode())
+                    state_path.write_bytes(json.dumps(state).encode())
+                    # Both sources agree on the wrong root; their agreement is
+                    # not authority to follow it outside the selected namespace.
+                    self.assertEqual(CASE["public_json"]((alternate / ".agentplugins-data-owner.json").read_bytes()), data)
+                elif effect == "marker":
+                    changed = copy.deepcopy(data)
+                    changed["ownership_digest"] = "sha256:" + "0" * 64
+                    (expected / ".agentplugins-data-owner.json").write_bytes(json.dumps(changed).encode())
+                read = CASE["public_binding"].__globals__["ordinary_bytes"]
+                with mock.patch.dict(CASE["public_binding"].__globals__, ordinary_bytes=mock.Mock(wraps=read)):
+                    capture = CASE["public_binding"].__globals__["ordinary_bytes"]
+                    if effect == "valid":
+                        observed = CASE["public_binding"](project, "hermes-public-a")
+                        self.assertEqual(observed["data"], expected)
+                        self.assertEqual(observed["installed"]["data_receipts"]["data"], data)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "public retained data receipt differs"):
+                            CASE["public_binding"](project, "hermes-public-a")
+                    if effect in ("legacy", "foreign", "sibling"):
+                        self.assertNotIn(alternate / ".agentplugins-data-owner.json",
+                                         [call.args[0] for call in capture.call_args_list])
 
     def test_receipt_owned_large_role_and_whole_package_join_are_both_required(self):
         import copy
@@ -2325,6 +2368,111 @@ class SourceRuntimeContracts(unittest.TestCase):
         error = PermissionError(13, "original refusal")
         CASE["source_payload_refusal"](error, member, {"identity": identity or CASE["stable_file"](leaf.stat())}, bytes_read=0)
         return error
+
+    def test_source_ordinary_bound_keeps_exact_first_observation_without_io(self):
+        import copy
+        import stat
+        import time
+        policy = dict(user="user", source="user/.hermes/hermes-agent", tools="user/.hermes/tools",
+                      installs="user/.hermes/installs", projects=["project-a/.uap/hermes-runtime",
+                      "project-b/.uap/hermes-runtime"], protected=())
+        for scope, prefix in (("selected-a", policy["projects"][0]), ("selected-b", policy["projects"][1]),
+                              ("original-user", "user"), ("fixture-other", "z-fixture")):
+            for predicate, count, kind in (("file-bytes", 1, "file"), ("count", 2049, "directory"),
+                                            ("count-and-file-bytes", 2049, "file"), ("count", 2049, "link")):
+                with self.subTest(scope=scope, predicate=predicate, kind=kind):
+                    name = prefix + "/first-refused"
+                    mode = {"file": stat.S_IFREG, "directory": stat.S_IFDIR, "link": stat.S_IFLNK}[kind] | 0o600
+                    size = CASE["LIMIT"] + 1 if "file-bytes" in predicate else 0
+                    item = dict(type=kind, identity=(1, 2, mode, 1, size, 10, 10, 1000, 1000))
+                    records = {f"fixture/{index:04}": dict(type="file", identity=(1, 10 + index, stat.S_IFREG | 0o600, 1, 0, 10, 10, 1000, 1000))
+                               for index in range(count - 1)}
+                    records[name] = item
+                    before = copy.deepcopy(records)
+                    selected = dict(policy, protected=(name,))
+                    with mock.patch.object(os, "read", side_effect=AssertionError("diagnostic read")), \
+                            mock.patch.object(os, "open", side_effect=AssertionError("diagnostic open")), \
+                            mock.patch.object(os, "scandir", side_effect=AssertionError("diagnostic walk")), \
+                            mock.patch.object(Path, "lstat", side_effect=AssertionError("diagnostic restat")), \
+                            self.assertRaisesRegex(RuntimeError, "^source ordinary profile bound$") as refused:
+                        CASE["source_ledger"](records, selected, time.monotonic() + 5)
+                    self.assertEqual(records, before)
+                    value = dict(refused.exception.source_payload_refusal, nonce="a" * 64, stage="observer-profile-snapshot")
+                    self.assertEqual(value["operation"], "ordinary-profile-bound")
+                    self.assertEqual(value["member"], name)
+                    self.assertEqual(value["profile_bound"], dict(scope=scope, kind=kind, ordinary_count=count, predicate=predicate))
+                    self.assertEqual(value["metadata"]["bytes"], size)
+                    self.assertEqual(CASE["source_refusal_document"](json.dumps(value).encode()), value)
+        with self.assertRaisesRegex(RuntimeError, "^payload scan deadline$") as expired:
+            CASE["source_ledger"](records, selected, time.monotonic() - 1)
+        self.assertFalse(hasattr(expired.exception, "source_payload_refusal"))
+
+    def test_source_ordinary_bound_schema_refuses_unjoined_or_false_predicates(self):
+        import copy
+        import stat
+        original = RuntimeError("source ordinary profile bound")
+        record = dict(type="file", identity=(1, 2, stat.S_IFREG | 0o600, 1, CASE["LIMIT"] + 1, 10, 10, 1000, 1000))
+        bound = dict(scope="selected-a", kind="file", ordinary_count=1, predicate="file-bytes")
+        CASE["source_payload_refusal"](original, "project-a/.uap/hermes-runtime/large", record, profile_bound=bound)
+        valid = dict(original.source_payload_refusal, nonce="a" * 64, stage="observer-profile-snapshot")
+        for change in ("scope", "kind", "count-bool", "count-zero", "count-big", "count-predicate", "size-predicate",
+                       "unknown", "unknown-bound", "missing-bound", "read", "target", "errno", "mode", "bytes", "qualified", "oversized"):
+            with self.subTest(change=change):
+                value = copy.deepcopy(valid); observed = value["profile_bound"]
+                if change == "scope": observed["scope"] = "selected-b"
+                elif change == "kind": observed["kind"] = "directory"
+                elif change == "count-bool": observed["ordinary_count"] = True
+                elif change == "count-zero": observed["ordinary_count"] = 0
+                elif change == "count-big": observed["ordinary_count"] = CASE["PAYLOAD_MEMBERS"] + 1
+                elif change == "count-predicate": observed["predicate"] = "count"
+                elif change == "size-predicate": value["metadata"]["bytes"] = CASE["LIMIT"]
+                elif change == "unknown": value["private"] = "forbidden"
+                elif change == "unknown-bound": observed["private"] = "forbidden"
+                elif change == "missing-bound": value.pop("profile_bound")
+                elif change == "read": value["bytes_read"] = 0
+                elif change == "target": value["target_sha256"] = "b" * 64
+                elif change == "errno": value["errno"] = 13
+                elif change == "mode": value["metadata"]["mode"] = stat.S_IFDIR | 0o700
+                elif change == "bytes": value["metadata"]["bytes"] = CASE["PAYLOAD_BYTES"] + 1
+                elif change == "qualified": value["admission_qualified"] = True
+                body = b" " * 2049 if change == "oversized" else json.dumps(value).encode()
+                with self.assertRaises(RuntimeError): CASE["source_refusal_document"](body)
+        for operation in ("file-read", "absolute-link-target"):
+            value = dict(valid, operation=operation)
+            with self.assertRaisesRegex(RuntimeError, "closed source refusal schema"):
+                CASE["source_refusal_document"](json.dumps(value).encode())
+
+    def test_source_ordinary_bound_retains_first_proof_without_replacing_failure(self):
+        import stat
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); evidence = root / "evidence"; evidence.mkdir()
+            expected = CASE["directory_identity"](evidence)
+            original = RuntimeError("source ordinary profile bound")
+            item = dict(type="file", identity=(1, 2, stat.S_IFREG | 0o600, 1, CASE["LIMIT"] + 1, 10, 10, 1000, 1000))
+            bound = dict(scope="selected-a", kind="file", ordinary_count=1, predicate="file-bytes")
+            CASE["source_payload_refusal"](original, "project-a/.uap/hermes-runtime/large", item, profile_bound=bound)
+            retain = lambda: CASE["retain_source_refusal"](original, evidence, expected, "a" * 64, "observer-profile-snapshot")
+            with self.assertRaises(RuntimeError) as refused:
+                try: raise original
+                except RuntimeError:
+                    retain()
+                    raise
+            self.assertIs(refused.exception, original)
+            member = evidence / "source-payload-refusal.json"; first = member.read_bytes()
+            bound["scope"] = "selected-b"
+            CASE["source_payload_refusal"](original, "project-b/.uap/hermes-runtime/other", item, profile_bound=bound)
+            retain(); self.assertEqual(member.read_bytes(), first)
+            evidence.rename(root / "retained"); evidence.mkdir()
+            with mock.patch.dict(CASE["retain_source_refusal"].__globals__, write_census_member=mock.Mock()) as state:
+                retain(); state["write_census_member"].assert_not_called()
+            self.assertFalse(list(evidence.iterdir()))
+            flags = ("capture_complete", "admission_qualified", "production_project_mcp", "vendor_authentication",
+                     "real_model_inference", "tools_call", "source_install_custom_root_qualified", "source_bootstrap_recovery_qualified")
+            proof = dict.fromkeys(flags, False); proof.update(nonce="a" * 64, runtime_distribution="source", status="failed")
+            CASE["write_json"](root / "retained/profile-admission.json", proof)
+            with mock.patch.dict(CASE["stage_evidence"].__globals__, EVIDENCE_CLOSED=False):
+                CASE["stage_evidence"](root / "retained")
+            self.assertEqual((root / "retained/upload/source-payload-refusal.json").read_bytes(), first)
 
     def test_source_refusal_has_bounded_names_integers_and_no_additional_reads(self):
         import hashlib

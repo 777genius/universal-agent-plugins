@@ -17,8 +17,8 @@ var _ clients.PluginEnablement = (*Adapter)(nil)
 
 var errEnablementUnqualified = errors.New("grok Project enablement requires verified recovery of native startup effects and original parent identity")
 
-// The prototype member journal does not recover ACP startup writes or preserve
-// original User parent authority. Prepared delivery remains available.
+// The prototype member journal preserves original User parent authority but
+// does not recover ACP startup writes. Prepared delivery remains available.
 func (*Adapter) SupportsPluginEnablement(domain.InstallScope) bool {
 	return false
 }

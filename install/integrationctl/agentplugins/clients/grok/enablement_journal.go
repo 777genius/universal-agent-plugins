@@ -9,6 +9,7 @@ import (
 	"io"
 	"path/filepath"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -25,27 +26,28 @@ const enabledMemberKind = "grok_enabled_plugin"
 // The private record describes one operation in the existing operation root.
 // No native configuration body, previous state body or credentials are stored.
 type enablementRecord struct {
-	Version            int                           `json:"version"`
-	Action             string                        `json:"action"`
-	OperationID        string                        `json:"operation_id"`
-	InstallationID     string                        `json:"installation_id"`
-	BindingID          string                        `json:"binding_id"`
-	ProjectRoot        string                        `json:"project_root"`
-	UserRoot           string                        `json:"user_root"`
-	ArtifactPath       string                        `json:"artifact_path"`
-	PackageDigest      string                        `json:"package_digest"`
-	BeforeStateDigest  string                        `json:"before_state_digest"`
-	AttemptStateDigest string                        `json:"attempt_state_digest"`
-	DesiredStateDigest string                        `json:"desired_state_digest"`
-	PluginID           string                        `json:"plugin_id"`
-	PluginName         string                        `json:"plugin_name"`
-	Edit               enablementEdit                `json:"edit"`
-	Hash               string                        `json:"hash"`
-	PreviousObject     *domain.NativeObjectOwnership `json:"previous_object,omitempty"`
-	decisionDigest     string
-	footer             []byte
-	headerBytes        int
-	rawDigest          string
+	Version             int                           `json:"version"`
+	Action              string                        `json:"action"`
+	OperationID         string                        `json:"operation_id"`
+	InstallationID      string                        `json:"installation_id"`
+	BindingID           string                        `json:"binding_id"`
+	ProjectRoot         string                        `json:"project_root"`
+	UserRoot            string                        `json:"user_root"`
+	UserParentAuthority directoryidentity.Authority   `json:"user_parent_authority"`
+	ArtifactPath        string                        `json:"artifact_path"`
+	PackageDigest       string                        `json:"package_digest"`
+	BeforeStateDigest   string                        `json:"before_state_digest"`
+	AttemptStateDigest  string                        `json:"attempt_state_digest"`
+	DesiredStateDigest  string                        `json:"desired_state_digest"`
+	PluginID            string                        `json:"plugin_id"`
+	PluginName          string                        `json:"plugin_name"`
+	Edit                enablementEdit                `json:"edit"`
+	Hash                string                        `json:"hash"`
+	PreviousObject      *domain.NativeObjectOwnership `json:"previous_object,omitempty"`
+	decisionDigest      string
+	footer              []byte
+	headerBytes         int
+	rawDigest           string
 }
 
 // EnablementRecovery is composed beside the existing transaction recovery.
@@ -89,11 +91,14 @@ func enablementBinding(state domain.StateFileV2, installationID, bindingID strin
 }
 
 func (recovery EnablementRecovery) validateRecord(record enablementRecord) error {
-	if record.Version != 1 || recovery.ProjectRoot == "" || recovery.UserRoot == "" ||
+	if record.Version != 2 || recovery.ProjectRoot == "" || recovery.UserRoot == "" ||
 		record.ProjectRoot != recovery.ProjectRoot || record.UserRoot != recovery.UserRoot ||
 		!enablementHash(record.PackageDigest) || !enablementHash(record.BeforeStateDigest) ||
 		!enablementHash(record.AttemptStateDigest) || record.DesiredStateDigest != "" && !enablementHash(record.DesiredStateDigest) {
 		return fmt.Errorf("grok enablement operation namespace or authority differs")
+	}
+	if err := record.validateParent(); err != nil {
+		return err
 	}
 	for _, id := range []string{record.OperationID, record.InstallationID, record.BindingID, record.PluginName} {
 		if err := pathpolicy.ValidateLeafID(id); err != nil {
@@ -145,7 +150,7 @@ func (recovery EnablementRecovery) writeRecord(record enablementRecord) error {
 	if err != nil || len(body) > enablementRecordLimit-enablementDecisionLength {
 		return fmt.Errorf("grok enablement record exceeds its bound: %w", err)
 	}
-	return recovery.publishRecord(record.OperationID, body)
+	return recovery.publishRecord(record, body)
 }
 
 func (recovery EnablementRecovery) readRecord(operationID string) (enablementRecord, error) {
@@ -176,7 +181,10 @@ func (recovery EnablementRecovery) decodeRecord(operationID string, body []byte)
 	}
 	got := record.Hash
 	record.Hash = ""
-	unsigned, _ := json.Marshal(record)
+	unsigned, err := json.Marshal(record)
+	if err != nil {
+		return record, err
+	}
 	if record.OperationID != operationID || got != enablementDigest(unsigned) {
 		return record, fmt.Errorf("grok enablement record integrity differs")
 	}
@@ -185,7 +193,7 @@ func (recovery EnablementRecovery) decodeRecord(operationID string, body []byte)
 	if err := recovery.validateRecord(record); err != nil {
 		return record, err
 	}
-	err := record.decodeDecision()
+	err = record.decodeDecision()
 	return record, err
 }
 

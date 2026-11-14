@@ -4,6 +4,7 @@ package grok
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 )
 
@@ -19,9 +21,10 @@ import (
 // namespace. A stage is never native-effect authority. Publication is a single
 // no-replace rename of a completely written, synced file in a held directory.
 type enablementJournal struct {
-	root *os.File
-	path string
-	hook func(string) error
+	root   *os.File
+	path   string
+	hook   func(string) error
+	parent directoryidentity.Authority
 }
 
 func (recovery EnablementRecovery) openJournal() (*enablementJournal, error) {
@@ -35,6 +38,20 @@ func (recovery EnablementRecovery) openJournal() (*enablementJournal, error) {
 		return nil, errors.Join(err, fmt.Errorf("grok operation namespace is not private and owned"))
 	}
 	return &enablementJournal{root: root, path: recovery.OperationsDir, hook: recovery.journalPoint}, nil
+}
+
+func (recovery EnablementRecovery) openRecordJournal(record enablementRecord) (*enablementJournal, error) {
+	if err := recovery.validateRecord(record); err != nil {
+		return nil, err
+	}
+	if err := record.revalidateParent(); err != nil {
+		return nil, err
+	}
+	journal, err := recovery.openJournal()
+	if err == nil {
+		journal.parent = record.UserParentAuthority
+	}
+	return journal, err
 }
 
 func (journal *enablementJournal) point(name string) error {
@@ -53,6 +70,9 @@ func (journal *enablementJournal) joinRoot() (resultErr error) {
 	held, err := journal.root.Stat()
 	if err != nil || !os.SameFile(info, held) || info.Mode().Perm() != 0700 {
 		return errors.Join(err, fmt.Errorf("grok operation namespace changed"))
+	}
+	if !journal.parent.IsZero() {
+		return directoryidentity.Revalidate(context.Background(), journal.parent)
 	}
 	return nil
 }
@@ -149,15 +169,19 @@ func (recovery EnablementRecovery) readRecordBytes(operationID string) (result [
 	return body, file.Close()
 }
 
-func (recovery EnablementRecovery) publishRecord(operationID string, body []byte) (resultErr error) {
+func (recovery EnablementRecovery) publishRecord(record enablementRecord, body []byte) (resultErr error) {
+	operationID := record.OperationID
 	if _, err := recovery.recordRoot(operationID); err != nil {
 		return err
 	}
-	journal, err := recovery.openJournal()
+	journal, err := recovery.openRecordJournal(record)
 	if err != nil {
 		return err
 	}
 	defer func() { resultErr = errors.Join(resultErr, journal.root.Close()) }()
+	if err := journal.joinRoot(); err != nil {
+		return err
+	}
 	stageName := enablementStagePrefix + operationID
 	fd, err := unix.Openat(int(journal.root.Fd()), stageName, unix.O_RDWR|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_CREAT|unix.O_EXCL, 0600)
 	if err != nil {
@@ -200,10 +224,16 @@ func (journal *enablementJournal) writeStage(file *os.File, body []byte) (unix.S
 	if err := journal.point("stage_created"); err != nil {
 		return empty, err
 	}
+	if err := journal.joinRoot(); err != nil {
+		return empty, err
+	}
 	if count, err := file.Write(body); err != nil || count != len(body) {
 		return empty, errors.Join(err, io.ErrShortWrite)
 	}
 	if err := journal.point("record_written"); err != nil {
+		return empty, err
+	}
+	if err := journal.joinRoot(); err != nil {
 		return empty, err
 	}
 	if err := file.Sync(); err != nil {
@@ -259,6 +289,11 @@ func (recovery EnablementRecovery) removeRecord(operationID, digest string) (res
 	if enablementDigest(body) != digest {
 		return fmt.Errorf("grok operation record differs from settled authority")
 	}
+	record, err := recovery.decodeRecord(operationID, body)
+	if err != nil {
+		return err
+	}
+	journal.parent = record.UserParentAuthority
 	if err := journal.point("before_record_remove"); err != nil {
 		return err
 	}
@@ -302,7 +337,13 @@ func (recovery EnablementRecovery) recordNames() (result []string, resultErr err
 			return nil, err
 		}
 		if len(body) != 0 {
-			_, err = recovery.decodeRecord(strings.TrimPrefix(name, enablementStagePrefix), body)
+			var record enablementRecord
+			record, err = recovery.decodeRecord(strings.TrimPrefix(name, enablementStagePrefix), body)
+			journal.parent = record.UserParentAuthority
+		} else {
+			// An empty unpublished stage has no native-effect authority. Its
+			// cleanup remains bound only to the held operation namespace.
+			journal.parent = directoryidentity.Authority{}
 		}
 		if err == nil {
 			err = journal.unlinkFile(name, file, info)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -32,19 +31,19 @@ func enableProject(ctx context.Context, env clients.Env, request domain.Activati
 	if err != nil {
 		return result, err
 	}
-	unlock, err := lockNativeEnablement(recovery.UserRoot)
+	profile, err := recovery.openEnablementProfile(ctx)
 	if err != nil {
 		return result, err
 	}
-	defer func() { resultErr = errors.Join(resultErr, unlock()) }()
-	file, err := recovery.Kernel.BeginExactFile(filepath.Join(recovery.UserRoot, "config.toml"))
-	if err != nil {
-		return result, err
-	}
-	defer func() { resultErr = errors.Join(resultErr, file.Close()) }()
-	session := enablementActivation{recovery: recovery, request: request, state: state, index: index, binding: binding}
+	defer func() { resultErr = errors.Join(resultErr, profile.close()) }()
+	file := profile.config
+	session := enablementActivation{recovery: recovery, request: request, state: state, index: index, binding: binding,
+		record: enablementRecord{Version: 2, UserRoot: recovery.UserRoot, UserParentAuthority: profile.parent}}
 	id := "project/" + enablementDigest([]byte(request.Delivery.ActivePath))[7:15] + "/" + request.DeclaredName
 	if err := refuseDisabledMembership(file.Original().Body, id, request.DeclaredName); err != nil {
+		return result, err
+	}
+	if err := session.record.revalidateParent(); err != nil {
 		return result, err
 	}
 	plugins, err := readEnablementInventory(ctx, env.Runner, request.BackendExecutable, recovery.ProjectRoot, env.UserHome)
@@ -85,6 +84,9 @@ func refuseDisabledMembership(body []byte, id, name string) error {
 
 func (session *enablementActivation) prepare(ctx context.Context, original nativeconfig.FileSnapshot, plugin grokACPPlugin) (bool, error) {
 	request, recovery := session.request, session.recovery
+	if err := session.record.revalidateParent(); err != nil {
+		return false, err
+	}
 	owned, err := enabledObjectForProfile(request.PreviousNativeObjects, plugin.root, plugin.name, recovery.UserRoot)
 	if err != nil {
 		return false, err
@@ -120,9 +122,10 @@ func (session *enablementActivation) prepare(ctx context.Context, original nativ
 	}
 	before := session.binding
 	before.NativeActivationAttempt = ""
-	session.record = enablementRecord{Version: 1, Action: "enable", OperationID: request.NativeAttempt.OperationID,
+	session.record = enablementRecord{Version: 2, Action: "enable", OperationID: request.NativeAttempt.OperationID,
 		InstallationID: request.NativeAttempt.InstallationID, BindingID: request.NativeAttempt.BindingID,
-		ProjectRoot: recovery.ProjectRoot, UserRoot: recovery.UserRoot, ArtifactPath: plugin.root, PackageDigest: request.Delivery.ArtifactDigest,
+		ProjectRoot: recovery.ProjectRoot, UserRoot: recovery.UserRoot, UserParentAuthority: session.record.UserParentAuthority,
+		ArtifactPath: plugin.root, PackageDigest: request.Delivery.ArtifactDigest,
 		BeforeStateDigest: enablementStateDigest(enablementState(session.state, session.index, before)), AttemptStateDigest: enablementStateDigest(session.state),
 		PluginID: plugin.id, PluginName: plugin.name, Edit: edit}
 	desired := before
@@ -161,8 +164,8 @@ func (session *enablementActivation) commit(ctx context.Context, env clients.Env
 		return false, err
 	}
 	session.record = record
-	if err := file.Apply(session.after); err != nil {
-		return false, errors.Join(err, file.Rollback())
+	if err := record.applyConfig(file, session.after); err != nil {
+		return false, errors.Join(err, record.rollbackConfig(file))
 	}
 	plugins, err := readEnablementInventory(ctx, env.Runner, request.BackendExecutable, recovery.ProjectRoot, env.UserHome)
 	if err != nil {
@@ -185,6 +188,9 @@ func (session *enablementActivation) commit(ctx context.Context, env clients.Env
 	target.NativeActivationAttempt = ""
 	target.NativeObjects = append(append([]domain.NativeObjectOwnership(nil), target.NativeObjects...), record.object())
 	desired := enablementState(session.state, session.index, target)
+	if err := record.revalidateParent(); err != nil {
+		return false, err
+	}
 	disposition, err := recovery.State.PersistStateDecisionWithDisposition(session.state, desired)
 	if err != nil || disposition != domain.StateDecisionDesired {
 		return false, errors.Join(err, fmt.Errorf("grok enabled ownership decision is not durable"))

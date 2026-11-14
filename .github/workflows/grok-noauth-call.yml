@@ -31,6 +31,8 @@ on:
       - 'install/integrationctl/agentplugins/go.sum'
       - 'scripts/native_client_research.py'
       - 'scripts/project_native_research.py'
+      - 'scripts/project_native_runtime.py'
+      - 'scripts/test_project_native_runtime.py'
       - 'scripts/project_native_collectors/grok.py'
       - 'go.work'
       - 'go.work.sum'
@@ -66,6 +68,8 @@ on:
       - 'install/integrationctl/agentplugins/go.sum'
       - 'scripts/native_client_research.py'
       - 'scripts/project_native_research.py'
+      - 'scripts/project_native_runtime.py'
+      - 'scripts/test_project_native_runtime.py'
       - 'scripts/project_native_collectors/grok.py'
       - 'go.work'
       - 'go.work.sum'
@@ -83,6 +87,7 @@ jobs:
     env:
       EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
       PYTHONDONTWRITEBYTECODE: '1'
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -94,6 +99,7 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=normal)"
           python3 -m unittest discover -s scripts -p 'test_grok_noauth_call.py' -v
           python3 -m unittest discover -s scripts -p 'test_grok_project_protocol.py' -v
+          python3 -m unittest discover -s scripts -p 'test_project_native_runtime.py' -v
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.11'
@@ -116,17 +122,28 @@ jobs:
           print('Public saved CLI consent, decline and EOF contract passed')
           PY
       - name: Run genuine Grok through deterministic local provider
+        id: grok_native
         run: |
-          python3 scripts/grok_noauth_call_e2e.py \
+          /usr/bin/python3 -B scripts/grok_project_protocol_service.py --case grok-noauth \
             --installer "$RUNNER_TEMP/grok-native-call-tools/agentplugins" \
             --probe "$RUNNER_TEMP/grok-native-call-tools/probe" \
             --output "$RUNNER_TEMP/grok-noauth-native-call-evidence"
       - name: Preserve original bounded protocol evidence
-        if: ${{ always() }}
+        if: ${{ always() && steps.grok_native.outcome == 'success' && steps.grok_native.outputs.publication == 'admitted' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: grok-noauth-native-call-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ runner.temp }}/grok-noauth-native-call-evidence/evidence.json
+          path: ${{ runner.temp }}/grok-noauth-native-call-evidence/upload/
           if-no-files-found: error
           retention-days: 14
+      - name: Require the original native result to pass
+        if: ${{ always() }}
+        env:
+          GROK_LAUNCH_OUTCOME: ${{ steps.grok_native.outcome }}
+          GROK_PUBLICATION: ${{ steps.grok_native.outputs.publication }}
+          GROK_NATIVE_PASSED: ${{ steps.grok_native.outputs.native_passed }}
+        run: |
+          test "$GROK_LAUNCH_OUTCOME" = success
+          test "$GROK_PUBLICATION" = admitted
+          test "$GROK_NATIVE_PASSED" = true
 

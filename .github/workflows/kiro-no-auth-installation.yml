@@ -98,7 +98,8 @@ jobs:
           if before != after or after['status'] or after['commit'] != os.environ['EXPECTED_COMMIT']:
               raise SystemExit('source changed during lifecycle')
           cli = 'TestProjectKiroComposedSourceLifecycle'
-          required = {'cli': [cli, cli + '/git', cli + '/zip'],
+          required = {'cli': [cli, cli + '/git', cli + '/git/user',
+                             cli + '/zip', cli + '/zip/user'],
                       'sdk': ['TestProjectKiroPublicSDKStdioDataRepairRestartAndRemove']}
           receipts = []
           for label, tests in required.items():

@@ -14,6 +14,8 @@ on:
       - 'scripts/test_devin_ordinary_metadata_admission.py'
       - 'scripts/devin_global_lifecycle_admission.py'
       - 'scripts/test_devin_global_lifecycle_admission.py'
+      - 'scripts/devin_global_toolchain.py'
+      - 'scripts/test_devin_global_toolchain_admission.py'
       - '.github/workflows/client-automation-native.yml'
   push:
     branches: [main]
@@ -30,6 +32,8 @@ on:
       - 'scripts/test_devin_ordinary_metadata_admission.py'
       - 'scripts/devin_global_lifecycle_admission.py'
       - 'scripts/test_devin_global_lifecycle_admission.py'
+      - 'scripts/devin_global_toolchain.py'
+      - 'scripts/test_devin_global_toolchain_admission.py'
       - '.github/workflows/client-automation-native.yml'
   workflow_dispatch:
 permissions:

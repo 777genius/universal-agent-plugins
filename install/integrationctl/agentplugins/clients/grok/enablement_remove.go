@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -30,16 +31,12 @@ func removeEnabledProject(ctx context.Context, env clients.Env, request domain.D
 	if request.BackendExecutable == "" || request.BackendExecutable != request.Client.ExecutablePath {
 		return result, fmt.Errorf("grok owned enablement removal requires its selected native executable")
 	}
-	unlock, err := lockNativeEnablement(recovery.UserRoot)
+	profile, err := recovery.openEnablementProfile(ctx)
 	if err != nil {
 		return result, err
 	}
-	defer func() { resultErr = errors.Join(resultErr, unlock()) }()
-	file, err := recovery.Kernel.BeginExactFile(filepath.Join(recovery.UserRoot, "config.toml"))
-	if err != nil {
-		return result, err
-	}
-	defer func() { resultErr = errors.Join(resultErr, file.Close()) }()
+	defer func() { resultErr = errors.Join(resultErr, profile.close()) }()
+	file := profile.config
 	plugins, err := readEnablementInventory(ctx, env.Runner, request.BackendExecutable, recovery.ProjectRoot, env.UserHome)
 	if err != nil {
 		return result, err
@@ -52,7 +49,7 @@ func removeEnabledProject(ctx context.Context, env clients.Env, request domain.D
 	if err != nil {
 		return result, err
 	}
-	record, after, err := recovery.prepareRemoval(state, index, binding, *owned, plugin, file.Original())
+	record, after, err := recovery.prepareRemoval(state, index, binding, *owned, plugin, file.Original(), profile.parent)
 	if err != nil {
 		return result, err
 	}
@@ -99,16 +96,16 @@ func matchesRemovalBinding(request domain.DeactivationRequest, installation doma
 		binding.NativeActivationAttempt == id.OperationID && reflect.DeepEqual(binding.NativeObjects, request.NativeObjects)
 }
 
-func (recovery EnablementRecovery) prepareRemoval(state domain.StateFileV2, index int, binding domain.ClientBinding, owned domain.NativeObjectOwnership, plugin grokACPPlugin, original nativeconfig.FileSnapshot) (enablementRecord, []byte, error) {
+func (recovery EnablementRecovery) prepareRemoval(state domain.StateFileV2, index int, binding domain.ClientBinding, owned domain.NativeObjectOwnership, plugin grokACPPlugin, original nativeconfig.FileSnapshot, parent directoryidentity.Authority) (enablementRecord, []byte, error) {
 	edit, after, err := prepareDisablementEdit(original, plugin.id)
 	if err != nil {
 		return enablementRecord{}, nil, err
 	}
 	before := binding
 	before.NativeActivationAttempt = ""
-	record := enablementRecord{Version: 1, Action: "remove", OperationID: binding.NativeActivationAttempt,
+	record := enablementRecord{Version: 2, Action: "remove", OperationID: binding.NativeActivationAttempt,
 		InstallationID: state.Installations[index].InstallationID, BindingID: binding.ClientBindingID,
-		ProjectRoot: recovery.ProjectRoot, UserRoot: recovery.UserRoot, ArtifactPath: binding.TargetLocator,
+		ProjectRoot: recovery.ProjectRoot, UserRoot: recovery.UserRoot, UserParentAuthority: parent, ArtifactPath: binding.TargetLocator,
 		PackageDigest: shared.ManagedPackageDigest(binding), PreviousObject: &owned, PluginID: plugin.id, PluginName: plugin.name,
 		BeforeStateDigest: enablementStateDigest(enablementState(state, index, before)), AttemptStateDigest: enablementStateDigest(state), Edit: edit}
 	if err := recovery.validateRecord(record); err != nil {
@@ -124,8 +121,8 @@ func (recovery EnablementRecovery) removeMembership(ctx context.Context, env cli
 	if err := recovery.writeRecord(record); err != nil {
 		return err
 	}
-	if err := file.Apply(after); err != nil {
-		return errors.Join(err, file.Rollback())
+	if err := record.applyConfig(file, after); err != nil {
+		return errors.Join(err, record.rollbackConfig(file))
 	}
 	plugins, err := readEnablementInventory(ctx, env.Runner, request.BackendExecutable, recovery.ProjectRoot, env.UserHome)
 	if err != nil {
@@ -141,5 +138,5 @@ func (recovery EnablementRecovery) removeMembership(ctx context.Context, env cli
 	if err := recovery.PackageVerifier.Verify(ctx, record.ArtifactPath, record.PackageDigest); err != nil {
 		return err
 	}
-	return recovery.requireState(state)
+	return errors.Join(recovery.requireState(state), record.revalidateParent())
 }
