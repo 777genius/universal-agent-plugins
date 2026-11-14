@@ -604,7 +604,8 @@
       "copied": "कॉपी हो गया",
       "copy": "कॉपी करें",
       "copyFailed": "कॉपी नहीं हो सका",
-      "announcement": "कमांड क्लिपबोर्ड पर कॉपी हो गई"
+      "announcement": "कमांड क्लिपबोर्ड पर कॉपी हो गई",
+      "useNativeCli": "npx के बजाय इंस्टॉल किया हुआ agentplugins CLI इस्तेमाल करें"
     },
     "directory": {
       "heading": "अपना प्लगइन ढूंढें",

@@ -604,7 +604,8 @@
       "copied": "تم النسخ",
       "copy": "نسخ",
       "copyFailed": "تعذر النسخ",
-      "announcement": "تم نسخ الأمر إلى الحافظة"
+      "announcement": "تم نسخ الأمر إلى الحافظة",
+      "useNativeCli": "استخدام واجهة agentplugins المثبتة بدلاً من npx"
     },
     "directory": {
       "heading": "ابحث عن إضافتك",

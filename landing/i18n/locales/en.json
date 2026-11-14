@@ -621,7 +621,8 @@
       "copied": "Copied",
       "copy": "Copy",
       "copyFailed": "Copy failed",
-      "announcement": "Command copied to clipboard"
+      "announcement": "Command copied to clipboard",
+      "useNativeCli": "Use installed agentplugins CLI instead of npx"
     },
     "directory": {
       "heading": "Find your plugin",

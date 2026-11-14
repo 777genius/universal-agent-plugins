@@ -604,7 +604,8 @@
       "copied": "Copiado",
       "copy": "Copiar",
       "copyFailed": "No se pudo copiar",
-      "announcement": "Comando copiado al portapapeles"
+      "announcement": "Comando copiado al portapapeles",
+      "useNativeCli": "Usar el CLI agentplugins instalado en lugar de npx"
     },
     "directory": {
       "heading": "Encuentra tu complemento",

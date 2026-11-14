@@ -604,7 +604,8 @@
       "copied": "Copié",
       "copy": "Copier",
       "copyFailed": "Échec de la copie",
-      "announcement": "Commande copiée dans le presse-papiers"
+      "announcement": "Commande copiée dans le presse-papiers",
+      "useNativeCli": "Utiliser le CLI agentplugins installé au lieu de npx"
     },
     "directory": {
       "heading": "Trouvez votre plugin",
