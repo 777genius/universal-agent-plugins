@@ -160,7 +160,19 @@ for (const { client, locale, theme, width } of nativeClientCases) {
     await expect(install.locator('p code')).toHaveText(selector);
     await expect(install).toContainText(t('registryUi.install.pinnedCatalogSource'));
     await expect(install).not.toContainText(t('registryUi.agentPage.packageExampleSourceHint'));
-    await snippet.getByRole('button', { name: t('registryUi.command.copyLabel'), exact: true }).click();
+    // Page-level clipping can hide an expanded grid without increasing scrollWidth.
+    for (const content of [install, install.locator('p code')]) {
+      const bounds = await content.evaluate((element) => {
+        const { left, right } = element.getBoundingClientRect();
+        return { left, right, viewport: window.innerWidth };
+      });
+      expect(bounds.left).toBeGreaterThanOrEqual(0);
+      expect(bounds.right).toBeLessThanOrEqual(bounds.viewport);
+    }
+    const copyButton = snippet.getByRole('button', { name: t('registryUi.command.copyLabel'), exact: true });
+    await copyButton.scrollIntoViewIfNeeded();
+    await expect(copyButton).toBeInViewport({ ratio: 1 });
+    await copyButton.click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
     const icon = page.locator('.agent-page__icon img');
     const iconFilename = client === 'hermes' ? 'hermes.webp' : 'antigravity.svg';

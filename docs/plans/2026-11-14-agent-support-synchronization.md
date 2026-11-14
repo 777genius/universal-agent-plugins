@@ -444,3 +444,21 @@ dependency documentation. Point to the existing `deps status` fields derived
 from registered capabilities, preserving the ChatGPT and frozen VS Code
 exclusions. This avoids introducing another support list alongside the shared
 contract.
+
+### Mobile source-command acceptance correction
+
+The preceding full browser shard recorded three real 390px copy failures before
+the newer revision cancelled it: the long pinned source hint expanded the agent
+page's automatic minimum grid width, leaving the copy button outside the visible
+viewport. That cancelled run is not a successful browser gate. Allow the install
+card to shrink, wrap its source-hint code and use a zero-minimum mobile grid
+track. Keep the correction scoped to the agent page.
+
+The existing 16 desktop/mobile, LTR/RTL and theme cases now also assert that the
+card and source hint stay within horizontal viewport bounds and that the copy
+button is fully visible before the unchanged ordinary click and exact clipboard
+assertion. Page-level overflow clipping cannot satisfy those checks. Local test
+collection, strict native TypeScript 7 and Vue scoped-CSS compilation pass;
+Chromium still fails to start under the local host socket policy, so actual
+rendering and interaction require the final hosted browser gate. Public release
+pins and the Antigravity repair blocker remain unchanged.

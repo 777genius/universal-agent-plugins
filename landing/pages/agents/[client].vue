@@ -366,7 +366,12 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
 }
 
 .agent-page__install {
+  min-width: 0;
   padding: 30px;
+}
+
+.agent-page__install p code {
+  overflow-wrap: anywhere;
 }
 
 .agent-page__install h2 {
@@ -492,7 +497,7 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
 @media (max-width: 900px) {
   .agent-page__hero-grid,
   .agent-page__steps {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .agent-page__plugin-grid {
