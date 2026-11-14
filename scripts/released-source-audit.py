@@ -66,6 +66,28 @@ def digest(body):
     return "sha256:" + hashlib.sha256(body).hexdigest()
 
 
+class StrictNativeYAMLLoader(yaml.SafeLoader):
+    """Audit only: reject ambiguous mappings before comparing native MCP."""
+
+
+def strict_native_yaml_mapping(loader, node):
+    result = {}
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=True)
+        require(type(key) is str and key not in result,
+                "duplicate or nonstring native YAML key")
+        result[key] = loader.construct_object(value_node, deep=True)
+    return result
+
+
+StrictNativeYAMLLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+                                        strict_native_yaml_mapping)
+
+
+def strict_native_yaml(body):
+    return yaml.load(body, Loader=StrictNativeYAMLLoader)
+
+
 def authenticated_snapshot(directory):
     """Use the production reader through its existing bootstrap verifier."""
     paths = {}
@@ -443,7 +465,7 @@ def checked_native_materialization(selected_root, locator, case, binding, root):
                 "native MCP entry is not owned at the selected scope and path")
     body, _ = read_saved_record(in_case(path, root))
     require(body is not None, "selected native MCP config is absent")
-    value = yaml.safe_load(body) if client == "hermes" else json.loads(body, object_pairs_hook=live._unique_json_object)
+    value = strict_native_yaml(body) if client == "hermes" else json.loads(body, object_pairs_hook=live._unique_json_object)
     require(isinstance(value, dict) and isinstance(value.get(collection), dict)
             and value[collection].get("notion") == entry, "owned native MCP entry differs from the reviewed transport and URL")
     return {"path": path.relative_to(root).as_posix(), "logical_name": "notion",
