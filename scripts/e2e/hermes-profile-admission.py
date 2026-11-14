@@ -2763,7 +2763,66 @@ def census_readout(value):
     return result
 
 
-def admission_failure_readout(body, source_refusal, *, native_failure=None):
+def source_user_failure_readout(line, result, proof, value, context):
+    """Append only captured User change hashes; any optional failure keeps the exact original line."""
+    if value is None:
+        return line
+    try:
+        require(json.dumps(result, sort_keys=True, separators=(",", ":")) == line
+                and len(line.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1 <= 2048,
+                "original failure readout differs")
+        context = native_failure_context(context)
+        require(context["primary_family_settled"] is True
+                and proof.get("runtime_distribution") == "source" and proof.get("status") == "failed"
+                and all(proof.get(key) is False for key in ("capture_complete", "admission_qualified", "production_project_mcp",
+                    "vendor_authentication", "real_model_inference", "tools_call", "source_install_custom_root_qualified",
+                    "source_bootstrap_recovery_qualified")), "settled source User readout required")
+        source = proof.get("source")
+        require(type(source) is dict and set(source) == {"commit", "tree", "dirty"} and source["dirty"] == ""
+                and type(source["tree"]) is str and re.fullmatch(r"[a-f0-9]{40}", source["tree"]) is not None
+                and source["commit"] == context["source_head"] == result["source_head"]
+                and proof.get("source_after") == source and proof.get("nonce") == context["nonce"]
+                and result["nonce_sha256"] == hashlib.sha256(context["nonce"].encode("ascii")).hexdigest(),
+                "source User readout identity differs")
+        value = source_delta_document(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii"))
+        require(value["nonce"] == context["nonce"], "source User delta nonce differs")
+        prepared, after = proof.get("source_prepared_runtime"), proof.get("runtime_after")
+        require(type(prepared) is dict and type(after) is dict
+                and all(type(item.get("user")) is dict and type(item["user"].get("entries")) is int for item in (prepared, after))
+                and prepared["user"] == value["before"] and after["user"] == value["after"],
+                "source User delta summaries differ")
+        rows = value["changes"]
+        require(value["total_changes"] > 0 and rows, "source User delta has no retained change")
+        non_directory = next((index for index, row in enumerate(rows)
+            if any(record is not None and record["kind"] in ("file", "link")
+                   for record in (row["before"], row["after"]))), None)
+        def selected(index):
+            row = rows[index]
+            left, right = row["before"], row["after"]
+            fields = ("kind", *SOURCE_DELTA_FIELDS, "integer_saturated", "sha256", "target_sha256")
+            def part(record, key):
+                if record is None:
+                    return None
+                return record["metadata"][key] if key in SOURCE_DELTA_FIELDS else record[key]
+            return dict(index=index, member_sha256=row["member_sha256"],
+                        before_kind=part(left, "kind"), after_kind=part(right, "kind"),
+                        before_integer_saturated=part(left, "integer_saturated"),
+                        after_integer_saturated=part(right, "integer_saturated"),
+                        changed_fields=[key for key in fields if part(left, key) != part(right, key)])
+        indices = [0] if non_directory in (None, 0) else [0, non_directory]
+        projection = dict(stage=value["stage"], hash_encoding=value["hash_encoding"],
+                          total_changes=value["total_changes"], retained_changes=len(rows), truncated=value["truncated"],
+                          before_entries=value["before"]["entries"], after_entries=value["after"]["entries"],
+                          selection="first-retained-and-first-retained-nondirectory",
+                          first_non_directory_index=non_directory, selected_changes=[selected(index) for index in indices])
+        extended = json.dumps(dict(result, source_user_delta=projection), sort_keys=True, separators=(",", ":"))
+        require(len(extended.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1 <= 2048, "source User readout bound")
+        return extended
+    except BaseException:
+        return line  # Never replace a refusal, its existing diagnostics, or an original exception.
+
+
+def admission_failure_readout(body, source_refusal, *, native_failure=None, source_delta=None):
     """Project already staged failure bytes; never read or authorize native state."""
     try:
         proof = public_json(body)
@@ -2811,7 +2870,7 @@ def admission_failure_readout(body, source_refusal, *, native_failure=None):
                       source_refusal=refusal, native_failure=native)
         line = json.dumps(result, sort_keys=True, separators=(",", ":"))
         require(len(line.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1 <= 2048, "failure readout bound")
-        return line
+        return source_user_failure_readout(line, result, proof, source_delta, context)
     except (AttributeError, KeyError, IndexError, TypeError, ValueError, UnicodeError, RuntimeError):
         return None  # Optional diagnostics never replace the original native refusal.
 
@@ -2876,7 +2935,7 @@ def stage_evidence(directory, *, native_failure=None):
     except (OSError, ValueError):
         pass
     try:
-        failure_line = admission_failure_readout(profile_body, source_refusal, native_failure=native_failure)
+        failure_line = admission_failure_readout(profile_body, source_refusal, native_failure=native_failure, source_delta=source_delta)
         if failure_line is not None:
             print("HERMES_ADMISSION_FAILURE " + failure_line, flush=True)
     except (OSError, ValueError):

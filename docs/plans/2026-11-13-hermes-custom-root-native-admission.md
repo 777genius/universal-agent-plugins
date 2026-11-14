@@ -2014,3 +2014,67 @@ Linux; that skip is not Windows evidence. Source review and this replay do not
 qualify the new native path. The incoming closed bootstrap diagnostic is retained
 for the distinct unmeasured Windows HTTP effect. The source-installed original
 User bytecode/UV-lock refusal remains unchanged and unresolved.
+
+
+## 2026-11-14: existing settled source User delta in closed stdout
+
+Original source-native run `43588580245` at
+`1412f416b9bf70b227d8f517e1881075f2b05a38` now has the same first cold
+`config-path-a` refusal on Linux job `132428496636` and Windows job
+`132428496582`. The exact owned call site iterates scope `a` then `b` and
+passes that same scope to `profile_effect_boundary`. The closed records
+identify its original line 1514, where the scope predicate is true and the
+captured User subtree differs from the original baseline. They do not name
+the changed member. Raw log SHA256 values are respectively
+`b20df2acf51069427af8ce2b5b614889e9cd004ca8931831213d225410c81d4b`
+(117627 bytes) and
+`45697ec053c5e09b0c704a0eb59f697818e58786c58383e9123a1de68d145f16`
+(138457 bytes). Source artifacts `14113135153` and `14112575305` remain
+unread here; no member identity or specific bootstrap cause is inferred.
+
+The existing source User delta writer already compares complete retained
+before/after records under the original deadline. It keeps at most eight
+lexicographic changed rows, exact total count and truncation, normalized
+metadata and digests, and User summary hashes. Its 16 KiB schema, held
+evidence publication, existing member encoding, and every admission guard
+remain unchanged. The existing staging loop already reads and validates
+this file, joins its nonce to the failed source proof, and joins both User
+summaries to the prepared and final runtime snapshots before publication.
+
+This change passes that same validated in-memory value to the existing
+closed failure readout after the evidence commit. An optional
+`source_user_delta` stdout field repeats the failed source, unchanged source
+identity, nonce, both User summary, and positive primary-family-settlement
+joins internally. Public output contains only the before/after entry counts,
+not the aggregate User inventory digests. It selects the first retained row
+and the earliest retained file/link
+row on either side, deduplicating index zero. The output retains exact
+indices, total/retained counts and truncation; absence of a file/link among
+truncated retained rows never means none changed elsewhere.
+
+Each selected row exposes only the existing `member_sha256`, before/after
+finite kind, saturation flags, and names of changed normalized fields. The
+existing `utf-8-surrogatepass` hash is preserved; it is not the domain-separated
+hash used by the separate public bootstrap diagnostic. Raw member names,
+targets, contents, identity numbers, nonce, aggregate inventory digests and
+individual file-content or link-target digests are omitted. Only the names
+of changed digest fields may appear. Saturation is
+explicit, including the case where changed raw captured identities become
+equal normalized records and no changed field can be reported.
+
+The original failure line is constructed and checked first. Missing,
+malformed, unjoined, or oversized optional data returns that exact original
+line, including any existing public bootstrap detail. The 2 KiB stdout cap,
+false qualifications, retained original error, artifact membership, writer,
+schema, process/cleanup decisions, source User baseline and native command
+catalog do not change. There is no new read, walk, member or process.
+
+Four new inert methods cover the real captured-map delta producer with
+directory-first/file-second selection and no-I/O sentinels; retained
+truncation, create/remove, link and saturated-identity cases; malformed and
+mismatched inputs plus actual line-size fallback preserving the public
+detail; and existing stage read counts, commit-before-output, exact copied
+bytes, nonce mismatch and late-read refusal. All preceding 143 test bodies, including the bd63 public content-hash privacy
+correction and the incoming 880d stdio-header/repaired-inspection contracts,
+are preserved. These new tests and native execution are pending; this
+source-only correction supplies diagnosis and grants no new admission.

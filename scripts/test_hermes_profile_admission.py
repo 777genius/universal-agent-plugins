@@ -4083,5 +4083,245 @@ class PublicBootstrapFailureDetailContracts(unittest.TestCase):
             with self.subTest(effect=effect):
                 self.assertIsNone(helper(fixtures.encoded(changed), None))
 
+class SourceUserFailureReadoutContracts(unittest.TestCase):
+    nonce, head = "a" * 64, "b" * 40
+
+    def captured(self, layout="mixed"):
+        import copy
+        import hashlib
+        import stat
+        import time
+        def directory(inode):
+            return dict(type="directory", identity=(1, inode, stat.S_IFDIR | 0o700, 1, 0, 10, 20, 1000, 1000))
+        def regular(inode, body):
+            return dict(type="file", identity=(1, inode, stat.S_IFREG | 0o600, 1, len(body), 10, 20, 1000, 1000),
+                        sha256=hashlib.sha256(body).hexdigest())
+        before = {"user": directory(2)}
+        if layout in ("directories", "late-file"):
+            before.update({"user/dir-" + str(index): directory(10 + index) for index in range(7 if layout == "late-file" else 1)})
+        if layout not in ("directories", "saturated"):
+            before["user/" + ("zz-" if layout == "late-file" else "") + "PRIVATE-" + self.nonce] = regular(3, b"PRIVATE BEFORE")
+        if layout == "saturated":
+            before["user"]["identity"] = (1, 1 << 70, stat.S_IFDIR | 0o700, 1, 0, 10, 20, 1000, 1000)
+        after = copy.deepcopy(before)
+        for name, row in after.items():
+            identity = list(row["identity"])
+            if row["type"] == "directory" and layout != "file-first":
+                identity[1 if layout == "saturated" else 5] += 1
+            elif row["type"] == "file":
+                row["sha256"] = hashlib.sha256(b"PRIVATE AFTER").hexdigest()
+                identity[4] = len(b"PRIVATE AFTER")
+            row["identity"] = tuple(identity)
+        if layout == "added-file":
+            before.pop("user/PRIVATE-" + self.nonce)
+        if layout == "removed-file":
+            after.pop("user/PRIVATE-" + self.nonce)
+        if layout == "link":
+            name = "user/PRIVATE-" + self.nonce
+            before[name] = dict(type="link", identity=(1, 3, stat.S_IFLNK | 0o777, 1, len("/PRIVATE BEFORE"), 10, 20, 1000, 1000),
+                                target="/PRIVATE BEFORE")
+            after[name] = dict(before[name], identity=(1, 4, stat.S_IFLNK | 0o777, 1, len("/PRIVATE SECOND"), 10, 20, 1000, 1000),
+                               target="/PRIVATE SECOND")
+        # A changed Project record is deliberately outside the User delta.
+        before["project-a/PRIVATE"] = regular(30, b"Project before")
+        after["project-a/PRIVATE"] = regular(30, b"Project after")
+        original = copy.deepcopy((before, after))
+        with mock.patch.object(os, "read", side_effect=AssertionError("capture read")), \
+                mock.patch.object(os, "open", side_effect=AssertionError("capture open")), \
+                mock.patch.object(os, "scandir", side_effect=AssertionError("capture walk")), \
+                mock.patch.object(Path, "lstat", side_effect=AssertionError("capture stat")):
+            summaries = [CASE["source_user_digest"](records, "user") for records in (before, after)]
+            packet = CASE["source_user_delta"](before, after, "user", self.nonce, *summaries, time.monotonic() + 10)
+        self.assertEqual((before, after), original)
+        proof = FailureReadoutContracts().proof("source")
+        proof.update(source_prepared_runtime={"user": dict(packet["before"])}, runtime_after={"user": dict(packet["after"])})
+        code = CASE["profile_effect_boundary"].__code__
+        line = next(line for _, _, line in code.co_lines() if line is not None)
+        observer = dict(schema_version=1, measurement_only=True, admission_qualified=False, nonce=self.nonce,
+                        source_head=self.head, phase="profiles", reason="uncaught-observer-exception",
+                        exception_kind="RuntimeError", command="config-path-a",
+                        caller=dict(function=code.co_name, function_line=code.co_firstlineno, line=line))
+        context = dict(source_head=self.head, nonce=self.nonce, cleanup_phase="census",
+                       primary_family_settled=True, observer_exit=1, observer=observer)
+        return packet, proof, context
+
+    def readout(self, packet, proof, context, refusal=None):
+        body = json.dumps(proof, sort_keys=True, separators=(",", ":")).encode("ascii")
+        return CASE["admission_failure_readout"](body, refusal, native_failure=context, source_delta=packet)
+
+    def test_captured_directory_and_first_file_are_hash_only_without_new_io(self):
+        import copy
+        import hashlib
+        packet, proof, context = self.captured()
+        original = copy.deepcopy((packet, proof, context))
+        with mock.patch.object(os, "read", side_effect=AssertionError("readout read")), \
+                mock.patch.object(os, "open", side_effect=AssertionError("readout open")), \
+                mock.patch.object(os, "scandir", side_effect=AssertionError("readout walk")), \
+                mock.patch.object(Path, "lstat", side_effect=AssertionError("readout stat")):
+            line = self.readout(packet, proof, context)
+        report = json.loads(line); projected = report["source_user_delta"]
+        self.assertEqual((packet, proof, context), original)
+        self.assertEqual(projected["hash_encoding"], "utf-8-surrogatepass")
+        self.assertEqual(projected["selection"], "first-retained-and-first-retained-nondirectory")
+        self.assertEqual((projected["total_changes"], projected["retained_changes"], projected["truncated"]), (2, 2, False))
+        self.assertEqual((projected["before_entries"], projected["after_entries"]),
+                         (packet["before"]["entries"], packet["after"]["entries"]))
+        self.assertNotIn("before", projected); self.assertNotIn("after", projected)
+        self.assertEqual(projected["first_non_directory_index"], 1)
+        rows = projected["selected_changes"]
+        self.assertEqual([row["index"] for row in rows], [0, 1])
+        self.assertEqual(rows[0]["member_sha256"], hashlib.sha256(b"user").hexdigest())
+        self.assertEqual(rows[0]["changed_fields"], ["mtime_ns"])
+        self.assertEqual(rows[1]["member_sha256"], hashlib.sha256(("user/PRIVATE-" + self.nonce).encode()).hexdigest())
+        self.assertEqual(rows[1]["changed_fields"], ["bytes", "sha256"])
+        self.assertEqual((rows[1]["before_kind"], rows[1]["after_kind"]), ("file", "file"))
+        self.assertIs(report["native_qualified"], False); self.assertIs(report["admission_qualified"], False)
+        for private in ("PRIVATE", self.nonce, "project-a", "user/", "/PRIVATE AFTER",
+                        packet["before"]["sha256"], packet["after"]["sha256"]):
+            self.assertNotIn(private, line)
+        for change in packet["changes"]:
+            for record in (change["before"], change["after"]):
+                if record is not None:
+                    for key in ("sha256", "target_sha256"):
+                        if record[key] is not None: self.assertNotIn(record[key], line)
+        for row in rows:
+            self.assertEqual(set(row), {"index", "member_sha256", "before_kind", "after_kind",
+                                      "before_integer_saturated", "after_integer_saturated", "changed_fields"})
+        with self.assertRaisesRegex(RuntimeError, "original source User changed"):
+            CASE["require_source_user_baseline"](packet["after"], packet["before"])
+
+    def test_retained_selection_truncation_absence_and_saturation_stay_explicit(self):
+        for layout in ("file-first", "directories", "late-file", "saturated", "added-file", "removed-file", "link"):
+            with self.subTest(layout=layout):
+                packet, proof, context = self.captured(layout)
+                projected = json.loads(self.readout(packet, proof, context))["source_user_delta"]
+                rows = projected["selected_changes"]
+                self.assertEqual(rows[0]["index"], 0)
+                self.assertLessEqual(len(rows), 2)
+                self.assertEqual(projected["retained_changes"], len(packet["changes"]))
+                self.assertEqual(projected["truncated"], packet["truncated"])
+                encoded = json.dumps(projected)
+                self.assertNotIn("PRIVATE", encoded)
+                for value in (packet["before"]["sha256"], packet["after"]["sha256"]):
+                    self.assertNotIn(value, encoded)
+                for change in packet["changes"]:
+                    for record in (change["before"], change["after"]):
+                        if record is not None:
+                            for key in ("sha256", "target_sha256"):
+                                if record[key] is not None: self.assertNotIn(record[key], encoded)
+                if layout == "file-first":
+                    self.assertEqual((projected["first_non_directory_index"], len(rows)), (0, 1))
+                elif layout == "late-file":
+                    self.assertEqual((projected["total_changes"], projected["retained_changes"], projected["truncated"]), (9, 8, True))
+                    self.assertIsNone(projected["first_non_directory_index"]); self.assertEqual(len(rows), 1)
+                elif layout in ("directories", "saturated"):
+                    self.assertIsNone(projected["first_non_directory_index"]); self.assertEqual(len(rows), 1)
+                if layout == "saturated":
+                    self.assertEqual(rows[0]["changed_fields"], [])
+                    self.assertIs(rows[0]["before_integer_saturated"], True)
+                    self.assertIs(rows[0]["after_integer_saturated"], True)
+                if layout in ("added-file", "removed-file"):
+                    self.assertIsNone(rows[1]["before_kind"] if layout == "added-file" else rows[1]["after_kind"])
+                if layout == "link":
+                    self.assertEqual(rows[1]["changed_fields"], ["inode", "target_sha256"])
+                    self.assertEqual((rows[1]["before_kind"], rows[1]["after_kind"]), ("link", "link"))
+
+    def test_optional_failures_and_overflow_preserve_exact_baseline_and_public_detail(self):
+        import copy
+        import hashlib
+        packet, proof, context = self.captured()
+        for effect in ("nonce", "before", "after", "summary", "summary-bool", "hash-encoding", "metadata",
+                       "unknown", "poison", "empty", "source", "unsettled", "success", "qualified"):
+            changed, document, native = copy.deepcopy((packet, proof, context))
+            if effect == "nonce": changed["nonce"] = "c" * 64
+            if effect in ("before", "after"): changed[effect]["sha256"] = "c" * 64
+            if effect == "summary": document["source_prepared_runtime"]["user"]["sha256"] = "c" * 64
+            if effect == "summary-bool":
+                changed, document, native = self.captured("saturated")
+                document["runtime_after"]["user"]["entries"] = True
+            if effect == "hash-encoding": changed["hash_encoding"] = "domain-separated"
+            if effect == "metadata": changed["changes"][0]["before"]["metadata"]["inode"] = True
+            if effect == "unknown": changed["PRIVATE"] = "forbidden"
+            if effect == "poison": changed["changes"][0]["member"] = object()
+            if effect == "empty": changed["changes"] = []; changed["truncated"] = True
+            if effect == "source": document["source_after"]["tree"] = "d" * 40
+            if effect == "unsettled": native["primary_family_settled"] = False
+            if effect == "success": document["status"] = "passed"
+            if effect == "qualified": document["admission_qualified"] = True
+            with self.subTest(effect=effect):
+                baseline = self.readout(None, document, native)
+                self.assertEqual(self.readout(changed, document, native), baseline)
+                if effect not in ("source", "unsettled", "success", "qualified"):
+                    self.assertIsNotNone(baseline)
+        public = PublicBootstrapFailureDetailContracts()
+        body, _ = public.emitted(public.fixture(unexpected=(("PRIVATE", "file"),)))
+        observed = CASE["observer_failure_document"](body, self.nonce, self.head)
+        bundled = FailureReadoutContracts().proof("bundled")
+        bundled["native_failure"] = dict(context, cleanup_phase="public-family", observer=observed)
+        helper = CASE["admission_failure_readout"]
+        encoded = json.dumps(bundled).encode("ascii")
+        baseline = helper(encoded, None)
+        self.assertIn("public_bootstrap", json.loads(baseline)["native_failure"]["observer"])
+        self.assertEqual(helper(encoded, None, source_delta=packet), baseline)
+        projection = json.loads(self.readout(packet, proof, context))["source_user_delta"]
+        with tempfile.TemporaryDirectory() as temporary:
+            refusal, _ = FailureReadoutContracts().source_refusal(Path(temporary).resolve())
+        demonstrated = False
+        for size in range(16, 481, 16):
+            candidate = copy.deepcopy(refusal)
+            candidate["member"] = "user/" + "x" * size
+            candidate["member_sha256"] = hashlib.sha256(candidate["member"].encode()).hexdigest()
+            baseline = self.readout(None, proof, context, candidate)
+            if baseline is None:
+                continue
+            extended = json.dumps(dict(json.loads(baseline), source_user_delta=projection), sort_keys=True, separators=(",", ":"))
+            if len(extended.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1 <= 2048:
+                continue
+            self.assertEqual(self.readout(packet, proof, context, candidate), baseline)
+            self.assertLessEqual(len(baseline.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1, 2048)
+            demonstrated = True
+            break
+        self.assertTrue(demonstrated, "a valid original line must survive an oversized optional projection")
+
+    def test_stage_reuses_validated_delta_bytes_and_prints_only_after_commit(self):
+        import copy
+        packet, proof, context = self.captured()
+        stage, authority = CASE["stage_evidence"], CASE["stage_evidence"].__globals__
+        for effect in ("valid", "wrong-nonce", "late-read"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                value = copy.deepcopy(packet)
+                if effect == "wrong-nonce": value["nonce"] = "c" * 64
+                bodies = {"source-user-delta.json": json.dumps(value).encode("ascii"),
+                          "profile-admission.json": json.dumps(proof).encode("ascii")}
+                for name, body in bodies.items(): (root / name).write_bytes(body)
+                reads, lines, actual = [], [], CASE["ordinary_bytes"]
+                def read(path, *args, **kwargs):
+                    self.assertFalse((root / "upload").exists())
+                    reads.append(path.name)
+                    if effect == "late-read" and reads.count("source-user-delta.json") == 2:
+                        raise RuntimeError("original captured delta copy refused")
+                    return actual(path, *args, **kwargs)
+                def emit(line, *, flush):
+                    self.assertTrue(flush); self.assertTrue(authority["EVIDENCE_CLOSED"])
+                    self.assertTrue((root / "upload").is_dir()); lines.append(line)
+                with mock.patch.dict(authority, ordinary_bytes=read, print=emit, EVIDENCE_CLOSED=False):
+                    if effect == "valid":
+                        stage(root, native_failure=context)
+                    else:
+                        with self.assertRaises(RuntimeError): stage(root, native_failure=context)
+                        self.assertFalse(authority["EVIDENCE_CLOSED"])
+                self.assertEqual(reads.count("source-user-delta.json"), 2)
+                self.assertEqual(reads.count("profile-admission.json"), 1)
+                if effect == "valid":
+                    self.assertEqual(len(lines), 2)
+                    report = json.loads(lines[1].removeprefix("HERMES_ADMISSION_FAILURE "))
+                    self.assertEqual(report["source_user_delta"]["selected_changes"][1]["member_sha256"], packet["changes"][1]["member_sha256"])
+                    for name, body in bodies.items(): self.assertEqual((root / "upload" / name).read_bytes(), body)
+                else:
+                    self.assertEqual(lines, []); self.assertFalse((root / "upload").exists())
+                for name, body in bodies.items(): self.assertEqual((root / name).read_bytes(), body)
+
+
 if __name__ == "__main__":
     unittest.main()
