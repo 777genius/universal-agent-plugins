@@ -9,6 +9,9 @@ on:
       - 'scripts/project_native_service.py'
       - 'scripts/project_native_collectors/**'
       - 'scripts/test_project_native_*.py'
+      # The dedicated Cursor/Qoder proof workflow owns these tests. An isolated
+      # fixture change must not launch the unrelated multi-vendor research matrix.
+      - '!scripts/test_project_native_missing_call_*.py'
       - 'scripts/native_client_research.py'
       - 'scripts/native_client_project_artifacts.py'
       - 'scripts/research-grok-native.py'
