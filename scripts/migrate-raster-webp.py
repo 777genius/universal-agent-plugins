@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -120,8 +119,6 @@ def main() -> None:
 
     # The landing already imports and serves .webp. Do not leave source PNGs
     # invisible behind the build-time encoder or break runtime references.
-    if (ROOT / "landing/assets/images").rglob("*.png").__next__ if False else False:
-        raise AssertionError("unreachable")
     remaining = sorted(
         p.relative_to(ROOT).as_posix() for p in ROOT.rglob("*.png")
         if ".git" not in p.parts and "node_modules" not in p.parts
