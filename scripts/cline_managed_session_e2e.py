@@ -65,6 +65,11 @@ def file_identity(path):
     return artifacts.identity(path.lstat())
 
 
+def same_record(left, right):
+    return json.dumps(left, sort_keys=True, separators=(",", ":"), allow_nan=False) == \
+        json.dumps(right, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
 def snapshot(root):
     require(root.resolve() == root and root.is_dir(), "foreign control root changed")
     with os.scandir(root) as entries:
@@ -211,9 +216,38 @@ class SessionJourney:
         self.user_before = read_owned(self.user_config, root)
         self.user_identity = file_identity(self.user_config)
         self.b_before = snapshot(self.b)
-        self.warm_origin = self.warm_pin = self.marker_before = None
+        self.warm_origin = self.warm_pin = self.warm_binding = self.marker_before = self.cold_marker = None
+        self.data_before = {}
+
+    def data_directory_facts(self, path):
+        require(path.is_absolute() and path.is_relative_to(self.root) and path != self.root
+                and path.resolve() == path, "original data directory namespace changed")
+        info = path.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_dev > 0 and info.st_ino > 0,
+                "ordinary original data directory required")
+        if os.name != "nt":
+            require(info.st_uid == os.getuid(), "foreign original data owner")
+        facts = info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid
+        if artifacts.WINDOWS:
+            artifacts.windows_identity(info)
+            facts += (info.st_birthtime_ns, info.st_file_attributes, info.st_reparse_tag)
+        return facts
+
+    def remember_data(self, project, installation, binding):
+        physical = binding["physical_artifact_id"]
+        require(isinstance(physical, str) and physical not in ("", ".", "..") and Path(physical).name == physical,
+                "original data physical artifact is not a basename")
+        data = Path(installation["data_receipts"][binding["data_receipt_id"]]["locator"])
+        require(project in (self.a, self.root / "cold") and data == project / ".uap/plugin-data" / physical
+                and data not in self.data_before and len(self.data_before) < 2, "original data capture differs or repeats")
+        self.data_before[data] = self.data_directory_facts(data)
+
+    def check_data(self):
+        for path, original in self.data_before.items():
+            require(self.data_directory_facts(path) == original, "original data directory changed")
 
     def check(self):
+        self.check_data()
         verify_files(self.identities, self.budget)
         require(all(file_identity(path) == before for path, before in self.runtime_before.items()), "runtime replaced")
         require(file_identity(self.user_config) == self.user_identity
@@ -222,6 +256,9 @@ class SessionJourney:
         require(snapshot(self.b) == self.b_before, "Project B changed")
         if self.marker_before is not None:
             require(self.marker_facts() == self.marker_before, "original warm data marker changed")
+        if self.cold_marker is not None:
+            path, original = self.cold_marker
+            require(self.marker_facts(path) == original, "original cold data marker changed")
 
     def run(self, action, expected=(0,)):
         self.check()
@@ -273,14 +310,19 @@ class SessionJourney:
     def session(self, stage, revision, create=False):
         installation, binding, active = self.owned()
         identity, pin = self.warm_facts(installation, binding, revision)
-        require(identity == self.warm_origin, "original warm installation authority changed")
+        require(same_record(identity, self.warm_origin), "original warm installation authority changed")
         require(stage in ("installed", "updated", "repaired"), "unknown warm phase")
+        expected_pin = copy.deepcopy(self.warm_pin)
         if stage == "updated":
             require(pin["source"]["tree_digest"] != self.warm_pin["source"]["tree_digest"]
                     and pin["package"]["manifest_digest"] != self.warm_pin["package"]["manifest_digest"],
                     "warm update did not advance its exact revision")
-        else:
-            require(pin == self.warm_pin, "warm repair or repeat changed the accepted revision")
+            for section, keys in (("source", ("tree_digest",)), ("package", ("version", "manifest_digest")),
+                                  ("binding_revision", ("version", "tree_digest", "manifest_digest"))):
+                for key in keys:
+                    expected_pin[section][key] = pin[section][key]
+        require(same_record(pin, expected_pin), "warm operation changed the accepted source/package authority")
+        self.binding_continuity(binding, pin, stage == "updated")
         state = read_owned(self.a / ".uap/state-v2.json", self.root)
         body = self.run("session-inspect")
         rows = document(body)
@@ -306,11 +348,33 @@ class SessionJourney:
             require(self.marker_before[1] == ("kept-" + self.nonce).encode(), "initial warm marker differs")
         require(self.marker_facts() == self.marker_before, "original warm data marker changed")
         self.warm_pin = copy.deepcopy(pin)
+        self.warm_binding = copy.deepcopy(binding)
         self.evidence["stages"].append({"stage": stage, "binding": binding, "native_inventory": rows,
                                          "package_revision": pin, "direct_installed_mcp": direct})
         return installation, binding, active
 
+    def binding_continuity(self, binding, pin, updated):
+        expected, current = copy.deepcopy(self.warm_binding), copy.deepcopy(binding)
+        previous_receipts, receipts = expected.pop("receipts"), current.pop("receipts")
+        require(isinstance(previous_receipts, list) and isinstance(receipts, list)
+                and len(receipts) >= len(previous_receipts)
+                and same_record(receipts[:len(previous_receipts)], previous_receipts)
+                and all(isinstance(row, dict) and row.get("phase") == "committed" for row in receipts),
+                "original committed receipt history changed")
+        expected.pop("updated_at", None); current.pop("updated_at", None)
+        if updated:
+            expected["package_revision"] = pin["binding_revision"]
+            before, after = expected.get("native_objects"), current.get("native_objects")
+            require(isinstance(before, list) and isinstance(after, list) and len(before) == len(after),
+                    "warm native object membership changed")
+            for original, observed in zip(before, after):
+                require(isinstance(original, dict) and isinstance(observed, dict)
+                        and isinstance(observed.get("managed_digest"), str), "warm native object digest missing")
+                original["managed_digest"] = observed["managed_digest"]
+        require(same_record(current, expected), "original full warm binding authority changed")
+
     def warm_facts(self, installation, binding, revision):
+        self.check_data()
         source, package, pin = installation["source"], installation["package"], binding["package_revision"]
         manifest = read_owned(self.source / "plugin.json", self.root)
         authored = document(manifest)
@@ -335,29 +399,32 @@ class SessionJourney:
         require(receipt.get("data_receipt_id") == receipt_id and receipt.get("physical_backend_id") == physical
                 and receipt.get("scope") == "project" and receipt.get("state") == "owned"
                 and receipt.get("locator") == str(data) and bool(receipt.get("ownership_digest"))
-                and document(read_owned(data / ".agentplugins-data-owner.json", self.root)) == receipt,
+                and same_record(document(read_owned(data / ".agentplugins-data-owner.json", self.root)), receipt),
                 "warm original data receipt differs")
+        self.check_data()
         identity = {key: installation[key] for key in ("installation_id", "declared_name", "data_receipts")}
         identity["source"] = {key: value for key, value in source.items() if key not in ("resolved_revision", "tree_digest")}
         identity["binding"] = {key: binding.get(key) for key in ("client_binding_id", "client_id", "scope", "target_locator",
             "physical_artifact_id", "native_profile_root", "data_receipt_id", "authentication", "policy")}
         return copy.deepcopy(identity), copy.deepcopy({"source": source, "package": package, "binding_revision": pin})
 
-    def marker_facts(self):
-        original = self.warm_origin
-        receipt = original["data_receipts"][original["binding"]["data_receipt_id"]]
-        path = Path(receipt["locator"]) / "native-marker.txt"
+    def marker_facts(self, path=None):
+        if path is None:
+            original = self.warm_origin
+            receipt = original["data_receipts"][original["binding"]["data_receipt_id"]]
+            path = Path(receipt["locator"]) / "native-marker.txt"
         before = file_identity(path)
         body = read_owned(path, self.root, 256)
-        require(file_identity(path) == before, "original warm marker changed during read")
+        require(file_identity(path) == before, "original marker changed during read")
         return before, body
 
     def verify_retained(self, state):
         require(state.get("schema_version") == 5 and len(state["installations"]) == 1, "retained installation count differs")
         retained = state["installations"][0]
         require(retained["clients"] == {} and retained["data_retained"] is True
-                and all(retained[key] == self.warm_origin[key] for key in ("installation_id", "declared_name", "data_receipts"))
-                and retained["source"] == self.warm_pin["source"] and retained["package"] == self.warm_pin["package"],
+                and all(same_record(retained[key], self.warm_origin[key]) for key in ("installation_id", "declared_name", "data_receipts"))
+                and same_record(retained["source"], self.warm_pin["source"])
+                and same_record(retained["package"], self.warm_pin["package"]),
                 "retained original installation/data authority differs")
         require(self.marker_facts() == self.marker_before, "original warm data marker lost")
 
@@ -403,7 +470,9 @@ class SessionJourney:
         self.author("0")
         self.install("install")
         first, binding, _ = self.owned()
+        self.remember_data(self.a, first, binding)
         self.warm_origin, self.warm_pin = self.warm_facts(first, binding, "0")
+        self.warm_binding = copy.deepcopy(binding)
         self.evidence["warm_authority"] = copy.deepcopy(self.warm_origin)
         state_path = self.a / ".uap/state-v2.json"
         state = read_owned(state_path, self.root)
@@ -461,6 +530,7 @@ class SessionJourney:
         self.run("cold-init")
         self.install("cold-locked-install")
         installed, binding, active = self.owned(self.root / "cold", "uap-cline-public-probe")
+        self.remember_data(self.root / "cold", installed, binding)
         self.cold_binding(pin, installed, binding)
         state = read_owned(self.root / "cold/.uap/state-v2.json", self.root)
         rows = document(self.run("cold-inspect"))
@@ -475,6 +545,9 @@ class SessionJourney:
                 "cold compiler cache unexpectedly populated")
         self.run("cold-build")
         direct = self.direct("cold-create", "cold")
+        marker = Path(installed["data_receipts"][binding["data_receipt_id"]]["locator"]) / "native-marker.txt"
+        self.cold_marker = marker, self.marker_facts(marker)
+        require(self.cold_marker[1][1] == ("kept-" + self.nonce).encode(), "initial cold marker differs")
         before = read_owned(self.root / "cold/.uap/state-v2.json", self.root)
         self.install("cold-repeat")
         require(read_owned(self.root / "cold/.uap/state-v2.json", self.root) == before, "cold repeat changed state")

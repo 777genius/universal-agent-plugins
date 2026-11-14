@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -13,6 +14,12 @@ import (
 const lockMode = "lock-qualification-v1"
 
 func validateResearchMode(r request) error {
+	if r.Mode == cliMode {
+		if r.Scope != "a" || cliArguments(r) == nil {
+			return errors.New("cli-phase-refused")
+		}
+		return nil
+	}
 	if r.Mode == lockMode {
 		if r.Scope != "a" || r.Phase != "locked-writer" && r.Phase != "released-writer" {
 			return errors.New("lock-phase-refused")
@@ -26,6 +33,9 @@ func validateResearchMode(r request) error {
 }
 
 func lockResultFields(mode, original string) string {
+	if mode == cliMode {
+		return original + " mode phase"
+	}
 	if mode == lockMode {
 		return original + " mode phase lock_held"
 	}
@@ -33,6 +43,9 @@ func lockResultFields(mode, original string) string {
 }
 
 func validateLockResult(got result, r request) error {
+	if r.Mode == cliMode {
+		return validateCLIResult(got, r)
+	}
 	if r.Mode != lockMode {
 		if got.Phase != "" || got.LockHeld != nil {
 			return errors.New("unexpected-lock-proof")
@@ -81,7 +94,11 @@ func (s *scopeState) prepareLock(r request) error {
 	}
 	id, e := identity(info)
 	if e != nil || id.Mode != unix.S_IFREG|0600 || int64(id.UID) != int64(r.UID) || int64(id.GID) != int64(r.GID) || id.Links != 1 || id.Size != 0 || id.Dev != parent.dev {
-		return errors.New("lock-file-authority-refused")
+		if e != nil {
+			return errors.New("lock-file-authority-refused")
+		}
+		return fmt.Errorf("lock-file-authority-refused: regular=%t mode=%#o uidgidmatch=%t nlink=%d size=%d deviceMatch=%t",
+			id.Mode&unix.S_IFMT == unix.S_IFREG, id.Mode, int64(id.UID) == int64(r.UID) && int64(id.GID) == int64(r.GID), id.Links, id.Size, id.Dev == parent.dev)
 	}
 	s.lock.file.id = id
 	if e = s.lock.verify(); e != nil {

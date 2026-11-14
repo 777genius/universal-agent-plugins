@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -128,6 +129,28 @@ func (fixture enablementFixture) attempt(t *testing.T, applied, committed bool) 
 	}
 }
 
+// recoverPrototypeRecords exercises the private member-journal codec only.
+// Public Recover refuses these records: they cannot recover native auxiliary
+// effects or establish the original User parent after a cold restart.
+func recoverPrototypeRecords(ctx context.Context, recovery EnablementRecovery) error {
+	entries, err := recovery.recordNames()
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry, enablementRecordPrefix) {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := recovery.recoverRecord(ctx, strings.TrimPrefix(entry, enablementRecordPrefix)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func TestEnablementRecoveryReopensEachDurableBoundary(t *testing.T) {
 	for _, stage := range []string{"journal", "attempt", "native-write", "state-commit"} {
 		t.Run(stage, func(t *testing.T) {
@@ -143,7 +166,7 @@ func TestEnablementRecoveryReopensEachDurableBoundary(t *testing.T) {
 			if err != nil || bytes.Contains(body, []byte("PRIVATE_TOKEN")) {
 				t.Fatal("journal persisted foreign configuration", err)
 			}
-			if err := fixture.recovery.Recover(t.Context()); err != nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 				t.Fatal(err)
 			}
 			want := fixture.original
@@ -171,7 +194,7 @@ func TestEnablementRecoveryRetainsConcurrentConfigAndPendingAuthority(t *testing
 	if err := os.WriteFile(fixture.config, concurrent, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := fixture.recovery.Recover(t.Context()); !errors.Is(err, nativeconfig.ErrConcurrentChange) {
+	if err := recoverPrototypeRecords(t.Context(), fixture.recovery); !errors.Is(err, nativeconfig.ErrConcurrentChange) {
 		t.Fatal("third version did not refuse", err)
 	}
 	current, _ := os.ReadFile(fixture.config)
@@ -197,7 +220,7 @@ func TestEnablementRecoveryPreservesStateOnBusyNativeLockAndLateStateFailure(t *
 			} else {
 				fixture.state.fail = true
 			}
-			if err := fixture.recovery.Recover(t.Context()); err == nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err == nil {
 				t.Fatal("failed recovery reported completion")
 			}
 			if fixture.loaded(t).Installations[0].Clients[fixture.record.BindingID].NativeActivationAttempt == "" {
@@ -208,7 +231,7 @@ func TestEnablementRecoveryPreservesStateOnBusyNativeLockAndLateStateFailure(t *
 			}
 			if failure == "state" {
 				fixture.state.fail = false
-				if err := fixture.recovery.Recover(t.Context()); err != nil {
+				if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 					t.Fatal("retry cannot settle restored bytes", err)
 				}
 			}
@@ -238,7 +261,7 @@ func TestEnablementRecoveryRejectsChangedCompleteBindingAndUnknownJournalMember(
 					t.Fatal(err)
 				}
 			}
-			if err := fixture.recovery.Recover(t.Context()); err == nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err == nil {
 				t.Fatal("changed recovery authority admitted")
 			}
 			current, _ := os.ReadFile(fixture.config)

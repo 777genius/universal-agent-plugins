@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { hydrated } from './i18n-state.helpers';
 
 test('reviewed plugins prioritize everyday workflows and offer stable A–Z opt-in', async ({ page }) => {
   await page.goto('plugins/');
+  await hydrated(page);
   const titles = page.locator('.plugin-grid--plugins .plugin-card__title-link');
   await expect(titles.first()).toBeVisible();
   const featured = (await titles.allTextContents()).slice(0, 9).map(name => name.trim().toLowerCase());
@@ -16,10 +18,23 @@ test('reviewed plugins prioritize everyday workflows and offer stable A–Z opt-
   await page.getByRole('option', { name: 'Name A–Z' }).click();
   await expect.poll(() => new URL(page.url()).searchParams.get('sort')).toBe('name');
   await page.reload();
+  await hydrated(page);
   await expect(titles.first()).toBeVisible();
+  // Prerendered HTML starts in recommended order; wait for the query-restored
+  // list to render before taking a non-retrying allTextContents snapshot.
+  await expect.poll(async () => {
+    const names = (await titles.allTextContents()).map(name => name.trim().toLowerCase());
+    return names.length > 1 && JSON.stringify(names) === JSON.stringify([...names].sort());
+  }).toBe(true);
   const alphabetical = (await titles.allTextContents()).map(name => name.trim().toLowerCase());
   expect(alphabetical).toEqual([...alphabetical].sort());
   await expect(page.locator('.catalog-curation-note')).toHaveCount(0);
+
+  await page.getByRole('combobox', { name: 'Sort plugins' }).click();
+  await page.getByRole('option', { name: 'Recommended', exact: true }).click();
+  await expect.poll(async () => (await titles.allTextContents()).slice(0, 9)
+    .map(name => name.trim().toLowerCase())).toEqual(featured);
+  await expect(page.locator('.catalog-curation-note')).toContainText('not a safety rating');
 
   await page.goto('plugins/?q=github&sort=name');
   await expect(titles.first()).toContainText(/github/i);

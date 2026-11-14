@@ -94,7 +94,10 @@ func (recovery EnablementRecovery) pendingRecord(state domain.StateFileV2, opera
 		Digest: record.rawDigest, AuthorityDigest: record.Hash}, nil
 }
 
-func (recovery EnablementRecovery) ReconcileObserved(ctx context.Context, observed ports.NativeTransitionObservation, state ports.NativeTransitionState) error {
+func (recovery EnablementRecovery) ReconcileObserved(ctx context.Context, observed ports.NativeTransitionObservation, _ ports.NativeTransitionState) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	pending, err := recovery.Pending()
 	if err != nil {
 		return err
@@ -102,8 +105,7 @@ func (recovery EnablementRecovery) ReconcileObserved(ctx context.Context, observ
 	for _, item := range pending {
 		item.EnvironmentID = observed.EnvironmentID
 		if item.Root != "" && reflect.DeepEqual(item, observed) {
-			recovery.State = state
-			return recovery.recoverRecord(ctx, item.OperationID)
+			return errEnablementUnqualified
 		}
 	}
 	return fmt.Errorf("grok native record no longer matches the observed authority")

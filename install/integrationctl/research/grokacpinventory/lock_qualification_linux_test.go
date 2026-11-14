@@ -239,3 +239,38 @@ func TestSupervisorLockRefusesForeignAndMalformedLeaves(t *testing.T) {
 		})
 	}
 }
+
+func TestSupervisorLockRefusalReportsCapturedAuthority(t *testing.T) {
+	for _, fault := range []string{"mode", "hardlink", "owner"} {
+		t.Run(fault, func(t *testing.T) {
+			s, r, path := supervisorLockFixture(t, "locked-writer")
+			want := "lock-file-authority-refused: regular=true mode=0100600 uidgidmatch=true nlink=1 size=0 deviceMatch=true"
+			var err error
+			switch fault {
+			case "mode":
+				err = os.Chmod(path, 0640)
+				want = strings.Replace(want, "mode=0100600", "mode=0100640", 1)
+			case "hardlink":
+				err = os.Link(path, path+"-alias")
+				want = strings.Replace(want, "nlink=1", "nlink=2", 1)
+			case "owner":
+				if os.Geteuid() != 0 {
+					t.Skip("changing the owned fixture leaf's uid requires root")
+				}
+				err = os.Chown(path, r.UID+1, r.GID)
+				want = strings.Replace(want, "uidgidmatch=true", "uidgidmatch=false", 1)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = s.prepareLock(r)
+			if err == nil || err.Error() != want || errors.Unwrap(err) != nil {
+				t.Fatalf("original lock refusal lacks its exact captured facts: %v", err)
+			}
+			if len(err.Error()) > 300 || strings.Contains(err.Error(), path) {
+				t.Fatal("lock refusal exposed a path or exceeded its finite bound")
+			}
+			assertIndependentFlock(t, path, false)
+		})
+	}
+}

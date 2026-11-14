@@ -1,3 +1,4 @@
+import { hasPluginInstallTarget } from './pluginInstallAvailability.ts';
 import type { ClientID, RegistryIndex } from '../types/registry';
 
 export type RegistryProjection =
@@ -19,7 +20,12 @@ export function projectRegistry(
       : projection.kind === 'plugin'
         ? reviewed.filter((plugin) => plugin.name === projection.value)
         : projection.kind === 'client'
-          ? reviewed.filter((plugin) => plugin.client_support.clients.includes(projection.value))
+          ? reviewed.filter((plugin) =>
+              projection.value === 'chatgpt'
+                ? hasPluginInstallTarget(plugin, 'chatgpt') ||
+                  hasPluginInstallTarget(plugin, 'chatgptweb')
+                : hasPluginInstallTarget(plugin, projection.value),
+            )
           : reviewed;
   return {
     ...registry,

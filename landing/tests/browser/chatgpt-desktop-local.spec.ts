@@ -134,6 +134,12 @@ for (const width of [1440, 390]) {
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command.replace(/\s+/g, ' '));
     await expect(card.locator('.desktop-guide')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await card.locator('.plugin-card__title-link').click();
+    const panel = page.locator('.install-panel');
+    await expect(panel.locator('.command-snippet')).toHaveCount(4);
+    for (const action of ['update', 'repair', 'remove'])
+      await expect(panel.locator(`.command-snippet--${action} code`))
+        .toHaveText(new RegExp(`${action} i18n-state-00 --target (chatgpt,chatgptweb|chatgptweb,chatgpt)$`));
     expect(errors).toEqual([]);
   });
 }

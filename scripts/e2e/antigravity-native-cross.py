@@ -1437,6 +1437,69 @@ def admission_contracts():
                             with self.assertRaisesRegex(AssertionError, "Disabled repeat changed"):
                                 public_disabled_repeat_preserved(before, changed)
 
+        def test_cold_repeat_admits_only_original_temp_parent_metadata(self):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); state = root / "uap-state"; state.mkdir(mode=0o700)
+                scratch = root / "tmp"; scratch.mkdir(mode=0o700)
+                (state / "state-v2.json").write_bytes(b"original state")
+                os.utime(scratch, ns=(1_000_000_000, 1_000_000_000))
+                before = public_state_snapshot(root, state)
+                with tempfile.TemporaryDirectory(prefix="agentplugins-package-", dir=scratch) as snapshot:
+                    selected = Path(snapshot) / "root"; selected.mkdir()
+                    (selected / "plugin.json").write_bytes(b"actual sealed snapshot")
+                after = public_state_snapshot(root, state)
+                self.assertNotEqual(before, after)
+                public_cold_repeat_preserved(root, state, before, after)
+                self.assertEqual(before["tmp"][1], after["tmp"][1])
+                self.assertEqual(before["uap-state"], after["uap-state"])
+                with self.assertRaisesRegex(AssertionError, "control root differs"):
+                    public_cold_repeat_preserved(root, root / "foreign", before, after)
+                for domain in (0, 1):
+                    for field in range(12):
+                        changed = dict(after); row = changed["tmp"]
+                        domains = [list(value) for value in row[2]]
+                        value = domains[domain][field]; domains[domain][field] = value + 1 if type(value) is int else 1
+                        changed["tmp"] = row[:2] + (tuple(tuple(value) for value in domains),)
+                        if field in (6, 7, 8):
+                            public_cold_repeat_preserved(root, state, before, changed)
+                        else:
+                            with self.subTest(domain=domain, field=field), self.assertRaisesRegex(AssertionError, "Cold repeat fixture differs") as refused:
+                                public_cold_repeat_preserved(root, state, before, changed)
+                            self.assertLessEqual(len(str(refused.exception).encode()), 512)
+                            self.assertNotIn(str(root), str(refused.exception))
+                changed = dict(after); row = changed["tmp"]
+                changed["tmp"] = (row[0], (row[1][0], row[1][1] + 1, *row[1][2:]), row[2])
+                with self.assertRaises(AssertionError): public_cold_repeat_preserved(root, state, before, changed)
+                changed = dict(after); row = changed["uap-state"]
+                domains = [list(value) for value in row[2]]; domains[0][8] += 1
+                changed["uap-state"] = row[:2] + (tuple(tuple(value) for value in domains),)
+                with self.assertRaises(AssertionError): public_cold_repeat_preserved(root, state, before, changed)
+
+        def test_cold_repeat_retains_all_descendants_and_non_scratch_rows(self):
+            for effect in ("installer-tmp", "nested", "state", "source", "extra", "replacement"):
+                with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                    outer = Path(temporary).resolve(); root = outer / "fixture"; root.mkdir()
+                    state = root / "uap-state"; state.mkdir(mode=0o700)
+                    for relative in ("tmp", "tmp/nested", "uap-state/installer-tmp", "source"):
+                        path = root / relative; path.mkdir(); os.utime(path, ns=(1_000_000_000, 1_000_000_000))
+                    for relative in ("uap-state/state-v2.json", "source/plugin.json", "tmp/original"):
+                        (root / relative).write_bytes(b"original fixture bytes")
+                    before = public_state_snapshot(root, state)
+                    if effect in ("installer-tmp", "nested"):
+                        parent = state / effect if effect == "installer-tmp" else root / "tmp/nested"
+                        child = parent / "snapshot"; child.mkdir(); child.rmdir()
+                    elif effect in ("state", "source"):
+                        (state / "state-v2.json" if effect == "state" else root / "source/plugin.json").write_bytes(b"changed bytes")
+                    elif effect == "extra": (root / "tmp/extra").write_bytes(b"unknown child")
+                    else:
+                        path = root / "tmp/original"; path.rename(outer / "retained")
+                        path.write_bytes(b"original fixture bytes")
+                    with self.assertRaisesRegex(AssertionError, "Cold repeat fixture differs") as refused:
+                        public_cold_repeat_preserved(root, state, before, public_state_snapshot(root, state))
+                    self.assertLessEqual(len(str(refused.exception).encode()), 512)
+                    self.assertNotIn(str(root), str(refused.exception))
+                    self.assertNotIn("fixture bytes", str(refused.exception))
+
         def test_public_control_and_owned_read_refuse_before_any_body(self):
             import types
             with tempfile.TemporaryDirectory() as temporary:
@@ -1832,6 +1895,32 @@ def public_disabled_repeat_preserved(before, after):
         normalized.append(view)
     if normalized[0] != normalized[1]:
         raise AssertionError("Disabled repeat changed original fixture bytes")
+
+
+def public_cold_repeat_preserved(root, state, before, after):
+    """Admit only sealed package snapshots' exact original temporary parent."""
+    if state != root / "uap-state": raise AssertionError("Cold repeat control root differs")
+    def scratch(row):
+        if (type(row) is not tuple or len(row) != 3 or row[0] != "directory"
+                or type(row[1]) is not tuple or len(row[1]) != 5
+                or type(row[2]) is not tuple or len(row[2]) != 2
+                or any(type(domain) is not tuple or len(domain) != 12 for domain in row[2])):
+            raise AssertionError("Cold repeat scratch snapshot shape differs")
+        # Keep original identity/authority in each API domain. Only this exact
+        # directory's size/mtime/ctime may reflect completed scratch cleanup.
+        return row[:2] + (tuple(domain[:6] + domain[9:] for domain in row[2]),)
+    original, current = before.get("tmp"), after.get("tmp")
+    same_scratch = scratch(original) == scratch(current)
+    changed = sorted(name for name in set(before) | set(after) if before.get(name) != after.get(name))
+    other = [name for name in changed if name != "tmp"]
+    if same_scratch and not other: return
+    names = ("device", "inode", "mode", "uid", "gid", "links", "size", "mtime", "ctime", "birthtime", "attributes", "reparse")
+    fields = [domain + "_" + name for domain, old, new in zip(("path", "held"), original[2], current[2])
+              for name, a, b in zip(names, old, new) if a != b]
+    facts = dict(scratch_fields=fields[:6], scratch_field_count=len(fields), other_changed=len(other),
+                 same_members=set(before) == set(after),
+                 first_other_sha256=hashlib.sha256(other[0].encode("utf-8", "surrogatepass")).hexdigest() if other else None)
+    raise AssertionError("Cold repeat fixture differs: " + json.dumps(facts, sort_keys=True))
 
 
 def public_package_object(binding, declared):
@@ -2292,7 +2381,7 @@ def public_user_cold_restore(runtime, executable_dir, parent):
             if public_snapshot(Path(env["HOME"])) != home_before: raise AssertionError("Cold observation changed User profile")
             before = public_state_snapshot(root, state_root, runtime[4])
             public_uap(runtime, root, authority, "uap-cold-repeat")  # Genuine locked no-op; not an inventory observation.
-            if public_state_snapshot(root, state_root, runtime[4]) != before: raise AssertionError("Cold locked repeat changed restored bytes")
+            public_cold_repeat_preserved(root, state_root, before, public_state_snapshot(root, state_root, runtime[4]))
             if any(public_owned_bytes(state_root / name) != body for name, body in agreement.items()):
                 raise AssertionError("Cold restore rewrote its only transferred agreement")
     print('{"public_user_cold_locked_restore":true,"agreement_only_transfer":true,"cold_public_observation":true,"locked_noop_observation_claimed":false}', flush=True)

@@ -66,10 +66,10 @@ for (const width of [1440, 390]) {
       }),
     });
     await expect(managed.locator('.plugin-detail__client')).toHaveText(['Cursor']);
-    await expect(prepared.locator('.plugin-detail__client')).toHaveText(['Codex']);
+    await expect(prepared.locator('.plugin-detail__client')).toHaveText(['Codex CLI', 'ChatGPT Desktop']);
     await expect(detail.locator('.plugin-detail__client').filter({ hasText: 'Kiro' })).toHaveCount(0);
     await expect(detail.locator('.install-outcome')).toContainText('Cursor');
-    await expect(detail.locator('.install-outcome')).toContainText('Codex');
+    await expect(detail.locator('.install-outcome')).toContainText('Codex CLI');
     await expect(detail.locator('.install-command-row .command-snippet--add code')).toContainText('--target codex,cursor');
     expect(errors).toEqual([]);
   });

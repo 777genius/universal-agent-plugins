@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
@@ -57,7 +58,8 @@ func newKiroProjectJourney(t *testing.T, transport *projectJourneyTransport) kir
 
 func newKiroJourney(t *testing.T, transport *projectJourneyTransport, userScope bool) kiroProjectJourney {
 	t.Helper()
-	f := kiroProjectJourney{projectJourney: projectJourney{home: projectJourneyTemp(t), a: projectJourneyTemp(t), b: projectJourneyTemp(t), transport: transport}, protected: map[string]kiroProtectedTree{}}
+	f := kiroProjectJourney{projectJourney: projectJourney{home: projectJourneyTemp(t), a: projectJourneyTemp(t), b: projectJourneyTemp(t), transport: transport},
+		protected: map[string]kiroProtectedTree{}, native: &kiroNoNativeRunner{}}
 	f.cache = filepath.Join(f.home, "uap")
 	for index, root := range []string{"", f.a, f.b} {
 		native := f.kiroRoot(root)
@@ -71,7 +73,6 @@ func newKiroJourney(t *testing.T, transport *projectJourneyTransport, userScope 
 	projectJourneyWrite(t, filepath.Join(user, "settings", "mcp.json"), `{"mcpServers":{"docs":{"url":"https://user-peer.invalid/mcp","disabled":true},"foreign":{"url":"https://foreign.test/mcp","disabled":true}},"foreignPreference":"keep"}`)
 	projectJourneyWrite(t, filepath.Join(user, "skills", "docs", "SKILL.md"), "Original same-name User skill.\n")
 	if userScope {
-		f.native = &kiroNoNativeRunner{}
 		for _, project := range []string{f.a, f.b} {
 			projectJourneyWrite(t, filepath.Join(f.kiroRoot(project), "settings", "mcp.json"), `{"mcpServers":{"uap_user_probe":{"url":"https://project-peer.invalid/mcp","disabled":true},"foreign":{"url":"https://foreign.test/mcp","disabled":true}},"foreignPreference":"keep"}`)
 			projectJourneyWrite(t, filepath.Join(f.kiroRoot(project), "skills", "uap-user-docs", "SKILL.md"), "Original same-name project Skill.\n")
@@ -131,6 +132,8 @@ func (f kiroProjectJourney) assertProtected(t *testing.T) {
 		if f.native.calls != 0 {
 			t.Fatal("file-only Kiro lifecycle executed a native or MCP process")
 		}
+	}
+	if f.foreignMCP != nil {
 		var current map[string]any
 		if err := json.Unmarshal([]byte(projectJourneyRead(t, filepath.Join(f.kiroRoot(""), "settings", "mcp.json"))), &current); err != nil {
 			t.Fatal(err)
@@ -204,14 +207,7 @@ func (f kiroProjectJourney) assertPreparedState(t *testing.T, project string) {
 func (f kiroProjectJourney) assertKiroUserOwned(t *testing.T, skill string) (domain.Installation, domain.ClientBinding) {
 	t.Helper()
 	installation, binding := f.owned(t, "")
-	kind := sourcespec.KindArchive
-	if strings.HasSuffix(f.transport.endpoint, "/repo.git") {
-		kind = sourcespec.KindGit
-	}
-	if installation.Source.SourceKind != string(kind) || installation.Source.SourceURL != f.transport.endpoint || installation.Source.RequestedSource != f.transport.endpoint ||
-		installation.Source.CanonicalSource != sourcespec.Key(kind, f.transport.endpoint, "") || installation.Source.PackageSubpath != "" {
-		t.Fatal("Kiro User source does not match its authored transport identity")
-	}
+	f.assertKiroSourceData(t, "", installation, binding)
 	// User preparation owns exact native file receipts; the historical User
 	// trait does not record a native registration profile root.
 	if binding.Scope != string(domain.ScopeUser) || binding.NativeProfileRoot != "" || binding.InstallIntent != domain.InstallIntentPrepare ||
@@ -313,6 +309,7 @@ func (f kiroProjectJourney) kiroRoot(project string) string {
 func (f kiroProjectJourney) assertKiroOwned(t *testing.T, project, skill, endpoint string) (domain.Installation, domain.ClientBinding) {
 	t.Helper()
 	installation, binding := f.owned(t, project)
+	f.assertKiroSourceData(t, project, installation, binding)
 	if binding.Scope != string(domain.ScopeProject) || binding.NativeProfileRoot != f.kiroRoot(project) || binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
 		t.Fatalf("Kiro project lifecycle lost its exact scope or conservative observation: %+v", binding)
 	}
@@ -333,12 +330,83 @@ func (f kiroProjectJourney) assertKiroOwned(t *testing.T, project, skill, endpoi
 	return installation, binding
 }
 
-// Select inert remote configuration so the composed proof never executes an
-// MCP command, copies a test binary as a launcher, or starts a native client.
+func (f kiroProjectJourney) assertKiroSourceData(t *testing.T, project string, installed domain.Installation, binding domain.ClientBinding) {
+	t.Helper()
+	kind := sourcespec.KindArchive
+	if strings.HasSuffix(f.transport.endpoint, "/repo.git") {
+		kind = sourcespec.KindGit
+	}
+	if installed.Source.SourceKind != string(kind) || installed.Source.SourceURL != f.transport.endpoint || installed.Source.RequestedSource != f.transport.endpoint ||
+		installed.Source.CanonicalSource != sourcespec.Key(kind, f.transport.endpoint, "") || installed.Source.PackageSubpath != "" {
+		t.Fatal("Kiro source does not match its original authored transport")
+	}
+	if binding.PackageRevision == nil || binding.PackageRevision.TreeDigest != installed.Source.TreeDigest ||
+		binding.PackageRevision.ResolvedRevision != installed.Source.ResolvedRevision || binding.PackageRevision.ManifestDigest != installed.Package.ManifestDigest {
+		t.Fatal("Kiro binding revision is detached from its complete source and package")
+	}
+	receipt, ok := installed.DataReceipts[binding.DataReceiptID]
+	if !ok || len(installed.DataReceipts) != 1 || receipt.DataReceiptID != binding.DataReceiptID ||
+		receipt.Scope != binding.Scope || receipt.PhysicalBackend != binding.PhysicalArtifact || receipt.State != domain.DataReceiptOwned {
+		t.Fatal("Kiro binding lacks one exact owned data receipt")
+	}
+	if err := (providers.PluginDataManager{Base: filepath.Join(f.namespace(project), "plugin-data")}).ValidateData(t.Context(), receipt); err != nil {
+		t.Fatal(err)
+	}
+	var marker domain.DataReceipt
+	body, err := atomicfile.ReadBoundedRegularFile(filepath.Join(receipt.Locator, ".agentplugins-data-owner.json"), 4096)
+	if err != nil || json.Unmarshal(body, &marker) != nil || marker != receipt {
+		t.Fatal("Kiro data marker differs from its complete original receipt", err)
+	}
+	if project != "" {
+		if err := kiro.VerifyNativeObjects(f.kiroRoot(project), binding.NativeObjects, false); err != nil {
+			t.Fatal(err)
+		}
+		servers, _, _, _, err := kiro.ReadMCPConfig(filepath.Join(f.kiroRoot(project), "settings", "mcp.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		server, ok := servers["docs_data"].(map[string]any)
+		if !ok {
+			t.Fatal("Kiro Project data component missing")
+		}
+		env, ok := server["env"].(map[string]any)
+		if !ok || env["DATA"] != receipt.Locator || env["PLUGIN_DATA"] != receipt.Locator {
+			t.Fatal("Kiro Project projection lost exact original data authority")
+		}
+	}
+	packages := 0
+	for _, object := range binding.NativeObjects {
+		if object.Kind == "managed_package_directory" {
+			packages++
+			if object.Path != binding.TargetLocator || object.LogicalName != installed.DeclaredName || object.ProtectionClass != "managed" || object.UserModified || object.ManagedDigest == "" {
+				t.Fatal("Kiro managed package lacks its original ownership")
+			}
+			if err := f.app.Lifecycle.Stager.Verify(t.Context(), binding.TargetLocator, object.ManagedDigest); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if packages != 1 {
+		t.Fatal("Kiro requires one exact managed package receipt")
+	}
+}
+
+func (f kiroProjectJourney) rememberKiroData(t *testing.T, project string, installed domain.Installation) {
+	t.Helper()
+	projectJourneyDataMarker(t, f.projectJourney, project, installed)
+	for _, receipt := range installed.DataReceipts {
+		// Hold the original directory, owner marker and user bytes through every
+		// later command; identical replacement bytes cannot establish continuity.
+		f.preserve(t, receipt.Locator)
+	}
+}
+
+// The remote component and never-executed stdio component exercise real data
+// ownership. A rejecting runner prevents native or MCP execution in both scopes.
 func kiroProjectCommitSource(t *testing.T, transport *projectJourneyTransport, skill, endpoint string) {
 	t.Helper()
 	projectJourneyWrite(t, filepath.Join(transport.repo, "skills", "docs", "SKILL.md"), skill)
-	projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"`+endpoint+`"}}}`)
+	projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"streamable-http","url":"`+endpoint+`"},"docs_data":{"type":"stdio","command":"go","args":["version"],"env":{"DATA":"${PLUGIN_DATA}"}}}}`)
 	projectJourneyGit(t, transport.repo, "add", ".")
 	projectJourneyGit(t, transport.repo, "commit", "-m", "select inert Kiro project components")
 	projectJourneyGit(t, transport.repo, "push", "--quiet", transport.remote, "main")

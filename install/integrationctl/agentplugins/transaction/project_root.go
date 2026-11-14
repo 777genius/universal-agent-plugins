@@ -197,7 +197,7 @@ func verifyNativeRoot(ctx context.Context, root string, marker domain.NativeObje
 	if digestNativeRoot(child, parent, root, marker.ManagedDigest) != expected {
 		return fmt.Errorf("native root physical publication changed")
 	}
-	body, err := child.readMarker(filepath.Base(marker.Path), 4096)
+	body, err := child.readMarker(filepath.Base(marker.Path))
 	if err != nil || fmt.Sprintf("%x", sha256.Sum256(body)) != marker.ManagedDigest {
 		return errors.Join(err, fmt.Errorf("native root marker changed"))
 	}

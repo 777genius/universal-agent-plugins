@@ -32,6 +32,9 @@ func (kernel Kernel) persistCommitDecision(desired domain.StateFileV2, beforeJSO
 	if initialErr == nil {
 		return false, nil
 	}
+	if err := kernel.validatePublicationParents(context.Background(), desired); err != nil {
+		return false, fmt.Errorf("state save failed: %w; publication authority unavailable: %w", initialErr, err)
+	}
 	observed, loadErr := kernel.StateStore.Load()
 	if loadErr != nil {
 		return false, fmt.Errorf("state save failed (%v) and commit visibility is unknown: %w", fmt.Sprint(initialErr), loadErr)

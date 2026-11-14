@@ -9,6 +9,7 @@ import { generatedRoot, sourceRoot, repoRoot } from "../config/site.mjs";
 import { listMarkdownFiles } from "../lib/fs.mjs";
 import { readFrontmatter } from "../lib/site-model.mjs";
 import { localeCodes, localeDestination, localeFromPath, preferredLocale } from "../../.vitepress/theme/components/locale-routes.mjs";
+import { gotoLocaleReady } from "./locale-browser.mjs";
 
 const routeFor = (relative) => `/${relative.replace(/index\.md$/, "").replace(/\.md$/, "")}`;
 const routes = new Map();
@@ -132,4 +133,101 @@ test("language switches retain only fragments attested in the destination page",
   assert.equal(localeDestination(entity, "ar", "#%broken").path, "/ar/build/");
   assert.equal(localeDestination(entity, "hi", "#build-from-source").path, "/en/build/#build-from-source");
   assert.equal(localeDestination(null, "ar", "#build-from-source").path, "/ar/");
+});
+
+function navigationFixture(t, state = {}) {
+  let now = 0;
+  let currentURL;
+  const calls = [];
+  const response = { status: () => 200 };
+  t.mock.method(performance, "now", () => now);
+  const page = {
+    url: () => currentURL,
+    async goto(url, options) {
+      calls.push({ method: "goto", url, options });
+      if (options.waitUntil === "networkidle") throw new Error("network remains busy");
+      if (state.loading) throw new Error("document still loading");
+      now += state.navigationMs ?? 0;
+      currentURL = state.destination ?? url;
+      return response;
+    },
+    async waitForFunction(predicate, payload, options) {
+      calls.push({ method: "readiness", payload, options });
+      now += state.readinessMs ?? 0;
+      const ready = vm.runInNewContext(`(${predicate.toString()})(payload)`, {
+        payload, location: { href: currentURL }, document: {
+          querySelector(selector) {
+            if (selector === "#app") return state.unhydrated ? {} : { __vue_app__: {} };
+            if (state.missing || selector !== (state.selector ?? ".vp-doc h1")) return null;
+            return { getClientRects: () => state.hidden ? [] : [{}] };
+          }
+        }
+      });
+      if (!ready) throw new Error("interface not ready before deadline");
+      if (state.afterReadyURL) currentURL = state.afterReadyURL;
+    }
+  };
+  return { page, calls, response };
+}
+
+test("locale navigation admits the existing ready interface while background network stays busy", async t => {
+  const url = "http://127.0.0.1:43105/universal-agent-plugins/docs/hi/use/";
+  const fixture = navigationFixture(t, { navigationMs: 400, readinessMs: 600 });
+  await assert.rejects(fixture.page.goto(url, { waitUntil: "networkidle" }), /network remains busy/);
+  assert.equal(await gotoLocaleReady(fixture.page, url), fixture.response);
+  assert.deepEqual(fixture.calls[1], { method: "goto", url, options: { waitUntil: "domcontentloaded", timeout: 30_000 } });
+  assert.equal(fixture.calls[2].options.timeout, 29_600);
+});
+
+test("locale navigation requires the actual URL and hydrated visible interface", async t => {
+  const url = "http://127.0.0.1:43105/universal-agent-plugins/docs/hi/use/?probe=one#use-plugins";
+  const refused = {
+    origin: { destination: url.replace("43105", "43106") },
+    path: { destination: url.replace("/hi/", "/en/") },
+    query: { destination: url.replace("probe=one", "probe=two") },
+    fragment: { destination: url.replace("#use-plugins", "#foreign") },
+    loading: { loading: true },
+    unhydrated: { unhydrated: true },
+    missing: { missing: true },
+    hidden: { hidden: true },
+    movedAfterReady: { afterReadyURL: url.replace("/hi/", "/en/") }
+  };
+  for (const [name, state] of Object.entries(refused)) await t.test(name, async child => {
+    const { page } = navigationFixture(child, state);
+    await assert.rejects(gotoLocaleReady(page, url), /not ready|still loading|changed its expected URL/);
+  });
+});
+
+test("locale readiness keeps one finite navigation budget including late completion", async t => {
+  const url = "http://127.0.0.1:43105/universal-agent-plugins/docs/en/use/";
+  for (const [name, state, expectedCalls] of [
+    ["navigation consumes the budget", { navigationMs: 30_000 }, 1],
+    ["readiness arrives on deadline", { navigationMs: 29_999, readinessMs: 1 }, 2],
+    ["readiness arrives after deadline", { navigationMs: 29_000, readinessMs: 1_001 }, 2]
+  ]) await t.test(name, async child => {
+    const { page, calls } = navigationFixture(child, state);
+    await assert.rejects(gotoLocaleReady(page, url), /30-second readiness budget/);
+    assert.equal(calls.length, expectedCalls);
+    for (const call of calls) assert.ok(call.options.timeout > 0 && call.options.timeout <= 30_000);
+  });
+});
+
+test("locale readiness preserves the exercised direct alias and manual gateway contracts", async t => {
+  await t.test("initial html spelling keeps the exact requested browser URL", async child => {
+    const url = "http://127.0.0.1:43105/universal-agent-plugins/docs/hi/guide/quickstart.html?probe=one#build-plugins";
+    const { page, calls } = navigationFixture(child);
+    await gotoLocaleReady(page, url);
+    assert.equal(calls[0].url, url);
+    assert.equal(calls[1].payload.href, url);
+  });
+  await t.test("an unrequested clean-URL redirect cannot satisfy direct alias readiness", async child => {
+    const url = "http://127.0.0.1:43105/universal-agent-plugins/docs/hi/guide/quickstart.html?probe=one#build-plugins";
+    const { page } = navigationFixture(child, { destination: url.replace("quickstart.html", "quickstart") });
+    await assert.rejects(gotoLocaleReady(page, url), /not ready/);
+  });
+  await t.test("manual gateway uses its existing visible target", async child => {
+    const { page, calls } = navigationFixture(child, { selector: ".language-gateway" });
+    await gotoLocaleReady(page, "http://127.0.0.1:43105/universal-agent-plugins/docs/?gateway=manual", ".language-gateway");
+    assert.equal(calls[1].payload.selector, ".language-gateway");
+  });
 });

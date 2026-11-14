@@ -14,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
 
 func clineCycleState(raw []byte) (domain.StateFileV2, error) {
@@ -224,16 +223,21 @@ func (c *clineProjectCycle) configProof(t *testing.T, r *clineCycleRecipe, insta
 		return nil
 	}
 	entry, ok := servers["uapclinea"].(map[string]any)
-	env := map[string]any{"PLUGIN_ROOT": r.Active, "PLUGIN_DATA": r.Data, "UAP_TEST_ROOT": c.f.base.Root, "UAP_TEST_EVENTS": c.f.base.Events, "UAP_TEST_NONCE": r.Nonce, "UAP_TEST_REVISION": r.Revision}
-	// Project stdio uses the owned managed launcher; the original bundled
-	// command is a positional child argument, never the executable Cline runs.
-	launcher := filepath.Join(r.Active, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
-	args := []any{managedstdio.Mode, r.Active, r.Data, r.Active, "plugin", "--", "./bin/probe", "Owned Cline " + r.Scope, r.Active + "/argument"}
-	if !ok || clineAttemptServer(entry, launcher, r.Active, args, env) != nil {
+	if !ok || c.exactCycleServer(r, entry) != nil {
 		t.Fatal("Cline cycle exact source-bound transport differs")
 	}
 	return entry
 }
+
+func (c *clineProjectCycle) exactCycleServer(r *clineCycleRecipe, entry map[string]any) error {
+	// Independently pin the installed wrapper protocol and the original authored
+	// command; the production argument builder must not define this oracle.
+	command := filepath.Join(r.Active, "io.github.777genius.agentplugins", "managed-stdio-v1", "agentplugins")
+	args := []any{"--internal-stdio-v1", r.Active, r.Data, r.Active, "plugin", "--", "./bin/probe", "Owned Cline " + r.Scope, r.Active + "/argument"}
+	env := map[string]any{"PLUGIN_ROOT": r.Active, "PLUGIN_DATA": r.Data, "UAP_TEST_ROOT": c.f.base.Root, "UAP_TEST_EVENTS": c.f.base.Events, "UAP_TEST_NONCE": r.Nonce, "UAP_TEST_REVISION": r.Revision}
+	return clineAttemptServer(entry, command, r.Active, args, env)
+}
+
 func (c *clineProjectCycle) foreign(t *testing.T, r *clineCycleRecipe) {
 	t.Helper()
 	c.configProof(t, r, r.Active != "" && !r.Removed)

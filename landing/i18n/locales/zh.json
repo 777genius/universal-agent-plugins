@@ -592,9 +592,10 @@
       "selected": "已选 {count} 项",
       "auto": "自动检测",
       "choose": "或指定客户端",
-      "automaticHelp": "CLI 会检查插件与已安装客户端的兼容性，跳过不兼容的客户端，再让你确认安装目标。只有插件提供了经过验证的连接时，才会包含 ChatGPT。",
-      "manualHelp": "选择需要安装此插件的客户端，至少保留一个选项。",
-      "summary": "{label}：{summary}"
+      "automaticHelp": "CLI 会检查已安装的本地智能体，并让你确认兼容的目标。ChatGPT Desktop 在本地运行；ChatGPT Web 的设置需在 ChatGPT 内完成。",
+      "manualHelp": "选择要安装到的智能体。必须保留至少一个选项。",
+      "summary": "{label}：{summary}",
+      "manualHelpWithAuto": "选择要安装到的智能体。清除最后一个选项，即可在终端中选择。"
     },
     "command": {
       "terminal": "终端",
@@ -705,7 +706,8 @@
       "noMatches": "没有匹配项 · 总计 {total}",
       "shown": "已显示 {shown} 个 · 共 {total} 个插件 | 已显示 {shown} 个 · 共 {total} 个插件",
       "shownMatching": "已显示 {shown} 个 · 匹配 {matching} 个 · 共 {total} 个",
-      "matching": "匹配 {matching} 个 · 共 {total} 个"
+      "matching": "匹配 {matching} 个 · 共 {total} 个",
+      "agentScopeHint": "结果可能提供安装到本机或项目中的选项。请在插件的安装选项中选择范围。"
     },
     "card": {
       "foundOnGithub": "在 GitHub 上找到",
@@ -829,7 +831,8 @@
         }
       },
       "noCompatibleSignedRelease": "UAP 支持 {agent}，但此插件没有适用于所选安装范围的兼容签名版本。",
-      "piPinnedProjectSource": "项目：使用此插件固定到具体 SHA 的 Git 源安装到 Pi（不是已签名的 Pi 目标）；CLI 会检查兼容性。"
+      "piPinnedProjectSource": "项目：使用此插件固定到具体 SHA 的 Git 源安装到 Pi（不是已签名的 Pi 目标）；CLI 会检查兼容性。",
+      "guidedChatgptSetup": "引导式 ChatGPT Web 设置；请在 ChatGPT 内完成连接。"
     },
     "authentication": {
       "not_required": "无需帐户",
@@ -1015,7 +1018,9 @@
       "schemaName": "{name} Agent Plugin 软件包",
       "directory": "插件目录",
       "version": "版本 {version}",
-      "reviewedListingTooltip": "已审核条目及元数据。这不代表对插件代码、行为或安全性的认证。"
+      "reviewedListingTooltip": "已审核条目及元数据。这不代表对插件代码、行为或安全性的认证。",
+      "exactGitProjectSource": "用于项目的确切 Git 源",
+      "signedProjectRelease": "用于项目的签名版本"
     },
     "community": {
       "breadcrumb": "导航路径",
@@ -1063,10 +1068,13 @@
       "vendorDocs": "阅读 {name} 文档",
       "availableFor": "适用于 {name} 的插件",
       "count": "{count} 个已审核的软件包支持此客户端。 | {count} 个已审核的软件包支持此客户端。",
-      "tryPlugin": "可先试用 Context7，或将 {source} 替换为其他兼容插件经过审核的短名称或完整包的源地址。",
+      "tryPlugin": "试用 {source}，或使用其他兼容插件经过审核的短名称或完整包源。",
       "localPackageHint": "将 ./my-plugin 替换为有效 Agent Plugins 1.0 包的路径。",
-      "piSignedCount": "Pi 已签名目录包：{count}",
-      "piDirectSourceNote": "此处仅显示已签名目录发行版明确支持 Pi 的包。兼容的 Skills、MCP 服务器和扩展也可从本地包或固定的 Git 提交安装；CLI 会独立验证这些来源。"
+      "piSignedCount": "提供 Pi 安装或设置选项的包：{count}",
+      "piDirectSourceNote": "可用选项可能包括用户或项目范围内的签名版本或确切 Git 源。CLI 会检查兼容性和设置要求；Git 源不代表已获得 Pi 签名授权。",
+      "packageExampleSourceHint": "请先在 ./my-plugin 创建兼容的 Agent Plugins 包。此处没有适用于该智能体的签名目录示例；CLI 会检查包的组件、安装范围和设置要求。",
+      "pinnedProjectHint": "部分列出的插件提供用于项目安装的确切 Git 源。这不表示签名目录已授权 Pi 支持。",
+      "skillsGuide": "安装单独的 Skills"
     },
     "components": {
       "extensions": "扩展",

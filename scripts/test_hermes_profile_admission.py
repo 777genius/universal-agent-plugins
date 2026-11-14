@@ -1469,6 +1469,96 @@ class BundledRuntimeContracts(unittest.TestCase):
 
 
 class PublicLifecycleContracts(unittest.TestCase):
+    def test_public_stdio_recipe_keeps_original_probe_authority(self):
+        import hashlib
+        for suffix in ("", ".exe"):
+            with self.subTest(suffix=suffix), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve() / "original build root"; root.mkdir()
+                environment = {}
+                for role, path_key, hash_key in (
+                    ("uap", "UAP_BIN", "UAP_HERMES_COLD_UAP_SHA256"),
+                    ("cold", "UAP_HERMES_COLD_TEST_BIN", "UAP_HERMES_COLD_TEST_SHA256"),
+                    ("probe", "UAP_HERMES_MCP_PROBE_BIN", "UAP_HERMES_MCP_PROBE_SHA256")):
+                    path = root / (("hermes-mcp-probe" if role == "probe" else role) + suffix)
+                    body = role.encode(); path.write_bytes(body); path.chmod(0o700)
+                    environment[path_key] = str(path)
+                    environment[hash_key] = hashlib.sha256(body).hexdigest()
+                with mock.patch.dict(os.environ, environment):
+                    pins = CASE["public_runtime_pins"]()
+                    for scope in ("a", "b"):
+                        project = root.parent / ("project-" + scope)
+                        recipe = CASE["public_stdio_recipe"](project, pins["probe"], "original-nonce")
+                        self.assertEqual(recipe, {"type": "stdio", "command": "hermes-mcp-probe" + suffix,
+                            "args": [], "env": {"PATH": str(root), "UAP_TEST_ROOT": str(project),
+                            "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": "original-nonce"}})
+                        self.assertEqual(recipe["env"]["PATH"].split(os.pathsep), [str(root)])
+                    self.assertEqual(CASE["public_runtime_pins"](pins), pins)
+                    probe = Path(pins["probe"]["path"])
+                    original = probe.read_bytes(); probe.rename(root / "original-probe")
+                    probe.write_bytes(original); probe.chmod(0o700)
+                    with mock.patch.dict(CASE["public_runtime_pins"].__globals__,
+                            ordinary_bytes=mock.Mock(side_effect=AssertionError("replacement body read"))), \
+                            self.assertRaisesRegex(RuntimeError, "original public runtime changed"):
+                        CASE["public_runtime_pins"](pins, rehash=False)
+
+    def test_continuity_rejects_individually_valid_but_detached_state_and_data(self):
+        import copy
+        import shutil
+        for effect in ("unchanged", "canonical", "requested", "source-id", "data-owner", "binding-id", "created", "data-directory", "receipt-history", "typed-package"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer = Path(temporary).resolve() / "outer"; outer.mkdir()
+                project, state_path, state, _, pins = self.fixture(outer)
+                state["installations"][0]["package"]["inventory"] = {"mcp_present": True}
+                state_path.write_bytes(json.dumps(state).encode())
+                _, previous = CASE["public_snapshot"](outer, {"a": project}, pins)
+                changed = copy.deepcopy(state)
+                installed = changed["installations"][0]
+                if effect == "canonical": installed["source"]["canonical_source"] = "different-canonical"
+                elif effect == "requested": installed["source"]["requested_source"] = "different-request"
+                elif effect == "source-id": installed["source"]["source_binding_id"] = "different-source"
+                elif effect == "data-owner":
+                    installed["data_receipts"]["data"]["ownership_digest"] = "sha256:" + "0" * 64
+                    (previous["a"]["data"] / ".agentplugins-data-owner.json").write_bytes(json.dumps(installed["data_receipts"]["data"]).encode())
+                elif effect == "binding-id":
+                    binding = installed["clients"].pop("binding")
+                    binding["client_binding_id"] = "different-binding"
+                    binding["receipts"][0]["client_binding_id"] = "different-binding"
+                    installed["clients"]["different-binding"] = binding
+                    changed["transaction_receipts"][0]["client_binding_id"] = "different-binding"
+                elif effect == "created": installed["created_at"] = "different-creation"
+                elif effect == "receipt-history": installed["clients"]["binding"]["receipts"][0]["operation_id"] = "changed-history"
+                elif effect == "typed-package": installed["package"]["inventory"]["mcp_present"] = 1
+                elif effect == "data-directory":
+                    original = previous["a"]["data"]
+                    original.rename(outer.parent / "original-data")
+                    shutil.copytree(outer.parent / "original-data", original)
+                state_path.write_bytes(json.dumps(changed).encode())
+                # Both complete package/receipt snapshots remain individually
+                # admissible. Only the original cross-operation identity closes
+                # this gap; no native executable or capability is faked here.
+                _, current = CASE["public_snapshot"](outer, {"a": project}, pins)
+                if effect == "unchanged": CASE["public_continuity"](previous["a"], current["a"])
+                else:
+                    with self.assertRaisesRegex(RuntimeError, "public original"):
+                        CASE["public_continuity"](previous["a"], current["a"])
+
+    def test_local_update_can_advance_only_revision_facts_after_snapshot_validation(self):
+        import copy
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve()
+            project, _, _, _, pins = self.fixture(outer)
+            _, proofs = CASE["public_snapshot"](outer, {"a": project}, pins)
+            original, changed = proofs["a"], copy.deepcopy(proofs["a"])
+            changed["installed"]["source"]["tree_digest"] = "sha256:" + "1" * 64
+            changed["installed"]["package"].update(version="1.1.0", manifest_digest="sha256:" + "2" * 64)
+            changed["binding"]["package_revision"].update(tree_digest="sha256:" + "1" * 64, version="1.1.0", manifest_digest="sha256:" + "2" * 64)
+            CASE["public_continuity"](original, changed, advance=True)
+            with self.assertRaisesRegex(RuntimeError, "source/package"):
+                CASE["public_continuity"](original, changed)
+            changed["installed"]["source"]["canonical_source"] = "detached-origin"
+            with self.assertRaisesRegex(RuntimeError, "source/package"):
+                CASE["public_continuity"](original, changed, advance=True)
+
     def test_source_capture_keeps_its_original_probe_family_without_public_runtime(self):
         import sys
         for source in (True, False):
@@ -1637,7 +1727,7 @@ class PublicLifecycleContracts(unittest.TestCase):
     def test_stdio_events_require_actual_pair_nonce_fresh_session_and_no_tool_claim(self):
         import copy
         with tempfile.TemporaryDirectory() as temporary:
-            path=Path(temporary)/'events';nonce='c'*64
+            path=Path(temporary).resolve()/'events';nonce='c'*64
             rows=[dict(method=method,pid=42,session='42-123',nonce=nonce,timestamp='2026-11-13T23:50:00Z',facts=None) for method in ('initialize','tools/list')]
             def write(value):path.write_bytes(b''.join(json.dumps(row).encode()+b'\n' for row in value))
             write(rows);self.assertEqual(CASE['public_stdio_events'](path,nonce),rows)
@@ -1890,6 +1980,126 @@ class SourceRuntimeContracts(unittest.TestCase):
     def capture(self, outer, policy):
         import time
         return CASE["payload_snapshot"](outer, CASE["directory_identity"](outer), time.monotonic() + 10, source=policy)
+
+    def test_source_empty_file_keeps_readable_handle_and_both_stat_fences(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, _, original, _, policy = self.fixture(temporary)
+            wanted = original / "installs/empty-ordinary-member"; wanted.write_bytes(b"")
+            before, actual_read, actual_stat = wanted.stat(), os.read, os.fstat
+            for capture_source in (policy, None):
+                with self.subTest(source=capture_source is not None):
+                    reads, held = [], []
+                    error = PermissionError(13, "inert beyond-EOF byte lock")
+                    def observed_stat(fd):
+                        info = actual_stat(fd)
+                        if (info.st_dev, info.st_ino) == (before.st_dev, before.st_ino): held.append(fd)
+                        return info
+                    def read(fd, count):
+                        info = actual_stat(fd)
+                        if (info.st_dev, info.st_ino) == (before.st_dev, before.st_ino):
+                            reads.append(count)
+                            raise error
+                        return actual_read(fd, count)
+                    with mock.patch.object(os, "read", side_effect=read), mock.patch.object(os, "fstat", side_effect=observed_stat):
+                        if capture_source is None:
+                            with self.assertRaises(PermissionError) as refused: self.capture(outer, None)
+                            self.assertIs(refused.exception, error); self.assertEqual(reads, [1])
+                        else:
+                            captured = self.capture(outer, policy)["_records"][wanted.relative_to(outer).as_posix()]
+                            self.assertEqual(captured["sha256"], hashlib.sha256(b"").hexdigest())
+                            self.assertEqual(captured["identity"], CASE["stable_file"](before))
+                            self.assertEqual(reads, []); self.assertEqual(len(held), 2)
+                    self.assertTrue(held)
+                    with self.assertRaises(OSError): actual_stat(held[-1])
+
+    def test_source_empty_file_changes_keep_original_authority(self):
+        for change in ("grow", "replace", "parent"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                runner, outer, _, original, _, policy = self.fixture(temporary)
+                wanted = original / "installs/empty-ordinary-member"; wanted.write_bytes(b"")
+                before, actual = wanted.stat(), os.fstat
+                changed, denied = [], []
+                moved = runner / "original-member"
+                def mutate(fd):
+                    info = actual(fd)
+                    if not changed and (info.st_dev, info.st_ino) == (before.st_dev, before.st_ino):
+                        changed.append(fd)
+                        if change == "grow": wanted.write_bytes(b"new byte")
+                        elif change == "replace":
+                            wanted.rename(moved); wanted.write_bytes(b"")
+                        else:
+                            try: outer.rename(moved)
+                            except OSError as error:
+                                if os.name != "nt" or getattr(error, "winerror", None) != 32: raise
+                                denied.append(error)
+                                self.assertFalse(moved.exists())
+                                self.assertEqual(CASE["stable_file"](wanted.stat()), CASE["stable_file"](before))
+                            else: outer.mkdir()
+                    return info
+                with mock.patch.object(os, "fstat", side_effect=mutate):
+                    if change == "parent" and os.name == "nt":
+                        captured = self.capture(outer, policy)
+                        self.assertEqual(len(denied), 1)
+                        self.assertEqual(captured["_records"][wanted.relative_to(outer).as_posix()]["identity"], CASE["stable_file"](before))
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "payload|inventory|directory"):
+                            self.capture(outer, policy)
+                self.assertEqual(len(changed), 1)
+                with self.assertRaises(OSError): actual(changed[0])
+                if change == "replace":
+                    self.assertEqual(wanted.read_bytes(), b""); self.assertEqual(moved.read_bytes(), b"")
+                    self.assertEqual((moved.stat().st_dev, moved.stat().st_ino), (before.st_dev, before.st_ino))
+
+    def test_source_empty_file_still_requires_successful_original_open(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, _, original, _, policy = self.fixture(temporary)
+            wanted = original / "installs/empty-ordinary-member"; wanted.write_bytes(b"")
+            before, calls = wanted.stat(), []
+            error = PermissionError(13, "inert initial open refusal")
+            actual_open, actual_member = os.open, CASE["artifacts"].open_member
+            def checked(opened):
+                def call(path, *args, **kwargs):
+                    if Path(path).name == wanted.name:
+                        calls.append(path)
+                        raise error
+                    return opened(path, *args, **kwargs)
+                return call
+            with mock.patch.object(os, "open", side_effect=checked(actual_open)), \
+                    mock.patch.object(CASE["artifacts"], "open_member", side_effect=checked(actual_member)), \
+                    self.assertRaises(PermissionError) as refused:
+                self.capture(outer, policy)
+            self.assertIs(refused.exception, error); self.assertEqual(len(calls), 1)
+            self.assertEqual(CASE["stable_file"](wanted.stat()), CASE["stable_file"](before))
+
+    @unittest.skipUnless(os.name == "nt", "actual Windows CRT byte-range lock")
+    def test_windows_source_empty_lease_has_no_locked_byte_to_capture(self):
+        import hashlib
+        import msvcrt
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, _, original, _, policy = self.fixture(temporary)
+            lease = original / "installs/generation/.leases" / ("a" * 32)
+            lease.parent.mkdir(parents=True)
+            for body in (b"", b"x"):
+                with self.subTest(bytes=len(body)):
+                    owner = os.open(lease, os.O_CREAT | os.O_EXCL | os.O_RDWR | os.O_BINARY, 0o600)
+                    try:
+                        os.write(owner, body); os.lseek(owner, 0, os.SEEK_SET)
+                        msvcrt.locking(owner, msvcrt.LK_NBLCK, 1)
+                        reader = CASE["artifacts"].open_member(lease)
+                        try:
+                            self.assertEqual(os.fstat(reader).st_size, len(body))
+                            with self.assertRaises(PermissionError) as refused: os.read(reader, 1)
+                            self.assertEqual(refused.exception.errno, 13)
+                        finally: os.close(reader)
+                        if body:
+                            with self.assertRaises(PermissionError): self.capture(outer, policy)
+                        else:
+                            captured = self.capture(outer, policy)["_records"][lease.relative_to(outer).as_posix()]
+                            self.assertEqual(captured["sha256"], hashlib.sha256(b"").hexdigest())
+                            self.assertEqual(captured["identity"][4], 0)
+                    finally:
+                        os.close(owner); lease.unlink()
 
     def test_source_read_refusal_preserves_original_error_offset_and_closed_fd(self):
         import time

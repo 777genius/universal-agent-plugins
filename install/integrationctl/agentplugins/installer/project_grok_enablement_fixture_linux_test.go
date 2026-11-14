@@ -238,3 +238,36 @@ func (native *grokEnableSDKNative) plugins(project string) ([]map[string]any, er
 	}
 	return rows, nil
 }
+
+// Capture original bytes and inode/mode/mtime, plus both native call counters.
+func snapshotGrokSDKFiles(t *testing.T, f *grokEnableSDKFixture, paths ...string) func() {
+	t.Helper()
+	type original struct {
+		body string
+		info os.FileInfo
+	}
+	originals := make(map[string]original, len(paths))
+	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		originals[path] = original{body: deathRead(t, path), info: info}
+	}
+	calls, duplex := f.native.calls, f.native.duplex
+	return func() {
+		t.Helper()
+		if f.native.calls != calls || f.native.duplex != duplex {
+			t.Fatal("refusal called the native client")
+		}
+		for path, before := range originals {
+			after, err := os.Stat(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if deathRead(t, path) != before.body || !os.SameFile(before.info, after) || before.info.Mode() != after.Mode() || !before.info.ModTime().Equal(after.ModTime()) {
+				t.Fatalf("refusal changed original file %s: error=%v bytes=%t identity=%t mode=%t mtime=%t", path, err, deathRead(t, path) != before.body, !os.SameFile(before.info, after), before.info.Mode() != after.Mode(), !before.info.ModTime().Equal(after.ModTime()))
+			}
+		}
+	}
+}

@@ -16,6 +16,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -150,6 +151,7 @@ func TestProjectHermesBundleColdRestoreAndRepair(t *testing.T) {
 	original := newHermesColdJourney(t, input, transport)
 	original.run(t, original.a, "add", transport.endpoint, "--alias", "docs", "--target", "hermes", "--yes")
 	installed, _, servers := hermesColdOwned(t, original, endpoint.URL+"/mcp")
+	input.rememberData(t, installed)
 	input.unchanged(t)
 	input.inspect(t, original, "original-inspect", servers)
 	pair := original.assertPortablePair(t, original.a)
@@ -162,15 +164,21 @@ func TestProjectHermesBundleColdRestoreAndRepair(t *testing.T) {
 	projectJourneyAbsent(t, cold.cache, filepath.Join(cold.a, ".uap"))
 	cold.run(t, cold.a, "deps", "import", exchange, "--install", "--yes")
 	restored, _, servers := hermesColdOwned(t, cold, endpoint.URL+"/mcp")
-	if restored.Source != installed.Source || restored.Package.ManifestDigest != installed.Package.ManifestDigest ||
+	if restored.Source != installed.Source || !reflect.DeepEqual(restored.Package, installed.Package) ||
 		restored.InstallationID == installed.InstallationID || pair != cold.assertPortablePair(t, cold.a) {
 		t.Fatal("cold restore changed exact source/pins or reused the original installation")
 	}
-	input.unchanged(t)
-	input.inspect(t, cold, "cold-inspect", servers)
 	for _, receipt := range restored.DataReceipts {
+		for _, previous := range installed.DataReceipts {
+			if receipt.Locator == previous.Locator || receipt.DataReceiptID == previous.DataReceiptID {
+				t.Fatal("cold Hermes restore reused the original world's data authority")
+			}
+		}
 		projectJourneyWrite(t, filepath.Join(receipt.Locator, "cold-retained.txt"), "retained cold project data\n")
 	}
+	input.rememberData(t, restored)
+	input.unchanged(t)
+	input.inspect(t, cold, "cold-inspect", servers)
 	hermesColdRepeatAndRepair(t, input, cold, restored, endpoint.URL+"/mcp", pair)
 	restored, binding, _ := hermesColdOwned(t, cold, endpoint.URL+"/mcp")
 	publications := cold.state(t, cold.a).TransactionReceipts
@@ -192,6 +200,16 @@ func TestProjectHermesBundleColdRestoreAndRepair(t *testing.T) {
 func hermesColdOwned(t *testing.T, journey projectJourney, endpoint string) (domain.Installation, domain.ClientBinding, map[string]any) {
 	t.Helper()
 	installation, binding := journey.owned(t, journey.a)
+	receipt, hasData := installation.DataReceipts[binding.DataReceiptID]
+	if !hasData || len(installation.DataReceipts) != 1 || receipt.DataReceiptID != binding.DataReceiptID ||
+		receipt.Scope != "project" || receipt.PhysicalBackend != binding.PhysicalArtifact || receipt.State != domain.DataReceiptOwned {
+		t.Fatal("Hermes cold binding lacks one exact retained data authority")
+	}
+	var marker domain.DataReceipt
+	body, err := atomicfile.ReadBoundedRegularFile(filepath.Join(receipt.Locator, ".agentplugins-data-owner.json"), 4096)
+	if err != nil || json.Unmarshal(body, &marker) != nil || marker != receipt {
+		t.Fatal("Hermes cold data marker differs from its complete receipt", err)
+	}
 	if binding.ClientID != "hermes" || binding.Scope != "project" ||
 		binding.NativeProfileRoot != filepath.Join(journey.a, ".hermes") ||
 		binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled ||
@@ -269,6 +287,7 @@ func hermesColdAdvance(t *testing.T, transport *projectJourneyTransport) {
 
 func hermesColdRepeatAndRepair(t *testing.T, input *hermesColdInputs, journey projectJourney, original domain.Installation, endpoint string, pair [2]string) {
 	t.Helper()
+	_, originalBinding, _ := hermesColdOwned(t, journey, endpoint)
 	statePath := filepath.Join(journey.a, ".uap", "state-v2.json")
 	before := projectJourneyRead(t, statePath)
 	journey.run(t, journey.a, "deps", "sync", "--locked", "--yes")
@@ -276,7 +295,10 @@ func hermesColdRepeatAndRepair(t *testing.T, input *hermesColdInputs, journey pr
 		t.Fatal("unchanged locked replay rewrote its source agreement or receipts")
 	}
 	input.unchanged(t)
-	_, binding, _ := hermesColdOwned(t, journey, endpoint)
+	repeated, binding, _ := hermesColdOwned(t, journey, endpoint)
+	if !hermesColdContinues(original, repeated, originalBinding, binding) {
+		t.Fatal("Hermes locked repeat changed original installation/binding/data authority")
+	}
 	for _, path := range []string{
 		filepath.Join(binding.TargetLocator, "skills", "docs", "SKILL.md"),
 		filepath.Join(journey.a, ".hermes", "uap-session", "config.yaml"),
@@ -286,13 +308,58 @@ func hermesColdRepeatAndRepair(t *testing.T, input *hermesColdInputs, journey pr
 		}
 	}
 	journey.run(t, journey.a, "repair", original.InstallationID, "--target", "hermes", "--yes")
-	repaired, _, servers := hermesColdOwned(t, journey, endpoint)
-	if repaired.Source != original.Source || !reflect.DeepEqual(repaired.Package, original.Package) ||
+	repaired, repairedBinding, servers := hermesColdOwned(t, journey, endpoint)
+	if !hermesColdContinues(original, repaired, originalBinding, repairedBinding) ||
 		pair != journey.assertPortablePair(t, journey.a) {
-		t.Fatal("missing repair moved the immutable source or saved agreement")
+		t.Fatal("missing repair changed original source/binding/data authority or saved agreement")
 	}
 	input.unchanged(t)
 	input.inspect(t, journey, "repaired-inspect", servers)
+}
+
+func hermesColdContinues(original, current domain.Installation, before, after domain.ClientBinding) bool {
+	// Timestamps and transaction receipts can advance on a real repair. The
+	// accepted installation, complete source and data ownership cannot change.
+	expected := original
+	if len(after.Receipts) < len(before.Receipts) || !reflect.DeepEqual(before.Receipts, after.Receipts[:len(before.Receipts)]) {
+		return false
+	}
+	expected.UpdatedAt, expected.OperationGroupID = current.UpdatedAt, current.OperationGroupID
+	expected.Clients = current.Clients
+	before.UpdatedAt, before.Receipts = after.UpdatedAt, after.Receipts
+	return reflect.DeepEqual(expected, current) && reflect.DeepEqual(before, after)
+}
+
+func TestHermesColdContinuityRejectsDetachedIdentity(t *testing.T) {
+	before := domain.ClientBinding{ClientBindingID: "binding", ClientID: "hermes", Scope: "project", DataReceiptID: "data",
+		Receipts: []domain.MutationReceipt{{OperationID: "original-commit", Phase: "committed"}}}
+	original := domain.Installation{InstallationID: "original", Source: domain.SourceBinding{SourceBindingID: "source", CanonicalSource: "original-source", TreeDigest: "same-tree"},
+		DataReceipts: map[string]domain.DataReceipt{"data": {DataReceiptID: "data", Locator: "original-data", OwnershipDigest: "original-owner"}},
+		Clients:      map[string]domain.ClientBinding{"binding": before}}
+	for _, effect := range []string{"unchanged", "append-receipt", "source", "installation", "binding", "data-receipt", "receipt-history"} {
+		t.Run(effect, func(t *testing.T) {
+			current, after := original, before
+			switch effect {
+			case "append-receipt":
+				after.Receipts = append(append([]domain.MutationReceipt(nil), before.Receipts...), domain.MutationReceipt{OperationID: "new-commit", Phase: "committed"})
+			case "source":
+				current.Source.CanonicalSource = "different-source"
+			case "installation":
+				current.InstallationID = "different-installation"
+			case "binding":
+				after.ClientBindingID = "different-binding"
+			case "data-receipt":
+				data := original.DataReceipts["data"]
+				data.OwnershipDigest = "different-owner"
+				current.DataReceipts = map[string]domain.DataReceipt{"data": data}
+			case "receipt-history":
+				after.Receipts = []domain.MutationReceipt{{OperationID: "replacement-history", Phase: "committed"}}
+			}
+			if hermesColdContinues(original, current, before, after) != (effect == "unchanged" || effect == "append-receipt") {
+				t.Fatal("cold lifecycle accepted detached source/installation/binding/data identity")
+			}
+		})
+	}
 }
 
 func hermesColdRemove(t *testing.T, input *hermesColdInputs, journey projectJourney) {
@@ -303,6 +370,15 @@ func hermesColdRemove(t *testing.T, input *hermesColdInputs, journey projectJour
 	rootBefore := hermesColdRootAuthority(t, journey, binding)
 	journey.run(t, journey.a, "remove", "docs", "--target", "hermes", "--yes")
 	state := journey.state(t, journey.a)
+	if len(state.Installations) != 1 {
+		t.Fatal("Hermes removal lost its one retained installation")
+	}
+	retained, expected := state.Installations[0], installation
+	expected.Clients, expected.DataRetained = retained.Clients, true
+	expected.UpdatedAt, expected.OperationGroupID = retained.UpdatedAt, retained.OperationGroupID
+	if !reflect.DeepEqual(retained, expected) {
+		t.Fatal("Hermes removal changed original source/package/data authority")
+	}
 	rootAfter := hermesColdRootAuthority(t, journey, binding)
 	if !reflect.DeepEqual(rootBefore.receipt, rootAfter.receipt) || rootBefore.marker != rootAfter.marker ||
 		!os.SameFile(rootBefore.root, rootAfter.root) || !os.SameFile(rootBefore.parent, rootAfter.parent) ||

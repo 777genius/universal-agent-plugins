@@ -150,7 +150,7 @@ func readRequest(root string, uid, gid int) (request, heldFile, error) {
 			e = closed(body, &r, "schema_version source_commit source_tree uid gid nonce scope start_monotonic_ns helper_sha256 mode")
 			if e != nil {
 				e = closed(body, &r, "schema_version source_commit source_tree uid gid nonce scope start_monotonic_ns helper_sha256 mode phase")
-				if e == nil && r.Mode != lockMode {
+				if e == nil && r.Mode != lockMode && r.Mode != cliMode {
 					e = errors.New("request-mode-refused")
 				}
 			} else if r.Mode != sessionMode {
@@ -188,10 +188,10 @@ func validateResult(body []byte, r request, parent uint64) error {
 	if len(body) > resultLimit {
 		return errors.New("result-bound-refused")
 	}
-	if e := closed(body, &got, lockResultFields(r.Mode, sessionFields(r.Mode, "schema_version source_commit source_tree scope nonce semantic_complete reason isolation commands rpc", "mode provider"))); e != nil {
+	if e := decodeResearchResult(body, &got, r.Mode); e != nil {
 		return e
 	}
-	commandLimit := map[string]int{"": 6, sessionMode: 5, lockMode: 4}[r.Mode]
+	commandLimit := map[string]int{"": 6, sessionMode: 5, lockMode: 4, cliMode: 1}[r.Mode]
 	if got.Schema != 1 || got.Commit != r.Commit || got.Tree != r.Tree || got.Scope != r.Scope || got.Nonce != r.Nonce || len(got.Commands) > commandLimit {
 		return errors.New("result-identity-refused")
 	}

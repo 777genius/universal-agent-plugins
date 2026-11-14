@@ -351,3 +351,22 @@ the native writer refuses under the held lock, then succeeds after release;
 31 exact startup members and the immutable original baseline remain joined.
 This confirms the measured lock behavior, without enabling Project activation,
 accepting session effects or supplying the still-separate recovery proof.
+
+## Coverage lock-file refusal diagnostic
+
+Coverage run `43536059262`, job `132265222709`, failed the two supervisor-lock
+positive contracts before the collector exchange. Its actual merge checkout
+`73b9bf66` has the same lock and identity sources as `ea7af4b1`. The original
+`lock-file-authority-refused` contains no failed metadata field. The same tests
+and whole helper package pass locally with atomic coverage; that does not
+identify or waive the hosted failure.
+
+The unchanged leaf predicate now reports only regular/full-mode, owner-match,
+link-count, size and device-match facts from its already captured held-file
+identity. No extra lookup, open, content read, mutation or error wrapping is
+added; an identity conversion error keeps the original fixed label. Numeric
+types and fixed fields bound the diagnostic, with no paths or arbitrary text.
+Real chmod/hardlink contracts reproduce the formerly missing detail and still
+refuse; a real uid-change case runs only where the test has root permission.
+The original capture, lock cleanup, native acceptance and process bounds remain
+unchanged. A later ordinary CI run must reveal the actual hosted mismatch.

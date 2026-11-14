@@ -11,7 +11,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -130,20 +129,16 @@ func configureProjectGrokEnablement(app agentpluginscli.App, runner *projectGrok
 	return app
 }
 
-func declineProjectGrokRepair(t *testing.T, journey projectJourney, input string) {
+func refuseProjectGrokRepair(t *testing.T, journey projectJourney, input string) {
 	t.Helper()
-	state := journey.state(t, journey.a)
 	var output bytes.Buffer
 	app := journey.app
 	app.Input, app.Output, app.ErrorOutput, app.Terminal = strings.NewReader(input), &output, &output, true
 	command := agentpluginscli.NewRoot(app)
 	command.SetArgs([]string{"repair", "docs", "--target", "grok", "--scope", "project", "--project-root", journey.a, "--confirm-plugin-enable", "--format", "human"})
 	err := command.ExecuteContext(t.Context())
-	if input != "" && err != nil {
-		t.Fatalf("interactive decline: %v\n%s", err, output.String())
-	}
-	if !strings.Contains(output.String(), "[y/N]") || !reflect.DeepEqual(journey.state(t, journey.a), state) {
-		t.Fatalf("consent did not reach the unchanged saved repair confirmation: %v\n%s", err, output.String())
+	if err == nil || strings.Contains(output.String(), "[y/N]") {
+		t.Fatalf("unsupported native consent reached confirmation: %v\n%s", err, output.String())
 	}
 }
 
@@ -163,40 +158,60 @@ func TestProjectGrokCLITLSZipSavedRepairConsentLifecycle(t *testing.T) {
 	journey.run(t, journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "grok")
 	installation, binding := journey.owned(t, journey.a)
 	journey.run(t, journey.a, "repair", "docs", "--target", "grok", "--yes")
-	journey.run(t, journey.a, "repair", "docs", "--target", "grok", "--confirm-plugin-enable", "--dry-run", "--yes")
-	declineProjectGrokRepair(t, journey, "n\n")
-	declineProjectGrokRepair(t, journey, "")
-	if runner.acp != 0 || projectJourneyRead(t, config) != before {
-		t.Fatal("ordinary --yes, dry-run, decline or EOF enabled the native plugin")
+	if binding.Activation != domain.ActivationPrepared || binding.NativeActivationAttempt != "" {
+		t.Fatal("ordinary install was promoted")
 	}
+	type original struct {
+		body string
+		info os.FileInfo
+	}
+	originals := map[string]original{}
+	for _, path := range []string{config, filepath.Join(journey.namespace(journey.a), "state-v2.json"), filepath.Join(binding.TargetLocator, ".grok-plugin", "plugin.json")} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		originals[path] = original{body: projectJourneyRead(t, path), info: info}
+	}
+	calls := runner.calls
+	unchanged := func() {
+		t.Helper()
+		if runner.acp != 0 || runner.calls != calls {
+			t.Fatal("refused consent called native client")
+		}
+		for path, old := range originals {
+			info, err := os.Stat(path)
+			if err != nil || projectJourneyRead(t, path) != old.body || !os.SameFile(old.info, info) || old.info.Mode() != info.Mode() || !old.info.ModTime().Equal(info.ModTime()) {
+				t.Fatalf("refused consent changed original %s: %v", path, err)
+			}
+		}
+	}
+	// The historical test name remains the workflow's exact inert contract.
+	// It now proves public refusal; it grants no native lifecycle acceptance.
 	for _, args := range [][]string{
+		{"repair", "docs", "--target", "grok", "--confirm-plugin-enable", "--dry-run", "--yes"},
+		{"repair", "docs", "--target", "grok", "--confirm-plugin-enable", "--yes"},
+		{"repair", installation.InstallationID, "--target", "grok", "--confirm-plugin-enable", "--yes"},
 		{"repair", "docs", "--confirm-plugin-enable", "--yes"},
 		{"repair", "docs", "--target", "grok,cline", "--confirm-plugin-enable", "--yes"},
 		{"repair", "docs", "--target", "grok,grok", "--confirm-plugin-enable", "--yes"},
 	} {
 		if output, err := journey.execute(journey.a, args...); err == nil {
-			t.Fatal("non-exact consent selection accepted", args, output)
+			t.Fatal("unqualified consent accepted", args, output)
 		}
+		unchanged()
+	}
+	for _, input := range []string{"y\n", "n\n", ""} {
+		refuseProjectGrokRepair(t, journey, input)
+		unchanged()
 	}
 	if output, err := journey.execute("", "repair", "docs", "--target", "grok", "--confirm-plugin-enable", "--yes"); err == nil {
 		t.Fatal("implicit scope accepted", output)
 	}
-	if runner.acp != 0 || projectJourneyRead(t, config) != before {
-		t.Fatal("refused selection touched native config")
-	}
-	journey.run(t, journey.a, "repair", installation.InstallationID, "--target", "grok", "--confirm-plugin-enable", "--yes")
-	_, enabled := journey.owned(t, journey.a)
-	if runner.acp != 2 || enabled.Activation != domain.ActivationPrepared || len(enabled.NativeObjects) != len(binding.NativeObjects)+1 {
-		t.Fatalf("CLI did not commit exact prepared enablement: %+v ACP=%d", enabled, runner.acp)
-	}
-	enabledBytes := projectJourneyRead(t, config)
-	journey.run(t, journey.a, "repair", "docs", "--target", "grok", "--confirm-plugin-enable", "--yes")
-	if runner.acp != 3 || projectJourneyRead(t, config) != enabledBytes {
-		t.Fatal("repeated CLI consent changed native config")
-	}
+	unchanged()
 	journey.run(t, journey.a, "remove", "docs", "--target", "grok")
-	if projectJourneyRead(t, config) != before {
-		t.Fatal("CLI removal did not preserve foreign native settings")
+	if projectJourneyRead(t, config) != before || runner.acp != 0 {
+		t.Fatal("plain Prepared removal changed native membership")
 	}
 	projectJourneyAbsent(t, binding.TargetLocator)
 }

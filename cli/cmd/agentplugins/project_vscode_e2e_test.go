@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -138,4 +139,55 @@ func workspaceJourneyOwned(t *testing.T, journey projectJourney, project, expect
 		t.Fatal("workspace codec lost owned registration or foreign numeric environment")
 	}
 	return installation, binding
+}
+
+func TestProjectVSCodeModifiedNativeEntryRefusesPublicLifecycle(t *testing.T) {
+	transport := newProjectJourneyTransport(t, "zip")
+	journey := newProjectJourney(t, transport)
+	user := filepath.Join(journey.home, "Code")
+	projectJourneyWrite(t, filepath.Join(user, "User", "mcp.json"), `{"servers":{"user-foreign":{"type":"http","url":"https://foreign.test/user"}}}`)
+	runner := &projectWorkspaceNoNative{}
+	journey.app = configureWorkspaceJourney(t, journey.app, user, runner)
+	for _, project := range []string{journey.a, journey.b} {
+		projectJourneyWrite(t, filepath.Join(project, ".vscode", "mcp.json"), `{"servers":{"foreign":{"type":"stdio","command":"inert","env":{"PORT":8123}}}}`)
+		projectJourneyWrite(t, filepath.Join(project, ".github", "mcp.json"), "Copilot control bytes")
+		journey.run(t, project, "add", transport.endpoint, "--alias", "review", "--target", "vscode")
+		workspaceJourneyOwned(t, journey, project, projectJourneySkill)
+	}
+	configPath := filepath.Join(journey.a, ".vscode", "mcp.json")
+	var document map[string]any
+	if err := json.Unmarshal([]byte(projectJourneyRead(t, configPath)), &document); err != nil {
+		t.Fatal(err)
+	}
+	servers := document["servers"].(map[string]any)
+	servers["docs"].(map[string]any)["foreignMember"] = true
+	modified, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectJourneyWrite(t, configPath, string(modified))
+	// A moved source makes update exercise replacement, while repair must keep
+	// the recorded revision. Neither operation owns the externally edited entry.
+	projectJourneyWrite(t, filepath.Join(transport.repo, "skills", "docs", "SKILL.md"), projectJourneyAdvancedSkill)
+	transport.mu.Lock()
+	transport.archive = projectJourneyArchive(t, transport.repo)
+	transport.mu.Unlock()
+	before := map[string]map[string]string{}
+	for _, root := range []string{journey.a, journey.b, journey.home} {
+		before[root] = securityFixtureTree(t, root)
+	}
+	for _, operation := range []string{"repair", "update", "remove"} {
+		output, err := journey.execute(journey.a, operation, "review", "--target", "vscode")
+		if err == nil || !strings.Contains(err.Error()+output, `managed project MCP server "docs" changed outside agentplugins`) {
+			t.Fatalf("public %s did not refuse the modified owned member: %v; %s", operation, err, output)
+		}
+		for root, original := range before {
+			if !reflect.DeepEqual(original, securityFixtureTree(t, root)) {
+				t.Fatalf("refused %s changed original workspace/User tree %q", operation, root)
+			}
+		}
+		if runner.calls != 0 {
+			t.Fatalf("refused %s invoked a native client", operation)
+		}
+	}
 }

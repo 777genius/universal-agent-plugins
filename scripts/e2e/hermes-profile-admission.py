@@ -561,6 +561,10 @@ def payload_hash_files(root, records, expected, deadline, source=None):
             overlap = max((len(value) for value in sentinels), default=1) - 1
             while size <= info.st_size:
                 require(time.monotonic() < deadline, "payload scan deadline")
+                # A readable, held empty source file has no byte to request;
+                # Windows leases may lock a byte beyond EOF. Keep both final fences.
+                if source is not None and info.st_size == 0:
+                    break
                 try:
                     chunk = os.read(descriptor, min(LIMIT, info.st_size + 1 - size))
                 except OSError as error:
@@ -1907,7 +1911,44 @@ def public_binding(project, name):
             and revision["version"] == installed["package"]["version"], "public source/package revision differs")
     return dict(state=state, state_sha256=hashlib.sha256(body).hexdigest(), installed=installed, binding=binding,
                 target=target, selected=selected, data=data_path, digest=package[0]["managed_digest"],
-                root_receipt=root_receipts[0], root_identity=directory_identity(selected), parent_identity=directory_identity(selected.parent))
+                root_receipt=root_receipts[0], root_identity=directory_identity(selected), parent_identity=directory_identity(selected.parent),
+                data_identity=directory_identity(data_path))
+
+
+def public_same_record(left, right):
+    return (json.dumps(left, sort_keys=True, separators=(",", ":"), allow_nan=False)
+            == json.dumps(right, sort_keys=True, separators=(",", ":"), allow_nan=False))
+
+
+def public_continuity(before, after, *, advance=False):
+    """Compare with the accepted installation, never a newly observed baseline."""
+    previous, current = before["installed"], after["installed"]
+    require(public_same_record({key: value for key, value in previous.items() if key not in {"source", "package", "clients", "updated_at", "operation_group_id"}},
+                 {key: value for key, value in current.items() if key not in {"source", "package", "clients", "updated_at", "operation_group_id"}}),
+            "public original installation/data authority changed")
+    source, package = dict(previous["source"]), dict(previous["package"])
+    if advance:
+        require(current["source"]["tree_digest"] != source["tree_digest"], "public update did not advance its local source")
+        # This warm family has one authored local source. No Git/archive or
+        # canonical/requested source field may change with its new tree.
+        source["tree_digest"] = current["source"]["tree_digest"]
+        package.update(version=current["package"]["version"], manifest_digest=current["package"]["manifest_digest"])
+    require(public_same_record(source, current["source"]) and public_same_record(package, current["package"]), "public original source/package identity changed")
+    left, right = dict(before["binding"]), dict(after["binding"])
+    require(public_same_record(left["receipts"], right["receipts"][:len(left["receipts"])]), "public original committed receipt history changed")
+    for key in ("receipts", "updated_at"):
+        left.pop(key, None); right.pop(key, None)
+    if advance:
+        revision = dict(left["package_revision"])
+        revision.update(tree_digest=source["tree_digest"], version=package["version"], manifest_digest=package["manifest_digest"])
+        left["package_revision"] = revision
+        # Complete current digests are independently recomputed by snapshot.
+        # Every object's identity, kind, path and ownership role must continue.
+        for binding in (left, right):
+            binding["native_objects"] = [{key: value for key, value in item.items() if key != "managed_digest"}
+                                         for item in binding["native_objects"]]
+    require(public_same_record(left, right) and before["data"] == after["data"] and before["data_identity"] == after["data_identity"],
+            "public original binding or physical data directory changed")
 
 
 def public_package_digest(outer, proof, image, pin):
@@ -1971,6 +2012,7 @@ def public_snapshot(outer, projects, pins):
         require(set(profile_tree(image, data)) <= {data, data + "/.agentplugins-data-owner.json", data + "/hermes-events.jsonl"}, "public data has unmeasured members")
         require((directory_identity(proof["selected"]), directory_identity(proof["selected"].parent)) ==
                 (proof["root_identity"], proof["parent_identity"]), "public root authority changed during capture")
+        require(directory_identity(proof["data"]) == proof["data_identity"], "public data authority changed during capture")
     return image, proofs
 
 
@@ -2145,6 +2187,13 @@ def public_cold(evidence, temporary, env, pins, deadline, head, bundle):
         for descriptor in descriptors.values(): os.close(descriptor)
 
 
+def public_stdio_recipe(project, probe, nonce):
+    executable = Path(probe["path"])
+    return {"type": "stdio", "command": executable.name, "args": [], "env": {
+        "PATH": str(executable.parent), "UAP_TEST_ROOT": str(project),
+        "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": nonce}}
+
+
 def observe_public(probes):
     import hermes_yaml as yaml
     evidence, user = Path(os.environ["HERMES_NATIVE_EVIDENCE"]), Path(os.environ["HOME"])
@@ -2175,8 +2224,7 @@ def observe_public(probes):
             "name": name, "version": "1.0.0", "description": "Disposable Hermes public lifecycle"}).encode())
         (source / "mcp.json").write_bytes(json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": {
             name + "-http": {"type": "streamable-http", "url": probes[scope].url},
-            name + "-stdio": {"type": "stdio", "command": pins["probe"]["path"], "args": [], "env": {
-                "UAP_TEST_ROOT": str(project), "UAP_TEST_EVENTS": "${PLUGIN_DATA}/hermes-events.jsonl", "UAP_TEST_NONCE": nonce}}}}).encode())
+            name + "-stdio": public_stdio_recipe(project, pins["probe"], nonce)}}).encode())
     authorities = {scope: directory_identity(project) for scope, project in projects.items()}
     write_json(evidence / "public-endpoints.json", {scope: {"project": str(project), "identity": authorities[scope],
                 "selected": str(project / ".hermes/uap-session"), "url": probes[scope].url} for scope, project in projects.items()})
@@ -2224,6 +2272,9 @@ def observe_public(probes):
         output = bounded(argv, project, dict(env, HERMES_HOME=str(selected)) if native else env,
                          evidence / label, timeout=min(90, deadline-time.monotonic()-5), expected_failure=expected_failure)
         after, proofs = snapshot()
+        for key, proof in previous.items():
+            if proof is not None and proofs[key] is not None:
+                public_continuity(proof, proofs[key], advance=key == scope and label == "public-update-a")
         delta = changes(before, after)
         selected_prefix = selected.relative_to(outer).as_posix()
         permitted = [selected_prefix]
@@ -2310,6 +2361,13 @@ def observe_public(probes):
             prior = proofs[scope]
             command("public-remove-" + scope, scope, ["remove", "hermes-public-" + scope])
             state = public_json(ordinary_bytes(projects[scope] / ".uap/state-v2.json"))
+            retained = state["installations"][0]
+            mutable = {"clients", "data_retained", "updated_at", "operation_group_id"}
+            require(retained.get("clients") == {} and retained.get("data_retained") is True
+                    and public_same_record({key: value for key, value in retained.items() if key not in mutable},
+                                           {key: value for key, value in prior["installed"].items() if key not in mutable})
+                    and directory_identity(prior["data"]) == prior["data_identity"],
+                    "public removal changed the accepted installation/source/data authority")
             require(prior["root_receipt"] in state.get("transaction_receipts", []) and not prior["target"].exists()
                     and directory_identity(prior["selected"]) == prior["root_identity"]
                     and directory_identity(prior["selected"].parent) == prior["parent_identity"]

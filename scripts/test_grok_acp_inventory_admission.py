@@ -1907,5 +1907,136 @@ class FrontendFailureContracts(unittest.TestCase):
                 if changed=='replacement':self.assertEqual(next(root.glob('*/foreign')).read_bytes(),b'preserved')
 
 
+class FixedCLIObservationContracts(unittest.TestCase):
+    def test_same_run_parent_authority_help_cleanup_and_closed_publication(self):
+        import project_native_research as shared
+        from project_native_collectors.grok import ACQUISITION
+        commit, tree, native = 'a'*40, 'b'*40, b'inert binary; never executed'
+        bodies = {name:(b'' if name.endswith('.lock') else ('inert '+name).encode()) for name in bootstrap_case.PINNED}
+        pins = {name:(len(body), case.digest(body), 0o644) for name, body in bodies.items()}
+        pins['config.toml'] = bootstrap_case.PINNED['config.toml']
+        for fault in ('none', 'unjoined-id', 'help', 'between', 'late-ledger', 'cleanup', 'source-final'):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temporary:
+                calls, owned, source_calls = [], [], []
+                original_post, original_remove = case.post_ledger, case.shutil.rmtree
+                def process(argv, **_options):
+                    if argv[0] == 'go':
+                        helper = Path(argv[argv.index('-o')+1]); helper.write_bytes(b'inert helper')
+                        owned.append((helper.parent, case.stable(helper.parent.lstat())[:2]))
+                        return SimpleNamespace(stdout=b'', stderr=b'')
+                    if argv[1:2] == ['status']:
+                        source_calls.append(1)
+                    result = commit if argv[1:] == ['rev-parse','HEAD'] else tree if argv[1:] == ['rev-parse','HEAD^{tree}'] else ''
+                    if fault == 'source-final' and len(source_calls) == 2: result = 'M source'
+                    return SimpleNamespace(stdout=result.encode(), stderr=b'')
+                def capture(_helper, root, _deadline):
+                    req = case.document((root/'request.json').read_bytes()); phase = req.get('phase', req['scope']); calls.append(phase)
+                    ident = {k:req[k] for k in ('schema_version','source_commit','source_tree','scope','nonce')}
+                    result = dict(ident, semantic_complete=True, reason='complete', isolation={}, rpc=case.rpc_state())
+                    if phase == 'user':
+                        profile = root/'home/.grok'
+                        for name, mode in bootstrap_case.DIRECTORIES.items():
+                            path=profile/name; path.mkdir(parents=True, exist_ok=True); path.chmod(mode)
+                        for name, body in bodies.items():
+                            if name != 'config.toml': path=profile/name; path.write_bytes(body); path.chmod(0o644)
+                        for name in bootstrap_case.MUTABLE:
+                            path=profile/name; path.write_bytes(b'x'* (32768 if name.endswith('-shm') else 0)); path.chmod(0o644)
+                        path=profile/'agent_id'; path.write_bytes(b'01234567-89ab-4cde-8fab-0123456789ab'); path.chmod(0o600)
+                    if phase in case.SCOPES:
+                        rows = [plugin_row(root, 'user', name) for name in ('uap-acp-foreign-user',)]
+                        rows += [plugin_row(root, phase, name) for name in (('uap-acp-collision',) if phase == 'user' else ('uap-acp-collision','uap-acp-foreign-'+phase))]
+                        if fault == 'unjoined-id' and phase == 'a': rows[-2]['id'] = 'project/00000000/uap-acp-collision'
+                        result['rpc']['plugins'] = dict(result=dict(result=dict(plugins=rows)))
+                        result['commands'] = help_rows() + [startup_row(root, phase), dict(help_rows()[0], label='acp')]
+                    else:
+                        with (root/'home/.grok/logs/unified.jsonl').open('ab') as stream: stream.write(phase.encode())
+                        body = b'Usage: grok plugin details <NAME>\n' if phase == 'details-help' else b'[]\n'
+                        if phase == 'details-help' and fault == 'help': body = b'Usage: grok plugin details <OTHER>\n'
+                        if phase == 'inspect-project':
+                            value=case.document(base64.b64decode(startup_row(root, 'a')['merged_base64']))
+                            value.update(projectRoot=str(root/'a'), projectTrusted=False, plugins=[dict(name='uap-acp-collision',
+                                scope='project', path=str(root/'a/.grok/plugins/uap-acp-collision'), enabled=False)])
+                            body=json.dumps(value).encode()
+                        result.update(mode=case.CLI_MODE, phase=phase, commands=[dict(label=phase,
+                            argv=['/tmp/uap-grok-acp-sealed-inert/grok', *case.cli_arguments(root, phase)],
+                            exit=1 if phase in ('details-full-id','details-name') else 0, error=None,
+                            merged_base64=base64.b64encode(body).decode(), merged_bytes=len(body), merged_sha256=case.digest(body))])
+                        if fault == 'late-ledger' and phase == 'inspect-project': (root/'unknown-native-effect').write_bytes(b'inert')
+                    return dict(ident, cleanup_complete=not (fault == 'cleanup' and phase == 'details-help'), sealed_cleanup_complete=True,
+                        system_executables={k:dict(path='/usr/bin/'+('python3.12' if k == 'python3' else k), sha256='d'*64)
+                                            for k in ('unshare','setpriv','env','python3')}, result=result)
+                def post(*args):
+                    ledger = original_post(*args)
+                    if fault == 'between' and calls[-1] == 'details-help': (args[0]/'inter-command-edit').write_bytes(b'foreign')
+                    return ledger
+                try:
+                    with (mock.patch.object(shared.native, 'require_hosted'), mock.patch.object(shared, 'acquire', return_value=({}, {'grok':native})),
+                          mock.patch.dict(ACQUISITION, binary_sha256=case.digest(native)), mock.patch.object(bootstrap_case,'PINNED',pins),
+                          mock.patch.dict(os.environ, EXPECTED_COMMIT=commit), mock.patch.object(case.os,'getuid',return_value=1001),
+                          mock.patch.object(case.subprocess,'run',side_effect=process), mock.patch.object(case,'helper_capture',side_effect=capture),
+                          mock.patch.object(case,'post_ledger',side_effect=post), mock.patch.object(shared,'Budget',wraps=shared.Budget) as budget,
+                          redirect_stdout(io.StringIO()) as stdout):
+                        status = case.frontend(Path(temporary)/'output', plugin_cli=True)
+                    self.assertEqual(status, 0 if fault == 'none' else 1)
+                    budget.assert_called_once_with(150)
+                    cli_calls = [p for p in calls if p in case.CLI_PHASES]
+                    self.assertEqual(cli_calls, [] if fault == 'unjoined-id' else list(case.CLI_PHASES[:1])
+                                     if fault in ('help','between','cleanup') else list(case.CLI_PHASES))
+                    packet = case.document(stdout.getvalue().encode())
+                    if fault == 'cleanup':
+                        self.assertEqual(packet['kind'], 'frontend-publication-refused')
+                        continue
+                    raw = (Path(temporary)/'output/upload/research.zip').read_bytes()
+                    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                        captured = {name:archive.read(name) for name in archive.namelist()}
+                        summary = case.document(archive.read('admission.json'))
+                        self.assertTrue(all(v is False for v in summary['qualification'].values()))
+                        self.assertEqual(summary['measurement_complete'], fault == 'none')
+                        if cli_calls:
+                            record = case.document(archive.read(case.CLI_MEMBER))
+                            self.assertTrue(all(row['ledger']['before'] == case.document(archive.read('b.ledger.json'))['before'] for row in record['observations']))
+                    facts = case.publication_readout(raw, packet, time.monotonic()+5, mode=case.CLI_MODE)
+                    self.assertEqual(facts.get('measurement_complete'), fault == 'none')
+                    if fault == 'none':
+                        self.assertEqual(len(archive.infolist()), 27)
+                        for changed in ('selected_id', 'rpc', 'phase', 'extra-row', 'stream-bound', 'source'):
+                            value = copy.deepcopy(record); first = value['observations'][0]['receipt']['result']
+                            if changed == 'selected_id': value['selected_id'] = 'project/00000000/uap-acp-collision'
+                            if changed == 'rpc': first['rpc']['plugins'] = {}
+                            if changed == 'phase': first['phase'] = 'enable'
+                            if changed == 'extra-row': first['commands'].append(copy.deepcopy(first['commands'][0]))
+                            if changed == 'stream-bound': first['commands'][0]['merged_bytes'] = 16385
+                            if changed == 'source': value['source_commit'] = 'e'*40
+                            bad = dict(captured, **{case.CLI_MEMBER:json.dumps(value).encode()})
+                            self.assertEqual(case.publication_readout(AdmissionContracts().readout_zip(bad), packet,
+                                time.monotonic()+5, mode=case.CLI_MODE)['reason'], 'readout-refused', changed)
+                        with mock.patch.object(zipfile, 'ZipFile') as parser:
+                            self.assertEqual(case.publication_readout(raw, packet, time.monotonic()+5)['reason'], 'readout-refused')
+                            parser.assert_not_called()
+                finally:
+                    for root, identity in owned:
+                        if root.exists() and case.stable(root.lstat())[:2] == identity: original_remove(root)
+
+    def test_collector_one_combined_stream_deadline_and_no_rpc_or_auth(self):
+        req = AdmissionContracts().request(Path('/tmp/uap-grok-acp-input-'+'c'*32))
+        req.update(mode=case.CLI_MODE, scope='a', phase='details-name')
+        real = case.command
+        def inert(argv, label, cwd, env, deadline, limit, state, request):
+            self.assertEqual(argv[1:], ['plugin','details','uap-acp-collision'])
+            self.assertEqual((deadline, limit, state), (req['start_monotonic_ns']/1e9+5, 16<<10, case.rpc_state()))
+            self.assertEqual(env['HOME'], req['input_root']+'/home'); self.assertNotIn('XAI_API_KEY',env)
+            row = real([sys.executable,'-I','-c',"import sys;sys.stdout.write('out');sys.stdout.flush();sys.stderr.write('err');sys.exit(3)"],
+                       label, Path.cwd(), dict(os.environ), deadline, limit, state, request)
+            row['argv'] = argv
+            return row
+        with mock.patch.object(case,'isolation',return_value={}), mock.patch.object(case,'command',side_effect=inert) as invocation:
+            result=case.cli_collector_result(req)
+        self.assertTrue(result['semantic_complete']); self.assertEqual(result['rpc'],case.rpc_state())
+        self.assertEqual(base64.b64decode(result['commands'][0]['merged_base64']),b'outerr'); invocation.assert_called_once()
+        with mock.patch.object(case,'isolation',return_value={}), mock.patch.object(case,'command',side_effect=AssertionError('expired child')):
+            expired = case.cli_collector_result(dict(req, start_monotonic_ns=1))
+        self.assertFalse(expired['semantic_complete']); self.assertEqual(expired['commands'],[])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -65,8 +65,30 @@ func TestProjectRootMovedBaseRetainsStageBeforeMarkerRemoval(t *testing.T) {
 				t.Fatal(err)
 			}
 			moved := prepared.base + "-moved"
-			if err := os.Rename(prepared.base, moved); err != nil {
-				t.Fatal(err)
+			if !moveNativeRootFixture(t, prepared.baseRoot, moved) {
+				if err := prepared.verifyNamed(); err != nil {
+					t.Fatal(err)
+				}
+				if prepared.staged != prepared.selected {
+					entries, err := os.ReadDir(prepared.staged.path)
+					if err != nil || len(entries) != 1 || entries[0].Name() != filepath.Base(prepared.selected.path) {
+						t.Fatalf("denied replacement changed original staging contents: %v %v", entries, err)
+					}
+				}
+				entries, err := os.ReadDir(prepared.selected.path)
+				if boundary == "directory-delete" {
+					if err != nil || len(entries) != 0 {
+						t.Fatalf("denied replacement changed original empty stage: %v %v", entries, err)
+					}
+				} else {
+					body, readErr := prepared.selected.readMarker(prepared.markerName)
+					current, statErr := prepared.selected.root.Lstat(prepared.markerName)
+					if err != nil || len(entries) != 1 || entries[0].Name() != prepared.markerName || readErr != nil || statErr != nil ||
+						!sameNativeMarker(before, current) || string(body) != string(prepared.markerBody) {
+						t.Fatalf("denied replacement changed original marker: %v %v %v", err, readErr, statErr)
+					}
+				}
+				return
 			}
 			if err := os.Mkdir(prepared.base, 0o700); err != nil {
 				t.Fatal(err)

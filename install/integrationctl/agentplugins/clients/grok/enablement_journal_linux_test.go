@@ -41,10 +41,10 @@ func TestEnablementJournalProcessDeathReopensFiniteStates(t *testing.T) {
 				}
 			}
 			runEnablementCrashChild(t, fixture, point)
-			if err := fixture.recovery.Recover(t.Context()); err != nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 				t.Fatal("reopen after real process exit", err)
 			}
-			if err := fixture.recovery.Recover(t.Context()); err != nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 				t.Fatal("second recovery", err)
 			}
 			body, err := os.ReadFile(fixture.config)
@@ -120,7 +120,7 @@ func TestEnablementJournalCrashChild(t *testing.T) {
 	if record.Action == "remove" {
 		err = runRemovalCrashBoundary(t, recovery, wire, point)
 	} else if point == "before_record_remove" || point == "record_removed" {
-		err = recovery.Recover(t.Context())
+		err = recoverPrototypeRecords(t.Context(), recovery)
 	} else {
 		err = recovery.writeRecord(record)
 	}
@@ -150,7 +150,7 @@ func TestEnablementJournalPublicationErrorsRetainOnlyCompleteAuthority(t *testin
 			if published && err != nil || !published && !errors.Is(err, os.ErrNotExist) {
 				t.Fatal("failure left incomplete recognized authority", err)
 			}
-			if err := fixture.recovery.Recover(t.Context()); err != nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -250,7 +250,7 @@ func TestEnablementJournalUnknownStageAndFullStateDriftRefuse(t *testing.T) {
 			if err := fixture.state.Save(state); err != nil {
 				t.Fatal(err)
 			}
-			if err := fixture.recovery.Recover(t.Context()); err == nil {
+			if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err == nil {
 				t.Fatal("unknown stage or third state admitted")
 			}
 			if enablementStateDigest(fixture.loaded(t)) != enablementStateDigest(state) {
@@ -297,7 +297,7 @@ func runRemovalCrashBoundary(t *testing.T, recovery EnablementRecovery, wire ena
 		return errors.Join(err, errors.New("TEST removal decision was not handled"))
 	}
 	if point == "decision_cleared" {
-		return recovery.Recover(t.Context())
+		return recoverPrototypeRecords(t.Context(), recovery)
 	}
 	disposition, err := recovery.State.PersistStateDecisionWithDisposition(before, wire.Desired)
 	if err != nil || disposition != domain.StateDecisionDesired {
@@ -306,7 +306,7 @@ func runRemovalCrashBoundary(t *testing.T, recovery EnablementRecovery, wire ena
 	if point == "state_committed" {
 		os.Exit(81)
 	}
-	if err := recovery.Recover(t.Context()); err != nil {
+	if err := recoverPrototypeRecords(t.Context(), recovery); err != nil {
 		return err
 	}
 	if point == "before_package_delete" {

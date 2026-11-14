@@ -157,11 +157,17 @@ class ClineWarmContinuityTests(unittest.TestCase):
         binding = {"client_binding_id": "binding-original", "client_id": "cline", "scope": "project", "activation": "prepared",
                    "target_locator": str(active), "physical_artifact_id": physical, "native_profile_root": str(journey.a),
                    "verification": "installation_verified", "authentication": "unchecked", "policy": "not_required",
-                   "data_receipt_id": receipt_id}
+                   "data_receipt_id": receipt_id, "materialization": "materialized", "affected_surfaces": ["skills", "mcp"],
+                   "native_objects": [{"object_id": "managed_package_directory:" + physical,
+                       "kind": "managed_package_directory", "path": str(active), "managed_digest": "sha256:" + "c" * 64,
+                       "protection_class": "managed"}],
+                   "receipts": [{"operation_id": "original-" + str(i), "sequence": i, "mutation_type": "directory_swap",
+                       "client_binding_id": "binding-original", "active_path": str(active), "phase": "committed",
+                       "after_digest": "sha256:" + str(i) * 64} for i in (1, 2)]}
         installation = {"installation_id": "installation-original", "declared_name": NAME,
                         "source": {"source_binding_id": "source-original", "requested_source": str(journey.source),
                                    "canonical_source": str(journey.source), "resolved_revision": ""},
-                        "package": {"declared_name": NAME, "loader_kind": "standard", "inventory": {}},
+                        "package": {"declared_name": NAME, "loader_kind": "standard", "inventory": {"mcp_present": True}},
                         "clients": {"cline": binding}, "data_receipts": {receipt_id: receipt}}
         state = {"schema_version": 5, "installations": [installation]}
         def save():
@@ -182,10 +188,135 @@ class ClineWarmContinuityTests(unittest.TestCase):
             "type": "stdio", "command": str(active / "helper"), "cwd": str(active),
             "env": {"PLUGIN_ROOT": str(active), "UAP_TEST_NONCE": journey.nonce}}}}})
         accepted, selected, _ = journey.owned()
+        journey.remember_data(journey.a, accepted, selected)
         journey.warm_origin, journey.warm_pin = journey.warm_facts(accepted, selected, "0")
+        journey.warm_binding = copy.deepcopy(selected)
         write(data / "native-marker.txt", "kept-" + journey.nonce)
         journey.marker_before = journey.marker_facts()
         return journey, state, save, revision
+
+    def test_original_data_directory_refuses_before_and_after_first_native(self):
+        for cold in (False, True):
+            for during in (False, True):
+                with self.subTest(cold=cold, during=during), tempfile.TemporaryDirectory() as tmp:
+                    journey, state, _, _ = self.fixture(Path(tmp).resolve())
+                    installed = copy.deepcopy(state["installations"][0])
+                    binding = installed["clients"]["cline"]
+                    receipt = installed["data_receipts"][binding["data_receipt_id"]]
+                    project = journey.root / "cold" if cold else journey.a
+                    data = project / ".uap/plugin-data" / binding["physical_artifact_id"]
+                    if cold:
+                        receipt["locator"] = str(data)
+                        write(data / ".agentplugins-data-owner.json", receipt)
+                        journey.remember_data(project, installed, binding)
+                    else:
+                        (data / "native-marker.txt").unlink(); journey.marker_before = None
+                    before, owner = data.stat(), (data / ".agentplugins-data-owner.json").read_bytes()
+                    def replace():
+                        data.rename(journey.root / "held-original-data"); data.mkdir()
+                        (data / ".agentplugins-data-owner.json").write_bytes(owner)
+                        self.assertNotEqual((data.stat().st_dev, data.stat().st_ino), (before.st_dev, before.st_ino))
+                    record = {"exit": 0, "runtime_sha256": {key: "a" * 64 for key in ("native", "installer", "probe", "git", "go", "fixture_source")}}
+                    def returned(*args):
+                        replace()
+                        return record, b"[]", b""
+                    if not during: replace()
+                    with mock.patch("cline_managed_session_e2e.invoke_bridge", side_effect=returned) as bridge:
+                        with self.assertRaisesRegex(ValueError, "original data directory changed"):
+                            if cold: journey.run("cold-inspect")
+                            else: journey.session("installed", "0", create=True)
+                        self.assertEqual(bridge.call_count, int(during))
+                    self.assertEqual((data / ".agentplugins-data-owner.json").read_bytes(), owner)
+
+    def test_directory_origin_is_not_renewed_by_same_leaf_move(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journey, state, _, _ = self.fixture(Path(tmp).resolve())
+            installed = state["installations"][0]
+            binding = installed["clients"]["cline"]
+            data = Path(installed["data_receipts"][binding["data_receipt_id"]]["locator"])
+            marker = data / "native-marker.txt"
+            before, body = marker.stat(), marker.read_bytes()
+            held = journey.root / "held-original-data"
+            data.rename(held); data.mkdir()
+            (held / "native-marker.txt").replace(marker)
+            (data / ".agentplugins-data-owner.json").write_bytes((held / ".agentplugins-data-owner.json").read_bytes())
+            self.assertEqual((marker.stat().st_dev, marker.stat().st_ino), (before.st_dev, before.st_ino))
+            self.assertEqual(marker.read_bytes(), body)
+            with self.assertRaises(ValueError): journey.remember_data(journey.a, installed, binding)
+            with mock.patch("cline_managed_session_e2e.invoke_bridge", side_effect=AssertionError("native tripwire")) as bridge:
+                with self.assertRaisesRegex(ValueError, "original data directory changed"): journey.install("repeat-install")
+                bridge.assert_not_called()
+
+    def test_backward_receipt_history_and_full_binding_refuse_before_bridge(self):
+        changes = ("history", "truncated", "surfaces", "namespace", "materialization", "native-object", "typed-package", "resolved-revision")
+        for change in changes:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as tmp:
+                journey, state, save, _ = self.fixture(Path(tmp).resolve())
+                installed = state["installations"][0]
+                binding = installed["clients"]["cline"]
+                if change == "history": binding["receipts"][0]["after_digest"] = "sha256:" + "b" * 64
+                if change == "truncated": binding["receipts"] = binding["receipts"][1:]
+                if change == "surfaces": binding["affected_surfaces"] = ["mcp"]
+                if change == "namespace": binding["profile_namespace"] = "replaced"
+                if change == "materialization": binding["materialization"] = "degraded"
+                if change == "native-object": binding["native_objects"][0]["path"] += "-foreign"
+                if change == "typed-package": installed["package"]["inventory"]["mcp_present"] = 1
+                if change == "resolved-revision":
+                    installed["source"]["resolved_revision"] = binding["package_revision"]["resolved_revision"] = "foreign"
+                save()
+                current, selected, _ = journey.owned()
+                journey.warm_facts(current, selected, "0")  # Both snapshots independently satisfy the old shape checks.
+                with mock.patch("cline_managed_session_e2e.invoke_bridge", side_effect=AssertionError("native tripwire")) as bridge:
+                    with self.assertRaises(ValueError): journey.session("repaired", "0")
+                    bridge.assert_not_called()
+
+    def test_only_update_advances_projection_and_receipts_remain_append_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            journey, state, save, revision = self.fixture(Path(tmp).resolve())
+            binding = state["installations"][0]["clients"]["cline"]
+            config = journey.a / ".uap/clients/cline/mcp.json"
+            rows = [{"name": SERVER, "path": str(config), "transportType": "stdio", "disabled": False}]
+            record = {"exit": 0, "runtime_sha256": {key: "a" * 64 for key in ("native", "installer", "probe", "git", "go", "fixture_source")}}
+            with mock.patch("cline_managed_session_e2e.invoke_bridge", return_value=(record, json.dumps(rows).encode(), b"")) as bridge, \
+                 mock.patch.object(journey, "direct", return_value={"facts": {}}):
+                journey.session("installed", "0")
+                revision("1")
+                binding["updated_at"] = "new timestamp"
+                binding["native_objects"][0]["managed_digest"] = "sha256:" + "d" * 64
+                binding["receipts"].append(dict(binding["receipts"][-1], operation_id="updated", sequence=3))
+                save()
+                journey.session("updated", "1")
+                binding["receipts"].append(dict(binding["receipts"][-1], operation_id="repaired", sequence=4))
+                save()
+                journey.session("repaired", "1")
+                self.assertEqual(bridge.call_count, 3)
+                binding["receipts"][2]["operation_id"] = "replaced-update-history"
+                save()
+                with self.assertRaises(ValueError): journey.session("repaired", "1")
+                self.assertEqual(bridge.call_count, 3)
+
+    def test_cold_repeat_refuses_same_bytes_marker_replacement(self):
+        for replace in (False, True):
+            with self.subTest(replace=replace), tempfile.TemporaryDirectory() as tmp:
+                journey, _, _, _ = self.fixture(Path(tmp).resolve())
+                marker = journey.root / "cold/.uap/plugin-data/cold-original/native-marker.txt"
+                write(marker, "kept-" + journey.nonce)
+                from cline_managed_session_e2e import file_identity
+                journey.cold_marker = (marker, (file_identity(marker), read_owned(marker, journey.root)))
+                original = marker.read_bytes()
+                record = {"exit": 0, "runtime_sha256": {key: "a" * 64 for key in ("native", "installer", "probe", "git", "go", "fixture_source")}}
+                def returned(*args):
+                    if replace:
+                        marker.rename(marker.with_name("held-original"))
+                        marker.write_bytes(original)
+                    return record, b'{"result":"success"}', b""
+                with mock.patch("cline_managed_session_e2e.invoke_bridge", side_effect=returned) as bridge:
+                    if replace:
+                        with self.assertRaises(ValueError): journey.install("cold-repeat")
+                    else:
+                        journey.install("cold-repeat")
+                    self.assertEqual(bridge.call_count, 1)
+                self.assertEqual(marker.read_bytes(), original)
 
     def test_rebound_authority_or_copied_marker_refuses_before_bridge(self):
         for change in ("installation", "source", "binding", "data", "marker", "manifest", "pending"):
