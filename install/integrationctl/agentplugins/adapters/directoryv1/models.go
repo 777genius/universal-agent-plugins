@@ -6,10 +6,7 @@ package directoryv1
 import (
 	"bytes"
 	"crypto/ed25519"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -75,8 +72,6 @@ type TrustedKey struct {
 	PublicKey ed25519.PublicKey
 	State     KeyState
 }
-
-type TrustStore struct{ Keys []TrustedKey }
 
 type VerifiedBundle struct {
 	SnapshotBytes []byte
@@ -162,56 +157,6 @@ func ParseEnvelope(body []byte) (Envelope, error) {
 		return value, err
 	}
 	return value, nil
-}
-
-func ParseSnapshot(body []byte) (domain.DirectorySnapshot, error) {
-	var value domain.DirectorySnapshot
-	if err := strictDecode(body, &value, MaxSnapshotBytes); err != nil {
-		return value, fmt.Errorf("%w: snapshot: %v", ErrStrictJSON, err)
-	}
-	if err := requireSnapshotFields(body); err != nil {
-		return value, fmt.Errorf("%w: snapshot: %v", ErrStrictJSON, err)
-	}
-	if err := validateSnapshot(value); err != nil {
-		return value, err
-	}
-	return value, nil
-}
-
-// VerifyBundle authenticates the exact received snapshot bytes. Key IDs are
-// exact and local; no key discovery is attempted.
-func VerifyBundle(snapshotBytes, envelopeBytes []byte, trust TrustStore) (VerifiedBundle, error) {
-	if len(trust.Keys) == 0 {
-		return VerifiedBundle{}, ErrNoTrustedKeys
-	}
-	envelope, err := ParseEnvelope(envelopeBytes)
-	if err != nil {
-		return VerifiedBundle{}, err
-	}
-	sum := sha256.Sum256(snapshotBytes)
-	digest := "sha256:" + hex.EncodeToString(sum[:])
-	if digest != envelope.SnapshotDigest {
-		return VerifiedBundle{}, ErrDigestMismatch
-	}
-	key, err := trustedKey(trust, envelope.KeyID)
-	if err != nil {
-		return VerifiedBundle{}, err
-	}
-	signature, err := base64.StdEncoding.Strict().DecodeString(envelope.Signature)
-	if err != nil || len(signature) != ed25519.SignatureSize {
-		return VerifiedBundle{}, fmt.Errorf("%w: malformed base64", ErrInvalidSignature)
-	}
-	if !ed25519.Verify(key.PublicKey, SnapshotSignatureMessage(snapshotBytes), signature) {
-		return VerifiedBundle{}, ErrInvalidSignature
-	}
-	snapshot, err := ParseSnapshot(snapshotBytes)
-	if err != nil {
-		return VerifiedBundle{}, err
-	}
-	if envelope.SnapshotSchemaVersion != snapshot.SnapshotSchemaVersion || envelope.Sequence != snapshot.Sequence {
-		return VerifiedBundle{}, ErrSequenceMismatch
-	}
-	return VerifiedBundle{SnapshotBytes: append([]byte(nil), snapshotBytes...), EnvelopeBytes: append([]byte(nil), envelopeBytes...), Snapshot: snapshot, Envelope: envelope, Digest: digest, Source: BundleSourceVerified}, nil
 }
 
 // SnapshotSignatureMessage returns the byte-exact, domain-separated message

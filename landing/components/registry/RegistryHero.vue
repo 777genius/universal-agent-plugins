@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { RegistryIndex } from '~/types/registry';
-import { installTargets, canonicalInstallTarget, canonicalInstallTargets, cliInstallTargets, reconcileLocalChatGPTTargets, type InstallTargetID } from '~/data/installTargets';
+import { installTargets, canonicalInstallTargets, cliInstallTargets, reconcileLocalChatGPTTargets, type InstallTargetID } from '~/data/installTargets';
 import { pluginInstallAvailability } from '~/utils/pluginInstallAvailability';
+import { pluginTargetDescription } from '~/utils/pluginTargetDescription';
 import { pluginCommands } from '~/utils/commands';
 import { countAtElapsed, PLUGIN_COUNT_ANIMATION_MS } from '~/utils/countAnimation';
 import { catalogVisiblePlugins, groupCatalogPlugins } from '~/utils/filter';
@@ -119,18 +120,10 @@ const targetOptions = computed(() =>
     icon: asset(`client-icons/${client.icon}`),
     disabled: !availableTargets.value.includes(client.id),
     description: (() => {
-      if (!published.value) return t('shell.hero.unavailable');
-      if (expired.value) return t('shell.hero.refreshing');
-      const target = expectedDistribution(demoPlugin.value, [canonicalInstallTarget(client.id)])?.targets.find(
-        (item) => item.client === canonicalInstallTarget(client.id),
-      );
-      if (client.id === 'chatgptweb')
-        return pluginInstallAvailability(demoPlugin.value, [client.id])
-          ? t('shell.hero.chatgptSetup')
-          : t('shell.hero.notAvailableForPlugin');
-      return target
-        ? t(`shell.hero.delivery.${target.delivery}`)
-        : t('registryUi.install.noCompatibleSignedRelease', { agent: client.name });
+      const hint = pluginTargetDescription(demoPlugin.value, client, {
+        scope: 'user', published: published.value, expired: expired.value, current: current.value,
+      });
+      return t(hint.key, hint.params);
     })(),
   })),
 );

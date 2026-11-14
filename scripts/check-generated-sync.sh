@@ -40,4 +40,6 @@ if ! diff -u "$before" "$after"; then
   exit 1
 fi
 
+go run ./cli/cmd/genclientcapabilities -output landing/data/clientCapabilities.generated.json -check
+
 echo "generated artifacts in sync"

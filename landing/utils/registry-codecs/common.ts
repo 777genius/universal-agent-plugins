@@ -1,4 +1,5 @@
 // Primitive validation shared by legacy and signed directory codecs.
+import { clientIds } from '../../data/clientIds.generated.ts';
 import type {
   ClientEvidence,
   ClientID,
@@ -16,23 +17,7 @@ export const REVISION = /^[a-f0-9]{40}$/;
 export const DIGEST = /^sha256:[a-f0-9]{64}$/;
 export const PLUGIN_NAME = /^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/;
 export const COMPONENTS = new Set<ComponentID>(['extensions', 'mcp', 'skills']);
-export const CLIENTS = new Set<ClientID>([
-  'codex',
-  'chatgpt',
-  'cursor',
-  'copilot',
-  'vscode',
-  'kiro',
-  'claude',
-  'gemini',
-  'opencode',
-  'cline',
-  'windsurf',
-  'grok',
-  'kimi',
-  'qoder',
-  'pi',
-]);
+export const CLIENTS = new Set<ClientID>(clientIds);
 export const KINDS = new Set<DistributionKind>(['upstream', 'community_bridge', 'community']);
 export const RFC3339_INSTANT =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/;

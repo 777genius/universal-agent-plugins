@@ -9,6 +9,12 @@ on:
       - ".github/workflows/docs-pages.yml"
       - ".github/workflows/registry-compatibility-mirror.yml"
       - "cmd/agentplugins-registry-mirror/**"
+      - "cli/cmd/genclientcapabilities/**"
+      - "install/integrationctl/agentplugins/domain/**"
+      - "install/integrationctl/agentplugins/clients/**"
+      - "install/integrationctl/agentplugins/installer/engine.go"
+      - "scripts/check-generated-sync.sh"
+      - "Makefile"
       - ".github/workflows/landing.yml"
   push:
     branches: [main]
@@ -19,6 +25,12 @@ on:
       - ".github/workflows/docs-pages.yml"
       - ".github/workflows/registry-compatibility-mirror.yml"
       - "cmd/agentplugins-registry-mirror/**"
+      - "cli/cmd/genclientcapabilities/**"
+      - "install/integrationctl/agentplugins/domain/**"
+      - "install/integrationctl/agentplugins/clients/**"
+      - "install/integrationctl/agentplugins/installer/engine.go"
+      - "scripts/check-generated-sync.sh"
+      - "Makefile"
       - ".github/workflows/landing.yml"
   workflow_dispatch:
   schedule:
@@ -74,8 +86,8 @@ jobs:
           cp -a "${RUNNER_TEMP}/uap-registry-mirror/." landing/public/
           echo "UAP_VERIFIED_MIRROR=${RUNNER_TEMP}/uap-registry-mirror" >> "$GITHUB_ENV"
 
-      - name: Verify generated Project and User agent capabilities
-        run: go test -count=1 ./cli/cmd/genclientcapabilities
+      - name: Verify generated agent contract and public presentation
+        run: make client-contract-check
 
       - name: Install landing dependencies
         working-directory: landing
@@ -96,7 +108,7 @@ jobs:
         run: |
           node ./scripts/prepare-webp-assets.mjs
           pnpm exec nuxt prepare
-          pnpm exec vue-tsc --noEmit
+          pnpm run check:types
 
       - name: Check registry, lint, and generate
         env:
