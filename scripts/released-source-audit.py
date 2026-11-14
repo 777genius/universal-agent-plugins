@@ -334,7 +334,7 @@ def checked_saved_removal(documents, alias, case, root):
         require(body is not None, "saved removal lost the manifest or lock")
         bodies.append(body)
     manifest = tomllib.loads(bodies[0].decode("utf-8"))
-    locked = json.loads(bodies[1].decode("utf-8"))
+    locked = json.loads(bodies[1].decode("utf-8"), object_pairs_hook=live._unique_json_object)
     dependencies, targets = manifest.get("dependencies", {}), manifest.get("targets", {})
     require(manifest.get("schema_version") == 1 and isinstance(dependencies, dict)
             and isinstance(targets, dict), "saved removal produced an invalid manifest")

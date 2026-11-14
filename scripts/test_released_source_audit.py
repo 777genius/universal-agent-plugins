@@ -693,6 +693,17 @@ class SavedScopeTests(unittest.TestCase):
                     audit.checked_saved_removal(documents, "portable", case(), root)
 
 
+    def test_saved_removal_rejects_duplicate_lock_keys(self):
+        # A duplicated lock member could hide a retained dependency.
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest, lock = root / "uap.toml", root / "uap.lock"
+            manifest.write_text("schema_version = 1\n[dependencies]\n[targets]\n", encoding="utf-8")
+            lock.write_text('{"lock_version":1,"packages":[{"alias":"portable"}],"packages":[]}',
+                            encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate JSON field"):
+                audit.checked_saved_removal([manifest, lock], "portable", case(), root)
+
     def test_saved_removal_refuses_hardlinked_or_oversized_lock(self):
         for variant in ("hardlink", "oversized"):
             with self.subTest(variant=variant), tempfile.TemporaryDirectory() as temp:
