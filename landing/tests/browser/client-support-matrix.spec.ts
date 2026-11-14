@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { clientSupportRows } from '../../data/clientSupport.ts';
 import { clientIds } from '../../data/clientIds.generated.ts';
 import { hiddenPublicClientIds } from '../../data/clients.ts';
-import { hydrated, wording } from './i18n-state.helpers';
+import { hydrated, pinnedContext7Example, wording } from './i18n-state.helpers';
 
 test('home lists the complete scope matrix immediately before FAQ', async ({ page }) => {
   await page.goto('./');
@@ -108,7 +108,7 @@ const nativeClientCases = (['hermes', 'antigravity'] as const).flatMap((client) 
 );
 
 for (const { client, locale, theme, width } of nativeClientCases) {
-  test(`${client} ${locale} ${theme} route copies a local package command at ${width}px`, async ({ page, context }, testInfo) => {
+  test(`${client} ${locale} ${theme} route copies an immutable source command at ${width}px`, async ({ page, context }, testInfo) => {
     const t = wording(locale);
     const direction = locale === 'ar' ? 'rtl' : 'ltr';
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -151,12 +151,16 @@ for (const { client, locale, theme, width } of nativeClientCases) {
       expect(firstStep.y).toBeLessThan(lastStep.y);
     }
     await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${theme}`));
-    const command = `npx -y universal-agent-plugins add ./my-plugin --target ${client}`;
+    const { command, selector } = await pinnedContext7Example(page, client);
     const install = page.locator('.agent-page__install');
-    await expect(install.locator('code')).toHaveText(command);
-    await expect(install.locator('pre')).toHaveCSS('direction', 'ltr');
-    await expect(install).toContainText(t('registryUi.agentPage.packageExampleSourceHint'));
-    await install.getByRole('button', { name: t('registryUi.command.copyLabel'), exact: true }).click();
+    const snippet = install.locator('.command-snippet--add');
+    await expect(snippet).toHaveCount(1);
+    await expect(snippet.locator('code')).toHaveText(command);
+    await expect(snippet.locator('pre')).toHaveCSS('direction', 'ltr');
+    await expect(install.locator('p code')).toHaveText(selector);
+    await expect(install).toContainText(t('registryUi.install.pinnedCatalogSource'));
+    await expect(install).not.toContainText(t('registryUi.agentPage.packageExampleSourceHint'));
+    await snippet.getByRole('button', { name: t('registryUi.command.copyLabel'), exact: true }).click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
     const icon = page.locator('.agent-page__icon img');
     const iconFilename = client === 'hermes' ? 'hermes.webp' : 'antigravity.svg';

@@ -341,3 +341,69 @@ after removal, parse the manifest and lock and inspect the real list result.
 A later removal cannot conceal an earlier cross-scope write, and native-file
 cleanup alone cannot prove saved removal. These strengthen the acceptance
 criteria; the known 0.1.108 repair failure remains a failed qualification.
+
+### Integrated review checkpoint: 2026-11-14
+
+The shared client contract and modern authenticated reader are merged in UAP
+#908; the released capability pin and frozen historical Registry boundary are
+merged in Registry #480. The narrow Antigravity repair is merged in UAP #911
+after genuine native acceptance on Linux, macOS and Windows and package-manager
+E2E on all four supported runner platforms. UAP #912 is merged at
+`e3943cee826064911a63ceb2e1e4b2a24a124674`: all 45 applicable jobs in eight
+workflows passed, including the genuine signed Go-to-TypeScript round trip,
+both combined site base paths and both full browser shards. Its actual merged
+tree preserves the already merged Antigravity fix.
+
+The modern publication mechanics remain under final CI in Registry #483.
+Independent review corrected marker validation before any remote CAS operation
+and required the modern compositor to validate the entire ledger history from
+the reviewed bootstrap. The exact corrected head `031ee717` passed all 91
+publication/profile/CAS tests and the full Pages gate: 1,902 Python tests ran
+with five explicitly skipped, followed by 27 confinement, 107 site and 26
+Chromium checks. Skips are not successful qualification. These mechanics do
+not provision a production issuer, signing key, origin, ledger or target grant.
+
+Both public-release audit runs are complete: binary head `e9f09473` and npm/UI
+head `e2270cbc` each passed Hermes Linux and Pi Linux/macOS/Windows, while
+Antigravity failed on all three OSes. Downloaded, CRC-checked receipts from all
+six Antigravity jobs confirm the same operation boundary in both User and
+Project scope: add, info, list and update succeed; repair exits 1 with
+`no_supported_components`; removal is not reached. All mandatory-dependency
+refusal cases remain successful. These observations qualify materialized
+lifecycle behavior only, not authentication, native activation or signed
+Directory eligibility. The immutable public release is still 0.1.108.
+
+Final UI browser review found outdated local-package expectations in 20 cases.
+Update them to independently read the built Context7 source projection, require
+the reviewed active immutable source, and compare the complete pinned command
+and copied clipboard value. Preserve the full locale/theme/viewport matrix.
+Retain a separate empty-catalog fallback case for Hermes, Antigravity and Pi,
+including the local-package prerequisite and Skills link. Select the command
+snippet specifically so the source explanation cannot create an ambiguous
+code-element locator. No production formatter is imported into this oracle.
+
+One hosted production-source test failed while removing its temporary Git
+repository. Trace2 confirmed that its commits start detached automatic
+maintenance. Keep maintenance synchronous through repository-local fixture
+settings instead of ignoring cleanup failures; all original provenance and
+refusal assertions remain. The four Python checks pass, and Trace2 now shows
+only `--no-detach` maintenance. The original test passed 25 local repetitions,
+so a deterministic reproduction of the intermittent cleanup failure is not
+claimed. Local browser execution remains blocked by the host's socket policy;
+collection and typechecking are not counted as browser execution.
+
+The current-main/UI merge was independently reviewed as tree
+`0528e5d1c268884d0889664021e2b14a9dc23e8f`. Its shared signed decoder retains
+both modern authenticated projection and validated source manifest identities;
+the Antigravity fix is unchanged. The five reviewed test corrections and this
+checkpoint accompany that integration. Final combined-head browser and build
+checks must pass before source UI acceptance.
+
+Production completion still requires an actual qualified fixed CLI release,
+followed by one reviewed update of public version, source commit, binary
+digests and npm integrity pins; both seven-lane public audits must then pass.
+Publish the website only through its reviewed immutable source/tree pin and
+verify live build provenance. Independently provision and qualify the modern
+issuer and its protected publication controls before enabling its feed. No
+source merge, prepared mechanics or historical failure is presented as that
+public release, live deployment or modern signed-target activation.
