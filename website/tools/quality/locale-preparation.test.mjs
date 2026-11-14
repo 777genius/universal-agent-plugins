@@ -212,14 +212,18 @@ test("locale readiness keeps one finite navigation budget including late complet
   });
 });
 
-test("locale readiness preserves the exercised clean alias and manual gateway contracts", async t => {
-  await t.test("html spelling reaches exactly the existing clean URL", async child => {
+test("locale readiness preserves the exercised direct alias and manual gateway contracts", async t => {
+  await t.test("initial html spelling keeps the exact requested browser URL", async child => {
     const url = "http://127.0.0.1:43105/universal-agent-plugins/docs/hi/guide/quickstart.html?probe=one#build-plugins";
-    const target = "http://127.0.0.1:43105/universal-agent-plugins/docs/hi/guide/quickstart?probe=one#build-plugins";
-    const { page, calls } = navigationFixture(child, { destination: target });
+    const { page, calls } = navigationFixture(child);
     await gotoLocaleReady(page, url);
     assert.equal(calls[0].url, url);
-    assert.equal(calls[1].payload.href, target);
+    assert.equal(calls[1].payload.href, url);
+  });
+  await t.test("an unrequested clean-URL redirect cannot satisfy direct alias readiness", async child => {
+    const url = "http://127.0.0.1:43105/universal-agent-plugins/docs/hi/guide/quickstart.html?probe=one#build-plugins";
+    const { page } = navigationFixture(child, { destination: url.replace("quickstart.html", "quickstart") });
+    await assert.rejects(gotoLocaleReady(page, url), /not ready/);
   });
   await t.test("manual gateway uses its existing visible target", async child => {
     const { page, calls } = navigationFixture(child, { selector: ".language-gateway" });

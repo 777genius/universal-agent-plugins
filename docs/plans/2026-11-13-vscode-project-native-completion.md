@@ -926,9 +926,10 @@ specific historical cause of the idle timeout remains unknown.
 R1 accepted a smoke-only readiness correction in three existing files. Only
 the locale `goto` helper changes: it waits for DOMContentLoaded, the already-used
 installed Vue application and visible document heading (or the existing manual
-language gateway), at the exact expected URL. The site's existing `cleanUrls`
-behavior maps the explicitly exercised `.html` spelling to its clean path;
-origin, query and fragment remain exact. One monotonic 30-second deadline covers
+language gateway), at the exact expected URL. This first correction incorrectly
+assumed that `cleanUrls` also rewrote an initial `.html` browser address; the
+direct-alias checkpoint below corrects that source interpretation. Origin,
+query and fragment remain exact. One monotonic 30-second deadline covers
 navigation and readiness; expiration refuses rather than passing timeout zero.
 All existing HTTP/content, locale, fragment, reload/history and working-control
 assertions remain. No website content, native stage, qualification or timeout
@@ -940,9 +941,10 @@ top-level/subtest cases; `git diff --check` also passes. They distinguish a
 ready interface with busy background network from
 an incorrect URL, missing/unhydrated/hidden interface, late URL change and
 readiness at or beyond the original deadline. They also retain the existing
-clean-alias and manual-gateway cases. Independent R2 accepted all three frozen
-hashes, replayed the 26 contracts and joined the original artifact's VitePress
-framework to the clean-URL behavior. Reconstructing the whole browser helper
+then-modeled clean-alias and manual-gateway cases. Independent R2 accepted all
+three frozen hashes and replayed the 26 contracts, but its interpretation of
+the original VitePress framework did not distinguish internal route normalization
+from the browser address. Reconstructing the whole browser helper
 back to 38a confirmed that every other assertion remained unchanged. New hosted
 smoke proof remains pending. Local original-site replay could not launch Chromium because
 the environment denied its process-singleton socket before the first navigation;
@@ -1006,3 +1008,80 @@ hashes/CRCs plus all 49 stream joins. Both Docs implementation/test hashes remai
 identical to their earlier accepted review. Only this factual note follows R2;
 the four runtime/test file hashes remain unchanged. New hosted Docs and complete
 trusted lifecycle success are still required, with historical timing unproved.
+
+### Exact direct-alias readiness after the 33e4 Docs failure
+
+Automatic Docs run `43540217865`, job `132278775120`, passed its generators,
+checks and build, then failed in `gotoLocaleReady` at the quickstart spelling
+loop: `waitForFunction` exceeded its remaining 29,931 ms. The original log does
+not identify that iteration's URL or DOM, so neither is inferred here. Its
+checkout was merge `249710cc39045581ca44f2b1ff2e435c61d2eac3`, tree
+`5fafa6e05cdb4ba3385435a481802ff693fa52f1`, with parents main
+`ee6bbb04c3bf1cf2981764e5093d803dc0b57aec` and head
+`33e4f22923b3e94f155f6a052fbc9603f5abbb57`. Canonical metadata and the actual
+Git commit object agree; the helper, contract and smoke-server sources match
+33e4. Original UI artifact `14092051678` is 10,346,438 bytes, SHA-256
+`45bad69aaf9a77901952fbfb9a5d43a007781994e0d9070c5e352a2ee6e8b785`.
+Its ZIP CRC and 765 unique members pass; every member equals the previous 38a
+UI artifact. No output from either historical run is rewritten.
+
+The pinned framework member `framework.C8yj6m5T.js` has SHA-256
+`4f1302bfee3df0886fe41bcd3aac11c550ad3ef5e3b3dc7aa1b6530341dcf547`.
+Executing its unchanged router and normalizers with the original quickstart
+page data proves that an initial direct `.html` browser URL remains unchanged,
+including query and fragment, while the internal route resolves without the
+extension. The earlier author and R2 interpretation conflated those two
+identities. The actual smoke HTTP handler also serves that existing `.html`
+member with status 200 and no redirect. Its unchanged callback was replayed
+against the original HTML without opening a socket or launching a browser.
+The original readiness helper rejects this ready direct-alias case; the same
+unchanged replay passes after removing only the invented pathname rewrite.
+This establishes a readiness-oracle defect, not the unrecorded historical
+iteration or renderer timing.
+
+R1 accepted exactly three existing paths: remove the pathname rewrite, correct
+the direct-alias contract and add the silent-redirect refusal, and record this
+checkpoint. The exact requested URL, Vue application and visible heading or
+manual gateway remain required. The same monotonic 30-second budget, positive
+remaining-time checks and all existing content, fragment, reload/history and
+control assertions remain unchanged. No native observer, stage, qualification,
+workflow, product page or timeout changes. Complexity is 1/10; source confidence
+is high, while hosted smoke and complete native acceptance remain unproved.
+
+All 27 locale contracts pass on Node 24.22.1 (820.650 ms). The immutable original
+router/helper replay is RED on 33e4 and PASS on this candidate (two tests); the
+original HTTP handler replay also passes both direct and clean spellings without
+a redirect. The original archive, actual Git object and three pinned source
+members are joined in the local audit. Independent R2 is pending. Publication
+is held while the current 33e4 trusted native run completes, so any necessary
+native correction can use its preserved original diagnostics. New hosted Docs
+and complete trusted native success are still required before merge.
+
+Independent R2 subsequently accepted all three frozen paths and the exact
+three-line runtime deletion. It independently replayed the original helper RED
+(one of two tests fails), candidate PASS (two of two), unchanged HTTP handler
+PASS (two of two), all 27 locale contracts, all 765 original ZIP members and the
+three pinned asset/source joins. There were no skipped cases or runtime changes
+after that review; this factual tail is the only subsequent candidate edit.
+
+The preserved 33e4 trusted native run `43540217934`, job `132278775546`, then
+completed successfully. Native artifact `14092442398` has outer SHA-256
+`4ad520dd5caeaf9ca29ba1278b4d95bf5ecded24b1e6703fb9ffcfe92223c815` and inner
+SHA-256 `b2dd6e690cfd7d9bb062fd9f82c9825321a03369e1290d1a4bb3853542f2ae87`;
+frontend artifact `14092645244` has outer SHA-256
+`a8805c11dcc9bb81efdfe235e6e0a2156645c1a350aceda6cabad149ac77e78b` and inner
+SHA-256 `13de961a2cf7fcb8f640dec38ca3f105736493807059242749558be708cf160f`.
+Both original ZIP pairs pass CRC, exact source/tree and upload-handoff joins.
+The audit joins 62 distinct stream receipts, ten GUI stage frames, eight public
+CLI results, the exact repeat-remove refusal, and 21 ordered probe events from
+two additional archive-bound event streams. Seven fresh native sessions perform
+gateway initialize/list/call; all 22 controller children are reaped and both
+cleanup receipts complete. The authored User skill is preserved in all ten
+observations; B's native definition is unchanged and A's root/data identity and
+retained marker survive source update, repair and full process restart. All five
+trusted Project lifecycle/MCP qualifiers are true on 33e4. Native log parsing
+remains unavailable; the actual gateway and independent probe events provide
+the protocol evidence. User public installation, vendor authentication, model
+and released-client qualification remain outside this fixture. This closes the
+publication hold, while new-head Docs, required checks and native results still
+must be verified separately before merge.

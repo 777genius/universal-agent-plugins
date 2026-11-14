@@ -12,9 +12,6 @@ export async function gotoLocaleReady(page, url, selector = ".vp-doc h1") {
     return timeout;
   };
   const expected = new URL(url);
-  // The existing cleanUrls site canonicalizes the exercised .html aliases.
-  // Keep the requested origin, query and fragment in the exact final URL.
-  expected.pathname = expected.pathname.replace(/\.html$/, "");
   const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: remaining() });
   await page.waitForFunction(({ href, selector }) => {
     const target = document.querySelector(selector);
