@@ -1606,9 +1606,12 @@ def admission_contracts():
                     path = state / "state-v2.json"; path.write_bytes(json.dumps(packet).encode())
                     env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(state)}
                     runtime_pins = ((1, "unused"), (3, hashlib.sha256(b"agy").hexdigest()), (1, "unused"))
+                    config = selected.parent.parent / "config.json"; config.write_bytes(b'{"plugins":{}}\n')
+                    foreign = selected.parent / "foreign"; foreign.mkdir()
+                    sentinel = foreign / "sentinel"; sentinel.write_bytes(b"foreign User bytes\n")
                     before = public_binding_proof(env, NAME, runtime_pins)
                     public_preserved(before, public_binding_proof(env, NAME, runtime_pins))
-                    for effect in ("extra-object", "wrong-path", "wrong-kind", "wrong-digest", "pending", "attempt", "latest-receipt"):
+                    for effect in ("extra-object", "wrong-path", "wrong-kind", "wrong-digest", "pending", "attempt", "latest-receipt", "source-revision"):
                         changed = json.loads(json.dumps(packet))
                         candidate = changed["installations"][0]["clients"]["binding"]
                         if effect == "extra-object": candidate["native_objects"].append(dict(candidate["native_objects"][0]))
@@ -1619,6 +1622,7 @@ def admission_contracts():
                             candidate["receipts"][-1]["after_digest"] = "sha256:" + "0" * 64
                         elif effect == "pending": candidate["pending_native_intent"] = {}
                         elif effect == "attempt": candidate["native_activation_attempt"] = "unsettled"
+                        elif effect == "source-revision": changed["installations"][0]["source"]["resolved_revision"] = "foreign"
                         else:
                             candidate["receipts"].append(dict(candidate["receipts"][0], operation_id="second", sequence=2,
                                                               after_digest="sha256:" + "0" * 64))
@@ -1637,10 +1641,31 @@ def admission_contracts():
                     self.assertEqual(json.loads(public_owned_bytes(path)), expected)
                     path.write_bytes(json.dumps(packet).encode())
                     before = public_binding_proof(env, NAME, runtime_pins)
-                    moved = root / "original-manifest"; manifest.rename(moved); manifest.write_bytes(moved.read_bytes()); manifest.chmod(0o600)
+                    unselected = public_unselected_home(home, selected)
+                    moved = root / "original-selected"; selected.rename(moved); shutil.copytree(moved, selected)
+                    binding["receipts"].append(dict(binding["receipts"][-1], operation_id="repair", sequence=3))
+                    path.write_bytes(json.dumps(packet).encode())
                     after = public_binding_proof(env, NAME, runtime_pins)
+                    self.assertNotEqual(before["bundle"]["."][1], after["bundle"]["."][1])
+                    self.assertEqual(after["receipts"][0][:-1], before["receipts"][0])
+                    self.assertEqual(after["receipts"][0][-1]["phase"], "committed")
                     with self.assertRaises(AssertionError): public_preserved(before, after)
                     public_preserved(before, after, replaced=True)
+                    for effect in ("missing", "replaced-history", "standalone"):
+                        changed = dict(after)
+                        receipts = json.loads(json.dumps(after["receipts"]))
+                        if effect == "missing": receipts[0] = receipts[0][:-1]
+                        elif effect == "replaced-history": receipts[0][0]["operation_id"] = "foreign"
+                        else: receipts[1].append({"operation_id": "foreign"})
+                        changed["receipts"] = receipts
+                        with self.subTest(receipt_effect=effect), self.assertRaisesRegex(AssertionError, "retained receipts"):
+                            public_preserved(before, changed, replaced=True)
+                    self.assertEqual(public_unselected_home(home, selected), unselected)
+                    for victim in (config, sentinel):
+                        protected = public_unselected_home(home, selected)
+                        victim.write_bytes(b"changed unselected User bytes\n")
+                        with self.subTest(member=victim.name):
+                            self.assertNotEqual(public_unselected_home(home, selected), protected)
                     (data / "marker").write_bytes(b"new data")
                     with self.assertRaises(AssertionError): public_preserved(after, public_binding_proof(env, NAME, runtime_pins), replaced=True)
                     package["version"] = "2.0.0"; path.write_bytes(json.dumps(packet).encode())
@@ -1856,6 +1881,10 @@ def public_preserved(before, after, *, replaced=False):
     if replaced:
         if public_bundle_content(before["bundle"]) != public_bundle_content(after["bundle"]):
             raise AssertionError("Public exact-revision repair changed bundle content/modes")
+        previous, current = before["receipts"], after["receipts"]
+        if (len(current[0]) != len(previous[0]) + 1 or current[0][:-1] != previous[0]
+                or current[1] != previous[1]):
+            raise AssertionError("Public repair changed retained receipts or omitted its new commit")
     elif before["bundle"] != after["bundle"] or before["receipts"] != after["receipts"]:
         raise AssertionError("Read-only public operation changed owned bundle/receipts")
 
@@ -2079,8 +2108,10 @@ def public_user_observation(runtime, source, executable_dir, parent, protected):
                 or updated["revision"][1]["manifest_digest"] == before["revision"][1]["manifest_digest"]):
             raise AssertionError("Public changed update lost revision or retained binding/data identity")
         retained()
-        command("uap-repair", observed=True, unchanged_home=True)
-        public_preserved(updated, public_binding_proof(env, NAME, runtime[4])); retained()
+        command("uap-repair", observed=True)
+        repaired = public_binding_proof(env, NAME, runtime[4])
+        public_preserved(updated, repaired, replaced=True); retained()
+        updated = repaired  # Adopt only the fully joined committed replacement before quarantine.
         quarantine = root / "retained-owned-bundle"
         if quarantine.exists() or quarantine.is_symlink() or object_identity(selected.lstat(), True) != updated["bundle"]["."][1]:
             raise AssertionError("Absent-repair quarantine authority differs")

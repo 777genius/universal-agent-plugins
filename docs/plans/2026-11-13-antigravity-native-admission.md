@@ -838,9 +838,10 @@ Warm and cold proofs join the exact installation/binding/source/package revision
 to canonical physical User path, native manifest and the real single owned
 data receipt/owner-marker bytes. A harmless exclusive task marker is retained
 through repeat, update, repair and removal. Read-only repeat, historical
-refinement, intact repair and cold observation preserve full owned bundle
-metadata and receipts; actual replacement compares original contents/modes
-while retaining binding and data authority. Historical authoring changes only
+refinement and cold observation preserve full owned bundle metadata and receipts.
+Confirmed grouped repair replaces the selected directory even when intact;
+that replacement compares original contents/modes while retaining binding,
+revision and data authority. Foreign User settings and members remain exact. Historical authoring changes only
 activation in the captured state, through original held state parent/file
 authority, and explicitly leaves authentication unsynthesized. The absent
 bundle is renamed to an owned retained quarantine, never recursively deleted.
@@ -1046,3 +1047,56 @@ All 35 contracts passed locally in 5.681 seconds. The two affected contracts
 also passed under an externally supplied fractional clock in 0.030 seconds.
 No native client or hosted flag was substituted for these inert checks; a fresh
 corrected-source Windows/native run remains required.
+
+### Confirmed grouped repair retains content, not directory identity (2026-11-13)
+
+At source `4c096eea961c1758bdc8779d43999355c7cd5ef0`,
+[run 43523128070, Linux job 132222204410](https://github.com/777genius/universal-agent-plugins/actions/runs/43523128070/job/132222204410)
+completed direct native exchanges and public add, repeat, historical repeat,
+changed update and intact repair. The last public receipt has exit 0,
+cleanup_complete=true, mutated=true and group_phase=external_completed.
+The harness then failed its whole-User-profile read-only comparison.
+
+Artifact 14085982872 (10,053 bytes; SHA-256
+`7d30eb1c402ef1b3449dea38b7612c5f177b20757ba1126aa7b6818c86d5c0bc`)
+and its nested receipts archive passed CRC checks. All 19 request/receipt
+identity joins and all 24 captured stream size/base64/SHA joins passed.
+The archive contains no before/after User inventory, so the exact original
+changed member or metadata field is unavailable and is not inferred.
+
+The existing public repair dispatch calls RepairGroup. Its Repair flag excludes
+the no-change path, stages the exact recorded revision and commits the selected
+directory through the existing transaction kernel. The existing public Cobra
+contract explicitly tests grouped activation and retained bytes. Therefore a
+whole-directory physical-identity assertion is inappropriate for this operation;
+this correction does not change product repair behavior.
+
+Only intact repair stops using unchanged_home. Its replacement must pass the
+full public_binding_proof and existing replacement-content comparison, exact
+binding/revision/data joins and unchanged foreign User/config/source/Project-B
+guards. Only then does the accepted repaired binding become the quarantine
+baseline. Read-only repeat/historical and cold observation checks stay exact.
+The existing inert contract now replaces an actual directory at the same
+revision, records a new valid committed receipt, and retains rejection of
+read-only replacement, changed source, data, foreign User files and config.
+
+An attempted local public-Cobra metadata replay did not execute: the compiler
+was killed. The cause was not established. The subsequent executor outage
+prevented running these new Python edits locally. No new local red/green or native PASS
+is claimed; ordinary contracts and fresh genuine native acceptance must run
+on the corrected source.
+
+After the executor recovered, the complete corrected directory-replacement
+contracts passed: 35 tests in 5.309 seconds, with no skips. Independent review
+then required preserving the exact previous receipt prefix, exactly one new
+committed directory-swap receipt and unchanged standalone receipts for each
+repair. This matches the existing producer, which copies the previous binding
+receipts and appends one directory mutation.
+
+The three new missing-commit, changed-history and changed-standalone cases fail
+when only that new receipt guard is removed. With the guard present, all 35
+contracts passed in 5.221 seconds with no skips. Independent source review
+accepted the final receipt guard and regressions. The original read-only
+checks, foreign contents and all revision/data joins remain strict. These are
+local contract results; genuine native acceptance on the corrected source
+remains required.
