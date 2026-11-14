@@ -6,7 +6,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -117,17 +119,22 @@ func TestSessionBoundedPinRejectsSameBytesAndTimestampsReplacement(t *testing.T)
 		t.Fatal(err)
 	}
 	calls := 0
+	var renameErr error
 	runner := &sessionObservationRunner{result: sourceInventoryResult(t, path), onRun: func() {
 		calls++
-		if err := os.Rename(replacement, path); err != nil {
-			t.Fatal("real same-filesystem replacement must execute", err)
-		}
-		if err := os.Chtimes(parent, parentBefore.ModTime(), parentBefore.ModTime()); err != nil {
-			t.Fatal(err)
-		}
+		renameErr = replaceSessionSourceFile(t, replacement, path, parentBefore)
 	}}
 	err = New().VerifySession(t.Context(), clients.Env{NativeConfig: nativeconfig.New(), Runner: runner}, plan)
-	if !errors.Is(err, nativeconfig.ErrConcurrentChange) || calls != 1 {
+	if sessionRenameWasDenied(t, renameErr, err, calls, replacement, path) {
+		assertUnchangedSessionEntry(t, path, original, owned.Body)
+		assertUnchangedSessionEntry(t, parent, parentBefore, nil)
+		if !bytes.Equal(mustSessionBytes(t, replacement), owned.Body) {
+			t.Fatal("denied replacement changed the pending fixture bytes")
+		}
+		if err := replaceSessionSourceFile(t, replacement, path, parentBefore); err != nil {
+			t.Fatal("same replacement must execute after the pin is released", err)
+		}
+	} else if !errors.Is(err, nativeconfig.ErrConcurrentChange) || calls != 1 {
 		t.Fatalf("same-byte replacement passed native verification: calls=%d err=%v", calls, err)
 	}
 	after, err := os.Lstat(path)
@@ -164,15 +171,23 @@ func TestSessionBoundedPinRejectsRetainedParentUnderNewAncestor(t *testing.T) {
 		}
 	})
 	calls := 0
+	var renameErr error
 	runner := &sessionObservationRunner{result: sourceInventoryResult(t, path), onRun: func() {
 		calls++
-		replaceSessionSourceAncestor(t, ancestor, parent, moved, beforeAncestor.Mode().Perm())
-		if err := os.Chtimes(parent, beforeParent.ModTime(), beforeParent.ModTime()); err != nil {
-			t.Fatal(err)
-		}
+		renameErr = replaceSessionSourceAncestor(t, ancestor, parent, moved, beforeAncestor.Mode().Perm(), beforeParent)
 	}}
 	err = New().VerifySession(t.Context(), clients.Env{NativeConfig: nativeconfig.New(), Runner: runner}, plan)
-	if !errors.Is(err, nativeconfig.ErrConcurrentChange) || calls != 1 {
+	if sessionRenameWasDenied(t, renameErr, err, calls, ancestor, moved) {
+		assertUnchangedSessionEntry(t, ancestor, beforeAncestor, nil)
+		assertUnchangedSessionEntry(t, parent, beforeParent, nil)
+		assertUnchangedSessionEntry(t, path, beforeFile, owned.Body)
+		if _, err := os.Lstat(moved); !os.IsNotExist(err) {
+			t.Fatal("denied ancestor move created its destination", err)
+		}
+		if err := replaceSessionSourceAncestor(t, ancestor, parent, moved, beforeAncestor.Mode().Perm(), beforeParent); err != nil {
+			t.Fatal("same ancestor substitution must execute after the pin is released", err)
+		}
+	} else if !errors.Is(err, nativeconfig.ErrConcurrentChange) || calls != 1 {
 		t.Fatalf("new ancestor with original parent/file was admitted: calls=%d err=%v", calls, err)
 	}
 	afterAncestor, err := os.Lstat(ancestor)
@@ -183,13 +198,13 @@ func TestSessionBoundedPinRejectsRetainedParentUnderNewAncestor(t *testing.T) {
 	assertUnchangedSessionEntry(t, path, beforeFile, owned.Body)
 }
 
-func replaceSessionSourceAncestor(t *testing.T, ancestor, parent, moved string, mode os.FileMode) {
+func replaceSessionSourceAncestor(t *testing.T, ancestor, parent, moved string, mode os.FileMode, parentBefore os.FileInfo) error {
 	t.Helper()
 	if _, err := os.Lstat(moved); !os.IsNotExist(err) {
 		t.Fatal("moved fixture destination already exists", err)
 	}
 	if err := os.Rename(ancestor, moved); err != nil {
-		t.Fatal("real ancestor rename must execute", err)
+		return err
 	}
 	if err := os.Mkdir(ancestor, mode); err != nil {
 		t.Fatal(err)
@@ -197,6 +212,10 @@ func replaceSessionSourceAncestor(t *testing.T, ancestor, parent, moved string, 
 	if err := os.Rename(filepath.Join(moved, filepath.Base(parent)), parent); err != nil {
 		t.Fatal("original parent must be retained under replacement ancestor", err)
 	}
+	if err := os.Chtimes(parent, parentBefore.ModTime(), parentBefore.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	return nil
 }
 
 func assertUnchangedSessionEntry(t *testing.T, path string, before os.FileInfo, body []byte) {
@@ -209,4 +228,35 @@ func assertUnchangedSessionEntry(t *testing.T, path string, before os.FileInfo, 
 	if body != nil && !bytes.Equal(mustSessionBytes(t, path), body) {
 		t.Fatal("refusal changed original bytes")
 	}
+}
+
+// A Windows denial is evidence that this attempt did not substitute a name,
+// not evidence that identity checks observed a completed replacement. The
+// caller checks original objects and repeats the same mutation after release.
+func sessionRenameWasDenied(t *testing.T, renameErr, verifyErr error, calls int, oldPath, newPath string) bool {
+	t.Helper()
+	if renameErr == nil {
+		return false
+	}
+	var link *os.LinkError
+	if runtime.GOOS != "windows" || !errors.As(renameErr, &link) || link.Op != "rename" ||
+		link.Old != oldPath || link.New != newPath || !errors.Is(link.Err, syscall.Errno(5)) {
+		t.Fatalf("unexpected fixture rename refusal: %v", renameErr)
+	}
+	if verifyErr != nil || calls != 1 {
+		t.Fatalf("unchanged source was not verified after rename denial: calls=%d err=%v", calls, verifyErr)
+	}
+	t.Log("Windows denied the in-flight substitution; checking the same operation after pin release")
+	return true
+}
+
+func replaceSessionSourceFile(t *testing.T, replacement, path string, parentBefore os.FileInfo) error {
+	t.Helper()
+	if err := os.Rename(replacement, path); err != nil {
+		return err
+	}
+	if err := os.Chtimes(filepath.Dir(path), parentBefore.ModTime(), parentBefore.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	return nil
 }

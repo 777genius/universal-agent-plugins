@@ -370,3 +370,35 @@ Local Go, gofmt, lint and regression execution are UNEXECUTED because the execut
 is unavailable. The older c605 managed results retain that original source;
 they do not qualify these changes. Independent source R2, actual current-source
 tests and all three native platforms remain required before final acceptance.
+
+## 2026-11-14 — exact Windows rename-refusal fixtures
+
+The genuine Windows session-contract job
+[132484906365](https://github.com/777genius/universal-agent-plugins/actions/runs/43607242258/job/132484906365)
+on `8d18cfff1e62ae8eeaf896b5b36dd14a8e98e14a` failed two new
+negative fixtures at their attempted file replacement and ancestor rename.
+The original 31,206-byte log has SHA-256
+`c7f8e8feece63cfc31d36b643fafb42dd847f1ecab40c2be9cee772e17936b01`.
+Both operations returned “Access is denied.” before substitution. The
+managed-stdio and CLI test packages passed; the Cline package failed.
+The original log does not expose a numeric Windows error code.
+
+The two fixtures now capture the attempted rename result. A successful
+in-flight mutation still requires `ErrConcurrentChange` on every platform.
+Only Windows may take a denial branch, and only for an exact
+`os.LinkError` with the original rename source/destination and
+`ERROR_ACCESS_DENIED` (5). This numeric condition is a proposed assertion
+for the next genuine Windows run, not a code observed in the old text log.
+That branch requires one native-runner call, successful verification of the
+unchanged source, original object identities/metadata/bytes, and no moved
+ancestor destination. It then repeats the same exact mutation after the
+verifier has released its pin. This control must succeed; a persistent
+filesystem restriction or leaked handle remains a failure.
+
+The original final replacement-identity, same-byte/mode/size/mtime and
+retained-parent assertions still run. A Windows denial is prevention evidence
+for that attempted mutation; the later successful control is not an
+in-flight replacement detected by the verifier. There is no test skip or broad
+error allowance, and no runtime, sharing flag, original-source check, consent,
+deadline or qualification change. Four test methods remain in this file.
+Local Go/gofmt and genuine Windows execution remain pending.
