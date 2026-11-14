@@ -181,6 +181,13 @@ def cline_owned_stdio(entry):
 def validate_events(result, raw):
     direct = [stage["direct_installed_mcp"] for stage in result["stages"]]
     direct += [result["cold_locked_restore"][key] for key in ("direct_installed_mcp", "repeat_mcp")]
+    # Python considers True == 1, so a forged boolean PID could otherwise
+    # correlate with a real process in the original MCP event stream.
+    require(len(direct) == 5 and all(type(item) is dict and type(item.get("facts")) is dict
+            and type(item["facts"].get("pid")) is int and item["facts"]["pid"] > 0
+            and type(item["facts"].get("session")) is str and bool(item["facts"]["session"])
+            and type(item["facts"].get("nonce")) is str and bool(item["facts"]["nonce"])
+            for item in direct), "five typed native session identities required")
     expected = {(item["facts"]["pid"], item["facts"]["session"]): item["facts"] for item in direct}
     require(len(direct) == len(expected) == 5, "five independent fixture sessions required")
     rows = [document(line) for line in raw.splitlines()]
@@ -190,6 +197,12 @@ def validate_events(result, raw):
         key = row.get("pid"), row.get("session")
         require(type(key[0]) is int and key[0] > 0 and key in expected
                 and row.get("nonce") == expected[key]["nonce"], "unowned event session")
+        if row.get("method") == "tools/call":
+            facts = row.get("facts")
+            require(type(facts) is dict and type(facts.get("pid")) is int and facts["pid"] > 0
+                    and type(facts.get("session")) is str and bool(facts["session"])
+                    and type(facts.get("nonce")) is str and bool(facts["nonce"]),
+                    "native call event identity types differ")
         grouped[key].append(row)
     for key, entries in grouped.items():
         require([entry["method"] for entry in entries] == ["initialize", "tools/list", "tools/call"]

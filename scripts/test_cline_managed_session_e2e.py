@@ -140,6 +140,16 @@ class ClinePortableFixtureTests(unittest.TestCase):
         for invalid in ([], rows[:-1], rows + rows[:1], [dict(rows[0], session="foreign"), *rows[1:]]):
             with self.assertRaises(ValueError):
                 validate_events(result, encode(invalid))
+        # The old equality-only join accepted True as process ID 1 in either
+        # the declared session facts or the original tools/call event facts.
+        forged_session = copy.deepcopy(result)
+        forged_session["stages"][0]["direct_installed_mcp"]["facts"]["pid"] = True
+        with self.assertRaisesRegex(ValueError, "typed native session identities"):
+            validate_events(forged_session, encode(rows))
+        forged_call = copy.deepcopy(rows)
+        forged_call[2]["facts"]["pid"] = True
+        with self.assertRaisesRegex(ValueError, "native call event identity types"):
+            validate_events(result, encode(forged_call))
 
 
 class ClineWarmContinuityTests(unittest.TestCase):
