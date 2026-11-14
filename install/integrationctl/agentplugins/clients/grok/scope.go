@@ -120,7 +120,18 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 	if binding.TargetLocator != filepath.Join(root, "plugins", binding.PhysicalArtifact) {
 		return fmt.Errorf("grok project binding locator differs from physical artifact")
 	}
+	enabled := false
 	for _, object := range binding.NativeObjects {
+		if object.Kind == enabledMemberKind {
+			if enabled {
+				return fmt.Errorf("grok project binding repeats enabled membership ownership")
+			}
+			if err := validateEnabledObject(binding, object); err != nil {
+				return err
+			}
+			enabled = true
+			continue
+		}
 		if object.Kind != "managed_package_directory" || object.Path != binding.TargetLocator {
 			return fmt.Errorf("grok project binding contains foreign native ownership")
 		}

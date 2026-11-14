@@ -8,11 +8,13 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from grok_project_protocol_client import (document, exercise, installed_server,
                                           read_owned, selected_installation, retained_data, STATE_SCHEMA,
                                           HELPER_DIRECTORY)
 from grok_project_protocol_e2e import observed_protocol, repair_refusal, Journey, snapshot
+from grok_project_protocol_enablement import enabled_receipt, expect_retained_receipt
 
 
 class ContractTests(unittest.TestCase):
@@ -65,6 +67,47 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(installation["installation_id"], "install")
         self.assertEqual(binding["client_binding_id"], "binding")
         self.assertEqual((active, data), (self.active, self.data))
+
+    def test_owned_enablement_receipt_is_unique_settled_and_unchanged(self):
+        owned = {"kind": "grok_enabled_plugin", "object_id": "exact", "managed_digest": "recorded"}
+        binding = {"native_objects": [owned]}
+        self.assertEqual(enabled_receipt(binding), owned)
+        journey = type("Receipt", (), {"enabled_receipt": owned})()
+        for changed in (
+            {"native_objects": [owned, owned]},
+            dict(binding, native_activation_attempt="pending"),
+            dict(binding, pending_native_intent={"operation_id": "pending"}),
+            {"native_objects": [dict(owned, object_id="foreign")]},
+            {"native_objects": [dict(owned, managed_digest="changed")]},
+        ):
+            with self.subTest(binding=changed), self.assertRaises(ValueError):
+                expect_retained_receipt(journey, changed)
+
+    def test_native_config_transition_accepts_only_exact_expected_foreign_bytes(self):
+        for extra in (b"", b"foreign drift"):
+            with self.subTest(extra=extra):
+                root = self.root / ("exact-transition" if not extra else "foreign-transition")
+                root.mkdir()
+                journey = Journey(root, Path("/unused"), Path("/unused"), {"commands": []})
+                config = journey.home / ".grok/config.toml"
+                config.parent.mkdir()
+                before = b'[plugins]\nenabled=["foreign"]\n'
+                after = b'[plugins]\nenabled=["foreign", "project/full-id/owned"]\n'
+                config.write_bytes(before)
+                original_digest = hashlib.sha256(before).hexdigest()
+                journey.protected[config] = original_digest
+                def observed(*_args, **_kwargs):
+                    config.write_bytes(after + extra)
+                    return {"exit": 0, "error": None}, b"{}", b""
+                with mock.patch("native_client_research.run_probe", side_effect=observed):
+                    if extra:
+                        with self.assertRaisesRegex(ValueError, "exact owned native member"):
+                            journey.run("selected-effect", ["/unused"], config_after=after)
+                        self.assertEqual(journey.protected[config], original_digest)
+                    else:
+                        journey.run("selected-effect", ["/unused"], config_after=after)
+                        self.assertEqual(journey.protected[config], hashlib.sha256(after).hexdigest())
+                self.assertEqual(config.read_bytes(), after + extra)
 
     def test_snapshot_detects_empty_directory_and_mode_changes(self):
         before = snapshot(self.active)

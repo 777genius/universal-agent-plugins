@@ -1348,5 +1348,394 @@ class BundledRuntimeContracts(unittest.TestCase):
                         CASE["BASE"]["closed_environment"](root, root, "nonce", "url", installation=invalid)
 
 
+class SourceRuntimeContracts(unittest.TestCase):
+    """Real inert trees only; these receipts never qualify a native source run."""
+
+    def test_source_version_joins_complete_original_readout_and_selected_path(self):
+        import hashlib
+        mac_source = "/Users/runner/work/_temp/hermes-agent"
+        banner = "Hermes Agent v0.23.0 (2026.9.24) · stable · local 2bd378ed1b8d"
+        notice = "Update available — run 'hermes update'"
+        original = (banner + "\nInstall directory: " + mac_source
+                    + "\nInstall method: git\nPython: 3.14.9\nOpenAI SDK: 2.54.0\n" + notice + "\n").encode()
+        self.assertEqual(len(original), 217)
+        self.assertEqual(hashlib.sha256(original).hexdigest(), "b4f09e15b3940ad8739fa1aa3bc99c802ab162f9112e798edf3557afffaf1911")
+        self.assertNotEqual(original.strip(), banner.encode(), "the original disproves v2's one-line oracle")
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "installed/hermes-agent"
+            for platform, newline, original_source in (("posix", b"\n", mac_source), ("nt", b"\r\n", r"D:\a\_temp\hermes-agent")):
+                captured = original.replace(mac_source.encode(), original_source.encode()).replace(b"\n", newline)
+                if platform == "nt":
+                    self.assertEqual(len(captured), 209)
+                    self.assertEqual(hashlib.sha256(captured).hexdigest(), "da4ae42f21fc02f2f0967394bbfbaaa0f45cad7ec01272c5a9e8f46d8add0691")
+                # Only the original runner's source path is substituted for this
+                # portable fixture. The original output and hashes stay above.
+                self.assertEqual(captured.count(original_source.encode()), 1)
+                body = captured.replace(original_source.encode(), str(source).encode())
+                with mock.patch.dict(CASE["source_version_readout"].__globals__, {"os": SimpleNamespace(name=platform)}):
+                    CASE["source_version_readout"](captured, original_source)
+                    CASE["source_version_readout"](body, source)
+                    CASE["source_version_readout"](body.removesuffix(notice.encode() + newline), source)
+                    refusals = {
+                        "banner-only": banner.encode() + newline,
+                        "missing-final-newline": body[:-len(newline)],
+                        "different-version": body.replace(b"v0.23.0", b"v0.23.1"),
+                        "different-commit": body.replace(b"2bd378ed1b8d", b"2bd378ed1b8e"),
+                        "different-source": body.replace(str(source).encode(), str(source).encode() + b"-replacement"),
+                        "different-method": body.replace(b"Install method: git", b"Install method: pip"),
+                        "missing-python": body.replace(b"Python: 3.14.9", b"Python: Not installed"),
+                        "incomplete-python": body.replace(b"Python: 3.14.9", b"Python: 3.14"),
+                        "oversized-python": body.replace(b"Python: 3.14.9", b"Python: 3.140000.9"),
+                        "missing-sdk": body.replace(b"OpenAI SDK: 2.54.0", b"OpenAI SDK: Not installed"),
+                        "sdk-suffix": body.replace(b"OpenAI SDK: 2.54.0", b"OpenAI SDK: 2.54.0 unmeasured"),
+                        "duplicate-field": body.replace(b"Install method: git", b"Install method: git" + newline + b"Install method: git"),
+                        "unobserved-notice": body.replace(notice.encode(), b"Up to date"),
+                        "trailing-line": body + b"unmeasured output" + newline,
+                        "trailing-empty-line": body + newline,
+                        "other-newline": body.replace(newline, b"\n" if platform == "nt" else b"\r\n"),
+                    }
+                    for name, refused in refusals.items():
+                        with self.subTest(platform=platform, refusal=name), self.assertRaisesRegex(RuntimeError, "source.*version|source version"):
+                            CASE["source_version_readout"](refused, source)
+
+    def fixture(self, temporary):
+        runner = Path(temporary).resolve()
+        outer, user = runner / "hermes-native-home", runner / "hermes-native-home/user"
+        original = user / ("AppData/Local/hermes" if os.name == "nt" else ".hermes")
+        source = original / "hermes-agent"
+        for path in (source, original / "tools", original / "installs"):
+            path.mkdir(parents=True, exist_ok=True)
+        (source / "owned.py").write_bytes(b"inert source")
+        (original / "tools/python").write_bytes(b"inert interpreter; never executed")
+        (original / "config.yaml").write_bytes(b"original config")
+        (original / "auth.json").write_bytes(b"original auth marker")
+        (user / "outside-pm.txt").write_bytes(b"complete User coverage")
+        for role in ("a", "b"):
+            root = outer / ("project-" + role) / ".uap/hermes-runtime"
+            root.mkdir(parents=True)
+            (root / "config.yaml").write_bytes(b"independent config")
+        protected = [(original / name).relative_to(outer).as_posix() for name in ("config.yaml", "auth.json")]
+        policy = CASE["source_layout"](outer, user, original, source, protected=protected)
+        return runner, outer, user, original, source, policy
+
+    def capture(self, outer, policy):
+        import time
+        return CASE["payload_snapshot"](outer, CASE["directory_identity"](outer), time.monotonic() + 10, source=policy)
+
+    def test_full_partition_covers_user_outside_pm_and_exact_protected_rows(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, user, original, source, policy = self.fixture(temporary)
+            (source / "large-owned").write_bytes(b"x" * ((1 << 20) + 1))
+            first = self.capture(outer, policy)
+            rows = first["ledger"]
+            self.assertEqual(sum(row["entries"] if row["type"] == "runtime-tree" else 1 for row in rows.values()), first["entries"])
+            self.assertEqual(rows[policy["protected"][0]], first["_records"][policy["protected"][0]])
+            (user / "outside-pm.txt").write_bytes(b"same authority, changed bytes")
+            second = self.capture(outer, policy)
+            self.assertNotEqual(rows["user"], second["ledger"]["user"])
+            with self.assertRaisesRegex(RuntimeError, "Project command changed original User"):
+                CASE["profile_effect_boundary"]("config-path-a", "a", rows, rows, second["ledger"], "user", policy["projects"][0], source_capture=True)
+            self.assertEqual(rows[policy["source"]], second["ledger"][policy["source"]])
+            self.assertEqual((original / "auth.json").read_bytes(), b"original auth marker")
+
+    def test_source_link_graph_rejects_sibling_and_user_even_inside_captured_outer(self):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, _, _, _, policy = self.fixture(temporary)
+            captured = self.capture(outer, policy)["_records"]
+            member = policy["projects"][0] + "/python"
+            for target, valid in ((policy["tools"] + "/python", True),
+                                  (policy["projects"][0] + "/config.yaml", True),
+                                  (policy["projects"][1] + "/config.yaml", False),
+                                  (policy["protected"][0], False)):
+                records = {**captured, member: {"type": "link", "target": str(outer / target)}}
+                with self.subTest(target=target), mock.patch.object(Path, "resolve", side_effect=AssertionError("filesystem link traversed")):
+                    if valid:
+                        CASE["payload_links"](outer, records, time.monotonic() + 5, source=policy)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "crosses runtime authority"):
+                            CASE["payload_links"](outer, records, time.monotonic() + 5, source=policy)
+            # A final allowed target cannot launder an intermediate B link.
+            bridge = policy["projects"][1] + "/bridge"
+            records = {**captured, bridge: {"type": "link", "target": str(outer / policy["tools"] / "python")},
+                       member: {"type": "link", "target": str(outer / bridge)}}
+            with self.assertRaisesRegex(RuntimeError, "crosses runtime authority"):
+                CASE["payload_links"](outer, records, time.monotonic() + 5, source=policy)
+
+    def test_complete_hardlink_set_cannot_join_project_b_or_user_auth(self):
+        for other in ("b", "auth", "outside"):
+            with self.subTest(other=other), tempfile.TemporaryDirectory() as temporary:
+                runner, outer, _, original, _, policy = self.fixture(temporary)
+                first = outer / policy["projects"][0] / "shared"
+                target = (outer / policy["projects"][1] / "shared" if other == "b" else
+                          original / "auth.json" if other == "auth" else runner / "outside")
+                if other != "auth": target.write_bytes(b"must not be read")
+                os.link(target, first)
+                with mock.patch.object(os, "read", side_effect=AssertionError("bytes before alias authority")):
+                    with self.assertRaisesRegex(RuntimeError, "hardlink crosses|hardlink escapes"):
+                        self.capture(outer, policy)
+
+    def test_windows_source_graph_uses_unique_captured_spelling_for_authority(self):
+        import time
+        from pathlib import PureWindowsPath
+        policy = {"user": "user", "source": "user/native/source", "tools": "user/native/tools",
+                  "projects": ["project-a/root", "project-b/root"]}
+        records = {name: {"type": "directory"} for name in
+                   (".", "user", "user/native", "user/native/source", "user/native/tools", "project-a", "project-a/root")}
+        records.update({"user/native/tools/python": {"type": "file"}, "user/native/config.yaml": {"type": "file"},
+                        "project-a/root/python": {"type": "link", "target": "C:/PAYLOAD/USER/NATIVE/TOOLS/PYTHON"}})
+        with mock.patch.dict(CASE["payload_links"].__globals__, {"Path": PureWindowsPath}):
+            CASE["payload_links"](PureWindowsPath("c:/payload"), records, time.monotonic() + 5, source=policy)
+            records["project-a/root/python"]["target"] = "C:/PAYLOAD/USER/NATIVE/CONFIG.YAML"
+            with self.assertRaisesRegex(RuntimeError, "crosses runtime authority"):
+                CASE["payload_links"](PureWindowsPath("c:/payload"), records, time.monotonic() + 5, source=policy)
+            records["USER/NATIVE/TOOLS/PYTHON"] = {"type": "file"}
+            with self.assertRaisesRegex(RuntimeError, "ambiguous payload path"):
+                CASE["payload_links"](PureWindowsPath("c:/payload"), records, time.monotonic() + 5, source=policy)
+
+    def test_project_copy_of_user_sentinel_across_read_chunks_is_refused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, _, _, _, policy = self.fixture(temporary)
+            marker = b"USER_AUTH_" + b"7" * 64
+            policy["sentinels"] = (marker,)
+            target = outer / policy["projects"][0] / "installs/generation"
+            target.mkdir(parents=True)
+            (target / "copied").write_bytes(b"x" * ((1 << 20) - 5) + marker)
+            with self.assertRaisesRegex(RuntimeError, "User sentinel copied"):
+                self.capture(outer, policy)
+
+    def test_source_user_control_has_no_new_baseline_for_unexpected_native_effect(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _, outer, user, _, _, policy = self.fixture(temporary)
+            before = self.capture(outer, policy)["ledger"]
+            CASE["profile_effect_boundary"]("list-user", "user", before, before, before, "user", "user", source_capture=True)
+            (user / "unexpected-native-log").write_bytes(b"measured but unqualified")
+            after = self.capture(outer, policy)["ledger"]
+            self.assertIn("user", CASE["changes"](before, after))
+            with self.assertRaisesRegex(RuntimeError, "source User control changed"):
+                CASE["profile_effect_boundary"]("list-user", "user", before, before, after, "user", "user", source_capture=True)
+            with self.assertRaisesRegex(RuntimeError, "original User changed before command"):
+                CASE["profile_effect_boundary"]("list-user", "user", before, after, after, "user", "user", source_capture=True)
+
+    def test_source_fixture_retains_installer_config_and_rejects_foreign_collision(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            original = Path(temporary).resolve()
+            (original / "config.yaml").write_bytes(b"official installer preimage")
+            (original / ".env").write_bytes(b"inert installer environment")
+            inode = (original / "config.yaml").stat().st_ino
+            retained = CASE["prepare_user_fixture"](original, {"config.yaml": "sentinel\n", ".env": "# inert\n"}, source_capture=True)
+            self.assertEqual((original / retained["config.yaml"]["member"]).read_bytes(), b"official installer preimage")
+            self.assertEqual((original / retained["config.yaml"]["member"]).stat().st_ino, inode)
+            self.assertEqual((original / "config.yaml").read_bytes(), b"sentinel\n")
+            (original / "auth.json").write_bytes(b"must remain untouched")
+            with self.assertRaisesRegex(RuntimeError, "fixture collision"):
+                CASE["prepare_user_fixture"](original, {"auth.json": "replacement"}, source_capture=True)
+            self.assertEqual((original / "auth.json").read_bytes(), b"must remain untouched")
+
+    def test_source_safe_failure_is_separate_and_all_qualifications_remain_false(self):
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.dict(os.environ, {"HERMES_PROFILE_SOURCE_CAPTURE": "1"}):
+            directory = CASE["safe_failure_evidence"](Path(temporary).resolve(), "inert-source-refusal")
+            self.assertTrue(directory.name.startswith("hermes-profile-source-evidence-"))
+            files = list((directory / "upload").iterdir())
+            self.assertEqual([path.name for path in files], ["profile-admission.json"])
+            proof = json.loads(files[0].read_text())
+            self.assertEqual(proof["runtime_distribution"], "source")
+            for name in ("admission_qualified", "production_project_mcp", "source_install_custom_root_qualified",
+                         "source_bootstrap_recovery_qualified", "vendor_authentication", "real_model_inference", "tools_call"):
+                self.assertIs(proof[name], False)
+
+    def installed_fixture(self, temporary):
+        import hashlib
+        runner, outer, user, original, source, _ = self.fixture(temporary)
+        native = user / "bin/hermes"; native.parent.mkdir(); native.write_bytes(b"inert launcher; never executed")
+        python = original / "tools/managed-python" / ("python.exe" if os.name == "nt" else "bin/python3")
+        python.parent.mkdir(parents=True); python.write_bytes(b"inert store Python; never executed" + b"x" * (1 << 20))
+        (original / "tools/facts.json").write_text(json.dumps({"packages": {"python": {"entry": "managed-python"}}}))
+        key = hashlib.sha256(str(source).encode()).hexdigest()[:16]
+        generation = original / "installs" / key / "environments/selected"
+        generation.mkdir(parents=True); (generation / "pyvenv.cfg").write_bytes(b"inert generation")
+        facts = generation.parent.parent / "facts.json"
+        facts.write_text(json.dumps({"packages": {"venv": {"environment": str(generation)}}}))
+        command = runner / "runtime-command.json"
+        command.write_text(json.dumps([str(python), "-I", "-c", "inert code; never executed"]))
+        env = {"HOME": str(user), "USERPROFILE": str(user), "HERMES_HOME": str(original),
+               "HERMES_BIN": str(native), "HERMES_NATIVE_RUNTIME_COMMAND_FILE": str(command)}
+        return runner, outer, original, source, facts, env
+
+    def test_source_inputs_join_exact_installer_owner_facts_and_generation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            runner, outer, original, source, facts, env = self.installed_fixture(temporary)
+            identity = CASE["directory_identity"](outer)
+            with mock.patch.dict(os.environ, env):
+                inputs = CASE["source_inputs"](runner, source)
+                snapshot = CASE["source_runtime_snapshot"](inputs, identity)
+                self.assertEqual(snapshot["provenance"]["source"], str(source))
+                self.assertEqual(snapshot, CASE["source_runtime_snapshot"](inputs, identity))
+                self.assertNotIn("_records", json.dumps(snapshot))
+                facts.write_text(json.dumps({"packages": {"venv": {"environment": str(source)}}}))
+                with self.assertRaisesRegex(RuntimeError, "generation escaped owner"):
+                    CASE["source_runtime_snapshot"](inputs, identity)
+            with mock.patch.dict(os.environ, {**env, "HOME": str(runner)}), self.assertRaisesRegex(RuntimeError, "preserved installed User"):
+                CASE["source_inputs"](runner, source)
+            with mock.patch.dict(os.environ, {**env, "HERMES_BIN": str(runner / "outside")}), self.assertRaisesRegex(RuntimeError, "launcher/interpreter escaped"):
+                CASE["source_inputs"](runner, source)
+            with mock.patch.dict(os.environ, env):
+                inputs = CASE["source_inputs"](runner, source)
+                (original / "tools/facts.json").write_text(json.dumps({"packages": {"python": {"entry": "unrecorded"}}}))
+                with self.assertRaisesRegex(RuntimeError, "interpreter does not match"):
+                    CASE["source_runtime_snapshot"](inputs, identity)
+
+    def test_source_facts_are_rejoined_to_capture_before_decoding(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            runner, outer, _, source, facts, env = self.installed_fixture(temporary)
+            capture = CASE["payload_snapshot"]
+            with mock.patch.dict(os.environ, env):
+                inputs = CASE["source_inputs"](runner, source)
+                identity = CASE["directory_identity"](outer)
+                def replace(*args, **kwargs):
+                    result = capture(*args, **kwargs)
+                    previous = facts.read_bytes(); facts.rename(facts.with_name("retained")); facts.write_bytes(previous)
+                    return result
+                with mock.patch.dict(CASE["source_runtime_snapshot"].__globals__, {"payload_snapshot": replace}):
+                    with self.assertRaisesRegex(RuntimeError, "source input changed after capture"):
+                        CASE["source_runtime_snapshot"](inputs, identity)
+                outer.rename(runner / "moved"); outer.mkdir()
+                with mock.patch.object(os, "scandir", side_effect=AssertionError("replacement visited")):
+                    with self.assertRaisesRegex(RuntimeError, "original root changed"):
+                        CASE["source_runtime_snapshot"](inputs, identity)
+
+    def test_source_parent_preparation_requires_exact_original_user_relation(self):
+        import hashlib
+        for effect in ("valid", "outside", "source", "directory", "extra"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                runner, outer, original, source, _, env = self.installed_fixture(temporary)
+                (original / "auth.json").unlink()  # The real no-auth installer has no authored auth fixture.
+                evidence = runner / "evidence"; evidence.mkdir()
+                env.update(RUNNER_TEMP=str(runner), UAP_BIN=str(runner / "unused-uap"), HERMES_NATIVE_SOURCE=str(source))
+                with mock.patch.dict(os.environ, env):
+                    inputs, records = CASE["source_inputs"](runner, source), {}
+                    authority = CASE["directory_identity"](outer)
+                    initial = CASE["source_runtime_snapshot"](inputs, authority, retain=records)
+                    closed = CASE["BASE"]["closed_environment"]
+                    def preparation(*args, **kwargs):
+                        result = closed(*args, **kwargs)
+                        if effect == "outside": (outer / "user/outside-pm.txt").write_bytes(b"unrelated preparation write")
+                        if effect == "source": (source / "owned.py").write_bytes(b"changed source")
+                        if effect == "directory":
+                            changed = outer / "user"; info = changed.stat()
+                            os.utime(changed, ns=(info.st_atime_ns, info.st_mtime_ns + 2_000_000_000))
+                            changed.chmod(0o700 if os.name != "nt" else 0o555)
+                        if effect == "extra": (original / "undeclared").write_bytes(b"unexpected")
+                        return result
+                    with mock.patch.dict(CASE["BASE"], {"closed_environment": preparation}):
+                        if effect != "valid":
+                            with self.assertRaisesRegex(RuntimeError, "preparation changed|preparation replaced"):
+                                CASE["prepare_source_user"](inputs, records, evidence, "6" * 64, authority)
+                            self.assertFalse((evidence / "source-user-preparation.json").exists())
+                            continue
+                        child_env, prepared, receipt = CASE["prepare_source_user"](inputs, records, evidence, "6" * 64, authority)
+                    self.assertEqual(prepared["immutable"], initial["immutable"])
+                    self.assertNotEqual(prepared["user"], initial["user"])
+                    self.assertEqual(receipt["original_user"], initial["user"])
+                    self.assertEqual(receipt["prepared_user"], prepared["user"])
+                    document = evidence / "source-user-preparation.json"
+                    digest = hashlib.sha256(document.read_bytes()).hexdigest()
+                    self.assertEqual(child_env["HERMES_SOURCE_PREPARATION_SHA256"], digest)
+                    read = CASE["read_source_preparation"](evidence, CASE["directory_identity"](evidence), "6" * 64, digest)
+                    self.assertEqual(read, json.loads(json.dumps(receipt)))
+                    CASE["admit_evidence"](evidence)
+                    self.assertEqual(child_env["HOME"], env["HOME"])
+                    (outer / "user/outside-pm.txt").write_bytes(b"observer bootstrap effect")
+                    after = CASE["source_runtime_snapshot"](inputs, authority)
+                    with self.assertRaisesRegex(RuntimeError, "original source User changed"):
+                        CASE["require_source_user_baseline"](after["user"], prepared["user"])
+
+    def test_source_preparation_artifact_refuses_raw_or_undeclared_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            runner, outer, original, source, _, env = self.installed_fixture(temporary)
+            (original / "auth.json").unlink()
+            evidence = runner / "evidence"; evidence.mkdir()
+            env.update(RUNNER_TEMP=str(runner), UAP_BIN=str(runner / "unused-uap"), HERMES_NATIVE_SOURCE=str(source))
+            with mock.patch.dict(os.environ, env):
+                inputs, records = CASE["source_inputs"](runner, source), {}
+                authority = CASE["directory_identity"](outer)
+                CASE["source_runtime_snapshot"](inputs, authority, retain=records)
+                CASE["prepare_source_user"](inputs, records, evidence, "7" * 64, authority)
+            document = evidence / "source-user-preparation.json"
+            original_body = document.read_bytes()
+            for effect in ("body", "name", "preimage", "identity", "boolean", "duplicate"):
+                with self.subTest(effect=effect):
+                    value = json.loads(original_body)
+                    if effect == "body": value["installer_preimages"]["config.yaml"]["content"] = "User body must never be exported"
+                    if effect == "name": value["declared_directories"].append("user/unmeasured-private-name")
+                    if effect == "preimage": value["installer_preimages"]["config.yaml"]["member"] = "outside/config.yaml"
+                    if effect == "identity": value["installer_preimages"]["config.yaml"]["retained_identity"][1] += 1
+                    if effect == "boolean": value["schema_version"] = True
+                    body = json.dumps(value).encode()
+                    if effect == "duplicate": body = b'{"nonce":"' + b"8" * 64 + b'",' + body[1:]
+                    document.write_bytes(body)
+                    with self.assertRaisesRegex(RuntimeError, "source preparation|duplicate census"):
+                        CASE["stage_evidence"](evidence)
+                    self.assertFalse((evidence / "upload").exists())
+            document.write_bytes(original_body)
+            CASE["admit_evidence"](evidence)
+
+    def test_source_observer_cannot_choose_a_user_baseline_after_bootstrap(self):
+        import hashlib
+        import shutil
+        import sys
+        with tempfile.TemporaryDirectory() as temporary:
+            runner, outer, original, source, _, env = self.installed_fixture(temporary)
+            for role in ("a", "b"): shutil.rmtree(outer / ("project-" + role))
+            (original / "auth.json").unlink()
+            evidence = runner / "evidence"; evidence.mkdir()
+            nonce = "9" * 64
+            env.update(RUNNER_TEMP=str(runner), UAP_BIN=str(runner / "unused-uap"), HERMES_NATIVE_SOURCE=str(source))
+            with mock.patch.dict(os.environ, env):
+                inputs, records = CASE["source_inputs"](runner, source), {}
+                authority = CASE["directory_identity"](outer)
+                CASE["source_runtime_snapshot"](inputs, authority, retain=records)
+                child, _, _ = CASE["prepare_source_user"](inputs, records, evidence, nonce, authority)
+            child.update(HERMES_PROFILE_SOURCE_CAPTURE="1", HERMES_HOME=str(original),
+                         HERMES_CENSUS_EVIDENCE_ID=json.dumps(CASE["directory_identity"](evidence)),
+                         HERMES_SOURCE_PREPARATION_SHA256=hashlib.sha256((evidence / "source-user-preparation.json").read_bytes()).hexdigest())
+            original_config = (original / "config.yaml").read_bytes()
+            (outer / "user/outside-pm.txt").write_bytes(b"unexpected observer bootstrap before first command")
+            calls = []
+            def git_only(argv, *_args, **_kwargs):
+                calls.append(argv)
+                self.assertEqual(argv[0], "git", "native command started before original User join")
+                return b""
+            modules = {"hermes_constants": SimpleNamespace(get_default_hermes_root=lambda **_: original),
+                       "hermes_yaml": SimpleNamespace(safe_dump=json.dumps, safe_load=json.loads)}
+            probes = {role: SimpleNamespace(url="http://127.0.0.1:19/" + role) for role in ("a", "b")}
+            with mock.patch.dict(os.environ, child, clear=True), mock.patch.dict(sys.modules, modules), \
+                    mock.patch.dict(CASE["observe_profiles"].__globals__, {"bounded": git_only}):
+                with self.assertRaisesRegex(RuntimeError, "original source User changed"):
+                    CASE["observe_profiles"](probes)
+            self.assertEqual(len(calls), 2)
+            self.assertEqual((original / "config.yaml").read_bytes(), original_config)
+
+    def test_source_snapshot_rejects_moved_outer_with_original_user_and_leaf(self):
+        for boundary in ("payload_snapshot", "source_user_digest"):
+            with self.subTest(boundary=boundary), tempfile.TemporaryDirectory() as temporary:
+                runner, outer, _, source, facts, env = self.installed_fixture(temporary)
+                with mock.patch.dict(os.environ, env):
+                    inputs = CASE["source_inputs"](runner, source)
+                    expected = CASE["directory_identity"](outer)
+                    operation = CASE[boundary]
+                    same_leaf = facts.stat()
+                    def moved(*args, **kwargs):
+                        result = operation(*args, **kwargs)
+                        retained = runner / "retained-outer"
+                        outer.rename(retained); outer.mkdir(); (retained / "user").rename(outer / "user")
+                        self.assertTrue(os.path.samestat(same_leaf, facts.stat()))
+                        return result
+                    with mock.patch.dict(CASE["source_runtime_snapshot"].__globals__, {boundary: moved}), \
+                            mock.patch.dict(CASE["source_runtime_snapshot"].__globals__, {"ordinary_bytes": mock.Mock(side_effect=AssertionError("provenance reread"))}):
+                        with self.assertRaisesRegex(RuntimeError, "original census evidence changed"):
+                            CASE["source_runtime_snapshot"](inputs, expected)
+
+
 if __name__ == "__main__":
     unittest.main()

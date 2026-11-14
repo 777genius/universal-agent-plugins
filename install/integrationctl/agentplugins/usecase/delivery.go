@@ -125,10 +125,14 @@ func packageNeedsPluginData(envelope domain.PackageEnvelope, plan domain.Deliver
 func (service Service) preflightActivation(input AddInput, plan domain.DeliveryPlan) error {
 	preflighter, ok := service.Activator.(ports.ActivationPreflighter)
 	if !ok {
+		if input.ConfirmPluginEnable {
+			return fmt.Errorf("explicit plugin enablement requires adapter preflight")
+		}
 		return nil
 	}
 	return preflighter.PreflightActivation(domain.ActivationRequest{
 		Client: input.Client, Plan: cloneLocalObservationPlan(plan), BackendExecutable: input.BackendExecutable,
 		VerifyOnly: input.DryRun, ActivationComplete: input.ActivationComplete,
+		ConfirmPluginEnable: input.ConfirmPluginEnable,
 	})
 }

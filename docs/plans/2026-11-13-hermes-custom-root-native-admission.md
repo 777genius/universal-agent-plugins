@@ -1012,3 +1012,136 @@ original Windows hash and refuses the opposite platform newline, missing newline
 duplicate carriage return and trailing content. Native effects, process bounds,
 cleanup, publication and qualification gates are unchanged. A corrected-source
 original Windows run is still required; no historical archive is reclassified.
+
+## Ordinary installed-source capture with the original owner preserved
+
+This six-path research change starts from
+`4ab2e3099e885fed2357b06cb628852566b1b353`. It preserves the reviewed directory
+transaction/session candidate, the Windows removal oracle and the absolute
+9000-second build budget. Public Hermes Project registration, source bootstrap,
+native recovery and actual Windows product qualification remain refused.
+
+The existing source-installed `native-call` job now installs the pinned official
+checkout under its real default User home: `user/.hermes/hermes-agent` on POSIX,
+or `user/AppData/Local/hermes/hermes-agent` on Windows, within the same disposable
+`RUNNER_TEMP/hermes-native-home` fixture. The official installer, immutable vendor
+commit, actual published `HERMES_BIN`, and official runtime-command output are
+retained. `HERMES_NATIVE_SOURCE` passes that exact checkout to existing helpers;
+their previous location remains the default in other workflows. There is one
+additional bounded source observation step in the same job, not another matrix
+job or a private replacement installer.
+
+The source input boundary verifies the original HOME, USERPROFILE, native User
+root, canonical source/tools/installs directories, actual launcher and store
+Python. It closes the complete captured link and hardlink graph before reading
+runtime bytes. The actual PM Python entry, dependency-generation fact and
+`pyvenv.cfg` are then joined back to that capture. Both facts documents come
+only from the existing held content-hash pass, with the same single-link and
+bounded-file checks; no path-based provenance-body reread follows the census.
+The original outer identity and captured facts ancestors/leaves are rejoined
+before decoding; the selected provenance, generation and `pyvenv.cfg` chains are
+rejoined again before returning the snapshot. Moving the original User tree
+and unchanged facts into a replacement outer directory refuses before any later
+provenance read. The saved native runtime argv
+must equal the pinned official `runtime_command` API output; its code is not
+evaluated as an unvalidated captured string. No PM facts or dependency generations
+are manufactured, adopted, copied or installed by the collector.
+
+Before any preparation, the parent retains the complete original post-installer
+census privately. It prepares only the existing inert config/auth/history/foreign
+sentinels and the closed environment's known directories. Official config and
+environment preimages retain their original file identities, bytes and exact
+rename metadata under fresh task-owned names; an existing auth/history/foreign
+member refuses. The parent compares every original record with the prepared
+census: only these authored files, recorded preimage renames and explicitly
+created directories may differ. Existing directory authority stays exact, with
+child-membership metadata changes allowed only where declared children changed.
+An unrelated User or source write during preparation refuses.
+
+The parent sends the child only a bounded preparation receipt with the nonce,
+original outer identity, original/prepared complete User digests, fixed fixture
+names and preimage metadata. Its hash comes from the bytes actually authored by
+the parent. The raw member ledger never passes through the environment or public
+artifact. The child does not write User or select a new User baseline; its first
+capture, after observer bootstrap and Project setup but before the first native
+Project command, must equal the parent's prepared User digest. The parent checks
+that same digest and the unchanged preparation receipt after process settlement.
+The receipt has a closed metadata-only schema, also checked during publication.
+
+The complete User digest covers caches and every file outside the three PM trees.
+Source/tools/installs have separate complete digests; protected files come from
+the same captured records. The remaining large runtime partitions are hashed,
+while small Project configuration/bootstrap metadata remains explicit. No file
+is excluded from the full capture or counted twice in its partition.
+
+The existing 262144-member, depth-64, 8-GiB logical-byte and 120-second scan bounds
+apply to this complete fixture. The ordinary Project metadata/output bounds stay
+2048 members and 1 MiB per file/report. A Project link may reach its own runtime
+or the exact installed source/toolstore; it cannot reach the other Project,
+original User configuration, or another captured sibling merely because they
+share an outer directory. Intermediate link hops are checked too. Complete
+hardlink alias closure and domain checks precede every content read. User sentinel
+copies are detected across streaming chunk boundaries without exporting bodies.
+
+Only HERMES_HOME selects A or B for the actual native commands; the installed
+OS User and launcher stay fixed. At this pinned source revision a cold
+`--version` deliberately skips dependency preparation, so the first A/B command
+is the actual `config path`, followed by the measured source version, ownership
+guard, `config get`, list and native initialize/tools-list exchange. A repeats
+its test from a fresh native process, then both roots remove their final server
+and verify absence. The original 60-second command and 720-second owned process
+family limits remain unchanged. The ordinary source banner must match the
+original observed `v0.23.0`/pinned-commit grammar; bundled `vunknown` is not used to
+qualify this path.
+
+Every Project command compares the entire original User, source, toolstore,
+installation state, sibling Project and outside-selected ledger against the
+original baseline. The already-installed final User control has no new cold-User
+allowlist: any changed User state is recorded and refused. Its baseline is never
+renewed. Unexpected observer effects are likewise retained in before/after
+runtime evidence and refused against the parent's prepared User state, including
+effects before the child's first capture. The parent separately compares the
+immutable source, toolstore, installation state and named launcher/provenance
+across the observer family. Its complete outer inventory digests are retained
+too. The original post-installer census is never replaced by an unchecked
+post-preparation baseline. This capture does not qualify an unmeasured general
+bootstrap/recovery footprint. The existing bundled cold-User policy remains
+separate and unchanged.
+
+After process-group/Windows-job settlement the source fixture and any measured
+client-owned PM state are retained. The collector does not recursively delete the
+installed source or claim ownership of a native dependency tree. The closed
+source artifact has its own prefix and metadata/command-stream envelope; it
+does not upload runtime trees or User file bodies. Every source/bootstrap/
+production qualification remains false even if the finite observation completes.
+Normal interrupted-sync recovery, actual repeat/restart state, effects outside
+the selected root and the public version/runtime gate still need original native
+evidence before Project promotion. These inert contracts do not supply it.
+
+### Complete native source version readout
+
+The independently audited original macOS User artifact `14086135237` from
+run `43515526775`, job `132197261526`, source `b7f96040e26e09a0c12a64eae8b909a90a8a32bc`,
+contains a 217-byte `native-version.stdout` with SHA-256
+`b4f09e15b3940ad8739fa1aa3bc99c802ab162f9112e798edf3557afffaf1911`.
+Its first line is the pinned `v0.23.0`/stable/local-commit banner, followed by
+install directory, install method, Python, OpenAI SDK, and an update notice.
+The independently joined Windows original has the same six fields with CRLF:
+209 bytes, SHA-256 `da4ae42f21fc02f2f0967394bbfbaaa0f45cad7ec01272c5a9e8f46d8add0691`.
+The v2 collector incorrectly compared the whole output to the banner alone.
+
+Pinned `hermes_cli/_startup_fast.py::print_fast_version_info` confirms this
+multiline format. The source-only decoder now requires the exact banner,
+selected installed source path and `git` install method; Python 3 and OpenAI SDK
+metadata must each contain concrete three-part numeric versions with bounded
+components. These metadata fields are observations, not an additional runtime
+qualification. Only the exact captured optional update notice is admitted.
+Additional/duplicate lines, unobserved status messages, malformed or missing
+metadata, a different source/version/commit, incomplete output and the opposite
+platform newline refuse. The original 217/209-byte hashes are retained in the
+regression, with source-path substitution explicit for the portable fixture.
+
+Command count, existing output/time budgets, source ownership, configuration
+guards, public registration and all source/bootstrap qualification flags remain
+unchanged. Original User and bundled evidence does not qualify the new ordinary
+source Project route or interrupted native bootstrap recovery.

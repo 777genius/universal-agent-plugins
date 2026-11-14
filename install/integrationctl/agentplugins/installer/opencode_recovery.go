@@ -5,18 +5,19 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 // The facade retains its mutation lock and exact observed scope. The existing
-// OpenCode recorder owns native classification, state publication and cleanup;
+// client recorder owns native classification, state publication and cleanup;
 // this guard permits only its current journal and binding to advance.
-func (e *Engine) recoverObservedOpenCode(ctx context.Context, svc usecase.Service, observed RecoveryObservation) error {
-	t := opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, PackageVerifier: svc.Stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeconfig.New()}
+func (e *Engine) recoverObservedTransitions(ctx context.Context, recovery ports.NativeTransitionRecovery, observed RecoveryObservation) error {
+	t, ok := recovery.(ports.ObservedNativeTransitionRecovery)
+	if !ok {
+		return fmt.Errorf("native transition observation is unavailable")
+	}
 	pending, err := t.Pending()
 	if err != nil {
 		return err
@@ -25,16 +26,15 @@ func (e *Engine) recoverObservedOpenCode(ctx context.Context, svc usecase.Servic
 		if item.Root == "" {
 			return fmt.Errorf("native attempt has no durable transition record; recovery required")
 		}
-		journal := PendingJournal{OperationID: item.OperationID, InstallationID: item.InstallationID, BindingID: item.BindingID, TargetPath: item.TargetPath, Phase: item.Phase, Digest: item.Digest}
+		journal := PendingJournal{EnvironmentID: item.EnvironmentID, OperationID: item.OperationID, InstallationID: item.InstallationID, BindingID: item.BindingID, TargetPath: item.TargetPath, Phase: item.Phase, Digest: item.Digest}
 		if !containsJournal(observed.Journals, journal) {
 			return ErrPlanChanged
 		}
-		guard := &openCodeRecoveryState{engine: e, expected: observed, active: journal, authorityDigest: item.AuthorityDigest}
+		guard := &nativeTransitionRecoveryState{engine: e, expected: observed, active: journal, authorityDigest: item.AuthorityDigest, pending: t.Pending}
 		if err := guard.confirm(false); err != nil {
 			return err
 		}
-		t.State = guard
-		if _, err := t.Reconcile(ctx, item.Root); err != nil {
+		if err := t.ReconcileObserved(ctx, item, guard); err != nil {
 			return err
 		}
 		if err := guard.confirm(true); err != nil {
@@ -49,19 +49,20 @@ func (e *Engine) recoverObservedOpenCode(ctx context.Context, svc usecase.Servic
 	return nil
 }
 
-type openCodeRecoveryState struct {
+type nativeTransitionRecoveryState struct {
 	engine          *Engine
 	expected        RecoveryObservation
 	active          PendingJournal
 	authorityDigest string
+	pending         func() ([]ports.NativeTransitionObservation, error)
 }
 
-func (s *openCodeRecoveryState) confirm(completed bool) error {
+func (s *nativeTransitionRecoveryState) confirm(completed bool) error {
 	view, err := s.engine.observe()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrPlanChanged, err)
 	}
-	pending, err := (opencode.NativeTransitions{ProjectRoot: s.engine.cfg.ProjectRoot, State: transaction.Kernel{StateStore: s.engine.store}}).Pending()
+	pending, err := s.pending()
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrPlanChanged, err)
 	}
@@ -83,7 +84,7 @@ func (s *openCodeRecoveryState) confirm(completed bool) error {
 
 // The recorder validates the complete active journal, including its hash
 // and prepared authority. Only its own phase/hash can change in this guard.
-func (s *openCodeRecoveryState) withoutActiveJournal(observation RecoveryObservation, expected, completed bool) (RecoveryObservation, error) {
+func (s *nativeTransitionRecoveryState) withoutActiveJournal(observation RecoveryObservation, expected, completed bool) (RecoveryObservation, error) {
 	filtered := observation
 	filtered.Journals = nil
 	found := false
@@ -92,7 +93,7 @@ func (s *openCodeRecoveryState) withoutActiveJournal(observation RecoveryObserva
 			filtered.Journals = append(filtered.Journals, journal)
 			continue
 		}
-		if found || journal.InstallationID != s.active.InstallationID || journal.BindingID != s.active.BindingID || journal.TargetPath != s.active.TargetPath {
+		if found || journal.EnvironmentID != s.active.EnvironmentID || journal.InstallationID != s.active.InstallationID || journal.BindingID != s.active.BindingID || journal.TargetPath != s.active.TargetPath {
 			return filtered, ErrPlanChanged
 		}
 		found = true
@@ -104,7 +105,7 @@ func (s *openCodeRecoveryState) withoutActiveJournal(observation RecoveryObserva
 	return filtered, nil
 }
 
-func (s *openCodeRecoveryState) Load() (domain.StateFileV2, error) {
+func (s *nativeTransitionRecoveryState) Load() (domain.StateFileV2, error) {
 	if err := s.confirm(false); err != nil {
 		return domain.StateFileV2{}, err
 	}
@@ -119,7 +120,7 @@ func (s *openCodeRecoveryState) Load() (domain.StateFileV2, error) {
 	return state, s.confirm(false)
 }
 
-func (s *openCodeRecoveryState) PersistStateDecisionWithDisposition(before, desired domain.StateFileV2) (domain.StateDecisionDisposition, error) {
+func (s *nativeTransitionRecoveryState) PersistStateDecisionWithDisposition(before, desired domain.StateFileV2) (domain.StateDecisionDisposition, error) {
 	if err := s.confirm(false); err != nil {
 		return domain.StateDecisionUnknown, err
 	}

@@ -64,6 +64,16 @@ jobs:
           go build -trimpath -o "$RUNNER_TEMP/grok-protocol-tools/agentplugins" ./cli/cmd/agentplugins
           go build -trimpath -o "$RUNNER_TEMP/grok-protocol-tools/probe" ./repotests/testdata/agentplugins_native_probe
           test -z "$(git status --porcelain --untracked-files=normal)"
+      - name: Verify public saved CLI consent and decline contracts
+        run: |
+          set -euo pipefail
+          go test -json ./cli/cmd/agentplugins -run '^TestProjectGrokCLITLSZipSavedRepairConsentLifecycle$' -count=1 > "$RUNNER_TEMP/grok-consent-contract.jsonl"
+          python3 - "$RUNNER_TEMP/grok-consent-contract.jsonl" <<'PY'
+          import json, pathlib, sys
+          rows = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().splitlines()]
+          assert sum(row.get('Action') == 'pass' and row.get('Test') == 'TestProjectGrokCLITLSZipSavedRepairConsentLifecycle' for row in rows) == 1
+          print('Public saved CLI consent, decline and EOF contract passed')
+          PY
       - name: Run real MCP without provider credentials or a model
         run: |
           python3 scripts/grok_project_protocol_e2e.py \

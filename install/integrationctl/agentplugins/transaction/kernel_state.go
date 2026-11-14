@@ -4,6 +4,7 @@ package transaction
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -80,6 +81,16 @@ func marshalComparableState(state domain.StateFileV2) ([]byte, error) {
 		return state.Installations[i].InstallationID < state.Installations[j].InstallationID
 	})
 	return json.Marshal(state)
+}
+
+// ComparableStateDigest uses the exact persisted comparison used by durable
+// state decisions. It does not normalize lifecycle values or receipt content.
+func ComparableStateDigest(state domain.StateFileV2) (string, error) {
+	body, err := marshalComparableState(state)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(body)), nil
 }
 
 func loadClientFromState(state domain.StateFileV2, installationID, clientBindingID string) (int, domain.ClientBinding, error) {

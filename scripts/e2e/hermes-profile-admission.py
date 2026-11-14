@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Observe pinned Hermes explicit custom-runtime-root MCP; UAP remains refused."""
 import hashlib
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 import json
 import os
 from pathlib import Path
@@ -267,9 +267,10 @@ def inventory(root, sentinels=()):
 PAYLOAD_MEMBERS, PAYLOAD_DEPTH, PAYLOAD_BYTES = 262144, 64, 8 << 30
 
 
-def payload_links(root, records, deadline):
+def payload_links(root, records, deadline, source=None):
     """Resolve only the captured link graph; never traverse a filesystem link."""
     lookup = {Path(name): record for name, record in records.items()}
+    spellings = {Path(name): name for name in records} if source is not None else {}
     require(len(lookup) == len(records), "ambiguous payload path spelling")
     def parts(target):
         extended = artifacts.WINDOWS and target.startswith("\\\\?\\")
@@ -303,6 +304,8 @@ def payload_links(root, records, deadline):
             resolved.append(component)
             selected = lookup.get(Path(*resolved))
             require(selected is not None, "payload link target missing")
+            if source is not None:
+                source_link_boundary(name, spellings[Path(*resolved)], source, intermediate=True)
             if selected["type"] == "link":
                 count += 1
                 require(count <= PAYLOAD_DEPTH, "payload link cycle/depth")
@@ -311,6 +314,8 @@ def payload_links(root, records, deadline):
                 pending = tail + pending
             elif pending:
                 require(selected["type"] == "directory", "payload link traverses non-directory")
+        if source is not None:
+            source_link_boundary(name, spellings[Path(*resolved)], source)
 
 
 
@@ -342,7 +347,7 @@ class PayloadHardlinkRefusal(RuntimeError):
             pass  # Diagnostics never replace the original alias refusal.
 
 
-def payload_hardlink_closure(records, deadline):
+def payload_hardlink_closure(records, deadline, source=None):
     """Close every regular inode's complete alias set before any content read."""
     groups = {}
     for name, record in records.items():
@@ -362,11 +367,15 @@ def payload_hardlink_closure(records, deadline):
         require(time.monotonic() < deadline, "payload scan deadline")
         if not (type(identity[3]) is int and len(names) == identity[3]):
             raise PayloadHardlinkRefusal(identity, names)
+        if source is not None:
+            source_hardlink_boundary(names, source)
 
 
-def payload_hash_files(root, records, expected, deadline):
+def payload_hash_files(root, records, expected, deadline, source=None):
     """Rejoin the metadata-first authority through held ancestors before bytes."""
-    children = {}
+    children, documents = {}, {}
+    requested = tuple(source.get("documents", ())) if source is not None else ()
+    require(len(requested) <= 2 and len(set(requested)) == len(requested), "bounded source documents required")
     for name in records:
         if name != ".":
             children.setdefault(Path(name).parent.as_posix(), set()).add(name)
@@ -404,7 +413,11 @@ def payload_hash_files(root, records, expected, deadline):
         try:
             held = os.fstat(descriptor)
             require(same_opened_capture(info, held) and (info.st_uid, info.st_gid) == (held.st_uid, held.st_gid), "payload file changed at open")
-            digest, size = hashlib.sha256(), 0
+            digest, size, tail = hashlib.sha256(), 0, b""
+            captured = bytearray() if name in requested else None
+            require(captured is None or (info.st_nlink == 1 and info.st_size <= LIMIT), "bounded source document required")
+            sentinels = source["sentinels"] if source is not None and source_project(name, source) is not None else ()
+            overlap = max((len(value) for value in sentinels), default=1) - 1
             while size <= info.st_size:
                 require(time.monotonic() < deadline, "payload scan deadline")
                 chunk = os.read(descriptor, min(LIMIT, info.st_size + 1 - size))
@@ -412,15 +425,23 @@ def payload_hash_files(root, records, expected, deadline):
                     break
                 size += len(chunk)
                 digest.update(chunk)
+                if captured is not None:
+                    captured.extend(chunk)
+                require(not any(value in tail + chunk for value in sentinels), "original User sentinel copied into selected runtime")
+                tail = (tail + chunk)[-overlap:] if overlap else b""
             require(size == info.st_size and stable_file(os.fstat(descriptor)) == stable_file(held)
                     and stable_file(linked()) == stable_file(info), "payload file changed during capture")
             record["sha256"] = digest.hexdigest()
+            if captured is not None:
+                documents[name] = bytes(captured)
         finally:
             os.close(descriptor)
 
     visit(root)
+    require(set(documents) == set(requested), "captured source document missing")
+    return documents
 
-def payload_snapshot(root, expected, deadline):
+def payload_snapshot(root, expected, deadline, *, source=None):
     """Stream all payload bytes with held no-follow directory/file authority."""
     require(directory_identity(root) == tuple(expected), "payload original root changed")
     records, links, total = {}, 0, 0
@@ -464,15 +485,420 @@ def payload_snapshot(root, expected, deadline):
                 os.close(descriptor)
 
     visit(root, 0)
-    payload_links(root, records, deadline)
-    payload_hardlink_closure(records, deadline)
-    payload_hash_files(root, records, expected, deadline)
+    source_options = {"source": source} if source is not None else {}
+    payload_links(root, records, deadline, **source_options)
+    payload_hardlink_closure(records, deadline, **source_options)
+    documents = payload_hash_files(root, records, expected, deadline, **source_options)
     digest = hashlib.sha256()
     for name, record in sorted(records.items()):
         require(time.monotonic() < deadline, "payload scan deadline")
         digest.update(json.dumps([name, record], sort_keys=True, ensure_ascii=True).encode() + b"\n")
     require(directory_identity(root) == tuple(expected), "payload original root changed")
-    return {"sha256": digest.hexdigest(), "entries": len(records), "logical_regular_bytes": total, "links": links}
+    result = {"sha256": digest.hexdigest(), "entries": len(records), "logical_regular_bytes": total, "links": links}
+    if source is not None:
+        result["ledger"] = source_ledger(records, source, deadline)
+        result["_records"] = records  # Private join authority, never an evidence member.
+        result["_documents"] = documents  # Only the two requested bounded PM facts.
+    return result
+
+
+def below(name, root):
+    return name == root or name.startswith(root + "/")
+
+
+def source_project(name, source):
+    return next((root for root in source["projects"] if below(name, root)), None)
+
+
+def source_link_boundary(origin, target, source, *, intermediate=False):
+    """A shared capture envelope is never shared link authority."""
+    project = source_project(origin, source)
+    allowed = [project, source["source"], source["tools"]] if project else [source["user"]]
+    require(project is not None or below(origin, source["user"]), "source link outside an owned runtime")
+    require(any(below(target, root) or (intermediate and (target == "." or below(root, target))) for root in allowed),
+            "source link crosses runtime authority")
+
+
+def source_hardlink_boundary(names, source):
+    projects = {source_project(name, source) for name in names} - {None}
+    require(len(projects) <= 1, "source hardlink crosses Project roots")
+    if projects:
+        allowed = [*projects, source["source"], source["tools"]]
+        require(all(any(below(name, root) for root in allowed) for name in names),
+                "source hardlink crosses original User authority")
+    elif len(names) > 1:
+        require(all(below(name, source["user"]) for name in names), "source hardlink crosses fixture authority")
+
+
+def source_layout(outer, user, original, source, *, protected=(), sentinels=()):
+    require(user == outer / "user" and source == original / "hermes-agent"
+            and original.is_relative_to(user) and source.resolve() == source,
+            "source installation layout differs")
+    relative = lambda path: path.relative_to(outer).as_posix()
+    return {"user": relative(user), "source": relative(source), "tools": relative(original / "tools"),
+            "installs": relative(original / "installs"), "protected": tuple(protected),
+            "projects": [relative(outer / ("project-" + role) / ".uap/hermes-runtime") for role in ("a", "b")],
+            "sentinels": tuple(value.encode("utf-8") for value in sentinels)}
+
+
+def source_user_digest(records, user, deadline=None):
+    digest, entries = hashlib.sha256(), 0
+    for name, record in sorted(records.items()):
+        require(deadline is None or time.monotonic() < deadline, "payload scan deadline")
+        if below(name, user):
+            digest.update(json.dumps([name, record], sort_keys=True, ensure_ascii=True).encode() + b"\n")
+            entries += 1
+    require(0 < entries <= PAYLOAD_MEMBERS, "source User census absent or oversized")
+    return {"sha256": digest.hexdigest(), "entries": entries}
+
+
+def source_ledger(records, source, deadline):
+    """Partition every captured member once; large runtime trees stay hashed.
+
+    Original User data is covered even when it is outside the three native PM
+    trees. Protected fixture members are separate rows from the same capture,
+    never independently reread or silently excluded from the authority ledger.
+    """
+    partitions = [source[key] for key in ("user", "source", "tools", "installs")]
+    partitions += [root + suffix for root in source["projects"] for suffix in ("/tools", "/installs")]
+    groups, ledger, ordinary = {}, {}, 0
+    for name, record in sorted(records.items()):
+        require(time.monotonic() < deadline, "payload scan deadline")
+        matches = [root for root in partitions if below(name, root)] if name not in source["protected"] else []
+        if not matches:
+            ordinary += 1
+            require(ordinary <= 2048 and (record["type"] != "file" or record["identity"][4] <= LIMIT),
+                    "source ordinary profile bound")
+            ledger[name] = record
+            continue
+        prefix = max(matches, key=len)
+        if prefix not in groups:
+            groups[prefix] = {"digest": hashlib.sha256(), "entries": 0, "logical_regular_bytes": 0, "links": 0}
+        group = groups[prefix]
+        group["digest"].update(json.dumps([name, record], sort_keys=True, ensure_ascii=True).encode() + b"\n")
+        group["entries"] += 1
+        group["logical_regular_bytes"] += record["identity"][4] if record["type"] == "file" else 0
+        group["links"] += record["type"] == "link"
+    for prefix, group in groups.items():
+        digest = group.pop("digest")
+        ledger[prefix] = dict(type="runtime-tree", sha256=digest.hexdigest(), **group)
+    require(sum(group["entries"] for group in groups.values()) + ordinary == len(records), "source partition coverage differs")
+    require(len(json.dumps(ledger, ensure_ascii=True).encode()) <= LIMIT, "source ledger output bound")
+    return ledger
+
+
+def source_capture_mode():
+    value = os.environ.get("HERMES_PROFILE_SOURCE_CAPTURE")
+    require(value in (None, "1"), "unknown source capture mode")
+    return value == "1"
+
+
+def source_inputs(runner, source):
+    """Read the actual official installer outputs; never synthesize PM facts."""
+    home, user = runner / "hermes-native-home", runner / "hermes-native-home/user"
+    original = user / ("AppData/Local/hermes" if os.name == "nt" else ".hermes")
+    require(os.environ["HOME"] == str(user) and os.environ["USERPROFILE"] == str(user)
+            and os.environ["HERMES_HOME"] == str(original) and source == original / "hermes-agent",
+            "preserved installed User/source authority differs")
+    for path in (home, user, original, source, original / "tools", original / "installs"):
+        directory_identity(path)
+    command_file = Path(os.environ["HERMES_NATIVE_RUNTIME_COMMAND_FILE"])
+    require(command_file.is_absolute() and command_file.is_relative_to(runner), "official runtime command receipt escapes fixture")
+    body = ordinary_bytes(command_file)
+    argv = json.loads(body.decode("utf-8-sig"))
+    require(type(argv) is list and len(argv) == 4 and all(type(value) is str for value in argv)
+            and argv[1:3] == ["-I", "-c"], "official source runtime command differs")
+    native, python = Path(os.environ["HERMES_BIN"]), Path(argv[0])
+    require(native.is_absolute() and native.is_relative_to(user) and native.resolve().is_relative_to(user)
+            and python.is_absolute() and python.is_relative_to(original / "tools")
+            and python.resolve().is_relative_to(original / "tools"), "installed source launcher/interpreter escaped owner")
+    install_key = hashlib.sha256(str(source).encode()).hexdigest()[:16]
+    facts = original / "installs" / install_key / "facts.json"
+    provenance_members = sorted({path.relative_to(home).as_posix() for path in
+                                 (native, native.resolve(), python, python.resolve(), facts, original / "tools/facts.json")})
+    layout = source_layout(home, user, original, source)
+    return {"home": home, "user": user, "original": original, "source": source, "native": native,
+            "python": python, "facts": facts, "layout": layout, "runtime_argv": argv, "provenance_members": provenance_members,
+            "command_sha256": hashlib.sha256(body).hexdigest()}
+
+
+def verify_source_capture_paths(home, expected, records, names, deadline):
+    """Rejoin captured ancestors and leaves; no provenance bytes are reread."""
+    with held_census_evidence(home, expected) as (root, verify):
+        require(stable_named_entry(home.lstat()) == records["."]["identity"], "source captured outer changed")
+        for name in names:
+            require(time.monotonic() < deadline, "payload scan deadline")
+            parts = Path(name).parts
+            require(parts and not Path(name).is_absolute() and not any(part in {"", ".", ".."} for part in parts), "source captured member spelling differs")
+            with ExitStack() as stack:
+                parent, path, held_directories = root, home, []
+                for index, part in enumerate(parts):
+                    verify()
+                    path = path / part
+                    record = records.get(path.relative_to(home).as_posix())
+                    linked_parent = None if artifacts.WINDOWS else parent
+                    info = path.lstat() if linked_parent is None else os.stat(part, dir_fd=parent, follow_symlinks=False)
+                    require(record is not None and stable_named_entry(info) == record["identity"], "source input changed after capture")
+                    if index < len(parts) - 1 or record["type"] == "directory":
+                        require(record["type"] == "directory", "source captured ancestor is aliased")
+                        descriptor = open_inventory_directory(path, linked_parent)
+                        stack.callback(os.close, descriptor)
+                        held = os.fstat(descriptor)
+                        check_inventory_directory(info, held, "source captured ancestor changed at open")
+                        verify_inventory_directory(path, info, descriptor, held, linked_parent)
+                        held_directories.append((path, info, descriptor, held, linked_parent))
+                        parent = descriptor
+                for authority in reversed(held_directories):
+                    verify_inventory_directory(*authority)
+                verify()
+        verify()
+
+
+def source_runtime_snapshot(inputs, expected, *, retain=None, deadline=None):
+    home, layout = inputs["home"], inputs["layout"]
+    tools = inputs["original"] / "tools"
+    document_names = tuple(path.relative_to(home).as_posix() for path in (inputs["facts"], tools / "facts.json"))
+    deadline = time.monotonic() + 120 if deadline is None else deadline
+    snapshot = payload_snapshot(home, expected, deadline, source=dict(layout, documents=document_names))
+    records = snapshot.pop("_records")
+    documents = snapshot.pop("_documents")
+    verify_source_capture_paths(home, expected, records, document_names, deadline)
+    facts, store = (json.loads(documents[name].decode("utf-8-sig")) for name in document_names)
+    entry = store.get("packages", {}).get("python", {}).get("entry")
+    require(type(entry) is str and entry and not Path(entry).is_absolute()
+            and ".." not in Path(entry).parts, "installed Python tool selection differs")
+    require(inputs["python"] == tools / entry / ("python.exe" if os.name == "nt" else "bin/python3"),
+            "installed interpreter does not match committed tool facts")
+    environment = facts.get("packages", {}).get("venv", {}).get("environment")
+    require(type(environment) is str, "official installed dependency selection absent")
+    environment = Path(environment)
+    require(environment.is_absolute() and os.path.normpath(str(environment)) == str(environment)
+            and environment.is_relative_to(inputs["facts"].parent / "environments"), "installed dependency generation escaped owner")
+    generation, venv = (path.relative_to(home).as_posix() for path in (environment, environment / "pyvenv.cfg"))
+    require(records.get(generation, {}).get("type") == "directory", "installed dependency generation is not a captured directory")
+    metadata = records.get(venv, {})
+    require(metadata.get("type") == "file" and metadata["identity"][3] == 1
+            and metadata["identity"][4] <= LIMIT, "installed pyvenv metadata differs")
+    ledger = snapshot.pop("ledger")
+    provenance_members = inputs["provenance_members"]
+    require(all(name in records and records[name]["type"] in {"file", "link"} for name in provenance_members), "installed provenance member missing")
+    immutable = {name: record for name, record in ledger.items()
+                 if any(below(name, layout[key]) for key in ("source", "tools", "installs"))}
+    # These provenance views join the same capture; the ledger partition still
+    # counts each member once, including large interpreter binaries and links.
+    immutable.update({name: records[name] for name in provenance_members})
+    user = source_user_digest(records, layout["user"], deadline)
+    verify_source_capture_paths(home, expected, records, (*provenance_members, generation, venv), deadline)
+    if retain is not None:
+        require(type(retain) is dict and not retain, "source private census destination differs")
+        retain.update(records)
+    return {"inventory": snapshot, "immutable": immutable, "user": user,
+            "provenance": {"source": str(inputs["source"]), "native_command": [str(inputs["native"])],
+                           "python": str(inputs["python"]), "selected_environment": str(environment),
+                           "runtime_command_sha256": inputs["command_sha256"],
+                           "captured_members": {name: records[name] for name in provenance_members}}}
+
+
+def prepare_user_fixture(original, authored, *, source_capture=False):
+    """Retain official config preimages before authoring this disposable fixture."""
+    retained = {}
+    for name, body in authored.items():
+        path = original / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() or path.is_symlink():
+            require(source_capture and name in {"config.yaml", ".env"}, "original User fixture collision")
+            before = path.lstat()
+            previous = ordinary_bytes(path, before)
+            preserved = original / ("uap-installer-preimage-" + name.lstrip("."))
+            require(not preserved.exists() and not preserved.is_symlink(), "installer preimage destination collision")
+            path.rename(preserved)
+            after = preserved.lstat()
+            old, new = stable_file(before), stable_file(after)
+            require(old[:6] + old[7:] == new[:6] + new[7:] and ordinary_bytes(preserved, after) == previous,
+                    "installer preimage changed during fixture preparation")
+            retained[name] = {"member": preserved.name, "bytes": len(previous), "sha256": hashlib.sha256(previous).hexdigest(),
+                              "before_identity": old, "retained_identity": new}
+        with path.open("xb") as stream:
+            stream.write(body.encode("utf-8"))
+        path.chmod(0o600)
+    return retained
+
+
+def user_fixture_content(nonce):
+    sentinels = ["USER_" + kind + "_" + nonce for kind in ("MODEL", "PROVIDER", "AUTH", "HISTORY", "FOREIGN")]
+    authored = {"config.yaml": "model: " + sentinels[0] + "\nproviders:\n  custom:\n    base_url: http://127.0.0.1:9/" + sentinels[1] + "\nmcp_servers:\n  foreign:\n    command: echo\n    args: [retained]\n",
+                "auth.json": json.dumps({"version": 1, "providers": {}, "admission_marker": sentinels[2]}),
+                ".env": "# inert admission; no credentials\n",
+                "sessions/retained-history.txt": sentinels[3],
+                "skills/foreign/SKILL.md": "---\nname: foreign\ndescription: Retained foreign User Skill.\n---\n" + sentinels[4]}
+    return sentinels, authored
+
+
+def source_preparation_directories(inputs, authored):
+    home, user, original = (inputs[key] for key in ("home", "user", "original"))
+    targets = [user / folder for _, folder in BASE["PROFILE_DIRECTORIES"]]
+    targets += [(original / name).parent for name in authored]
+    result = set()
+    for directory in targets:
+        require(directory.is_relative_to(user), "source fixture preparation escaped original User")
+        while directory.is_relative_to(user):
+            result.add(directory.relative_to(home).as_posix())
+            if directory == user:
+                break
+            directory = directory.parent
+    return result
+
+
+def source_preparation_relation(before, after, inputs, authored, retained, directories, deadline):
+    """Account for every original record and only the declared fixture writes."""
+    home, original = inputs["home"], inputs["original"]
+    relative = lambda path: path.relative_to(home).as_posix()
+    files = {relative(original / name): body.encode("utf-8") for name, body in authored.items()}
+    renames = {relative(original / name): relative(original / ("uap-installer-preimage-" + name.lstrip(".")))
+               for name in ("config.yaml", ".env") if relative(original / name) in before}
+    require(set(retained) == {Path(name).name for name in renames}, "source fixture preimage set differs")
+    require(not (set(renames.values()) & before.keys()), "source fixture preimage overwrote an original member")
+    require(after.keys() == before.keys() | files.keys() | set(renames.values()) | directories,
+            "source fixture preparation changed undeclared membership")
+    def child_names(records):
+        children = {name: set() for name in directories}
+        for name in records:
+            require(time.monotonic() < deadline, "payload scan deadline")
+            parent = Path(name).parent.as_posix()
+            if name != "." and parent in children:
+                children[parent].add(name)
+        return children
+    old_children, new_children = child_names(before), child_names(after)
+    changed = set(files) | set(renames.values()) | directories
+    for name, record in before.items():
+        require(time.monotonic() < deadline, "payload scan deadline")
+        if name not in changed:
+            require(after.get(name) == record, "source fixture preparation changed an original User/runtime member")
+    for name, body in files.items():
+        require(name not in before or name in renames, "source fixture preparation adopted an original protected member")
+        record = after[name]
+        mode = 0o666 if os.name == "nt" else 0o600
+        require(record["type"] == "file" and record["identity"][3] == 1
+                and stat.S_IMODE(record["identity"][2]) == mode and record["identity"][4] == len(body)
+                and record["sha256"] == hashlib.sha256(body).hexdigest()
+                and record["identity"][-2:] == after[Path(name).parent.as_posix()]["identity"][-2:],
+                "source authored fixture postimage differs")
+    for old_name, new_name in renames.items():
+        old, new = before[old_name], after[new_name]
+        require(old["type"] == new["type"] == "file" and old["identity"][3] == new["identity"][3] == 1
+                and old["sha256"] == new["sha256"]
+                and old["identity"][:6] + old["identity"][7:] == new["identity"][:6] + new["identity"][7:],
+                "source installer preimage changed during declared rename")
+        report = retained[Path(old_name).name]
+        require(relative(original / report["member"]) == new_name and report["sha256"] == old["sha256"]
+                and report["bytes"] == old["identity"][4]
+                and tuple(report["before_identity"]) == old["identity"]
+                and tuple(report["retained_identity"]) == new["identity"], "source preimage receipt differs from captured records")
+    for name in directories:
+        record = after[name]
+        require(record["type"] == "directory", "source preparation directory was replaced")
+        if name in before:
+            previous = before[name]
+            require(previous["type"] == "directory", "source preparation adopted a non-directory")
+            if old_children[name] == new_children[name]:
+                require(record == previous, "source preparation changed an untouched original directory")
+            else:
+                require(record["identity"][:3] + record["identity"][7:] == previous["identity"][:3] + previous["identity"][7:],
+                        "source preparation replaced original directory authority")
+        else:
+            require(stat.S_IMODE(record["identity"][2]) == (0o777 if os.name == "nt" else 0o700),
+                    "source preparation directory mode differs")
+            require(record["identity"][-2:] == after[Path(name).parent.as_posix()]["identity"][-2:],
+                    "source preparation directory owner differs")
+
+
+def prepare_source_user(inputs, original_records, evidence, nonce, expected):
+    deadline = time.monotonic() + 120
+    _, authored = user_fixture_content(nonce)
+    directories = source_preparation_directories(inputs, authored)
+    existing = [name for name in directories if name in original_records]
+    require(all(original_records[name]["type"] == "directory" for name in existing), "source preparation parent is not an original ordinary directory")
+    verify_source_capture_paths(inputs["home"], expected, original_records, existing, deadline)
+    for name in sorted(directories, key=lambda value: (len(Path(value).parts), value)):
+        path = inputs["home"] / name
+        if name not in original_records:
+            path.mkdir(mode=0o700)
+    env = BASE["closed_environment"](inputs["user"], evidence, nonce, "http://127.0.0.1:9/unused")
+    retained = prepare_user_fixture(inputs["original"], authored, source_capture=True)
+    prepared = {}
+    snapshot = source_runtime_snapshot(inputs, expected, retain=prepared, deadline=deadline)
+    source_preparation_relation(original_records, prepared, inputs, authored, retained, directories, deadline)
+    receipt = {"schema_version": 1, "nonce": nonce, "outer_identity": expected, "admission_qualified": False,
+               "original_user": source_user_digest(original_records, inputs["layout"]["user"], deadline),
+               "prepared_user": snapshot["user"], "installer_preimages": retained,
+               "declared_directories": sorted(directories), "authored_members": sorted(authored)}
+    env["HERMES_SOURCE_PREPARATION_SHA256"] = write_json(evidence / "source-user-preparation.json", receipt)
+    return env, snapshot, receipt
+
+
+def require_source_user_baseline(captured, prepared):
+    require(captured == prepared, "original source User changed before the first Project command or across the native family")
+
+
+def source_preparation_document(body):
+    """Only fixed fixture names, hashes and captured identities may be exported."""
+    value = census_document(body)
+    require(type(value) is dict and set(value) == {
+        "schema_version", "nonce", "outer_identity", "admission_qualified", "original_user",
+        "prepared_user", "installer_preimages", "declared_directories", "authored_members"},
+        "source preparation receipt schema differs")
+    def digest(text):
+        return type(text) is str and re.fullmatch(r"[0-9a-f]{64}", text) is not None
+    require(type(value["schema_version"]) is int and value["schema_version"] == 1
+            and digest(value["nonce"]) and value["admission_qualified"] is False,
+            "source preparation receipt qualification differs")
+    require(type(value["outer_identity"]) is list and len(value["outer_identity"]) == 5
+            and all(type(number) is int and 0 <= number < 2**64 for number in value["outer_identity"]),
+            "source preparation root identity differs")
+    for name in ("original_user", "prepared_user"):
+        record = value[name]
+        require(type(record) is dict and set(record) == {"sha256", "entries"}
+                and type(record["entries"]) is int and 0 < record["entries"] <= PAYLOAD_MEMBERS
+                and digest(record["sha256"]), "source preparation User digest differs")
+    _, authored = user_fixture_content(value["nonce"])
+    require(value["authored_members"] == sorted(authored), "source preparation authored names differ")
+    # Validate both portable artifact spellings without touching a filesystem.
+    home = Path("fixture")
+    directory_sets = [sorted(source_preparation_directories(
+        {"home": home, "user": home / "user", "original": home / "user" / relative}, authored))
+        for relative in (".hermes", "AppData/Local/hermes")]
+    require(value["declared_directories"] in directory_sets, "source preparation declared directories differ")
+    preimages = value["installer_preimages"]
+    require(type(preimages) is dict and set(preimages) <= {"config.yaml", ".env"},
+            "source preparation preimage names differ")
+    for name, record in preimages.items():
+        require(type(record) is dict and set(record) == {"member", "bytes", "sha256", "before_identity", "retained_identity"}
+                and record["member"] == "uap-installer-preimage-" + name.lstrip(".")
+                and type(record["bytes"]) is int and 0 <= record["bytes"] <= LIMIT and digest(record["sha256"]),
+                "source preparation preimage metadata differs")
+        before, retained = record["before_identity"], record["retained_identity"]
+        for identity in (before, retained):
+            require(type(identity) is list and len(identity) in (9, 12)
+                    and all(type(number) is int and -(2**63) <= number < 2**64 for number in identity)
+                    and all(number >= 0 for index, number in enumerate(identity)
+                            if index not in ((5, 6, 7) if len(identity) == 12 else (5, 6)))
+                    and stat.S_ISREG(identity[2]) and identity[3] == 1 and identity[4] == record["bytes"],
+                    "source preparation preimage identity differs")
+            if len(identity) == 12:
+                require(identity[7] > 0 and 0 <= identity[8] < 2**32 and not identity[8] & 0x400
+                        and identity[9] == 0, "source preparation preimage reparse metadata differs")
+        require(before[:6] + before[7:] == retained[:6] + retained[7:], "source preparation preimage rename differs")
+    return value
+
+
+def read_source_preparation(evidence, expected, nonce, digest):
+    with held_census_evidence(evidence, expected) as (descriptor, verify):
+        body = ordinary_bytes(evidence / "source-user-preparation.json", parent=None if artifacts.WINDOWS else descriptor)
+        require(hashlib.sha256(body).hexdigest() == digest, "source preparation receipt changed")
+        value = source_preparation_document(body)
+        require(value["nonce"] == nonce, "source preparation receipt nonce differs")
+        verify()
+        return value
 
 
 def payload_contract(payload, source, target):
@@ -753,18 +1179,39 @@ def user_control_boundary(before, after, prefix):
             "User control backup aliases original config")
 
 
-def profile_effect_boundary(label, scope, baseline, before, after, user, selected):
+def profile_effect_boundary(label, scope, baseline, before, after, user, selected, *, source_capture=False):
     require(profile_tree(before, user) == profile_tree(baseline, user), "original User changed before command")
     delta = changes(before, after)
     if scope == "user":
         require(label == "list-user" and all(name == user or name.startswith(user + "/") for name in delta),
                 "User control changed outside original User")
-        user_control_boundary(before, after, user)
+        if source_capture:
+            # The source fixture is already installed. Unexpected User effects
+            # are recorded by the caller, then refused; never renew a baseline.
+            require(profile_tree(after, user) == profile_tree(baseline, user), "source User control changed the measured original User")
+        else:
+            user_control_boundary(before, after, user)
     else:
         require(scope in {"a", "b"} and profile_tree(after, user) == profile_tree(baseline, user),
                 "Project command changed original User")
         require(all(name == selected or name.startswith(selected + "/") for name in delta),
                 "Project command changed outside selected runtime")
+
+
+def source_version_readout(body, source):
+    """Join the complete pinned fast-version output, not just its banner."""
+    newline = b"\r\n" if os.name == "nt" else b"\n"
+    require(0 < len(body) <= LIMIT and body.endswith(newline), "source version output is incomplete")
+    lines = body[:-len(newline)].split(newline)
+    expected = ["Hermes Agent v0.23.0 (2026.9.24) · stable · local 2bd378ed1b8d".encode(),
+                ("Install directory: " + str(source)).encode(), b"Install method: git"]
+    require(len(lines) in (5, 6) and lines[:3] == expected, "pinned source native version differs")
+    number = rb"(?:0|[1-9][0-9]{0,3})"
+    require(re.fullmatch(rb"Python: 3\." + number + rb"\." + number, lines[3]) is not None
+            and re.fullmatch(rb"OpenAI SDK: " + number + rb"\." + number + rb"\." + number, lines[4]) is not None,
+            "source version runtime metadata differs")
+    require(len(lines) == 5 or lines[5] == "Update available — run 'hermes update'".encode(),
+            "source version has an unobserved trailing notice")
 
 
 def config_readout(kind, body, selected):
@@ -842,6 +1289,10 @@ value = {'home': str(get_hermes_home().resolve()), 'default_root': str(get_defau
          'gateway_running': _check_gateway_running(p), 'default_gateway_pid': live_default_gateway_pid(),
          'served_profiles': recorded_served_profiles(), 'service_manager': detect_service_manager(),
          'memory_provider': active_memory_provider(load_config_readonly())}
+if os.environ.get('HERMES_PROFILE_SOURCE_CAPTURE') == '1':
+    from pm.environments import owning_home_root
+    owner = owning_home_root(Path(os.environ['HERMES_NATIVE_SOURCE']))
+    value['source_owner'] = str(owner) if owner is not None else None
 print('UAP_PROFILE_RESOLUTION=' + json.dumps(value, sort_keys=True))
 """
 
@@ -892,30 +1343,31 @@ def write_json(path, value):
     body = json.dumps(value, indent=2).encode() + b"\n"
     require(len(body) <= LIMIT and not path.exists(), "fresh bounded evidence required")
     path.write_bytes(body)
+    return hashlib.sha256(body).hexdigest()
 
 
 def observe_profiles(probes):
     evidence = Path(os.environ["HERMES_NATIVE_EVIDENCE"])
     user = Path(os.environ["HOME"])
     outer, nonce = user.parent, os.environ["HERMES_CALL_NONCE"]
+    source_capture = source_capture_mode()
     native = [os.environ["HERMES_BIN"]]
     from hermes_constants import get_default_hermes_root
     import hermes_yaml as yaml
     original = get_default_hermes_root(home="").resolve()
     require(original.is_relative_to(user) and original != user and os.environ["USERPROFILE"] == str(user), "actual native User root differs")
-    original.mkdir(parents=True, exist_ok=True)
-    sentinels = ["USER_" + kind + "_" + nonce for kind in ("MODEL", "PROVIDER", "AUTH", "HISTORY", "FOREIGN")]
-    authored = {"config.yaml": "model: " + sentinels[0] + "\nproviders:\n  custom:\n    base_url: http://127.0.0.1:9/" + sentinels[1] + "\nmcp_servers:\n  foreign:\n    command: echo\n    args: [retained]\n",
-                "auth.json": json.dumps({"version": 1, "providers": {}, "admission_marker": sentinels[2]}),
-                ".env": "# inert admission; no credentials\n",
-                "sessions/retained-history.txt": sentinels[3],
-                "skills/foreign/SKILL.md": "---\nname: foreign\ndescription: Retained foreign User Skill.\n---\n" + sentinels[4]}
-    for name, body in authored.items():
-        path = original / name
-        require(not path.exists(), "original User fixture collision")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(body.encode("utf-8"))
-        path.chmod(0o600)
+    inputs = source_inputs(Path(os.environ["RUNNER_TEMP"]).resolve(), BASE["source_root"]()) if source_capture else None
+    require(inputs is None or original == inputs["original"], "native source default User differs before fixture preparation")
+    sentinels, authored = user_fixture_content(nonce)
+    preparation = None
+    if source_capture:
+        preparation = read_source_preparation(evidence, json.loads(os.environ["HERMES_CENSUS_EVIDENCE_ID"]), nonce,
+                                              os.environ["HERMES_SOURCE_PREPARATION_SHA256"])
+        require(directory_identity(outer) == tuple(preparation["outer_identity"]), "original source outer changed before Project setup")
+        retained = preparation["installer_preimages"]
+    else:
+        original.mkdir(parents=True, exist_ok=True)
+        retained = prepare_user_fixture(original, authored)
     spec, records, shared = {}, [], []
     for scope in ("a", "b"):
         project = outer / ("project-" + scope)
@@ -943,15 +1395,29 @@ def observe_profiles(probes):
     # This receipt records our original created roots, independently of whether
     # the subsequent whole-tree inventory admits native bootstrap effects.
     write_json(evidence / "profile-endpoints.json", {"selected": spec, "original_native_root": str(original),
-               "os_home": str(user), "sentinel_sha256": [hashlib.sha256(x.encode()).hexdigest() for x in sentinels]})
-    try:
-        baseline = inventory(outer)
-    except (OSError, RuntimeError, ValueError):
-        publish_census_request(evidence, outer, nonce, json.loads(os.environ["HERMES_CENSUS_EVIDENCE_ID"]))
-        raise
+               "os_home": str(user), "sentinel_sha256": [hashlib.sha256(x.encode()).hexdigest() for x in sentinels],
+               "installer_preimages": retained, "source_capture": source_capture})
     protected = [str((original / name).relative_to(outer)).replace('\\', '/') for name in authored]
     controls = [str((outer / ("project-" + scope) / "foreign.txt").relative_to(outer)).replace('\\', '/') for scope in ("a", "b")]
     protected += controls
+    outer_identity = tuple(preparation["outer_identity"]) if preparation is not None else directory_identity(outer)
+    layout = None
+    if source_capture:
+        layout = dict(inputs["layout"], protected=(*inputs["layout"]["protected"], *protected),
+                      sentinels=tuple(value.encode("utf-8") for value in sentinels))
+    def capture(*, initial=False):
+        if layout is None:
+            return inventory(outer)
+        deadline = time.monotonic() + 120
+        snapshot = payload_snapshot(outer, outer_identity, deadline, source=layout)
+        if initial:
+            require_source_user_baseline(source_user_digest(snapshot["_records"], layout["user"], deadline), preparation["prepared_user"])
+        return snapshot["ledger"]
+    try:
+        baseline = capture(initial=True)
+    except (OSError, RuntimeError, ValueError):
+        publish_census_request(evidence, outer, nonce, json.loads(os.environ["HERMES_CENSUS_EVIDENCE_ID"]))
+        raise
     write_json(evidence / "original-user-baseline.json", baseline)
     current = baseline
 
@@ -961,9 +1427,9 @@ def observe_profiles(probes):
         for name, root in root_paths.items():
             config_boundary(root, spec[name]["server"], spec[name]["url"], name in removed,
                             None if name in removed else spec[name]["config_sha256"])
-        before = inventory(outer)
+        before = capture()
         require(before == current, "unmeasured inter-command mutation")
-        user_prefix = original.relative_to(outer).as_posix()
+        user_prefix = (user if source_capture else original).relative_to(outer).as_posix()
         require(profile_tree(before, user_prefix) == profile_tree(baseline, user_prefix), "original User changed before command")
         require(scope != "user" or (label == "list-user" and removed == {"a", "b"}), "User control must follow Project removal")
         selected = spec[scope]
@@ -982,7 +1448,7 @@ def observe_profiles(probes):
         except BaseException as error:
             failure = error
         verify_root_identities(root_paths, held_roots)
-        after = inventory(outer)
+        after = capture()
         delta = changes(before, after)
         records.append({"label": label, "scope": scope, "runtime_root": selected["root"],
                         "delta": delta, "error": type(failure).__name__ if failure else None})
@@ -997,7 +1463,7 @@ def observe_profiles(probes):
                                    or path.startswith(root.relative_to(outer).as_posix() + "/") for root in roots)]
         try:
             profile_effect_boundary(label, scope, baseline, before, after, user_prefix,
-                                    Path(selected["root"]).relative_to(outer).as_posix())
+                                    Path(selected["root"]).relative_to(outer).as_posix(), source_capture=source_capture)
         except BaseException:
             shared.extend(shared_delta)
             raise
@@ -1007,8 +1473,9 @@ def observe_profiles(probes):
             require({key: value for key, value in before.items() if key == prefix or key.startswith(prefix + "/")}
                     == {key: value for key, value in after.items() if key == prefix or key.startswith(prefix + "/")},
                     "sibling custom root changed")
-        for root in roots:
-            no_user_copies(root, sentinels)
+        if not source_capture:
+            for root in roots:
+                no_user_copies(root, sentinels)
         if failure:
             raise failure
         methods_after = {name: list(probe.methods()) for name, probe in probes.items()}
@@ -1023,15 +1490,26 @@ def observe_profiles(probes):
             require(receipt["home"] == selected["root"] == receipt["default_root"]
                     and receipt["native_root"] == str(original) and receipt["auth_fallback"] is None
                     and receipt["os_home"] == str(user) and receipt["userprofile"] == str(user), "native custom/User root authority differs")
+            if source_capture:
+                require(receipt.get("source_owner") == str(original), "native source checkout owner differs")
             records[-1]["resolution"] = receipt
         return output
 
     try:
-        require(b"hermes" in command("version-a", "a", ["--version"]).lower(), "bundled native version absent")
+        if not source_capture:
+            require(b"hermes" in command("version-a", "a", ["--version"]).lower(), "bundled native version absent")
         for scope in ("a", "b"):
+            if source_capture:
+                # A real cold source launcher must prepare its own environment.
+                # --version skips that preparation at the pinned revision.
+                config_readout("path", command("config-path-" + scope, scope, ["config", "path"]), spec[scope])
+                if scope == "a":
+                    version = command("version-a", "a", ["--version"])
+                    source_version_readout(version, inputs["source"])
             command("guard-" + scope, scope, guard=True)
             # Bounded native observation may initialize only its selected home.
-            config_readout("path", command("config-path-" + scope, scope, ["config", "path"]), spec[scope])
+            if not source_capture:
+                config_readout("path", command("config-path-" + scope, scope, ["config", "path"]), spec[scope])
             config_readout("mcp", command("config-mcp-" + scope, scope, ["config", "get", "mcp_servers", "--json"]), spec[scope])
             output = command("list-" + scope, scope, ["mcp", "list"])
             require(spec[scope]["server"].encode() in output, "selected native MCP name absent")
@@ -1044,7 +1522,7 @@ def observe_profiles(probes):
             command("removed-test-" + scope, scope, ["mcp", "test", spec[scope]["server"]], expected_failure=True)
         output = command("list-user", "user", ["mcp", "list"])
         require(b"foreign" in output and all(spec[x]["server"].encode() not in output for x in ("a", "b")), "original User MCP selection changed")
-        write_json(evidence / "original-user-final.json", inventory(outer))
+        write_json(evidence / "original-user-final.json", capture())
     finally:
         write_json(evidence / "profile-command-deltas.json", {"commands": records, "unadmitted_shared_effects": shared,
                    "production_project_mcp": False, "admission_qualified": False,
@@ -1055,7 +1533,8 @@ COMMANDS = ({prefix + x for prefix in ("git-", "guard-", "config-path-", "config
             | {"test-a-restart", "list-user", "version-a"})
 MEMBERS = ({name + suffix for name in COMMANDS for suffix in (".stdout", ".stderr", ".status.json")}
            | {"original-user-baseline.json", "original-user-final.json", "source-guards.json", "profile-endpoints.json",
-              "profile-command-deltas.json", "bootstrap-census-request.json", "bootstrap-census.json", "profile-admission.json", "lifecycle.stdout", "lifecycle.stderr", "owned-start-gate"})
+              "profile-command-deltas.json", "bootstrap-census-request.json", "bootstrap-census.json", "source-user-preparation.json",
+              "profile-admission.json", "lifecycle.stdout", "lifecycle.stderr", "owned-start-gate"})
 
 
 def admit_evidence(directory):
@@ -1069,6 +1548,8 @@ def admit_evidence(directory):
         if path.name in ("bootstrap-census-request.json", "bootstrap-census.json"):
             require(info.st_size <= 16 << 10, "census evidence bound")
             validate_census_member(path.name, ordinary_bytes(path, info))
+        elif path.name == "source-user-preparation.json":
+            source_preparation_document(ordinary_bytes(path, info))
 
 
 def census_readout(value):
@@ -1101,6 +1582,8 @@ def stage_evidence(directory):
                 value = validate_census_member(name, body)
                 if name == "bootstrap-census.json":
                     census = value
+            elif name == "source-user-preparation.json":
+                source_preparation_document(body)
             with (pending / name).open("xb") as stream:
                 stream.write(body)
         require(directory_identity(directory) == identity
@@ -1123,11 +1606,13 @@ def stage_evidence(directory):
 
 
 def safe_failure_evidence(runner, failure_kind="unclosed-native-admission"):
-    directory = Path(tempfile.mkdtemp(prefix="hermes-profile-admission-evidence-", dir=runner))
+    source_capture = os.environ.get("HERMES_PROFILE_SOURCE_CAPTURE") == "1"
+    directory = Path(tempfile.mkdtemp(prefix="hermes-profile-source-evidence-" if source_capture else "hermes-profile-admission-evidence-", dir=runner))
     write_json(directory / "profile-admission.json", {"status": "failed", "error": "native admission aborted before evidence closure", "original_failure_kind": failure_kind,
                "admission_qualified": False, "production_project_mcp": False, "vendor_authentication": False,
                "real_model_inference": False, "tools_call": False,
-               "runtime_distribution": "bundled", "source_install_custom_root_qualified": False})
+               "runtime_distribution": "source" if source_capture else "bundled", "source_install_custom_root_qualified": False,
+               "source_bootstrap_recovery_qualified": False})
     stage_evidence(directory)
     return directory
 
@@ -1145,57 +1630,80 @@ def run():
     require(os.environ.get("GITHUB_ACTIONS") == "true" and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted",
             "genuine GitHub-hosted admission required")
     runner, checkout = Path(os.environ["RUNNER_TEMP"]).resolve(), HERE.parents[1]
-    before, official = BASE["source_identity"](checkout), BASE["source_identity"](runner / "hermes-agent")
+    source_capture = source_capture_mode()
+    official_source = BASE["source_root"]() if source_capture else runner / "hermes-agent"
+    before, official = BASE["source_identity"](checkout), BASE["source_identity"](official_source)
     require(before["commit"] == os.environ["HERMES_NATIVE_UAP_HEAD"] and not before["dirty"], "exact clean UAP source required")
     require(official["commit"] == BASE["PIN"] and not official["dirty"], "unmodified pinned Hermes required")
-    evidence = Path(tempfile.mkdtemp(prefix="hermes-profile-admission-evidence-", dir=runner))
-    home = Path(tempfile.mkdtemp(prefix="hermes-profile-admission-home-", dir=runner))
+    evidence = Path(tempfile.mkdtemp(prefix="hermes-profile-source-evidence-" if source_capture else "hermes-profile-admission-evidence-", dir=runner))
+    home = runner / "hermes-native-home" if source_capture else Path(tempfile.mkdtemp(prefix="hermes-profile-admission-home-", dir=runner))
     home_authority = directory_identity(home)
     identity = (home.stat().st_dev, home.stat().st_ino, home.stat().st_mode)
     evidence_identity = (evidence.stat().st_dev, evidence.stat().st_ino, evidence.stat().st_mode)
     evidence_authority = directory_identity(evidence)
     user = home / "user"
-    user.mkdir(mode=0o700)
+    if source_capture:
+        directory_identity(user)
+    else:
+        user.mkdir(mode=0o700)
     nonce, child, job, failure = secrets.token_hex(32), None, None, None
     proof = {"source": before, "hermes_source": official, "nonce": nonce, "capture_complete": False,
              "admission_qualified": False, "production_project_mcp": False,
              "vendor_authentication": False, "real_model_inference": False, "tools_call": False,
-             "runtime_distribution": "bundled", "source_install_custom_root_qualified": False}
+             "runtime_distribution": "source" if source_capture else "bundled", "source_install_custom_root_qualified": False,
+             "source_bootstrap_recovery_qualified": False}
     payload = runner / "hermes-profile-payload"
     target = {"Linux": "linux", "Windows": "win32", "macOS": "darwin"}[os.environ["RUNNER_OS"]] + "-" + os.environ["RUNNER_ARCH"].lower()
-    payload_descriptor, runtime_before, native_started = None, None, None
+    payload_descriptor, runtime_before, native_started, source_installation = None, None, None, None
+    source_prepared, preparation = None, None
     helpers = runpy.run_path(str(HERE / "hermes-native.py"), run_name="hermes_profile_process_helpers")
     lifecycle_deadline = time.monotonic() + 720
     try:
-        build = json.loads(ordinary_bytes(runner / "hermes-profile-build.json"))
-        require(set(build) == {"commit", "exit_code", "timeout_seconds", "elapsed_seconds"}
-                and build["commit"] == BASE["PIN"] and build["exit_code"] == 0 and build["timeout_seconds"] == 9000
-                and type(build["elapsed_seconds"]) in (int, float) and 0 < build["elapsed_seconds"] <= 9000, "official payload build receipt differs")
-        proof.update(bootstrap=build, native_family_timeout_seconds=720, payload_scan_timeout_seconds=120)
-        payload_identity, payload_before = directory_identity(payload), payload.lstat()
-        require(not any(payload.is_relative_to(root) or root.is_relative_to(payload) for root in (home, evidence, checkout, runner / "hermes-agent")), "runtime/configuration roots overlap")
-        payload_descriptor = open_inventory_directory(payload)
-        payload_held = os.fstat(payload_descriptor)
-        check_inventory_directory(payload_before, payload_held, "payload root changed at open")
-        verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
-        runtime_before = {"inventory": payload_snapshot(payload, payload_identity, time.monotonic() + 120),
-                          "provenance": payload_contract(payload, runner / "hermes-agent", target)}
+        proof.update(native_family_timeout_seconds=720, payload_scan_timeout_seconds=120)
+        if source_capture:
+            source_installation = source_inputs(runner, official_source)
+            original_records = {}
+            runtime_before = source_runtime_snapshot(source_installation, home_authority, retain=original_records)
+            proof["runtime_before"] = runtime_before
+            env, source_prepared, preparation = prepare_source_user(source_installation, original_records, evidence, nonce, home_authority)
+            runtime_root, python = official_source, source_installation["python"]
+            env.update(HERMES_PROFILE_SOURCE_CAPTURE="1", HERMES_HOME=str(source_installation["original"]),
+                       HERMES_PROFILE_RUNTIME_ROOT=str(runtime_root), HERMES_PROFILE_PYTHON=str(python))
+            proof.update(source_prepared_runtime=source_prepared, source_user_preparation=preparation)
+        else:
+            build = json.loads(ordinary_bytes(runner / "hermes-profile-build.json"))
+            require(set(build) == {"commit", "exit_code", "timeout_seconds", "elapsed_seconds"}
+                    and build["commit"] == BASE["PIN"] and build["exit_code"] == 0 and build["timeout_seconds"] == 9000
+                    and type(build["elapsed_seconds"]) in (int, float) and 0 < build["elapsed_seconds"] <= 9000, "official payload build receipt differs")
+            proof["bootstrap"] = build
+            payload_identity, payload_before = directory_identity(payload), payload.lstat()
+            require(not any(payload.is_relative_to(root) or root.is_relative_to(payload) for root in (home, evidence, checkout, official_source)), "runtime/configuration roots overlap")
+            payload_descriptor = open_inventory_directory(payload)
+            payload_held = os.fstat(payload_descriptor)
+            check_inventory_directory(payload_before, payload_held, "payload root changed at open")
+            verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
+            runtime_before = {"inventory": payload_snapshot(payload, payload_identity, time.monotonic() + 120),
+                              "provenance": payload_contract(payload, official_source, target)}
+            selected = runtime_before["provenance"]["selected"]
+            runtime_root, python = payload / selected["code"], payload / selected["python"]
+            env = BASE["closed_environment"](user, evidence, nonce, "http://127.0.0.1:9/unused", installation={
+                "HERMES_BIN": runtime_before["provenance"]["native_command"][0], "RUNNER_TEMP": str(runner),
+                "HERMES_PROFILE_RUNTIME_ROOT": str(runtime_root), "HERMES_PROFILE_PYTHON": str(python)})
         proof["runtime_before"] = runtime_before
-        selected = runtime_before["provenance"]["selected"]
-        runtime_root, python = payload / selected["code"], payload / selected["python"]
-        env = BASE["closed_environment"](user, evidence, nonce, "http://127.0.0.1:9/unused", installation={
-            "HERMES_BIN": runtime_before["provenance"]["native_command"][0], "RUNNER_TEMP": str(runner),
-            "HERMES_PROFILE_RUNTIME_ROOT": str(runtime_root), "HERMES_PROFILE_PYTHON": str(python)})
         env["HERMES_CENSUS_EVIDENCE_ID"] = json.dumps(evidence_authority)
         env.pop("HERMES_NATIVE_MCP_URL", None)  # This case has no User/legacy-call endpoint.
         gate = evidence / "owned-start-gate"
         env["HERMES_CALL_START_GATE"] = str(gate)
         sys.path.insert(0, str(runtime_root))
         from hermes_cli._launchers import runtime_command
-        require(Path(runtime_command.__code__.co_filename).resolve() == runtime_root / "hermes_cli/_launchers.py", "observer runtime API is not payload-owned")
+        require(Path(runtime_command.__code__.co_filename).resolve() == runtime_root / "hermes_cli/_launchers.py", "observer runtime API is not selected-source-owned")
+        if source_capture:
+            require(runtime_command(runtime_root, python=python) == source_installation["runtime_argv"],
+                    "installed launcher runtime command does not match the pinned official API")
         argv = observer_runtime_command(runtime_command, runtime_root, python, args=["--child"],
                                         code=f"runpy.run_path({str(Path(__file__).resolve())!r}, run_name='__main__')")
-        verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
+        if payload_descriptor is not None:
+            verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
         native_started = time.monotonic()
         lifecycle_deadline = native_started + 720
         flags = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
@@ -1253,19 +1761,38 @@ def run():
                     and (home.stat().st_dev, home.stat().st_ino, home.stat().st_mode) == identity, "owned outer root changed")
             maybe_census(evidence, home, home_authority, nonce, process_settled, lifecycle_deadline, evidence_authority)
             require(directory_identity(home) == home_authority, "owned outer root changed after census")
-            shutil.rmtree(home)
-            proof["cleanup"] = "completed"
+            if source_capture:
+                proof["cleanup"] = "owned-processes-settled; installed source and measured client-owned state retained"
+            else:
+                shutil.rmtree(home)
+                proof["cleanup"] = "completed"
         except BaseException as error:
             failure = failure or error
             proof.update(status="failed", cleanup="failed", cleanup_error=type(error).__name__)
         proof["native_family_elapsed_seconds"] = round(time.monotonic() - native_started, 3) if native_started is not None else None
         try:
+            if source_prepared is not None and process_settled:
+                require(read_source_preparation(evidence, evidence_authority, nonce,
+                                               env["HERMES_SOURCE_PREPARATION_SHA256"]) == json.loads(json.dumps(preparation)),
+                        "source preparation envelope changed after native settlement")
+        except BaseException as error:
+            failure = failure or error
+            proof.update(status="failed", preparation_error=type(error).__name__ + ": " + str(error)[:300])
+        try:
             if runtime_before is not None and process_settled:
-                verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
-                runtime_after = {"inventory": payload_snapshot(payload, payload_identity, time.monotonic() + 120),
-                                 "provenance": payload_contract(payload, runner / "hermes-agent", target)}
-                proof["runtime_after"] = runtime_after
-                require(runtime_after == runtime_before, "immutable bundled runtime changed")
+                if source_capture:
+                    runtime_after = source_runtime_snapshot(source_inputs(runner, official_source), home_authority)
+                    proof["runtime_after"] = runtime_after
+                    require(runtime_after["immutable"] == runtime_before["immutable"]
+                            and runtime_after["provenance"] == runtime_before["provenance"], "immutable source installation changed")
+                    if source_prepared is not None:
+                        require_source_user_baseline(runtime_after["user"], source_prepared["user"])
+                else:
+                    verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
+                    runtime_after = {"inventory": payload_snapshot(payload, payload_identity, time.monotonic() + 120),
+                                     "provenance": payload_contract(payload, official_source, target)}
+                    proof["runtime_after"] = runtime_after
+                    require(runtime_after == runtime_before, "immutable bundled runtime changed")
         except BaseException as error:
             failure = failure or error
             proof.update(status="failed", runtime_error=type(error).__name__ + ": " + str(error)[:300])
@@ -1279,7 +1806,7 @@ def run():
                 and (evidence.stat().st_dev, evidence.stat().st_ino, evidence.stat().st_mode) == evidence_identity,
                 "evidence directory identity changed")
         admit_evidence(evidence)
-        proof.update(source_after=BASE["source_identity"](checkout), hermes_source_after=BASE["source_identity"](runner / "hermes-agent"),
+        proof.update(source_after=BASE["source_identity"](checkout), hermes_source_after=BASE["source_identity"](official_source),
                      streams={p.name: {"bytes": p.stat().st_size, "sha256": hashlib.sha256(ordinary_bytes(p)).hexdigest()} for p in evidence.iterdir() if p.is_file()})
         if proof["source_after"] != before or proof["hermes_source_after"] != official:
             failure = failure or RuntimeError("source/runtime identity changed")

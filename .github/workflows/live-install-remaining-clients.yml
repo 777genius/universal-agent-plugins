@@ -8,6 +8,9 @@ on:
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'tests/live-install/fixtures.json'
+      - 'install/integrationctl/agentplugins/**'
+      - 'cli/cmd/agentplugins/**'
+      - 'cli/internal/agentpluginscli/**'
   workflow_dispatch:
 
 permissions:

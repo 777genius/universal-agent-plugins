@@ -9,7 +9,7 @@ func TestGrokManagedStdioIsProjectOnlyAndRemainsPrepared(t *testing.T) {
 	if user.UsesManagedStdioLauncher || user.RequiresActiveNativeProjection {
 		t.Fatal("Grok User acquired Project policy", user)
 	}
-	if !project.UsesManagedStdioLauncher || !project.RequiresActiveNativeProjection || project.TracksNativeEffects || project.LifecycleKind != LifecyclePrepared {
+	if !project.UsesManagedStdioLauncher || !project.RequiresActiveNativeProjection || !project.TracksNativeEffects || project.LifecycleKind != LifecyclePrepared {
 		t.Fatal("Grok Project policy changed lifecycle", project)
 	}
 	for _, id := range []ClientID{ClientAntigravity, ClientQoder} {

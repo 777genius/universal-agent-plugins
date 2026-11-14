@@ -4,6 +4,9 @@ package domain
 // never package input or a second operation allocator.
 type NativeAttemptIdentity struct {
 	OperationID, InstallationID, BindingID, NativeRoot string
+	// StateDigest binds an existing removal attempt's complete frozen state.
+	// It is transient caller authority, never persisted in the binding.
+	StateDigest string
 }
 
 type StateDecisionDisposition string

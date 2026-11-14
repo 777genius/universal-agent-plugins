@@ -162,10 +162,26 @@ class DriverTests(unittest.TestCase):
             self.assertIs(value["features"]["turn_summary"], False)
             self.assertEqual(value["model"][native.MODEL]["base_url"], "http://127.0.0.1:5678/v1")
 
+    def test_provider_refresh_retains_later_foreign_edit_and_does_not_reenable_removed_member(self):
+        with tempfile.TemporaryDirectory() as temp:
+            journey = native.NativeJourney(Path(temp), Path("/usr/bin/false"), Path("/usr/bin/false"), {"commands": []})
+            config = journey.home / ".grok/config.toml"
+            native.existing.write(config, '[features]\nturn_summary=false\n[plugins]\nenabled=["owned"]\n')
+            journey.configure_provider("http://127.0.0.1:1234/v1")
+            changed = config.read_text().replace('enabled=["owned"]', 'enabled=["foreign-later"]')
+            changed = changed.replace('[plugins]\n', '[foreign]\nkeep="retained"\n[plugins]\n')
+            native.existing.write(config, changed)
+            journey.configure_provider("http://127.0.0.1:5678/v1")
+            value = tomllib.loads(config.read_text())
+            self.assertEqual(value["plugins"]["enabled"], ["foreign-later"])
+            self.assertEqual(value["foreign"], {"keep": "retained"})
+            self.assertEqual(value["model"][native.MODEL]["base_url"], "http://127.0.0.1:5678/v1")
+            self.assertEqual(config.read_text().count("telemetry = false"), 1)
+
     def test_negative_project_requires_normal_explicit_trust_and_absent_plugin(self):
         with tempfile.TemporaryDirectory() as temp:
             journey = native.NativeJourney(Path(temp), Path("/usr/bin/false"), Path("/usr/bin/false"), {"commands": []})
-            journey.enable_fixture()
+            journey.trust_fixture()
             trust = journey.home / ".grok/trusted_folders.toml"
             self.assertEqual(tomllib.loads(trust.read_text())["folders"], {
                 str(journey.a): {"trusted": True}, str(journey.b): {"trusted": True}})

@@ -64,6 +64,9 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 		Use: "repair <name-or-installation-id>", Short: "Explicitly restore a missing or modified managed package",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validatePluginEnablementSelection(cmd, app, opts); err != nil {
+				return err
+			}
 			app, scopeErr := app.forOptions(opts)
 			if scopeErr != nil {
 				return scopeErr
@@ -93,10 +96,14 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 			if handled, err := repairOwnedDependencies(cmd, operationApp, opts, args[0], targets); handled || err != nil {
 				return err
 			}
+			if opts.confirmPluginEnable {
+				return runRepair(cmd.Context(), cmd, operationApp, opts, args[0], stdin)
+			}
 			return runRepairMany(cmd.Context(), cmd, operationApp, opts, args[0], targets)
 		},
 	}
 	command.Flags().BoolVar(&opts.yes, "yes", false, "accept the preflighted repair plan")
+	command.Flags().BoolVar(&opts.confirmPluginEnable, "confirm-plugin-enable", false, "enable the exact selected Project plugin after native identity verification; requires explicit --target and --scope project")
 	return command
 }
 

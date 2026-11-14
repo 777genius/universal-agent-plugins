@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+
 	"golang.org/x/mod/semver"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
@@ -248,6 +250,9 @@ func (service Service) guardEnvironmentRecovery() error {
 	// Managed environments recover explicitly; ordinary imperative recovery
 	// may continue only when the complete pending scope is unmanaged.
 	if err := transaction.ValidateEnvironmentRecoveryScope(state, nil); err != nil {
+		return err
+	}
+	if err := service.guardNativeEnvironmentRecovery(state); err != nil {
 		return err
 	}
 	// An unmanaged in-memory planner may have no journal backend configured.

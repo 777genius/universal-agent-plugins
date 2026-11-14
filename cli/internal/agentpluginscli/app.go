@@ -110,6 +110,7 @@ type options struct {
 	scope                string
 	dryRun               bool
 	yes                  bool
+	confirmPluginEnable  bool
 	scopeInferred        bool
 	format               string
 	plain                bool

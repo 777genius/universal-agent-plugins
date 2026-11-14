@@ -159,11 +159,12 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 // completeNativeRemoval records a known deactivation before a later managed
 // directory transaction. A failed Deactivate leaves the attempt marker in
 // place, because a partial native write cannot safely be inferred away.
-func (service Service) completeNativeRemoval(installationID, bindingID string, removed bool) error {
+func (service Service) completeNativeRemoval(ctx context.Context, installationID, bindingID string, removed bool) error {
 	state, err := service.StateStore.Load()
 	if err != nil {
 		return err
 	}
+	before := state
 	for i, installation := range state.Installations {
 		if installation.InstallationID != installationID {
 			continue
@@ -195,7 +196,7 @@ func (service Service) completeNativeRemoval(installationID, bindingID string, r
 		installation.Clients[bindingID] = client
 		installation.UpdatedAt = client.UpdatedAt
 		state.Installations[i] = installation
-		return service.persistLifecycleState(state)
+		return service.persistNativeRemovalDecision(ctx, installationID, bindingID, before, state)
 	}
 	return fmt.Errorf("installation disappeared before recording native removal")
 }

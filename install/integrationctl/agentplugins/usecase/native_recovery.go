@@ -69,7 +69,7 @@ func (service Service) RecoverNativeIntent(ctx context.Context, installationID, 
 		return err
 	}
 	if intent.Direction == domain.NativeIntentRemove {
-		return service.completeNativeRemoval(installationID, bindingID, true)
+		return service.completeNativeRemoval(ctx, installationID, bindingID, true)
 	}
 	return service.acknowledgeNativeRecovery(installationID, bindingID, binding, outcome, previousObservation)
 }

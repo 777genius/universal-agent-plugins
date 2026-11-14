@@ -99,6 +99,7 @@ func (session *repairSession) reapplyRepairedNative(delivery domain.StagedDelive
 			NativeObjects: append([]domain.NativeObjectOwnership(nil), delivery.NativeObjects...),
 		},
 		DeclaredName: session.input.Envelope.Manifest.Name, Replacing: true,
+		ConfirmPluginEnable:   session.input.ConfirmPluginEnable,
 		BackendExecutable:     session.input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),
 	})

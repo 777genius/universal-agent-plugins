@@ -33,8 +33,11 @@ const (
 
 // Request is copied by Prepare. Subsequent caller edits do not change the handle.
 type Request struct {
-	Scope       domain.InstallScope
-	ProjectRoot string `json:"-"`
+	// ConfirmPluginEnable applies only to one explicit Project repair. It is
+	// captured by Prepare and cannot be granted by diagnostic JSON or Apply.
+	ConfirmPluginEnable bool `json:"-"`
+	Scope               domain.InstallScope
+	ProjectRoot         string `json:"-"`
 	// Completion flags attest explicit host-observed lifecycle completion.
 	ActivationComplete, AuthComplete bool
 	physical                         map[domain.ClientID]domain.DetectedClient

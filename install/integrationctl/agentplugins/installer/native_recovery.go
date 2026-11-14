@@ -26,7 +26,7 @@ type PendingNativeIntent struct {
 	Digest            string
 }
 
-func inspectNativeIntents(state domain.StateFileV2) ([]PendingNativeIntent, error) {
+func inspectNativeIntents(state domain.StateFileV2, observed ...ports.NativeTransitionObservation) ([]PendingNativeIntent, error) {
 	var out []PendingNativeIntent
 	for _, installation := range state.Installations {
 		for _, binding := range installation.Clients {
@@ -34,7 +34,7 @@ func inspectNativeIntents(state domain.StateFileV2) ([]PendingNativeIntent, erro
 				// Legacy user native-config attempts predate persisted selected intents.
 				// Inspection preserves their uncertainty without granting mutation authority.
 				legacyNativeConfig := binding.SelectedDelivery.IsZero() && binding.Scope == string(domain.ScopeUser) && binding.SelectedDelivery.EffectiveTraitsForScope(domain.ClientID(binding.ClientID), domain.ScopeUser).LifecycleKind == domain.LifecycleNativeConfig
-				if binding.NativeActivationAttempt != "" && !legacyNativeConfig && (binding.ClientID != "opencode" || !binding.SelectedDelivery.IsZero()) {
+				if binding.NativeActivationAttempt != "" && !legacyNativeConfig && (binding.ClientID != "opencode" || !binding.SelectedDelivery.IsZero()) && !observedNativeAttempt(observed, installation.InstallationID, binding) {
 					return out, fmt.Errorf("native attempt has no persisted intent; retain uncertainty")
 				}
 				continue
@@ -111,6 +111,7 @@ func (e *Engine) recoverNativeIntents(ctx context.Context, svc usecase.Service, 
 	scope := &nativeRecoveryScope{engine: e, expected: observed}
 	// OpenCode's durable recorder publishes its binding itself. Directory and
 	// selected-intent recovery must retain those journals until its own phase.
+	nativeTransitions := svc.Kernel.NativeRecovery
 	svc.Kernel.NativeRecovery = nil
 	if err := scope.RequireMutationReady(); err != nil {
 		return err
@@ -140,7 +141,7 @@ func (e *Engine) recoverNativeIntents(ctx context.Context, svc usecase.Service, 
 			return ErrPlanChanged
 		}
 	}
-	return e.recoverObservedOpenCode(ctx, svc, scope.expected)
+	return e.recoverObservedTransitions(ctx, nativeTransitions, scope.expected)
 }
 
 // Only existing state_committed receipts can advance during successful kernel

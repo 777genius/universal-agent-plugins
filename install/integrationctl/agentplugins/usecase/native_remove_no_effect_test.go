@@ -113,6 +113,11 @@ func (a *removalNoEffectControl) Deactivate(ctx context.Context, req domain.Deac
 	if a.seen == "" {
 		a.t.Fatal("callback ran without this invocation's persisted native attempt")
 	}
+	digest, err := transaction.ComparableStateDigest(state)
+	if err != nil || req.NativeAttempt.OperationID != a.seen || req.NativeAttempt.InstallationID != state.Installations[0].InstallationID ||
+		req.NativeAttempt.BindingID != binding.ClientBindingID || req.NativeAttempt.NativeRoot != binding.NativeProfileRoot || req.NativeAttempt.StateDigest != digest {
+		a.t.Fatal("callback did not receive this invocation's frozen complete state proof", err)
+	}
 	switch a.change {
 	case "source":
 		state.Installations[0].Source.Publisher = "callback changed source authority"

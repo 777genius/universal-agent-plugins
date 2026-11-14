@@ -9,6 +9,10 @@ import (
 )
 
 func (session *repairSession) repairNative() (AddResult, error) {
+	if session.input.ConfirmPluginEnable && (session.input.DryRun || !session.input.Confirmed) {
+		session.result.RequiresConfirmation = true
+		return session.result, nil
+	}
 	delivery, complete, _, err := session.service.activeNativeDelivery(session.ctx, session.input, session.plan, session.installation, session.client)
 	if err != nil {
 		return session.result, err
@@ -18,7 +22,7 @@ func (session *repairSession) repairNative() (AddResult, error) {
 			return session.result, fmt.Errorf("prepare installed MCP runtime before repair: %w", err)
 		}
 	}
-	if !complete {
+	if !complete || session.input.ConfirmPluginEnable {
 		return session.reapplyIntactNative(delivery)
 	}
 	verified, clientVerifyErr := session.service.verifyClientReadOnly(session.ctx, session.input, session.result, session.client)
@@ -56,6 +60,7 @@ func (session *repairSession) reapplyIntactNative(delivery domain.StagedDelivery
 	outcome, activationErr := session.service.activateWithNativeAttempt(session.ctx, session.installation.InstallationID, session.clientKey, domain.ActivationRequest{
 		Client: session.input.Client, Plan: session.result.Plan, Delivery: delivery,
 		DeclaredName: session.input.Envelope.Manifest.Name, Replacing: true,
+		ConfirmPluginEnable:   session.input.ConfirmPluginEnable,
 		BackendExecutable:     session.input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),
 	})
@@ -65,7 +70,7 @@ func (session *repairSession) reapplyIntactNative(delivery domain.StagedDelivery
 	if err != nil {
 		return session.result, fmt.Errorf("persist repaired native lifecycle: %w", err)
 	}
-	session.result.Mutated = changed
+	session.result.Mutated = changed || outcome.NativeEffect == domain.NativeEffectCommitted
 	if activationErr != nil {
 		return session.result, fmt.Errorf("repair managed native state: %w", activationErr)
 	}
