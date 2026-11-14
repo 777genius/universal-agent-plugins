@@ -13,9 +13,9 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func removalEnablementFixture(t *testing.T) (enablementFixture, domain.StateFileV2) {
+func removalEnablementFixture(t *testing.T, versions ...int) (enablementFixture, domain.StateFileV2) {
 	t.Helper()
-	fixture := newEnablementFixture(t)
+	fixture := newEnablementFixture(t, versions...)
 	fixture.attempt(t, true, true)
 	if err := recoverPrototypeRecords(t.Context(), fixture.recovery); err != nil {
 		t.Fatal(err)

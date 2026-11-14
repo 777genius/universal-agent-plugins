@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -15,6 +16,8 @@ import (
 )
 
 func removeEnabledProject(ctx context.Context, env clients.Env, request domain.DeactivationRequest, outcome domain.DeactivationOutcome) (result domain.DeactivationOutcome, resultErr error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
 	result = outcome
 	recovery, err := enablementAuthority(env, request.TargetContext.ProjectRoot, request.Client.ConfigRoot)
 	if err != nil {
@@ -31,13 +34,13 @@ func removeEnabledProject(ctx context.Context, env clients.Env, request domain.D
 	if request.BackendExecutable == "" || request.BackendExecutable != request.Client.ExecutablePath {
 		return result, fmt.Errorf("grok owned enablement removal requires its selected native executable")
 	}
-	profile, err := recovery.openEnablementProfile(ctx)
+	profile, err := recovery.openInventoryProfile(ctx, request.BackendExecutable, env.UserHome)
 	if err != nil {
 		return result, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, profile.close()) }()
 	file := profile.config
-	plugins, err := readEnablementInventory(ctx, env.Runner, request.BackendExecutable, recovery.ProjectRoot, env.UserHome)
+	plugins, err := readEnablementInventory(ctx, env.Runner, profile.inputs, file.Original())
 	if err != nil {
 		return result, err
 	}
@@ -54,7 +57,7 @@ func removeEnabledProject(ctx context.Context, env clients.Env, request domain.D
 		return result, err
 	}
 	result.NativeEffect = domain.NativeEffectUncertain
-	if err := recovery.removeMembership(ctx, env, request, state, record, file, after, plugin); err != nil {
+	if err := recovery.removeMembership(ctx, env, state, record, file, profile.inputs, after, plugin); err != nil {
 		return result, err
 	}
 	result.NativeEffect, result.ExternalRemovalComplete = domain.NativeEffectCommitted, true
@@ -114,7 +117,7 @@ func (recovery EnablementRecovery) prepareRemoval(state domain.StateFileV2, inde
 	return record, after, recovery.requireState(state)
 }
 
-func (recovery EnablementRecovery) removeMembership(ctx context.Context, env clients.Env, request domain.DeactivationRequest, state domain.StateFileV2, record enablementRecord, file *nativeconfig.ExactFile, after []byte, before grokACPPlugin) error {
+func (recovery EnablementRecovery) removeMembership(ctx context.Context, env clients.Env, state domain.StateFileV2, record enablementRecord, file *nativeconfig.ExactFile, inputs *enablementInventoryInputs, after []byte, before grokACPPlugin) error {
 	if err := recovery.PackageVerifier.Verify(ctx, record.ArtifactPath, record.PackageDigest); err != nil {
 		return err
 	}
@@ -124,7 +127,8 @@ func (recovery EnablementRecovery) removeMembership(ctx context.Context, env cli
 	if err := record.applyConfig(file, after); err != nil {
 		return errors.Join(err, record.rollbackConfig(file))
 	}
-	plugins, err := readEnablementInventory(ctx, env.Runner, request.BackendExecutable, recovery.ProjectRoot, env.UserHome)
+	expected := nativeconfig.FileSnapshot{Body: after, Mode: file.Original().Mode, Exists: true}
+	plugins, err := readEnablementInventory(ctx, env.Runner, inputs, expected)
 	if err != nil {
 		return err
 	}

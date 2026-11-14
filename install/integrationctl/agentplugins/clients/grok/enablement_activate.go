@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -17,11 +18,14 @@ type enablementActivation struct {
 	state    domain.StateFileV2
 	index    int
 	binding  domain.ClientBinding
+	inputs   *enablementInventoryInputs
 	record   enablementRecord
 	after    []byte
 }
 
 func enableProject(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (result domain.ActivationOutcome, resultErr error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
 	result = outcome
 	recovery, err := enablementAuthority(env, request.Plan.TargetContext.ProjectRoot, request.Client.ConfigRoot)
 	if err != nil {
@@ -31,13 +35,14 @@ func enableProject(ctx context.Context, env clients.Env, request domain.Activati
 	if err != nil {
 		return result, err
 	}
-	profile, err := recovery.openEnablementProfile(ctx)
+	profile, err := recovery.openInventoryProfile(ctx, request.BackendExecutable, env.UserHome)
 	if err != nil {
 		return result, err
 	}
 	defer func() { resultErr = errors.Join(resultErr, profile.close()) }()
 	file := profile.config
 	session := enablementActivation{recovery: recovery, request: request, state: state, index: index, binding: binding,
+		inputs: profile.inputs,
 		record: enablementRecord{Version: 2, UserRoot: recovery.UserRoot, UserParentAuthority: profile.parent}}
 	id := "project/" + enablementDigest([]byte(request.Delivery.ActivePath))[7:15] + "/" + request.DeclaredName
 	if err := refuseDisabledMembership(file.Original().Body, id, request.DeclaredName); err != nil {
@@ -46,7 +51,7 @@ func enableProject(ctx context.Context, env clients.Env, request domain.Activati
 	if err := session.record.revalidateParent(); err != nil {
 		return result, err
 	}
-	plugins, err := readEnablementInventory(ctx, env.Runner, request.BackendExecutable, recovery.ProjectRoot, env.UserHome)
+	plugins, err := readEnablementInventory(ctx, env.Runner, profile.inputs, file.Original())
 	if err != nil {
 		return result, err
 	}
@@ -158,7 +163,7 @@ func requireEnabledMembership(body []byte, id, name string) error {
 }
 
 func (session *enablementActivation) commit(ctx context.Context, env clients.Env, file *nativeconfig.ExactFile, before grokACPPlugin) (bool, error) {
-	recovery, request := session.recovery, session.request
+	recovery := session.recovery
 	if err := recovery.writeRecord(session.record); err != nil {
 		return false, err
 	}
@@ -170,7 +175,8 @@ func (session *enablementActivation) commit(ctx context.Context, env clients.Env
 	if err := record.applyConfig(file, session.after); err != nil {
 		return false, errors.Join(err, record.rollbackConfig(file))
 	}
-	plugins, err := readEnablementInventory(ctx, env.Runner, request.BackendExecutable, recovery.ProjectRoot, env.UserHome)
+	expected := nativeconfig.FileSnapshot{Body: session.after, Mode: file.Original().Mode, Exists: true}
+	plugins, err := readEnablementInventory(ctx, env.Runner, session.inputs, expected)
 	if err != nil {
 		return false, err
 	}

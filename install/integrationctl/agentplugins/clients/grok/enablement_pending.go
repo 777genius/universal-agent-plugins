@@ -72,7 +72,11 @@ func (recovery EnablementRecovery) pendingRecord(state domain.StateFileV2, opera
 	if err != nil {
 		return ports.NativeTransitionObservation{}, err
 	}
-	_, _, _, err = recovery.recordBinding(state, record)
+	return recovery.recordObservation(state, record)
+}
+
+func (recovery EnablementRecovery) recordObservation(state domain.StateFileV2, record enablementRecord) (ports.NativeTransitionObservation, error) {
+	_, _, _, err := recovery.recordBinding(state, record)
 	if err != nil {
 		return ports.NativeTransitionObservation{}, err
 	}
@@ -81,7 +85,7 @@ func (recovery EnablementRecovery) pendingRecord(state domain.StateFileV2, opera
 		len(record.footer) != 0 && record.decisionDigest == "" && digest != record.AttemptStateDigest {
 		return ports.NativeTransitionObservation{}, fmt.Errorf("grok native record differs from the complete observed state")
 	}
-	root, err := recovery.recordRoot(operationID)
+	root, err := recovery.recordRoot(record.OperationID)
 	if err != nil {
 		return ports.NativeTransitionObservation{}, err
 	}
@@ -89,9 +93,44 @@ func (recovery EnablementRecovery) pendingRecord(state domain.StateFileV2, opera
 	if record.decisionDigest != "" || digest == record.targetStateDigest() {
 		phase = "native_state_decision"
 	}
-	return ports.NativeTransitionObservation{OperationID: operationID, InstallationID: record.InstallationID,
+	return ports.NativeTransitionObservation{OperationID: record.OperationID, InstallationID: record.InstallationID,
 		BindingID: record.BindingID, TargetPath: record.ArtifactPath, Root: root, Phase: phase,
 		Digest: record.rawDigest, AuthorityDigest: record.Hash}, nil
+}
+
+// This private codec path does not qualify a v3 producer. Public recovery stays
+// closed until the readonly transport and original-parent contract are proven.
+// Never replace the supplied observation with a later operation-ID-only lookup.
+func (recovery EnablementRecovery) recoverObservedRecord(ctx context.Context, observed ports.NativeTransitionObservation) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if recovery.State == nil || recovery.PackageVerifier == nil {
+		return fmt.Errorf("grok enablement recovery services are unavailable")
+	}
+	if observed.Root == "" {
+		return errEnablementUnqualified
+	}
+	record, err := recovery.readRecord(observed.OperationID)
+	if err != nil {
+		return err
+	}
+	if record.Version != 3 {
+		return errEnablementUnqualified
+	}
+	state, err := recovery.State.Load()
+	if err != nil {
+		return err
+	}
+	current, err := recovery.recordObservation(state, record)
+	if err != nil {
+		return err
+	}
+	current.EnvironmentID = observed.EnvironmentID
+	if !reflect.DeepEqual(current, observed) {
+		return fmt.Errorf("grok native record no longer matches the observed authority")
+	}
+	return recovery.recoverHeldRecord(ctx, record)
 }
 
 func (recovery EnablementRecovery) ReconcileObserved(ctx context.Context, observed ports.NativeTransitionObservation, _ ports.NativeTransitionState) error {

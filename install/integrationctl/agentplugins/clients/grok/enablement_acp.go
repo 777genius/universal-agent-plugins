@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -28,27 +29,29 @@ type grokACPInventory struct {
 
 // This is the measured sessionless route. It never creates or resumes a
 // session, submits a prompt, authorizes trust, or invokes a plugin action.
-func readEnablementInventory(ctx context.Context, runner ports.CommandRunner, executable, project, home string) (plugins []grokACPPlugin, resultErr error) {
-	duplex, ok := runner.(ports.DuplexCapabilityRunner)
-	if !ok {
-		return nil, fmt.Errorf("grok enablement requires contained duplex execution")
+func readEnablementInventory(ctx context.Context, runner ports.CommandRunner, inputs *enablementInventoryInputs, expected nativeconfig.FileSnapshot) (plugins []grokACPPlugin, resultErr error) {
+	duplex, ok := runner.(ports.ReadonlyDuplexCommandRunner)
+	if !ok || inputs == nil {
+		return nil, fmt.Errorf("grok enablement requires contained readonly duplex execution")
 	}
-	if err := duplex.DuplexCapability(); err != nil {
+	bounded, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	if err := inputs.revalidate(bounded, expected); err != nil {
 		return nil, err
 	}
+	defer func() { resultErr = errors.Join(resultErr, inputs.revalidate(bounded, expected)) }()
 	var nonce [16]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return nil, err
 	}
-	bounded, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	command := legacyports.Command{Argv: []string{executable, "agent", "--no-leader", "stdio"}, Dir: project,
-		Env: grokMetadataEnvironment(home)}
+	project := inputs.inputs.Project.Path
+	command := legacyports.Command{Argv: []string{inputs.inputs.Executable.Path, "agent", "--no-leader", "stdio"}, Dir: project,
+		Env: grokMetadataEnvironment(inputs.inputs.Home.Path)}
 	var tail *grokACPTail
 	var pending []byte
 	var inventory grokACPInventory
 	defer func() { resultErr = errors.Join(resultErr, tail.close()) }()
-	err := duplex.RunDuplexWithPlannedShutdown(bounded, command, func(stdin io.Writer, stdout io.Reader) error {
+	err := duplex.RunReadonlyDuplexWithPlannedShutdown(bounded, command, inputs.inputs, func(stdin io.Writer, stdout io.Reader) error {
 		var err error
 		tail, err = captureGrokACPTail(stdout)
 		if err != nil {

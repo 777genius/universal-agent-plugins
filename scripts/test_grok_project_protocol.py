@@ -862,17 +862,39 @@ class DelegatedPublicationTests(unittest.TestCase):
         if not passed:
             value["error"] = "ValueError: inert original refusal"
         if case == "grok-protocol":
-            value.update(model_invoked=False, grok_tools_call_qualified=False, transport="stdio")
+            value.update(model_invoked=False, grok_tools_call_qualified=False, transport="stdio", inventory_test_sha256="e" * 64)
             if passed:
                 value.update(native_doctor_initialize_and_list_qualified=True, direct_installed_config_tools_call_qualified=True)
+                self.readonly_proof(value)
         else:
             value.update(github_run_id="123", github_run_attempt="1", github_event="pull_request", platform="Linux-x86_64",
                 actual_model_used=False, scripted_local_provider=True, grok_native_tools_call_qualified=passed)
         return value
 
     def admit(self, value, case="grok-noauth", exit_code=1, error=None):
+        expected = {**self.expected, **({"inventory_test_sha256": "e" * 64} if case == "grok-protocol" else {})}
         return self.service.admit_evidence(json.dumps(value).encode(), case, {"exit": exit_code, "error": error},
-                                          self.expected, self.env, self.budget)
+                                          expected, self.env, self.budget,
+                                          inventory_test=self.root / "tools/grok-inventory-test")
+
+    def readonly_proof(self, value):
+        project = self.root / "project-a"
+        active = project / ".grok/plugins/owned"
+        value["prepared_owned_state"] = {"installations": [{"declared_name": "fixture", "package": {"version": "1.0.0"},
+            "clients": {"binding": {"client_id": "grok", "scope": "project", "target_locator": str(active)}}}]}
+        value["readonly_inventory"] = {"calls": 2, "input_snapshot_sha256": "f" * 64}
+        row = dict(probe="readonly-production-inventory", argv=[str(self.root / "tools/grok-inventory-test"),
+            "-test.run=^TestEnablementReadonlyNativeInventory$", "-test.v", "-test.count=1", "-test.timeout=45s",
+            "-grok-readonly-home=" + str(self.root / "home"), "-grok-readonly-project=" + str(project),
+            "-grok-readonly-native=" + str(self.root / "bin/grok"), "-grok-readonly-path=" + str(active),
+            "-grok-readonly-name=fixture", "-grok-readonly-version=1.0.0"], cwd=str(project), error=None,
+            exit=0, elapsed_seconds=0.01)
+        stdout = b"=== RUN   TestEnablementReadonlyNativeInventory\nGROK_READONLY_NATIVE_INVENTORY_PASS\n--- PASS: TestEnablementReadonlyNativeInventory (0.01s)\nPASS\n"
+        for name, body in (("stdout", stdout), ("stderr", b"")):
+            row.update({name: body.decode(), name + "_base64": base64.b64encode(body).decode(),
+                name + "_bytes": len(body), name + "_sha256": hashlib.sha256(body).hexdigest(),
+                name + "_file": row["probe"] + "." + name + ".log"})
+        value["commands"].append(row)
 
     def test_literal_case_flags_source_exit_and_stage_prefix_are_joined(self):
         for case in self.service.CASE_FIELDS:
@@ -882,7 +904,7 @@ class DelegatedPublicationTests(unittest.TestCase):
             self.assertTrue(self.admit(positive, case, 0))
             for change in ({"passed": True}, {"passed": 0}, {"vendor_authentication_used": 0},
                     {"source_commit": "e" * 40}, {"installer_sha256": "e" * 64}, {"source_tree": "e" * 40},
-                    {"probe_sha256": "e" * 64}, {"unknown": False}, {"unmanaged_project_owned_enablement_qualified": True},
+                    {"probe_sha256": "e" * 64}, {"inventory_test_sha256": "f" * 64}, {"unknown": False}, {"unmanaged_project_owned_enablement_qualified": True},
                     {"stages": [{"stage": "unknown"}]}, {"error": ""}, {"schema_version": True}):
                 with self.subTest(case=case, change=change), self.assertRaises(ValueError):
                     self.admit({**negative, **change}, case)
@@ -915,6 +937,27 @@ class DelegatedPublicationTests(unittest.TestCase):
                 self.admit({**value, "commands": [{**row, field: changed}]})
         with self.assertRaises(ValueError):
             self.admit({**value, "commands": [row, row]})
+
+    def test_partial_readonly_proof_requires_executed_source_pinned_selected_test(self):
+        value = self.evidence("grok-protocol")
+        self.readonly_proof(value)
+        self.assertFalse(self.admit(value, "grok-protocol"))
+        for fault in ("calls", "snapshot", "missing-command", "different-test", "relative-test", "different-native", "different-package", "failed-command", "no-test"):
+            changed = copy.deepcopy(value)
+            if fault == "calls": changed["readonly_inventory"]["calls"] = True
+            elif fault == "snapshot": changed["readonly_inventory"]["input_snapshot_sha256"] = "unknown"
+            elif fault == "missing-command": changed["commands"] = []
+            elif fault == "different-test": changed["commands"][0]["argv"][0] = "/foreign/grok-inventory-test"
+            elif fault == "relative-test": changed["commands"][0]["argv"][0] = "grok-inventory-test"
+            elif fault == "different-native": changed["commands"][0]["argv"][7] = "-grok-readonly-native=/foreign/grok"
+            elif fault == "different-package": changed["commands"][0]["argv"][8] = "-grok-readonly-path=/foreign/plugin"
+            elif fault == "failed-command": changed["commands"][0]["exit"] = 1
+            else:
+                row, body = changed["commands"][0], b"testing: warning: no tests to run\nPASS\n"
+                row.update(stdout=body.decode(), stdout_base64=base64.b64encode(body).decode(),
+                           stdout_bytes=len(body), stdout_sha256=hashlib.sha256(body).hexdigest())
+            with self.subTest(fault=fault), self.assertRaises(ValueError):
+                self.admit(changed, "grok-protocol")
 
     def ordinary_prefix_fixture(self, case="grok-noauth"):
         fixture = ContractTests()

@@ -91,7 +91,7 @@ func enablementBinding(state domain.StateFileV2, installationID, bindingID strin
 }
 
 func (recovery EnablementRecovery) validateRecord(record enablementRecord) error {
-	if record.Version != 2 || recovery.ProjectRoot == "" || recovery.UserRoot == "" ||
+	if record.Version != 2 && record.Version != 3 || recovery.ProjectRoot == "" || recovery.UserRoot == "" ||
 		record.ProjectRoot != recovery.ProjectRoot || record.UserRoot != recovery.UserRoot ||
 		!enablementHash(record.PackageDigest) || !enablementHash(record.BeforeStateDigest) ||
 		!enablementHash(record.AttemptStateDigest) || record.DesiredStateDigest != "" && !enablementHash(record.DesiredStateDigest) {

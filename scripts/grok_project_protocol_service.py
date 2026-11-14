@@ -29,12 +29,12 @@ OPTIONAL_FIELDS = frozenset("acquisition all_original_events events_sha256 event
     "pre_removal_data_receipts post_removal_installation project_b_unchanged protected_fixture_files_match_expected "
     "untrusted_refusal_verified removed_absent persistent_data_retained".split())
 CASE_FIELDS = {
-    "grok-protocol": frozenset("model_invoked grok_tools_call_qualified transport".split()),
+    "grok-protocol": frozenset("model_invoked grok_tools_call_qualified transport inventory_test_sha256".split()),
     "grok-noauth": frozenset("github_run_id github_run_attempt github_event platform actual_model_used scripted_local_provider "
                             "grok_native_tools_call_qualified".split()),
 }
 CASE_OPTIONAL = {
-    "grok-protocol": frozenset("native_doctor_initialize_and_list_qualified direct_installed_config_tools_call_qualified".split()),
+    "grok-protocol": frozenset("native_doctor_initialize_and_list_qualified direct_installed_config_tools_call_qualified readonly_inventory".split()),
     "grok-noauth": frozenset("project_b_negative removed_native_negative native_provider_sessions".split()),
 }
 STAGES = ("installed", "updated", "repaired", "plugin-cwd", "data-cwd", "restarted-data-cwd")
@@ -189,7 +189,7 @@ def command_streams(rows, budget):
                     and row[stream + "_file"] == row["probe"] + "." + stream + ".log", "original command stream differs")
 
 
-def admit_evidence(body, case, record, expected, env, budget):
+def admit_evidence(body, case, record, expected, env, budget, *, inventory_test=None):
     require(case in CASE_FIELDS and type(body) is bytes and 0 < len(body) <= LIMIT, "bounded selected evidence required")
     value = runtime.strict_json(body)
     required = COMMON_FIELDS | CASE_FIELDS[case]
@@ -210,7 +210,7 @@ def admit_evidence(body, case, record, expected, env, budget):
     if case == "grok-protocol":
         require(value["model_invoked"] is False and value["grok_tools_call_qualified"] is False
                 and value["transport"] == "stdio", "protocol boundary differs")
-        for key in CASE_OPTIONAL[case]:
+        for key in ("native_doctor_initialize_and_list_qualified", "direct_installed_config_tools_call_qualified"):
             require(value.get(key, False) is passed, "protocol qualification differs")
     else:
         require(value["actual_model_used"] is False and value["scripted_local_provider"] is True
@@ -219,12 +219,55 @@ def admit_evidence(body, case, record, expected, env, budget):
                 and value["github_run_attempt"] == env["GITHUB_RUN_ATTEMPT"]
                 and value["github_event"] == env["GITHUB_EVENT_NAME"], "local-provider boundary differs")
     command_streams(value["commands"], budget)
+    if case == "grok-protocol":
+        require(type(value["inventory_test_sha256"]) is str
+                and re.fullmatch(r"[0-9a-f]{64}", value["inventory_test_sha256"]), "compiled inventory test identity differs")
+        if "readonly_inventory" in value:
+            admit_readonly_inventory(value, inventory_test)
+        require(not passed or "readonly_inventory" in value, "successful lifecycle lacks production readonly proof")
     if "ordinary_repair_observation" in value:
         admit_ordinary_repair(value)
     if passed:
         require(all(row["error"] is None for row in value["commands"]), "successful evidence has an incomplete capture")
     budget.check()
     return passed
+
+
+def admit_readonly_inventory(value, inventory_test):
+    proof = value["readonly_inventory"]
+    require(type(proof) is dict and set(proof) == {"calls", "input_snapshot_sha256"}
+            and type(proof["calls"]) is int and proof["calls"] == 2
+            and type(proof["input_snapshot_sha256"]) is str
+            and re.fullmatch(r"[0-9a-f]{64}", proof["input_snapshot_sha256"]), "readonly input proof differs")
+    rows = [row for row in value["commands"] if row["probe"] == "readonly-production-inventory"]
+    require(len(rows) == 1 and rows[0]["exit"] == 0 and rows[0]["error"] is None,
+            "original readonly native command required")
+    row = rows[0]
+    argv, project = row["argv"], Path(row["cwd"])
+    require(isinstance(inventory_test, Path) and inventory_test.is_absolute()
+            and len(argv) == 11 and argv[0] == str(inventory_test)
+            and argv[1:5] == ["-test.run=^TestEnablementReadonlyNativeInventory$", "-test.v", "-test.count=1", "-test.timeout=45s"]
+            and argv[5:8] == ["-grok-readonly-home=" + str(project.parent / "home"),
+                             "-grok-readonly-project=" + str(project),
+                             "-grok-readonly-native=" + str(project.parent / "bin/grok")],
+            "readonly native command selection differs")
+    installations = value.get("prepared_owned_state", {}).get("installations", [])
+    require(type(installations) is list and len(installations) == 1 and type(installations[0]) is dict,
+            "original readonly package state required")
+    selected = installations[0]
+    bindings = selected.get("clients", {})
+    require(type(bindings) is dict and len(bindings) == 1, "original readonly binding required")
+    binding = next(iter(bindings.values()))
+    require(type(binding) is dict and binding.get("client_id") == "grok" and binding.get("scope") == "project"
+            and argv[8:] == ["-grok-readonly-path=" + binding.get("target_locator", ""),
+                            "-grok-readonly-name=" + selected.get("declared_name", ""),
+                            "-grok-readonly-version=" + selected.get("package", {}).get("version", "")],
+            "readonly native package identity differs")
+    stdout = base64.b64decode(row["stdout_base64"], validate=True)
+    require(stdout.count(b"GROK_READONLY_NATIVE_INVENTORY_PASS\n") == 1
+            and stdout.count(b"--- PASS: TestEnablementReadonlyNativeInventory ") == 1
+            and b"--- SKIP:" not in stdout and b"--- FAIL:" not in stdout,
+            "readonly native test completion differs")
 
 
 def ordinary_repair_selection(value):
@@ -398,6 +441,11 @@ def run(case, installer, probe, output):
                     and installer.parent == probe.parent, "exact compiled role pair required")
             expected_files = {"installer_sha256": inputs.pin(installer, ((os.getuid(), os.getgid()),), 512 << 20, executable=True),
                               "probe_sha256": inputs.pin(probe, ((os.getuid(), os.getgid()),), 32 << 20, executable=True)}
+            if case == "grok-protocol":
+                inventory_test = installer.with_name("grok-inventory-test")
+                expected_files["inventory_test_sha256"] = inputs.pin(inventory_test,
+                    ((os.getuid(), os.getgid()),), 128 << 20, executable=True)
+                ctx.identities[inventory_test] = expected_files["inventory_test_sha256"]
             ctx.identities.update({installer: expected_files["installer_sha256"], probe: expected_files["probe_sha256"]})
             source = source_identity(ctx, "before")
             require(source["source_commit"] == expected, "unexpected source commit")
@@ -432,7 +480,8 @@ def run(case, installer, probe, output):
             evidence_path = child / "evidence.json"
             inputs.pin(evidence_path, ((os.getuid(), os.getgid()),), LIMIT)
             body = inputs.read(evidence_path)
-            passed = admit_evidence(body, case, record, {**source, **expected_files}, ctx.env, budget)
+            passed = admit_evidence(body, case, record, {**source, **expected_files}, ctx.env, budget,
+                                    inventory_test=inventory_test if case == "grok-protocol" else None)
             receipt = {"schema_version": 1, "kind": "grok-delegated-service", "case": case, **source, **expected_files,
                 "python_sha256": python_hash, "original_start_monotonic_ns": origin, "native_passed": passed,
                 "evidence_bytes": len(body), "evidence_sha256": hashlib.sha256(body).hexdigest(),

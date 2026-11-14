@@ -50,7 +50,7 @@ type enablementFixture struct {
 	config         string
 }
 
-func newEnablementFixture(t *testing.T) enablementFixture {
+func newEnablementFixture(t *testing.T, versions ...int) enablementFixture {
 	t.Helper()
 	root := t.TempDir()
 	project, user, operations := filepath.Join(root, "project"), filepath.Join(root, "home", ".grok"), filepath.Join(root, "state", "operations-v2")
@@ -90,7 +90,7 @@ func newEnablementFixture(t *testing.T) enablementFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	record := enablementRecord{Version: 2, Action: "enable", OperationID: "op-fixture", InstallationID: installationID, BindingID: bindingID,
+	record := enablementRecord{Version: enablementFixtureVersion(t, versions), Action: "enable", OperationID: "op-fixture", InstallationID: installationID, BindingID: bindingID,
 		ProjectRoot: project, UserRoot: user, UserParentAuthority: enablementFixtureParent(t, user), ArtifactPath: artifact, PackageDigest: packageDigest,
 		PluginID: id, PluginName: name, Edit: edit}
 	before, err := state.Load()
@@ -107,6 +107,19 @@ func newEnablementFixture(t *testing.T) enablementFixture {
 		t.Fatal(err)
 	}
 	return enablementFixture{recovery: recovery, record: record, state: state, original: original, next: after, config: config}
+}
+
+// Every original fixture remains v2. New codec tests explicitly choose their
+// version before the first publication; no persisted legacy record is upgraded.
+func enablementFixtureVersion(t *testing.T, versions []int) int {
+	t.Helper()
+	if len(versions) == 0 {
+		return 2
+	}
+	if len(versions) != 1 {
+		t.Fatal("one explicit private record version is required")
+	}
+	return versions[0]
 }
 
 func (fixture enablementFixture) attempt(t *testing.T, applied, committed bool) {

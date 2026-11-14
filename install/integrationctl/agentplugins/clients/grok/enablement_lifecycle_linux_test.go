@@ -29,7 +29,10 @@ func (*enablementNativeFixture) Run(context.Context, legacyports.Command) (legac
 	return legacyports.CommandResult{}, errors.New("unexpected ordinary native call")
 }
 func (*enablementNativeFixture) DuplexCapability() error { return nil }
-func (native *enablementNativeFixture) RunDuplexWithPlannedShutdown(ctx context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+func (native *enablementNativeFixture) RunReadonlyDuplexWithPlannedShutdown(ctx context.Context, command legacyports.Command, inputs legacyports.ReadonlyDuplexInputs, exchange func(io.Writer, io.Reader) error) error {
+	if err := validateEnablementFixtureInputs(command, inputs); err != nil {
+		return err
+	}
 	native.calls++
 	body, err := os.ReadFile(native.fixture.config)
 	if err != nil {
@@ -58,7 +61,7 @@ func (native *enablementNativeFixture) RunDuplexWithPlannedShutdown(ctx context.
 		return err
 	}
 	fixture := enablementDuplexFixture{frames: frames.String()}
-	err = fixture.RunDuplexWithPlannedShutdown(ctx, command, exchange)
+	err = fixture.RunReadonlyDuplexWithPlannedShutdown(ctx, command, inputs, exchange)
 	if native.calls == 2 && native.afterSecond != nil {
 		native.afterSecond()
 	}
@@ -68,6 +71,7 @@ func (native *enablementNativeFixture) RunDuplexWithPlannedShutdown(ctx context.
 func newLifecycleEnablementFixture(t *testing.T) enablementFixture {
 	t.Helper()
 	fixture := newEnablementFixture(t)
+	prepareInventoryInputFixture(t, fixture.record.ProjectRoot)
 	record, err := fixture.recovery.readRecord(fixture.record.OperationID)
 	if err != nil {
 		t.Fatal(err)
@@ -88,14 +92,15 @@ func lifecycleEnablementInput(t *testing.T, fixture enablementFixture) (clients.
 		t.Fatal(err)
 	}
 	native := &enablementNativeFixture{fixture: fixture}
+	executable := filepath.Join(filepath.Dir(fixture.record.ProjectRoot), "native")
 	env := clients.Env{UserHome: filepath.Dir(fixture.record.UserRoot), NativeTransitions: &fixture.recovery, NativeConfig: fixture.recovery.Kernel, Runner: native}
 	request := domain.ActivationRequest{ConfirmPluginEnable: true, NativeAttempt: domain.NativeAttemptIdentity{OperationID: fixture.record.OperationID,
 		InstallationID: fixture.record.InstallationID, BindingID: fixture.record.BindingID, NativeRoot: binding.NativeProfileRoot},
-		Client: domain.DetectedClient{ClientID: domain.ClientGrok, ConfigRoot: fixture.record.UserRoot, ExecutablePath: "/native/grok"},
+		Client: domain.DetectedClient{ClientID: domain.ClientGrok, ConfigRoot: fixture.record.UserRoot, ExecutablePath: executable},
 		Plan: domain.DeliveryPlan{Scope: domain.ScopeProject, TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: fixture.record.ProjectRoot, UserConfigRoot: fixture.record.UserRoot},
 			NativeRegistryRoot: binding.NativeProfileRoot, PhysicalArtifactID: binding.PhysicalArtifact},
 		Delivery:     domain.StagedDelivery{ActivePath: fixture.record.ArtifactPath, ArtifactDigest: fixture.record.PackageDigest},
-		DeclaredName: fixture.record.PluginName, BackendExecutable: "/native/grok", PreviousNativeObjects: previous}
+		DeclaredName: fixture.record.PluginName, BackendExecutable: executable, PreviousNativeObjects: previous}
 	return env, request, native
 }
 

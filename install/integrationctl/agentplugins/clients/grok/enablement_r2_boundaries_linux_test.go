@@ -25,7 +25,7 @@ type r2MutatingReadbackRunner struct {
 	path string
 }
 
-func (runner *r2MutatingReadbackRunner) RunDuplexWithPlannedShutdown(ctx context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+func (runner *r2MutatingReadbackRunner) RunReadonlyDuplexWithPlannedShutdown(ctx context.Context, command legacyports.Command, inputs legacyports.ReadonlyDuplexInputs, exchange func(io.Writer, io.Reader) error) error {
 	if runner.calls == 1 {
 		runner.calls++
 		if err := os.WriteFile(runner.path, []byte("native auxiliary postimage\n"), 0600); err != nil {
@@ -33,7 +33,7 @@ func (runner *r2MutatingReadbackRunner) RunDuplexWithPlannedShutdown(ctx context
 		}
 		return errors.New("inert readback failed after native auxiliary mutation")
 	}
-	return runner.enablementNativeFixture.RunDuplexWithPlannedShutdown(ctx, command, exchange)
+	return runner.enablementNativeFixture.RunReadonlyDuplexWithPlannedShutdown(ctx, command, inputs, exchange)
 }
 
 func TestR2ReadbackRecoveryCannotDeclareAuxiliaryEffectRestored(t *testing.T) {
@@ -70,7 +70,7 @@ func (*r2MutatingMetadataRunner) Run(context.Context, legacyports.Command) (lega
 
 func (*r2MutatingMetadataRunner) DuplexCapability() error { return nil }
 
-func (runner *r2MutatingMetadataRunner) RunDuplexWithPlannedShutdown(context.Context, legacyports.Command, func(io.Writer, io.Reader) error) error {
+func (runner *r2MutatingMetadataRunner) RunReadonlyDuplexWithPlannedShutdown(context.Context, legacyports.Command, legacyports.ReadonlyDuplexInputs, func(io.Writer, io.Reader) error) error {
 	runner.calls++
 	if err := os.WriteFile(runner.path, []byte("observed auxiliary startup effect\n"), 0600); err != nil {
 		return err

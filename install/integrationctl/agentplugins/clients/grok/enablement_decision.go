@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -111,14 +110,23 @@ func (recovery EnablementRecovery) PrepareNativeRemovalDecision(ctx context.Cont
 	if err := validateRemovalDesired(before, desired, record); err != nil {
 		return true, err
 	}
-	if err := record.revalidateParent(); err != nil {
-		return true, err
+	return true, recovery.recordRemovalDecision(ctx, record, before, desired)
+}
+
+func (recovery EnablementRecovery) recordRemovalDecision(ctx context.Context, record enablementRecord, before, desired domain.StateFileV2) (resultErr error) {
+	recovery = recovery.withRecoveryContext(ctx)
+	profile, err := recovery.openRecordedProfile(ctx, record)
+	if err != nil {
+		return err
 	}
-	current, err := recovery.Kernel.ReadExactFile(filepath.Join(record.UserRoot, "config.toml"))
-	if err != nil || !current.Exists || current.Mode != os.FileMode(record.Edit.Mode) || enablementDigest(current.Body) != record.Edit.AfterDigest {
-		return true, errors.Join(err, fmt.Errorf("grok removal config changed before state decision"))
+	defer func() { resultErr = errors.Join(resultErr, profile.close(), ctx.Err()) }()
+	if err := record.requireConfig(profile.config.Original(), record.Edit.AfterDigest); err != nil {
+		return err
 	}
-	return true, recovery.appendDecision(record, enablementStateDigest(desired))
+	if err := recovery.requireRecoveryAuthority(ctx, before, record, record.Edit.AfterDigest); err != nil {
+		return err
+	}
+	return recovery.appendDecision(record, enablementStateDigest(desired))
 }
 
 // A missing record means ordinary removal only when no enablement member was

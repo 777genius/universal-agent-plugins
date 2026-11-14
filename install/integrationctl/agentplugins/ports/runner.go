@@ -35,3 +35,11 @@ type DuplexCapabilityRunner interface {
 	DuplexCommandRunner
 	DuplexCapability() error
 }
+
+// ReadonlyDuplexCommandRunner is optional and has no ordinary duplex fallback.
+// Preparation consumes ctx before starting the native command. A nil result
+// requires both the original readonly input view and planned process-tree
+// shutdown; the input descriptors remain owned by the caller throughout.
+type ReadonlyDuplexCommandRunner interface {
+	RunReadonlyDuplexWithPlannedShutdown(context.Context, legacyports.Command, legacyports.ReadonlyDuplexInputs, func(io.Writer, io.Reader) error) error
+}

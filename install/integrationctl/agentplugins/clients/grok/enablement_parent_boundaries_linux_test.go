@@ -103,8 +103,8 @@ type parentReplacingInventory struct {
 	replace func()
 }
 
-func (native parentReplacingInventory) RunDuplexWithPlannedShutdown(ctx context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
-	if err := native.enablementNativeFixture.RunDuplexWithPlannedShutdown(ctx, command, exchange); err != nil {
+func (native parentReplacingInventory) RunReadonlyDuplexWithPlannedShutdown(ctx context.Context, command legacyports.Command, inputs legacyports.ReadonlyDuplexInputs, exchange func(io.Writer, io.Reader) error) error {
+	if err := native.enablementNativeFixture.RunReadonlyDuplexWithPlannedShutdown(ctx, command, inputs, exchange); err != nil {
 		return err
 	}
 	native.replace()

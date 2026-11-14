@@ -296,3 +296,68 @@ The existing focused Grok and installer security/SDK matrix also passed, with
 to that isolated packet; the final composed commit still requires its ordinary
 lint/core and native gates. Public native enablement remains closed until the
 separate auxiliary-write and exact recovery admission is established.
+
+## Private v3 observed recovery preparation (2026-11-14)
+
+This change prepares the existing private member-journal codec for a future
+qualified producer. It does not enable public recovery, public Project
+membership, or a v3 producer. Activation and removal still publish their
+existing v2 records, and public `Recover` and `ReconcileObserved` still refuse.
+Bare attempts and legacy v2 observations do not enter the new private observed
+entrypoint. The separate readonly native transport and its actual input-root
+qualification remain prerequisites for admitting a public v3 producer.
+
+The new private entrypoint retains the exact supplied observation: root, raw
+record digest, header digest, binding, installation, target and phase. It passes
+the admitted record through recovery instead of replacing it with a later
+operation-ID lookup. Every complete-state boundary is classified before native
+config IO. Reopening uses the recorded original User parent, then retains the
+original native flock and existing `ExactFile` transaction through completion
+or rollback. Committed completion requires the exact C1 bytes, existence and
+mode; predecessor completion requires C0 and no footer. A pending attempt can
+restore C0 only from its exact C0 or reversible owned C1 image.
+
+Before and after later effects, the same original parent, raw journal/header,
+whole state, package and config image are checked again. Removal's exact footer
+is written under the same parent/native-lock/config lease. Existing journal
+checkpoints carry the original caller context through a value copy of the
+recovery service. No journal mutation primitive, persisted public schema,
+generic transition port or directory-identity algorithm changes. The repeated
+observations do not exclude arbitrary hostile writers atomically after the
+last check.
+
+The existing v2 fixtures keep their default version and assertions. New fixtures
+select v3 before their first publication; no retained legacy record is upgraded.
+The new cases cover enablement S0/SA/ST, removal footer absence/partial/complete
+against those states and C0/C1, foreign config/mode refusal, exact observation
+and raw-journal drift, parent replacement preserving the original config and
+lock leaves, busy native lock, state-save failure and cold retry, and public
+refusal for both versions. Additional cases change an unrelated actual saved
+state field between observation admission and recovery, cancel after footer
+truncation or immediately before/after unlink, and distinguish rollback from
+completion when a user already disabled the ID so C0 equals C1. Late failures
+report the actual retained or already-removed journal; they do not recreate a
+stage or claim an effect that did not occur.
+
+These are private codec and local contract checks. The reviewed implementation
+and exact test execution receipt must accompany publication; they do not stand
+in for original native EOF/Wait/process-tree cleanup, a complete readonly view,
+actual Grok input-root physical qualification, or the final public lifecycle.
+
+## Readonly native inventory qualification
+
+The optional process port now retains the original HOME, selected ordinary Git
+root, project and native executable handles. Its Linux implementation uses the
+existing contained process owner with a fixed Bubblewrap view, an unchanged
+caller deadline, and checks before and after native execution. It has no
+ordinary-process fallback. Runtime symlinks retain their original metadata and
+link text; their outside targets are not mounted or followed by the census.
+This is a bounded runtime view, not a claim that every host input is available.
+
+Both inventory reads share one client input lease and native config lock. The
+protocol workflow compiles a tagged test that runs the actual production port
+twice against the pinned Grok executable and selected installed package, then
+requires unchanged original input snapshots and no MCP witness invocation.
+The parent joins that exact held test binary, original output and source to the
+result. A successful inventory result alone does not qualify the public
+lifecycle: its existing refusal remains until native qualification is complete.

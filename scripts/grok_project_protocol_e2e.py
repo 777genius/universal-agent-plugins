@@ -117,6 +117,7 @@ class Journey:
         self.grok = root / "bin/grok"
         self.protected = {}
         self.native_profile = None
+        self.inventory_test = None
 
     def run(self, label, argv, cwd=None, expected=(0,), timeout=60, *, config_after=None):
         from native_client_research import run_probe
@@ -293,6 +294,27 @@ class Journey:
             "original_state_sha256": hashlib.sha256(state_before).hexdigest()}
         self.check()
 
+    def readonly_inventory(self, installation, active):
+        require(self.inventory_test is not None, "compiled native inventory test required")
+        roots = (self.home, self.a, self.b, self.source, self.grok)
+        before = [snapshot(root) for root in roots]
+        original_events = read_owned(self.log, self.root) if self.log.exists() else None
+        stdout = self.run("readonly-production-inventory", [self.inventory_test,
+            "-test.run=^TestEnablementReadonlyNativeInventory$", "-test.v", "-test.count=1", "-test.timeout=45s",
+            "-grok-readonly-home=" + str(self.home), "-grok-readonly-project=" + str(self.a),
+            "-grok-readonly-native=" + str(self.grok), "-grok-readonly-path=" + str(active),
+            "-grok-readonly-name=" + installation["declared_name"],
+            "-grok-readonly-version=" + installation["package"]["version"]], timeout=50)
+        require(stdout.count(b"GROK_READONLY_NATIVE_INVENTORY_PASS\n") == 1
+                and stdout.count(b"--- PASS: TestEnablementReadonlyNativeInventory ") == 1
+                and b"--- SKIP:" not in stdout and b"--- FAIL:" not in stdout,
+                "actual production readonly test did not pass")
+        require([snapshot(root) for root in roots] == before
+                and (read_owned(self.log, self.root) if self.log.exists() else None) == original_events,
+                "readonly inventory changed original inputs or invoked the MCP witness")
+        self.evidence["readonly_inventory"] = {"calls": 2,
+            "input_snapshot_sha256": hashlib.sha256(json.dumps(before, sort_keys=True).encode()).hexdigest()}
+
     def execute(self):
         self.run("git-a", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"])
         self.run("git-b", ["/usr/bin/git", "-c", "core.hooksPath=/dev/null", "init", "--quiet"], self.b)
@@ -319,6 +341,8 @@ class Journey:
         require(snapshot(active) == initial, "repeat installation changed package bytes")
         require(read_owned(self.a / ".uap/state-v2.json", self.root) == initial_receipt,
                 "repeat installation changed ownership state")
+        if self.inventory_test is not None:
+            self.readonly_inventory(first, active)
         preview_enablement(self, first)
         self.trust_fixture()
         enable_owned(self, first, active, NAME)
@@ -378,7 +402,8 @@ def main():
             and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
             and platform.system() == "Linux" and platform.machine() == "x86_64",
             "actual disposable GitHub-hosted Linux x64 required")
-    for path in (args.installer, args.probe):
+    inventory_test = args.installer.with_name("grok-inventory-test")
+    for path in (args.installer, args.probe, inventory_test):
         require(path.is_absolute() and path.resolve() == path and path.is_file()
                 and stat.S_ISREG(path.stat().st_mode) and path.stat().st_uid == os.getuid(),
                 "expected owned compiled binary")
@@ -396,13 +421,14 @@ def main():
                 "vendor_authentication_used": False, "grok_tools_call_qualified": False,
                 "unmanaged_project_owned_enablement_qualified": False,
                 "transport": "stdio", "installer_sha256": digest(args.installer),
-                "probe_sha256": digest(args.probe)}
+                "probe_sha256": digest(args.probe), "inventory_test_sha256": digest(inventory_test)}
     try:
         from project_native_research import Budget, acquire, materialize, verify_files
         from project_native_collectors.grok import ACQUISITION
         with tempfile.TemporaryDirectory(prefix="grok-no-model-", dir=os.environ["RUNNER_TEMP"]) as temporary:
             root = Path(temporary).resolve()
             journey = Journey(root, args.installer, args.probe, evidence)
+            journey.inventory_test = inventory_test
             budget = Budget(900)
             receipt, contents = acquire(ACQUISITION, budget)
             binary, identities = materialize(root / "bin", ACQUISITION, receipt, contents)

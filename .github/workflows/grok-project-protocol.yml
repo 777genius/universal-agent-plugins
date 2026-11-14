@@ -7,6 +7,9 @@ on:
       - 'scripts/test_grok_project_protocol.py'
       - 'repotests/testdata/agentplugins_native_probe/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'install/integrationctl/adapters/process/**'
+      - 'install/integrationctl/ports/**'
+      - 'install/integrationctl/agentplugins/ports/runner.go'
       - 'cli/**'
       - 'install/integrationctl/agentplugins/clients/shared/**'
       - 'scripts/native_client_research.py'
@@ -24,6 +27,9 @@ on:
       - 'scripts/test_grok_project_protocol.py'
       - 'repotests/testdata/agentplugins_native_probe/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'install/integrationctl/adapters/process/**'
+      - 'install/integrationctl/ports/**'
+      - 'install/integrationctl/agentplugins/ports/runner.go'
       - 'cli/**'
       - 'install/integrationctl/agentplugins/clients/shared/**'
       - 'scripts/native_client_research.py'
@@ -63,12 +69,20 @@ jobs:
         with:
           go-version: '1.26.11'
           cache: false
+      - name: Provision the readonly inventory primitive
+        timeout-minutes: 3
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap
+          dpkg-query --show --showformat='${Package} ${Version}\n' bubblewrap
+          /usr/bin/bwrap --version
       - name: Build ordinary installer and existing credential-free probe
         run: |
           set -euo pipefail
           mkdir -m 700 "$RUNNER_TEMP/grok-protocol-tools"
           go build -trimpath -o "$RUNNER_TEMP/grok-protocol-tools/agentplugins" ./cli/cmd/agentplugins
           go build -trimpath -o "$RUNNER_TEMP/grok-protocol-tools/probe" ./repotests/testdata/agentplugins_native_probe
+          go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-protocol-tools/grok-inventory-test" ./install/integrationctl/agentplugins/clients/grok
           test -z "$(git status --porcelain --untracked-files=normal)"
       - name: Verify public saved CLI consent and decline contracts
         run: |
