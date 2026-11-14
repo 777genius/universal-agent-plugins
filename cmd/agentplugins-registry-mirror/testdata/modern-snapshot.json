@@ -1,0 +1,130 @@
+{
+  "snapshot_schema_version": 1,
+  "sequence": 1,
+  "publication_id": "modern-projection-test-only",
+  "source_commit": "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+  "generated_at": "2026-11-14T11:00:00Z",
+  "expires_at": "2026-12-14T11:00:00Z",
+  "products": [{
+    "schema_version": 1,
+    "id": "tool",
+    "display_name": "Projection fixture",
+    "description": "Test-only modern catalog, never production evidence",
+    "manifest_name": "tool",
+    "aliases": ["tool"],
+    "reserved_aliases": ["tool"],
+    "categories": ["tools"],
+    "minimum_capabilities": {"skills": "optional", "mcp": "required"},
+    "default_distribution": "owner/tool",
+    "distributions": ["owner/tool"]
+  }],
+  "distributions": [{
+    "schema_version": 1,
+    "id": "owner/tool",
+    "product_id": "tool",
+    "kind": "upstream",
+    "status": "active",
+    "packager": "owner",
+    "releases": [{
+      "sequence": 9,
+      "package_version": "1.0.0",
+      "manifest_name": "tool",
+      "agent_plugins_schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "package_source": {
+        "repository": "owner/repo",
+        "revision": "0123456789012345678901234567890123456789",
+        "path": "plugin"
+      },
+      "tree_digest_algorithm": "agentplugins-tree-sha256-v1",
+      "tree_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "components": ["mcp", "skills"],
+      "published_at": "2026-11-14T10:00:00Z"
+    }],
+    "release_policies": [{
+      "release_sequence": 9,
+      "status": "active",
+      "minimum_installer_version": "1.0.0",
+      "targets": [
+        {"client": "codex", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"},
+        {"client": "cursor", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"},
+        {"client": "future-test-agent", "scopes": ["user"], "delivery": "managed", "authentication": "unknown"}
+      ],
+      "current_evidence": ["schema-pass", "codex-pass", "cursor-fail", "future-pass"]
+    }]
+  }],
+  "evidence": [
+    {
+      "schema_version": 1,
+      "id": "schema-pass",
+      "distribution_id": "owner/tool",
+      "release_sequence": 9,
+      "package_tree_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "level": "schema",
+      "outcome": "passed",
+      "artifact": {
+        "repository": "owner/evidence", "revision": "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        "path": "evidence/schema.json", "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "trust": {
+        "kind": "github_actions", "workflow": "owner/evidence/.github/workflows/directory.yml",
+        "source_ref": "refs/heads/main", "source_digest": "abcdefabcdefabcdefabcdefabcdefabcdefabcd"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "codex-pass",
+      "distribution_id": "owner/tool",
+      "release_sequence": 9,
+      "package_tree_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "level": "materialization", "outcome": "passed", "client": "codex",
+      "client_version": "fixture-only", "installer_version": "1.0.0", "os": "linux", "architecture": "amd64",
+      "observed_at": "2026-11-14T10:30:00Z",
+      "artifact": {
+        "repository": "owner/evidence", "revision": "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        "path": "evidence/codex.json", "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "trust": {
+        "kind": "github_actions", "workflow": "owner/evidence/.github/workflows/directory.yml",
+        "source_ref": "refs/heads/main", "source_digest": "abcdefabcdefabcdefabcdefabcdefabcdefabcd"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "cursor-fail",
+      "distribution_id": "owner/tool",
+      "release_sequence": 9,
+      "package_tree_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "level": "materialization", "outcome": "failed", "client": "cursor",
+      "client_version": "fixture-only", "installer_version": "1.0.0", "os": "linux", "architecture": "amd64",
+      "observed_at": "2026-11-14T10:30:00Z",
+      "artifact": {
+        "repository": "owner/evidence", "revision": "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        "path": "evidence/cursor.json", "digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "trust": {
+        "kind": "github_actions", "workflow": "owner/evidence/.github/workflows/directory.yml",
+        "source_ref": "refs/heads/main", "source_digest": "abcdefabcdefabcdefabcdefabcdefabcdefabcd"
+      }
+    },
+    {
+      "schema_version": 1,
+      "id": "future-pass",
+      "distribution_id": "owner/tool",
+      "release_sequence": 9,
+      "package_tree_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "level": "materialization", "outcome": "passed", "client": "future-test-agent",
+      "client_version": "fixture-only", "installer_version": "1.0.0", "os": "linux", "architecture": "amd64",
+      "observed_at": "2026-11-14T10:30:00Z",
+      "artifact": {
+        "repository": "owner/evidence", "revision": "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        "path": "evidence/future.json", "digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+      },
+      "trust": {
+        "kind": "github_actions", "workflow": "owner/evidence/.github/workflows/directory.yml",
+        "source_ref": "refs/heads/main", "source_digest": "abcdefabcdefabcdefabcdefabcdefabcdefabcd"
+      }
+    }
+  ],
+  "revocations": []
+}
