@@ -116,7 +116,6 @@ async function copyCommand() {
       </button>
     </div>
     <pre><code><slot>{{ visibleCommand }}</slot></code></pre>
-    <NativeCliCheckbox v-if="canChooseNativeCli" />
     <span class="sr-only" role="status" aria-live="polite">{{
       copied ? t('registryUi.command.announcement') : ''
     }}</span>
