@@ -1,6 +1,18 @@
+import { hasPluginInstallTarget } from './pluginInstallAvailability.ts';
+import type { InstallTargetID } from '../data/installTargets.ts';
 import type { RegistryPlugin } from '../types/registry';
 import { pluginBenefit, recommendedPluginRank } from '../data/catalogCuration.ts';
 import { isTemporarilyUnlistedProduct } from '../data/routes.ts';
+
+export type CatalogClientFilter =
+  RegistryPlugin['client_support']['clients'][number] | 'chatgpt-desktop';
+
+/** Legacy chatgpt queries identify Web; Desktop is an explicit UI surface. */
+export function matchesCatalogClient(plugin: RegistryPlugin, client: CatalogClientFilter): boolean {
+  const target: InstallTargetID =
+    client === 'chatgpt' ? 'chatgptweb' : client === 'chatgpt-desktop' ? 'chatgpt' : client;
+  return hasPluginInstallTarget(plugin, target);
+}
 
 export interface CatalogFilters {
   query?: string;
@@ -8,7 +20,7 @@ export interface CatalogFilters {
   component?: RegistryPlugin['components'][number];
   source?: 'all' | 'upstream' | 'community_bridge' | 'community' | 'direct';
   trust?: 'all' | 'reviewed' | 'conformant_unreviewed';
-  client?: 'all' | RegistryPlugin['client_support']['clients'][number];
+  client?: 'all' | CatalogClientFilter;
   authentication?: 'all' | 'none' | 'required_or_unknown';
   owner?: string;
   order?: 'recommended' | 'name';
@@ -254,7 +266,7 @@ export function filterPlugins(
         (plugin.trust_state ?? 'reviewed') === filters.trust) &&
       (!filters.client ||
         filters.client === 'all' ||
-        plugin.client_support.clients.includes(filters.client)) &&
+        matchesCatalogClient(plugin, filters.client)) &&
       (!filters.authentication ||
         filters.authentication === 'all' ||
         (filters.authentication === 'none'
@@ -286,12 +298,13 @@ export function filterPlugins(
   if (!query) {
     const reviewed = matches
       .filter((plugin) => (plugin.trust_state ?? 'reviewed') === 'reviewed')
-      .sort((left, right) =>
-        (filters.order === 'name'
-          ? 0
-          : Number(!left.installable) - Number(!right.installable) ||
-            recommendedPluginRank(left.name) - recommendedPluginRank(right.name)) ||
-        compareText(normalized(left.display_name), normalized(right.display_name)),
+      .sort(
+        (left, right) =>
+          (filters.order === 'name'
+            ? 0
+            : Number(!left.installable) - Number(!right.installable) ||
+              recommendedPluginRank(left.name) - recommendedPluginRank(right.name)) ||
+          compareText(normalized(left.display_name), normalized(right.display_name)),
       );
     const community = matches.filter((plugin) => plugin.trust_state === 'conformant_unreviewed');
     const discovered =

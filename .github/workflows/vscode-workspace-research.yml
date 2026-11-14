@@ -6,7 +6,7 @@ on:
       - 'scripts/research-vscode-workspace.py'
       - 'scripts/test_vscode_workspace_research.py'
       - 'scripts/vscode-workspace-observer/**'
-      - 'install/integrationctl/research/vscodeworkspace/**'
+      - 'install/integrationctl/agentplugins/research/vscodeworkspace/**'
       - 'scripts/research-vscode-native.py'
       - 'scripts/native_client_research.py'
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_vscode_native_research.py'
           python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
           node --test scripts/vscode-workspace-observer/shape.test.cjs
-          go test -p=1 ./install/integrationctl/research/vscodeworkspace
+          go test -p=1 ./install/integrationctl/agentplugins/research/vscodeworkspace
       - name: Observe pinned untrusted workbench metadata in strict isolated trees
         env:
           AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'

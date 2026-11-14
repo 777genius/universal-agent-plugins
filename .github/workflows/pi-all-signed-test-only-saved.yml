@@ -1,0 +1,170 @@
+name: Pi signed TEST-only 72 real saved scopes (no production entitlement)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - '.github/workflows/pi-all-signed-test-only-saved.yml'
+      - 'cli/cmd/agentplugins/pi_all_signed_test_only_saved_test.go'
+      - 'cli/cmd/agentplugins/pi_upstream_signed_saved_test.go'
+      - 'cli/cmd/agentplugins/pi_full_modern_signed_v1_test.go'
+      - 'cli/cmd/agentplugins/testdata/pi-full-modern-v1-test-only-snapshot.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pi-all-signed-test-only-saved.yml'
+      - 'cli/cmd/agentplugins/pi_all_signed_test_only_saved_test.go'
+      - 'cli/cmd/agentplugins/pi_upstream_signed_saved_test.go'
+      - 'cli/cmd/agentplugins/pi_full_modern_signed_v1_test.go'
+      - 'cli/cmd/agentplugins/testdata/pi-full-modern-v1-test-only-snapshot.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pi-full-72-test-only-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  saved-install:
+    name: Signed TEST-only real Git saved / ${{ matrix.os }} / shard ${{ matrix.shard }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        shard: [0, 1, 2]
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+      UAP_PI_ALL_SAVED_TEST_ONLY_E2E: '1'
+      UAP_PI_ALL_SAVED_SHARD: ${{ matrix.shard }}
+      GOMAXPROCS: '2'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Require immutable test HEAD and clean checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git diff --exit-code
+      # Docker Hub's source-authored MCP manifest requires a real Docker CLI
+      # on PATH. Hosted macOS images do not guarantee it; do not shim it or
+      # bypass package readiness checks. This does not start a Docker daemon.
+      - name: Install genuine Docker CLI for macOS Docker Hub readiness
+        if: matrix.os == 'macos-15'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v docker >/dev/null 2>&1; then
+            HOMEBREW_NO_AUTO_UPDATE=1 brew install --formula docker
+          fi
+          command -v docker
+          docker --version
+      - name: Execute original full source saved install, locked replay and remove
+        shell: bash
+        env:
+          UAP_PI_ALL_SAVED_REPORT: ${{ runner.temp }}/pi-all-72-test-only-${{ matrix.os }}-${{ matrix.shard }}.json
+        run: |
+          set -euo pipefail
+          go test -p=2 -count=1 -timeout=75m -v ./cli/cmd/agentplugins \
+            -run '^TestPiAllSignedTestOnlySavedMarketplace$'
+      - name: Preserve original actual scoped results, including failures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pi-all-72-test-only-${{ matrix.os }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/pi-all-72-test-only-${{ matrix.os }}-${{ matrix.shard }}.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  aggregate:
+    name: Require exactly 72 real saved scopes per OS under synthetic-only trust
+    needs: saved-install
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: pi-all-72-test-only-*
+          path: _reports
+          merge-multiple: true
+      - name: Verify nine original 3-OS receipts, never grant production trust
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+          MATRIX_RESULT: ${{ needs.saved-install.result }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$MATRIX_RESULT" = success
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+
+          def strict_pairs(pairs):
+              result = {}
+              for key, value in pairs:
+                  if key in result:
+                      raise ValueError('duplicate JSON key')
+                  result[key] = value
+              return result
+
+          fixture = Path('cli/cmd/agentplugins/testdata/pi-full-modern-v1-test-only-snapshot.json').read_bytes()
+          digest = 'sha256:' + hashlib.sha256(fixture).hexdigest()
+          assert digest == 'sha256:458a5c2809d6d2c443496e18ea3fee309d14f8a12f476f301873f3b9f9769399'
+          original = json.loads(fixture, object_pairs_hook=strict_pairs)
+          sources = original['distributions']
+          assert len(sources) == 36 and len({d['id'] for d in sources}) == 36
+          assert original['source_commit'] == '32b6c48d071aceadf90a030c9d69477fe1a6a65a'
+          expected_keys = {
+              i: {f"{d['id']}@{d['releases'][0]['sequence']}/{scope}"
+                  for index, d in enumerate(sources) if index % 3 == i
+                  for scope in ('user', 'project')}
+              for i in range(3)
+          }
+          assert all(len(v) == 24 for v in expected_keys.values())
+          observed = set()
+          for runner, goos in [('ubuntu-24.04', 'linux'), ('macos-15', 'darwin'), ('windows-2025', 'windows')]:
+              cases = set()
+              for shard in range(3):
+                  path = Path('_reports') / f'pi-all-72-test-only-{runner}-{shard}.json'
+                  assert path.is_file(), f'missing original test shard {runner}/{shard}'
+                  report = json.loads(path.read_bytes(), object_pairs_hook=strict_pairs)
+                  assert set(report) == {
+                      'kind', 'test_commit', 'source_commit', 'snapshot_sha256',
+                      'runner_os', 'shard', 'saved_cases', 'production_published',
+                      'production_eligibility', 'synthetic_evidence', 'native_pi_runtime_or_oauth',
+                  }
+                  assert report['kind'] == 'pi-all-72-synthetic-test-only-saved'
+                  assert report['test_commit'] == os.environ['EXPECTED_HEAD']
+                  assert report['source_commit'] == original['source_commit']
+                  assert report['snapshot_sha256'] == digest
+                  assert report['runner_os'] == goos and type(report['shard']) is int and report['shard'] == shard
+                  assert report['production_published'] is False
+                  assert report['production_eligibility'] is False
+                  assert report['synthetic_evidence'] is True
+                  assert report['native_pi_runtime_or_oauth'] is False
+                  saved = report['saved_cases']
+                  assert type(saved) is list and len(saved) == 24 and all(type(x) is str for x in saved)
+                  assert set(saved) == expected_keys[shard]
+                  assert len(set(saved)) == 24 and not (cases & set(saved))
+                  cases.update(saved)
+                  observed.add((runner, shard))
+              assert len(cases) == 72
+          assert len(observed) == 9 and len(list(Path('_reports').glob('*.json'))) == 9
+          print('TEST-ONLY: 72 real immutable-source managed saved lifecycles per OS under one artificial signed Pi v1 cohort')
+          print('NOT PRODUCTION: synthetic upstream materialization grants, no protected signer/key, no release routing, live Pi/OAuth, publisher approval or CDN evidence')
+          PY

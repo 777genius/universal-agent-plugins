@@ -65,6 +65,8 @@ const localizedRoutes = expandLocalizedRoutes(htmlRoutes);
 const sitemapRoutes = localizedRoutes.filter((route) => route.indexable);
 
 export default defineNuxtConfig({
+  // GHSA-mjrq-cffv-q4qc: keep the development workspace at this project root.
+  workspaceDir: '.',
   compatibilityDate: '2026-01-19',
   ssr: true,
   features: {

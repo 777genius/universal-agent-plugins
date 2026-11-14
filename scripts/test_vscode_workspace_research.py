@@ -30,7 +30,7 @@ class WorkspaceCollectorTests(unittest.TestCase):
         self.assertEqual(collector.publisher.ARCHIVE_BYTES, 350844741)
         self.assertEqual(collector.publisher.ARCHIVE_SHA256, "48f658052e54e020a1c1be7b37ac0f9ae39f07e8ccda805c63f053cfda72b2be")
         self.assertEqual(set(collector.PINNED_FILES), {"code", "resources/app/out/cli.js", "resources/app/product.json"})
-        source = (ROOT.parent / "install/integrationctl/research/vscodeworkspace/model_linux.go").read_text()
+        source = (ROOT.parent / "install/integrationctl/agentplugins/research/vscodeworkspace/model_linux.go").read_text()
         self.assertIn("node_modules.asar.unpacked/@vscode/ripgrep-universal/bin/linux-x64/rg", source)
 
     def test_control_capture_has_no_privileged_kill_fallback(self):

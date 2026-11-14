@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
-import type { ClientID, RegistryIndex } from '~/types/registry';
+import type { RegistryIndex } from '~/types/registry';
 import { installTargets, canonicalInstallTarget, canonicalInstallTargets, cliInstallTargets, reconcileLocalChatGPTTargets, type InstallTargetID } from '~/data/installTargets';
+import { pluginInstallAvailability } from '~/utils/pluginInstallAvailability';
 import { pluginCommands } from '~/utils/commands';
 import { countAtElapsed, PLUGIN_COUNT_ANIMATION_MS } from '~/utils/countAnimation';
 import { catalogVisiblePlugins, groupCatalogPlugins } from '~/utils/filter';
@@ -79,55 +80,8 @@ const demoPlugin = computed(() => {
   return plugin;
 });
 
-// Context7 has a CLI-guided personal app setup path without a publisher binding.
-// Keep this separate from verified Directory compatibility and generic discovery.
-function context7Preparation(peers: ClientID[] = []) {
-  const plugin = demoPlugin.value;
-  if (
-    plugin.trust_state === 'conformant_unreviewed' ||
-    plugin.name !== 'context7' ||
-    plugin.install_source !== 'context7' ||
-    plugin.client_support.resolution !== 'directory'
-  )
-    return false;
-  const upstream = plugin.distributions.find(
-    (item) => item.id === 'upstash/context7' && item.kind === 'upstream',
-  );
-  if (!upstream) return false;
-  const candidate = { ...plugin, distributions: [upstream], default_distribution: upstream.id, declared_default_distribution: upstream.id };
-  const promoted = upstream.compatible_clients
-    .map((client) => expectedDistribution(candidate, [client]))
-    .filter(
-      (release) =>
-        release?.source.repository === 'upstash/context7' &&
-        release.source.path === 'plugins/agent-plugins/context7',
-    )
-    .sort((a, b) => (b!.release_sequence ?? 0) - (a!.release_sequence ?? 0))[0];
-  if (!promoted) return false;
-  if (!peers.length) return true;
-  candidate.distributions = [
-    {
-      ...upstream,
-      releases: upstream.releases.filter(
-        (release) => release.release_sequence === promoted.release_sequence,
-      ),
-    },
-  ];
-  return Boolean(expectedDistribution(candidate, peers));
-}
-const guidedChatgptSetup = computed(() => context7Preparation());
 const compatibleClients = computed(() =>
-  installTargets.filter((client) => {
-    const id = canonicalInstallTarget(client.id);
-    if (client.id === 'chatgptweb') {
-      const target = expectedDistribution(demoPlugin.value, [id])?.targets.find(
-        (entry) => entry.client === id && Boolean(entry.app_binding),
-      );
-      return (demoPlugin.value.trust_state !== 'conformant_unreviewed' && Boolean(target)) ||
-        guidedChatgptSetup.value;
-    }
-    return demoPlugin.value.client_support.clients.includes(id);
-  }),
+  installTargets.filter(client => Boolean(pluginInstallAvailability(demoPlugin.value, [client.id]))),
 );
 const preferences = useInstallPreferencesStore();
 const availableTargets = computed(() => compatibleClients.value.map((client) => client.id));
@@ -171,7 +125,7 @@ const targetOptions = computed(() =>
         (item) => item.client === canonicalInstallTarget(client.id),
       );
       if (client.id === 'chatgptweb')
-        return target?.app_binding || guidedChatgptSetup.value
+        return pluginInstallAvailability(demoPlugin.value, [client.id])
           ? t('shell.hero.chatgptSetup')
           : t('shell.hero.notAvailableForPlugin');
       return target
@@ -235,10 +189,8 @@ const fallbackReason = computed(() => {
 });
 defineExpose({ fallbackReason });
 const command = computed(() => {
-  const guidedSelection =
-    selectedTargets.value.includes('chatgptweb') &&
-    context7Preparation(canonicalInstallTargets(selectedTargets.value.filter((client) => client !== 'chatgptweb')));
-  if (!current.value || (!autoDetect.value && !resolution.value.distribution && !guidedSelection))
+  const available = pluginInstallAvailability(demoPlugin.value, selectedTargets.value);
+  if (!current.value || (!autoDetect.value && !available))
     return '';
   return pluginCommands(
     demoPlugin.value,
@@ -344,6 +296,13 @@ function updateTargets(values: string[]) {
                     <CommandSnippet v-if="command" :command="command" kind="add" inline />
                     <p v-else class="install-panel__notice" role="status">
                       {{ t('shell.hero.refreshNotice') }}
+                    </p>
+                    <p
+                      v-if="command && !autoDetect && selectedTargets.includes('chatgptweb')"
+                      class="install-panel__notice"
+                      role="status"
+                    >
+                      {{ t('shell.hero.chatgptSetup') }}
                     </p>
                     <NuxtLink
                       class="hero-quick-start__more-install"

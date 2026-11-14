@@ -90,6 +90,12 @@ func TestPinnedModernDirectoryTrustFailsClosedBeforeFilesystemMutation(t *testin
 		{"missing_feed", func(c *pinnedModernDirectoryTrust) { c.FeedID = "" }},
 		{"unsafe_feed", func(c *pinnedModernDirectoryTrust) { c.FeedID = "../legacy" }},
 		{"legacy_origin", func(c *pinnedModernDirectoryTrust) { c.Origin = defaultDirectoryOrigin }},
+		{"legacy_origin_different_path", func(c *pinnedModernDirectoryTrust) {
+			c.Origin = "https://777genius.github.io/independent-modern/registry/schemas/1/"
+		}},
+		{"legacy_origin_different_path_with_port_alias", func(c *pinnedModernDirectoryTrust) {
+			c.Origin = "https://777GENIUS.github.io.:00443/independent-modern/schemas/1/"
+		}},
 		{"legacy_origin_default_https_port", func(c *pinnedModernDirectoryTrust) {
 			c.Origin = "https://777genius.github.io:443/universal-agent-plugins-registry/registry/schemas/1/"
 		}},

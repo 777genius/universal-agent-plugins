@@ -4,7 +4,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -118,7 +117,11 @@ func (c *controller) sourcePaths(label string) []string {
 	return []string{filepath.Join(base, "observer"), filepath.Join(base, "projects"), filepath.Join(base, "home", ".copilot", "skills"), filepath.Join(base, "probes", label, "profile", "User", "settings.json"), filepath.Join(base, "probes", label, "profile", "User", "mcp.json")}
 }
 func (c *controller) checkPublisher() error {
-	if err := immutableAncestors(filepath.Join(c.request.Base, "observer")); err != nil {
+	observer := filepath.Join(c.request.Base, "observer")
+	if c.request.Input.Mode == trustedProjectMode {
+		observer = filepath.Join(c.request.Base, "tools", "observer")
+	}
+	if err := immutableAncestors(observer); err != nil {
 		return err
 	}
 	self := filepath.Join(c.request.Base, "control", "controller")
@@ -149,6 +152,9 @@ func (c *controller) checkPublisher() error {
 		if err != nil || digest != c.hashes[name] {
 			return errors.Join(fmt.Errorf("sealed publisher digest changed"), err)
 		}
+	}
+	if c.publisherView != nil && c.publisherView.active {
+		return c.publisherView.verifyActive()
 	}
 	return nil
 }
@@ -182,12 +188,7 @@ func (c *controller) prepareDisplayParent() error {
 	if parentInfo.Mode().Perm()&0002 != 0 && parentInfo.Mode()&os.ModeSticky == 0 {
 		return fmt.Errorf("display parent is not protected by sticky ownership")
 	}
-	for _, name := range []string{"/tmp/.X93-lock", "/tmp/.X11-unix/X93"} {
-		if _, err := os.Lstat(name); !os.IsNotExist(err) {
-			return fmt.Errorf("display/lock collision; refusing to attach: %s", name)
-		}
-	}
-	return nil
+	return requireFreshDisplayLocks("/tmp/.X93-lock", "/tmp/.tX93-lock", "/tmp/.X11-unix/X93")
 }
 func (c *controller) systemIdentities() error {
 	for _, path := range []string{"/usr/bin/Xvfb", "/usr/bin/xauth"} {
@@ -248,36 +249,40 @@ func (c *controller) setupAuthority() error {
 	}
 	return os.Chmod(file, 0440)
 }
-func (c *controller) displayReady(ctx context.Context, proof isolationProof) error {
+func (c *controller) displayReady(ctx context.Context, proof isolationProof) (resultErr error) {
+	publication := &displayLockPublication{}
+	defer func() { resultErr = errors.Join(resultErr, publication.close()) }()
 	deadline := time.NewTimer(10 * time.Second)
 	defer deadline.Stop()
 	tick := time.NewTicker(25 * time.Millisecond)
 	defer tick.Stop()
-	for {
-		lock, err := readOrdinary("/tmp/.X93-lock", 64)
-		if err == nil {
+	return waitDisplayReadiness(ctx, deadline.C, tick.C, func() (bool, error) {
+		ready, err := publication.ready("/tmp/.X93-lock", "/tmp/.tX93-lock", proof)
+		if err != nil {
+			return false, err
+		}
+		if ready {
+			lock, err := readOrdinary("/tmp/.X93-lock", 64)
+			if err != nil {
+				return false, err
+			}
 			lockInfo, le := os.Lstat("/tmp/.X93-lock")
 			if le != nil {
-				return le
+				return false, le
+			}
+			if err := publication.finalInfo(lockInfo); err != nil {
+				return false, err
 			}
 			info, se := os.Lstat("/tmp/.X11-unix/X93")
 			if se == nil {
-				return c.retainReadyDisplay(lock, lockInfo, info, proof)
+				return true, c.retainReadyDisplay(lock, lockInfo, info, proof)
 			}
 			if !os.IsNotExist(se) {
-				return se
+				return false, se
 			}
-		} else if !os.IsNotExist(err) {
-			return err
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-deadline.C:
-			return fmt.Errorf("display readiness exceeded ten seconds")
-		case <-tick.C:
-		}
-	}
+		return false, nil
+	})
 }
 func (c *controller) removeA() error {
 	base := filepath.Join(c.request.Base, "projects", "A")
@@ -385,7 +390,11 @@ func (c *controller) execute() (resultErr error) {
 		c.displayCleanupErr = errors.Join(c.displayCleanupErr, c.closeDisplayAssets())
 		resultErr = errors.Join(resultErr, c.displayCleanupErr)
 	}()
-	if err := c.fixtures(); err != nil {
+	fixtures := c.fixtures
+	if c.request.Input.Mode == trustedProjectMode {
+		fixtures = c.trustedFixtures
+	}
+	if err := fixtures(); err != nil {
 		return err
 	}
 	if err := c.setupDisplay(); err != nil {
@@ -395,13 +404,23 @@ func (c *controller) execute() (resultErr error) {
 		return err
 	}
 	env := c.environment(filepath.Join(c.request.Base, "projects", "A"), "", "")
+	if c.request.Input.Mode == trustedProjectMode {
+		env = c.trustedEnvironment()
+	}
 	argv := []string{"/usr/bin/Xvfb", display, "-screen", "0", "1024x768x24", "-nolisten", "tcp", "-auth", filepath.Join(c.request.Base, "auth", "authority")}
 	displayCtx, cancel := context.WithDeadline(context.Background(), c.deadline)
 	defer cancel()
 	attemptedDisplay = true
-	record, err := runDisplayTable(c.work, func(exchange func(context.Context, isolationProof) error) (childRecord, error) {
+	outer := func(exchange func(context.Context, isolationProof) error) (childRecord, error) {
 		return c.strict(displayCtx, "Xvfb", argv, c.request.Base, env, exchange)
-	}, c.displayReady, c.observe)
+	}
+	var record childRecord
+	var err error
+	if c.request.Input.Mode == trustedProjectMode {
+		record, err = runTrustedDisplay(outer, c.displayReady, c.trustedSequence)
+	} else {
+		record, err = runDisplayTable(c.work, outer, c.displayReady, c.observe)
+	}
 	reapedDisplay = record.TreeReaped
 	return err
 }
@@ -428,59 +447,4 @@ func (c *controller) waitObservation(ctx context.Context, label, result, folder 
 		case <-tick.C:
 		}
 	}
-}
-func validateObservationEnvelope(m map[string]any) error {
-	if m["collected"] == true {
-		if _, present := m["stage_error"]; present {
-			return fmt.Errorf("successful observer envelope contains stage_error")
-		}
-	}
-	allowed := map[string]bool{}
-	for _, key := range []string{"schema_version", "collected", "stage_error", "version", "app_root", "app_host", "observer", "folder", "trusted", "policy", "mcp", "skills", "native_project_qualified", "native_mcp_initialization_qualified", "native_runtime_qualified"} {
-		allowed[key] = true
-	}
-	for key := range m {
-		if !allowed[key] {
-			return fmt.Errorf("unknown observer result field")
-		}
-	}
-	if m["schema_version"] != json.Number("1") || m["native_project_qualified"] != false || m["native_mcp_initialization_qualified"] != false || m["native_runtime_qualified"] != false {
-		return fmt.Errorf("observer schema/qualification differs")
-	}
-	return nil
-}
-func validateObservationContext(m map[string]any, base, folder string) error {
-	if m["version"] != publisherVersion || m["app_root"] != filepath.Join(base, "publisher", publisherPrefix, "resources", "app") || m["app_host"] != "desktop" || m["trusted"] != false {
-		return fmt.Errorf("publisher/context differs")
-	}
-	if err := metadataURI(m["folder"]); err != nil {
-		return err
-	}
-	selected, ok := m["folder"].(map[string]any)
-	if !ok || selected["scheme"] != "file" || selected["authority"] != "" || selected["path"] != folder || selected["value"] != "file://"+folder {
-		return fmt.Errorf("selected native folder differs")
-	}
-	return nil
-}
-func validateObservationPolicy(m map[string]any) error {
-	policy, policyErr := objectKeys(m["policy"], []string{"skills_enabled", "mcp_access", "mcp_autostart"}, nil)
-	ok := policyErr == nil
-	if !ok || policy["mcp_autostart"] != "never" {
-		return fmt.Errorf("actual restrictive policy missing")
-	}
-	if _, ok = policy["skills_enabled"].(bool); !ok {
-		return fmt.Errorf("unknown skills policy type")
-	}
-	if value := policy["mcp_access"]; value != "all" && value != "none" && value != "registry" {
-		return fmt.Errorf("unknown MCP policy type")
-	}
-	return nil
-}
-func validateObserverIdentity(m map[string]any) error {
-	observer, observerErr := objectKeys(m["observer"], []string{"id", "mode", "proposals"}, nil)
-	ok := observerErr == nil
-	if !ok || observer["id"] != "uap-research.workspace-observer" || observer["mode"] != json.Number("3") || !reflect.DeepEqual(observer["proposals"], []any{"mcpServerDefinitions", "chatPromptFiles"}) {
-		return fmt.Errorf("observer identity/proposals differ")
-	}
-	return nil
 }

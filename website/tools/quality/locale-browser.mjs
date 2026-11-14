@@ -4,6 +4,25 @@ import path from "node:path";
 import { docsLocaleEntries, docsLocales } from "../config/locales.mjs";
 import { docsBaseUrl } from "../config/site.mjs";
 
+export async function gotoLocaleReady(page, url, selector = ".vp-doc h1") {
+  const deadline = performance.now() + 30_000;
+  const remaining = () => {
+    const timeout = Math.floor(deadline - performance.now());
+    assert.ok(timeout > 0, "Locale navigation exceeded its 30-second readiness budget");
+    return timeout;
+  };
+  const expected = new URL(url);
+  const response = await page.goto(url, { waitUntil: "domcontentloaded", timeout: remaining() });
+  await page.waitForFunction(({ href, selector }) => {
+    const target = document.querySelector(selector);
+    return location.href === href && !!document.querySelector("#app")?.__vue_app__ &&
+      !!target && target.getClientRects().length > 0;
+  }, { href: expected.href, selector }, { timeout: remaining() });
+  remaining();
+  assert.equal(new URL(page.url()).href, expected.href, "Locale navigation changed its expected URL");
+  return response;
+}
+
 export async function runLocaleSmoke(browser, base, artifactsRoot) {
   const evidence = [];
   const languageTags = Object.fromEntries(docsLocaleEntries.map(({ code, lang }) => [code, lang]));
@@ -15,7 +34,8 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
   page.setDefaultNavigationTimeout(30_000);
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
-  const goto = route => page.goto(`${base}${route}`, { waitUntil: "networkidle" });
+  const goto = route => gotoLocaleReady(page, `${base}${route}`,
+    route === "/?gateway=manual" ? ".language-gateway" : ".vp-doc h1");
   async function visibleTarget(id) {
     await page.waitForFunction(id => {
       const target = document.getElementById(id);
@@ -47,9 +67,8 @@ export async function runLocaleSmoke(browser, base, artifactsRoot) {
         await page.reload({ waitUntil: "networkidle" });
         await visibleTarget(id);
         await goto(`/${locale}/use/`);
-        // goto() only waits for networkidle, not VitePress client-router
-        // rendering; page.evaluate has no locator auto-wait, so query the
-        // node through a real wait instead of racing hydration.
+        // Retain the concrete container check before page.evaluate, which
+        // has no locator auto-wait of its own.
         await page.locator(".vp-doc").first().waitFor({ state: "visible" });
         // A real anchor exercises VitePress's installed client router.
         await page.evaluate(href => {

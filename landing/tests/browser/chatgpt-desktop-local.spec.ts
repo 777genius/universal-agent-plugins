@@ -112,6 +112,17 @@ for (const width of [1440, 390]) {
     const errors = await offline(page);
     await projections(page, signedMixedSurfaceFixture());
     await navigate(page, '/', 'en', '?q=i18n-state-00');
+    const hero = page.locator('.hero__demo');
+    await hero.locator('.app-multiselect__trigger').click();
+    await page.getByRole('checkbox', { name: /^ChatGPT Desktop/ }).click();
+    await page.keyboard.press('Escape');
+    await expect(hero.locator('.install-panel__notice')).toHaveCount(0);
+    await hero.locator('.app-multiselect__trigger').click();
+    await page.getByRole('checkbox', { name: /^ChatGPT Web/ }).click();
+    await page.keyboard.press('Escape');
+    await expect(hero.locator('.command-snippet code')).toContainText('chatgptweb');
+    await expect(hero.locator('.install-panel__notice')).toHaveText('Finish setup in ChatGPT');
+    await expect(hero.locator('.install-panel__notice')).toBeVisible();
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
     await card.locator('.app-multiselect__trigger').click();
@@ -134,6 +145,12 @@ for (const width of [1440, 390]) {
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command.replace(/\s+/g, ' '));
     await expect(card.locator('.desktop-guide')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await card.locator('.plugin-card__title-link').click();
+    const panel = page.locator('.install-panel');
+    await expect(panel.locator('.command-snippet')).toHaveCount(4);
+    for (const action of ['update', 'repair', 'remove'])
+      await expect(panel.locator(`.command-snippet--${action} code`))
+        .toHaveText(new RegExp(`${action} i18n-state-00 --target (chatgpt,chatgptweb|chatgptweb,chatgpt)$`));
     expect(errors).toEqual([]);
   });
 }
