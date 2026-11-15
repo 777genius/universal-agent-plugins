@@ -1689,7 +1689,25 @@ class OriginalConfigObservationContracts(unittest.TestCase):
                     ctx.summary.setdefault("commands", []).append(record)
                     return record, out, b""
                 ctx.probe = mock.Mock(side_effect=probe)
-                yield journey, user, output
+                # This existing fixture exercises the actual parent/profile
+                # consumer without a vendor binary or host bwrap acquisition.
+                # The fixed prelude and input-custody guards have separate
+                # causal tests below; this is not a native-view proof.
+                header = case.READONLY_HEADER + b"f" * 64 + b"\n"
+                def wrapper(_ctx, arguments, _before, _old, _directories):
+                    return ["/usr/bin/bwrap", "--", *ctx.argv, *arguments], header
+                def command(label, argv, cwd, env):
+                    self.assertEqual((cwd, env), (ctx.projects["a"], ctx.env))
+                    record, out, err = ctx.probe(label, argv[3:], project="a")
+                    record["argv"] = argv[:2] + record["argv"]
+                    if record["stdout_sha256"] == case.sha(out):
+                        record["stdout_sha256"] = case.sha(header + out)
+                    record["stdout_bytes"] += len(header)
+                    return record, header + out, err
+                ctx.command = mock.Mock(side_effect=command)
+                with mock.patch.object(case, "readonly_system", return_value={"inert": True}), \
+                     mock.patch.object(case, "readonly_arguments", side_effect=wrapper):
+                    yield journey, user, output
             finally:
                 held.close()
 
@@ -1837,6 +1855,180 @@ class OriginalConfigObservationContracts(unittest.TestCase):
                 wrong["native_global_steps"] = list(case.NATIVE)
             with self.subTest(change=change), self.assertRaises(ValueError):
                 case.completion(wrong)
+
+
+
+class ReadonlyViabilityContracts(unittest.TestCase):
+    def prelude(self, change):
+        import errno
+        from types import ModuleType
+
+        fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
+                  "st_size", "st_mtime_ns", "st_ctime_ns")
+        file_info = [4, 12, case.stat.S_IFREG | 0o600, 1, 1000, 1000, 8, 10, 11]
+        dir_info = [4, 14, case.stat.S_IFDIR | 0o700, 2, 1000, 1000, 4096, 10, 11]
+        request = dict(uid=1000, gid=1000, cwd="/owned/a", home="/owned/home",
+            config="/owned/home/config/devin/config.json",
+            argv=["/owned/client/devin", "--config", "/owned/home/config/devin/config.json", "mcp", "list", "--json"],
+            environment={"HOME": "/owned/home", "XDG_DATA_HOME": "/owned/home/data",
+                         "XDG_CONFIG_HOME": "/owned/home/config"},
+            files={"/owned/client/devin": file_info, "/owned/home/config/devin/config.json": file_info},
+            directories={"/owned/a": dir_info, "/owned/home": dir_info,
+                         "/owned/home/data/devin/cli/logs": dir_info},
+            logs="/owned/home/data/devin/cli/logs")
+        raw = json.dumps(request, sort_keys=True, separators=(",", ":"))
+        fake_os, fake_sys = ModuleType("os"), ModuleType("sys")
+        fake_sys.argv = ["-c", raw]
+        fake_os.environ = dict(request["environment"])
+        if change == "home": fake_os.environ["HOME"] = "/shadow"
+        fake_os.getuid = fake_os.geteuid = lambda: 1001 if change == "uid" else 1000
+        fake_os.getgid = fake_os.getegid = lambda: 1001 if change == "gid" else 1000
+        fake_os.getcwd = lambda: "/owned/b" if change == "cwd" else "/owned/a"
+        for field in ("O_CREAT", "O_EXCL", "O_WRONLY", "O_NOFOLLOW"):
+            setattr(fake_os, field, getattr(os, field))
+        observations, dispatches, writes, closed = [], [], [], []
+        control = request["logs"] + "/" + case.READONLY_CONTROL
+        identities = {**request["files"], **request["directories"]}
+        def lstat(path):
+            observations.append(path)
+            if path == control:
+                if change == "preexisting-control":
+                    return SimpleNamespace(**dict(zip(fields, file_info)))
+                raise FileNotFoundError(path)
+            value = list(identities[path])
+            if change == "config-identity" and path == request["config"]: value[1] += 1
+            if change == "native-identity" and path == request["argv"][0]: value[1] += 1
+            if change == "log-parent" and path == request["logs"]: value[1] += 1
+            return SimpleNamespace(**dict(zip(fields, value)))
+        fake_os.lstat = lstat
+        def opened(path, flags, mode):
+            self.assertEqual((path, flags, mode), (control,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600))
+            if change == "writable": return 77
+            raise OSError(errno.EACCES if change == "eacces" else errno.EROFS, "inert fixed control")
+        fake_os.open, fake_os.close = opened, closed.append
+        def write(descriptor, body):
+            self.assertEqual(descriptor, 1)
+            writes.append(body)
+            return len(body)
+        fake_os.write = write
+        class Dispatched(Exception):
+            pass
+        def execute(path, argv, environment):
+            dispatches.append((path, argv, environment))
+            raise Dispatched()
+        fake_os.execve = execute
+        with mock.patch.dict("sys.modules", {"os": fake_os, "sys": fake_sys}):
+            if change == "erofs":
+                with self.assertRaises(Dispatched):
+                    exec(compile(case.READONLY_PRELUDE, "<fixed-readonly-viability>", "exec"), {})
+            else:
+                with self.assertRaises(ValueError):
+                    exec(compile(case.READONLY_PRELUDE, "<fixed-readonly-viability>", "exec"), {})
+        return request, raw, observations, dispatches, writes, closed
+
+    def test_fixed_prelude_requires_erofs_before_exact_original_exec(self):
+        request, raw, observations, dispatches, writes, closed = self.prelude("erofs")
+        self.assertEqual(dispatches, [(request["argv"][0], request["argv"], request["environment"])])
+        self.assertEqual(writes, [case.READONLY_HEADER + case.sha(raw.encode()).encode() + b"\n"])
+        self.assertEqual(observations.count(request["config"]), 2)
+        self.assertEqual(observations.count(request["argv"][0]), 2)
+        self.assertEqual(closed, [])
+        for change in ("writable", "eacces", "uid", "gid", "cwd", "home",
+                       "config-identity", "native-identity", "log-parent", "preexisting-control"):
+            with self.subTest(change=change):
+                _, _, _, dispatches, writes, closed = self.prelude(change)
+                self.assertEqual((dispatches, writes), ([], []))
+                self.assertEqual(closed, [77] if change == "writable" else [])
+
+    def test_raw_wrapper_and_header_are_joined_before_strict_native_tail(self):
+        for change in ("header-missing", "header-foreign", "header-duplicate", "tail-extra", "wrapper-argv"):
+            with self.subTest(change=change), OriginalConfigObservationContracts().fixture() as (journey, _, _):
+                original = journey.ctx.command.side_effect
+                def command(*args, **kwargs):
+                    record, out, err = original(*args, **kwargs)
+                    header = case.READONLY_HEADER + b"f" * 64 + b"\n"
+                    if change == "header-missing": out = out[len(header):]
+                    elif change == "header-foreign": out = case.READONLY_HEADER + b"0" * 64 + b"\n" + out[len(header):]
+                    elif change == "header-duplicate": out = header + out
+                    elif change == "tail-extra": out += b"\n{}"
+                    else: record["argv"][0] = "/foreign/bwrap"
+                    record["stdout_bytes"], record["stdout_sha256"] = len(out), case.sha(out)
+                    return record, out, err
+                journey.ctx.command.side_effect = command
+                with self.assertRaises(ValueError):
+                    journey.native("installed", original_config=True)
+                self.assertEqual(journey.ctx.command.call_count, 1)
+                self.assertEqual(journey.native_labels, [])
+
+    def test_readonly_zero_effects_and_system_custody_cannot_be_promoted(self):
+        for change in ("single-log", "directory-time", "system", "native-nonzero"):
+            with self.subTest(change=change), OriginalConfigObservationContracts().fixture() as (journey, user, _):
+                original = journey.ctx.probe.side_effect
+                config = user.read_bytes()
+                frame = mock.Mock(wraps=journey.frame)
+                journey.frame = frame
+                def probe(*args, **kwargs):
+                    record, out, err = original(*args, **kwargs)
+                    logs = journey.ctx.root / "home/data/devin/cli/logs"
+                    if change == "single-log":
+                        path = logs / "devin_20261114-200000_1.log"
+                        path.write_bytes(b"inert"); path.chmod(0o644)
+                    elif change == "directory-time":
+                        info = logs.stat()
+                        os.utime(logs, ns=(info.st_atime_ns, info.st_mtime_ns + 1000000000))
+                    elif change == "native-nonzero":
+                        record["exit"] = 1
+                    return record, out, err
+                journey.ctx.probe.side_effect = probe
+                with mock.patch.object(case, "readonly_system",
+                    side_effect=[{"original": True}, {"original": change != "system"}]):
+                    with self.assertRaises(ValueError):
+                        journey.native("installed", original_config=True)
+                self.assertEqual(journey.ctx.probe.call_count, 1)
+                self.assertEqual(journey.native_labels, [])
+                self.assertEqual(user.read_bytes(), config)
+                if change == "native-nonzero":
+                    self.assertEqual(frame.call_count, 2)  # Settled refusal still checks the complete after-frame.
+
+    def test_fixed_mount_arguments_refuse_uncovered_original_runtime(self):
+        root = Path("/owned")
+        native, config = root / "client/devin", root / case.ordinary.OrdinaryEffects.config_path
+        ctx = SimpleNamespace(root=root, home=root / "home", argv=[str(native)], projects={"a": root / "project-a"},
+            budget=SimpleNamespace(check=lambda: 10), identities={native: case.base.BINARY},
+            summary={"runtime_files": [{"path": str(native), "sha256": case.base.BINARY}]})
+        ctx.env = dict(HOME=str(ctx.home), TMPDIR=str(root / "tmp"), PATH="/usr/bin:/bin")
+        ctx.env.update({"XDG_" + name.upper() + "_HOME": str(ctx.home / name)
+                        for name in ("config", "data", "cache", "state")})
+        file_info = (4, 12, case.stat.S_IFREG | 0o700, 1, 1000, 1000, 213734376, 10, 11)
+        before = {path.relative_to(root).as_posix(): file_info for path in (native, config)}
+        old = {native.relative_to(root).as_posix(): {"sha256": case.base.BINARY}}
+        directories = {str(path): [4, 14, case.stat.S_IFDIR | 0o700, 2, 1000, 1000, 4096, 10, 11]
+                       for path in (ctx.home, ctx.projects["a"], root / "home/data/devin/cli/logs")}
+        arguments = ["--config", str(config), "mcp", "list", "--json"]
+        with mock.patch.object(case.os, "getuid", return_value=1000), \
+             mock.patch.object(case.os, "getgid", return_value=1000):
+            argv, header = case.readonly_arguments(ctx, arguments, before, old, directories)
+            mounts = [(argv[index + 1], argv[index + 2]) for index, value in enumerate(argv) if value == "--ro-bind"]
+            self.assertEqual(mounts, [(path, path) for path in ("/usr", "/bin", "/lib", "/lib64", str(root))])
+            self.assertNotIn("--bind", argv)
+            self.assertNotIn("--ro-bind-try", argv)
+            self.assertEqual(argv[-5:-1], ["-I", "-B", "-c", case.READONLY_PRELUDE])
+            request = json.loads(argv[-1])
+            self.assertEqual(request["argv"], [str(native), *arguments])
+            self.assertEqual(header, case.READONLY_HEADER + case.sha(argv[-1].encode()).encode() + b"\n")
+            for change in ("native-outside", "runtime-outside", "runtime-hash", "config", "home", "root-uid"):
+                trial = copy.deepcopy(ctx)
+                options = list(arguments)
+                if change == "native-outside": trial.argv = ["/opt/toolcache/devin"]
+                elif change == "runtime-outside":
+                    trial.summary["runtime_files"].append({"path": "/opt/toolcache/runtime", "sha256": "a" * 64})
+                elif change == "runtime-hash": trial.summary["runtime_files"][0]["sha256"] = "a" * 64
+                elif change == "config": options[1] = str(root / case.base.METADATA_CONFIG)
+                elif change == "home": trial.env["HOME"] = "/shadow"
+                with self.subTest(change=change), mock.patch.object(case.os, "getuid", return_value=0 if change == "root-uid" else 1000):
+                    with self.assertRaises(ValueError):
+                        case.readonly_arguments(trial, options, before, old, directories)
 
 
 if __name__ == "__main__":

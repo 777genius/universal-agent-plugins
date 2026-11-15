@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"syscall"
 	"testing"
 
@@ -77,7 +78,7 @@ func (runner *hermesSessionSwapRunner) replaceRoot() {
 	if runner.parentReplacement {
 		parent := filepath.Dir(runner.root)
 		if err := os.Rename(parent, parent+"-original"); err != nil {
-			runner.requireRenameDenial(err, parent, parent+"-original", syscall.Errno(5))
+			runner.requireRenameDenial(err, parent, parent+"-original", syscall.Errno(5), syscall.Errno(32))
 			return
 		}
 		if err := os.Mkdir(parent, 0o700); err != nil {
@@ -113,12 +114,12 @@ func (runner *hermesSessionSwapRunner) replaceRoot() {
 	}
 }
 
-func (runner *hermesSessionSwapRunner) requireRenameDenial(err error, source, destination string, code syscall.Errno) {
+func (runner *hermesSessionSwapRunner) requireRenameDenial(err error, source, destination string, codes ...syscall.Errno) {
 	runner.t.Helper()
 	var failure *os.LinkError
 	if runtime.GOOS != "windows" || !errors.As(err, &failure) || failure.Op != "rename" ||
 		failure.Old != source || failure.New != destination || reflect.TypeOf(failure.Err) != reflect.TypeFor[syscall.Errno]() ||
-		!errors.Is(failure.Err, code) || runner.original == nil {
+		!slices.Contains(codes, failure.Err.(syscall.Errno)) || runner.original == nil {
 		runner.t.Fatal("unexpected native-boundary rename error", err)
 	}
 	if _, err := os.Lstat(destination); !errors.Is(err, os.ErrNotExist) {

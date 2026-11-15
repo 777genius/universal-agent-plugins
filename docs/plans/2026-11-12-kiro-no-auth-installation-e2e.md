@@ -263,3 +263,109 @@ the oracle now checks that exact existing production value. These local results
 do not establish Windows/macOS execution or native discovery. Final-source
 three-OS Git/ZIP runs and the separate eighteen no-auth native originals remain
 required; their commands, pins, budgets and qualification flags are unchanged.
+
+
+## Authenticated native lifecycle candidate (2026-11-15)
+
+The existing manual Kiro attempt only requested a model response without tools
+and deliberately failed afterwards. Its API-key guard therefore did not yet
+make it a lifecycle/MCP qualification gate. The separate no-auth installation
+lane and its Prepared boundary remain unchanged.
+
+This candidate reuses the pinned 2.34.0 acquisition, existing disposable native
+fixture, source/installer/scanner identity checks, bounded command supervisor,
+ordinary descendant cleanup, fixed probe, private-key redaction, and closed
+artifact collector. It changes only the selected Kiro runtime entry plus new
+Kiro-specific helpers/reader/contracts. The shared CLI attempt, probe, all
+other clients, and the public Kiro activation state remain unchanged.
+
+The manual `workflow_dispatch` / `kiro_auth_research` selection and the existing
+dedicated `KIRO_API_KEY` expression are preserved. Missing credentials fail
+before the lifecycle starts; no secret value is inspected by preparation or
+contract tests. The unchanged probe writes only its explicit nonce, revision,
+cwd, argv, root/DATA, marker, PID/session fields. It never enumerates inherited
+environment values. Existing `kiroAttemptAuth` redaction still handles all
+retained stdout, stderr and JSON bytes. The parent first rejects every raw,
+JSON-escaped and base64 private form in the bounded inner ZIP before admitting
+or publishing runtime members. Its existing frontend publisher separately
+redacts registered forms, rejoins stream hashes, and rejects any remaining
+private form before ZIP creation; failure publishes only closed safe fields.
+
+### Fixed native sequence and evidence
+
+The new entry first performs the existing genuine Git A/B, pinned version and
+public Project install A. It then records this exact one-shot sequence:
+
+1. Read genuine chat and agent-validation help; require the selected 2.34 syntax.
+2. Publicly install B and prove separate receipt-selected package and DATA.
+3. Author the two disposable workspace agent profiles and require successful
+   authenticated validation of each exact path.
+4. Start fresh authenticated chats A and B. Each must initialize/list/call only
+   the selected `@uap-kiro-attempt/inspect_runtime` probe and write its own
+   fresh nonce-bound DATA marker.
+5. Remove only A's exact owned Skill projection, publicly repair A, and start a
+   fresh A chat that reads the unchanged original marker.
+6. Publicly remove A, complete a genuine authenticated A chat with no probe
+   events, then start a fresh B chat that still reads B's original marker.
+7. Publicly remove B and complete the matching no-event authenticated B chat.
+
+An unavailable tool is not inferred from model prose. Both negative commands
+must exit zero within their original command context and settle all supervised
+descendants. Authentication, startup, timeout, capture or forced-cleanup
+failure remains a failed native test. The positive B command after removal of
+A is required; omitting it cannot qualify the negative control.
+
+The custom agent has exactly one `tools` and `allowedTools` selector,
+empty resources, object-valued empty hooks, empty inline MCP servers and tool
+aliases. There is no all-tools trust and no vendor patch. The closed chat argv
+uses `--v2 --no-interactive --agent … --trust-tools @…/inspect_runtime`;
+the actual pinned help must declare those flags. The candidate deliberately
+does not assume that the current V3-only `includeMcpJson` documentation
+proves a 2.34 field. Workspace inheritance and exact probe visibility must
+succeed in the genuine validation/chat observations. Original User and
+unmounted ancestor MCP catalogs remain absent.
+
+The official 2026-04-13 [headless-mode announcement](https://kiro.dev/blog/introducing-headless-mode/)
+distinguishes the agent's complete available tool list from its pre-approved
+subset and documents the dedicated API-key route. The
+[2.x reference](https://kiro.dev/docs/cli/2x-reference/) is syntax context,
+not native execution evidence. The exact singleton agent, actual validation,
+and nonce-bound call events remain required; a trust flag by itself is not
+treated as a denial of other built-ins.
+
+The existing parent context starts once and remains 150 seconds; final
+collection retains the existing 180-second bound. Each added command is capped
+at 30 seconds by that original context, with the existing 5-second descendant
+exit grace. There is no retry or deadline renewal. Existing 80-member,
+1 MiB/member and 16 MiB aggregate artifact limits remain. A successful closed
+capture has 18 command triples, two exact agent documents, five raw state/config
+proofs and the probe history (59 members).
+
+Original A/B root identity/mode/owner, source files, selected native runtime,
+receipt state, config, agent, DATA marker and event history are joined before
+and after their fixed operations. Only the exact public operation may update
+its selected state/config/Skill projection. Repair retains installation,
+source, package, DATA, binding and receipt history; removal retains DATA and
+removes only the selected binding/package/Skill/MCP entry. The other project
+stays pinned. Read and negative phases cannot rewrite the marker or old event
+history. Probe PID/session creation, event timestamps, nonce, cwd, argv,
+selected package and DATA must join the actual bounded command. Ledger/PID
+facts do not grant cleanup or kill authority.
+
+### Readiness and remaining execution gate
+
+The existing ordinary Linux contracts step already compiles all repotests
+without the secret. Its selector additionally runs the four new inert
+`TestKiroCycle` controls; the Python contracts step runs seven pure reader
+tests. The reader independently validates exact command order/argv/source,
+typed state/config/body hashes, all four fresh positive sessions, both settled
+negative commands and the post-removal positive B control. Unknown members,
+partial triples, extra events, changed roles, mixed nonces, stale sessions,
+broad trust and pre-start/auth/cleanup failures cannot become successful proof.
+
+This is an unexecuted source candidate until normal CI compiles/contracts it
+and the existing guarded manual lane receives an authorized dedicated key.
+No local Go, gofmt, Python or native result is asserted by this note. Prepared
+public binding status and the existing no-auth coverage are preserved; only
+a complete genuine authenticated run may set this research capture's native
+lifecycle/MCP flags.

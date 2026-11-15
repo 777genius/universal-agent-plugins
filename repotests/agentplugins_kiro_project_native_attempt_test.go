@@ -5,5 +5,5 @@ package pluginkitairepo_test
 import "testing"
 
 func TestAgentpluginsKiroNativeProjectRuntimeAttempt(t *testing.T) {
-	projectNativeCLIRuntimeAttempt(t, "kiro")
+	kiroAuthenticatedNativeCycle(t)
 }

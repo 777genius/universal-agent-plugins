@@ -149,6 +149,13 @@ jobs:
           cache: false
       - name: Test Global lifecycle contracts
         run: python3 -m unittest discover -s scripts -p 'test_devin_*admission.py' -v
+      - name: Provision the readonly viability primitive
+        timeout-minutes: 3
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap
+          dpkg-query --show --showformat='${Package} ${Version}\n' bubblewrap
+          /usr/bin/bwrap --version
       - name: Build with bounded original receipts and observe public Global lifecycle
         run: |
           python3 scripts/devin_global_lifecycle_admission.py \

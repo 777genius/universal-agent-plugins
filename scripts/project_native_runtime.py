@@ -716,7 +716,9 @@ def cli_attempt_members(bodies, source, client):
         raise ValueError("unknown fixed native CLI attempt")
     summary = strict_json(bodies.get("runtime-attempt.json", b"{}"))
     if isinstance(summary, dict) and "capture_mode" in summary:
-        if (client, summary["capture_mode"]) == ("grok", "grok-complete-skills-cycle"):
+        if (client, summary["capture_mode"]) == ("kiro", "kiro-authenticated-project-mcp-cycle"):
+            from project_native_kiro_cycle import members
+        elif (client, summary["capture_mode"]) == ("grok", "grok-complete-skills-cycle"):
             from project_native_grok_cycle import members
         elif (client, summary["capture_mode"]) == ("qoder", "qoder-complete-skills-cycle"):
             from project_native_qoder_cycle import members

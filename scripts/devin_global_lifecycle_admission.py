@@ -469,6 +469,184 @@ def capture_package(ctx, active, inventory, helper_pin):
     return bodies, "sha256:" + digest.hexdigest()
 
 
+
+# This disposable experiment establishes only finite-command viability when
+# original-profile writes return EROFS. It is not the production readonly port.
+READONLY_HEADER = b"uap-devin-readonly-viability-v1:"
+READONLY_CONTROL = ".uap-readonly-viability-control"
+READONLY_PRELUDE = r"""
+import errno, hashlib, json, os, sys
+raw = sys.argv[1]
+request = json.loads(raw)
+def require(value):
+    if not value:
+        raise ValueError("readonly viability original authority")
+def identity(path):
+    value = os.lstat(path)
+    return [getattr(value, field) for field in (
+        "st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
+        "st_size", "st_mtime_ns", "st_ctime_ns")]
+require(len(sys.argv) == 2 and len(raw.encode("ascii")) <= 16384)
+require(json.dumps(request, sort_keys=True, separators=(",", ":")) == raw)
+require(set(request) == {"uid", "gid", "cwd", "home", "config", "argv",
+                        "environment", "files", "directories", "logs"})
+require(type(request["uid"]) is int and type(request["gid"]) is int
+        and request["uid"] > 0 and request["gid"] > 0)
+require(os.getuid() == os.geteuid() == request["uid"]
+        and os.getgid() == os.getegid() == request["gid"]
+        and os.getcwd() == request["cwd"])
+require(all(os.environ.get(key) == value for key, value in request["environment"].items()))
+require(request["environment"]["HOME"] == request["home"])
+require(type(request["argv"]) is list and len(request["argv"]) == 6
+        and request["argv"][1:3] == ["--config", request["config"]]
+        and request["argv"][3] in ("mcp", "skills")
+        and request["argv"][4:] == ["list", "--json"])
+require(set(request["files"]) == {request["argv"][0], request["config"]}
+        and set(request["directories"]) == {request["cwd"], request["home"], request["logs"]}
+        and request["logs"] == request["environment"]["XDG_DATA_HOME"] + "/devin/cli/logs"
+        and request["config"] == request["environment"]["XDG_CONFIG_HOME"] + "/devin/config.json")
+for path, expected in request["files"].items():
+    require(identity(path) == expected)
+for path, expected in request["directories"].items():
+    require(identity(path) == expected)
+control = request["logs"] + "/.uap-readonly-viability-control"
+try:
+    os.lstat(control)
+except FileNotFoundError:
+    pass
+else:
+    raise ValueError("readonly viability control preexists")
+try:
+    descriptor = os.open(control, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+except OSError as error:
+    require(error.errno == errno.EROFS)
+else:
+    os.close(descriptor)
+    raise ValueError("readonly viability write was not prevented")
+for path, expected in request["files"].items():
+    require(identity(path) == expected)
+for path, expected in request["directories"].items():
+    require(identity(path) == expected)
+header = b"uap-devin-readonly-viability-v1:" + hashlib.sha256(raw.encode("ascii")).hexdigest().encode("ascii") + b"\n"
+require(os.write(1, header) == len(header))
+os.execve(request["argv"][0], request["argv"], dict(os.environ))
+"""
+
+
+def readonly_system(ctx):
+    """Pin only the fixed ordinary root-owned measurement tools and roots."""
+    result = {}
+    for value, target in (("/", None), ("/usr", None), ("/usr/bin", None),
+                          ("/bin", "usr/bin"), ("/lib", "usr/lib"), ("/lib64", "usr/lib64")):
+        ctx.budget.check()
+        path = Path(value)
+        before = path.lstat()
+        base.require((before.st_uid, before.st_gid) == (0, 0), "readonly viability runtime authority")
+        text = None
+        if stat.S_ISLNK(before.st_mode):
+            base.require(target is not None and before.st_nlink == 1 and before.st_size <= 256,
+                         "readonly viability runtime alias")
+            text = os.readlink(path)
+            base.require(text in (target, "/" + target), "readonly viability runtime alias")
+        else:
+            base.require(stat.S_ISDIR(before.st_mode) and not stat.S_IMODE(before.st_mode) & 0o6022,
+                         "readonly viability runtime directory")
+        base.require(installer_metadata(path.lstat()) == installer_metadata(before),
+                     "readonly viability runtime changed")
+        result[value] = (installer_metadata(before), text)
+    python = Path("/usr/bin/python3")
+    original = python.lstat()
+    if stat.S_ISLNK(original.st_mode):
+        target = os.readlink(python)
+        base.require((original.st_uid, original.st_gid, original.st_nlink) == (0, 0, 1)
+                     and re.fullmatch(r"python3\.[0-9]{1,2}", target)
+                     and installer_metadata(python.lstat()) == installer_metadata(original),
+                     "readonly viability Python alias")
+        result[str(python)] = (installer_metadata(original), target)
+        python = python.parent / target
+    for path in (Path("/usr/bin/bwrap"), python):
+        metadata = {}
+        result[str(path)] = (installer_pin(path, ctx.budget, owner=(0, 0), metadata=metadata), metadata)
+    return result
+
+
+def readonly_directories(ctx, inventory):
+    """Rejoin captured names; no new directory membership is discovered."""
+    result = {}
+    for relative, expected in inventory.items():
+        ctx.budget.check()
+        if len(expected) != 5:
+            continue
+        path = ctx.root if relative == "." else ctx.root / relative
+        before = path.lstat()
+        base.require(base.root_identity(path) == expected, "readonly viability directory replaced")
+        result[str(path)] = list(installer_metadata(before).values())
+    return result
+
+
+def readonly_arguments(ctx, arguments, before, old, directories):
+    native = Path(ctx.argv[0]) if type(ctx.argv) is list and len(ctx.argv) == 1 else Path(".")
+    config = ctx.root / ordinary.OrdinaryEffects.config_path
+    cwd, logs = ctx.projects["a"], ctx.root / "home/data/devin/cli/logs"
+    base.require(native.is_absolute() and native.is_relative_to(ctx.root) and str(native) == ctx.argv[0]
+                 and native != ctx.root and ctx.identities.get(native) == base.BINARY,
+                 "readonly viability native custody")
+    base.require(type(arguments) is list and len(arguments) == 5
+                 and arguments[:2] == ["--config", str(config)] and arguments[2] in ("mcp", "skills")
+                 and arguments[3:] == ["list", "--json"], "readonly viability native argv")
+    runtime = ctx.summary.get("runtime_files")
+    base.require(type(runtime) is list and 0 < len(runtime) <= 4096, "readonly viability runtime custody")
+    for row in runtime:
+        ctx.budget.check()
+        base.require(type(row) is dict and set(row) == {"path", "sha256"}
+                     and type(row["path"]) is str and type(row["sha256"]) is str,
+                     "readonly viability runtime custody")
+        path = Path(row["path"])
+        base.require(path.is_absolute() and path.is_relative_to(ctx.root) and path != ctx.root
+                     and ctx.identities.get(path) == row["sha256"]
+                     and old.get(path.relative_to(ctx.root).as_posix(), {}).get("sha256") == row["sha256"],
+                     "readonly viability runtime custody")
+    control = (logs / READONLY_CONTROL).relative_to(ctx.root).as_posix()
+    base.require(control not in before, "readonly viability control preexists")
+    environment = {key: ctx.env.get(key) for key in ("HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME",
+        "XDG_CACHE_HOME", "XDG_STATE_HOME", "TMPDIR", "PATH")}
+    base.require(environment["HOME"] == str(ctx.home)
+                 and all(environment["XDG_" + role.upper() + "_HOME"] == str(ctx.home / role)
+                         for role in ("config", "data", "cache", "state"))
+                 and environment["TMPDIR"] == str(ctx.root / "tmp")
+                 and type(environment["PATH"]) is str, "readonly viability original environment")
+    files = {}
+    for path in (native, config):
+        relative = path.relative_to(ctx.root).as_posix()
+        info = before.get(relative)
+        base.require(type(info) in (list, tuple) and len(info) == 9 and stat.S_ISREG(info[2])
+                     and info[3] == 1 and tuple(info[4:6]) == (os.getuid(), os.getgid()),
+                     "readonly viability original file")
+        files[str(path)] = list(info)
+    base.require(old[native.relative_to(ctx.root).as_posix()]["sha256"] == base.BINARY,
+                 "readonly viability native bytes")
+    selected = {str(path): directories.get(str(path)) for path in (ctx.home, cwd, logs)}
+    base.require(all(type(value) is list and len(value) == 9 for value in selected.values()),
+                 "readonly viability original directories")
+    request = dict(uid=os.getuid(), gid=os.getgid(), cwd=str(cwd), home=str(ctx.home), config=str(config),
+                   argv=[*ctx.argv, *arguments], environment=environment, files=files,
+                   directories=selected, logs=str(logs))
+    raw = json.dumps(request, sort_keys=True, separators=(",", ":"))
+    base.require(0 < request["uid"] and 0 < request["gid"] and len(raw.encode("ascii")) <= 16384,
+                 "readonly viability ordinary identity or request bound")
+    argv = ["/usr/bin/bwrap", "--unshare-user", "--uid", str(request["uid"]), "--gid", str(request["gid"]),
+            "--unshare-pid", "--unshare-net", "--unshare-ipc", "--unshare-uts", "--disable-userns",
+            "--die-with-parent", "--new-session", "--cap-drop", "ALL", "--tmpfs", "/"]
+    for path in ("/usr", "/bin", "/lib", "/lib64", str(ctx.root)):
+        argv.extend(("--ro-bind", path, path))
+    argv.extend(("--proc", "/proc", "--remount-ro", "/proc", "--dev", "/dev"))
+    for name in ("null", "zero", "full", "random", "urandom", "tty", "pts"):
+        argv.extend(("--remount-ro", "/dev/" + name))
+    argv.extend(("--remount-ro", "/dev", "--remount-ro", "/", "--chdir", str(cwd), "--",
+                 "/usr/bin/python3", "-I", "-B", "-c", READONLY_PRELUDE, raw))
+    return argv, READONLY_HEADER + sha(raw.encode("ascii")).encode("ascii") + b"\n"
+
+
 class Journey:
     def __init__(self, ctx, probes, expected, nonce, effects, installer, source):
         self.ctx, self.probes, self.expected = ctx, probes, copy.deepcopy(expected)
@@ -857,6 +1035,21 @@ class Journey:
                      "Global original config gate incomplete")
         return path
 
+    def readonly_original_command(self, label, arguments, before, old):
+        directories = readonly_directories(self.ctx, before)
+        system = readonly_system(self.ctx)
+        argv, header = readonly_arguments(self.ctx, arguments, before, old, directories)
+        base.shared.verify_files(self.ctx.identities, self.ctx.budget)
+        try:
+            record, out, err = self.ctx.command(label, argv, self.ctx.projects["a"], dict(self.ctx.env))
+        finally:
+            base.require(readonly_system(self.ctx) == system, "readonly viability system changed")
+            base.shared.verify_files(self.ctx.identities, self.ctx.budget)
+        public_command_join(record, label, argv, self.ctx.projects["a"], out, err)
+        base.require(readonly_directories(self.ctx, before) == directories,
+                     "readonly viability directory effects")
+        return record, out, err, header
+
     def native(self, phase, *, original_config=False):
         base.require(type(original_config) is bool and (not original_config or phase == "installed"),
                      "Global original config phase")
@@ -870,15 +1063,22 @@ class Journey:
                 before, old = self.frame()
                 arguments = [kind, "list", "--json"]
                 if original_config: arguments = ["--config", str(config), *arguments]
-                record, out, err = self.ctx.probe(label, arguments, project=scope)
                 if original_config:
-                    public_command_join(record, label, [*self.ctx.argv, *arguments], self.ctx.projects[scope], out, err)
-                base.require(type(record.get("exit")) is int and record["exit"] == 0 and record.get("error") is None,
-                             "Global native inventory refused")
+                    record, out, err, header = self.readonly_original_command(label, arguments, before, old)
+                else:
+                    record, out, err = self.ctx.probe(label, arguments, project=scope)
+                    base.require(type(record.get("exit")) is int and record["exit"] == 0 and record.get("error") is None,
+                                 "Global native inventory refused")
                 after = base.metadata_inventory(self.ctx.root, self.ctx.budget)
                 self.verify_native_metadata(before, after)
                 after, now = self.frame(after)
                 self.verify_native_delta(before, after, old, now, label)
+                if original_config:
+                    base.require(before == after and old == now, "readonly viability original effects")
+                    base.require(type(record.get("exit")) is int and record["exit"] == 0 and record.get("error") is None,
+                                 "Global native inventory refused")
+                    base.require(type(out) is bytes and out.startswith(header), "readonly viability header")
+                    out = out[len(header):]
                 rows = base.strict_json(out)
                 base.require(type(rows) is list and all(type(row) is dict for row in rows), "Global native row container")
                 if kind == "mcp":

@@ -1063,3 +1063,52 @@ same-path observation. Arbitrary cloud/auth/trust settings and exact auxiliary
 write recovery/prevention remain unproved prerequisites for product readback.
 ReadOnlyVerifier/VerifyOnly and offline receipt-bound removal remain unchanged;
 all product, authentication, model and live-MCP qualifications stay false.
+
+
+## 2026-11-14: prospective readonly logger viability on the original profile
+
+The prerequisite plain original-config measurement at source
+`0633402a9c992fd941caebd74a88a0fbe07220bd` completed in run `43640883052`,
+job `132613737968`. The original closed readout reached `source-final-clean`
+and `metadata-complete`: collection, metadata and cleanup were true, with
+39 commands, zero failed commands and 32 effects. Both prospective original
+`--config` observations succeeded under the unchanged strict source and DTO
+gates. Each recorded one auxiliary addition and three metadata changes; the
+original config and nonauxiliary authority remained protected. This establishes
+the original-path command prerequisite, not readonly or product qualification.
+Artifact `14136868649` is 69,276 bytes with SHA-256
+`6ecccf5f600856b808889e8759b1656686b8ecb618292d965bf6dcfb60406377`.
+It changes only the two prospective original-config observations, retaining the
+37 earlier commands in order and the closed 39-command / 32-effect catalogue.
+It does not replace the plain source's result or qualify a production runner.
+
+The disposable Linux experiment runs the same acquired Devin 3000.12.57 binary
+and original `--config` path through an ordinary root-owned `/usr/bin/bwrap`.
+The complete authored fixture and the fixed system runtime roots are mounted
+read-only at their original paths. HOME, XDG roots, working directory and the
+original numeric UID/GID are preserved. A native executable or acquired runtime
+member outside the existing fixture custody is refused; nothing is copied into
+a shadow profile, and no writable mount or log exception is introduced.
+
+A fixed `/usr/bin/python3 -I -B -c` prelude joins the original file and selected
+directory identities, requires an exclusive creation attempt under the original
+log directory to fail specifically with `EROFS`, emits a request-hash-bound
+header, then executes the exact native argv. The existing finite research owner
+retains complete bounded header-plus-JSON stdout and stderr. Their original
+record hashes, wrapper argv and cwd are checked before the exact header is
+removed and the existing strict MCP/Skills DTO decoders see the native tail.
+All original file bytes/metadata and captured directory metadata must remain
+unchanged; a settled nonzero exit is still checked for effects and stays a
+negative result. The ordinary command budget, archive bounds and all false
+product/authentication/MCP-runtime qualification flags remain unchanged.
+
+This is a viability experiment for the unresolved question whether this pinned
+CLI can report metadata when its normal log creation is prevented. Public docs
+describe per-run file logging but do not establish how this release handles
+`EROFS`. No native result, production readonly contract, generic external-input
+closure or automatic product verification is asserted by this source change.
+The added contracts remain inert. Local validation of this frozen four-path
+candidate passed all 67 Global lifecycle tests in 2.162 seconds and all 124
+Devin contracts in 2.714 seconds, with no failures or skips. Native execution
+of this readonly candidate remains pending; those contract results do not
+establish metadata viability or product readiness.
