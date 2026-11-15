@@ -98,8 +98,7 @@ func (recovery EnablementRecovery) recordObservation(state domain.StateFileV2, r
 		Digest: record.rawDigest, AuthorityDigest: record.Hash}, nil
 }
 
-// This private codec path does not qualify a v3 producer. Public recovery stays
-// closed until the readonly transport and original-parent contract are proven.
+// Only v3 records from the readonly producer may use observed recovery.
 // Never replace the supplied observation with a later operation-ID-only lookup.
 func (recovery EnablementRecovery) recoverObservedRecord(ctx context.Context, observed ports.NativeTransitionObservation) error {
 	if err := ctx.Err(); err != nil {
@@ -133,7 +132,11 @@ func (recovery EnablementRecovery) recoverObservedRecord(ctx context.Context, ob
 	return recovery.recoverHeldRecord(ctx, record)
 }
 
-func (recovery EnablementRecovery) ReconcileObserved(ctx context.Context, observed ports.NativeTransitionObservation, _ ports.NativeTransitionState) error {
+func (recovery EnablementRecovery) ReconcileObserved(ctx context.Context, observed ports.NativeTransitionObservation, state ports.NativeTransitionState) error {
+	if state == nil {
+		return fmt.Errorf("grok observed recovery requires its caller state fence")
+	}
+	recovery.State = state
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -144,8 +147,29 @@ func (recovery EnablementRecovery) ReconcileObserved(ctx context.Context, observ
 	for _, item := range pending {
 		item.EnvironmentID = observed.EnvironmentID
 		if item.Root != "" && reflect.DeepEqual(item, observed) {
-			return errEnablementUnqualified
+			return recovery.recoverObservedRecord(ctx, observed)
 		}
 	}
 	return fmt.Errorf("grok native record no longer matches the observed authority")
+}
+
+func (recovery EnablementRecovery) requireSettledRemoval(observed ports.NativeTransitionObservation) error {
+	if observed.Root == "" {
+		return errEnablementUnqualified
+	}
+	record, err := recovery.readRecord(observed.OperationID)
+	if err != nil {
+		return err
+	}
+	if record.Version != 3 || record.Action != "remove" || record.decisionDigest == "" {
+		return errEnablementUnqualified
+	}
+	state, err := recovery.State.Load()
+	if err != nil {
+		return err
+	}
+	if enablementStateDigest(state) != record.decisionDigest {
+		return errEnablementUnqualified
+	}
+	return nil
 }

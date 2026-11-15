@@ -103,6 +103,8 @@ class ReadonlyFixtureTests(unittest.TestCase):
                 output = b""
             elif len(calls) == 4:
                 output = b"GROK_READONLY_NATIVE_INVENTORY_PASS\n"
+            elif len(calls) == 5:
+                output = b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS\n"
             else:
                 raise AssertionError("unexpected process call")
             return SimpleNamespace(returncode=0, stdout=output, stderr=b"")
@@ -110,6 +112,7 @@ class ReadonlyFixtureTests(unittest.TestCase):
         with real_tempdir() as temporary:
             output_dir = Path(temporary) / "evidence"
             arguments = ["grok-enable-readonly.py", "--test", str(Path(temporary) / "inert-helper"),
+                         "--public-test", str(Path(temporary) / "inert-public-helper"),
                          "--output", str(output_dir)]
             constants = {"ARCHIVE": hashlib.sha256(archive).hexdigest(),
                          "BINARY": hashlib.sha256(binary).hexdigest()}
@@ -122,10 +125,14 @@ class ReadonlyFixtureTests(unittest.TestCase):
                 status = runner["main"]()
 
             evidence = json.loads((output_dir / "evidence.json").read_text())
-            self.assertEqual(len(calls), 4)
+            self.assertEqual(len(calls), 5)
+            self.assertIn("-test.run=^TestProjectGrokNativeSavedEnablementLifecycle$", calls[4])
+            self.assertTrue(evidence["public_native_saved_lifecycle_passed"])
             self.assertEqual(status, 1)
             self.assertFalse(evidence["passed"])
             self.assertNotIn("fixture_unchanged", evidence)
+            self.assertNotIn("archive_sha256", evidence)
+            self.assertNotIn("binary_sha256", evidence)
             self.assertIn("simulated fixture cleanup failure", evidence["error"])
 
 if __name__ == "__main__":
