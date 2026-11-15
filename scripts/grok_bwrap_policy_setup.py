@@ -56,6 +56,9 @@ def remaining(deadline):
 def command(root, label, argv, deadline, records, limit=LIMIT):
     record, stdout, stderr = run_probe(argv, root, ENV, root, label,
         timeout=min(30, remaining(deadline)), limit=limit, memory_only=True)
+    record.update(stdout_preview=stdout[:512].decode("utf-8", "backslashreplace"),
+                  stderr_preview=stderr[:512].decode("utf-8", "backslashreplace"),
+                  stdout_preview_truncated=len(stdout) > 512, stderr_preview_truncated=len(stderr) > 512)
     records.append(record)
     require(record["error"] is None and record["exit"] == 0, "Bubblewrap policy setup command refused: " + label)
     remaining(deadline)
@@ -154,7 +157,12 @@ def open_policy_directory(path=POLICY_DIRECTORY):
     except BaseException:
         os.close(fd)
         raise
-    return fd
+    return fd, before
+
+
+def verify_policy_directory(fd, original, path=POLICY_DIRECTORY):
+    require(identity(os.fstat(fd))[:5] == identity(path.lstat())[:5] == identity(original)[:5],
+            "policy directory authority changed")
 
 
 def require_absent(fd, name):
@@ -199,7 +207,6 @@ def write_owned(fd, name, body, mode=0o644):
                 == (os.geteuid(), os.getegid(), 1, len(body)), "installed policy shape")
     finally:
         os.close(target)
-
 
 
 def derive_profile(vendor):
@@ -340,6 +347,11 @@ def main():
         result = subprocess.run(argv, executable="/proc/self/fd/" + str(binary), pass_fds=tuple(held),
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             cwd="/", env={"PATH": "/usr/bin:/bin", "LANG": "C"}, timeout=10, check=False)
+        if result.returncode != 0 or result.stderr or len(result.stdout) > 4096:
+            print(json.dumps(dict(control="bwrap-control-refused", exit=result.returncode,
+                stderr_preview=result.stderr[:512].decode("utf-8", "backslashreplace"),
+                stdout_preview=result.stdout[:512].decode("utf-8", "backslashreplace"),
+                stderr_bytes=len(result.stderr), stdout_bytes=len(result.stdout)), ensure_ascii=True), file=sys.stderr)
         require(result.returncode == 0 and not result.stderr and len(result.stdout) <= 4096, "bwrap-control-refused")
         child = json.loads(result.stdout)
         check_child(child, expected)
@@ -360,9 +372,8 @@ def prove_runtime(root, deadline, runtime, inputs, output, uid, gid, records):
     require(remaining(deadline) >= 30, "insufficient original policy-control budget")
     runtime_fd, input_fd, binary_fd = -1, -1, -1
     try:
-        runtime_fd = open_policy_directory(runtime)
-        input_fd = open_policy_directory(inputs)
-        root_info, input_info = os.fstat(runtime_fd), os.fstat(input_fd)
+        runtime_fd, root_info = open_policy_directory(runtime)
+        input_fd, input_info = open_policy_directory(inputs)
         out_info = output.lstat()
         require(stat.S_ISDIR(out_info.st_mode) and (out_info.st_uid, out_info.st_gid) == (uid, gid)
                 and stat.S_IMODE(out_info.st_mode) == 0o700, "control output authority")
@@ -410,8 +421,7 @@ def prove_runtime(root, deadline, runtime, inputs, output, uid, gid, records):
                 os.close(fd)
 
 
-def setup(root, deadline, runtime, inputs, output, uid, gid):
-    records = []
+def setup(root, deadline, runtime, inputs, output, uid, gid, records):
     metadata = apt_metadata(command(root, "policy-metadata",
         ["/usr/bin/apt-cache", "show", PACKAGE + "=" + VERSION], deadline, records, 65536))
     command(root, "policy-download", ["/usr/bin/apt-get",
@@ -429,7 +439,7 @@ def setup(root, deadline, runtime, inputs, output, uid, gid):
     require(restriction == b"1\n", "ordinary Ubuntu user-namespace restriction required")
     before = loaded_profiles()
     require_loaded(before)
-    fd = open_policy_directory()
+    fd, original_directory = open_policy_directory()
     try:
         check_policy_names(fd)
         remaining(deadline)
@@ -437,7 +447,7 @@ def setup(root, deadline, runtime, inputs, output, uid, gid):
         path = POLICY_DIRECTORY / PROFILE_NAME
         require(read_regular(path, 4096, deadline) == profile, "installed derived policy differs")
         command(root, "policy-add", ["/usr/sbin/apparmor_parser", "--config-file=/dev/null",
-                "--add", "--skip-cache", "--jobs=1", "--Werror=rule-not-enforced", str(path)], deadline, records)
+                "--add", "--skip-cache", "--jobs=1", "--warn=rule-not-enforced", "--Werror=rule-not-enforced", str(path)], deadline, records)
         check_policy_names(fd, installed=True)
         require(read_regular(path, 4096, deadline) == profile, "installed policy changed")
         control = prove_runtime(root, deadline, runtime, inputs, output, uid, gid, records)
@@ -445,10 +455,7 @@ def setup(root, deadline, runtime, inputs, output, uid, gid):
         require_loaded(before, after)
         require(kernel_read("/proc/sys/kernel/apparmor_restrict_unprivileged_userns", 16) == restriction,
                 "user-namespace restriction changed")
-        held, named = os.fstat(fd), POLICY_DIRECTORY.lstat()
-        require((held.st_dev, held.st_ino, held.st_mode, held.st_uid, held.st_gid)
-                == (named.st_dev, named.st_ino, named.st_mode, named.st_uid, named.st_gid),
-                "policy directory authority changed")
+        verify_policy_directory(fd, original_directory)
         remaining(deadline)
     finally:
         os.close(fd)
@@ -474,11 +481,19 @@ def main():
     uid, gid = map(int, ids)
     # Hosted-runner disposal owns final cleanup; unsettled setup never removes inputs.
     temporary = Path(tempfile.mkdtemp(prefix="grok-bwrap-policy-"))
-    result = setup(temporary, time.monotonic() + 150, runner / "grok-runtime-root",
-                   runner / "grok-runtime-input", runner / "grok-readonly-evidence", uid, gid)
-    text = json.dumps(result, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
-    require(len(text) <= 65536, "policy setup report bound")
-    print(text)
+    records = []
+    result = {"schema": 1, "qualification": False, "setup_completed": False, "commands": records}
+    try:
+        result = setup(temporary, time.monotonic() + 150, runner / "grok-runtime-root",
+                       runner / "grok-runtime-input", runner / "grok-readonly-evidence", uid, gid, records)
+        result["setup_completed"] = True
+    except Exception as error:
+        result["error"] = type(error).__name__ + ": " + str(error)[:512]
+        raise
+    finally:
+        text = json.dumps(result, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        require(len(text) <= 65536, "policy setup report bound")
+        print(text)
 
 
 if __name__ == "__main__":

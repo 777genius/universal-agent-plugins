@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import stat
+import sys
 import tarfile
 import tempfile
 import time
@@ -53,6 +54,20 @@ def command(root, label, argv, deadline, records, limit=LIMIT):
     record, stdout, stderr = run_probe(argv, root, ENV, root, label,
         timeout=min(30, remaining(deadline)), limit=limit, memory_only=True)
     records.append(record)
+    if label == "policy-add" and (record["error"] is not None or record["exit"] != 0):
+        try:
+            packet = {"stage": "policy-add", "exit": record["exit"],
+                      "capture_error_present": record["error"] is not None,
+                      "stderr_captured_bytes": record["stderr_bytes"],
+                      "stderr_captured_sha256": record["stderr_sha256"],
+                      "stderr_tail": stderr[-2048:].decode("utf-8", "backslashreplace"),
+                      "stderr_tail_truncated": len(stderr) > 2048}
+            text = json.dumps(packet, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+            require(len(text) <= 16384, "policy failure diagnostic bound")
+            print("DEVIN_BWRAP_POLICY_FAILURE=" + text, file=sys.stderr, flush=True)
+        except Exception:
+            # Optional output never substitutes for the original refusal below.
+            pass
     require(record["error"] is None and record["exit"] == 0, "Bubblewrap policy setup command refused: " + label)
     remaining(deadline)
     return stdout
@@ -150,7 +165,12 @@ def open_policy_directory():
     except BaseException:
         os.close(fd)
         raise
-    return fd
+    return fd, before
+
+
+def verify_policy_directory(fd, original):
+    require(identity(os.fstat(fd))[:5] == identity(POLICY_DIRECTORY.lstat())[:5] == identity(original)[:5],
+            "policy directory authority changed")
 
 
 def require_absent(fd, name):
@@ -214,7 +234,7 @@ def setup(root, deadline):
     require(restriction == b"1\n", "ordinary Ubuntu user-namespace restriction required")
     before = loaded_profiles()
     require_loaded(before)
-    fd = open_policy_directory()
+    fd, original_directory = open_policy_directory()
     try:
         check_policy_names(fd)
         remaining(deadline)
@@ -222,17 +242,14 @@ def setup(root, deadline):
         path = POLICY_DIRECTORY / PROFILE_NAME
         require(read_regular(path, PROFILE_BYTES, deadline) == profile, "installed policy differs from signed package")
         command(root, "policy-add", ["/usr/sbin/apparmor_parser", "--config-file=/dev/null",
-                "--add", "--skip-cache", "--jobs=1", "--Werror=rule-not-enforced", str(path)], deadline, records)
+                "--add", "--skip-cache", "--jobs=1", "--warn=rule-not-enforced", "--Werror=rule-not-enforced", str(path)], deadline, records)
         check_policy_names(fd, installed=True)
         require(read_regular(path, PROFILE_BYTES, deadline) == profile, "installed policy changed")
         after = loaded_profiles()
         require_loaded(before, after)
         require(kernel_read("/proc/sys/kernel/apparmor_restrict_unprivileged_userns", 16) == restriction,
                 "user-namespace restriction changed")
-        held, named = os.fstat(fd), POLICY_DIRECTORY.lstat()
-        require((held.st_dev, held.st_ino, held.st_mode, held.st_uid, held.st_gid)
-                == (named.st_dev, named.st_ino, named.st_mode, named.st_uid, named.st_gid),
-                "policy directory authority changed")
+        verify_policy_directory(fd, original_directory)
         remaining(deadline)
     finally:
         os.close(fd)
