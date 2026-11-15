@@ -371,7 +371,7 @@ func (r *dependencyFixtureRunner) Run(ctx context.Context, command legacyports.C
 	case domain.ClientCodex, domain.ClientClaude:
 		return r.claude.Run(ctx, command)
 	case domain.ClientOpenCode:
-		return dependencyOpenCodeObservation(command)
+		return fixtureOpenCodeNative(command)
 	case domain.ClientCopilot:
 		if len(args) >= 2 && args[0] == "plugin" && args[1] == "uninstall" {
 			r.copilot.spec = ""
