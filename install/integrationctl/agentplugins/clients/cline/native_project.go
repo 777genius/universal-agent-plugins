@@ -3,7 +3,6 @@ package cline
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -17,18 +16,10 @@ import (
 func ProjectClineNative(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, dataPath string) error {
 	servers := make(map[string]nativeconfig.Server)
 	for _, name := range shared.SupportedMCPNames(plan) {
-		portable := envelope.MCP.Servers[name]
-		if portable.Type == "stdio" {
-			portable.Decoded = shared.CloneObject(portable.Decoded)
-			if err := shared.ApplyStdioDataContract(portable.Decoded, plan.ActivePath, dataPath, root); err != nil {
-				return fmt.Errorf("project Cline MCP server %s: %w", name, err)
-			}
-		}
-		server, err := ClineNeutralServer(portable)
+		server, err := projectClineServer(root, envelope.MCP.Servers[name], plan, dataPath)
 		if err != nil {
 			return fmt.Errorf("project Cline MCP server %s: %w", name, err)
 		}
-		server.StdioValuesResolved = portable.Type == "stdio"
 		// This first pass validates the codec without touching client state. The
 		// exact configured path is bound later when ownership objects are built.
 		settingsPath := filepath.Join(root, ".cline-settings-validation.json")
@@ -132,13 +123,24 @@ func clineMCPOwnership(stagingRoot, root string, component domain.ComponentDecis
 }
 
 func ReadClineProjection(root string) (ClineProjection, error) {
-	body, err := os.ReadFile(filepath.Join(root, ClineProjectionFile))
+	file, err := nativeconfig.New().ReadExactFile(filepath.Join(root, ClineProjectionFile))
 	if err != nil {
 		return ClineProjection{}, fmt.Errorf("read projected Cline MCP configuration: %w", err)
 	}
-	var projection ClineProjection
-	if err := json.Unmarshal(body, &projection); err != nil || projection.Servers == nil {
+	if !file.Exists || len(file.Body) > 1<<20 {
+		return ClineProjection{}, fmt.Errorf("projected Cline MCP configuration is missing or oversized")
+	}
+	// Ownership must not depend on JSON's last-write-wins behavior for
+	// duplicate (including case-ambiguous) server or transport keys.
+	if _, err := shared.DecodeStrictJSONObject(file.Body); err != nil {
 		return ClineProjection{}, fmt.Errorf("decode projected Cline MCP configuration: %w", err)
+	}
+	var projection ClineProjection
+	if err := json.Unmarshal(file.Body, &projection); err != nil {
+		return ClineProjection{}, fmt.Errorf("decode projected Cline MCP configuration: %w", err)
+	}
+	if projection.Servers == nil {
+		return ClineProjection{}, fmt.Errorf("projected Cline MCP configuration has no servers object")
 	}
 	for name, server := range projection.Servers {
 		server.StdioValuesResolved = server.Type == "stdio"
@@ -148,10 +150,15 @@ func ReadClineProjection(root string) (ClineProjection, error) {
 }
 
 func ClineNeutralServer(server domain.MCPServer) (nativeconfig.Server, error) {
-	result := nativeconfig.Server{
-		Type:    server.Type,
-		Command: clineDecodedString(server, "command"),
-		URL:     clineDecodedString(server, "url"),
+	result := nativeconfig.Server{Type: server.Type}
+	var err error
+	result.Command, err = clineDecodedString(server, "command")
+	if err != nil {
+		return result, err
+	}
+	result.URL, err = clineDecodedString(server, "url")
+	if err != nil {
+		return result, err
 	}
 	if err := applyClineNeutralCWD(&result, server); err != nil {
 		return result, err
@@ -160,7 +167,6 @@ func ClineNeutralServer(server domain.MCPServer) (nativeconfig.Server, error) {
 	if err := applyClineNeutralArgs(&result, server); err != nil {
 		return result, err
 	}
-	var err error
 	result.Env, err = clineStringMap(server, "env")
 	if err != nil {
 		return result, err
@@ -169,9 +175,16 @@ func ClineNeutralServer(server domain.MCPServer) (nativeconfig.Server, error) {
 	return result, err
 }
 
-func clineDecodedString(server domain.MCPServer, key string) string {
-	value, _ := server.Decoded[key].(string)
-	return value
+func clineDecodedString(server domain.MCPServer, key string) (string, error) {
+	value, present := server.Decoded[key]
+	if !present {
+		return "", nil
+	}
+	text, ok := value.(string)
+	if !ok {
+		return "", fmt.Errorf("cline MCP server %s must be a string", key)
+	}
+	return text, nil
 }
 
 func applyClineNeutralCWD(result *nativeconfig.Server, server domain.MCPServer) error {
@@ -198,27 +211,35 @@ func applyClineNeutralRemoteType(result *nativeconfig.Server, server domain.MCPS
 }
 
 func applyClineNeutralArgs(result *nativeconfig.Server, server domain.MCPServer) error {
-	if values, ok := server.Decoded["args"].([]any); ok {
-		for _, value := range values {
-			text, ok := value.(string)
+	value, present := server.Decoded["args"]
+	if !present {
+		return nil
+	}
+	switch values := value.(type) {
+	case []any:
+		for _, item := range values {
+			text, ok := item.(string)
 			if !ok {
 				return fmt.Errorf("args must be strings")
 			}
 			result.Args = append(result.Args, text)
 		}
 		return nil
-	}
-	if values, ok := server.Decoded["args"].([]string); ok {
+	case []string:
 		result.Args = append([]string(nil), values...)
+		return nil
+	default:
+		return fmt.Errorf("args must be an array of strings")
 	}
-	return nil
 }
 
 func clineStringMap(server domain.MCPServer, key string) (map[string]string, error) {
-	result := map[string]string{}
-	switch values := server.Decoded[key].(type) {
-	case nil:
+	value, present := server.Decoded[key]
+	if !present {
 		return nil, nil
+	}
+	result := map[string]string{}
+	switch values := value.(type) {
 	case map[string]any:
 		for name, value := range values {
 			text, ok := value.(string)

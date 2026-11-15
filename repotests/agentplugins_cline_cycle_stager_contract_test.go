@@ -143,6 +143,49 @@ func TestClineCycleRecipeProofMatchesActualUserAndProjectStager(t *testing.T) {
 	}
 }
 
+func TestClineCycleRejectsDetachedManagedStdioTransport(t *testing.T) {
+	c := clineCycleInert(t)
+	clineCycleStageActual(t, c, "a")
+	r := c.recipes["a"]
+	original, err := json.Marshal(c.configProof(t, r, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, change := range []string{"unwrapped", "launcher", "root", "data", "command", "extra"} {
+		t.Run(change, func(t *testing.T) {
+			value, err := projectNativeRuntimeJSON(original)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entry := value.(map[string]any)
+			transport := entry["transport"].(map[string]any)
+			args := transport["args"].([]any)
+			switch change {
+			case "unwrapped":
+				direct := filepath.Join(r.Active, "bin", "probe")
+				children := []any{"Owned Cline " + r.Scope, r.Active + "/argument"}
+				transport["command"], transport["args"] = direct, children
+				if err := clineAttemptServer(entry, direct, r.Active, children, transport["env"].(map[string]any)); err != nil {
+					t.Fatal("counterexample must satisfy the former direct-command oracle", err)
+				}
+			case "launcher":
+				transport["command"] = filepath.Join(c.f.other, "agentplugins")
+			case "root":
+				args[1] = c.f.other
+			case "data":
+				args[2] = c.f.other
+			case "command":
+				args[6] = filepath.Join(r.Active, "bin", "probe")
+			case "extra":
+				transport["args"] = append(args, "unowned argument")
+			}
+			if err := c.exactCycleServer(r, entry); err == nil {
+				t.Fatal("Cline cycle accepted a transport detached from the original owned wrapper and source")
+			}
+		})
+	}
+}
+
 func TestClineCycleMissingOwnedDirectoryRepairsButPartialTamperingRefuses(t *testing.T) {
 	for _, kind := range []string{"absent", "leaf", "extra"} {
 		t.Run(kind, func(t *testing.T) {

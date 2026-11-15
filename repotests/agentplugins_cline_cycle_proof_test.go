@@ -223,12 +223,21 @@ func (c *clineProjectCycle) configProof(t *testing.T, r *clineCycleRecipe, insta
 		return nil
 	}
 	entry, ok := servers["uapclinea"].(map[string]any)
-	env := map[string]any{"PLUGIN_ROOT": r.Active, "PLUGIN_DATA": r.Data, "UAP_TEST_ROOT": c.f.base.Root, "UAP_TEST_EVENTS": c.f.base.Events, "UAP_TEST_NONCE": r.Nonce, "UAP_TEST_REVISION": r.Revision}
-	if !ok || clineAttemptServer(entry, filepath.Join(r.Active, "bin", "probe"), r.Active, []any{"Owned Cline " + r.Scope, r.Active + "/argument"}, env) != nil {
+	if !ok || c.exactCycleServer(r, entry) != nil {
 		t.Fatal("Cline cycle exact source-bound transport differs")
 	}
 	return entry
 }
+
+func (c *clineProjectCycle) exactCycleServer(r *clineCycleRecipe, entry map[string]any) error {
+	// Independently pin the installed wrapper protocol and the original authored
+	// command; the production argument builder must not define this oracle.
+	command := filepath.Join(r.Active, "io.github.777genius.agentplugins", "managed-stdio-v1", "agentplugins")
+	args := []any{"--internal-stdio-v1", r.Active, r.Data, r.Active, "plugin", "--", "./bin/probe", "Owned Cline " + r.Scope, r.Active + "/argument"}
+	env := map[string]any{"PLUGIN_ROOT": r.Active, "PLUGIN_DATA": r.Data, "UAP_TEST_ROOT": c.f.base.Root, "UAP_TEST_EVENTS": c.f.base.Events, "UAP_TEST_NONCE": r.Nonce, "UAP_TEST_REVISION": r.Revision}
+	return clineAttemptServer(entry, command, r.Active, args, env)
+}
+
 func (c *clineProjectCycle) foreign(t *testing.T, r *clineCycleRecipe) {
 	t.Helper()
 	c.configProof(t, r, r.Active != "" && !r.Removed)
