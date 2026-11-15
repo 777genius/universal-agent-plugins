@@ -173,21 +173,17 @@ func TestInstallConvergesDependencyEnvironment(t *testing.T) {
 	}
 	dependencyWrite(t, lp, savedLock)
 
-	// e) Removal attestation stays consistent with deps sync: removal requires
-	// --external-uninstalled, and only the attested run removes the projection.
+	// e) The captured Codex CLI can remove the exact managed registration and
+	// verify its native absence without an invented external-uninstall attestation.
 	dependencyWrite(t, mp, "schema_version = 1\n[targets]\n")
 	run("deps", "lock", "--format", "json")
-	beforeRemoval := dependencyRead(t, f.store.Path)
-	if _, _, err := f.execute(false, "install", "--locked", "--yes", "--format", "json"); err == nil {
-		t.Fatal("removal without external uninstall attestation reported success")
+	if len(runner.codexIDs) != 1 {
+		t.Fatalf("expected an owned native registration before removal: %v", runner.codexIDs)
 	}
-	if dependencyRead(t, f.store.Path) != beforeRemoval {
-		t.Fatal("refused removal changed state")
+	run("install", "--locked", "--yes", "--format", "json")
+	if len(runner.codexIDs) != 0 {
+		t.Fatalf("native removal did not clear the managed registration: %v", runner.codexIDs)
 	}
-	if _, err := os.Stat(binding.TargetPath); err != nil {
-		t.Fatal("refused removal deleted the projection")
-	}
-	run("install", "--locked", "--yes", "--external-uninstalled", "--format", "json")
 	after, err := f.store.Load()
 	if err != nil || len(after.EnvironmentReceipts) != 0 {
 		t.Fatalf("terminal removal retained owner: %+v %v", after, err)
