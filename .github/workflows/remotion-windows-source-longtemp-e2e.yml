@@ -36,7 +36,7 @@ jobs:
           import pathlib
           import subprocess
           pins = {
-              "tests/live-install/fixtures.json": "cd7ba20b2144343645eed1498e4e810f47d4113811ddbfea72790294c2345a5d",
+              "tests/live-install/fixtures.json": "7399eaed15b3eb0981a6be12082dd8825529e896a59ea125b9500a666c21112e",
               "install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/plugin.schema.json": "0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883",
               "install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/mcp.schema.json": "6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb",
           }
