@@ -1402,6 +1402,28 @@ os._exit(0)
         self.assertIsNone(row["exit"])
         signal_group.assert_not_called()
 
+    def test_bwrap_loopback_denial_is_only_a_specific_readonly_refusal(self):
+        message = b'bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\\n'
+        row = {'exit': 1, 'error': None, 'wait_observed': True, 'streams': {
+            'stdout': {'body': bytearray(), 'eof': True},
+            'stderr': {'body': bytearray(message), 'eof': True},
+            'trace': {'body': bytearray(b'original process trace'), 'eof': True}}}
+        self.assertEqual(trace_case.readonly_failure_reason(row), 'readonly-bwrap-loopback-permission')
+        for key, value in (('exit', 0), ('exit', 2), ('error', 'capture-incomplete'),
+                           ('wait_observed', False)):
+            altered = copy.deepcopy(row)
+            altered[key] = value
+            with self.subTest(field=key, value=value):
+                self.assertEqual(trace_case.readonly_failure_reason(altered), 'readonly-tracer-refused')
+        for stream, key, value in (('stderr', 'body', bytearray(message + b'extra')),
+                                   ('stderr', 'body', bytearray()),
+                                   ('stdout', 'body', bytearray(b'unexpected')),
+                                   ('trace', 'eof', False)):
+            altered = copy.deepcopy(row)
+            altered['streams'][stream][key] = value
+            with self.subTest(stream=stream, field=key):
+                self.assertEqual(trace_case.readonly_failure_reason(altered), 'readonly-tracer-refused')
+
     def test_first_control_refusal_does_not_attempt_the_readonly_control(self):
         import time
 

@@ -276,6 +276,18 @@ def completed(row):
     return (row['exit'] == 0 and row['error'] is None and row['wait_observed']
             and all(stream['eof'] for stream in row['streams'].values()))
 
+def readonly_failure_reason(row):
+    # An exact original hosted bwrap denial is diagnostic, never a native pass.
+    # Keep every other missing/partial/truncated result in the generic refusal.
+    message = b'bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\\n'
+    streams = row['streams']
+    if (row['exit'] == 1 and row['error'] is None and row['wait_observed']
+            and all(stream['eof'] for stream in streams.values())
+            and bytes(streams.get('stdout', {}).get('body', b'')) == b''
+            and bytes(streams.get('stderr', {}).get('body', b'')) == message):
+        return 'readonly-bwrap-loopback-permission'
+    return 'readonly-tracer-refused'
+
 
 def readonly_arguments(fixture):
     argv = ['/usr/bin/bwrap', '--unshare-user', '--uid', str(os.getuid()), '--gid', str(os.getgid()),
@@ -308,12 +320,13 @@ def controls(receipt, root, fixture, env, deadline):
     before = fixture_snapshot(fixture)
     readonly = collect('readonly', readonly_arguments(fixture), root, fixture, env, deadline, trace=True)
     readonly_body = bytes(readonly['streams'].get('stdout', {}).get('body', b''))
+    refusal_reason = readonly_failure_reason(readonly)
     record_streams(readonly, root)
     receipt['runs'].append(readonly)
     receipt['readonly_fixture_before'], receipt['readonly_fixture_after'] = before, fixture_snapshot(fixture)
     require(completed(readonly) and readonly_body == b'STEP0_READONLY_EROFS\n'
             and readonly['streams']['trace']['bytes'] > 0 and receipt['readonly_fixture_after'] == before,
-            'readonly-tracer-refused')
+            refusal_reason)
 
 
 def final_tool_facts(receipt, held, deadline):
