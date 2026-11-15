@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,7 +14,8 @@ import (
 // Public saved CLI, real TLS Git and the production source/store/planner,
 // installer/native transactions. Detection/security are inert host boundaries.
 // The trusted test executable is copied as launcher bytes but never executed;
-// this test certifies no Copilot, MCP, model, trust or native discovery behavior.
+// this test checks remembered trust configuration, not native trust enforcement,
+// Copilot/MCP execution or model behavior.
 func TestProjectCopilotComposedSavedLifecycle(t *testing.T) {
 	transport := newProjectJourneyTransport(t, "git")
 	journey := newProjectJourney(t, transport)
@@ -25,11 +27,30 @@ func TestProjectCopilotComposedSavedLifecycle(t *testing.T) {
 		projectJourneyWrite(t, filepath.Join(project, ".github", "skills", "foreign", "SKILL.md"), "foreign Copilot skill\n")
 	}
 	projectJourneyWrite(t, filepath.Join(journey.a, ".mcp.json"), foreign)
+	trustPath := filepath.Join(user, "config.json")
+	projectJourneyWrite(t, trustPath, `{"trustedFolders":["/foreign-project"],"allowedTools":["shell(git status)"],"theme":"dark"}`)
 	userBefore := securityFixtureTree(t, user)
-	for _, project := range []string{journey.a, journey.b} {
+	journey.run(t, journey.a, "add", transport.endpoint, "--no-save", "--target", "copilot", "--dry-run")
+	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) {
+		t.Fatal("Copilot dry-run changed folder trust or user files")
+	}
+	for index, project := range []string{journey.a, journey.b} {
 		journey.run(t, project, "add", transport.endpoint, "--alias", "docs", "--target", "copilot")
 		projectCopilotOwned(t, journey, project, projectJourneySkill)
+		projectCopilotTrust(t, trustPath, append([]string{"/foreign-project"}, []string{journey.a, journey.b}[:index+1]...))
 	}
+	userAfter := securityFixtureTree(t, user)
+	delete(userBefore, "config.json")
+	delete(userAfter, "config.json")
+	if !reflect.DeepEqual(userBefore, userAfter) {
+		t.Fatal("Copilot project installation changed unrelated user files")
+	}
+	projectJourneyWrite(t, trustPath, `{"trustedFolders":["/foreign-project"],"allowedTools":["shell(git status)"],"theme":"dark"}`)
+	journey.run(t, journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "copilot", "--yes")
+	projectCopilotTrust(t, trustPath, []string{"/foreign-project", journey.a})
+	journey.run(t, journey.b, "add", transport.endpoint, "--alias", "docs", "--target", "copilot", "--yes")
+	projectCopilotTrust(t, trustPath, []string{"/foreign-project", journey.a, journey.b})
+	userBefore = securityFixtureTree(t, user)
 	projectJourneyWrite(t, filepath.Join(journey.b, "B-retained-marker"), "other project\n")
 	bBefore := securityFixtureTree(t, journey.b)
 	statePath := filepath.Join(journey.namespace(journey.a), "state-v2.json")
@@ -54,6 +75,22 @@ func TestProjectCopilotComposedSavedLifecycle(t *testing.T) {
 	projectCopilotUpdateRemove(t, journey, installation, binding)
 	if !reflect.DeepEqual(userBefore, securityFixtureTree(t, user)) || !reflect.DeepEqual(bBefore, securityFixtureTree(t, journey.b)) {
 		t.Fatal("Copilot A lifecycle mutated the user profile or B")
+	}
+}
+
+func projectCopilotTrust(t *testing.T, path string, folders []string) {
+	t.Helper()
+	var got map[string]any
+	if err := json.Unmarshal([]byte(projectJourneyRead(t, path)), &got); err != nil {
+		t.Fatal(err)
+	}
+	trusted := make([]any, len(folders))
+	for index, folder := range folders {
+		trusted[index] = folder
+	}
+	want := map[string]any{"trustedFolders": trusted, "allowedTools": []any{"shell(git status)"}, "theme": "dark"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatal("Copilot must remember only selected projects and preserve every other user setting")
 	}
 }
 

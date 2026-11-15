@@ -12,7 +12,7 @@ import (
 	"github.com/tailscale/hujson"
 )
 
-func TestCopilotTrustProjectPreservesJSONCAndPermissions(t *testing.T) {
+func TestProjectCopilotTrustPreservesJSONCAndPermissions(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "project")
 	body := []byte("// original profile\n{\n" +
 		`  "trustedFolders": ["/foreign", /* retained folder comment */],` + "\n" +
@@ -46,7 +46,7 @@ func TestCopilotTrustProjectPreservesJSONCAndPermissions(t *testing.T) {
 	}
 }
 
-func TestCopilotTrustProjectCreatesOnlyExactTrust(t *testing.T) {
+func TestProjectCopilotTrustCreatesOnlyExactTrust(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "project with spaces")
 	for _, body := range [][]byte{nil, []byte("{}"), []byte(`{"trustedFolders": []}`), []byte(`{"trustedFolders": ["/"]}`)} {
 		next, already, err := CopilotTrustProject(body, root)
@@ -63,7 +63,7 @@ func TestCopilotTrustProjectCreatesOnlyExactTrust(t *testing.T) {
 	}
 }
 
-func TestCopilotTrustProjectRejectsMalformedState(t *testing.T) {
+func TestProjectCopilotTrustRejectsMalformedState(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "project")
 	for _, body := range []string{
 		" ", "null", "[]", "true", "{", "{} {}",
@@ -90,7 +90,7 @@ func TestCopilotTrustProjectRejectsMalformedState(t *testing.T) {
 	}
 }
 
-func TestCopilotTrustProjectRejectsBroadOrUncleanRoot(t *testing.T) {
+func TestProjectCopilotTrustRejectsBroadOrUncleanRoot(t *testing.T) {
 	root := t.TempDir()
 	for _, project := range []string{"", "relative", filepath.VolumeName(root) + string(filepath.Separator), root + string(filepath.Separator) + ".."} {
 		if _, _, err := CopilotTrustProject([]byte("{}"), project); err == nil {
