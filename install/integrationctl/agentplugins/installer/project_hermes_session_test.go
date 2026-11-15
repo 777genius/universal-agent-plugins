@@ -117,9 +117,10 @@ func (runner *hermesSessionSwapRunner) replaceRoot() {
 func (runner *hermesSessionSwapRunner) requireRenameDenial(err error, source, destination string, codes ...syscall.Errno) {
 	runner.t.Helper()
 	var failure *os.LinkError
+	var code syscall.Errno
 	if runtime.GOOS != "windows" || !errors.As(err, &failure) || failure.Op != "rename" ||
 		failure.Old != source || failure.New != destination || reflect.TypeOf(failure.Err) != reflect.TypeFor[syscall.Errno]() ||
-		!slices.Contains(codes, failure.Err.(syscall.Errno)) || runner.original == nil {
+		!errors.As(failure.Err, &code) || !slices.Contains(codes, code) || runner.original == nil {
 		runner.t.Fatal("unexpected native-boundary rename error", err)
 	}
 	if _, err := os.Lstat(destination); !errors.Is(err, os.ErrNotExist) {
