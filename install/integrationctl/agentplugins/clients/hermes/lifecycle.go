@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -21,7 +22,7 @@ func (*Adapter) AutomaticallyActivates(_ clients.Env, req domain.ActivationReque
 	return req.Plan.InstallIntent == domain.InstallIntentAutomatic && req.Plan.NativeRegistryRoot != ""
 }
 
-func (*Adapter) PreflightActivation(env clients.Env, req domain.ActivationRequest) error {
+func (adapter *Adapter) PreflightActivation(env clients.Env, req domain.ActivationRequest) error {
 	// Group preflight runs before staging, so Delivery has no identity or path
 	// yet. Validate the selected client and plan now; demand exact delivery
 	// identity only once a staged delivery actually exists.
@@ -39,15 +40,23 @@ func (*Adapter) PreflightActivation(env clients.Env, req domain.ActivationReques
 	if req.ActivationComplete {
 		return fmt.Errorf("hermes runtime activation cannot be attested by installer")
 	}
-	layout, err := components(req.Plan, req.Delivery.ActivePath)
+	if adapter.hasProjectSession(req.Plan) {
+		if _, err := qualifyHermesBundle(req.Client.ExecutablePath); err != nil {
+			return err
+		}
+		if err := hermesProjectAuthority(req.Plan.TargetContext.ProjectRoot, req.Client.ConfigRoot, os.Environ()); err != nil {
+			return err
+		}
+	}
+	layout, err := adapter.componentLayout(req.Plan, req.Delivery.ActivePath)
 	if err != nil {
 		return err
 	}
-	desired, err := ownedObjects(req.Plan.Scope, req.Delivery.NativeObjects)
+	desired, err := adapter.componentObjects(req.Plan, req.Delivery.NativeObjects)
 	if err != nil {
 		return err
 	}
-	previous, err := ownedObjects(req.Plan.Scope, req.PreviousNativeObjects)
+	previous, err := adapter.componentObjects(req.Plan, req.PreviousNativeObjects)
 	if err != nil {
 		return err
 	}
@@ -57,12 +66,15 @@ func (*Adapter) PreflightActivation(env clients.Env, req domain.ActivationReques
 	if err := layout.ValidateObjects(desired); err != nil {
 		return err
 	}
+	if err := adapter.preflightProjectRoot(env, req); err != nil {
+		return err
+	}
 	return env.NativeConfig.RequireFileIO()
 }
 
 func (*Adapter) UsesNativeRegistryExecutable() bool { return false }
 
-func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, binding *domain.ClientBinding) (clients.RegistryFinding, error) {
+func (adapter *Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, binding *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {
 		return clients.RegistryIndeterminate, err
 	}
@@ -76,7 +88,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 		client.ConfigRoot != plan.TargetContext.UserConfigRoot {
 		return clients.RegistryIndeterminate, fmt.Errorf("hermes Project request changed selected User profile")
 	}
-	layout, err := components(plan, "")
+	layout, err := adapter.componentLayout(plan, "")
 	if err != nil {
 		return clients.RegistryIndeterminate, err
 	}
@@ -84,13 +96,16 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 		if component.Kind == domain.ComponentSkill {
 			continue
 		}
-		if component.Kind == domain.ComponentMCPServer && plan.Scope == domain.ScopeUser && component.Support != domain.SupportUnsupported {
+		if component.Kind == domain.ComponentMCPServer && component.Support != domain.SupportUnsupported {
 			continue
 		}
 		return clients.RegistryIndeterminate, fmt.Errorf("hermes native observation cannot inspect an unsupported component")
 	}
 	if binding != nil {
-		owned, err := ownedObjects(plan.Scope, binding.NativeObjects)
+		if err := adapter.verifyProjectRoot(ctx, env, plan, binding.NativeObjects); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		owned, err := adapter.componentObjects(plan, binding.NativeObjects)
 		if err != nil {
 			return clients.RegistryIndeterminate, err
 		}
@@ -101,7 +116,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	return layout.Inspect(plan.Components, binding, env.NativeConfig)
 }
 
-func (*Adapter) Activate(ctx context.Context, env clients.Env, req domain.ActivationRequest) (domain.ActivationOutcome, error) {
+func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, req domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
@@ -111,21 +126,21 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, req domain.Activa
 	if req.Delivery.ActivePath != req.Plan.ActivePath {
 		return domain.ActivationOutcome{}, fmt.Errorf("hermes staged delivery path differs")
 	}
-	if err := New().PreflightActivation(env, req); err != nil {
+	if err := adapter.PreflightActivation(env, req); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
 	if req.ActivationComplete {
 		return domain.ActivationOutcome{}, fmt.Errorf("hermes runtime activation cannot be attested by installer")
 	}
-	layout, err := components(req.Plan, req.Delivery.ActivePath)
+	layout, err := adapter.componentLayout(req.Plan, req.Delivery.ActivePath)
 	if err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	desired, err := ownedObjects(req.Plan.Scope, req.Delivery.NativeObjects)
+	desired, err := adapter.componentObjects(req.Plan, req.Delivery.NativeObjects)
 	if err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	previous, err := ownedObjects(req.Plan.Scope, req.PreviousNativeObjects)
+	previous, err := adapter.componentObjects(req.Plan, req.PreviousNativeObjects)
 	if err != nil {
 		return domain.ActivationOutcome{}, err
 	}
@@ -136,9 +151,15 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, req domain.Activa
 		RetryAction:       "Retry Hermes Skills installation after restoring ownership",
 		CompletedAction:   "Restart Hermes and review project trust before using installed Skills",
 		Verify: func() error {
+			if err := adapter.verifyProjectRoot(ctx, env, req.Plan, req.Delivery.NativeObjects); err != nil {
+				return err
+			}
 			return layout.Verify(desired, false, env.NativeConfig)
 		},
 		Activate: func(ctx context.Context, _ domain.ActivationRequest) error {
+			if err := adapter.publishProjectRoot(ctx, env, req); err != nil {
+				return err
+			}
 			servers, err := hermesDesiredServers(req.Delivery.ActivePath, desired)
 			if err != nil {
 				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
@@ -157,7 +178,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, req domain.Activa
 	return outcome, err
 }
 
-func (*Adapter) Deactivate(ctx context.Context, env clients.Env, req domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, req domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
 	if err := ctx.Err(); err != nil {
 		return outcome, err
@@ -167,15 +188,18 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, req domain.Deac
 		Scope:    req.TargetContext.Scope, TargetContext: req.TargetContext,
 		NativeRegistryRoot: req.NativeRegistryRoot,
 	}
-	layout, err := components(plan, "")
+	layout, err := adapter.componentLayout(plan, "")
 	if err != nil {
 		return outcome, err
 	}
-	owned, err := ownedObjects(plan.Scope, req.NativeObjects)
+	owned, err := adapter.componentObjects(plan, req.NativeObjects)
 	if err != nil {
 		return outcome, err
 	}
 	if err := layout.ValidateObjects(owned); err != nil {
+		return outcome, err
+	}
+	if err := adapter.verifyProjectRoot(ctx, env, plan, req.NativeObjects); err != nil {
 		return outcome, err
 	}
 	if !req.Confirmed {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"os/exec"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
@@ -11,16 +10,17 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 func configureNativeSession(app *agentpluginscli.App, facade *installer.Engine, kernel nativeconfig.Kernel) {
 	app.Installer = facade
-	app.SessionEnv = clients.Env{NativeConfig: kernel, Runner: processadapter.OS{}, LookupExecutable: exec.LookPath}
-	app.StartNativeSession = func(ctx context.Context, plan clients.SessionPlan) error {
+	app.SessionEnv = clients.Env{ProjectRoots: transaction.ProjectRootPublisher{Kernel: app.Lifecycle.Kernel}, NativeConfig: kernel, Runner: processadapter.OS{}, LookupExecutable: exec.LookPath}
+	app.StartNativeSession = func(ctx context.Context, plan clients.SessionPlan, base []string) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		return managedstdio.StartSessionContext(ctx, plan.Executable, append([]string{plan.Executable}, plan.Arguments...),
-			plan.Directory, plan.ChildEnvironment(os.Environ()))
+			plan.Directory, plan.ChildEnvironment(base))
 	}
 }

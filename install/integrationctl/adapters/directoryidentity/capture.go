@@ -21,7 +21,29 @@ func Capture(ctx context.Context, canonicalRoot string) (Authority, error) {
 	if err != nil {
 		return Authority{}, bootstrapError(err)
 	}
-	return observe(ctx, root)
+	return observe(ctx, root, nil)
+}
+
+// CaptureHeld joins the original held directory to the same handle that supplies
+// the durable ancestry facts. It never substitutes a new pathname observation.
+func CaptureHeld(ctx context.Context, canonicalRoot string, original *os.File) (Authority, error) {
+	if err := ctx.Err(); err != nil {
+		return Authority{}, err
+	}
+	if platformScheme() == "unsupported" {
+		return Authority{}, ErrUnsupported
+	}
+	if original == nil {
+		return Authority{}, errors.New("original directory handle is required")
+	}
+	root, err := canonicalize(canonicalRoot)
+	if err != nil {
+		return Authority{}, bootstrapError(err)
+	}
+	if root != canonicalRoot {
+		return Authority{}, ErrChanged
+	}
+	return observe(ctx, root, original)
 }
 
 // Revalidate never follows a newly introduced alias or recaptures consent.
@@ -35,7 +57,7 @@ func Revalidate(ctx context.Context, expected Authority) error {
 	if expected.IsZero() {
 		return errors.New("zero directory authority")
 	}
-	current, err := observe(ctx, expected.Facts().CanonicalRoot)
+	current, err := observe(ctx, expected.Facts().CanonicalRoot, nil)
 	if err != nil {
 		return err
 	}
@@ -72,7 +94,7 @@ func ancestryPaths(root string) ([]string, error) {
 	return paths, nil
 }
 
-func observe(ctx context.Context, root string) (result Authority, err error) {
+func observe(ctx context.Context, root string, original *os.File) (result Authority, err error) {
 	paths, err := ancestryPaths(root)
 	if err != nil {
 		return Authority{}, err
@@ -111,6 +133,9 @@ func observe(ctx context.Context, root string) (result Authority, err error) {
 	if err := verifyHeld(ctx, held, facts.Ancestry); err != nil {
 		return Authority{}, err
 	}
+	if err := joinOriginalDirectory(original, held[len(held)-1]); err != nil {
+		return Authority{}, err
+	}
 	// A second complete namespace walk observes ancestor substitution even when
 	// the retained old parent still has the original child. No atomic exclusion
 	// of a rename after this walk is claimed.
@@ -121,6 +146,24 @@ func observe(ctx context.Context, root string) (result Authority, err error) {
 		return Authority{}, err
 	}
 	return NewAuthority(facts)
+}
+
+func joinOriginalDirectory(original, current *os.File) error {
+	if original == nil {
+		return nil
+	}
+	want, err := LegacyHandleIdentity(original)
+	if err != nil {
+		return err
+	}
+	got, err := LegacyHandleIdentity(current)
+	if err != nil {
+		return err
+	}
+	if want != got {
+		return ErrChanged
+	}
+	return nil
 }
 
 func entryOf(f *os.File, p string) (Entry, error) {

@@ -577,7 +577,7 @@ func TestApplyRejectsReusedCompletedOperationIDBeforeFilesystemMutation(t *testi
 
 func transactionFixture(t *testing.T, operationID string) (Kernel, DirectoryMutation, statev2.Store) {
 	t.Helper()
-	root := t.TempDir()
+	root := physicalTempDir(t)
 	base := filepath.Join(root, "managed")
 	active := filepath.Join(base, "plugin")
 	staging := filepath.Join(base, "plugin.staging")

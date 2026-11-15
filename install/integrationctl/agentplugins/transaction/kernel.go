@@ -12,6 +12,10 @@ import (
 )
 
 func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutation) (domain.MutationReceipt, error) {
+	if err := validateExpectedPublication(mutation); err != nil {
+		return domain.MutationReceipt{}, err
+	}
+	mutation.PublicationParentAuthority = domain.CloneProfileAuthority(mutation.PublicationParentAuthority)
 	owners, err := kernel.mutationOwners(ctx, mutation.DesiredState, []DirectoryMutation{mutation})
 	if err != nil {
 		return domain.MutationReceipt{}, err
@@ -35,6 +39,9 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	if err != nil {
 		return domain.MutationReceipt{}, fmt.Errorf("encode state before directory transaction: %w", err)
 	}
+	if err := validateStandalonePublication(mutation, beforeStateJSON); err != nil {
+		return domain.MutationReceipt{}, err
+	}
 	if operationIDExists(beforeState, mutation.OperationID) {
 		return domain.MutationReceipt{}, fmt.Errorf("mutation operation id %q was already used", mutation.OperationID)
 	}
@@ -42,7 +49,12 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	if err != nil {
 		return domain.MutationReceipt{}, err
 	}
-	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{EnvironmentID: environmentID(mutation.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
+	parentAuthority, err := neutralPublicationParent(mutation.PublicationParentAuthority)
+	if err != nil {
+		return domain.MutationReceipt{}, err
+	}
+	directoryReceipt, err := kernel.Directory.Apply(ctx, dirswap.Input{PublicationParentAuthority: parentAuthority, ExpectedPublication: mutation.ExpectedPublication,
+		EnvironmentID: environmentID(mutation.EnvironmentAuthority), ProfileOwners: neutralOwners(owners),
 		OperationID: mutation.OperationID, ClientBindingID: mutation.ClientBindingID, Sequence: mutation.Sequence,
 		OwnedBase: mutation.OwnedBase, ActivePath: mutation.ActivePath, StagingPath: mutation.StagingPath,
 		RequireAbsent: mutation.RequireAbsent, VerifyActive: mutation.VerifyBefore,
@@ -69,31 +81,11 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 	if err := kernel.Directory.VerifyPending(directoryReceipt); err != nil {
 		return domain.MutationReceipt{}, rollback(err)
 	}
-	receipt := domain.MutationReceipt{DirectoryProof: directoryProof(directoryReceipt), ProfileOwners: copyOwners(owners), DataReceiptID: directoryReceipt.DataReceiptID,
-		OperationID:          mutation.OperationID,
-		OperationGroupID:     mutation.OperationID,
-		Sequence:             mutation.Sequence,
-		MutationType:         "directory_swap",
-		ClientBindingID:      mutation.ClientBindingID,
-		ActivePath:           directoryReceipt.ActivePath,
-		StagingPath:          directoryReceipt.StagingPath,
-		BackupPath:           directoryReceipt.BackupPath,
-		BeforeDigest:         mutation.BeforeDigest,
-		AfterDigest:          mutation.AfterDigest,
-		EnvironmentAuthority: mutation.EnvironmentAuthority,
-		Phase:                ReceiptPhaseStateCommitted,
+	receipt, err := recordedDirectoryMutation(mutation, directoryReceipt, owners)
+	if err != nil {
+		return domain.MutationReceipt{}, rollback(err)
 	}
-	client.Receipts = append(client.Receipts, receipt)
-	client.NativeObjects = committedDirectoryObjects(beforeState, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
-	client.Materialization = domain.MaterializationMaterialized
-	client.Activation = mutation.Activation
-	client.Authentication = mutation.Authentication
-	client.Policy = mutation.Policy
-	client.Verification = mutation.Verification
-	installation := state.Installations[installationIndex]
-	installation.OperationGroupID = mutation.OperationID
-	installation.Clients[mutation.ClientBindingID] = client
-	state.Installations[installationIndex] = installation
+	recordDirectoryMutation(&state, beforeState, installationIndex, client, mutation, receipt)
 	if oldState, err := kernel.persistCommitDecision(state, beforeStateJSON); err != nil {
 		if oldState {
 			if rollbackErr := kernel.Directory.Rollback(context.Background(), directoryReceipt); rollbackErr != nil {
@@ -106,15 +98,22 @@ func (kernel Kernel) ApplyDirectory(ctx context.Context, mutation DirectoryMutat
 		return receipt, fmt.Errorf("finalize committed directory mutation: %w", err)
 	}
 	receipt.Phase = ReceiptPhaseCommitted
-	state.Installations[installationIndex].Clients[mutation.ClientBindingID] = replaceReceipt(client, receipt)
-	if err := kernel.StateStore.Save(state); err != nil {
+	if mutation.Standalone {
+		committed := receipt
+		committed.PublicationParentAuthority = domain.CloneProfileAuthority(receipt.PublicationParentAuthority)
+		state.TransactionReceipts[len(state.TransactionReceipts)-1] = committed
+	} else {
+		current := state.Installations[installationIndex].Clients[mutation.ClientBindingID]
+		state.Installations[installationIndex].Clients[mutation.ClientBindingID] = replaceReceipt(current, receipt)
+	}
+	if err := kernel.saveState(state); err != nil {
 		return receipt, fmt.Errorf("finalize transaction receipt state: %w", err)
 	}
 	return receipt, nil
 }
 
 func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGroup) ([]domain.MutationReceipt, error) {
-	owners, err := kernel.mutationOwners(ctx, group.DesiredState, group.Mutations)
+	owners, err := kernel.groupedPublicationOwners(ctx, group)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +255,7 @@ func (kernel Kernel) ApplyDirectoryGroup(ctx context.Context, group DirectoryGro
 		}
 		state.Installations[installationIndex] = installation
 	}
-	if err := kernel.StateStore.Save(state); err != nil {
+	if err := kernel.saveState(state); err != nil {
 		return groupReceipts(applied), groupError(GroupFailureCommitted, fmt.Errorf("finalize grouped receipt state: %w", err))
 	}
 	result := groupReceipts(applied)
@@ -351,7 +350,7 @@ func (kernel Kernel) RemoveDirectory(ctx context.Context, removal DirectoryRemov
 	}
 	receipt.Phase = ReceiptPhaseCommitted
 	state.Installations[installationIndex].Clients[removal.ClientBindingID] = replaceReceipt(client, receipt)
-	if err := kernel.StateStore.Save(state); err != nil {
+	if err := kernel.saveState(state); err != nil {
 		return receipt, fmt.Errorf("finalize removal receipt state: %w", err)
 	}
 	return receipt, nil
@@ -498,7 +497,7 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 			state.TransactionReceipts[index].Phase = ReceiptPhaseCommitted
 		}
 	}
-	if err := kernel.StateStore.Save(state); err != nil {
+	if err := kernel.saveState(state); err != nil {
 		return groupReceipts(applied), groupError(GroupFailureCommitted, fmt.Errorf("finalize grouped removal receipt state: %w", err))
 	}
 	result := groupReceipts(applied)
@@ -507,4 +506,3 @@ func (kernel Kernel) RemoveDirectoryGroup(ctx context.Context, group DirectoryRe
 	}
 	return result, nil
 }
-
