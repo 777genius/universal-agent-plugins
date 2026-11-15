@@ -70,13 +70,16 @@ func TestCISupersession_ClosedPRCleanupCannotCancelOtherIdentities(t *testing.T)
 		".event == \"pull_request\"", ".head_repository.id == $head",
 		".number == $pr and .head.repo.id == $head and .base.repo.id == $base",
 		"still_closed", ".state == \"closed\"", ".closed_at == $closed",
-		"closed-pr-head-associations.json", "length == 1", "fork_unique",
+		"closed-pr-head-associations.json", "length == 1", "head_unique", "head_unique=false", "head_unique=true",
 		"(.pull_requests | length) == 0", ".head_branch == $branch",
 		"fromdateiso8601", "sort -un", "--method POST", "current", "completed",
 	} {
 		if !strings.Contains(script, required) {
 			t.Fatalf("closed-PR cleanup lost guard %q", required)
 		}
+	}
+	if strings.Contains(script, "IS_FORK") {
+		t.Fatal("same-repository PRs must use the same unique head association fallback")
 	}
 	for _, forbidden := range []string{"actions/checkout", "pull_request.head.sha", "git checkout"} {
 		if strings.Contains(readRepoFile(t, RepoRoot(t), ".github", "workflows", name), forbidden) {
