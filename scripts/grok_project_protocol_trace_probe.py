@@ -230,7 +230,7 @@ def collect(label, argv, root, fixture, env, deadline, *, trace=False):
                 require(stat.S_ISFIFO(trace_original[2]) and trace_original == identity(fifo.lstat())[:6], 'trace-channel-original')
                 state['dummy'] = os.open(fifo, os.O_WRONLY | os.O_NONBLOCK | os.O_NOFOLLOW | os.O_CLOEXEC)
                 require(identity(os.fstat(state['dummy']))[:6] == trace_original, 'trace-writer-original')
-                argv = ['/usr/bin/strace', '-f', '--kill-on-exit', '--decode-pids=pidns', '-e', 'trace=%process',
+                argv = ['/usr/bin/strace', '-f', '--kill-on-exit', '--decode-pids=pidns', '-e', 'trace=%process,%network',
                         '-s', '4096', '-v', '-o', str(fifo), '--', *argv]
             child = subprocess.Popen(argv, cwd=fixture, env=env, stdin=subprocess.DEVNULL,
                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True, start_new_session=True)

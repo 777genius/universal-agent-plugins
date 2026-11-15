@@ -1305,7 +1305,8 @@ class InertTraceMechanicsContracts(unittest.TestCase):
         observed = [] if events is None else events
 
         def spawn(argv, **kwargs):
-            self.assertEqual(argv[:4], ["/usr/bin/strace", "-f", "--kill-on-exit", "--decode-pids=pidns"])
+            self.assertEqual(argv[:6], ["/usr/bin/strace", "-f", "--kill-on-exit", "--decode-pids=pidns",
+                                       "-e", "trace=%process,%network"])
             channel = argv[argv.index("-o") + 1]
             # Actual inert child and original pipes; no tracer/native success claim.
             child = original_popen([sys.executable, "-I", "-B", "-c", code, channel], **kwargs)

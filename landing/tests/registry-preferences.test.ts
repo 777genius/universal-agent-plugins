@@ -250,7 +250,7 @@ test('catalog SSR defaults do not populate install preferences; valid manual sel
   remount.stop();
 });
 
-test('invalid target preferences are discarded and a new package does not inherit another package selection', async () => {
+test('known invalid targets keep manual intent, while a different package starts with its own selection', async () => {
   setActivePinia(createPinia());
   const first = card();
   first.state.updateTargets(['codex']);
@@ -269,12 +269,33 @@ test('invalid target preferences are discarded and a new package does not inheri
       })),
     }),
   );
-  assert.deepEqual(Array.from(changed.state.targets.value), ['cursor']);
-  assert.equal(changed.state.autoDetect.value, true);
+  assert.deepEqual(Array.from(changed.state.targets.value), ['codex']);
+  assert.equal(changed.state.autoDetect.value, false);
+  assert.equal(changed.state.command.value, '', 'Ineligible manual choice has no command');
   changed.stop();
   const other = card(packageProps({ ...fixture, install_source: 'different' }));
   assert.equal(other.state.autoDetect.value, true);
   other.stop();
+});
+
+test('unknown persisted targets cannot enter a manual selection in either scope', () => {
+  setActivePinia(createPinia());
+  const preferences = useInstallPreferencesStore();
+  for (const scope of ['user', 'project'] as const) {
+    preferences.package = {
+      identity: 'gitlab', targetIds: ['unknown-agent', 'hermes'],
+      autoDetect: false, expanded: true, scope,
+    };
+    assert.deepEqual(preferences.readPackage('gitlab', ['cursor']).targetIds, ['hermes']);
+    preferences.reconcilePackage('gitlab', ['cursor']);
+    assert.deepEqual(preferences.package.targetIds, ['hermes']);
+    assert.equal(preferences.package.autoDetect, false);
+    assert.equal(preferences.package.scope, scope);
+    preferences.selectPackage('gitlab', {
+      targetIds: ['unknown-agent', 'hermes'], autoDetect: false, expanded: true, scope,
+    }, ['cursor']);
+    assert.deepEqual(preferences.package.targetIds, ['hermes']);
+  }
 });
 
 test('bound detail v-model persists picker event order and exact commands across remounts', async () => {

@@ -24,7 +24,10 @@ const readonlyRuntimeEntryLimit = 262144
 
 const readonlyRuntimeDiagnosticLimit = 1536
 
-var errReadonlyRuntimeMetadata = errors.New("readonly runtime ownership or metadata differs")
+var (
+	errReadonlyRuntimeMetadata = errors.New("readonly runtime ownership or metadata differs")
+	errReadonlyRuntimeMember   = errors.New("readonly runtime contains an unsafe or special member")
+)
 
 type readonlyRuntimeRow struct {
 	facts readonlyObjectFacts
@@ -50,9 +53,18 @@ func readonlyRuntimeFacts(facts readonlyObjectFacts, uid, gid uint32) (readonlyO
 	if err := readonlyRuntimeMetadataRefusal(facts, uid, gid); err != nil {
 		return readonlyObjectFacts{}, err
 	}
-	if kind != unix.S_IFDIR && kind != unix.S_IFREG && kind != unix.S_IFLNK ||
-		kind != unix.S_IFLNK && facts.Mode&0022 != 0 || kind == unix.S_IFLNK && facts.Links != 1 {
-		return readonlyObjectFacts{}, errors.New("readonly runtime contains an unsafe or special member")
+	// The bitmap retains the three original kind, write and link predicates.
+	failed := [...]bool{kind != unix.S_IFDIR && kind != unix.S_IFREG && kind != unix.S_IFLNK,
+		kind != unix.S_IFLNK && facts.Mode&0022 != 0, kind == unix.S_IFLNK && facts.Links != 1}
+	var predicates uint8
+	for bit, invalid := range failed {
+		if invalid {
+			predicates |= 1 << bit
+		}
+	}
+	if predicates != 0 {
+		return readonlyObjectFacts{}, fmt.Errorf("%w: predicates=0x%02x mode=%#o links=%d",
+			errReadonlyRuntimeMember, predicates, facts.Mode, facts.Links)
 	}
 	// Runtime set-id bits are metadata, not authority. The child separately
 	// requires NOSUID on every runtime mount and drops all capabilities.
@@ -89,7 +101,8 @@ func readonlyRuntimeMetadataRefusal(facts readonlyObjectFacts, uid, gid uint32) 
 }
 
 func readonlyRuntimeMemberError(path string, err error) error {
-	if !errors.Is(err, errReadonlyRuntimeMetadata) || !readonlyAbsolute(path) || !readonlyWithin(path, "/usr") {
+	if (!errors.Is(err, errReadonlyRuntimeMetadata) && !errors.Is(err, errReadonlyRuntimeMember)) ||
+		!readonlyAbsolute(path) || !readonlyWithin(path, "/usr") {
 		return err
 	}
 	relative := "."

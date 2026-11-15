@@ -86,15 +86,18 @@ export function installCommands(
   const scopeFlag = scope === 'project' ? ' --scope project' : '';
   const mode = dependencySaveMode(source, values);
   const owned = savedDependenciesReleased && mode === 'saved';
+  // Explicit maintenance targets retain the selected saved binding and use
+  // the actual updater. Existing Directory maintenance keeps its own policy.
+  const maintenanceTargetFlag = owned && lifecycleTargets === undefined ? '' : lifecycleTargetFlag;
   return {
     saveMode: savedDependenciesReleased ? mode : undefined,
     add: `${invocation} add ${source}${targetFlag}${scopeFlag}${dependencyAddFlag(mode, savedDependenciesReleased)}`,
     update:
-      owned && isPinnedGitSource(source)
+      owned && isPinnedGitSource(source) && lifecycleTargets === undefined
         ? `${invocation} add ${source}${targetFlag}${scopeFlag}`
-        : `${invocation} update ${name}${owned ? '' : lifecycleTargetFlag}${scopeFlag}`,
+        : `${invocation} update ${name}${maintenanceTargetFlag}${scopeFlag}`,
     repair: `${invocation} repair ${name}${lifecycleTargetFlag}${scopeFlag}`,
     switch: `${invocation} switch ${name} --to <distribution-id>${scopeFlag}`,
-    remove: `${invocation} remove ${name}${owned ? '' : lifecycleTargetFlag}${scopeFlag}`,
+    remove: `${invocation} remove ${name}${maintenanceTargetFlag}${scopeFlag}`,
   };
 }

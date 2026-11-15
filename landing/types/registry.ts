@@ -90,6 +90,8 @@ export interface ClientEvidence extends EvidenceDetails {
 
 export interface DistributionReleaseView {
   release_sequence: number;
+  // Exact source package identity; product IDs may use a different catalog name.
+  manifest_name?: string;
   source: PluginSource;
   version: string;
   targets: ReleaseTarget[];

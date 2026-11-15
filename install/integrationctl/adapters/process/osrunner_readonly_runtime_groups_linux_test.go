@@ -4,6 +4,7 @@ package process
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -182,7 +183,7 @@ func TestReadonlyRuntimeMemberGroupCannotAdmitUnsafeOwnerOrMode(t *testing.T) {
 				if !errors.Is(err, errReadonlyRuntimeMetadata) || !strings.Contains(err.Error(), "predicates=0x08") {
 					t.Fatal("member owner refusal lost its original predicate", err)
 				}
-			} else if err.Error() != "readonly runtime contains an unsafe or special member" {
+			} else if !errors.Is(err, errReadonlyRuntimeMember) || !strings.Contains(err.Error(), `member="bin/original"`) {
 				t.Fatal("member refused for an unrelated metadata condition", err)
 			}
 		})
@@ -227,5 +228,77 @@ func TestReadonlyRuntimeRetainedSetIDMetadataCannotAdmitSelectedExecutable(t *te
 	plain.Mode &^= 07000
 	if err := admitReadonlyFacts(plain, false, before.UID, before.GID); err != nil {
 		t.Fatal("selected executable mode-only positive control refused", err)
+	}
+}
+
+func TestReadonlyRuntimeUnsafeMemberDiagnosticRetainsOriginalRow(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		predicates uint8
+	}{
+		{"writable-file", 2}, {"writable-directory", 2}, {"fifo", 1}, {"writable-fifo", 3}, {"linked-symlink", 4},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			base, original, census, _ := readonlyRuntimeFixture(t)
+			path := filepath.Join(base, "unsafe")
+			createReadonlyRuntimeUnsafeMember(t, path, test.name)
+			before, err := readonlyNamedFacts(original, "unsafe")
+			if err != nil {
+				t.Fatal(err)
+			}
+			entries, err := os.ReadDir(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if first, readErr := original.ReadDir(1); readErr != nil || len(first) != 1 {
+				t.Fatal("original iterator control failed", readErr)
+			}
+			census.mount, err = readonlyMountID(original, "", unix.AT_EMPTY_PATH)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = census.entry(t.Context(), original, "/usr", "unsafe", 0)
+			if !errors.Is(err, errReadonlyRuntimeMember) || errors.Is(err, errReadonlyRuntimeMetadata) {
+				t.Fatal("original member refused for an unrelated predicate", err)
+			}
+			for _, want := range []string{fmt.Sprintf("predicates=0x%02x mode=%#o links=%d", test.predicates, before.Mode, before.Links),
+				`member="unsafe"`, "member_bytes=6 ", "member_truncated=false"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("original refusal lacks %q: %s", want, err)
+				}
+			}
+			if len(err.Error()) > readonlyRuntimeDiagnosticLimit || len(census.rows) != 0 || len(census.aliases) != 0 {
+				t.Fatal("member diagnostic expanded its bound or admitted original evidence", err)
+			}
+			requireReadonlyRuntimeOriginalSurvives(t, path, original, len(entries), before)
+		})
+	}
+}
+
+func createReadonlyRuntimeUnsafeMember(t *testing.T, path, kind string) {
+	t.Helper()
+	var err error
+	switch kind {
+	case "writable-file":
+		err = os.WriteFile(path, []byte("original native body"), 0600)
+	case "writable-directory":
+		err = os.Mkdir(path, 0700)
+	case "fifo", "writable-fifo":
+		err = unix.Mkfifo(path, 0600)
+	case "linked-symlink":
+		err = os.Symlink("unfollowed-target", path)
+		if err == nil {
+			err = os.Link(path, path+"-alias")
+		}
+	default:
+		t.Fatal("unknown unsafe member fixture", kind)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.HasPrefix(kind, "writable-") {
+		if err := os.Chmod(path, 0770); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

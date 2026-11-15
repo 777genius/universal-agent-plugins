@@ -25,14 +25,18 @@ type kiroCycleFile struct {
 
 type kiroCycleRole struct {
 	key, project, name, data, marker string
-	installation                    domain.Installation
-	binding                         domain.ClientBinding
-	removed                         bool
+	installation                     domain.Installation
+	binding                          domain.ClientBinding
+	removed                          bool
 }
 
 func (r *kiroCycleRole) statePath() string { return filepath.Join(r.project, ".uap", "state-v2.json") }
-func (r *kiroCycleRole) configPath() string { return filepath.Join(r.project, ".kiro", "settings", "mcp.json") }
-func (r *kiroCycleRole) skillPath() string { return filepath.Join(r.project, ".kiro", "skills", r.name, "SKILL.md") }
+func (r *kiroCycleRole) configPath() string {
+	return filepath.Join(r.project, ".kiro", "settings", "mcp.json")
+}
+func (r *kiroCycleRole) skillPath() string {
+	return filepath.Join(r.project, ".kiro", "skills", r.name, "SKILL.md")
+}
 func (r *kiroCycleRole) markerPath() string { return filepath.Join(r.data, "native-marker.txt") }
 
 func kiroCycleCapture(path string) (kiroCycleFile, error) {
@@ -62,7 +66,7 @@ func (c *kiroNativeCycle) pin(t *testing.T, path string) {
 
 func kiroCycleAbsent(path string) error {
 	original := path
-	for count := 0; count <= 32; count++ {
+	for range 33 {
 		info, err := os.Lstat(path)
 		if err == nil {
 			if path == original || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
@@ -295,9 +299,9 @@ func (c *kiroNativeCycle) installedObjects(t *testing.T, r *kiroCycleRole) {
 	canonical, _ := json.Marshal(entry)
 	skillDigest := kiroCycleSHA(append(append([]byte("f\x00SKILL.md\x00-\x00"), skill...), 0))
 	expected := map[string]domain.NativeObjectOwnership{
-		"managed_package_directory": {ObjectID: "package:kiro:" + r.binding.PhysicalArtifact, Kind: "managed_package_directory", LogicalName: r.name, Path: active, ManagedDigest: digest},
+		"managed_package_directory":   {ObjectID: "package:kiro:" + r.binding.PhysicalArtifact, Kind: "managed_package_directory", LogicalName: r.name, Path: active, ManagedDigest: digest},
 		"kiro_global_skill_directory": {ObjectID: "kiro-skill:" + r.name, Kind: "kiro_global_skill_directory", LogicalName: r.name, Path: filepath.Dir(r.skillPath()), ManagedDigest: "sha256:" + skillDigest},
-		"kiro_global_mcp_server": {ObjectID: "kiro-mcp:" + r.name, Kind: "kiro_global_mcp_server", LogicalName: r.name, Path: r.configPath(), ManagedDigest: "sha256:" + kiroCycleSHA(canonical)},
+		"kiro_global_mcp_server":      {ObjectID: "kiro-mcp:" + r.name, Kind: "kiro_global_mcp_server", LogicalName: r.name, Path: r.configPath(), ManagedDigest: "sha256:" + kiroCycleSHA(canonical)},
 	}
 	if err := projectNativeCLIOwnership(r.binding.NativeObjects, expected); err != nil {
 		t.Fatal(err)
@@ -372,7 +376,7 @@ func kiroCycleSHA(raw []byte) string {
 func TestKiroCycleStateContinuityRetainsIndependentData(t *testing.T) {
 	original := domain.Installation{
 		InstallationID: "original", DeclaredName: "fixture", UpdatedAt: "before",
-		Clients: map[string]domain.ClientBinding{"kiro": {ClientID: "kiro", DataReceiptID: "data", UpdatedAt: "before"}},
+		Clients:      map[string]domain.ClientBinding{"kiro": {ClientID: "kiro", DataReceiptID: "data", UpdatedAt: "before"}},
 		DataReceipts: map[string]domain.DataReceipt{"data": {DataReceiptID: "data", Locator: "/original/data", State: domain.DataReceiptOwned}},
 	}
 	clone := func() domain.Installation {

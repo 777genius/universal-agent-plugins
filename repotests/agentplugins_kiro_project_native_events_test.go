@@ -106,7 +106,7 @@ func kiroCycleEvents(raw []byte, nonce string, role *kiroCycleRole, start, end t
 		currentSession, sessionOK := row["session"].(string)
 		timestamp, timeOK := row["timestamp"].(string)
 		when, timeErr := time.Parse(time.RFC3339Nano, timestamp)
-		if !ok || numberErr != nil || currentPID <= 0 || currentPID > 1<<31-1 || !sessionOK || !strings.HasPrefix(currentSession, strconv.Itoa(currentPID)+"-") || !timeOK || timeErr != nil || when.Before(last) || when.After(end) || row["nonce"] != nonce {
+		if !ok || numberErr != nil || currentPID <= 0 || currentPID >= 1<<31 || !sessionOK || !strings.HasPrefix(currentSession, strconv.Itoa(currentPID)+"-") || !timeOK || timeErr != nil || when.Before(last) || when.After(end) || row["nonce"] != nonce {
 			return facts, fmt.Errorf("Kiro original command/session/time/nonce differs")
 		}
 		birth, birthErr := strconv.ParseInt(strings.TrimPrefix(currentSession, strconv.Itoa(currentPID)+"-"), 10, 64)

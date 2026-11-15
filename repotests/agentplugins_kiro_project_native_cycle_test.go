@@ -103,7 +103,7 @@ func kiroCycleAgent(name, server string) map[string]any {
 	return map[string]any{
 		"name": name, "description": "Disposable UAP native MCP fixture",
 		"prompt": "Use only the named disposable MCP inspect_runtime tool, exactly as the user requests. Never run shell, file, web, or subagent tools.",
-		"tools": []string{selector}, "allowedTools": []string{selector},
+		"tools":  []string{selector}, "allowedTools": []string{selector},
 		"mcpServers": map[string]any{}, "resources": []string{},
 		"hooks": map[string]any{}, "toolAliases": map[string]string{},
 	}
