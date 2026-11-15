@@ -21,8 +21,9 @@ type request struct {
 }
 
 type response struct {
-	Result legacyports.CommandResult `json:"result"`
-	Error  string                    `json:"error,omitempty"`
+	Result            legacyports.CommandResult `json:"result"`
+	Error             string                    `json:"error,omitempty"`
+	ForcedCleanupOnly bool                      `json:"forced_cleanup_only,omitempty"`
 }
 
 func main() {
@@ -38,7 +39,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(req.TimeoutSeconds)*time.Second)
 	defer cancel()
 	result, err := (processadapter.OS{}).Run(ctx, legacyports.Command{Argv: req.Argv, Dir: req.Directory, Env: os.Environ(), StdoutLimitBytes: req.Limit})
-	out := response{Result: result}
+	out := response{Result: result, ForcedCleanupOnly: ctx.Err() == nil && result.ExitCode == 0 && result.CleanupComplete && !result.NoChildStarted && soleForcedCleanup(err)}
 	if err != nil {
 		out.Error = err.Error()
 	}
@@ -51,3 +52,36 @@ func main() {
 }
 
 func fail(err error) { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
+
+// Classify the original error graph without accepting it. The supervisor still
+// exits unsuccessfully and preserves the exact original error and result.
+func soleForcedCleanup(err error) bool {
+	leaves := 0
+	return forcedCleanupLeaves(err, 0, &leaves) && leaves == 1
+}
+
+func forcedCleanupLeaves(err error, depth int, leaves *int) bool {
+	if err == nil || depth > 32 {
+		return false
+	}
+	if err == processadapter.ErrOrdinaryForcedCleanup {
+		*leaves++
+		return *leaves == 1
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		children := joined.Unwrap()
+		if len(children) == 0 {
+			return false
+		}
+		for _, child := range children {
+			if child != nil && !forcedCleanupLeaves(child, depth+1, leaves) {
+				return false
+			}
+		}
+		return true
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return forcedCleanupLeaves(wrapped.Unwrap(), depth+1, leaves)
+	}
+	return false
+}

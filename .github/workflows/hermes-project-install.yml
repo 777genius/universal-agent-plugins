@@ -3,7 +3,7 @@ name: Hermes Project installation and inspection
 on:
   push:
     branches: [main]
-    paths: ['install/integrationctl/**', 'cli/**', 'scripts/hermes_install_acceptance.py', 'scripts/e2e/hermes-project-install.py', 'repotests/testdata/hermes_install_runner/**', '.github/workflows/hermes-project-install.yml']
+    paths: ['install/integrationctl/**', 'cli/**', 'scripts/hermes_install_acceptance.py', 'scripts/test_hermes_install_acceptance.py', 'scripts/e2e/hermes-project-install.py', 'repotests/testdata/hermes_install_runner/**', '.github/workflows/hermes-project-install.yml']
   pull_request:
     paths:
       - 'install/integrationctl/agentplugins/clients/hermes/**'
@@ -25,6 +25,7 @@ on:
       - 'cli/cmd/agentplugins/project_hermes*'
       - 'scripts/e2e/hermes-project-install.py'
       - 'scripts/hermes_install_acceptance.py'
+      - 'scripts/test_hermes_install_acceptance.py'
       - 'repotests/testdata/hermes_install_runner/**'
       - '.github/workflows/hermes-project-install.yml'
   workflow_dispatch:
@@ -87,6 +88,11 @@ jobs:
                                  'UAP_HERMES_COLD_UAP_SHA256': hashlib.sha256(uap.read_bytes()).hexdigest()}.items():
                   stream.write(key + '=' + value + '\n')
           PY
+      - name: Verify strict native and builder-only cleanup boundaries
+        shell: bash
+        run: |
+          go test -count=1 ./repotests/testdata/hermes_install_runner
+          ${{ matrix.python }} -m unittest discover -s scripts -p test_hermes_install_acceptance.py -v
       - name: Build the unmodified pinned official standalone distribution
         shell: bash
         run: |
@@ -104,7 +110,7 @@ jobs:
           record, stdout, stderr = supervised([sys.executable, '-S', '-B', str(source / 'scripts/bundles/native_build.py'),
                           '--source', str(source), '--work', str(root / 'hermes-project-work'),
                           '--cache', str(root / 'hermes-project-cache'), '--out', str(root / 'hermes-project-payload'),
-                          '--commit', pin], pathlib.Path.cwd(), os.environ, timeout=9000, limit=16 << 20)
+                          '--commit', pin], pathlib.Path.cwd(), os.environ, timeout=9000, limit=16 << 20, completed_builder_cleanup=True)
           print(stdout.decode(errors='replace')); print(stderr.decode(errors='replace'))
           binary = root / 'hermes-project-payload' / 'bin' / ('hermes.exe' if os.name == 'nt' else 'hermes')
           assert binary.is_file()
