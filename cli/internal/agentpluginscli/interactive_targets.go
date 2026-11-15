@@ -35,7 +35,7 @@ func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, ap
 	}
 
 	stop = startCommandActivity(cmd, app, opts, "Checking plugin compatibility")
-	compatible, skipped, preloaded, err := app.compatibleDetectedTargets(ctx, source, detected, intents...)
+	compatible, skipped, preloaded, err := stopPluginActivityOnWrite(app, stop).compatibleDetectedTargets(ctx, source, detected, intents...)
 	stop()
 	if err != nil {
 		return nil, nil, nil, err

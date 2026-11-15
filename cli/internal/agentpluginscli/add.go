@@ -64,7 +64,9 @@ func executeAddCommand(cmd *cobra.Command, app App, opts *options, source string
 	if err != nil {
 		return err
 	}
+	stop := startCommandActivity(cmd, app, opts, "Checking plugin lifecycle context")
 	opts.installIntents, err = app.addLifecycleIntents(cmd.Context(), source, opts.scope, opts.installIntents, requestedTargets)
+	stop()
 	if err != nil {
 		return err
 	}
@@ -99,7 +101,7 @@ func executePromptedAdd(cmd *cobra.Command, app App, opts *options, source strin
 	if err != nil {
 		return err
 	}
-	writeProgress(app, opts.format, "Checking selected agents and preparing the install plan...")
+	stop := startAddProgress(cmd, app, opts, "Checking selected agents and preparing the install plan...")
 	if preloaded != nil && preloaded.cleanup != nil {
 		defer func() { _ = preloaded.cleanup() }()
 	}
@@ -109,9 +111,11 @@ func executePromptedAdd(cmd *cobra.Command, app App, opts *options, source strin
 	}
 	detectedClients, err := detectSelectedTargetsForLifecycleResolution(cmd.Context(), app.Detector, automaticInstallTargets(selection, opts.installIntents), clients, !opts.dryRun && isDirectorySelector(source))
 	if err != nil {
+		stop()
 		return fmt.Errorf("detect selected AI clients: %w", err)
 	}
 	_, detected, err := preflightProjectLifecycleTargets(cmd.Context(), app, opts, selection, detectedClients, false)
+	stop()
 	if err != nil {
 		return err
 	}
@@ -119,8 +123,7 @@ func executePromptedAdd(cmd *cobra.Command, app App, opts *options, source strin
 	if preloaded != nil {
 		loaded = *preloaded
 	} else {
-		writeProgress(app, opts.format, "Resolving and validating Agent Plugin...")
-		loaded, err = app.loadPackageFor(cmd.Context(), source, withDetectedClients(app.addResolutionRequest(source, selection), detected))
+		loaded, err = loadAddPackageFor(cmd.Context(), cmd, app, opts, source, withDetectedClients(app.addResolutionRequest(source, selection), detected), "Resolving and validating Agent Plugin...")
 		if err != nil {
 			return err
 		}

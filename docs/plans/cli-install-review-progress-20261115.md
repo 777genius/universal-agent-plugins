@@ -54,8 +54,12 @@ the evidence supports them; keep final counts separate from estimates.
 - Default rich view: unique Skills, selected agents, counts of install/update/
   unchanged/remove actions, and all warnings. Use friendly agent names.
 - Keep the confirmation and summary in the existing bounded viewport.
-- Optional `Details []string` on confirmation requests exposes exact action/path
-  mappings using `d`; toggling resets scroll position and preserves Yes/No state.
+- Optional `Details []string` on the internal prompt request exposes exact
+  action/path mappings using `d`; toggling resets scroll and preserves Yes/No.
+  Preserve the public three-field `installerui.ConfirmRequest` shape, including
+  existing unkeyed consumers; use additive `Terminal.ConfirmWithDetails` instead
+  of adding a field to that exported request. A consumer qualification test exposed
+  this compatibility constraint during implementation; it must remain unchanged.
 - Validate Summary + Details against the existing combined 128-row/64-KiB budget;
   individual rows remain bounded and sanitized, never silently clipped authority.
   If the rich budget is exceeded, show the complete existing plain review before
@@ -126,8 +130,6 @@ verification failed. No other binding may be presented as installed from that ru
   foreign state: correct only an observed supported case; unknown stays refused.
 - Retrying a partial install blindly can repeat native mutations: surface the
   recorded per-binding results and existing recovery workflow instead.
-
-## Verification and delivery
 
 ## Critique, round 2: independent review corrections
 

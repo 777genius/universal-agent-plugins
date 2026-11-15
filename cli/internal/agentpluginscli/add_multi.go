@@ -86,12 +86,13 @@ func runAddMany(ctx context.Context, cmd *cobra.Command, app App, opts *options,
 }
 
 func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
+	stop := startCommandActivity(cmd, app, opts, "Checking selected agents")
 	_, detected, err := preflightAddTargets(ctx, app, opts, source, targets, clients)
+	stop()
 	if err != nil {
 		return err
 	}
-	writeProgress(app, opts.format, "Resolving and validating one Agent Plugin package for every selected target...")
-	loaded, err := app.loadPackageFor(ctx, source, withDetectedClients(app.addResolutionRequest(source, targets), detected))
+	loaded, err := loadAddPackageFor(ctx, cmd, app, opts, source, withDetectedClients(app.addResolutionRequest(source, targets), detected), "Resolving and validating one Agent Plugin package for every selected target...")
 	if err != nil {
 		return err
 	}

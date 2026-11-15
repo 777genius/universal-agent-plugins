@@ -224,7 +224,7 @@ func validProjectListMetadata(entry map[string]any, project string) bool {
 }
 
 func projectSuppression(entry map[string]any) (bool, bool) {
-	if len(entry) != 6 || entry["version"] != "unknown" || entry["scope"] != "project" || entry["enabled"] != false || entry["installPath"] != "" || !boundedProjectStrings(entry["notes"], true) {
+	if entry["version"] != "unknown" || entry["scope"] != "project" || entry["enabled"] != false || entry["installPath"] != "" || !boundedProjectStrings(entry["notes"], true) {
 		return false, false
 	}
 	trust := false
@@ -232,6 +232,21 @@ func projectSuppression(entry map[string]any) (bool, bool) {
 		if note == claudeUntrustedProjectNote {
 			trust = true
 		}
+	}
+	if details, exists := entry["noteDetails"]; exists {
+		// Claude Code 2.1.325 adds typed metadata to this exact trust sentinel.
+		// It is not activation evidence; require the corresponding native note
+		// and preserve refusal for unknown, contradictory or unbounded shapes.
+		values, ok := details.([]any)
+		if len(entry) != 7 || !trust || len(entry["notes"].([]any)) != 1 || !ok || len(values) != 1 {
+			return false, false
+		}
+		detail, ok := values[0].(map[string]any)
+		if !ok || len(detail) != 1 || detail["type"] != "project-scope-suppressed-untrusted" {
+			return false, false
+		}
+	} else if len(entry) != 6 {
+		return false, false
 	}
 	return trust, true
 }
