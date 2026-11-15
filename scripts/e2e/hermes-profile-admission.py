@@ -3,6 +3,7 @@
 import base64
 import hashlib
 from contextlib import ExitStack, contextmanager
+from concurrent.futures import ThreadPoolExecutor
 import json
 import math
 import os
@@ -22,6 +23,7 @@ HERE = Path(__file__).resolve().parent
 BASE = runpy.run_path(str(HERE / "hermes-noauth-tool-call.py"), run_name="hermes_admission_helpers")
 require, bounded, sha = (BASE[name] for name in ("require", "bounded", "sha"))
 import native_client_project_artifacts as artifacts
+import hermes_passive_history_control as history_control
 
 LIMIT = 1 << 20
 EVIDENCE_CLOSED = False
@@ -214,9 +216,10 @@ def verify_inventory_directory(path, before, descriptor, held, parent=None, *, d
     if stable_named_entry(linked) == stable_named_entry(before) and stable_file(opened) == stable_file(held):
         return
     fields = STABLE_FIELDS + (("st_birthtime_ns", "st_file_attributes", "st_reparse_tag") if artifacts.WINDOWS else ())
-    details = []
+    details, changed = [], {}
     for domain, previous, current in (("path", before, linked), ("handle", held, opened)):
         names = [name for name in fields if getattr(previous, name, None) != getattr(current, name, None)]
+        changed[domain] = names
         if names:
             details.append(domain + ":" + ",".join(names))
     if artifacts.WINDOWS and type(diagnostic) is tuple and len(diagnostic) == 2:
@@ -237,7 +240,9 @@ def verify_inventory_directory(path, before, descriptor, held, parent=None, *, d
                     details.append("attributes:" + encoded)
             except (TypeError, ValueError, UnicodeError):
                 pass  # A diagnostic cannot replace the original refusal.
-    raise RuntimeError("inventory directory changed (" + ";".join(details) + ")")
+    error = RuntimeError("inventory directory changed (" + ";".join(details) + ")")
+    error._uap_directory_change = changed
+    raise error
 
 
 # Same official archive members already admitted by the Antigravity/Devin
@@ -572,14 +577,74 @@ def retain_source_refusal(error, evidence, expected, nonce, stage):
         pass  # First O_EXCL record only; unavailable diagnostics never mask refusal.
 
 
+def payload_hash_member(path, name, info, parent, deadline, *, capture, capture_source, sentinels):
+    """Read one original member; the caller retains every ancestor until join."""
+    require(time.monotonic() < deadline, "payload scan deadline")
+    linked = lambda: path.lstat() if parent is None else os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+    descriptor = (artifacts.open_member(path) if parent is None else
+                  os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent))
+    try:
+        held = os.fstat(descriptor)
+        require(same_opened_capture(info, held) and (info.st_uid, info.st_gid) == (held.st_uid, held.st_gid), "payload file changed at open")
+        digest, size, tail = hashlib.sha256(), 0, b""
+        captured = bytearray() if capture else None
+        require(captured is None or (info.st_nlink == 1 and info.st_size <= LIMIT), "bounded source document required")
+        overlap = max((len(value) for value in sentinels), default=1) - 1
+        while size <= info.st_size:
+            require(time.monotonic() < deadline, "payload scan deadline")
+            # A readable, held empty source file has no byte to request;
+            # Windows leases may lock a byte beyond EOF. Keep both final fences.
+            if capture_source and info.st_size == 0:
+                break
+            try:
+                chunk = os.read(descriptor, min(LIMIT, info.st_size + 1 - size))
+            except OSError as error:
+                if capture_source:
+                    source_payload_refusal(error, name, {"type": "file", "identity": stable_named_entry(info)}, bytes_read=size)
+                raise
+            require(time.monotonic() < deadline, "payload scan deadline")
+            if not chunk:
+                break
+            size += len(chunk)
+            digest.update(chunk)
+            if captured is not None:
+                captured.extend(chunk)
+            require(not any(value in tail + chunk for value in sentinels), "original User sentinel copied into selected runtime")
+            tail = (tail + chunk)[-overlap:] if overlap else b""
+        require(size == info.st_size and stable_file(os.fstat(descriptor)) == stable_file(held)
+                and stable_file(linked()) == stable_file(info), "payload file changed during capture")
+        return digest.hexdigest(), bytes(captured) if captured is not None else None
+    finally:
+        os.close(descriptor)
+
+
 def payload_hash_files(root, records, expected, deadline, source=None):
     """Rejoin the metadata-first authority through held ancestors before bytes."""
-    children, documents = {}, {}
+    children, documents, pending = {}, {}, []
     requested = tuple(source.get("documents", ())) if source is not None else ()
     require(len(requested) <= 2 and len(set(requested)) == len(requested), "bounded source documents required")
     for name in records:
         if name != ".":
             children.setdefault(Path(name).parent.as_posix(), set()).add(name)
+
+    def drain(failure=None):
+        nonlocal pending
+        work, pending = pending, []
+        completed = []
+        for name, future in work:
+            try:
+                completed.append((name, future.result()))
+            except BaseException as error:
+                if failure is None:
+                    failure = error
+        if failure is not None:
+            raise failure
+        require(time.monotonic() < deadline, "payload scan deadline")
+        # Workers never publish into either proof map. Preserve original order.
+        for name, (digest, captured) in completed:
+            records[name]["sha256"] = digest
+            if captured is not None:
+                documents[name] = captured
 
     def visit(path, parent=None):
         require(time.monotonic() < deadline, "payload scan deadline")
@@ -592,6 +657,7 @@ def payload_hash_files(root, records, expected, deadline, source=None):
         if record["type"] == "link":
             return
         if record["type"] == "directory":
+            drain()  # No work may borrow an ancestor across recursive entry.
             descriptor = open_inventory_directory(path, parent)
             try:
                 held = os.fstat(descriptor)
@@ -604,50 +670,33 @@ def payload_hash_files(root, records, expected, deadline, source=None):
                         require(member in children.get(name, set()), "payload new member before hashing")
                         names.add(member)
                         visit(path / entry.name, None if artifacts.WINDOWS else descriptor)
+                drain()
                 require(names == children.get(name, set()), "payload member disappeared before hashing")
                 verify_inventory_directory(path, info, descriptor, held, parent)
+            except BaseException as error:
+                try:
+                    drain(error)
+                finally:
+                    # No timeout/cancel shortcut: even failed reads settle before
+                    # this directory or any of its retained ancestors can close.
+                    pool.shutdown(wait=True)
             finally:
                 os.close(descriptor)
             return
-        descriptor = (artifacts.open_member(path) if parent is None else
-                      os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent))
-        try:
-            held = os.fstat(descriptor)
-            require(same_opened_capture(info, held) and (info.st_uid, info.st_gid) == (held.st_uid, held.st_gid), "payload file changed at open")
-            digest, size, tail = hashlib.sha256(), 0, b""
-            captured = bytearray() if name in requested else None
-            require(captured is None or (info.st_nlink == 1 and info.st_size <= LIMIT), "bounded source document required")
-            sentinels = source["sentinels"] if source is not None and source_project(name, source) is not None else ()
-            overlap = max((len(value) for value in sentinels), default=1) - 1
-            while size <= info.st_size:
-                require(time.monotonic() < deadline, "payload scan deadline")
-                # A readable, held empty source file has no byte to request;
-                # Windows leases may lock a byte beyond EOF. Keep both final fences.
-                if source is not None and info.st_size == 0:
-                    break
-                try:
-                    chunk = os.read(descriptor, min(LIMIT, info.st_size + 1 - size))
-                except OSError as error:
-                    if source is not None:
-                        source_payload_refusal(error, name, record, bytes_read=size)
-                    raise
-                if not chunk:
-                    break
-                size += len(chunk)
-                digest.update(chunk)
-                if captured is not None:
-                    captured.extend(chunk)
-                require(not any(value in tail + chunk for value in sentinels), "original User sentinel copied into selected runtime")
-                tail = (tail + chunk)[-overlap:] if overlap else b""
-            require(size == info.st_size and stable_file(os.fstat(descriptor)) == stable_file(held)
-                    and stable_file(linked()) == stable_file(info), "payload file changed during capture")
-            record["sha256"] = digest.hexdigest()
-            if captured is not None:
-                documents[name] = bytes(captured)
-        finally:
-            os.close(descriptor)
+        # Do not submit beyond an already observed failure or the original deadline.
+        if any(future.done() and future.exception() is not None for _, future in pending):
+            drain()
+        require(time.monotonic() < deadline, "payload scan deadline")
+        sentinels = tuple(source["sentinels"]) if source is not None and source_project(name, source) is not None else ()
+        pending.append((name, pool.submit(payload_hash_member, path, name, info, parent, deadline,
+                                        capture=name in requested, capture_source=source is not None, sentinels=sentinels)))
+        if len(pending) == 4:
+            drain()
 
-    visit(root)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        visit(root)
+        drain()
+    require(time.monotonic() < deadline, "payload scan deadline")
     require(set(documents) == set(requested), "captured source document missing")
     return documents
 
@@ -3634,29 +3683,40 @@ def source_user_failure_readout(line, result, proof, value, context):
 def observer_boundary_readout(line, context, distribution):
     """Extend an already valid line with closed enum facts, never replace it."""
     try:
-        require(type(distribution) is str and distribution == "bundled", "public boundary distribution differs")
+        require(type(distribution) is str and distribution in ("source", "bundled"), "public boundary distribution differs")
         context = native_failure_context(context)
         require(context["primary_family_settled"] is True and context["observer"] is not None,
                 "public boundary lacks primary settlement")
         observer = context["observer"]
-        if "boundary" not in observer:
+        if not any(name in observer for name in ("boundary", "directory_change", "history_control")):
             return line
-        detail = observer_boundary_detail(observer["boundary"])
         value = public_json(line.encode("ascii"))
+        original = {name: observer[name] for name in ("phase", "reason", "exception_kind", "command", "caller")}
+        if "public_bootstrap" in observer:
+            original["public_bootstrap"] = observer["public_bootstrap"]
         require(value["source_head"] == context["source_head"]
                 and value["nonce_sha256"] == hashlib.sha256(context["nonce"].encode("ascii")).hexdigest()
                 and value["admission_qualified"] is False and value["native_qualified"] is False
                 and value["native_failure"]["primary_family_settled"] is True
-                and value["native_failure"]["observer"] == {name: observer[name]
-                    for name in ("phase", "reason", "exception_kind", "command", "caller")},
+                and value["native_failure"]["observer"] == original,
                 "public boundary original readout differs")
-        value["native_failure"]["observer"]["boundary"] = detail
-        extended = json.dumps(value, sort_keys=True, separators=(",", ":"))
-        require(len(extended.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1 <= 2048,
-                "public boundary readout bound")
-        return extended
     except BaseException:
         return line
+    for name, validator in (("boundary", observer_boundary_detail), ("directory_change", observer_directory_detail),
+                            ("history_control", observer_history_detail)):
+        if name not in observer:
+            continue
+        try:
+            require(name == "directory_change" or distribution == "bundled", "public detail distribution differs")
+            projected = dict(value["native_failure"]["observer"], **{name: validator(observer[name])})
+            candidate = dict(value, native_failure=dict(value["native_failure"], observer=projected))
+            extended = json.dumps(candidate, sort_keys=True, separators=(",", ":"))
+            require(len(extended.encode("ascii")) + len("HERMES_ADMISSION_FAILURE ") + 1 <= 2048,
+                    "public boundary readout bound")
+            value, line = candidate, extended
+        except BaseException:
+            pass
+    return line
 
 
 def admission_failure_readout(body, source_refusal, *, native_failure=None, source_delta=None):
@@ -3815,6 +3875,64 @@ OBSERVER_PUBLIC_COMMAND = next(code for code in observe_public.__code__.co_const
 OBSERVER_BOUNDARY_POPEN, OBSERVER_BOUNDARY_EVENT = subprocess.Popen, bounded.__globals__["threading"].Event
 OBSERVER_BOUNDARY_STDIO = {"public-stdio-a": "a", "public-stdio-b": "b",
                          "public-stdio-restart-a": "a", "public-stdio-repaired-a": "a"}
+OBSERVER_DIRECTORY_ORIGIN = (verify_inventory_directory, verify_inventory_directory.__code__)
+OBSERVER_HISTORY_CLASS, OBSERVER_HISTORY_COMMANDS = history_control.HistoryControl, history_control.COMMANDS
+OBSERVER_HISTORY_ORIGINS = tuple((name, function, function.__code__, function.__globals__) for name, function in (
+    ("run_control", history_control.run_control),
+    *((name, vars(OBSERVER_HISTORY_CLASS)[name]) for name in (
+        "__init__ hold join snapshot private_snapshot phase prepare uap run_command authorities bootstrap history "
+        "native_producer profile observer forge preserved exercise active_control close_processes close_handles complete report").split())))
+OBSERVER_HISTORY_CLEANUP = ("close_processes", "close_handles", "complete")
+OBSERVER_HISTORY_REQUIRE = (require, require.__code__)
+
+
+def observer_history_codes():
+    """Retained fixed imports exist in both child and parent before capture."""
+    if require is not OBSERVER_HISTORY_REQUIRE[0] or require.__code__ is not OBSERVER_HISTORY_REQUIRE[1]:
+        raise RuntimeError("history diagnostic original guard differs")
+    require(type(history_control) is type(sys) and vars(history_control).get("HistoryControl") is OBSERVER_HISTORY_CLASS
+            and vars(history_control).get("COMMANDS") is OBSERVER_HISTORY_COMMANDS, "history diagnostic module differs")
+    for name, original, code, namespace in OBSERVER_HISTORY_ORIGINS:
+        owner = vars(history_control) if name == "run_control" else vars(OBSERVER_HISTORY_CLASS)
+        require(owner.get(name) is original and original.__code__ is code and original.__globals__ is namespace,
+                "history diagnostic original method differs")
+    return {name: code for name, _, code, _ in OBSERVER_HISTORY_ORIGINS}
+
+
+def observer_history_detail(value):
+    require(type(value) is dict and set(value) == {"stage", "method", "line", "command"}
+            and type(value["stage"]) is str and value["stage"] in ("control", "cleanup")
+            and type(value["method"]) is str and type(value["line"]) is int, "closed history diagnostic required")
+    code = observer_history_codes().get(value["method"])
+    require(code is not None and value["line"] in {line for _, _, line in code.co_lines()}, "history diagnostic source differs")
+    require(value["command"] is None or type(value["command"]) is str and value["command"] in OBSERVER_HISTORY_COMMANDS,
+            "history diagnostic command differs")
+    require((value["method"] not in OBSERVER_HISTORY_CLEANUP or value["stage"] == "cleanup")
+            and (value["stage"] != "cleanup" or value["command"] is None), "history diagnostic cleanup differs")
+    return dict(value)
+
+
+def observer_history_origin(error, phase):
+    observer_history_codes()
+    require(type(phase) is str and phase == "public", "history diagnostic phase differs")
+    trace, entry, method, line, command, cleanup = error.__traceback__, False, None, None, None, False
+    for _ in range(256):
+        if trace is None:
+            break
+        frame = trace.tb_frame
+        for name, _, code, namespace in OBSERVER_HISTORY_ORIGINS:
+            if frame.f_code is code and frame.f_globals is namespace:
+                entry |= name == "run_control"
+                method, line = name, trace.tb_lineno
+                cleanup |= name in OBSERVER_HISTORY_CLEANUP
+                if name == "run_command":
+                    label = frame.f_locals.get("label")
+                    command = label if type(label) is str and label in OBSERVER_HISTORY_COMMANDS else None
+                break
+        trace = trace.tb_next
+    require(trace is None and entry and method is not None, "history diagnostic lacks original entry")
+    return observer_history_detail(dict(stage="cleanup" if cleanup else "control", method=method, line=line,
+                                        command=None if cleanup else command))
 
 
 def observer_boundary_origin(error, phase):
@@ -3936,6 +4054,18 @@ def observer_spawn_boundary(values):
     return None
 
 
+def observer_directory_detail(value):
+    """Only already-computed field names, never metadata values or paths."""
+    fields = STABLE_FIELDS + (("st_birthtime_ns", "st_file_attributes", "st_reparse_tag") if artifacts.WINDOWS else ())
+    require(type(value) is dict and set(value) == {"path", "handle"}, "closed directory diagnostic domains required")
+    for names in value.values():
+        require(type(names) is list and len(names) <= len(fields)
+                and all(type(name) is str and name in fields for name in names)
+                and names == [field for field in fields if field in names], "closed directory diagnostic fields required")
+    require(value["path"] or value["handle"], "directory diagnostic has no mismatch")
+    return {domain: list(names) for domain, names in value.items()}
+
+
 def observer_failure_document(body, nonce, source):
     require(type(body) is bytes and 0 < len(body) <= 2048, "observer diagnostic bound")
     value = census_document(body)
@@ -3944,6 +4074,10 @@ def observer_failure_document(body, nonce, source):
         fields.add("public_bootstrap")
     if type(value) is dict and "boundary" in value:
         fields.add("boundary")
+    if type(value) is dict and "directory_change" in value:
+        fields.add("directory_change")
+    if type(value) is dict and "history_control" in value:
+        fields.add("history_control")
     require(type(value) is dict and set(value) == fields, "closed observer diagnostic")
     require(type(value["schema_version"]) is int and value["schema_version"] == 1
             and value["measurement_only"] is True and value["admission_qualified"] is False
@@ -3979,13 +4113,24 @@ def observer_failure_document(body, nonce, source):
                     and caller["line"] == code.co_firstlineno + 9 and sys.platform == "win32"
                     and value["command"] in OBSERVER_BOUNDARY_STDIO),
                 "public boundary caller differs")
+    if "directory_change" in value:
+        observer_directory_detail(value["directory_change"])
+        original, original_code = OBSERVER_DIRECTORY_ORIGIN
+        require("public_bootstrap" not in value and "boundary" not in value
+                and value["phase"] in ("profiles", "public") and value["exception_kind"] == "RuntimeError"
+                and caller is not None and code is original_code
+                and verify_inventory_directory is original and original.__code__ is original_code
+                and original.__globals__ is globals(), "directory diagnostic caller differs")
+    if "history_control" in value:
+        observer_history_detail(value["history_control"])
+        require(value["phase"] == "public", "history diagnostic observer phase differs")
     require(body == json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n", "observer diagnostic is not one canonical record")
     return value
 
 
 def observer_failure_projection(value, nonce, source):
     """Validate the original refusal first; optional detail cannot erase it."""
-    original = {key: item for key, item in value.items() if key != "boundary"} if type(value) is dict else value
+    original = {key: item for key, item in value.items() if key not in {"boundary", "directory_change", "history_control"}} if type(value) is dict else value
     body = json.dumps(original, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
     observer_failure_document(body, nonce, source)
     try:
@@ -3993,6 +4138,14 @@ def observer_failure_projection(value, nonce, source):
         observer_failure_document(body, nonce, source)
         return value
     except BaseException:
+        if type(value) is dict and "history_control" in value:
+            retained = {key: item for key, item in value.items() if key != "history_control"}
+            try:
+                body = json.dumps(retained, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+                observer_failure_document(body, nonce, source)
+                return retained
+            except BaseException:
+                pass
         return original
 
 
@@ -4032,6 +4185,14 @@ def emit_observer_failure(error, phase):
             body = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
             observer_failure_document(body, nonce, source)
         if "public_bootstrap" not in value:
+            if type(error) is RuntimeError and "_uap_directory_change" in error.__dict__:
+                try:
+                    extended = dict(value, directory_change=observer_directory_detail(error.__dict__["_uap_directory_change"]))
+                    candidate = json.dumps(extended, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+                    observer_failure_document(candidate, nonce, source)
+                    body = candidate
+                except BaseException:
+                    pass
             try:
                 boundary, deadline = observer_boundary_origin(error, phase)
                 extended = dict(value, boundary=observer_boundary_detail(boundary))
@@ -4041,6 +4202,14 @@ def emit_observer_failure(error, phase):
                 body = candidate
             except BaseException:
                 pass
+        try:
+            detail = observer_history_origin(error, phase)
+            extended = dict(observer_failure_document(body, nonce, source), history_control=detail)
+            candidate = json.dumps(extended, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+            observer_failure_document(candidate, nonce, source)
+            body = candidate
+        except BaseException:
+            pass
         sys.stdout.buffer.write(body)
         sys.stdout.buffer.flush()
     except BaseException:

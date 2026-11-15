@@ -1189,6 +1189,89 @@ class ObserverFailureDiagnosticContracts(unittest.TestCase):
                     nonce=self.nonce, source_head=self.source, phase="public", reason="uncaught-observer-exception",
                     exception_kind="RuntimeError", command=None, caller=dict(function=code.co_name, function_line=code.co_firstlineno, line=line))
 
+    def directory_refusal(self):
+        with tempfile.TemporaryDirectory(prefix="private-directory-cause-") as temporary:
+            root = Path(temporary).resolve()
+            descriptor = CASE["open_inventory_directory"](root)
+            try:
+                before, held = root.lstat(), os.fstat(descriptor)
+                os.utime(root, ns=(before.st_atime_ns, before.st_mtime_ns + 2_000_000_000))
+                try:
+                    CASE["verify_inventory_directory"](root, before, descriptor, held)
+                except RuntimeError as error:
+                    return error
+                self.fail("changed directory was admitted")
+            finally:
+                os.close(descriptor)
+
+    def emit_directory_refusal(self, error):
+        import io
+        import sys
+        stream = io.BytesIO()
+        with mock.patch.object(sys, "stdout", SimpleNamespace(buffer=stream)), \
+                mock.patch.dict(os.environ, {"HERMES_CALL_NONCE": self.nonce, "HERMES_PROFILE_SOURCE_HEAD": self.source}), \
+                mock.patch.object(os, "open", side_effect=AssertionError("diagnostic open")), \
+                mock.patch.object(os, "read", side_effect=AssertionError("diagnostic read")), \
+                mock.patch.object(os, "fstat", side_effect=AssertionError("diagnostic restat")), \
+                mock.patch.object(Path, "lstat", side_effect=AssertionError("diagnostic restat")):
+            CASE["emit_observer_failure"](error, "public")
+        return stream.getvalue()
+
+    def test_directory_change_retains_only_fields_through_original_descriptor_and_failure(self):
+        error = self.directory_refusal()
+        message, original_args = str(error), error.args
+        body = self.emit_directory_refusal(error)
+        value = CASE["observer_failure_document"](body, self.nonce, self.source)
+        self.assertIn("st_mtime_ns", value["directory_change"]["path"])
+        self.assertIn("st_mtime_ns", value["directory_change"]["handle"])
+        self.assertEqual(value["caller"]["function"], "verify_inventory_directory")
+        self.assertIsNone(value["command"])
+        self.assertIs(value["admission_qualified"], False)
+        self.assertLessEqual(len(body), 2048)
+        self.assertNotIn(b"private-directory-cause", body)
+        self.assertNotIn(message.encode(), body)
+        self.assertEqual(error.args, original_args)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "original-observer"
+            with path.open("x+b") as stream:
+                original = os.fstat(stream.fileno())
+                stream.write(body); stream.flush()
+                self.assertIsNone(CASE["read_observer_failure"](stream.fileno(), original, self.nonce, self.source, primary_settled=False))
+                self.assertEqual(CASE["read_observer_failure"](stream.fileno(), original, self.nonce, self.source, primary_settled=True), value)
+        context = dict(source_head=self.source, nonce=self.nonce, cleanup_phase="public-family",
+                       primary_family_settled=True, observer_exit=1, observer=value)
+        self.assertEqual(CASE["native_failure_context"](context), context)
+
+    def test_directory_detail_is_optional_closed_and_bound_to_the_original_verifier(self):
+        import copy
+        error = self.directory_refusal()
+        body = self.emit_directory_refusal(error)
+        valid = CASE["observer_failure_document"](body, self.nonce, self.source)
+        original = {key: item for key, item in valid.items() if key != "directory_change"}
+        malformed = [{"path": [], "handle": []}, {"path": ["/private"], "handle": []},
+                     {"path": ["st_mtime_ns", "st_mtime_ns"], "handle": []},
+                     {"path": ["st_mtime_ns", "st_dev"], "handle": []},
+                     {"path": [1], "handle": []}, {"path": "st_mtime_ns", "handle": []},
+                     {"path": [], "handle": ["st_mtime_ns"], "values": [123456789]}]
+        for detail in malformed:
+            with self.subTest(detail=detail):
+                changed = dict(valid, directory_change=detail)
+                with self.assertRaises(RuntimeError):
+                    CASE["observer_failure_document"](self.encoded(changed), self.nonce, self.source)
+                self.assertEqual(CASE["observer_failure_projection"](changed, self.nonce, self.source), original)
+                error._uap_directory_change = detail
+                self.assertEqual(json.loads(self.emit_directory_refusal(error)), original)
+        for key, value in (("phase", "profile-probes"), ("exception_kind", "ValueError"),
+                           ("caller", self.record()["caller"])):
+            changed = copy.deepcopy(valid); changed[key] = value
+            with self.subTest(key=key), self.assertRaises(RuntimeError):
+                CASE["observer_failure_document"](self.encoded(changed), self.nonce, self.source)
+        try:
+            raise RuntimeError("private foreign error")
+        except RuntimeError as foreign:
+            foreign._uap_directory_change = valid["directory_change"]
+            self.assertNotIn("directory_change", json.loads(self.emit_directory_refusal(foreign)))
+
     def test_child_emits_only_closed_source_joined_failure_and_reraises_same_exception(self):
         import io
         import sys
@@ -6638,6 +6721,382 @@ class PassiveHistoryIntegrationContracts(unittest.TestCase):
             self.assertFalse(complete(home, proof))
             (home / "public-history").rmdir()
             self.assertTrue(complete(home, proof))
+
+
+class ParallelPayloadHashContracts(unittest.TestCase):
+    def controlled_capture(self, effect):
+        import errno
+        import hashlib
+        import threading
+        import time
+        from contextlib import contextmanager
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            bodies = {f"f{index}": bytes([65 + index]) * 8192 for index in range(8)}
+            for name, body in bodies.items():
+                (root / name).write_bytes(body)
+                (root / name).chmod(0o600)
+            state = {"owner": None, "root_fd": None, "started": 0, "peak": 0,
+                     "open_files": set(), "fds": set(), "threads": set(), "published": [],
+                     "early_close": [], "changed": False}
+            lock, release, entered, failed, expired, done = (threading.Lock(), threading.Event(), threading.Event(),
+                                                          threading.Event(), threading.Event(), threading.Event())
+            barrier, result = threading.Barrier(4), {}
+            first_failure = OSError(errno.EIO, "inert original read failure")
+            real_read, real_close, real_stat, real_lstat, real_scandir = os.read, os.close, os.stat, os.lstat, os.scandir
+            open_directory = CASE["open_inventory_directory"]
+            globals_ = CASE["payload_hash_files"].__globals__
+            deadline = time.monotonic() + 15
+
+            class ProofRow(dict):
+                def __setitem__(row, key, value):
+                    if key == "sha256":
+                        self.assertEqual(threading.get_ident(), state["owner"])
+                        state["published"].append(row["name"])
+                    super().__setitem__(key, value)
+
+            records = {".": {"type": "directory", "identity": CASE["stable_named_entry"](root.lstat())}}
+            for name in bodies:
+                records[name] = ProofRow(name=name, type="file", identity=CASE["stable_named_entry"]((root / name).lstat()))
+            original = {name: dict(row) for name, row in records.items()}
+            expected = CASE["directory_identity"](root)
+
+            def opened(path, parent=None):
+                descriptor = open_directory(path, parent)
+                self.assertEqual(path, root)
+                state["root_fd"] = descriptor
+                state["fds"].add(descriptor)
+                return descriptor
+
+            def closed(descriptor):
+                with lock:
+                    if descriptor == state["root_fd"] and state["open_files"]:
+                        state["early_close"].append(tuple(state["open_files"]))
+                    state["open_files"].discard(descriptor)
+                return real_close(descriptor)
+
+            def read(descriptor, count):
+                with lock:
+                    first = descriptor not in state["open_files"]
+                    if first:
+                        state["open_files"].add(descriptor)
+                        state["fds"].add(descriptor)
+                        state["threads"].add(threading.current_thread())
+                        state["started"] += 1
+                        ordinal = state["started"]
+                        state["peak"] = max(state["peak"], len(state["open_files"]))
+                if first and ordinal <= (1 if effect == "metadata" else 4):
+                    os.fstat(state["root_fd"])
+                    if effect != "metadata":
+                        barrier.wait(timeout=5)
+                    entered.set()
+                    if effect == "read-error" and ordinal == 1:
+                        failed.set()
+                        raise first_failure
+                    if not release.wait(timeout=5):
+                        raise AssertionError("test did not release the genuine held read")
+                    os.fstat(state["root_fd"])
+                return real_read(descriptor, count)
+
+            def mutate_metadata(path, options):
+                selected = str(path) == str(root / "f1") or str(path) == "f1" and options.get("dir_fd") is not None
+                if effect == "metadata" and selected and not state["changed"]:
+                    self.assertTrue(entered.wait(timeout=5))
+                    state["changed"] = True
+                    (root / "f1").chmod(0o400)
+                    failed.set()
+
+            def stated(path, *args, **kwargs):
+                mutate_metadata(path, kwargs)
+                return real_stat(path, *args, **kwargs)
+
+            def lstated(path, *args, **kwargs):
+                mutate_metadata(path, kwargs)
+                return real_lstat(path, *args, **kwargs)
+
+            @contextmanager
+            def scanned(path):
+                with real_scandir(path) as entries:
+                    yield iter(sorted(entries, key=lambda entry: entry.name))
+
+            def capture():
+                state["owner"] = threading.get_ident()
+                try:
+                    result["documents"] = CASE["payload_hash_files"](
+                        root, records, expected, deadline,
+                        source={"documents": ("f0",), "sentinels": (), "projects": ()})
+                except BaseException as error:
+                    result["error"] = error
+                finally:
+                    done.set()
+
+            clock = SimpleNamespace(monotonic=lambda: deadline + 1 if expired.is_set() else time.monotonic())
+            with mock.patch.dict(globals_, {"open_inventory_directory": opened, "time": clock}), \
+                 mock.patch.object(os, "read", side_effect=read), mock.patch.object(os, "close", side_effect=closed), \
+                 mock.patch.object(os, "stat", side_effect=stated), mock.patch.object(os, "lstat", side_effect=lstated), \
+                 mock.patch.object(os, "scandir", side_effect=scanned):
+                thread = threading.Thread(target=capture)
+                thread.start()
+                try:
+                    self.assertTrue(entered.wait(timeout=5))
+                    if effect in ("read-error", "metadata"):
+                        self.assertTrue(failed.wait(timeout=5))
+                    if effect == "deadline":
+                        expired.set()
+                    self.assertFalse(done.wait(timeout=0.05))
+                    self.assertFalse(state["published"])
+                    os.fstat(state["root_fd"])
+                finally:
+                    release.set()
+                    thread.join(timeout=10)
+                self.assertFalse(thread.is_alive())
+            self.assertFalse(state["early_close"])
+            self.assertFalse(state["open_files"])
+            self.assertTrue(all(not worker.is_alive() for worker in state["threads"]))
+            for descriptor in state["fds"]:
+                with self.assertRaises(OSError):
+                    os.fstat(descriptor)
+            self.assertLessEqual(state["peak"], 4)
+            if effect == "success":
+                self.assertNotIn("error", result)
+                self.assertEqual(state["peak"], 4)
+                self.assertEqual(state["started"], 8)
+                self.assertEqual(state["published"], sorted(bodies))
+                self.assertEqual(result["documents"], {"f0": bodies["f0"]})
+                for name, body in bodies.items():
+                    self.assertEqual(records[name], {**original[name], "sha256": hashlib.sha256(body).hexdigest()})
+            else:
+                self.assertEqual(records, original)
+                self.assertNotIn("documents", result)
+                self.assertEqual(state["started"], 1 if effect == "metadata" else 4)
+                if effect == "read-error":
+                    self.assertIs(result["error"], first_failure)
+                else:
+                    self.assertIsInstance(result["error"], RuntimeError)
+                    self.assertIn("metadata changed" if effect == "metadata" else "payload scan deadline", str(result["error"]))
+            (root / "f1").chmod(0o600)
+
+    def test_four_real_reads_hold_parent_and_publish_in_caller_order(self):
+        self.controlled_capture("success")
+
+    def test_read_failure_settles_window_before_parent_close(self):
+        self.controlled_capture("read-error")
+
+    def test_original_deadline_settles_reads_without_another_window(self):
+        self.controlled_capture("deadline")
+
+    def test_metadata_refusal_settles_pending_read_before_parent_close(self):
+        self.controlled_capture("metadata")
+
+    def test_original_deadline_is_rechecked_after_join_and_shutdown(self):
+        import threading
+        import time
+        globals_ = CASE["payload_hash_files"].__globals__
+        member, executor = globals_["payload_hash_member"], globals_["ThreadPoolExecutor"]
+        for phase in ("join", "shutdown"):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                (root / "file").write_bytes(b"complete original bytes")
+                expected = CASE["directory_identity"](root)
+                records = {name: {"type": kind, "identity": CASE["stable_named_entry"](path.lstat())}
+                           for name, kind, path in ((".", "directory", root), ("file", "file", root / "file"))}
+                expired, deadlines, pools = threading.Event(), [], []
+                deadline = time.monotonic() + 10
+                clock = SimpleNamespace(monotonic=lambda: deadline + 1 if expired.is_set() else time.monotonic())
+
+                def read(path, name, info, parent, original_deadline, **options):
+                    deadlines.append(original_deadline)
+                    result = member(path, name, info, parent, original_deadline, **options)
+                    if phase == "join":
+                        expired.set()
+                    return result
+
+                class SettledPool(executor):
+                    def __init__(self, **options):
+                        super().__init__(**options)
+                        pools.append(self)
+
+                    def shutdown(self, *args, **kwargs):
+                        super().shutdown(*args, **kwargs)
+                        if phase == "shutdown":
+                            expired.set()
+
+                with mock.patch.dict(globals_, {"payload_hash_member": read, "ThreadPoolExecutor": SettledPool, "time": clock}), \
+                     self.assertRaisesRegex(RuntimeError, "payload scan deadline"):
+                    CASE["payload_hash_files"](root, records, expected, deadline)
+                self.assertEqual(deadlines, [deadline])
+                self.assertTrue(all(not thread.is_alive() for pool in pools for thread in pool._threads))
+                if phase == "join":
+                    self.assertNotIn("sha256", records["file"])
+
+
+class ImportedHistoryDiagnosticContracts(unittest.TestCase):
+    nonce, source = "a" * 64, "b" * 40
+    encoded = ObserverFailureDiagnosticContracts.encoded
+    emit = ObserverFailureDiagnosticContracts.emit_directory_refusal
+
+    def failure(self, effect, label=None):
+        import time
+        import hermes_passive_history_control as control
+        with tempfile.TemporaryDirectory(prefix="private-history-cause-") as temporary:
+            outer, code = Path(temporary).resolve() / "outer", Path(temporary).resolve() / "code"
+            outer.mkdir(); code.mkdir()
+            opened, denied, calls = [], [], []
+            original_open, original_close = CASE["open_inventory_directory"], os.close
+            helpers = {name: CASE[name] for name in control.HELPERS}
+            def open_directory(*args):
+                descriptor = original_open(*args); opened.append(descriptor)
+                return descriptor
+            def snapshot(*_args):
+                if effect == "directory":
+                    descriptor = original_open(outer)
+                    try:
+                        before, held = outer.lstat(), os.fstat(descriptor)
+                        os.utime(outer, ns=(before.st_atime_ns, before.st_mtime_ns + 2_000_000_000))
+                        CASE["verify_inventory_directory"](outer, before, descriptor, held)
+                    finally:
+                        original_close(descriptor)
+                return {"public-history": {}}, {}
+            def capture(*_args, **_kwargs):
+                calls.append("capture")
+                if effect == "label" and len(calls) == 1:
+                    nested = SimpleNamespace(snapshot=lambda: ({}, {}), current={}, records=[],
+                                             api=SimpleNamespace(), project=outer, env={}, evidence=outer,
+                                             deadline=time.monotonic() + 5)
+                    return control.HistoryControl.run_command(nested, label, [])
+                raise RuntimeError("PRIVATE command failure /outside/config")
+            def close(descriptor):
+                if effect == "cleanup" and not denied:
+                    denied.append(descriptor)
+                    raise OSError("PRIVATE close failure")
+                original_close(descriptor)
+            helpers.update(open_inventory_directory=open_directory, public_snapshot=snapshot,
+                           public_runtime_pins=lambda *_args, **_kwargs: None,
+                           public_spawn_install=lambda *_args: (CASE["directory_identity"](code), "c" * 64))
+            env = dict(HERMES_CALL_NONCE=self.nonce, HERMES_BIN="inert-hermes", HERMES_PROFILE_PYTHON="inert-python",
+                       HERMES_PROFILE_RUNTIME_ROOT=str(code))
+            with mock.patch.object(control, "capture_command", capture), mock.patch.object(os, "close", close):
+                try:
+                    control.run_control(helpers, outer=outer, baseline={}, probes={}, env=env, pins={},
+                                        deadline=time.monotonic() + 180)
+                except RuntimeError as error:
+                    result = error
+                else:
+                    self.fail("original imported control should refuse")
+            for descriptor in denied:
+                original_close(descriptor)
+            for descriptor in opened:
+                with self.assertRaises(OSError): os.fstat(descriptor)
+            return result
+
+    def test_original_entry_reports_current_command_and_separates_cleanup(self):
+        for effect, method, stage, command in (("command", "run_command", "control", "git"),
+                                               ("cleanup", "close_handles", "cleanup", None)):
+            with self.subTest(effect=effect):
+                error = self.failure(effect)
+                original = error.args
+                value = CASE["observer_failure_document"](self.emit(error), self.nonce, self.source)
+                detail = value["history_control"]
+                self.assertEqual((detail["method"], detail["stage"], detail["command"]), (method, stage, command))
+                self.assertIn(detail["line"], {line for _, _, line in CASE["observer_history_codes"]()[method].co_lines()})
+                self.assertIsNone(value["command"])
+                self.assertIs(value["admission_qualified"], False)
+                self.assertEqual(error.args, original)
+                self.assertNotIn("PRIVATE", self.encoded(value).decode())
+
+    def test_foreign_replaced_code_and_poisoned_labels_grant_no_diagnostic_authority(self):
+        from types import FunctionType
+        import hermes_passive_history_control as control
+        error = self.failure("command")
+        original = control.HistoryControl.run_command
+        clone = FunctionType(original.__code__.replace(), original.__globals__)
+        self.assertEqual(clone.__code__, original.__code__)
+        self.assertIsNot(clone.__code__, original.__code__)
+        with mock.patch.object(control.HistoryControl, "run_command", clone):
+            self.assertNotIn("history_control", json.loads(self.emit(error)))
+        code = original.__code__
+        try:
+            original.__code__ = code.replace()
+            self.assertNotIn("history_control", json.loads(self.emit(error)))
+        finally:
+            original.__code__ = code
+        label = "inspect"  # A foreign local with the right spelling is not a command frame.
+        try:
+            raise RuntimeError(label)
+        except RuntimeError as foreign:
+            self.assertNotIn("history_control", json.loads(self.emit(foreign)))
+        class Poison:
+            def __eq__(self, _other): raise AssertionError("poison equality")
+            def __hash__(self): raise AssertionError("poison hash")
+            def __str__(self): raise AssertionError("poison text")
+        for label in ("PRIVATE /outside", True, Poison()):
+            error = self.failure("label", label)
+            value = CASE["observer_failure_document"](self.emit(error), self.nonce, self.source)
+            self.assertEqual(value["history_control"]["method"], "run_command")
+            self.assertIsNone(value["history_control"]["command"])
+            self.assertNotIn("PRIVATE", self.encoded(value).decode())
+
+    def test_directory_and_imported_locations_reach_the_committed_failure_line(self):
+        error = self.failure("directory")
+        original_args = error.args
+        observer = CASE["observer_failure_document"](self.emit(error), self.nonce, self.source)
+        self.assertEqual(observer["caller"]["function"], "verify_inventory_directory")
+        self.assertEqual(observer["history_control"]["method"], "snapshot")
+        self.assertEqual(observer["history_control"]["command"], "git")
+        self.assertIn("st_mtime_ns", observer["directory_change"]["path"])
+        proof = FailureReadoutContracts().native_proof()
+        proof["native_failure"]["observer"] = observer
+        body = self.encoded(proof)
+        stage, namespace = CASE["stage_evidence"], CASE["stage_evidence"].__globals__
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence = Path(temporary).resolve()
+            (evidence / "profile-admission.json").write_bytes(body)
+            lines, reads, ordinary = [], [], CASE["ordinary_bytes"]
+            def read(path, *args, **kwargs):
+                self.assertFalse((evidence / "upload").exists())
+                reads.append(path.name)
+                return ordinary(path, *args, **kwargs)
+            def emit(line, *, flush):
+                self.assertTrue(flush and namespace["EVIDENCE_CLOSED"])
+                self.assertTrue((evidence / "upload").is_dir())
+                lines.append(line)
+            with mock.patch.dict(namespace, ordinary_bytes=read, print=emit, EVIDENCE_CLOSED=False):
+                stage(evidence)
+            self.assertEqual(reads, ["profile-admission.json"])
+            self.assertEqual((evidence / "upload/profile-admission.json").read_bytes(), body)
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[1].startswith("HERMES_ADMISSION_FAILURE "))
+        report = json.loads(lines[1].removeprefix("HERMES_ADMISSION_FAILURE "))
+        for name in ("directory_change", "history_control"):
+            self.assertEqual(report["native_failure"]["observer"][name], observer[name])
+        self.assertIs(report["admission_qualified"], False); self.assertIs(report["native_qualified"], False)
+        self.assertLessEqual(len(lines[1].encode("ascii")) + 1, 2048)
+        for private in (self.nonce, "PRIVATE", "private-history-cause", "inventory directory changed", ".py"):
+            self.assertNotIn(private, lines[1])
+        self.assertEqual(error.args, original_args)
+
+    def test_malformed_or_oversize_history_preserves_the_previous_directory_failure(self):
+        observer = json.loads(self.emit(self.failure("directory")))
+        retained = {key: value for key, value in observer.items() if key != "history_control"}
+        proof = FailureReadoutContracts().native_proof()
+        proof["native_failure"]["observer"] = retained
+        original = CASE["admission_failure_readout"](self.encoded(proof), None)
+        self.assertIn("directory_change", json.loads(original)["native_failure"]["observer"])
+        invalid = [dict(observer["history_control"], **{key: value}) for key, value in (
+            ("method", "unknown"), ("method", "PRIVATE" * 4096), ("line", True), ("line", -1),
+            ("stage", "cleanup"), ("command", "PRIVATE"), ("path", "/outside/config"))]
+        for detail in invalid:
+            with self.subTest(key=tuple(detail)):
+                changed = dict(observer, history_control=detail)
+                with self.assertRaises(RuntimeError):
+                    CASE["observer_failure_document"](self.encoded(changed), self.nonce, self.source)
+                self.assertEqual(CASE["observer_failure_projection"](changed, self.nonce, self.source), retained)
+                proof["native_failure"]["observer"] = changed
+                with mock.patch.object(os, "read", side_effect=AssertionError("new read")), \
+                        mock.patch.object(Path, "read_bytes", side_effect=AssertionError("new body")), \
+                        mock.patch.object(Path, "lstat", side_effect=AssertionError("new stat")):
+                    self.assertEqual(CASE["admission_failure_readout"](self.encoded(proof), None), original)
 
 
 if __name__ == "__main__":

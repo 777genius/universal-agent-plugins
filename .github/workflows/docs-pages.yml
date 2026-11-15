@@ -3,6 +3,12 @@ name: Pages
 on:
   push:
     branches: [main, master]
+    paths:
+      - 'website/production-source.json'
+      - '.github/workflows/docs-pages.yml'
+      - 'scripts/production_site_source.py'
+      - 'landing/scripts/check-published-capabilities.mjs'
+      - 'landing/scripts/check-production-routes.mjs'
   workflow_dispatch:
     inputs:
       github_hosted:

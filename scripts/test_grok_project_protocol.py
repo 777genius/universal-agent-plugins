@@ -1485,5 +1485,207 @@ os._exit(0)
         self.assertIn('exit "$grok_tracer_status"', driver)
 
 
+class InertProcessTraceContracts(unittest.TestCase):
+    @staticmethod
+    def python_argv(fixture, mode="direct"):
+        target = "direct-owned" if mode == "direct" else "read-only-attempt"
+        return ["/usr/bin/python3", "-I", "-B", "-c", trace_case.CHILD_CODE, str(fixture / target), mode]
+
+    @staticmethod
+    def exec_line(pid, argv, environment):
+        return f"{pid} execve({json.dumps(argv[0])}, {json.dumps(argv)}, {json.dumps(environment)}) = 0"
+
+    def direct_lines(self, argv, parent=11263, child=11264):
+        fixture = str(Path(argv[-2]).parent)
+        environment = [f"HOME={fixture}", "PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C"]
+        # Exact line forms retained from the hosted strace6.8 original. Only
+        # fixture paths/PIDs are parameters; this is not a new tracer execution.
+        return [
+            self.exec_line(parent, argv, environment),
+            f"{parent} clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=0x7f8bb11cf350) = {child}",
+            f"{parent} wait4({child},  <unfinished ...>",
+            self.exec_line(child, ["/usr/bin/true"], ["PATH=/usr/bin:/bin"]),
+            f"{child} exit_group(0)                     = ?",
+            f"{child} +++ exited with 0 +++",
+            f"{parent} <... wait4 resumed>[{{WIFEXITED(s) && WEXITSTATUS(s) == 0}}], 0, NULL) = {child}",
+            f"{parent} --- SIGCHLD {{si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid={child}, si_uid=1001, si_status=0, si_utime=0, si_stime=0}} ---",
+            f"{parent} exit_group(0)                     = ?",
+            f"{parent} +++ exited with 0 +++",
+        ]
+
+    @staticmethod
+    def encoded(lines):
+        return ("\n".join(lines) + "\n").encode("ascii")
+
+    def decode(self, lines, argv, payload=None):
+        import time
+        return trace_case.decode_process_trace(self.encoded(lines), argv, payload or argv, time.monotonic() + 2)
+
+    def test_hosted_direct_shape_observes_the_silent_child(self):
+        argv = self.python_argv(Path("/home/runner/work/_temp/grok-inert-tracer-step0/fixture"))
+        lines = self.direct_lines(argv)
+        self.assertEqual(len(self.encoded(lines)), 1540)
+        self.assertEqual(self.decode(lines, argv),
+                         dict(complete=True, processes=2, execs=2, silent_child_execs=1))
+
+    def test_child_events_before_split_clone_return_join_to_that_original_fork(self):
+        argv = self.python_argv(Path("/fixture"))
+        lines = self.direct_lines(argv)
+        prefix = lines[1].split(" = ")[0]
+        split = [lines[0], prefix + " <unfinished ...>", *lines[3:6],
+                 "11263 <... clone resumed> = 11264",
+                 "11263 wait4(11264, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL) = 11264",
+                 *lines[7:]]
+        self.assertEqual(self.decode(split, argv)["silent_child_execs"], 1)
+        with self.assertRaisesRegex(RuntimeError, "^process-trace-refused$"):
+            self.decode([lines[0], *lines[3:6], lines[1], *split[6:]], argv)
+
+    def test_missing_or_foreign_process_events_never_complete(self):
+        argv = self.python_argv(Path("/fixture"))
+        original = self.direct_lines(argv)
+        variants = {
+            "silent-exec-absent": [row for row in original if '11264 execve(' not in row],
+            "child-terminal-absent": [row for row in original if row != "11264 +++ exited with 0 +++"],
+            "root-terminal-absent": original[:-1],
+            "uncreated-child": original[:1] + original[2:],
+            "unmatched-resume": [original[0], original[1], *original[3:]],
+            "unmatched-unfinished": [row for row in original if "<... wait4 resumed>" not in row],
+            "pid-reuse": [*original[:7], original[1], *original[7:]],
+            "event-after-terminal": [*original[:6], original[3], *original[6:]],
+            "detached": [*original[:8], "strace: Process 11264 detached", *original[8:]],
+            "namespace-annotation": [row.replace("11264 ", "11264[2] ", 1) for row in original],
+            "unobserved-network": [original[0], "11263 socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE) = 3", *original[1:]],
+            "clone3": [row.replace(" clone(", " clone3(", 1) for row in original],
+            "execveat": [row.replace(" execve(", " execveat(", 1) for row in original],
+            "foreign-exec": [row.replace('["/usr/bin/true"]', '["/usr/bin/true", "foreign"]') for row in original],
+            "wrong-wait-child": [row.replace(") = 11264", ") = 11265") if "resumed>" in row else row for row in original],
+            "wrong-signal-child": [row.replace("si_pid=11264", "si_pid=11265") for row in original],
+            "nonzero-exit": [row.replace("11264 exit_group(0)", "11264 exit_group(1)") for row in original],
+        }
+        for name, lines in variants.items():
+            with self.subTest(case=name), self.assertRaisesRegex(RuntimeError, "^process-trace-refused$"):
+                self.decode(lines, argv)
+        with self.assertRaisesRegex(RuntimeError, "^process-trace-refused$"):
+            self.decode(original, [*argv[:-1], "different"])
+        initial = ["/usr/bin/bwrap", "--", *argv]
+        before_payload = self.readonly_lines(initial, argv)
+        before_payload[3], before_payload[4] = before_payload[4], before_payload[3]
+        with self.assertRaisesRegex(RuntimeError, "^process-trace-refused$"):
+            self.decode(before_payload, initial, argv)
+
+    def test_exec_strings_and_arrays_require_complete_observed_bytes(self):
+        argv = self.python_argv(Path("/fixture"))
+        original = self.direct_lines(argv)
+        initial = original[0]
+        variants = (
+            initial.replace('["/usr/bin/python3",', '[0x1234,', 1),
+            initial.replace('"direct"],', '"direct"...],', 1),
+            initial.replace('"direct"],', '"direct", ...],', 1),
+            initial.replace('["HOME=/fixture", "PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C"]', "0x7fff"),
+            initial.replace('"/usr/bin/python3"', '"/usr/bin/py\\x74hon3"', 1),
+            initial.replace('"/usr/bin/python3"', '"/usr/bin/py\\164hon3"', 1),
+            initial.replace('"/usr/bin/python3"', '"/usr/bin/python3"...', 1),
+            initial[:-1],
+        )
+        for row in variants:
+            with self.subTest(row=row[:100]), self.assertRaisesRegex(RuntimeError, "^process-trace-refused$"):
+                self.decode([row, *original[1:]], argv)
+        import time
+        for body in (self.encoded(original)[:-1], self.encoded(original) + b"\n",
+                     self.encoded(original).replace(b"11264 execve", b"\xff1264 execve"),
+                     b"x" * (trace_case.LIMITS["trace"] + 1)):
+            with self.subTest(bytes=len(body)), self.assertRaisesRegex(RuntimeError, "^process-trace-refused$"):
+                trace_case.decode_process_trace(body, argv, argv, time.monotonic() + 2)
+
+    def test_original_deadline_still_applies_during_decoding(self):
+        argv = self.python_argv(Path("/fixture"))
+        body = self.encoded(self.direct_lines(argv))
+        with mock.patch.object(trace_case.time, "monotonic", return_value=2):
+            with self.assertRaisesRegex(RuntimeError, "^original-deadline$"):
+                trace_case.decode_process_trace(body, argv, argv, 1)
+        samples = iter([0, 0, 0, 2])
+        with mock.patch.object(trace_case.time, "monotonic", side_effect=lambda: next(samples)):
+            with self.assertRaisesRegex(RuntimeError, "^original-deadline$"):
+                trace_case.decode_process_trace(body, argv, argv, 1)
+
+    def readonly_lines(self, argv, payload):
+        # Synthetic composition of the two observed clone forms. This tests the
+        # decoder/control wiring, not visibility inside a real readonly child.
+        return [
+            self.exec_line(11260, argv, ["PATH=/usr/bin:/bin"]),
+            "11260 wait4(-1, 0x7ffd, WNOHANG, NULL) = -1 ECHILD (No child processes)",
+            "11260 clone(child_stack=NULL, flags=CLONE_NEWNS|CLONE_NEWUTS|CLONE_NEWIPC|CLONE_NEWUSER|CLONE_NEWPID|CLONE_NEWNET|SIGCHLD) = 11263",
+            *self.direct_lines(payload),
+            "11260 wait4(-1, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], WNOHANG, NULL) = 11263",
+            "11260 exit_group(0) = ?",
+            "11260 +++ exited with 0 +++",
+        ]
+
+    def run_controls(self, fault=None):
+        import time
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            fixture = root / "fixture"
+            fixture.mkdir(mode=0o700)
+            (fixture / "original.txt").write_bytes(b"inert original input\n")
+            (fixture / "original.txt").chmod(0o600)
+            receipt = dict(versions=[], runs=[], complete_process_family_admitted=False, native_qualification=False)
+            labels = []
+
+            def collect(label, argv, *args, **kwargs):
+                labels.append(label)
+                streams = {name: dict(body=bytearray(), eof=True) for name in ("stdout", "stderr")}
+                row = dict(label=label, argv=argv, exit=0, error=None, wait_observed=True, streams=streams)
+                if label not in ("direct", "readonly"):
+                    return row
+                payload = argv if label == "direct" else self.python_argv(fixture, "readonly")
+                lines = self.direct_lines(argv) if label == "direct" else self.readonly_lines(argv, payload)
+                if fault == label:
+                    lines = [line for line in lines if "11264 +++ exited" not in line]
+                streams["trace"] = dict(body=bytearray(self.encoded(lines)), eof=True)
+                streams["stdout"]["body"] = bytearray(b"STEP0_DIRECT_DONE\n" if label == "direct"
+                                                     else b"STEP0_READONLY_EROFS\n")
+                if fault == "loopback" and label == "readonly":
+                    row["exit"] = 1
+                    streams["stdout"]["body"] = bytearray()
+                    streams["stderr"]["body"] = bytearray(b"bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\n")
+                    streams["trace"]["body"] = bytearray(b"unparsed original network diagnostic\n")
+                return row
+
+            error = None
+            with mock.patch.object(trace_case, "collect", side_effect=collect), \
+                    mock.patch.object(trace_case.os, "readlink", side_effect=lambda path: {
+                        "/bin": "usr/bin", "/lib": "usr/lib", "/lib64": "usr/lib64"}[path]):
+                try:
+                    trace_case.controls(receipt, root, fixture, {}, time.monotonic() + 2)
+                except RuntimeError as caught:
+                    error = str(caught)
+            self.assertFalse(receipt["complete_process_family_admitted"])
+            self.assertFalse(receipt["native_qualification"])
+            return receipt, labels, error
+
+    def test_actual_control_path_requires_decoder_for_both_captures(self):
+        receipt, labels, error = self.run_controls()
+        self.assertIsNone(error)
+        self.assertEqual(labels, ["strace-version", "bwrap-version", "direct", "readonly"])
+        self.assertEqual([row["process_observation"] for row in receipt["runs"]], [
+            dict(complete=True, processes=2, execs=2, silent_child_execs=1),
+            dict(complete=True, processes=3, execs=3, silent_child_execs=1)])
+        for label in ("direct", "readonly"):
+            with self.subTest(control=label):
+                receipt, labels, error = self.run_controls(label)
+                self.assertEqual(error, label + "-process-trace-refused")
+                self.assertEqual(labels[-1], label)
+                self.assertNotIn("process_observation", receipt["runs"][-1])
+                self.assertEqual(receipt["runs"][-1]["streams"]["trace"]["file"], label + ".trace")
+
+    def test_original_loopback_failure_precedes_decoder_admission(self):
+        receipt, labels, error = self.run_controls("loopback")
+        self.assertEqual(labels[-1], "readonly")
+        self.assertEqual(error, "readonly-bwrap-loopback-permission")
+        self.assertTrue(receipt["runs"][0]["process_observation"]["complete"])
+        self.assertNotIn("process_observation", receipt["runs"][1])
+
+
 if __name__ == "__main__":
     unittest.main()

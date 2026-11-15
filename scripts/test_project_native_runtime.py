@@ -135,18 +135,18 @@ class RuntimeTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parent.parent /
                     ".github/workflows/project-native-runtime.yml").read_text()
         contracts, native = workflow.split("\n  native:\n", 1)
-        prepare = "      - name: Prepare pinned Go for selected Copilot inert process contracts\n"
-        execute = "      - name: Verify selected Copilot inert process contracts before native execution\n"
+        prepare = "      - name: Prepare pinned Go for selected Copilot or Kiro inert process contracts\n"
+        execute = "      - name: Verify selected Copilot or Kiro inert process contracts before native execution\n"
         selection, toolchain = contracts.split(prepare, 1)
         toolchain, gate = toolchain.split(execute, 1)
-        condition = "        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') }}\n"
+        condition = "        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'kiro') }}\n"
         self.assertIn("        id: selection\n", selection)
         self.assertTrue(toolchain.startswith(condition))
         self.assertTrue(gate.startswith(condition))
         self.assertIn("actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", toolchain)
         self.assertIn("          go-version: '1.26.10'\n          cache: false\n", toolchain)
         self.assertEqual(gate.removeprefix(condition).strip(),
-                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime)'")
+                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestKiroCycle)'")
         self.assertIn("    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n", contracts)
         self.assertNotIn("AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED", contracts)
         self.assertIn("    needs: contracts\n", native)

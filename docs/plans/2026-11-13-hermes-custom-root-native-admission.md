@@ -3619,3 +3619,84 @@ policy nor the shared receipt oracle is changed.
 These corrections have source review only. The 16 existing mechanics methods
 remain, with one additional parent-preparation control; hosted execution and
 the complete bundled lifecycle are still required.
+
+
+### Bounded parallel payload hashing (2026-11-15; native timing pending)
+
+The original Linux source failure from run `43650863143`, job `132633925997`,
+retained 20 completed command records but no final User-control record. Its
+original User capture contains 100,254 entries. The unchanged runtime buckets
+contain 2,873,833,690 logical regular-file bytes. The existing command order and
+pre/post capture sites establish at least 36 complete captures before the last
+retained command status, hence at least 103,458,012,840 logical bytes hashed.
+This is a source-derived work lower bound, not measured disk I/O or proof that
+hashing alone caused the 720.023-second family timeout; individual command
+elapsed times were not retained.
+
+The capture still performs the complete metadata-first walk, link and hardlink
+closure, and fresh byte hashes at every existing boundary. Only regular-file
+reads within one held directory use a fixed window of at most four futures.
+Each worker retains its original file checks and returns its digest and bounded
+requested document; only the caller publishes those values, in original order.
+Every started read settles before recursion, ancestor closure, success or
+failure. Observed failure or deadline expiry stops further submissions. No
+future timeout/cancellation substitutes for settlement, and no cross-capture
+content or metadata cache is introduced. The original deadline is checked after
+reads, after joins and after pool shutdown. The observer's independent parent
+still owns the 720-second family stop; parent pre/post captures retain their
+existing cooperative 120-second scan bound.
+
+The affected profile suite ran 206 tests (199 passed, seven existing platform
+skips), including four genuine file/FD concurrency, error, metadata and deadline
+controls. The final five focused controls, including the added post-join and
+post-shutdown deadline case, passed without skips. These are inert contracts;
+actual native timing and full source admission remain unqualified until a new
+original hosted result proves them. No native limits or refusal predicates were
+relaxed.
+
+### Directory-change failure detail (2026-11-15; original cause still open)
+
+The subsequent bundled macOS job `132655311783` on source `718509b9` passed
+the passive controls and refused at `verify_inventory_directory`, line 240.
+That site means a temporal metadata mismatch in the named or held directory;
+the original closed failure record did not retain which fields differed.
+Its null command label does not identify the lifecycle stage, because the
+imported history control has a separate command function. No pathname, field
+value or remedy is inferred from this failure.
+
+The same refusal now attaches only the already-computed `path` and `handle`
+field-name lists. The existing observer record validates their finite names,
+order, uniqueness and exact loaded verifier origin, within its unchanged
+2,048-byte bound. The original RuntimeError, message and predicates remain.
+Malformed or foreign optional detail falls back to the original refusal;
+neither projection nor publication performs another filesystem read. Eight
+observer diagnostic controls and eleven existing boundary/directory controls
+passed with no skips, including a real held-directory timestamp mutation and
+the original descriptor/settlement requirement. Native acceptance remains
+pending; this diagnostic does not admit a directory change.
+
+### Imported history-control failure location (2026-11-15)
+
+The Windows bundled original `132655311785` on source `718509b9` reached
+`observe_public`'s call to the imported `run_control`, then retained only that
+outer caller and a null command. The original does not identify the failing
+imported method, command or predicate. It does not justify a native allowance.
+
+The observer now loads the existing history-control module before capture in
+both parent and child, retaining its fixed entrypoint and method code objects
+and globals. An optional `history_control` field reports only the deepest
+matching method, an actual source line, the active original `run_command` label
+from the fixed command set, and `control` or `cleanup`. The original entrypoint
+must occur in the bounded traceback. Cleanup frames suppress any prior command
+label; completed report prefixes never supply current-failure authority. No
+exception text, filenames, profile values or additional reads are included.
+
+Both this location and the existing directory-change field names now survive
+the final closed `HERMES_ADMISSION_FAILURE` projection. Each addition retains
+the original 2,048-byte limit and false qualification flags. Malformed or
+oversized history detail preserves the already valid directory refusal and
+original line. The four new inert controls cover genuine imported execution,
+cleanup failure, replaced code and poisoned labels, and committed publication
+with both details. All 26 affected observer/readout controls passed without
+skips. No native guard, process ownership, cleanup decision or lifecycle claim
+changes; the genuine native cause and acceptance remain pending.

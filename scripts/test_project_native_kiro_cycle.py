@@ -292,7 +292,38 @@ class KiroAuthenticatedCycleContracts(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/project-native-runtime.yml").read_text()
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.kiro_auth_research == true && matrix.client == 'kiro' && secrets.KIRO_API_KEY || ''", workflow)
         self.assertIn("if not allow_kiro_auth:", workflow)
+        compiled_selection = "contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'kiro')"
+        self.assertEqual(workflow.count("if: ${{ " + compiled_selection + " }}"), 2)
         self.assertIn("go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestKiroCycle)'", workflow)
+
+    def test_manual_authenticated_selection_does_not_duplicate_other_clients(self):
+        import io
+        import os
+        import subprocess
+        import tempfile
+        import textwrap
+        from contextlib import redirect_stdout
+        from unittest.mock import patch
+
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/project-native-runtime.yml").read_text()
+        block = workflow.split("      - name: Select implemented native tests", 1)[1]
+        script = textwrap.dedent(block.split("python3 - <<'PYTHON'\n", 1)[1].split("\n          PYTHON", 1)[0])
+        rows = [{"client": name, "phase": "runtime-attempt"} for name in ("cline", "kiro", "windsurf")]
+        for event, optin, selected in (("pull_request", "false", [rows[0], rows[2]]),
+                                       ("pull_request", "true", [rows[0], rows[2]]),
+                                       ("workflow_run", "true", [rows[0], rows[2]]),
+                                       ("workflow_dispatch", "false", [rows[0], rows[2]]),
+                                       ("workflow_dispatch", "true", [rows[1]])):
+            with self.subTest(event=event, optin=optin), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / "output"
+                env = {"UAP_WORKFLOW_EVENT": event, "UAP_KIRO_AUTH_RESEARCH": optin, "GITHUB_OUTPUT": str(output)}
+                with patch.dict(os.environ, env, clear=True), redirect_stdout(io.StringIO()), \
+                        patch.object(subprocess, "check_output", return_value=json.dumps({"include": rows})) as source:
+                    exec(compile(script, "owned-project-native-selection", "exec"), {})
+                source.assert_called_once_with(["python3", "scripts/project_native_runtime.py", "--matrix"], text=True)
+                values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+                self.assertEqual(values, {"matrix": json.dumps({"include": selected}, separators=(",", ":")),
+                                          "count": str(len(selected))})
 
 
 if __name__ == "__main__":

@@ -304,22 +304,206 @@ def readonly_arguments(fixture):
     return argv
 
 
+TRACE_STRING = r'"(?:[\x20-\x21\x23-\x5b\x5d-\x7e]|\\["\\n])*"'
+TRACE_ARRAY = r'\[(?:' + TRACE_STRING + r'(?:, ' + TRACE_STRING + r')*)?\]'
+TRACE_PID = r'[1-9][0-9]{0,9}'
+TRACE_CLONE_FLAGS = (
+    r'CLONE_CHILD_CLEARTID\|CLONE_CHILD_SETTID\|SIGCHLD, child_tidptr=0x[0-9a-f]+',
+    r'CLONE_NEWNS\|CLONE_NEWUTS\|CLONE_NEWIPC\|CLONE_NEWUSER\|CLONE_NEWPID\|CLONE_NEWNET\|SIGCHLD',
+)
+
+
+def trace_require(value):
+    require(value, 'process-trace-refused')
+
+
+def trace_pid(value):
+    trace_require(re.fullmatch(TRACE_PID, value) is not None and int(value) < 1 << 31)
+    return int(value)
+
+
+def trace_process(state, pid, position=None):
+    if pid not in state['processes']:
+        trace_require(len(state['processes']) < 64)
+        state['processes'][pid] = dict(first=None, pending=None, exiting=None, terminal=None)
+    process = state['processes'][pid]
+    if position is not None and process['first'] is None:
+        process['first'] = position
+    return process
+
+
+def trace_join(process, body, position):
+    resumed = re.fullmatch(r'<\.\.\. (execve|clone|wait4|exit_group) resumed>(.*)', body)
+    if resumed:
+        pending = process['pending']
+        trace_require(pending is not None and pending[0] == resumed[1])
+        process['pending'] = None
+        return pending[1] + resumed[2], pending[2]
+    trace_require(process['pending'] is None)
+    if body.endswith('<unfinished ...>'):
+        prefix = body[:-len('<unfinished ...>')]
+        call = re.match(r'(execve|clone|wait4|exit_group)\(', prefix)
+        trace_require(call is not None)
+        process['pending'] = (call[1], prefix, position)
+        return None
+    return body, position
+
+
+def trace_exec(body):
+    match = re.fullmatch(r'execve\((' + TRACE_STRING + r'), (' + TRACE_ARRAY + r'), ('
+                         + TRACE_ARRAY + r')\)[ \t]+= 0', body)
+    trace_require(match is not None)
+    # Only the observed ASCII C-string escape subset reaches JSON decoding.
+    # Pointers, abbreviation markers, partial strings and other escapes refuse.
+    path, argv, environment = (json.loads(item) for item in match.groups())
+    trace_require(0 < len(argv) <= 128 and len(environment) <= 128
+                  and all(len(item) <= 4096 for item in [path, *argv, *environment])
+                  and path == argv[0])
+    return tuple(argv)
+
+
+def trace_wait(state, pid, body, position):
+    success = re.fullmatch(r'wait4\((-1|' + TRACE_PID
+        + r'),[ \t]+\[\{WIFEXITED\(s\) && WEXITSTATUS\(s\) == 0\}\], (0|WNOHANG), NULL\)'
+        + r'[ \t]+= (' + TRACE_PID + r')', body)
+    if success:
+        child = trace_pid(success[3])
+        trace_require(success[1] == '-1' or trace_pid(success[1]) == child)
+        state['waits'].append((pid, child, position))
+        return
+    trace_require(re.fullmatch(r'wait4\(-1, 0x[0-9a-f]+, WNOHANG, NULL\)'
+                              r'[ \t]+= -1 ECHILD \(No child processes\)', body) is not None)
+
+
+def trace_event(state, pid, body, started, position):
+    process = state['processes'][pid]
+    if body == '+++ exited with 0 +++':
+        trace_require(process['exiting'] is not None)
+        process['terminal'] = position
+        return
+    trace_require(process['exiting'] is None)
+    if body.startswith('execve('):
+        state['execs'].append((pid, started, trace_exec(body)))
+        return
+    clone = re.fullmatch(r'clone\(child_stack=NULL, flags=(?:'
+                         + '|'.join(TRACE_CLONE_FLAGS) + r')\)[ \t]+= (' + TRACE_PID + r')', body)
+    if clone:
+        child = trace_pid(clone[1])
+        trace_require(child != pid and child not in state['forks'])
+        state['forks'][child] = (pid, started, position)
+        trace_process(state, child)
+        return
+    if body.startswith('wait4('):
+        trace_wait(state, pid, body, position)
+        return
+    if re.fullmatch(r'exit_group\(0\)[ \t]+= \?', body):
+        process['exiting'] = position
+        return
+    signal_row = re.fullmatch(r'--- SIGCHLD \{si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=('
+        + TRACE_PID + r'), si_uid=([0-9]{1,10}), si_status=0, si_utime=([0-9]{1,10}),'
+        + r' si_stime=([0-9]{1,10})\} ---', body)
+    trace_require(signal_row is not None and all(int(value) < 1 << 32 for value in signal_row.groups()[1:]))
+    state['signals'].append((pid, trace_pid(signal_row[1]), position))
+
+
+def trace_family(state, root_pid, deadline):
+    processes, forks = state['processes'], state['forks']
+    trace_require(root_pid not in forks and set(forks) == set(processes) - {root_pid})
+    for pid, process in processes.items():
+        remaining(deadline)
+        trace_require(process['first'] is not None and process['terminal'] is not None
+                      and process['pending'] is None)
+        if pid != root_pid:
+            parent, started, finished = forks[pid]
+            trace_require(started < process['first'] and parent in processes
+                          and processes[parent]['first'] <= started < finished + 1
+                          and finished < processes[parent]['terminal'])
+        ancestry = {pid}
+        while pid != root_pid:
+            trace_require(pid in forks)
+            pid = forks[pid][0]
+            trace_require(pid not in ancestry)
+            ancestry.add(pid)
+    waited = set()
+    for pid, child, position in state['waits']:
+        trace_require(child in forks and forks[child][0] == pid
+                      and processes[child]['terminal'] < position and child not in waited)
+        waited.add(child)
+    for pid, child, position in state['signals']:
+        trace_require(child in forks and forks[child][0] == pid and processes[child]['terminal'] < position)
+
+
+def decode_process_trace(body, initial_argv, payload_argv, deadline):
+    """Decode the observed inert subset; unknown records never establish completeness."""
+    remaining(deadline)
+    trace_require(type(body) is bytes and 0 < len(body) <= LIMITS['trace']
+                  and body.endswith(b'\n') and b'\r' not in body)
+    try:
+        lines = body.decode('ascii').split('\n')[:-1]
+    except UnicodeDecodeError:
+        raise RuntimeError('process-trace-refused') from None
+    trace_require(0 < len(lines) <= 2048)
+    state = dict(processes={}, forks={}, execs=[], waits=[], signals=[])
+    root_pid = None
+    for position, line in enumerate(lines):
+        remaining(deadline)
+        row = re.fullmatch(r'(' + TRACE_PID + r')[ \t]+(.+)', line)
+        trace_require(row is not None)
+        pid = trace_pid(row[1])
+        root_pid = pid if root_pid is None else root_pid
+        process = trace_process(state, pid, position)
+        trace_require(process['terminal'] is None)
+        joined = trace_join(process, row[2], position)
+        if joined is not None:
+            trace_event(state, pid, joined[0], joined[1], position)
+    trace_family(state, root_pid, deadline)
+    initial, payload, silent = tuple(initial_argv), tuple(payload_argv), ('/usr/bin/true',)
+    expected = {initial, payload, silent}
+    trace_require(len(state['execs']) == len(expected)
+                  and {row[2] for row in state['execs']} == expected)
+    initial_row = next(row for row in state['execs'] if row[2] == initial)
+    payload_row = next(row for row in state['execs'] if row[2] == payload)
+    silent_row = next(row for row in state['execs'] if row[2] == silent)
+    trace_require(initial_row[:2] == (root_pid, 0)
+                  and (initial == payload or payload_row[0] != root_pid)
+                  and silent_row[0] in state['forks']
+                  and state['forks'][silent_row[0]][0] == payload_row[0]
+                  and payload_row[1] < state['forks'][silent_row[0]][1]
+                  and payload_row[1] < silent_row[1]
+                  and any(row[:2] == (payload_row[0], silent_row[0]) for row in state['waits']))
+    remaining(deadline)
+    return dict(complete=True, processes=len(state['processes']), execs=len(state['execs']), silent_child_execs=1)
+
+
+def observe_inert_trace(row, body, initial_argv, payload_argv, deadline):
+    try:
+        row['process_observation'] = decode_process_trace(body, initial_argv, payload_argv, deadline)
+    except RuntimeError as error:
+        if str(error) == 'process-trace-refused':
+            raise RuntimeError(row['label'] + '-process-trace-refused') from error
+        raise
+
+
 def controls(receipt, root, fixture, env, deadline):
     for label, binary in (('strace-version', TOOLS[0]), ('bwrap-version', TOOLS[1])):
         row = collect(label, [binary, '--version'], root, fixture, env, deadline)
         record_streams(row, root, version=True)
         receipt['versions'].append(row)
         require(completed(row), 'version-refused')
-    direct = collect('direct', ['/usr/bin/python3', '-I', '-B', '-c', CHILD_CODE,
-                                str(fixture / 'direct-owned'), 'direct'], root, fixture, env, deadline, trace=True)
+    direct_argv = ['/usr/bin/python3', '-I', '-B', '-c', CHILD_CODE, str(fixture / 'direct-owned'), 'direct']
+    direct = collect('direct', direct_argv, root, fixture, env, deadline, trace=True)
     direct_body = bytes(direct['streams'].get('stdout', {}).get('body', b''))
+    direct_trace = bytes(direct['streams'].get('trace', {}).get('body', b''))
     record_streams(direct, root)
     receipt['runs'].append(direct)
     require(completed(direct) and direct_body == b'STEP0_DIRECT_DONE\n'
             and direct['streams']['trace']['bytes'] > 0, 'direct-tracer-refused')
+    observe_inert_trace(direct, direct_trace, direct_argv, direct_argv, deadline)
     before = fixture_snapshot(fixture)
-    readonly = collect('readonly', readonly_arguments(fixture), root, fixture, env, deadline, trace=True)
+    readonly_argv = readonly_arguments(fixture)
+    readonly = collect('readonly', readonly_argv, root, fixture, env, deadline, trace=True)
     readonly_body = bytes(readonly['streams'].get('stdout', {}).get('body', b''))
+    readonly_trace = bytes(readonly['streams'].get('trace', {}).get('body', b''))
     refusal_reason = readonly_failure_reason(readonly)
     record_streams(readonly, root)
     receipt['runs'].append(readonly)
@@ -327,6 +511,8 @@ def controls(receipt, root, fixture, env, deadline):
     require(completed(readonly) and readonly_body == b'STEP0_READONLY_EROFS\n'
             and readonly['streams']['trace']['bytes'] > 0 and receipt['readonly_fixture_after'] == before,
             refusal_reason)
+    payload_argv = ['/usr/bin/python3', '-I', '-B', '-c', CHILD_CODE, str(fixture / 'read-only-attempt'), 'readonly']
+    observe_inert_trace(readonly, readonly_trace, readonly_argv, payload_argv, deadline)
 
 
 def final_tool_facts(receipt, held, deadline):
