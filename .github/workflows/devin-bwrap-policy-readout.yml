@@ -1,0 +1,43 @@
+name: Devin Bubblewrap policy readout
+on:
+  push:
+    branches: [diagnostics/devin-bwrap-policy-readout-20261115]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-policy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          ref: ${{ github.sha }}
+      - name: Bind fixed diagnostic source and unchanged bounded process owner
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_REF: ${{ github.ref }}
+        run: |
+          python3 - <<'PYTHON'
+          import os, subprocess
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True, timeout=10).strip()
+          assert os.environ['EXPECTED_REF'] == 'refs/heads/diagnostics/devin-bwrap-policy-readout-20261115'
+          assert git('rev-parse', 'HEAD') == os.environ['EXPECTED_SHA']
+          assert git('rev-list', '--parents', '-n', '1', 'HEAD').split()[1:] == ['0707f181de4fd9832bace4563093eddfce3fdbc4']
+          assert git('diff-tree', '--no-commit-id', '--name-status', '-r', 'HEAD').splitlines() == [
+              'A\t.github/workflows/devin-bwrap-policy-readout.yml', 'A\tscripts/read-devin-bwrap-policy.py']
+          assert git('hash-object', 'scripts/native_client_research.py') == '746a931dec5b17f2be76cfd3dd4c4acbda1168e0'
+          assert git('status', '--porcelain', '--untracked-files=normal') == ''
+          PYTHON
+      - name: Refresh authenticated Ubuntu package indexes without installing or changing policy
+        timeout-minutes: 2
+        run: |
+          sudo apt-get -o APT::Get::AllowUnauthenticated=false -o Acquire::AllowInsecureRepositories=false -o Acquire::AllowDowngradeToInsecureRepositories=false update
+      - name: Read pinned Noble package and bounded current host policy facts
+        timeout-minutes: 3
+        run: python3 scripts/read-devin-bwrap-policy.py
