@@ -45,7 +45,7 @@ func TestFilterableCompactViewportPTY(t *testing.T) {
 						if strings.Contains(view, "select at least") || strings.Contains(view, "invalid terminal selection") {
 							initialIssue = "validation was displayed before a submit"
 						}
-						if !strings.Contains(view, "> [ ] Skill-00") || strings.Contains(view, "END-MARKER") || strings.Count(view, "Skill-") > 8 {
+						if !strings.Contains(view, "> [ ] 1. Skill-00") || strings.Contains(view, "END-MARKER") || strings.Count(view, "Skill-") > 8 {
 							initialIssue = "cursor, clipping, or bounded viewport failed"
 						}
 						phase = 1

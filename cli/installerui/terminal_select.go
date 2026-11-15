@@ -16,7 +16,12 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 	ids := append([]string(nil), req.Defaults...)
 	choices := make([]huh.Option[string], len(req.Options))
 	for i, option := range req.Options {
-		choices[i] = huh.NewOption(option.Label, option.ID)
+		label := option.Label
+		if req.Filterable {
+			// Huh toggles by display key, so clipped labels need unique keys.
+			label = fmt.Sprintf("%d. %s", i+1, label)
+		}
+		choices[i] = huh.NewOption(label, option.ID)
 	}
 	validate := func(ids []string) error { _, err := terminalSelection(req, ids); return err }
 	attempted := !req.Filterable
@@ -51,6 +56,7 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 	// Enter while filtering only accepts the query; release the input handoff
 	// gate so the user can continue selecting instead of treating it as submit.
 	err := p.run(ctx, form, formInput{canSubmit: func() bool { return !field.GetFiltering() && validate(ids) == nil }, resize: resize, onKey: func(key tea.KeyPressMsg) {
+		resetEmptyFilterCursor(field)
 		if key.String() == "enter" && !field.GetFiltering() {
 			attempted = true
 		}
@@ -62,6 +68,18 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 		return Selection{}, err
 	}
 	return terminalSelection(req, ids)
+}
+
+// Huh v2.0.3 leaves a negative cursor after Down on an empty filter. Clamp it
+// before the next key restores matches; Up preserves the query and selections.
+func resetEmptyFilterCursor(field *huh.MultiSelect[string]) {
+	if !field.GetFiltering() {
+		return
+	}
+	if _, hovered := field.Hovered(); hovered {
+		return
+	}
+	_, _ = field.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 }
 
 func (p terminalRenderer) initialSize(resize func(int, int) error) error {
