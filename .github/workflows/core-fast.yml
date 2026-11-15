@@ -61,6 +61,13 @@ jobs:
           cache: false
       - name: Verify scoped ownership, project lifecycle and legacy lock safety
         run: go test -p=2 -count=1 -timeout=12m ./install/integrationctl/agentplugins/domain ./install/integrationctl/agentplugins/adapters/statev2 ./install/integrationctl/agentplugins/adapters/nativeconfig ./install/integrationctl/agentplugins/adapters/legacylock ./install/integrationctl/agentplugins/clients/... ./install/integrationctl/agentplugins/providers ./install/integrationctl/agentplugins/planner ./install/integrationctl/agentplugins/installer ./install/integrationctl/agentplugins/environment ./install/integrationctl/agentplugins/usecase ./cli/internal/agentpluginscli ./cli/cmd/agentplugins -run 'Test(TargetContext|Project|PrepareRejectsCrossEnvironmentContext|StateLockSharesPhysicalLegacyFileLock|RemoveLegacyAbortsReconcileWhenLegacyStateReappears|RemoveLegacyDelegatesThenReconcilesStateV2|LegacyControllerRejectsForeignHomeBeforeLegacyEngine|LegacyControllerAcceptsOriginalUserHome|LegacyRemovalRequiresExplicitAllTargetAndReconcilesV2|MigrateStateIsExplicitPlanFirstAndPathRedacted|MigrateStateExplicitlyMigratesAuthoritativeSchemaTwoThroughFour)'
+      - name: Verify Devin User installation and original profile authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p=2 -count=1 -timeout=3m -v \
+            ./install/integrationctl/agentplugins/clients/windsurf ./install/integrationctl/agentplugins/installer ./cli/internal/agentpluginscli \
+            -run '^(TestDevinGlobal.*|TestFacadeDevinGlobal.*|TestUserDevin.*|TestRecordedCascadeMCPReplaysThroughSelectedDevinWithoutMigration|TestRecordedPackageOnlyCascadeDoesNotAdoptSelectedDevinGlobal|TestRecordedMixedOrRetargetedUserReceiptFailsClosed|TestWindsurfRemoveDeletesExactlyManagedObjects)$'
 
   opencode-transition-windows:
     name: opencode-transition-windows
