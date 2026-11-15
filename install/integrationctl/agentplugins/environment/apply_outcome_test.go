@@ -97,10 +97,10 @@ func TestApplySyncRecoveryRequiredStopsRemainingBindings(t *testing.T) {
 
 func TestApplySyncStopMarkerAndResultOutcomesEndTheSync(t *testing.T) {
 	cases := map[string]*scriptedMutator{
-		"marked guard":      {prepareErr: map[string]error{"codex": Stop(errors.New("inputs changed after review"))}},
-		"plan changed":      {applyErr: map[string]error{"codex": installer.ErrPlanChanged}},
-		"recovery outcome":  {results: map[string]installer.Result{"codex": {Outcome: installer.OutcomeRecovery}}},
-		"cancelled outcome": {results: map[string]installer.Result{"codex": {Outcome: installer.OutcomeCancelled}}},
+		"marked guard":     {prepareErr: map[string]error{"codex": Stop(errors.New("inputs changed after review"))}},
+		"plan changed":     {applyErr: map[string]error{"codex": installer.ErrPlanChanged}},
+		"recovery outcome": {results: map[string]installer.Result{"codex": {Outcome: installer.OutcomeRecovery}}},
+		"canceled outcome": {results: map[string]installer.Result{"codex": {Outcome: installer.OutcomeCancelled}}},
 	}
 	for name, mutator := range cases {
 		t.Run(name, func(t *testing.T) {

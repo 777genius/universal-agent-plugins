@@ -280,7 +280,6 @@ func TestIndependentPrepareRefusalStaysWithItsOwnClient(t *testing.T) {
 // activating anything else unsafe, exactly as it does in the serial path.
 type unclosedProbeActivator struct {
 	serialAwareActivator
-	gate chan struct{}
 }
 
 func (a *unclosedProbeActivator) PrepareIndependentActivation(_ context.Context, request domain.ActivationRequest) (func(context.Context) (domain.ActivationOutcome, error), error) {

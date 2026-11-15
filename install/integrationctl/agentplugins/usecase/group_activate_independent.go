@@ -36,7 +36,9 @@ func (session *groupSession) independentGroupActivator() (activator ports.Indepe
 	if len(independentAt) < 2 {
 		return nil, 0, nil, false
 	}
-	order := append(independentAt, serialAt...)
+	order := make([]int, 0, len(session.planned))
+	order = append(order, independentAt...)
+	order = append(order, serialAt...)
 	original := session.planned
 	reordered := make([]plannedGroupTarget, len(original))
 	for position, from := range order {
