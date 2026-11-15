@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import tempfile
 
-FIXTURE_SHA256 = "cd7ba20b2144343645eed1498e4e810f47d4113811ddbfea72790294c2345a5d"
+FIXTURE_SHA256 = "7399eaed15b3eb0981a6be12082dd8825529e896a59ea125b9500a666c21112e"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
 
 
