@@ -56,6 +56,9 @@ def remaining(deadline):
 def command(root, label, argv, deadline, records, limit=LIMIT):
     record, stdout, stderr = run_probe(argv, root, ENV, root, label,
         timeout=min(30, remaining(deadline)), limit=limit, memory_only=True)
+    record.update(stdout_preview=stdout[:512].decode("utf-8", "backslashreplace"),
+                  stderr_preview=stderr[:512].decode("utf-8", "backslashreplace"),
+                  stdout_preview_truncated=len(stdout) > 512, stderr_preview_truncated=len(stderr) > 512)
     records.append(record)
     require(record["error"] is None and record["exit"] == 0, "Bubblewrap policy setup command refused: " + label)
     remaining(deadline)
@@ -340,6 +343,11 @@ def main():
         result = subprocess.run(argv, executable="/proc/self/fd/" + str(binary), pass_fds=tuple(held),
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             cwd="/", env={"PATH": "/usr/bin:/bin", "LANG": "C"}, timeout=10, check=False)
+        if result.returncode != 0 or result.stderr or len(result.stdout) > 4096:
+            print(json.dumps(dict(control="bwrap-control-refused", exit=result.returncode,
+                stderr_preview=result.stderr[:512].decode("utf-8", "backslashreplace"),
+                stdout_preview=result.stdout[:512].decode("utf-8", "backslashreplace"),
+                stderr_bytes=len(result.stderr), stdout_bytes=len(result.stdout)), ensure_ascii=True), file=sys.stderr)
         require(result.returncode == 0 and not result.stderr and len(result.stdout) <= 4096, "bwrap-control-refused")
         child = json.loads(result.stdout)
         check_child(child, expected)
@@ -410,8 +418,7 @@ def prove_runtime(root, deadline, runtime, inputs, output, uid, gid, records):
                 os.close(fd)
 
 
-def setup(root, deadline, runtime, inputs, output, uid, gid):
-    records = []
+def setup(root, deadline, runtime, inputs, output, uid, gid, records):
     metadata = apt_metadata(command(root, "policy-metadata",
         ["/usr/bin/apt-cache", "show", PACKAGE + "=" + VERSION], deadline, records, 65536))
     command(root, "policy-download", ["/usr/bin/apt-get",
@@ -474,11 +481,19 @@ def main():
     uid, gid = map(int, ids)
     # Hosted-runner disposal owns final cleanup; unsettled setup never removes inputs.
     temporary = Path(tempfile.mkdtemp(prefix="grok-bwrap-policy-"))
-    result = setup(temporary, time.monotonic() + 150, runner / "grok-runtime-root",
-                   runner / "grok-runtime-input", runner / "grok-readonly-evidence", uid, gid)
-    text = json.dumps(result, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
-    require(len(text) <= 65536, "policy setup report bound")
-    print(text)
+    records = []
+    result = {"schema": 1, "qualification": False, "setup_completed": False, "commands": records}
+    try:
+        result = setup(temporary, time.monotonic() + 150, runner / "grok-runtime-root",
+                       runner / "grok-runtime-input", runner / "grok-readonly-evidence", uid, gid, records)
+        result["setup_completed"] = True
+    except Exception as error:
+        result["error"] = type(error).__name__ + ": " + str(error)[:512]
+        raise
+    finally:
+        text = json.dumps(result, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        require(len(text) <= 65536, "policy setup report bound")
+        print(text)
 
 
 if __name__ == "__main__":
