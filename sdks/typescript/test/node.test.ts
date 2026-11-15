@@ -3,7 +3,7 @@ import { ChildProcess, spawnSync } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after, before, test } from 'node:test';
+import { after, before, test, type TestContext } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { startUap, type StartupConfiguration } from '../dist/node.js';
@@ -21,6 +21,80 @@ before(async () => {
 });
 after(async () => { if (directory) await rm(directory, { recursive: true, force: true }); });
 function options(mode = '') { return { executable, config, startupTimeoutMs: 2_000, shutdownTimeoutMs: 100, env: { ...process.env, UAP_SDK_TEST_MODE: mode } }; }
+
+function holdOwnedClose(t: TestContext, pid: number) {
+  const original: (this: ChildProcess, event: string | symbol, ...args: unknown[]) => boolean = ChildProcess.prototype.emit;
+  let child: ChildProcess | undefined;
+  let arguments_: unknown[] = [];
+  let observed!: () => void;
+  const emitted = new Promise<void>((resolve) => { observed = resolve; });
+  const held = t.mock.method(ChildProcess.prototype, 'emit', function (this: ChildProcess, event: string | symbol, ...args: unknown[]): boolean {
+    if (this.pid !== pid || event !== 'close') return original.call(this, event, ...args);
+    assert.equal(child, undefined, 'owned child emitted close more than once');
+    child = this;
+    arguments_ = args;
+    observed();
+    return true;
+  });
+  return {
+    emitted,
+    release() {
+      held.mock.restore();
+      if (child) {
+        const originalChild = child;
+        child = undefined;
+        original.call(originalChild, 'close', ...arguments_);
+      }
+    },
+  };
+}
+
+test('close waits for the exact owned close event after actual process exit', { timeout: 5_000 }, async (t) => {
+  const host = await startUap(options());
+  const held = holdOwnedClose(t, host.pid);
+  let settled = false;
+  const closing = host.close().then(() => { settled = true; });
+  try {
+    await held.emitted;
+    await delay(0);
+    assert.equal(host.hasExited, true, 'the real fixture process must already have exited');
+    assert.equal(settled, false, 'exit alone must not complete close');
+    held.release();
+    await closing;
+    assert.equal(settled, true);
+    await host.close();
+  } finally {
+    held.release();
+    await closing;
+  }
+});
+
+test('unsettled owned streams retain the shutdown bound after actual process exit', { timeout: 5_000 }, async (t) => {
+  const host = await startUap(options());
+  const held = holdOwnedClose(t, host.pid);
+  const originalKill = ChildProcess.prototype.kill;
+  const signals: Array<NodeJS.Signals | number | undefined> = [];
+  t.mock.method(ChildProcess.prototype, 'kill', function (this: ChildProcess, signal?: NodeJS.Signals | number): boolean {
+    if (this.pid === host.pid) signals.push(signal);
+    return originalKill.call(this, signal);
+  });
+  const started = Date.now();
+  const closing = host.close().then(() => undefined, (error: unknown) => error);
+  try {
+    await held.emitted;
+    assert.equal(host.hasExited, true);
+    const failure = await closing;
+    assert.ok(failure instanceof ManagementError);
+    assert.equal(failure.code, 'SHUTDOWN_TIMEOUT');
+    assert.ok(Date.now() - started < 4_000, 'unsettled streams must not wait indefinitely');
+    assert.deepEqual(signals, [], 'an already exited child must not be signalled again');
+    held.release();
+    await assert.rejects(host.close(), (error: unknown) => error === failure);
+  } finally {
+    held.release();
+    await closing;
+  }
+});
 
 test('real owned child performs private authenticated bootstrap and repeat close', async () => {
   const host = await startUap({ ...options(), requiredCapabilities: ['install'] });
