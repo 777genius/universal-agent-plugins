@@ -46,9 +46,13 @@ type Change struct {
 }
 
 type Result struct {
-	Results   []installer.Result
+	// Outcomes holds one entry per planned binding, in plan order.
+	Outcomes  []environment.BindingOutcome
 	Published bool
 }
+
+// Results lists installer results for the bindings that produced one.
+func (result Result) Results() []installer.Result { return environment.Results(result.Outcomes) }
 
 // Apply owns the application ordering around the existing coordinator. It never
 // resolves intent, asks for confirmation or replaces installer transactions.
@@ -95,7 +99,7 @@ func (service Service) Apply(ctx context.Context, change Change) (out Result, er
 	if err = change.Intent.Publish(service.Files); err != nil {
 		return out, err
 	}
-	out.Results, err = (environment.Coordinator{
+	out.Outcomes, err = (environment.Coordinator{
 		EnvironmentID: change.Plan.EnvironmentID,
 		Mutator:       guardedMutator{inner: service.Mutator, check: checkInputs},
 	}).ApplySync(ctx, change.Plan, true)
@@ -109,16 +113,17 @@ type guardedMutator struct {
 	check func() error
 }
 
+// A failed guard means the reviewed inputs changed, so it ends the whole sync.
 func (mutator guardedMutator) Prepare(ctx context.Context, binding environment.PreparedBinding) (*installer.PreparedOperation, error) {
 	if err := mutator.check(); err != nil {
-		return nil, err
+		return nil, environment.Stop(err)
 	}
 	return mutator.inner.Prepare(ctx, binding)
 }
 
 func (mutator guardedMutator) Apply(ctx context.Context, prepared *installer.PreparedOperation) (installer.Result, error) {
 	if err := mutator.check(); err != nil {
-		return installer.Result{}, err
+		return installer.Result{}, environment.Stop(err)
 	}
 	return mutator.inner.Apply(ctx, prepared)
 }

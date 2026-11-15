@@ -66,6 +66,12 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 			status = outputResultFailure
 		}
 		data := map[string]any{"schema_version": outputSchemaVersion, "command": cmd.CommandPath(), "result": status, "outcome": outcome, "actions": dependencyActionOutput(actions, opts.dependencyComponents), "results": out, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts)}
+		if opts.installResult != nil {
+			data["bindings"] = opts.installResult.bindingsJSON()
+			if opts.installResult.LogFile != "" {
+				data["log_file"] = opts.installResult.LogFile
+			}
+		}
 		if opts.installSelection != nil {
 			data["selection"] = opts.installSelection
 		}
@@ -75,7 +81,20 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 		}
 		return renderJSON(cmd.OutOrStdout(), data)
 	}
-	return renderDependencyHumanResults(cmd, opts, actions, out)
+	if err := renderDependencyHumanResults(cmd, opts, actions, out); err != nil {
+		return err
+	}
+	return renderInstallAttention(cmd, opts)
+}
+
+// renderInstallAttention explains agents that did not succeed in plain words.
+// The raw per-binding lines above stay for scripts; technical detail is in the log.
+func renderInstallAttention(cmd *cobra.Command, opts *options) error {
+	result := opts.installResult
+	if result == nil || len(result.failedAgents()) == 0 {
+		return nil
+	}
+	return renderAgentAttention(cmd.OutOrStdout(), result.Agents, result.LogFile, retryHintFor(cmd, result.Agents))
 }
 
 func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []dependencyAction, out []dependencyResultDTO) error {

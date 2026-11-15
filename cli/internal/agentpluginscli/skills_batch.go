@@ -24,7 +24,11 @@ type SkillsBatchRequest struct {
 	TargetIDs  []string
 }
 type SkillsAction struct{ Alias, ClientID, Action, TargetPath, CandidateID, FromPath, ToPath string }
-type SkillsBatchItem struct{ Alias, ClientID, TargetPath, CandidateID, Status, Reason string }
+type SkillsBatchItem struct {
+	Alias, ClientID, TargetPath, CandidateID, Status, Reason string
+	// failure explains a binding that did not succeed; nil otherwise.
+	failure *installFailure
+}
 type SkillsBatchResult struct {
 	Status             string
 	Items              []SkillsBatchItem
@@ -32,6 +36,7 @@ type SkillsBatchResult struct {
 }
 type PreparedSkillsBatch struct {
 	warnings        []string
+	selections      []SkillsSelection
 	app, preview    App
 	request         dependencySyncRequest
 	actions         []SkillsAction
@@ -109,27 +114,26 @@ func (p *PreparedSkillsBatch) Apply(ctx context.Context) (SkillsBatchResult, err
 	p.applied = true
 	adapter := &dependencyInstaller{app: p.app, opts: p.app.skillsOptions(), detected: p.request.detected, beforeApply: p.checkInputs}
 	applied, applyErr := applyPreparedDependencies(ctx, p.app, &p.request, adapter, p.check)
-	results := applied.Results
-	cursor := 0
-	failedItem := false
-	for _, action := range p.actions {
+	mutated := applied.Published
+	for index, action := range p.actions {
 		item := SkillsBatchItem{Alias: action.Alias, ClientID: action.ClientID, TargetPath: action.TargetPath, CandidateID: action.CandidateID, Status: "not_attempted"}
-		if action.Action == "unchanged" {
+		switch {
+		case action.Action == "unchanged":
 			item.Status = "unchanged"
-		} else if cursor < len(results) {
-			r := results[cursor]
-			cursor++
-			item.Status = string(r.Outcome)
-			item.Reason = r.Reason
-		} else if applyErr != nil && !failedItem {
-			item.Status = "failed"
+		case index < len(applied.Outcomes):
+			outcome := applied.Outcomes[index]
+			item.Status, item.Reason = outcomeStatusReason(outcome)
+			item.failure = describeBindingFailure(outcome)
+			mutated = mutated || outcome.Status == environment.BindingApplied || (outcome.Result != nil && outcome.Result.Mutated)
+		case applyErr != nil:
+			// Nothing ran: the sync failed before reaching any binding.
 			item.Reason = applyErr.Error()
-			failedItem = true
+			item.failure = describeSyncFailure(applyErr)
 		}
 		result.Items = append(result.Items, item)
 	}
 	if applyErr != nil {
-		if len(results) > 0 || applied.Published {
+		if mutated {
 			result.Status = "partial"
 		}
 		result.RepairInstructions = append(result.RepairInstructions, "Inspect agentplugins deps status and follow existing recovery/repair instructions.")

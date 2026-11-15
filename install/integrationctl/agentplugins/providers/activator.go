@@ -22,6 +22,10 @@ type Activator struct {
 	// Registry supplies the client adapters that own lifecycle. It is injected
 	// by the composition root and never defaulted to "every client".
 	Registry *clients.Registry
+	// Concurrent lets groups run attested clients' activation effects together.
+	// The zero value keeps activation strictly serial; only a composition root
+	// that qualified its runner for simultaneous commands sets it.
+	Concurrent bool
 }
 
 func (activator Activator) requireRegistry() error {
@@ -158,8 +162,24 @@ func (activator Activator) dispatchActivate(ctx context.Context, request domain.
 	return domain.ActivationOutcome{}, fmt.Errorf("unsupported activation client %q", request.Client.ClientID)
 }
 
-// SupportsIndependentActivation delegates effect isolation to adapter metadata.
+// SupportsIndependentActivation delegates effect isolation to adapter metadata
+// and only offers it when the composition opted into concurrent activation.
 func (activator Activator) SupportsIndependentActivation(request domain.ActivationRequest) bool {
+	if !activator.Concurrent {
+		return false
+	}
 	independent, ok := clients.As[clients.IndependentActivator](activator.Registry, request.Client.ClientID)
 	return ok && independent.SupportsIndependentActivation(request)
+}
+
+// PrepareIndependentActivation returns the client effect of a target whose
+// adapter attested isolation. The returned operation only runs the client's
+// own activation; the coordinator keeps state writes and publication serial.
+func (activator Activator) PrepareIndependentActivation(_ context.Context, request domain.ActivationRequest) (func(context.Context) (domain.ActivationOutcome, error), error) {
+	if !activator.SupportsIndependentActivation(request) {
+		return nil, fmt.Errorf("client activation cannot run independently")
+	}
+	return func(effectContext context.Context) (domain.ActivationOutcome, error) {
+		return activator.Activate(effectContext, request)
+	}, nil
 }

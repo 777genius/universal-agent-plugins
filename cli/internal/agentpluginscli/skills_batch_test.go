@@ -225,7 +225,7 @@ func TestSkillsPartialRevisionColdRepairAfterLockAdvance(t *testing.T) {
 	oldBinding := savedJourneyBinding(t, before, oldClient)
 	injected := &skillFailSecondPrepare{inner: &dependencyInstaller{app: j.cli.app, opts: &options{}, detected: review.request.detected, beforeApply: review.request.checkInputs}}
 	results, err := (environment.Coordinator{Mutator: injected}).ApplySync(ctx, environment.PreparedSync{EnvironmentID: environment.EnvironmentUserDefault, ManifestDigest: review.request.lock.ManifestDigest, Bindings: actions}, true)
-	if err == nil || len(results) != 1 || injected.calls != 2 {
+	if err == nil || len(results) != 2 || results[0].Status != environment.BindingApplied || results[1].Status != environment.BindingFailed || injected.calls != 2 {
 		t.Fatalf("expected exactly one accepted target before injected failure: results=%+v error=%v", results, err)
 	}
 	advanced := j.state(t)

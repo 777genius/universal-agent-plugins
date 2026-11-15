@@ -207,7 +207,7 @@ type dependencyInstaller struct {
 func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environment.PreparedBinding) (*installer.PreparedOperation, error) {
 	if adapter.beforeApply != nil {
 		if err := adapter.beforeApply(); err != nil {
-			return nil, err
+			return nil, environment.Stop(err)
 		}
 	}
 	if action.Authority != nil {
@@ -266,7 +266,7 @@ func dependencyNativeConfigRoot(app App, client domain.DetectedClient) string {
 func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *installer.PreparedOperation) (installer.Result, error) {
 	if adapter.beforeApply != nil {
 		if err := adapter.beforeApply(); err != nil {
-			return installer.Result{}, err
+			return installer.Result{}, environment.Stop(err)
 		}
 	}
 	result, err := adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
