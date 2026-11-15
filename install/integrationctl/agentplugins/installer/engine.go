@@ -137,9 +137,10 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		projectArgs:  e.cfg.ProjectArgs,
 		facts:        facts,
 	}
-	legacyTransitions := opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, PackageVerifier: stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeKernel}
-	transitions := providers.NewNativeTransitions(e.cfg.Registry, clients.NativeTransitionContext{ProjectRoot: e.cfg.ProjectRoot, UserHome: e.cfg.UserHome, OperationsDir: e.cfg.OperationsDir, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeKernel, PackageVerifier: stager}, legacyTransitions)
-	directoryKernel := transaction.Kernel{Namespace: e.cfg.StateRoot, PhysicalAuthority: plan, NativeRecovery: transitions, StateStore: e.store, Directory: dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}}
+	directoryKernel := transaction.Kernel{Namespace: e.cfg.StateRoot, PhysicalAuthority: plan, StateStore: e.store, Directory: dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}}
+	legacyTransitions := opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, PackageVerifier: stager, State: directoryKernel, Kernel: nativeKernel}
+	transitions := providers.NewNativeTransitions(e.cfg.Registry, clients.NativeTransitionContext{ProjectRoot: e.cfg.ProjectRoot, UserHome: e.cfg.UserHome, OperationsDir: e.cfg.OperationsDir, State: directoryKernel, Kernel: nativeKernel, PackageVerifier: stager}, legacyTransitions)
+	directoryKernel.NativeRecovery = transitions
 	projectRoots := transaction.ProjectRootPublisher{Kernel: directoryKernel}
 	inner := providers.Activator{ProjectRoots: projectRoots, UserHome: e.cfg.UserHome, NativeTransitions: transitions, OpenCodeTransitions: legacyTransitions, Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
 	var observer usecase.NativeIdentityObserver

@@ -37,14 +37,12 @@ type Adapter interface {
 type Env struct {
 	UserHome          string
 	NativeTransitions ports.NativeTransitionRecovery
-	// SessionEnvironment is the transient inherited base for an explicit session.
-	// Nil retains ambient selection; a nonnil empty slice is an exact empty base.
-	// It may contain secrets and never belongs in a plan, receipt or diagnostic.
+	ProjectRoots      ports.NativeProjectRootPublisher
+	// SessionEnvironment is transient explicit-session authority, never persisted.
 	SessionEnvironment []string `json:"-"`
 	// LookupExecutable is used only by an explicitly requested native session.
 	// File-only installation/detection never resolves this into execution authority.
 	LookupExecutable    func(string) (string, error)
-	ProjectRoots        ports.NativeProjectRootPublisher
 	OpenCodeTransitions ports.OpenCodeTransitionRecorder
 	Runner              ports.CommandRunner
 	NativeConfig        nativeconfig.Kernel
