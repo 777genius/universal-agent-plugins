@@ -98,7 +98,7 @@ func TestDoctorNativeProjectionCanceledContextDoesNotCallActivator(t *testing.T)
 func TestDoctorNativeProjectionCanceledDuringVerificationIsInconclusive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	activator := &doctorProjectionActivator{
-		err: errors.New("native verifier returned a generic error after cancellation"),
+		err:    errors.New("native verifier returned a generic error after cancellation"),
 		cancel: cancel,
 	}
 	findings := checkNativeProjectionIntegrity(ctx, App{Lifecycle: usecasetest.NewService(usecase.Service{Activator: activator})},
