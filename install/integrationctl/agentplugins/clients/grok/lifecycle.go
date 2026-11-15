@@ -31,6 +31,9 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryP
 }
 
 func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if request.ConfirmPluginEnable && !New().SupportsPluginEnablement(request.Plan.Scope) {
+		return domain.ActivationOutcome{}, errEnablementUnqualified
+	}
 	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject || request.Plan.TargetContext.ProjectRoot != "" {
 		return activateProject(ctx, env, request)
 	}
