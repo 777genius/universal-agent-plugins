@@ -142,6 +142,30 @@ class NativeMatrixTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     matrix.require_hosted("darwin-arm64")
 
+    def test_browser_skills_requires_the_exact_current_source_dual_client_lane(self):
+        _, required = matrix.select_native_tests("codex", project_components=True)
+        matrix.validate_browser_skills("codex", "linux-amd64", True, False, required)
+        for client, target, project, released, selected in [
+            ("claude", "linux-amd64", True, False, required),
+            ("opencode", "linux-amd64", True, False, required),
+            ("codex", "darwin-arm64", True, False, required),
+            ("codex", "windows-amd64", True, False, required),
+            ("codex", "linux-amd64", False, False, required),
+            ("codex", "linux-amd64", True, True, required),
+            ("codex", "linux-amd64", True, False, matrix.REQUIRED_TESTS["codex"]),
+        ]:
+            with self.subTest(client=client, target=target, project=project, released=released, selected=selected):
+                with self.assertRaises(ValueError):
+                    matrix.validate_browser_skills(client, target, project, released, selected)
+
+    def test_browser_tools_reject_non_disposable_execution_before_lookup(self):
+        for env in [{}, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "self-hosted",
+                         "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}]:
+            with patch.dict(matrix.os.environ, env, clear=True), patch.object(matrix.shutil, "which") as lookup:
+                with self.assertRaises(RuntimeError):
+                    matrix.browser_runtime_environment(Path("/unused"))
+                lookup.assert_not_called()
+
     def test_source_project_proof_selects_exact_required_codex_tests(self):
         pattern, required = matrix.select_native_tests("codex", project_components=True)
         declared = set()
