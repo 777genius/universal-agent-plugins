@@ -96,10 +96,12 @@ func lifecycleEnablementInput(t *testing.T, fixture enablementFixture) (clients.
 	env := clients.Env{UserHome: filepath.Dir(fixture.record.UserRoot), NativeTransitions: &fixture.recovery, NativeConfig: fixture.recovery.Kernel, Runner: native}
 	request := domain.ActivationRequest{ConfirmPluginEnable: true, NativeAttempt: domain.NativeAttemptIdentity{OperationID: fixture.record.OperationID,
 		InstallationID: fixture.record.InstallationID, BindingID: fixture.record.BindingID, NativeRoot: binding.NativeProfileRoot},
-		Client: domain.DetectedClient{ClientID: domain.ClientGrok, ConfigRoot: fixture.record.UserRoot, ExecutablePath: executable},
-		Plan: domain.DeliveryPlan{Scope: domain.ScopeProject, TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: fixture.record.ProjectRoot, UserConfigRoot: fixture.record.UserRoot},
+		Client: domain.DetectedClient{ClientID: domain.ClientGrok, ConfigRoot: fixture.record.UserRoot, ExecutablePath: executable, Version: "1.0.70"},
+		Plan: domain.DeliveryPlan{ClientID: domain.ClientGrok, Status: domain.PlanReady, DeclaredName: fixture.record.PluginName,
+			TargetAnchor: binding.NativeProfileRoot, TargetRoot: filepath.Dir(fixture.record.ArtifactPath), ActivePath: fixture.record.ArtifactPath, NativeRegistryExecutable: executable,
+			Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative}}, Scope: domain.ScopeProject, TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: fixture.record.ProjectRoot, UserConfigRoot: fixture.record.UserRoot},
 			NativeRegistryRoot: binding.NativeProfileRoot, PhysicalArtifactID: binding.PhysicalArtifact},
-		Delivery:     domain.StagedDelivery{ActivePath: fixture.record.ArtifactPath, ArtifactDigest: fixture.record.PackageDigest},
+		Delivery:     domain.StagedDelivery{ClientID: domain.ClientGrok, OwnedBase: filepath.Dir(fixture.record.ArtifactPath), ActivePath: fixture.record.ArtifactPath, ArtifactDigest: fixture.record.PackageDigest},
 		DeclaredName: fixture.record.PluginName, BackendExecutable: executable, PreviousNativeObjects: previous}
 	return env, request, native
 }
@@ -211,7 +213,7 @@ func TestEnablementExplicitHomeAndDisabledPreferenceRefuseBeforeACP(t *testing.T
 	}
 }
 
-func TestPrototypeRemovalComponentIsNotPublicAdmission(t *testing.T) {
+func TestOwnedRemovalRequiresConfirmedContainedRuntime(t *testing.T) {
 	fixture := newLifecycleEnablementFixture(t)
 	env, request, _ := lifecycleEnablementInput(t, fixture)
 	if _, err := enableProject(t.Context(), env, request, domain.ActivationOutcome{NativeEffect: domain.NativeEffectUnchanged}); err != nil {
@@ -230,15 +232,16 @@ func TestPrototypeRemovalComponentIsNotPublicAdmission(t *testing.T) {
 	for _, confirmed := range []bool{false, true} {
 		removal.Confirmed = confirmed
 		outcome, err := New().Deactivate(t.Context(), env, removal)
-		if !errors.Is(err, errEnablementUnqualified) || native.calls != 0 || outcome.ExternalRemovalComplete || outcome.NativeEffect != domain.NativeEffectUnchanged {
+		if confirmed && !errors.Is(err, errEnablementUnqualified) || !confirmed && err != nil || native.calls != 0 || outcome.ExternalRemovalComplete || outcome.NativeEffect != domain.NativeEffectUnchanged {
 			t.Fatalf("direct removal admitted unqualified ACP: %+v %v", outcome, err)
 		}
 		assertPrototypeFilesUnchanged(t, originals)
 	}
-	// The private component remains testable with inert pipes. This does not
-	// bypass either public Adapter method or establish native recovery safety.
+	// The admitted readonly transport reaches the public adapter route. This
+	// remains an inert protocol contract, not native platform qualification.
 	removal.Confirmed = true
-	outcome, err := removeEnabledProject(t.Context(), env, removal, domain.DeactivationOutcome{NativeEffect: domain.NativeEffectUnchanged})
+	env.Runner = &admittedEnablementFixture{enablementNativeFixture: native}
+	outcome, err := New().Deactivate(t.Context(), env, removal)
 	if err != nil || outcome.NativeEffect != domain.NativeEffectCommitted || native.calls != 2 {
 		t.Fatalf("private removal component: %+v %v", outcome, err)
 	}

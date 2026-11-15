@@ -96,9 +96,13 @@ func TestRecordedRecoveryV3CompletionRequiresExactConfig(t *testing.T) {
 	}
 }
 
-func recordedRemovalBoundary(t *testing.T, footer, state string, applied bool) (enablementFixture, domain.StateFileV2) {
+func recordedRemovalBoundary(t *testing.T, footer, state string, applied bool, versions ...int) (enablementFixture, domain.StateFileV2) {
 	t.Helper()
-	fixture, desired := removalEnablementFixture(t, 3)
+	version := 3
+	if len(versions) > 0 {
+		version = versions[0]
+	}
+	fixture, desired := removalEnablementFixture(t, version)
 	if applied {
 		applyRemovalFixture(t, fixture)
 	}
@@ -161,7 +165,7 @@ func TestRecordedRecoveryV3RemovalMatrix(t *testing.T) {
 	}
 }
 
-func TestRecordedRecoveryV3CodecDoesNotOpenPublicRecovery(t *testing.T) {
+func TestRecordedRecoveryRequiresObservedV3Authority(t *testing.T) {
 	for _, version := range []int{2, 3} {
 		t.Run(fmt.Sprint(version), func(t *testing.T) {
 			fixture := newEnablementFixture(t, version)
@@ -172,15 +176,20 @@ func TestRecordedRecoveryV3CodecDoesNotOpenPublicRecovery(t *testing.T) {
 			if err := cold.Recover(t.Context()); !errors.Is(err, errEnablementUnqualified) {
 				t.Fatal("private format opened public recovery", err)
 			}
-			if err := cold.ReconcileObserved(t.Context(), observed, cold.State); !errors.Is(err, errEnablementUnqualified) {
-				t.Fatal("private format opened observed public recovery", err)
-			}
-			if version == 2 {
+			if version == 3 {
+				if err := cold.ReconcileObserved(t.Context(), observed, cold.State); err != nil {
+					t.Fatal("exact observed v3 recovery refused", err)
+				}
+				assertRecordedSettlement(t, fixture, fixture.original, fixture.record.BeforeStateDigest)
+			} else {
+				if err := cold.ReconcileObserved(t.Context(), observed, cold.State); !errors.Is(err, errEnablementUnqualified) {
+					t.Fatal("legacy auxiliary effects admitted", err)
+				}
 				if err := cold.recoverObservedRecord(t.Context(), observed); !errors.Is(err, errEnablementUnqualified) {
 					t.Fatal("private v3 admission accepted legacy auxiliary effects", err)
 				}
+				assertPrototypeFilesUnchanged(t, originals)
 			}
-			assertPrototypeFilesUnchanged(t, originals)
 		})
 	}
 }

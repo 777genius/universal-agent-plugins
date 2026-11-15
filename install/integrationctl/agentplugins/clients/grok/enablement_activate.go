@@ -43,7 +43,7 @@ func enableProject(ctx context.Context, env clients.Env, request domain.Activati
 	file := profile.config
 	session := enablementActivation{recovery: recovery, request: request, state: state, index: index, binding: binding,
 		inputs: profile.inputs,
-		record: enablementRecord{Version: 2, UserRoot: recovery.UserRoot, UserParentAuthority: profile.parent}}
+		record: enablementRecord{Version: 3, UserRoot: recovery.UserRoot, UserParentAuthority: profile.parent}}
 	id := "project/" + enablementDigest([]byte(request.Delivery.ActivePath))[7:15] + "/" + request.DeclaredName
 	if err := refuseDisabledMembership(file.Original().Body, id, request.DeclaredName); err != nil {
 		return result, err
@@ -130,7 +130,7 @@ func (session *enablementActivation) prepare(ctx context.Context, original nativ
 	}
 	before := session.binding
 	before.NativeActivationAttempt = ""
-	session.record = enablementRecord{Version: 2, Action: "enable", OperationID: request.NativeAttempt.OperationID,
+	session.record = enablementRecord{Version: 3, Action: "enable", OperationID: request.NativeAttempt.OperationID,
 		InstallationID: request.NativeAttempt.InstallationID, BindingID: request.NativeAttempt.BindingID,
 		ProjectRoot: recovery.ProjectRoot, UserRoot: recovery.UserRoot, UserParentAuthority: session.record.UserParentAuthority,
 		ArtifactPath: plugin.root, PackageDigest: request.Delivery.ArtifactDigest,
