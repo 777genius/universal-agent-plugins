@@ -2025,6 +2025,17 @@ def readonly_mount_path(raw):
     return path
 
 
+def readonly_mount_failure_note(target, options, root, sealed, witness):
+    roles = {'/':'root', root:'input', sealed:'sealed', witness:'witness',
+             '/proc':'proc', '/proc/sys':'proc-sys', '/proc/sysrq-trigger':'proc-sysrq-trigger',
+             '/proc/irq':'proc-irq', '/proc/bus':'proc-bus', '/dev':'dev', '/dev/pts':'devpts'}
+    roles.update({path:'runtime-' + path[1:] for path in READONLY_RUNTIME_ROOTS})
+    roles.update({'/dev/' + name:'device-' + name for name in READONLY_DEVICES})
+    return ('readonly-mount-flags: role=' + roles.get(target, 'other')
+            + ' ro=' + str(int(b'ro' in options)) + ' rw=' + str(int(b'rw' in options))
+            + ' duplicates=' + str(int(len(options) != len(set(options)))))
+
+
 def readonly_mounts(body, req):
     require(type(body) is bytes and 0 < len(body) <= 262144, 'readonly-mount-bound')
     root, runtime = req['input_root'], req['readonly']
@@ -2046,8 +2057,12 @@ def readonly_mounts(body, req):
         require(mount > 0 and parent > 0 and mount not in seen_ids and target not in rows
                 and target in required | optional, 'readonly-mount-membership')
         options = fields[5].split(b',')
-        require(len(options) == len(set(options)) and (b'rw' in options) is (target == witness)
-                and (b'ro' in options) is (target != witness), 'readonly-mount-writable')
+        try:
+            require(len(options) == len(set(options)) and (b'rw' in options) is (target == witness)
+                    and (b'ro' in options) is (target != witness), 'readonly-mount-writable')
+        except ValueError as error:
+            error.add_note(readonly_mount_failure_note(target, options, root, sealed, witness))
+            raise
         if target == '/proc':
             require(filesystem[0] == b'proc', 'readonly-proc-mount')
         if target == '/dev/pts':

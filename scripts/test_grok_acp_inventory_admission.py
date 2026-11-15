@@ -2463,6 +2463,52 @@ class ReadonlyInventoryContracts(unittest.TestCase):
         optional = raw + b'500 99 0:2 /sys /proc/sys ro,nosuid - proc proc rw\n'
         self.assertIn('/proc/sys', case.readonly_mounts(optional, req)['rows'])
 
+    def test_mount_flag_failure_note_is_bounded_and_keeps_the_original_refusal(self):
+        import traceback
+        req, _ = self.request()
+        req['input_root'] = '/tmp/private-input-' + 'x' * 256
+        req['readonly']['roots']['sealed']['path'] = '/tmp/private-sealed-' + 'y' * 256
+        root, sealed = req['input_root'], req['readonly']['roots']['sealed']['path']
+        raw = self.mount_rows(req) + b'500 99 0:2 /sys /proc/sysrq-trigger ro,nosuid - proc source rw\n'
+        accepted = case.readonly_mounts(raw, req)
+        self.assertEqual([name for name, row in accepted['rows'].items() if not row['readonly']],
+                         [root + '/readonly-witness'])
+        cases = (
+            (root + '/readonly-witness', b'ro,nosuid', 'witness', 'ro=1 rw=0 duplicates=0'),
+            (root, b'rw,nosuid', 'input', 'ro=0 rw=1 duplicates=0'),
+            (sealed, b'rw,nosuid', 'sealed', 'ro=0 rw=1 duplicates=0'),
+            ('/usr', b'rw,nosuid', 'runtime-usr', 'ro=0 rw=1 duplicates=0'),
+            ('/dev/null', b'rw,nosuid', 'device-null', 'ro=0 rw=1 duplicates=0'),
+            ('/proc/sysrq-trigger', b'rw,nosuid', 'proc-sysrq-trigger', 'ro=0 rw=1 duplicates=0'),
+            ('/', b'ro,ro,nosuid', 'root', 'ro=1 rw=0 duplicates=1'),
+            ('/', b'ro,rw,nosuid', 'root', 'ro=1 rw=1 duplicates=0'),
+            ('/', b'rw,nosuid,private-option-' + b'z' * 4096, 'root', 'ro=0 rw=1 duplicates=0'))
+        for target, options, role, flags in cases:
+            lines = raw.splitlines()
+            index = next(index for index, line in enumerate(lines) if line.split()[4] == target.encode())
+            left, right = lines[index].split(b' - ')
+            fields = left.split()
+            fields[5] = options
+            lines[index] = b' '.join(fields) + b' - ' + right.replace(b'source', b'private-device-source')
+            with self.subTest(role=role, flags=flags), self.assertRaises(ValueError) as caught:
+                case.readonly_mounts(b'\n'.join(lines) + b'\n', req)
+            error = caught.exception
+            self.assertIs(type(error), ValueError)
+            self.assertEqual(error.args, ('readonly-mount-writable',))
+            note = 'readonly-mount-flags: role=' + role + ' ' + flags
+            self.assertEqual(getattr(error, '__notes__', []), [note])
+            rendered = ''.join(traceback.format_exception_only(type(error), error))
+            self.assertLessEqual(len(note.encode('ascii')), 96)
+            self.assertLessEqual(len(rendered.encode('ascii')), 136)
+            self.assertTrue(rendered.endswith(note + '\n'))
+            for private in (root, sealed, 'private-device-source', 'private-option-', '0:2', ' - '):
+                self.assertNotIn(private, rendered)
+        unknown = raw + b'501 99 0:2 / /private-unadmitted rw - ext4 private-device-source rw\n'
+        with self.assertRaises(ValueError) as caught:
+            case.readonly_mounts(unknown, req)
+        self.assertEqual(caught.exception.args, ('readonly-mount-membership',))
+        self.assertFalse(getattr(caught.exception, '__notes__', []))
+
     def test_runtime_link_resolution_never_reads_or_exposes_hidden_targets(self):
         import stat
         req, _ = self.request()
