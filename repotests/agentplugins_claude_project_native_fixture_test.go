@@ -32,7 +32,7 @@ func newClaudeProjectNativeFixture(t *testing.T) *claudeProjectNativeFixture {
 		f.keep(t, filepath.Join(root, "settings.json"), `{"enabledPlugins":{"foreign-project-fixture@skills-dir":false}}`)
 		f.keep(t, filepath.Join(root, "skills", "foreign-project-fixture", "SKILL.md"), "---\nname: foreign-project-fixture\ndescription: Preserve foreign project fixture\n---\nInert foreign bytes.\n")
 	}
-	f.keep(t, filepath.Join(f.base.ConfigDir, "plugins", "cache", "foreign", "keep.txt"), "foreign user plugin cache\n")
+	claudeProjectSeedForeignCache(t, f)
 	return f
 }
 

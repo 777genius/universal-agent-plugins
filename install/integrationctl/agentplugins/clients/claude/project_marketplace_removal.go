@@ -111,7 +111,7 @@ func retireClaudeProjectCacheWithVerifier(ctx context.Context, request domain.De
 	defer func() { _ = quarantine.Close() }()
 	retiredPath := filepath.Join(quarantine.Name(), "retired")
 	retain := func(cause error) error {
-		return fmt.Errorf("Claude cache retirement is uncertain; original private path %q: %w", retiredPath, cause)
+		return fmt.Errorf("the Claude cache retirement is uncertain; original private path %q: %w", retiredPath, cause)
 	}
 	if err := ctx.Err(); err != nil {
 		return retain(err)

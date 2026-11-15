@@ -20,6 +20,9 @@ import (
 // baseline, before public UAP; every later command keeps the whole-byte guard.
 func claudeTrustedInitializeProfile(t *testing.T, f *claudeProjectNativeFixture, authored []byte) {
 	t.Helper()
+	// Listing alone leaves userID uninitialized. The native SDK creates it
+	// without a user/model request, before the one immutable profile baseline.
+	claudeProjectInitializedSkills(t, f, "trusted-prime", nil, false)
 	claudeTrustedProjectObservation(t, f, "trusted-prime", "", false)
 	body := claudeTrustedRecordProfile(t, f, "trust-profile-initialized.json")
 	path := filepath.Join(f.base.ConfigDir, ".claude.json")
