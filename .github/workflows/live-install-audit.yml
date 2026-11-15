@@ -6,6 +6,8 @@ on:
     paths:
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/codex_runtime_audit.py'
+      - 'scripts/test_codex_runtime_audit.py'
       - 'tests/live-install/fixtures.json'
       - 'install/integrationctl/agentplugins/adapters/securityscan/scanner*.go'
       - '.github/workflows/live-install-audit.yml'
@@ -53,7 +55,9 @@ jobs:
       # require an ordinary release-semver CLI. This is still the PR source
       # binary, NOT the published agentplugins-v0.1.95 release.
       - name: Refuse ambient native-profile and Git configuration leakage
-        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+          python3 -m unittest discover -s scripts -p 'test_codex_runtime_audit.py'
       - name: Verify exact empty-stderr LintAI exit diagnostic
         run: go test ./install/integrationctl/agentplugins/adapters/securityscan -run '^TestCommandScannerIncludesNonzeroExitWhenStderrIsEmpty$' -count=1
       - name: Build actual PR CLI with current eligible directory version policy

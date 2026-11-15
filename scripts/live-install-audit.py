@@ -13,11 +13,13 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from runpy import run_path
 from datetime import datetime, timezone
 from urllib.parse import urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
+CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -1837,6 +1839,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     env = isolated_client_env(home, case_root, data)
+    codex_skill_case = target == "codex" and kind == "skill"
+    codex_runtime = None
+    codex_add_ready = False
+    codex_repeat_ready = False
     def assert_case_unchanged():
         # Native clients and acquired packages execute as subprocesses.
         # Re-anchor before and after each call; otherwise an ancestor symlink
@@ -1853,6 +1859,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                          *(project / rel for rel in project_skill_roots)):
                 if not path_inside_case(path, case_root):
                     raise ValueError("audit case native/project ancestor was redirected")
+            if codex_runtime is not None:
+                codex_runtime.guard()
         except (OSError, RuntimeError) as error:
             raise ValueError("audit case root became unavailable") from error
 
@@ -1866,6 +1874,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         # Grok inspect reports projectRoot from Git discovery. Never weaken its
         # strict native project identity contract to accept a missing root.
         initialize_project_skill_git_root(project, env, case_root)
+    if codex_skill_case and AGENT_BINARIES.get("codex"):
+        codex_runtime = CODEX_RUNTIME_AUDIT["CodexRuntimeAudit"](
+            AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign,
+            codex_marketplace_source_in_case)
+        assert_case_unchanged()
     before = snapshot(native_roots)
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)
@@ -1887,6 +1900,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # inherited Windows Firebase child pipe handles masking parent exit.
     file_capture = (sys.platform == "win32" and kind == "plugin" and item == "firebase")
     capture_option = {"capture_files": True} if file_capture else {}
+    if codex_runtime is not None:
+        codex_runtime.begin_install()
     output = audited_call([cli, *args], env, project, add_timeout, **capture_option)
     added_json = output.pop("_json", None)
     native_components = (native_components_from_add(added_json)
@@ -1936,6 +1951,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         (kind == "plugin" or
          (bool(skill_path) and lock_pinned and skill_bytes_match))
     )
+    if codex_runtime is not None and installed:
+        codex_runtime.checkpoint("installed", True)
+        codex_add_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](added_json, matching, identity)
     # BUG-016: a single successful add/remove cannot attest idempotence.
     # Repeat the same source and target only after the first registered add;
     # keep native, managed and foreign state inside the same disposable case.
@@ -1961,7 +1979,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         before_repeat_lock = lock_state()
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
                                   **capture_option)
-        repeat_add.pop("_json", None)
+        repeat_add_json = repeat_add.pop("_json", None)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
         repeat_list_json = repeat_list.pop("_json", None)
@@ -1971,6 +1989,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 repeat_list_json, identity, target, kind, item, signed_release_pins))
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
+        if codex_runtime is not None:
+            codex_runtime.checkpoint("repeat-installed", True)
+            codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
+                repeat_add_json, repeat_matches, identity)
         repeat_native_unchanged = snapshot(native_roots) == before_repeat_native
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
@@ -1981,6 +2003,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and repeat_native_unchanged and repeat_lock_unchanged
             and (not grok_prepared or repeat_project_unchanged)
+            and (not codex_skill_case or codex_repeat_ready)
         )
     # BUG-039: independent native ID+version proof before UAP removes it.
     qoder_native_before_remove = None
@@ -2044,6 +2067,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     post_list = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
+    if codex_runtime is not None and cleanup and cleanup["exit_code"] == 0:
+        codex_runtime.checkpoint("removed", False)
+        assert_case_unchanged()
     copilot_native_after_remove = None
     if target == "copilot" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
         copilot_native_after_remove = copilot_native_plugin_state(
@@ -2129,6 +2155,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     )
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
     install_refused = is_cli_refusal(output)
+    # Still remove an installed-but-unready Skill, but never call its lifecycle
+    # PASS. The public ready states and fresh native inventory are both needed.
+    installed = installed and (not codex_skill_case or codex_add_ready)
     if installed and removal_verified and sentinels_preserved and not repeat_verified:
         status = "repeat-add-unqualified"
     elif target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved and repeat_verified:
@@ -2230,6 +2259,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "qoder_native_after_remove": qoder_native_after_remove,
             "copilot_native_after_repeat": copilot_native_before_remove,
             "copilot_native_after_remove": copilot_native_after_remove,
+            "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
+            "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
+            "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
             "copilot_disabled_setting_retained": copilot_disabled_setting_retained,
             "post_list_schema_valid": post_list_schema_valid,
             "post_remove_identity_registered": post_remove_identity_registered,

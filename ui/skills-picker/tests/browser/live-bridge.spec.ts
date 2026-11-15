@@ -77,6 +77,9 @@ test('production Go bridge installs two raw Skills and recovers a lost apply res
     await expect(readiness).toContainText('Files:');
     await expect(readiness).toContainText('Skills installation verified. Model execution was not tested.');
     await expect(readiness).not.toContainText('detected by the agent');
+    const preview = page.getByRole('region', { name: 'Skill preview' });
+    await expect(preview.getByRole('heading', { name: 'Review', exact: true })).toBeVisible();
+    await expect(preview.getByText('Loading preview…', { exact: true })).toHaveCount(0);
     expect(external).toEqual([]);
     expect(errors).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath('live-picker-complete.png'), fullPage: true });
