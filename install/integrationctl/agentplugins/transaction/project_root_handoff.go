@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -68,21 +69,11 @@ func (prepared *preparedNativeRoot) sealForPublication() error {
 	if err := prepared.verifyNamed(); err != nil {
 		return err
 	}
-	entries, err := prepared.originalPublicationEntries()
+	proof, err := prepared.captureClosedMarkerPublication()
 	if err != nil {
-		return err
-	}
-	proof, err := dirswap.CaptureOriginalPublication(prepared.staged.root, entries)
-	if err != nil {
-		return err
-	}
-	if err := prepared.verifyNamed(); err != nil {
 		return err
 	}
 	prepared.expectedPublication = proof
-	if err := prepared.closeMarkerHandle(); err != nil {
-		return err
-	}
 	if prepared.selected != prepared.staged {
 		selected := prepared.selected.root
 		prepared.selected.root = nil
@@ -110,41 +101,46 @@ func (prepared *preparedNativeRoot) originalPublicationEntries() ([]dirswap.Orig
 	return append(entries, dirswap.OriginalPublicationEntry{RelativePath: filepath.ToSlash(markerPath), Info: prepared.markerInfo}), nil
 }
 
-// A pre-journal refusal may release staging back to the preparer. Reopen only
-// beneath the still-held original stage, retaining the original identity. A
-// same-byte replacement is foreign and must survive cleanup.
-func (prepared *preparedNativeRoot) restoreOriginalSelected() (resultErr error) {
-	if prepared.selected.root != nil {
-		return nil
-	}
-	if prepared.selected == prepared.staged || prepared.staged.root == nil {
-		return fmt.Errorf("original native staging handle is unavailable; retained")
-	}
-	if err := errors.Join(prepared.baseRoot.verifyNamed(), prepared.staged.verifyNamed()); err != nil {
-		return err
-	}
-	name := filepath.Base(prepared.selected.path)
-	before, err := prepared.staged.root.Lstat(name)
-	if err != nil || !sameNativeRoot(prepared.selected.info, before) {
-		return fmt.Errorf("original native selected directory changed; retained")
-	}
-	root, err := prepared.staged.root.OpenRoot(name)
+// Keep an independently joined original reader across the last writer close.
+// Windows may finalize the marker's modification time at that close; publication
+// must seal metadata from the surviving original handle after that transition.
+func (prepared *preparedNativeRoot) closedMarkerReader() (_ *os.File, resultErr error) {
+	reader, err := atomicfile.OpenRootReadFile(prepared.selected.root, prepared.markerName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() {
 		if resultErr != nil {
-			resultErr = errors.Join(resultErr, root.Close())
+			resultErr = errors.Join(resultErr, reader.Close())
 		}
 	}()
-	opened, err := root.Stat(".")
-	named, namedErr := prepared.staged.root.Lstat(name)
-	if err != nil || namedErr != nil || !sameNativeRoot(prepared.selected.info, opened) || !sameNativeRoot(prepared.selected.info, named) {
-		return fmt.Errorf("original native selected directory changed during reopen; retained")
+	opened, err := reader.Stat()
+	if err != nil || !sameNativeMarker(prepared.markerInfo, opened) {
+		return nil, fmt.Errorf("original native marker changed before writer close")
 	}
-	if err := errors.Join(prepared.baseRoot.verifyNamed(), prepared.staged.verifyNamed()); err != nil {
-		return err
+	if err := prepared.closeMarkerHandle(); err != nil {
+		return nil, err
 	}
-	prepared.selected.root = root
-	return nil
+	if err := prepared.captureWrittenMarker(reader); err != nil {
+		return nil, err
+	}
+	named, err := prepared.selected.root.Lstat(prepared.markerName)
+	if err != nil || !sameNativeMarker(prepared.markerInfo, named) {
+		return nil, fmt.Errorf("original native marker changed after writer close")
+	}
+	return reader, nil
+}
+
+func (prepared *preparedNativeRoot) captureClosedMarkerPublication() (_ dirswap.PreparedPublication, resultErr error) {
+	reader, err := prepared.closedMarkerReader()
+	if err != nil {
+		return dirswap.PreparedPublication{}, err
+	}
+	defer func() { resultErr = errors.Join(resultErr, reader.Close()) }()
+	entries, err := prepared.originalPublicationEntries()
+	if err != nil {
+		return dirswap.PreparedPublication{}, err
+	}
+	proof, err := dirswap.CaptureOriginalPublication(prepared.staged.root, entries)
+	return proof, errors.Join(err, prepared.verifyNamed())
 }

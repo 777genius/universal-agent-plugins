@@ -268,85 +268,26 @@ func (prepared *preparedNativeRoot) writeMarker() error {
 
 func (prepared *preparedNativeRoot) close() error {
 	result := prepared.closeMarkerHandle()
-	if prepared.selected != nil && prepared.selected != prepared.staged && prepared.selected.root != nil {
-		result = errors.Join(result, prepared.selected.root.Close())
+	for _, held := range []*heldNativeRoot{prepared.selected, prepared.staged, prepared.baseRoot} {
+		if held != nil && held.root != nil {
+			root := held.root
+			held.root = nil
+			result = errors.Join(result, root.Close())
+		}
 	}
-	if prepared.staged != nil {
-		result = errors.Join(result, prepared.staged.root.Close())
-	}
-	return errors.Join(result, prepared.baseRoot.root.Close())
+	return result
 }
 
+// There is no portable exact-object unlink beneath os.Root. A named identity
+// check followed by Remove can delete a foreign replacement between the calls.
+// Unjournaled staging is therefore retained, even when it still looks original.
 func (prepared *preparedNativeRoot) cleanup() error {
 	if prepared.staging == "" {
 		return nil
 	}
-	if prepared.staged == nil || prepared.selected == nil {
-		return fmt.Errorf("unpublished staging identity unavailable; retained without adopting its contents")
-	}
-	if err := prepared.restoreOriginalSelected(); err != nil {
-		return err
-	}
-	if err := prepared.cleanupMarker(); err != nil {
-		return err
-	}
-	if prepared.selected != prepared.staged {
-		if err := removeEmptyNativeChild(prepared.baseRoot, prepared.staged, prepared.selected); err != nil {
-			return err
-		}
-	}
-	return removeEmptyNativeChild(prepared.baseRoot, prepared.baseRoot, prepared.staged)
+	return errors.Join(fmt.Errorf("unpublished staging retained: exact-object removal unavailable"), prepared.close())
 }
 
 func (prepared *preparedNativeRoot) verifyNamed() error {
 	return errors.Join(prepared.baseRoot.verifyNamed(), prepared.staged.verifyNamed(), prepared.selected.verifyNamed())
-}
-
-func (prepared *preparedNativeRoot) cleanupMarker() error {
-	if err := prepared.verifyNamed(); err != nil {
-		return err
-	}
-	root := prepared.selected
-	info, err := root.root.Lstat(prepared.markerName)
-	if os.IsNotExist(err) {
-		return prepared.closeMarkerHandle()
-	}
-	if err != nil || prepared.markerInfo == nil || !info.Mode().IsRegular() || !os.SameFile(prepared.markerInfo, info) {
-		return fmt.Errorf("unpublished marker ownership changed; retained")
-	}
-	body, err := root.readMarker(prepared.markerName)
-	if err != nil || string(body) != string(prepared.writtenMarker) {
-		return errors.Join(err, fmt.Errorf("unpublished marker changed; retained"))
-	}
-	return errors.Join(prepared.removeMarker(info), prepared.closeMarkerHandle())
-}
-
-func (prepared *preparedNativeRoot) removeMarker(before os.FileInfo) error {
-	if err := prepared.verifyNamed(); err != nil {
-		return err
-	}
-	named, err := prepared.selected.root.Lstat(prepared.markerName)
-	if err != nil || !sameNativeMarker(before, named) {
-		return fmt.Errorf("unpublished marker changed before removal; retained")
-	}
-	if err := prepared.verifyNamed(); err != nil {
-		return err
-	}
-	return errors.Join(prepared.selected.root.Remove(prepared.markerName), prepared.verifyNamed())
-}
-
-func removeEmptyNativeChild(base, parent, child *heldNativeRoot) error {
-	verify := func() error { return errors.Join(base.verifyNamed(), parent.verifyNamed(), child.verifyNamed()) }
-	if err := verify(); err != nil {
-		return err
-	}
-	named, err := parent.root.Lstat(filepath.Base(child.path))
-	if err != nil || !sameNativeRoot(child.info, named) {
-		return fmt.Errorf("unpublished staging link changed; retained")
-	}
-	if err := verify(); err != nil {
-		return err
-	}
-	// Remove is intentionally nonrecursive: unexpected children always survive.
-	return errors.Join(parent.root.Remove(filepath.Base(child.path)), base.verifyNamed(), parent.verifyNamed())
 }

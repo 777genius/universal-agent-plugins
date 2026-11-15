@@ -164,11 +164,11 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, req domai
 			if err != nil {
 				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 			}
-			return (shared.ProjectComponentMutation{
+			return adapter.applyComponents(ctx, env, req.Plan, req.Delivery.NativeObjects, shared.ProjectComponentMutation{
 				Layout: layout, ActivePath: req.Delivery.ActivePath,
 				Previous: previous, Desired: desired,
 				Servers: servers, Kernel: env.NativeConfig,
-			}).Apply(ctx)
+			})
 		},
 	})
 	if err == nil && outcome.Verification == domain.VerificationInstalled {
@@ -206,10 +206,10 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, req dom
 		outcome.UserActions = append(outcome.UserActions, "Only exact-owned Hermes Skills will be removed; foreign Skills and project trust remain unchanged")
 		return outcome, nil
 	}
-	err = (shared.ProjectComponentMutation{
+	err = adapter.applyComponents(ctx, env, plan, req.NativeObjects, shared.ProjectComponentMutation{
 		Layout: layout, Previous: owned,
 		Kernel: env.NativeConfig,
-	}).Apply(ctx)
+	})
 	if err != nil {
 		var observed *shared.NativeEffectError
 		if errors.As(err, &observed) && observed.Effect == domain.NativeEffectUnchanged {

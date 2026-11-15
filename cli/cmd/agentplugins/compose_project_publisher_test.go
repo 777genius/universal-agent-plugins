@@ -7,8 +7,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -43,7 +43,7 @@ func TestProjectPublisherRetainsScopedKernelAuthority(t *testing.T) {
 				t.Fatal("expected concrete native identity observer")
 			}
 			publishers := []struct {
-				name string
+				name  string
 				value any
 			}{{"activator", activator.ProjectRoots}, {"observer", observer.ProjectRoots}}
 			for _, item := range publishers {

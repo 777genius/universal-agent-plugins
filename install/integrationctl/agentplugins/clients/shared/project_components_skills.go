@@ -28,6 +28,9 @@ func newProjectSkillSwap(mutation ProjectComponentMutation) *projectSkillSwap {
 }
 
 func (txn *projectSkillSwap) create() error {
+	if err := txn.mutation.revalidate(); err != nil {
+		return err
+	}
 	if txn.root != "" {
 		return txn.ownedRoot()
 	}
@@ -68,6 +71,9 @@ func (txn *projectSkillSwap) stage(ctx context.Context) error {
 }
 
 func (txn *projectSkillSwap) stageSkill(object domain.NativeObjectOwnership, previous map[string]domain.NativeObjectOwnership) error {
+	if err := txn.mutation.revalidate(); err != nil {
+		return err
+	}
 	source := filepath.Join(txn.mutation.ActivePath, filepath.FromSlash(object.SourceRelative))
 	if err := pathpolicy.RequireContainedChild(txn.mutation.ActivePath, source); err != nil {
 		return err
@@ -107,6 +113,9 @@ func (txn *projectSkillSwap) stageSkill(object domain.NativeObjectOwnership, pre
 }
 
 func (txn *projectSkillSwap) swap(ctx context.Context) error {
+	if err := txn.mutation.revalidate(); err != nil {
+		return err
+	}
 	if txn.root != "" {
 		if err := txn.ownedRoot(); err != nil {
 			return err
@@ -119,22 +128,7 @@ func (txn *projectSkillSwap) swap(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if _, err := os.Lstat(object.Path); os.IsNotExist(err) {
-			continue
-		} else if err != nil {
-			return err
-		}
-		name := "old-" + object.LogicalName
-		if err := pathpolicy.RequireContainedChild(txn.mutation.Layout.ProjectRoot, object.Path); err != nil {
-			return err
-		}
-		if err := RenameDirectoryExclusive(object.Path, filepath.Join(txn.root, name)); err != nil {
-			return err
-		}
-		txn.backups[object.ObjectID], txn.known[name] = name, object
-		isolated := object
-		isolated.Path = filepath.Join(txn.root, name)
-		if err := verifyComponentSkill(isolated, false); err != nil {
+		if err := txn.backupSkill(object); err != nil {
 			return err
 		}
 	}
@@ -147,6 +141,9 @@ func (txn *projectSkillSwap) swap(ctx context.Context) error {
 		if err := pathpolicy.RequireContainedChild(txn.mutation.Layout.ProjectRoot, object.Path); err != nil {
 			return err
 		}
+		if err := txn.mutation.revalidate(); err != nil {
+			return err
+		}
 		if err := RenameDirectoryExclusive(filepath.Join(txn.root, name), object.Path); err != nil {
 			return err
 		}
@@ -156,7 +153,35 @@ func (txn *projectSkillSwap) swap(ctx context.Context) error {
 	return nil
 }
 
+func (txn *projectSkillSwap) backupSkill(object domain.NativeObjectOwnership) error {
+	if _, err := os.Lstat(object.Path); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	name := "old-" + object.LogicalName
+	if err := pathpolicy.RequireContainedChild(txn.mutation.Layout.ProjectRoot, object.Path); err != nil {
+		return err
+	}
+	if err := txn.mutation.revalidate(); err != nil {
+		return err
+	}
+	if err := RenameDirectoryExclusive(object.Path, filepath.Join(txn.root, name)); err != nil {
+		return err
+	}
+	txn.backups[object.ObjectID], txn.known[name] = name, object
+	isolated := object
+	isolated.Path = filepath.Join(txn.root, name)
+	if err := verifyComponentSkill(isolated, false); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (txn *projectSkillSwap) restore() error {
+	if err := txn.mutation.revalidate(); err != nil {
+		return err
+	}
 	if txn.root != "" {
 		if err := txn.ownedRoot(); err != nil {
 			return err
@@ -185,6 +210,10 @@ func (txn *projectSkillSwap) restore() error {
 			failures = append(failures, err)
 			continue
 		}
+		if err := txn.mutation.revalidate(); err != nil {
+			failures = append(failures, err)
+			continue
+		}
 		if err := RenameDirectoryExclusive(isolated.Path, object.Path); err != nil {
 			failures = append(failures, err)
 			continue
@@ -195,6 +224,9 @@ func (txn *projectSkillSwap) restore() error {
 }
 
 func (txn *projectSkillSwap) removeInstalled(object domain.NativeObjectOwnership) error {
+	if err := txn.mutation.revalidate(); err != nil {
+		return err
+	}
 	if _, err := os.Lstat(object.Path); os.IsNotExist(err) {
 		return nil
 	}
@@ -208,6 +240,9 @@ func (txn *projectSkillSwap) removeInstalled(object domain.NativeObjectOwnership
 }
 
 func (txn *projectSkillSwap) ownedRoot() error {
+	if err := txn.mutation.revalidate(); err != nil {
+		return err
+	}
 	if err := pathpolicy.RequireContainedChild(txn.mutation.Layout.ProjectRoot, txn.root); err != nil {
 		return err
 	}
@@ -222,6 +257,9 @@ func (txn *projectSkillSwap) ownedRoot() error {
 }
 
 func (txn *projectSkillSwap) cleanup() error {
+	if err := txn.mutation.revalidate(); err != nil {
+		return err
+	}
 	if txn.root == "" {
 		return nil
 	}
@@ -229,6 +267,9 @@ func (txn *projectSkillSwap) cleanup() error {
 		return fmt.Errorf("preserved project skill recovery at %q: %w", txn.root, err)
 	}
 	for name := range txn.known {
+		if err := txn.mutation.revalidate(); err != nil {
+			return err
+		}
 		if err := os.RemoveAll(filepath.Join(txn.root, name)); err != nil {
 			return fmt.Errorf("cleanup project skill recovery at %q: %w", txn.root, err)
 		}

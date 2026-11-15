@@ -25,7 +25,7 @@ func (state *rootPreflightState) Load() (domain.StateFileV2, error) {
 	return state.StateStore.Load()
 }
 
-func TestProjectRootKernelPreflightRefusalCleansExactUnjournaledStage(t *testing.T) {
+func TestProjectRootKernelPreflightRefusalRetainsUnjournaledStage(t *testing.T) {
 	publisher, request, spec, store := projectRootFixture(t)
 	before, err := store.Load()
 	if err != nil {
@@ -39,10 +39,14 @@ func TestProjectRootKernelPreflightRefusalCleansExactUnjournaledStage(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	retained := 0
 	for _, entry := range entries {
 		if strings.HasPrefix(entry.Name(), ".uap-native-root-") {
-			t.Fatal("kernel preflight retained an unjournaled staging directory")
+			retained++
 		}
+	}
+	if retained != 1 {
+		t.Fatalf("expected one retained unjournaled stage, got %d", retained)
 	}
 	if _, err := os.Lstat(spec.Path); !os.IsNotExist(err) {
 		t.Fatalf("preflight published root: %v", err)
