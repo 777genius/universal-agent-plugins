@@ -1,0 +1,63 @@
+name: Hermes retained originals and changed inert contracts
+
+on:
+  push:
+    branches: [diagnostics/hermes-2b-original-readout-20261115]
+    paths:
+      - '.github/workflows/hermes-2b-original-readout.yml'
+      - 'scripts/read-hermes-2b-originals.py'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-originals:
+    if: github.repository == '777genius/universal-agent-plugins' && github.ref == 'refs/heads/diagnostics/hermes-2b-original-readout-20261115'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Verify exact candidate and diagnostic-only delta
+        id: source
+        run: |
+          python3 -B - <<'PY'
+          import os, re, subprocess
+          base = 'c5bb5cfeea396d1153513623dffa238a8f050423'
+          head = os.environ['GITHUB_SHA']
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          assert re.fullmatch('[0-9a-f]{40}', head)
+          assert git('rev-parse', 'HEAD') == head
+          assert git('show', '-s', '--format=%P', head) == base
+          assert git('status', '--porcelain', '--untracked-files=all') == ''
+          assert set(git('diff', '--name-status', base, head).splitlines()) == {
+              'A\t.github/workflows/hermes-2b-original-readout.yml',
+              'A\tscripts/read-hermes-2b-originals.py'}
+          PY
+      - name: Read two fixed existing failure streams
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_HOST: github.com
+          GH_PROMPT_DISABLED: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B scripts/read-hermes-2b-originals.py
+      - name: Execute only changed inert Hermes and Devin contracts
+        if: always() && !cancelled() && steps.source.outcome == 'success'
+        timeout-minutes: 5
+        working-directory: scripts
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -B -m unittest -v \
+            test_hermes_passive_history_control.OriginalLedgerCapture.test_private_permission_policy_precedes_capture_and_preserves_original_history \
+            test_hermes_profile_admission.BundledRuntimeContracts.test_parent_bundled_snapshot_budget_is_single_and_remains_finite \
+            test_devin_structured_inventory_admission.FixedDefinitionCacheContracts.test_separate_fixed_allowance_reads_full_short_chunks_and_only_records_hash \
+            test_devin_structured_inventory_admission.FixedDefinitionCacheContracts.test_real_pin_size_and_mode_refuse_without_generic_larger_file_admission \
+            test_devin_structured_inventory_admission.FixedDefinitionCacheContracts.test_first_cache_and_parent_identities_never_refresh_or_read_replacements \
+            test_devin_structured_inventory_admission.RefusedDefinitionCacheContracts.test_changed_size_is_measured_from_the_refused_held_cache_without_admission \
+            test_devin_structured_inventory_admission.ObservedDefinitionCacheContracts \
+            test_devin_global_lifecycle_admission.ObservedDefinitionFrameContracts
