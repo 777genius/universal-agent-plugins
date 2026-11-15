@@ -105,6 +105,9 @@ func (candidate *skillsBatchCandidate) prepare(ctx context.Context, app, preview
 	}
 	request := dependencySyncRequest{targets: candidate.targets, requirements: candidate.requirements, lock: locked, intent: snapshot.intent(manifest, lockBody), aliases: aliases, prepared: bindings, detected: detected}
 	plan := &PreparedSkillsBatch{app: app, preview: preview, cleanup: cleanup, request: request, warnings: warnings}
+	// Keep the command-owned immutable bytes through confirmation and Apply.
+	// Consumers still copy, rehash, reload and rescan them on every use.
+	plan.app.dependencySnapshots = preview.dependencySnapshots
 	for _, binding := range bindings {
 		plan.actions = append(plan.actions, SkillsAction{Alias: binding.Alias, ClientID: binding.ClientID, Action: string(binding.Action), TargetPath: paths[binding.Alias+"\x00"+binding.ClientID], CandidateID: candidate.candidateIDs[binding.Alias]})
 	}

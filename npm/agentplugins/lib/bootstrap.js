@@ -136,7 +136,8 @@ async function ensureBinary(options = {}) {
   const root = options.cacheRoot || cacheRoot(options.environment, options.platform);
   const lockRoot = path.join(root, ".locks");
   const binaryPath = path.join(root, release.version, platformInfo.key, platformInfo.binaryName);
-  if (await validCachedBinary(binaryPath, release.asset.sha256)) {
+  options.onStatus?.("Checking native CLI cache");
+  if (await validCachedBinary(binaryPath, release.asset.sha256, release.asset.size)) {
     return { binaryPath, version: release.version, cacheHit: true };
   }
   const proofAsset = localProofAsset(options.environment || process.env);
@@ -149,7 +150,7 @@ async function ensureBinary(options = {}) {
       await installVerifiedBinary(proofAsset, binaryPath, release, platformInfo, lockRoot);
       return { binaryPath, version: release.version, cacheHit: false, source: "local_frozen_asset" };
     } catch (error) {
-      const cold = !(await validCachedBinary(binaryPath, release.asset.sha256));
+      const cold = !(await validCachedBinary(binaryPath, release.asset.sha256, release.asset.size));
       const suffix = cold ? " No client or plugin files were changed." : "";
       throw new Error(`unable to obtain agentplugins ${release.version}: ${error.message}.${suffix}`);
     }
@@ -158,11 +159,28 @@ async function ensureBinary(options = {}) {
   const url = `${String(releaseBase).replace(/\/$/, "")}/${encodeURIComponent(release.asset.file)}`;
   const temporary = path.join(os.tmpdir(), `agentplugins-download-${process.pid}-${crypto.randomBytes(8).toString("hex")}`);
   try {
-    await downloadFile(url, temporary, release.asset, options);
-    await installVerifiedBinary(temporary, binaryPath, release, platformInfo, lockRoot);
-    return { binaryPath, version: release.version, cacheHit: false };
+    // Serialize acquisition as well as publication. A second cold process must
+    // reuse the verified result instead of downloading the same asset again.
+    options.onStatus?.("Waiting for native CLI cache lock");
+    const unlock = await acquireLock(binaryPath, { lockRoot, signal: options.signal });
+    let result, primary;
+    try {
+      if (await validCachedBinary(binaryPath, release.asset.sha256, release.asset.size)) {
+        result = { binaryPath, version: release.version, cacheHit: true };
+      } else {
+        options.onStatus?.("Connecting to GitHub for first CLI download");
+        await downloadFile(url, temporary, release.asset, options);
+        options.onStatus?.("Verifying and preparing native CLI");
+        await verifier.commitVerifiedBinary(temporary, binaryPath, release.asset, { osName: platformInfo.osName, signal: options.signal });
+        result = { binaryPath, version: release.version, cacheHit: false };
+      }
+    } catch (error) { primary = error; }
+    const errors = [];
+    await unlock().catch(error => errors.push(error));
+    if (primary || errors.length) throw verifier.failures(primary, errors);
+    return result;
   } catch (error) {
-    const cold = !(await validCachedBinary(binaryPath, release.asset.sha256));
+    const cold = !(await validCachedBinary(binaryPath, release.asset.sha256, release.asset.size));
     const suffix = cold ? " No client or plugin files were changed." : "";
     throw new Error(`unable to obtain agentplugins ${release.version}: ${error.message}.${suffix}`);
   } finally {

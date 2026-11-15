@@ -65,7 +65,9 @@ func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, locke
 	}
 	defer cleanup()
 	app = preview
+	stop := startCommandActivity(cmd, app, opts, "Resolving and verifying dependencies")
 	request, err := prepareDependencySyncCandidate(cmd, app, opts, lockedOnly)
+	stop()
 	if err != nil {
 		return err
 	}
@@ -112,7 +114,9 @@ func requireDependencyRecoveryClear(cmd *cobra.Command, app App) error {
 // runDependencySyncApply detects clients, preflights the planned actions and
 // either renders the dry-run plan or applies the converged sync.
 func runDependencySyncApply(cmd *cobra.Command, app App, opts *options, request dependencySyncRequest, actions []dependencyAction, yes bool) error {
+	stop := startCommandActivity(cmd, app, opts, "Detecting target agents")
 	detected, err := detectDependencyClients(cmd.Context(), app)
+	stop()
 	if err != nil {
 		return err
 	}

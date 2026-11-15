@@ -155,8 +155,25 @@ test("hash and original facade cache helpers remain canonical", async () => {
   const file = destination(); fs.writeFileSync(file, BODY);
   assert.equal(await v.sha256File(file), PIN.sha256);
   assert.equal(await v.validCachedBinary(file, PIN.sha256), true);
+  assert.equal(await v.validCachedBinary(file, PIN.sha256, BODY.length), true);
+  assert.equal(await v.validCachedBinary(file, PIN.sha256, BODY.length + 1), false,
+    "a wrong-size cache entry is rejected before hashing its contents");
   fs.unlinkSync(file); assert.equal(await v.validCachedBinary(file, PIN.sha256), false);
   assert.equal(typeof fsp.open, "function");
+});
+
+test("cache hashing verifies every byte across buffer boundaries and the final short read", async () => {
+  const bytes = Buffer.alloc(3 * 256 * 1024 + 17);
+  for (let i = 0; i < bytes.length; i++) bytes[i] = i % 251;
+  const pin = c.metadata(bytes);
+  const file = destination();
+  fs.writeFileSync(file, bytes, { mode: 0o755 });
+  assert.equal(await v.sha256File(file), pin.sha256);
+  assert.equal(await v.strictCachedBinary(file, pin, { osName: process.platform === "win32" ? "windows" : "linux" }), true);
+  bytes[256 * 1024] ^= 1;
+  fs.writeFileSync(file, bytes);
+  assert.equal(await v.validCachedBinary(file, pin.sha256, pin.size), false);
+  assert.equal(await v.strictCachedBinary(file, pin, { osName: process.platform === "win32" ? "windows" : "linux" }), false);
 });
 
 test("download owner receives opened inode on partial failure, and cancellation closes output", async () => {

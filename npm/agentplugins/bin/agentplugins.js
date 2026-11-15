@@ -8,12 +8,16 @@ const { ensureBinary, formatBootstrapError } = require("../lib/bootstrap");
 
 async function main() {
   let resolved;
+  const progress = require("../lib/bootstrap-progress").bootstrapProgress(process.stderr, globalThis, process.env, process.argv.slice(2));
   try {
-    resolved = await ensureBinary({ packageRoot: path.resolve(__dirname, "..") });
+    resolved = await ensureBinary({ packageRoot: path.resolve(__dirname, ".."), onProgress: progress.update, onStatus: progress.status });
   } catch (error) {
+    progress.stop();
     process.stderr.write(formatBootstrapError(error) + "\n");
     process.exitCode = 1;
     return;
+  } finally {
+    progress.stop();
   }
   const childEnvironment = resolved.publicAuthoring
     ? require("../lib/public-authoring").childEnvironment() : { ...process.env };

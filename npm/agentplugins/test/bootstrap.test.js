@@ -84,6 +84,19 @@ async function fixturePackage(t, binary = BINARY) {
 }
 
 // Preserve the historical transport assertions with injected streams, no socket.
+test("cold download bounds DNS/connect wait before any response headers", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const request = new EventEmitter();
+  request.setTimeout = () => {};
+  request.destroy = error => request.emit("error", error);
+  const acquisition = downloadFile("https://github.com/owner/repo/releases/download/v1/asset", "unused", {
+    size: 1, sha256: "a".repeat(64)
+  }, { request: () => request });
+  const rejected = assert.rejects(acquisition, /timed out waiting for response headers/);
+  t.mock.timers.tick(30000);
+  await rejected;
+});
+
 const endpoints = new Map();
 async function listen(t, handler) {
   const url = `fixture:${endpoints.size}`;
@@ -123,20 +136,28 @@ test("cold, warm, corrupted, and concurrent cache paths stay verified", async (t
   const cache = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-npm-cache-parent-"));
   await fsp.rm(cache, { recursive: true, force: true });
   t.after(() => fsp.rm(cache, { recursive: true, force: true }));
+  const progress = [];
   const options = {
     packageRoot: fixture.root,
     cacheRoot: cache,
     request: requestThrough(endpoint.url),
+    onProgress: event => progress.push(event),
     platform: "linux",
     arch: "x64"
   };
   const [first, concurrent] = await Promise.all([ensureBinary(options), ensureBinary(options)]);
   assert.equal(await fsp.readFile(first.binaryPath, "utf8"), fixture.binary.toString());
   assert.equal(first.binaryPath, concurrent.binaryPath);
+  assert.equal(requests, 1, "concurrent cold callers download one shared binary");
+  assert.equal([first, concurrent].filter(result => result.cacheHit).length, 1);
+  assert.ok(progress.length > 0, "cold download reports byte progress before native CLI starts");
+  assert.deepEqual(progress.at(-1), { received: fixture.binary.length, total: fixture.binary.length });
   const beforeWarm = requests;
+  const beforeWarmProgress = progress.length;
   const warm = await ensureBinary(options);
   assert.equal(warm.cacheHit, true);
   assert.equal(requests, beforeWarm);
+  assert.equal(progress.length, beforeWarmProgress, "verified warm cache does not report a download");
   await fsp.writeFile(warm.binaryPath, "corrupted");
   const repaired = await ensureBinary(options);
   assert.equal(await fsp.readFile(repaired.binaryPath, "utf8"), fixture.binary.toString());
@@ -239,12 +260,13 @@ test("real npm launcher consumes local proof bootstrap variables without forward
   assert.equal(await fsp.readFile(path.join(cache, VERSION, "linux-amd64", "agentplugins"), "utf8"), launcherBinary.toString());
 });
 
-test("offline cold cache fails without creating the cache", async (t) => {
+test("offline cold acquisition leaves no binary or lock file", async (t) => {
   const fixture = await fixturePackage(t);
   const endpoint = await listen(t, (_request, response) => response.end(fixture.binary));
   const unavailable = endpoint.url;
   await new Promise((resolve) => endpoint.server.close(resolve));
   const cache = path.join(os.tmpdir(), `agentplugins-offline-${crypto.randomBytes(8).toString("hex")}`);
+  t.after(() => fsp.rm(cache, { recursive: true, force: true }));
   await assert.rejects(
     ensureBinary({
       packageRoot: fixture.root,
@@ -255,7 +277,8 @@ test("offline cold cache fails without creating the cache", async (t) => {
     }),
     /No client or plugin files were changed/
   );
-  assert.equal(fs.existsSync(cache), false);
+  assert.equal(fs.existsSync(path.join(cache, VERSION)), false);
+  assert.deepEqual(await fsp.readdir(path.join(cache, ".locks")), []);
 });
 
 test("redirected public download never inherits GITHUB_TOKEN", async (t) => {

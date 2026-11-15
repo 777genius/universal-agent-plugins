@@ -89,12 +89,9 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 			return skillsMissingSelection(cmd, opts, "INVALID_PATH", "--path must be an exact repository-relative Skill folder", []skillspicker.Candidate{})
 		}
 	}
-	if interactive {
-		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Resolving Skills source…"); err != nil {
-			return err
-		}
-	}
+	stop := startCommandActivity(cmd, app, opts, "Resolving Skills source")
 	session, err := app.openSkillsCatalog(cmd.Context(), request)
+	stop()
 	if err != nil {
 		return err
 	}
@@ -117,7 +114,8 @@ func runSkillsBrowser(cmd *cobra.Command, app App, opts *options, session *skill
 		if explicit {
 			return true, errors.New("browser picker assets are not bundled in this development binary; use --no-ui")
 		}
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Browser picker is not bundled; continuing with --no-ui terminal selection.")
+		// Development builds have a complete terminal picker; absence of the
+		// optional browser bundle is not a degraded user-facing state.
 		return false, nil
 	}
 	server, err := session.startPicker(cmd.Context())

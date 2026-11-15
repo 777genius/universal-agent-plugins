@@ -19,8 +19,8 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 		choices[i] = huh.NewOption(option.Label, option.ID)
 	}
 	validate := func(ids []string) error { _, err := terminalSelection(req, ids); return err }
-	field := huh.NewMultiSelect[string]().Title(req.Title).Options(choices...).Value(&ids).Filterable(false).Validate(validate)
-	layout := &selectionLayout{field: field, ids: &ids, validate: validate, title: req.Title, count: len(choices)}
+	field := huh.NewMultiSelect[string]().Title(req.Title).Options(choices...).Value(&ids).Filterable(req.Filterable).Validate(validate)
+	layout := &selectionLayout{field: field, ids: &ids, validate: validate, title: req.Title, count: len(choices), filterable: req.Filterable}
 	form := huh.NewForm(huh.NewGroup(field).WithShowHelp(false).WithShowErrors(false)).WithLayout(layout)
 	layout.form = form
 	_ = layout.resize(80, 24) // Private injected qualification has no terminal geometry.
@@ -28,7 +28,9 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 	if err := p.initialSize(resize); err != nil {
 		return Selection{}, err
 	}
-	err := p.run(ctx, form, formInput{canSubmit: func() bool { return validate(ids) == nil }, resize: resize})
+	// Enter while filtering only accepts the query; release the input handoff
+	// gate so the user can continue selecting instead of treating it as submit.
+	err := p.run(ctx, form, formInput{canSubmit: func() bool { return !field.GetFiltering() && validate(ids) == nil }, resize: resize})
 	if _, canceled := err.(formCanceled); canceled { //nolint:errorlint // Only sole user cancellation is clean; wrapped cleanup errors must fail.
 		return Selection{Cancelled: true}, nil //nolint:misspell // Preserve the existing public cancellation API.
 	}
@@ -71,9 +73,20 @@ type selectionLayout struct {
 	validate                  func([]string) error
 	title                     string
 	count, width, errorHeight int
+	filterable                bool
 }
 
 const selectionControls = "↑/↓ move · space toggle · enter submit\nesc/ctrl+c/ctrl+d cancel"
+
+func (l *selectionLayout) controls() string {
+	if l.filterable {
+		if l.field.GetFiltering() {
+			return "Type to search · enter apply filter\nesc/ctrl+c/ctrl+d cancel"
+		}
+		return "↑/↓ move · space toggle · / search · enter submit\nesc/ctrl+c/ctrl+d cancel"
+	}
+	return selectionControls
+}
 
 func (l *selectionLayout) resize(w, h int) error {
 	titleHeight := lenLines(ansi.Wrap(l.title, max(1, w-4), ""))
@@ -82,7 +95,7 @@ func (l *selectionLayout) resize(w, h int) error {
 	if err := l.validate(nil); err != nil {
 		l.errorHeight = lenLines(ansi.Wrap(err.Error(), max(1, w), ""))
 	}
-	reserved := 1 + l.errorHeight + lenLines(ansi.Wrap(selectionControls, max(1, w), ""))
+	reserved := 1 + l.errorHeight + lenLines(ansi.Wrap(l.controls(), max(1, w), ""))
 	if w < 16 || h < titleHeight+reserved+1 {
 		return fmt.Errorf("terminal too small for selection controls")
 	}
@@ -97,6 +110,6 @@ func (l *selectionLayout) View(_ *huh.Form) string {
 		text = ansi.Wrap(err.Error(), max(1, l.width), "")
 	}
 	errorRow := lipgloss.NewStyle().Height(l.errorHeight).Render(text)
-	return lipgloss.JoinVertical(lipgloss.Left, l.field.View(), errorRow, ansi.Wrap(selectionControls, max(1, l.width), ""))
+	return lipgloss.JoinVertical(lipgloss.Left, l.field.View(), errorRow, ansi.Wrap(l.controls(), max(1, l.width), ""))
 }
 func (*selectionLayout) GroupWidth(_ *huh.Form, _ *huh.Group, w int) int { return w }

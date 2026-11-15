@@ -49,7 +49,11 @@ func normalizeMulti(req MultiSelectRequest) (MultiSelectRequest, error) {
 	if len(req.Defaults) > len(req.Options) {
 		return MultiSelectRequest{}, fmt.Errorf("%w: too many defaults", ErrInvalidRequest)
 	}
-	if len(req.Options) < 1 || len(req.Options) > 64 || req.MinSelected < 0 || req.MinSelected > len(req.Options) {
+	maxOptions, maxDisplayBytes := 64, 64*1024
+	if req.Filterable {
+		maxOptions, maxDisplayBytes = 2000, 1024*1024
+	}
+	if len(req.Options) < 1 || len(req.Options) > maxOptions || req.MinSelected < 0 || req.MinSelected > len(req.Options) {
 		return MultiSelectRequest{}, fmt.Errorf("%w: options/minimum out of range", ErrInvalidRequest)
 	}
 	total := len(req.Title)
@@ -72,8 +76,8 @@ func normalizeMulti(req MultiSelectRequest) (MultiSelectRequest, error) {
 		}
 		options[i] = option
 	}
-	if total > 64*1024 {
-		return MultiSelectRequest{}, fmt.Errorf("%w: display exceeds 64 KiB", ErrInvalidRequest)
+	if total > maxDisplayBytes {
+		return MultiSelectRequest{}, fmt.Errorf("%w: display exceeds %d bytes", ErrInvalidRequest, maxDisplayBytes)
 	}
 	defaults := make(map[string]bool, len(req.Defaults))
 	for _, id := range req.Defaults {

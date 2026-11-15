@@ -37,12 +37,9 @@ func runSkillsTerminal(cmd *cobra.Command, app App, opts *options, s *skillsCata
 		request.TargetIDs = append(request.TargetIDs, string(target))
 	}
 	s.rememberTerminalCandidates(candidates)
-	if interactive {
-		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Preparing installation review…"); err != nil {
-			return err
-		}
-	}
+	stop := startCommandActivity(cmd, app, opts, "Preparing installation review")
 	prepared, err := app.PrepareSkills(cmd.Context(), request)
+	stop()
 	if err != nil {
 		return reportSkillsPreparationRefusal(cmd, opts, s, err)
 	}
@@ -83,12 +80,9 @@ func selectSkillsTerminal(cmd *cobra.Command, opts *options, s *skillsCatalogSes
 	if candidate != nil {
 		return []skillsource.Candidate{*candidate}, nil
 	}
-	if interactive {
-		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Scanning Skills catalog…"); err != nil {
-			return nil, err
-		}
-	}
+	stop := startCommandActivity(cmd, s.app, opts, "Scanning Skills catalog")
 	catalog, err := s.scan(cmd.Context(), s.source.RequestedPath)
+	stop()
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +92,7 @@ func selectSkillsTerminal(cmd *cobra.Command, opts *options, s *skillsCatalogSes
 	if !interactive {
 		return nil, skillsMissingSelection(cmd, opts, "SELECTION_REQUIRED", "Use --skill or --path with --target in a non-interactive session", catalog.Candidates)
 	}
-	return promptSkillsCatalog(cmd, s, catalog)
+	return promptSkillsCatalog(cmd, s, catalog, opts)
 }
 func selectNamedSkills(cmd *cobra.Command, opts *options, s *skillsCatalogSession, catalog skillspicker.Catalog, names []string) ([]skillsource.Candidate, error) {
 	if !catalog.Complete {
@@ -149,7 +143,9 @@ func skillsTerminalTargets(cmd *cobra.Command, app App, opts *options, interacti
 	if err != nil {
 		return nil, err
 	}
+	stop := startCommandActivity(cmd, app, opts, "Detecting available agents")
 	choices, err := app.skillsTargets(cmd.Context())
+	stop()
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +190,9 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 			return err
 		}
 	}
+	stop := startCommandActivity(cmd, app, opts, "Installing selected Skills")
 	result, err := prepared.Apply(cmd.Context())
+	stop()
 	if writeErr := renderSkillsResult(cmd, opts, result); writeErr != nil {
 		return writeErr
 	}

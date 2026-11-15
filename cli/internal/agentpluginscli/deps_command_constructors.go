@@ -33,7 +33,9 @@ func newDependencyLockCommand(app App, opts *options, update bool) *cobra.Comman
 		if update {
 			alias = args[0]
 		}
+		stop := startCommandActivity(cmd, app, opts, "Resolving and verifying dependency lock")
 		result, err := runDependencyLock(cmd.Context(), app, opts, alias, true)
+		stop()
 		if err != nil {
 			return err
 		}

@@ -34,6 +34,7 @@ type TerminalConfig struct {
 type MultiSelectRequest struct {
 	SelectRequest
 	MinSelected int
+	Filterable  bool
 }
 
 var (

@@ -11,20 +11,23 @@ const DOWNLOAD_TIMEOUT_MS = 30_000;
 // Only the HTTP status handler may authorize a retry, never transport errors.
 const RETRYABLE_GATEWAY_RESPONSE = Symbol("retryable-gateway-response");
 const LOCK_TIMEOUT_MS = 30_000;
+// Bound memory while avoiding hundreds of small async reads per native binary.
+const HASH_READ_BYTES = 256 * 1024;
 
 async function sha256File(file) {
   const hash = crypto.createHash("sha256");
-  const stream = fs.createReadStream(file);
+  const stream = fs.createReadStream(file, { highWaterMark: HASH_READ_BYTES });
   for await (const chunk of stream) {
     hash.update(chunk);
   }
   return hash.digest("hex");
 }
 
-async function validCachedBinary(file, expectedHash) {
+async function validCachedBinary(file, expectedHash, expectedSize) {
   try {
     const stat = await fsp.lstat(file);
-    if (!stat.isFile() || stat.isSymbolicLink()) {
+    if (!stat.isFile() || stat.isSymbolicLink() ||
+        (expectedSize !== undefined && stat.size !== expectedSize)) {
       return false;
     }
     return (await sha256File(file)) === expectedHash;
@@ -93,6 +96,7 @@ async function downloadFileOnce(value, destination, expected, options = {}, redi
   const target = validateDownloadURL(value);
   cancelled(options.signal);
   let abort;
+  let headersTimer;
   await new Promise((resolve, reject) => {
     const requestOptions = {
       headers: {
@@ -104,6 +108,10 @@ async function downloadFileOnce(value, destination, expected, options = {}, redi
       ? options.request(target.url, requestOptions)
       : requestApprovedTarget(target, requestOptions);
     request.setTimeout(DOWNLOAD_TIMEOUT_MS, () => request.destroy(new Error("binary download timed out")));
+    // Socket inactivity timeouts do not bound DNS/connect/TLS setup. Bound the
+    // wait for headers too, so a cold start cannot hang before the first byte.
+    headersTimer = setTimeout(() => request.destroy(new Error("binary download timed out waiting for response headers")), DOWNLOAD_TIMEOUT_MS);
+    headersTimer.unref?.();
     let streamFailure;
     let delegated = false;
     request.once("error", error => {
@@ -115,6 +123,7 @@ async function downloadFileOnce(value, destination, expected, options = {}, redi
     options.signal?.addEventListener("abort", abort, { once: true });
     if (options.signal?.aborted) { abort(); return; }
     request.once("response", (response) => {
+      clearTimeout(headersTimer);
       if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
         response.resume();
         if (redirects <= 0) {
@@ -175,6 +184,7 @@ async function downloadFileOnce(value, destination, expected, options = {}, redi
           return;
         }
         hash.update(chunk);
+        options.onProgress?.({ received: size, total: expected.size });
       });
       response.pipe(output);
       output.once("finish", () => {
@@ -199,7 +209,10 @@ async function downloadFileOnce(value, destination, expected, options = {}, redi
         resolve();
       });
     });
-  }).finally(() => { if (abort) options.signal?.removeEventListener("abort", abort); });
+  }).finally(() => {
+    clearTimeout(headersTimer);
+    if (abort) options.signal?.removeEventListener("abort", abort);
+  });
 }
 
 function cancelled(signal) {
@@ -263,7 +276,7 @@ async function strictCachedBinary(file, pin, options = {}) {
     ownedFile(opened);
     if (!sameFile(before, opened)) throw new Error("binary cache file changed while opening");
     const hash = crypto.createHash("sha256");
-    const buffer = Buffer.alloc(Math.min(64 * 1024, pin.size));
+    const buffer = Buffer.alloc(Math.min(HASH_READ_BYTES, pin.size));
     let size = 0;
     while (size <= pin.size) {
       cancelled(options.signal);
@@ -354,7 +367,7 @@ async function acquireLock(target, options = {}) {
 // private-only. Two renames have an absence interval, not crash durability.
 async function commitVerifiedBinary(input, binaryPath, pin, options = {}) {
   const io = options.io || fsp;
-  const valid = file => options.strict ? strictCachedBinary(file, pin, options) : validCachedBinary(file, pin.sha256);
+  const valid = file => options.strict ? strictCachedBinary(file, pin, options) : validCachedBinary(file, pin.sha256, pin.size);
   cancelled(options.signal);
   if (await valid(binaryPath)) return binaryPath;
   let previous;

@@ -95,7 +95,7 @@ func executePromptedAdd(cmd *cobra.Command, app App, opts *options, source strin
 	if err != nil {
 		return err
 	}
-	selection, clients, preloaded, err := promptCompatibleDetectedTargets(cmd.Context(), cmd, app, source, opts.installIntents)
+	selection, clients, preloaded, err := promptCompatibleDetectedTargets(cmd.Context(), cmd, app, opts, source, opts.installIntents)
 	if err != nil {
 		return err
 	}
