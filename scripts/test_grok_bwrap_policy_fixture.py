@@ -93,7 +93,7 @@ class ReadonlyFixtureTests(unittest.TestCase):
         def fake_run(argv, **kwargs):
             calls.append(list(argv))
             if len(calls) == 1:
-                output = b"grok 1.0.70 (f50904eaee6c)\\n"
+                output = b"grok 1.0.70 (f50904eaee6c)\n"
             elif len(calls) == 2:
                 output = b""
             elif len(calls) == 3:
@@ -102,7 +102,7 @@ class ReadonlyFixtureTests(unittest.TestCase):
                 lock.chmod(0o600)
                 output = b""
             elif len(calls) == 4:
-                output = b"GROK_READONLY_NATIVE_INVENTORY_PASS\\n"
+                output = b"GROK_READONLY_NATIVE_INVENTORY_PASS\n"
             else:
                 raise AssertionError("unexpected process call")
             return SimpleNamespace(returncode=0, stdout=output, stderr=b"")
@@ -113,11 +113,11 @@ class ReadonlyFixtureTests(unittest.TestCase):
                          "--output", str(output_dir)]
             constants = {"ARCHIVE": hashlib.sha256(archive).hexdigest(),
                          "BINARY": hashlib.sha256(binary).hexdigest()}
-            with patch.dict(runner["main"].__globals__, constants), \\
-                 patch("urllib.request.urlopen", return_value=io.BytesIO(archive)), \\
-                 patch("subprocess.run", side_effect=fake_run), \\
-                 patch("tempfile.TemporaryDirectory", CleanupFailure), \\
-                 patch.object(sys, "argv", arguments), \\
+            with patch.dict(runner["main"].__globals__, constants), \
+                 patch("urllib.request.urlopen", return_value=io.BytesIO(archive)), \
+                 patch("subprocess.run", side_effect=fake_run), \
+                 patch("tempfile.TemporaryDirectory", CleanupFailure), \
+                 patch.object(sys, "argv", arguments), \
                  contextlib.redirect_stdout(io.StringIO()):
                 status = runner["main"]()
 
