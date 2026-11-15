@@ -65,8 +65,10 @@ jobs:
           meson compile -C "$RUNNER_TEMP/bubblewrap-build"
           sudo install -o root -g root -m 0555 "$RUNNER_TEMP/bubblewrap-build/bwrap" \
             "$RUNNER_TEMP/grok-runtime-root/usr/bin/bwrap"
-          test "$(sudo chroot "$RUNNER_TEMP/grok-runtime-root" /usr/bin/bwrap --version)" = 'bubblewrap 0.13.1'
-          sudo chroot "$RUNNER_TEMP/grok-runtime-root" /usr/bin/bwrap --help \
+          # Metadata startup reads host /proc before argument parsing.
+          # The native gate below still runs inside RootDirectory with MountAPIVFS.
+          test "$("$RUNNER_TEMP/grok-runtime-root/usr/bin/bwrap" --version)" = 'bubblewrap 0.13.1'
+          "$RUNNER_TEMP/grok-runtime-root/usr/bin/bwrap" --help \
             > "$RUNNER_TEMP/grok-bubblewrap-help.txt"
           grep --fixed-strings -- '--ro-bind-fd FD DEST' "$RUNNER_TEMP/grok-bubblewrap-help.txt"
           python3 -I -B - <<'PYTHON' > "$RUNNER_TEMP/grok-bubblewrap-build.json"
