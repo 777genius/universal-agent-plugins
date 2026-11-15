@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -133,6 +134,7 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	if err != nil {
 		return request, err
 	}
+	prepared.Bindings = reviewedCopilotSavedAddActions(cmd, app, opts, targets, prepared.Bindings)
 	detected, err := detectDependencyClients(cmd.Context(), app)
 	if err != nil {
 		return request, err
@@ -155,6 +157,26 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	}
 	request = dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, intent: snapshot.intent(manifest, body), prepared: actions, detected: detected, consent: consent, aliases: aliases, attestation: attest}
 	return request, nil
+}
+
+// Explicit saved add confirmation may finish native trust for the selected
+// Copilot project. A matching package receipt alone does not prove remembered
+// folder trust; ordinary deps sync and other projects stay unchanged.
+func reviewedCopilotSavedAddActions(cmd *cobra.Command, app App, opts *options, targets []string, actions []dependencyAction) []dependencyAction {
+	if cmd.Name() != "add" || !opts.yes || app.scope() != domain.ScopeProject ||
+		len(targets) != 1 || targets[0] != string(domain.ClientCopilot) {
+		return actions
+	}
+	for i, action := range actions {
+		if action.Action != environment.ActionUnchanged || action.ClientID != string(domain.ClientCopilot) ||
+			action.Authority == nil || action.Authority.ReceiptID == "" || action.Package == nil {
+			continue
+		}
+		reviewed := managementNativeRepair(action)
+		reviewed.Reason = "Verify and finish selected Copilot project folder trust if missing"
+		actions[i] = reviewed
+	}
+	return actions
 }
 
 // Replaced only by disposable failure-injection tests.

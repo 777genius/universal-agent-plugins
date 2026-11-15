@@ -223,9 +223,14 @@ func TestProjectCopilotTrustLockCleanupAndAcquisitionFaults(t *testing.T) {
 func TestProjectCopilotDetectionBindsSelectedHome(t *testing.T) {
 	home := t.TempDir()
 	selected := filepath.Join(home, "chosen")
+	physicalHome, err := filepath.EvalSymlinks(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := filepath.Join(physicalHome, "chosen")
 	host := clients.NewHost(clients.HostProbes{HomeDir: home, Environment: map[string]string{"COPILOT_HOME": selected}, Lstat: os.Lstat, EvalSymlinks: filepath.EvalSymlinks})
 	detected := New().DetectSurfaces(host)
-	if detected.Err != nil || detected.ConfigRoot != selected {
+	if detected.Err != nil || detected.ConfigRoot != expected {
 		t.Fatalf("selected COPILOT_HOME not captured: %+v", detected)
 	}
 	host = clients.NewHost(clients.HostProbes{HomeDir: home, Environment: map[string]string{"COPILOT_HOME": "relative"}, Lstat: os.Lstat, EvalSymlinks: filepath.EvalSymlinks})
