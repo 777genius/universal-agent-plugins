@@ -24,8 +24,8 @@ function sha256(file) {
 }
 
 function regularUnaliasedFile(file, label) {
-  const stat = fs.lstatSync(file);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 || stat.nlink !== 1) {
+  const stat = fs.lstatSync(file, { bigint: true });
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0n || stat.nlink !== 1n) {
     throw new Error(`${label} is not a regular, non-empty, unaliased file`);
   }
   return stat;
@@ -65,7 +65,10 @@ function assetMetadata(assetRoot, version) {
     const identity = `${stat.dev}:${stat.ino}`;
     if (identities.has(identity)) throw new Error(`release asset is aliased: ${file}`);
     identities.add(identity);
-    assets[key] = { file, sha256: sha256(filePath), size: stat.size };
+    if (stat.size > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error(`release asset size is not a safe integer: ${file}`);
+    }
+    assets[key] = { file, sha256: sha256(filePath), size: Number(stat.size) };
   }
   return assets;
 }

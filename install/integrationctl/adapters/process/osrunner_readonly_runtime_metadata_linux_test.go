@@ -110,9 +110,9 @@ func (walk *runtimeMetadataWalker) entry(ctx context.Context, parent *os.File, p
 		return err
 	}
 	if before.Mode&unix.S_IFMT == unix.S_IFDIR {
-		child, err := openReadonlyDirectory(parent, name)
-		if err != nil {
-			return err
+		child, openErr := openReadonlyDirectory(parent, name)
+		if openErr != nil {
+			return openErr
 		}
 		visitErr := walk.directory(ctx, child, path, before, depth+1)
 		err = errors.Join(visitErr, child.Close())
@@ -139,6 +139,15 @@ func (report *runtimeMetadataReport) encode() ([]byte, error) {
 		}
 		report.Rows = report.Rows[:len(report.Rows)-1]
 		report.Truncated = true
+	}
+}
+
+// finish is shared by the fixed-root diagnostic and its small bound controls.
+// An incomplete traversal never supplies a complete metadata observation.
+func (report *runtimeMetadataReport) finish(err error) {
+	report.Complete = err == nil
+	if err != nil {
+		report.Error = fmt.Sprintf("metadata traversal incomplete: %.1024s", err)
 	}
 }
 
@@ -206,9 +215,8 @@ func TestReadonlyRuntimeMetadataDiagnostic(t *testing.T) {
 	if err == nil {
 		err = requireReadonlyNamed(root, "usr", before)
 	}
-	walk.report.Complete = err == nil
+	walk.report.finish(err)
 	if err != nil {
-		walk.report.Error = fmt.Sprintf("metadata traversal incomplete: %.1024s", err)
 		t.Fatal("nonqualifying metadata diagnostic incomplete", err)
 	}
 	t.Logf("metadata diagnostic only: visited=%d refusals=%d truncated=%t; not runtime qualification", walk.report.Visited, walk.report.Refusals, walk.report.Truncated)
@@ -271,5 +279,84 @@ func TestReadonlyRuntimeMetadataDiagnosticControls(t *testing.T) {
 	cancel()
 	if err := walk.directory(ctx, file, "/usr", facts, 0); !errors.Is(err, context.Canceled) {
 		t.Fatal("diagnostic ignored cancellation", err)
+	}
+}
+
+// Seed only the counter: each case creates at most one directory and one leaf,
+// never a large runtime tree or an observation of the host's /usr contents.
+func TestReadonlyRuntimeMetadataDiagnosticVisitBound(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		seed     int
+		nested   bool
+		leaf     bool
+		complete bool
+	}{
+		{name: "exact limit", seed: readonlyRuntimeEntryLimit - 1, complete: true},
+		{name: "root overflow", seed: readonlyRuntimeEntryLimit},
+		{name: "leaf overflow", seed: readonlyRuntimeEntryLimit - 1, leaf: true},
+		{name: "nested overflow", seed: readonlyRuntimeEntryLimit - 2, nested: true, leaf: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			base := t.TempDir()
+			parent := base
+			if test.nested {
+				parent = filepath.Join(base, "nested")
+				if err := os.Mkdir(parent, 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if test.leaf {
+				if err := os.WriteFile(filepath.Join(parent, "leaf"), []byte("contents must not be read"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			file, err := os.Open(base)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() {
+				if err := file.Close(); err != nil {
+					t.Error(err)
+				}
+			})
+			info, err := file.Stat()
+			if err != nil {
+				t.Fatal(err)
+			}
+			facts, err := readonlyFacts(info)
+			if err != nil {
+				t.Fatal(err)
+			}
+			census := readonlyRuntimeCensus{uid: uint32(os.Getuid()), gid: uint32(os.Getgid())}
+			census.mount, err = readonlyMountID(file, "", unix.AT_EMPTY_PATH)
+			if err != nil {
+				t.Fatal(err)
+			}
+			walk := runtimeMetadataWalker{validator: census, report: runtimeMetadataReport{MetadataOnly: true, Visited: test.seed}}
+			err = walk.directory(t.Context(), file, "/usr", facts, 0)
+			if test.complete && err != nil || !test.complete && (err == nil || !strings.Contains(err.Error(), "diagnostic runtime entry bound exceeded")) {
+				t.Fatalf("entry-bound propagation: complete=%t, err=%v", test.complete, err)
+			}
+			walk.report.finish(err)
+			wanted := readonlyRuntimeEntryLimit
+			if !test.complete {
+				wanted++
+			}
+			if walk.report.Visited != wanted || walk.report.Complete != test.complete || walk.report.Qualification || !walk.report.MetadataOnly {
+				t.Fatalf("entry-bound report differs: %+v", walk.report)
+			}
+			body, err := walk.report.encode()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var reported runtimeMetadataReport
+			if err := json.Unmarshal(body, &reported); err != nil {
+				t.Fatal(err)
+			}
+			if reported.Complete && reported.Visited > readonlyRuntimeEntryLimit || reported.Complete != test.complete || reported.Qualification || !test.complete && reported.Error == "" {
+				t.Fatalf("encoded bound failure granted completeness: %s", body)
+			}
+		})
 	}
 }

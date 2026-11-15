@@ -18,7 +18,9 @@ permissions:
 jobs:
   readonly:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 18
+    env:
+      EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -28,79 +30,97 @@ jobs:
         with:
           go-version: '1.26.11'
           cache: false
-      - name: Provision the existing readonly containment primitive
+      - name: Provision a signature-verified minimal Ubuntu runtime
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends bubblewrap
-          /usr/bin/bwrap --version
-      - name: Prepare the observed non-writable runtime fixture
+          sudo apt-get install --yes --no-install-recommends debootstrap ubuntu-keyring
+          sudo debootstrap --arch=amd64 --variant=minbase --components=main,universe \
+            --force-check-gpg --keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg \
+            --include=python3,git,bubblewrap,ca-certificates,libstdc++6 \
+            noble "$RUNNER_TEMP/grok-runtime-root" https://archive.ubuntu.com/ubuntu
+          sudo chroot "$RUNNER_TEMP/grok-runtime-root" /usr/bin/dpkg-query -W \
+            > "$RUNNER_TEMP/grok-runtime-packages.txt"
+          sudo chroot "$RUNNER_TEMP/grok-runtime-root" /usr/sbin/groupadd --gid="$(id -g)" uapfixture
+          sudo chroot "$RUNNER_TEMP/grok-runtime-root" /usr/sbin/useradd \
+            --uid="$(id -u)" --gid="$(id -g)" --no-create-home --home-dir=/work \
+            --shell=/usr/sbin/nologin uapfixture
+          sudo install -d -m 0755 "$RUNNER_TEMP/grok-runtime-root/opt/uap-input" \
+            "$RUNNER_TEMP/grok-runtime-root/work" "$RUNNER_TEMP/grok-runtime-input"
+          mkdir -m 700 "$RUNNER_TEMP/grok-readonly-evidence"
+      - name: Build exact tagged helpers without ambient Go flags
+        env:
+          GOENV: 'off'
+          GOFLAGS: ''
+          GOEXPERIMENT: ''
+          GOTOOLCHAIN: local
+          GOOS: linux
+          GOARCH: amd64
+          GOAMD64: v1
+          CGO_ENABLED: '0'
+          GOWORK: ${{ github.workspace }}/go.work
         run: |
-          sudo -n /usr/bin/python3 -I -B - <<'PY' > "$RUNNER_TEMP/grok-readonly-runtime.json"
-          import json, os, stat
-          paths = ('/usr/share', '/usr/share/applications')
-          report = dict(kind='ci-runtime-permission-preparation', prepared=False, paths=[])
-          held = []
-          def facts(value):
-              return dict(device=value.st_dev, inode=value.st_ino, uid=value.st_uid,
-                          gid=value.st_gid, mode=oct(value.st_mode), links=value.st_nlink)
-          def identity(value):
-              return value.st_dev, value.st_ino, value.st_uid, value.st_gid, value.st_nlink
-          def named(index):
-              return os.stat(paths[0], follow_symlinks=False) if index == 0 else os.stat('applications', dir_fd=held[0], follow_symlinks=False)
-          try:
-              flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
-              held.append(os.open(paths[0], flags))
-              held.append(os.open('applications', flags, dir_fd=held[0]))
-              originals = [os.fstat(fd) for fd in held]
-              for index, before in enumerate(originals):
-                  report['paths'].append(dict(path=paths[index], before=facts(before)))
-                  if before.st_uid != 0 or stat.S_IMODE(before.st_mode) not in (0o755, 0o777):
-                      raise ValueError('unexpected runtime fixture owner or permissions')
-                  if identity(before) != identity(named(index)):
-                      raise ValueError('original runtime fixture named identity changed')
-              for index, (fd, before) in enumerate(zip(held, originals)):
-                  expected = before.st_mode & ~0o022
-                  if before.st_mode != expected:
-                      os.fchmod(fd, stat.S_IMODE(expected))
-                  after, current = os.fstat(fd), named(index)
-                  report['paths'][index].update(after=facts(after), named_after=facts(current))
-                  if identity(before) != identity(after) or identity(after) != identity(current):
-                      raise ValueError('runtime fixture identity or ownership changed')
-                  if after.st_mode != expected or current.st_mode != expected:
-                      raise ValueError('runtime fixture changed beyond the two write bits')
-              for index, fd in enumerate(held):
-                  if facts(os.fstat(fd)) != facts(named(index)):
-                      raise ValueError('settled runtime fixture named identity changed')
-              report['prepared'] = True
-          except Exception as error:
-              report['error'] = type(error).__name__ + ': ' + str(error)
-              raise
-          finally:
-              print(json.dumps(report, sort_keys=True))
-              for fd in reversed(held):
-                  os.close(fd)
-          PY
-      - name: Build the genuine tagged metadata test
-        run: |
+          test "$(go env GOVERSION)" = go1.26.11
+          go version
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git diff --exit-code HEAD --
           go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-readonly-test" ./install/integrationctl/agentplugins/clients/grok
           go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-runtime-metadata-test" ./install/integrationctl/adapters/process
-      - name: Collect bounded runtime metadata without qualification
+          "$RUNNER_TEMP/grok-runtime-metadata-test" \
+            -test.run='^TestReadonlyRuntimeMetadataDiagnostic(Controls|VisitBound)$' -test.count=1 -test.v -test.timeout=30s
+          sudo install -m 0555 "$RUNNER_TEMP/grok-readonly-test" "$RUNNER_TEMP/grok-runtime-input/grok-readonly-test"
+          sudo install -m 0555 "$RUNNER_TEMP/grok-runtime-metadata-test" "$RUNNER_TEMP/grok-runtime-input/grok-runtime-metadata-test"
+          sudo install -m 0444 scripts/e2e/grok-enable-readonly.py "$RUNNER_TEMP/grok-runtime-input/grok-enable-readonly.py"
+          python3 -I -B - <<'PYTHON' > "$RUNNER_TEMP/grok-runtime-build.json"
+          import hashlib, json, os, pathlib, stat, subprocess
+          temporary = pathlib.Path(os.environ['RUNNER_TEMP'])
+          sources = {'grok-readonly-test': temporary / 'grok-readonly-test',
+                     'grok-runtime-metadata-test': temporary / 'grok-runtime-metadata-test',
+                     'grok-enable-readonly.py': pathlib.Path('scripts/e2e/grok-enable-readonly.py')}
+          copied = {}
+          for name, source in sources.items():
+              target = temporary / 'grok-runtime-input' / name
+              before, after = hashlib.sha256(source.read_bytes()).hexdigest(), hashlib.sha256(target.read_bytes()).hexdigest()
+              info = target.lstat()
+              if before != after or not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o222:
+                  raise ValueError('copied fixed input differs or is writable')
+              copied[name] = dict(sha256=after, bytes=info.st_size, mode=oct(info.st_mode), uid=info.st_uid)
+          subprocess.run(['git', 'diff', '--exit-code', 'HEAD', '--'], check=True)
+          command = lambda *args: subprocess.check_output(args, text=True).strip()
+          if command('git', 'rev-parse', 'HEAD') != os.environ['EXPECTED_SOURCE_SHA']:
+              raise ValueError('copied helpers do not match the selected source head')
+          print(json.dumps(dict(source_head=command('git', 'rev-parse', 'HEAD'),
+              source_tree=command('git', 'rev-parse', 'HEAD^{tree}'), go_version=command('go', 'version'),
+              build_environment={key: os.environ[key] for key in ('GOENV','GOFLAGS','GOEXPERIMENT','GOTOOLCHAIN','GOOS','GOARCH','GOAMD64','CGO_ENABLED','GOWORK')},
+              build_flags={'grok-readonly-test': ['test', '-tags=grokreadonlynative', '-c'],
+                           'grok-runtime-metadata-test': ['test', '-tags=grokreadonlynative', '-c']},
+              copied_inputs=copied), sort_keys=True))
+          PYTHON
+      - name: Collect bounded clean-runtime metadata without qualification
         continue-on-error: true
         run: |
-          "$RUNNER_TEMP/grok-runtime-metadata-test" -test.run='^TestReadonlyRuntimeMetadataDiagnostic$' \
-            -test.count=1 -test.v -test.timeout=40s \
-            -runtime-metadata-output="$RUNNER_TEMP/grok-runtime-metadata.json"
-      - name: Run exact native gate in a delegated ordinary-user service
+          sudo -n /usr/bin/systemd-run --unit="uap-grok-metadata-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --wait --pipe --collect --quiet --service-type=exec --expand-environment=no \
+            --uid="$(id -u)" --gid="$(id -g)" --property=NoNewPrivileges=yes \
+            --property="RootDirectory=$RUNNER_TEMP/grok-runtime-root" --property=MountAPIVFS=yes \
+            --property="BindReadOnlyPaths=$RUNNER_TEMP/grok-runtime-input:/opt/uap-input" \
+            --property="BindPaths=$RUNNER_TEMP/grok-readonly-evidence:/work" \
+            --property=RuntimeMaxSec=45s --property=TimeoutStopSec=15s \
+            /usr/bin/env -i PATH=/usr/bin:/bin \
+            /opt/uap-input/grok-runtime-metadata-test -test.run='^TestReadonlyRuntimeMetadataDiagnostic$' \
+            -test.count=1 -test.v -test.timeout=40s -runtime-metadata-output=/work/runtime-metadata.json
+      - name: Run the mandatory native gate in the delegated clean runtime
         run: |
-          mkdir -m 700 "$RUNNER_TEMP/grok-readonly-evidence"
           sudo -n /usr/bin/systemd-run --unit="uap-grok-readonly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --wait --pipe --collect --quiet --service-type=exec --expand-environment=no \
             --uid="$(id -u)" --gid="$(id -g)" --property=Delegate=yes \
             --property=NoNewPrivileges=yes --property=KillMode=control-group \
+            --property="RootDirectory=$RUNNER_TEMP/grok-runtime-root" --property=MountAPIVFS=yes \
+            --property="BindReadOnlyPaths=$RUNNER_TEMP/grok-runtime-input:/opt/uap-input" \
+            --property="BindPaths=$RUNNER_TEMP/grok-readonly-evidence:/work /sys/fs/cgroup" \
             --property=RuntimeMaxSec=180s --property=TimeoutStopSec=15s \
             /usr/bin/env -i PATH=/usr/bin:/bin \
-            /usr/bin/python3 -I -B "$GITHUB_WORKSPACE/scripts/e2e/grok-enable-readonly.py" \
-            --test "$RUNNER_TEMP/grok-readonly-test" --output "$RUNNER_TEMP/grok-readonly-evidence"
+            /usr/bin/python3 -I -B /opt/uap-input/grok-enable-readonly.py \
+            --test /opt/uap-input/grok-readonly-test --output /work
       - name: Retain the actual native verdict and bounded diagnostic
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
@@ -108,7 +128,8 @@ jobs:
           name: grok-readonly-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             ${{ runner.temp }}/grok-readonly-evidence/evidence.json
-            ${{ runner.temp }}/grok-readonly-runtime.json
-            ${{ runner.temp }}/grok-runtime-metadata.json
+            ${{ runner.temp }}/grok-readonly-evidence/runtime-metadata.json
+            ${{ runner.temp }}/grok-runtime-build.json
+            ${{ runner.temp }}/grok-runtime-packages.txt
           if-no-files-found: error
           retention-days: 14

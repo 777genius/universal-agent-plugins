@@ -10,7 +10,7 @@ const path = require("node:path");
 const test = require("node:test");
 
 const { detectPlatform, expectedAssetName } = require("../lib/platform");
-const { prepareRelease, verifyRelease } = require("../scripts/release-assets");
+const { expectedAssets, prepareRelease, verifyRelease } = require("../scripts/release-assets");
 const { stage, stageEvidence, validateEvidenceRecord, validatePackageMetadata } = require("../scripts/stage-release");
 
 const COMMIT = "a".repeat(40);
@@ -593,4 +593,49 @@ test("release staging rejects unsafe package metadata", () => {
     () => validatePackageMetadata({ name: "agentplugins-cli", bin: { other: "bin/agentplugins.js" } }),
     /must expose the agentplugins binary/
   );
+});
+
+test("release assets preserve full-width identities and safe JSON sizes", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentplugins-release-identity-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const version = "1.2.3";
+  const files = Object.values(expectedAssets(version)).map((name) => path.join(root, name));
+  for (const file of files) fs.writeFileSync(file, "synthetic asset " + path.basename(file));
+  const identities = files.map((_, index) => 2n ** 53n + BigInt(index));
+  assert.equal(Number(identities[0]), Number(identities[1]));
+  assert.notEqual(identities[0], identities[1]);
+
+  const originalLstat = fs.lstatSync;
+  let identityField = "ino";
+  let duplicate = false;
+  let unsafeSize = false;
+  t.mock.method(fs, "lstatSync", (file, options) => {
+    const stat = originalLstat(file, options);
+    const index = files.indexOf(file);
+    if (index < 0) return stat;
+    const value = (number) => options?.bigint === true ? number : Number(number);
+    stat.dev = value(7n);
+    stat.ino = value(11n);
+    stat[identityField] = value(identities[duplicate ? 0 : index]);
+    if (unsafeSize) stat.size = value(2n ** 53n);
+    return stat;
+  });
+
+  for (const field of ["ino", "dev"]) {
+    identityField = field;
+    const manifest = prepareRelease(root, `agentplugins-v${version}`, COMMIT);
+    assert.equal(Object.keys(manifest.assets).length, files.length);
+    for (const asset of Object.values(manifest.assets)) {
+      assert.equal(typeof asset.size, "number");
+      assert.ok(Number.isSafeInteger(asset.size) && asset.size > 0);
+    }
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "release-manifest.json"), "utf8")), manifest);
+    assert.doesNotThrow(() => verifyRelease(root, `agentplugins-v${version}`, COMMIT));
+  }
+
+  duplicate = true;
+  assert.throws(() => prepareRelease(root, `agentplugins-v${version}`, COMMIT), /release asset is aliased/);
+  duplicate = false;
+  unsafeSize = true;
+  assert.throws(() => prepareRelease(root, `agentplugins-v${version}`, COMMIT), /size is not a safe integer/);
 });
