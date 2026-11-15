@@ -63,7 +63,7 @@ func coldEnablementRecovery(fixture enablementFixture) EnablementRecovery {
 func coldParentFixture(t *testing.T, stage string) enablementFixture {
 	t.Helper()
 	if stage == "remove-native" || stage == "remove-decision" || stage == "remove-state" {
-		fixture, desired := removalEnablementFixture(t)
+		fixture, desired := removalEnablementFixture(t, 3)
 		applyRemovalFixture(t, fixture)
 		if stage != "remove-native" {
 			if _, err := fixture.recovery.PrepareNativeRemovalDecision(t.Context(), fixture.record.InstallationID, fixture.record.BindingID, fixture.loaded(t), desired); err != nil {

@@ -103,6 +103,9 @@ func (recovery EnablementRecovery) PrepareNativeRemovalDecision(ctx context.Cont
 	if err := ctx.Err(); err != nil {
 		return true, err
 	}
+	if !New().SupportsPluginEnablement(domain.ScopeProject) || record.Version != 3 {
+		return true, errEnablementUnqualified
+	}
 	if record.Action != "remove" || record.InstallationID != installationID || record.BindingID != bindingID ||
 		enablementStateDigest(before) != record.AttemptStateDigest {
 		return true, fmt.Errorf("grok removal decision differs from its pending authority")
