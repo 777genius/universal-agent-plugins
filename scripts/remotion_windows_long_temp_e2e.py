@@ -16,6 +16,62 @@ import tempfile
 FIXTURE_SHA256 = "7399eaed15b3eb0981a6be12082dd8825529e896a59ea125b9500a666c21112e"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
 
+# Codex 0.153.4 supports native sqlite_home/log_dir in config.toml. These
+# process-generated stores must not be mistaken for active plugin configuration.
+# Both remain inside the same disposable case and get independent validation.
+CODEX_DB_NAMES = {
+    "state_5.sqlite", "logs_2.sqlite", "goals_1.sqlite",
+    "memories_1.sqlite", "queue_1.sqlite", "thread_history_1.sqlite",
+}
+
+
+def prepare_codex_runtime_case(root):
+    case = root / "skill-24"
+    profile = case / "home" / ".codex"
+    sqlite = case / "home" / ".local" / "state" / "codex-sqlite"
+    logs = case / "home" / ".local" / "state" / "codex-logs"
+    for directory in (profile, sqlite, logs):
+        directory.mkdir(parents=True, exist_ok=False)
+        if directory.is_symlink() or not directory.resolve(strict=True).is_relative_to(case.resolve(strict=True)):
+            raise RuntimeError("Codex runtime store escaped disposable case")
+    config = profile / "config.toml"
+    original = ("sqlite_home = " + json.dumps(str(sqlite.resolve(strict=True))) +
+                "\nlog_dir = " + json.dumps(str(logs.resolve(strict=True))) + "\n").encode()
+    with config.open("xb") as stream:
+        stream.write(original)
+    return case, config, original, sqlite, logs
+
+
+def verify_codex_runtime_case(prepared):
+    case, config, original, sqlite, logs = prepared
+    if config.is_symlink() or config.read_bytes() != original:
+        raise RuntimeError("native Codex runtime configuration changed during lifecycle")
+    anchor = case.resolve(strict=True)
+    counts = {"sqlite": 0, "logs": 0}
+    for label, root in (("sqlite", sqlite), ("logs", logs)):
+        if root.is_symlink() or not root.is_dir() or not root.resolve(strict=True).is_relative_to(anchor):
+            raise RuntimeError("Codex runtime metadata store escaped disposable case")
+        for base, dirs, files in os.walk(root, followlinks=False):
+            for name in dirs:
+                directory = Path(base) / name
+                if directory.is_symlink() or not directory.is_dir() or not directory.resolve(strict=True).is_relative_to(anchor):
+                    raise RuntimeError("Codex runtime metadata contains an unsafe directory")
+            for name in files:
+                file = Path(base) / name
+                if file.is_symlink() or not file.is_file() or not file.resolve(strict=True).is_relative_to(anchor):
+                    raise RuntimeError("Codex runtime metadata contains an unsafe file")
+                # Only six DBs from exact upstream Codex 0.153.4 and their
+                # SQLite WAL/SHM/journal companions qualify in this store.
+                if label == "sqlite" and not any(name == db or name in (
+                        db + "-wal", db + "-shm", db + "-journal") for db in CODEX_DB_NAMES):
+                    raise RuntimeError("Codex runtime SQLite store has an unknown member")
+                if file.stat().st_size > (256 << 20 if label == "sqlite" else 32 << 20):
+                    raise RuntimeError("Codex runtime metadata exceeds per-file audit bound")
+                counts[label] += 1
+    if counts["sqlite"] == 0:
+        raise RuntimeError("pinned Codex did not use its separately guarded SQLite home")
+    return counts
+
 
 def main():
     if os.name != "nt":
@@ -67,9 +123,13 @@ def main():
             raise RuntimeError("default Windows TEMP is not longer than runner TEMP")
         for label, root in (("runner-temp", short), ("default-windows-temp", long)):
             try:
+                runtime = prepare_codex_runtime_case(root)
                 row = audit.do_case(str(cli), "codex", "skill", item, 24, root,
                                     fixtures["plugin_declared_names"], fixtures["signed_release_pins"])
-                evidence["results"][label] = {"root_chars": len(str(root / "skill-24")), "case": row}
+                runtime_counts = verify_codex_runtime_case(runtime)
+                evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
+                                              "codex_runtime_stores_checked": runtime_counts,
+                                              "case": row}
                 if row.get("status") != "passed":
                     failures.append(f"{label}: native E2E case did not PASS")
             except Exception as error:
