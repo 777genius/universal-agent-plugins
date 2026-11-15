@@ -11,6 +11,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminalactivity"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 )
 
@@ -19,7 +20,7 @@ func startCommandActivity(cmd *cobra.Command, app App, opts *options, label stri
 		return func() {}
 	}
 	writer := cmd.ErrOrStderr()
-	live := !opts.plain && os.Getenv("TERM") != "dumb" && terminaltheme.IsTerminal(terminaltheme.Unwrap(writer))
+	live := terminalprompts.DetectMode(cmd.InOrStdin(), cmd.OutOrStdout(), writer, opts.plain) == terminalprompts.Rich
 	width := func() int {
 		if file, ok := terminaltheme.Unwrap(writer).(*os.File); ok {
 			if columns, _, err := term.GetSize(int(file.Fd())); err == nil {

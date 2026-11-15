@@ -40,20 +40,26 @@ func terminal(v any) bool {
 	return ok && term.IsTerminal(int(f.Fd()))
 }
 
-// New receives the CLI-resolved noColor decision for the visible stream.
-// It must not reapply NO_COLOR after explicit flags have overridden it.
-func New(input io.Reader, output, errorOutput io.Writer, plain, noColor bool) (prompt.Prompter, io.Writer, error) {
+// DetectMode observes the same streams and dimensions for prompts and passive
+// activity. It does not read input or enter terminal raw mode.
+func DetectMode(input io.Reader, output, errorOutput io.Writer, plain bool) Mode {
 	c := Capabilities{InputTTY: terminal(input), OutputTTY: terminal(output), ErrorTTY: terminal(errorOutput), TERM: os.Getenv("TERM"), GOOS: runtime.GOOS}
 	if f, ok := terminaltheme.Unwrap(output).(*os.File); ok {
 		w, h, e := term.GetSize(int(f.Fd()))
 		c.SizeOK = e == nil && w >= 40 && h >= 10
 	}
-	mode := ResolveMode(c, plain)
+	return ResolveMode(c, plain)
+}
+
+// New receives the CLI-resolved noColor decision for the visible stream.
+// It must not reapply NO_COLOR after explicit flags have overridden it.
+func New(input io.Reader, output, errorOutput io.Writer, plain, noColor bool) (prompt.Prompter, io.Writer, error) {
+	mode := DetectMode(input, output, errorOutput, plain)
 	if mode == Unavailable {
 		return nil, nil, prompt.ErrPromptUnavailable
 	}
 	visible := output
-	if !c.OutputTTY {
+	if !terminal(output) {
 		visible = errorOutput
 	}
 	if mode == Rich {
