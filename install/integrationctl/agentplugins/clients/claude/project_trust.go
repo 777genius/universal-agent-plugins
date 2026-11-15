@@ -18,26 +18,34 @@ import (
 // folder. This persistent user preference is independent of plugin ownership;
 // removal never revokes it or changes another project's trust.
 func grantClaudeProjectTrust(env clients.Env, request domain.ActivationRequest) (bool, error) {
-	root, err := claudePlanProjectRoot(request.Client, request.Plan)
+	project, err := claudeTrustableProject(request)
 	if err != nil {
 		return false, err
-	}
-	project := filepath.Dir(root)
-	_, home, err := boundedClaudeProbeEnvironment()
-	if err != nil {
-		return false, err
-	}
-	physicalHome, err := filepath.EvalSymlinks(home)
-	if err != nil {
-		return false, fmt.Errorf("resolve Claude Code home before project trust: %w", err)
-	}
-	if project == home || project == physicalHome {
-		return false, fmt.Errorf("claude Code project trust cannot grant the entire home directory")
 	}
 	if request.VerifyOnly || request.Delivery.ArtifactDigest == "" {
 		return false, fmt.Errorf("claude Code project trust requires a confirmed verified delivery")
 	}
 	return shared.UpdateProjectTrustFile(env.NativeConfig, filepath.Join(request.Client.ConfigRoot, ".claude.json"), func(body []byte) ([]byte, error) { return renderClaudeProjectTrust(body, project) })
+}
+
+func claudeTrustableProject(request domain.ActivationRequest) (string, error) {
+	root, err := claudePlanProjectRoot(request.Client, request.Plan)
+	if err != nil {
+		return "", err
+	}
+	project := filepath.Dir(root)
+	_, home, err := boundedClaudeProbeEnvironment()
+	if err != nil {
+		return "", err
+	}
+	physicalHome, err := filepath.EvalSymlinks(home)
+	if err != nil {
+		return "", fmt.Errorf("resolve Claude Code home before project trust: %w", err)
+	}
+	if project == home || project == physicalHome {
+		return "", fmt.Errorf("claude Code project trust cannot grant the entire home directory")
+	}
+	return project, nil
 }
 
 func renderClaudeProjectTrust(body []byte, project string) ([]byte, error) {

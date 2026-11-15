@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
@@ -156,7 +157,7 @@ func TestClaudeProjectMarketplaceNativeAdapterLifecycle(t *testing.T) {
 	request := newClaudeMarketplaceRequest(t)
 	request.BackendExecutable, request.Client.ExecutablePath = binary, binary
 	runner := &claudeNativeAdapterRunner{t: t, evidence: os.Getenv("AGENTPLUGINS_CLAUDE_ADAPTER_EVIDENCE_DIR")}
-	env := clients.Env{Runner: runner}
+	env := clients.Env{Runner: runner, NativeConfig: nativeconfig.New()}
 	outcome, err := New().Activate(t.Context(), env, request)
 	if err != nil || outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled || outcome.NativeEffect != domain.NativeEffectCommitted {
 		t.Fatalf("initial native activation: %+v %v", outcome, err)
@@ -253,7 +254,7 @@ func TestClaudeUserNativeAdapterLifecycle(t *testing.T) {
 	if evidence := os.Getenv("AGENTPLUGINS_CLAUDE_ADAPTER_EVIDENCE_DIR"); evidence != "" {
 		runner.evidence = filepath.Join(evidence, "user")
 	}
-	env := clients.Env{Runner: runner}
+	env := clients.Env{Runner: runner, NativeConfig: nativeconfig.New()}
 	for range 2 {
 		out, err := New().Activate(t.Context(), env, request)
 		if err != nil || out.Activation != domain.ActivationActive || out.Verification != domain.VerificationInstalled {
