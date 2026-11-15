@@ -16,3 +16,13 @@ func TestUserProfileCreationPolicyDoesNotAdoptExistingBindings(t *testing.T) {
 		t.Fatal("unknown client received profile-recording policy")
 	}
 }
+
+// Other clients cannot inherit Copilot's explicit saved project repair policy.
+func TestSavedProjectRepairOnAddIsNotGeneric(t *testing.T) {
+	for _, definition := range ClientDefinitions() {
+		want := definition.ID == ClientCopilot
+		if got := ClientTraitsFor(definition.ID).SavedProjectRepairOnAdd; got != want {
+			t.Errorf("%s saved project repair opt-in = %t, want %t", definition.ID, got, want)
+		}
+	}
+}

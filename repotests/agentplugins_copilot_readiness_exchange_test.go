@@ -142,7 +142,10 @@ func (f *copilotProjectAttempt) readiness(body []byte, p *copilotProjectProvider
 	return f.readinessBytes(body, log, p)
 }
 func (f *copilotProjectAttempt) readinessBytes(body, log []byte, p *copilotProjectProvider) (string, error) {
-	s, err := copilotReadinessDecode(body, f.nativeStarted, f.nativeEnded)
+	return f.readinessBytesOrder(body, log, p, false)
+}
+func (f *copilotProjectAttempt) readinessBytesOrder(body, log []byte, p *copilotProjectProvider, interleaved bool) (string, error) {
+	s, err := copilotReadinessDecodeOrder(body, f.nativeStarted, f.nativeEnded, interleaved)
 	if err != nil {
 		return "", err
 	}

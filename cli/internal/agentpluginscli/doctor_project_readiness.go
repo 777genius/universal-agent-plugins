@@ -145,7 +145,7 @@ func projectNativeClientActions(clientID string) []string {
 		return []string{"Start Gemini CLI in the selected project and review workspace trust and .gemini/settings.json",
 			"Inspect native skill discovery and MCP status in the current Gemini CLI session"}
 	case "copilot":
-		return []string{"Start GitHub Copilot CLI in the selected project and review native trust and MCP configuration",
+		return []string{"Start GitHub Copilot CLI in the selected project; confirmed project installation remembers its folder trust",
 			"Confirm project .github/skills and project MCP loading in a fresh Copilot CLI session"}
 	case "cursor":
 		return []string{"Open the selected project in Cursor and review workspace trust, project Skills and MCP settings",

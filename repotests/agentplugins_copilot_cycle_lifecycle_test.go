@@ -159,6 +159,9 @@ func TestAgentpluginsCopilotNativeProjectCompleteCycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_COPILOT_PROJECT_RUNTIME_ATTEMPT") != "1" {
 		t.Skip("opt-in genuine hosted complete Copilot cycle")
 	}
+	if !t.Run("remembered_project_trust", testCopilotProjectTrustInstallation) {
+		t.Fatal("Copilot project trust installation did not pass")
+	}
 	f := newCopilotProjectAttempt(t)
 	c := newCopilotProjectCycle(f)
 	defer c.finish(t)

@@ -38,6 +38,12 @@ type ActivationVerifierClassifier interface {
 	VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool
 }
 
+// ActivationReadinessInspector observes required native configuration without
+// mutating it. An absent capability preserves projection-only completeness.
+type ActivationReadinessInspector interface {
+	RequiresActivation(context.Context, domain.DetectedClient, domain.DeliveryPlan) (bool, error)
+}
+
 // ManagedStdioPreflighter resolves a declared stdio helper against the managed
 // runtime before the plan promises to deliver it.
 type ManagedStdioPreflighter interface {
