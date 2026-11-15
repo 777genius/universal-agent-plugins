@@ -54,6 +54,23 @@ import registry, so it cannot establish Project activation. Vendor enable and
 disable also write shared configuration and remain outside ordinary UAP
 installation consent. UAP removes only the directory it owns.
 
+### Source addition: automatic User inventory readback
+
+The current source adds read-only inventory to confirmed User repeat, update
+and intact repair. It uses the original detected profile and the exact
+`agy 1.5.3` executable. A supported existing native configuration allows UAP to
+report whether its exact physical package is enabled or disabled. An initial
+file installation does not create native settings; a repeated add can also
+observe an originally absent configuration without creating it. Grouped repair
+without native settings retains its existing file-only behavior.
+
+The observation preserves **Prepared** and the existing ownership receipts.
+Disabled plugins remain disabled. Preview does not run the native commands,
+and Project installation and SDK requests without independently observed native
+profile provenance keep their existing file-only behavior. Unknown native
+versions, ambiguous inventory or changed config/executable identity are refused.
+This source addition is separate from the published release described above.
+
 **Merge qualification:** Require passing pinned `agy plugin validate --strict`,
 separate disposable vendor CLI import/list/uninstall, UAP User and Project
 add/remove with independent ownership, complete applicable cross-OS CI, support
