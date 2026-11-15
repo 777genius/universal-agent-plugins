@@ -47,3 +47,58 @@ func TestFilterableSelectionPreservesBasketAndQueuedNextAnswer(t *testing.T) {
 		t.Fatal("selection succeeded without displaying a question")
 	}
 }
+
+func TestFilterableSelectionKeepsClippedLabelsIndependent(t *testing.T) {
+	prefix := "review · " + strings.Repeat("shared-directory/", 40)
+	req := MultiSelectRequest{
+		SelectRequest: SelectRequest{Title: "Choose Skills", Options: []Option{
+			{ID: "first", Label: prefix + "one/review"},
+			{ID: "second", Label: prefix + "two/review"},
+		}},
+		MinSelected: 1,
+		Filterable:  true,
+	}
+	for _, tt := range []struct {
+		name, input, want string
+	}{
+		{name: "first", input: " \r", want: "first"},
+		{name: "second", input: "\x1b[B \r", want: "second"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var output strings.Builder
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			selected, err := (testRich{Input: strings.NewReader(tt.input), Output: &output, NoColor: true}).SelectMany(ctx, req)
+			if err != nil || !reflect.DeepEqual(selected.IDs, []string{tt.want}) {
+				t.Fatalf("clipped labels changed another selection: %+v %v", selected, err)
+			}
+		})
+	}
+}
+
+func TestFilterableSelectionRecoversFromEmptyFilterNavigation(t *testing.T) {
+	req := MultiSelectRequest{SelectRequest: SelectRequest{Title: "Choose Skills", Options: []Option{
+		{ID: "alpha", Label: "Alpha"}, {ID: "beta", Label: "Beta"},
+	}}, MinSelected: 1, Filterable: true}
+	for _, tt := range []struct {
+		name, input, want string
+	}{
+		{name: "apply empty query", input: "/missing\x1b[B\r \r", want: "alpha"},
+		{name: "replace empty query", input: "/missing\x1b[B" + strings.Repeat("\x7f", 7) + "Beta\r \r", want: "beta"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			input := strings.NewReader(tt.input + "next-answer\n")
+			var output strings.Builder
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			selected, err := (testRich{Input: input, Output: &output, NoColor: true}).SelectMany(ctx, req)
+			if err != nil || !reflect.DeepEqual(selected.IDs, []string{tt.want}) {
+				t.Fatalf("empty filter navigation lost the selection: %+v %v", selected, err)
+			}
+			rest, err := io.ReadAll(input)
+			if err != nil || string(rest) != "next-answer\n" {
+				t.Fatalf("empty filter navigation consumed the next answer: %q %v", rest, err)
+			}
+		})
+	}
+}

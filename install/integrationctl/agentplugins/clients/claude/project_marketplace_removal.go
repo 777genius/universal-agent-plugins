@@ -68,6 +68,17 @@ func removeClaudeProjectCache(ctx context.Context, request domain.DeactivationRe
 }
 
 func claudeProjectCacheRemovalIdentity(configRoot, cache string, parent *os.Root, before os.FileInfo) error {
+	if err := claudeProjectCacheParentIdentity(configRoot, cache, parent); err != nil {
+		return err
+	}
+	current, err := parent.Lstat(filepath.Base(cache))
+	if err != nil || !current.IsDir() || !os.SameFile(before, current) {
+		return fmt.Errorf("the Claude cache changed before removal")
+	}
+	return nil
+}
+
+func claudeProjectCacheParentIdentity(configRoot, cache string, parent *os.Root) error {
 	if err := pathpolicy.RequireContainedChild(configRoot, cache); err != nil {
 		return err
 	}
@@ -79,115 +90,184 @@ func claudeProjectCacheRemovalIdentity(configRoot, cache string, parent *os.Root
 	if err != nil || !os.SameFile(held, named) {
 		return fmt.Errorf("the Claude cache parent changed before removal")
 	}
-	current, err := parent.Lstat(filepath.Base(cache))
-	if err != nil || !current.IsDir() || !os.SameFile(before, current) {
-		return fmt.Errorf("the Claude cache changed before removal")
-	}
 	return nil
 }
 
+type claudeRetiredCacheVerifier func(context.Context, domain.DeactivationRequest, string, string) error
 
-// retireClaudeProjectCache is also exercised with a deterministic swap after
-// the caller's last identity check. A mismatch is retained for manual recovery;
-// never restore with a rename that could overwrite a new foreign cache.
+// A mismatch is retained for manual recovery; never restore with a rename that
+// could overwrite a new foreign cache. The verifier parameter is a local seam
+// for exercising real namespace replacement around the content read.
 func retireClaudeProjectCache(ctx context.Context, request domain.DeactivationRequest, cache string, parent *os.Root, before os.FileInfo, effect *domain.NativeEffectState) error {
+	return retireClaudeProjectCacheWithVerifier(ctx, request, cache, parent, before, effect, verifyClaudeRetiredCache)
+}
+
+func retireClaudeProjectCacheWithVerifier(ctx context.Context, request domain.DeactivationRequest, cache string, parent *os.Root, before os.FileInfo, effect *domain.NativeEffectState, verify claudeRetiredCacheVerifier) error {
 	*effect = domain.NativeEffectUncertain
-	var nonce [16]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return fmt.Errorf("create Claude cache retirement identity: %w", err)
-	}
-	quarantineName := ".agentplugins-cache-retire-" + hex.EncodeToString(nonce[:])
-	if err := parent.Mkdir(quarantineName, 0700); err != nil {
-		return fmt.Errorf("create exclusive Claude cache quarantine: %w", err)
-	}
-	quarantine, err := parent.OpenRoot(quarantineName)
+	quarantine, err := newClaudeCacheQuarantine(parent)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = quarantine.Close() }()
-	held, err := quarantine.Stat(".")
-	if err != nil {
-		return err
-	}
-	named, err := parent.Lstat(quarantineName)
-	if err != nil || !os.SameFile(held, named) {
-		return fmt.Errorf("the private Claude cache quarantine changed before retirement")
+	retiredPath := filepath.Join(quarantine.Name(), "retired")
+	retain := func(cause error) error {
+		return fmt.Errorf("Claude cache retirement is uncertain; original private path %q: %w", retiredPath, cause)
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return retain(err)
 	}
-	const retired = "retired"
-	if err := parent.Rename(filepath.Base(cache), filepath.Join(quarantineName, retired)); err != nil {
-		return fmt.Errorf("move the Claude cache into exclusive retirement: %w", err)
+	if err := parent.Rename(filepath.Base(cache), filepath.Join(filepath.Base(quarantine.Name()), "retired")); err != nil {
+		return retain(fmt.Errorf("move the Claude cache into exclusive retirement: %w", err))
 	}
-	retiredPath := filepath.Join(filepath.Dir(cache), quarantineName, retired)
-	retain := func(cause error) error {
-		return fmt.Errorf("Claude cache retirement is uncertain; retained at %q for inspection: %w", retiredPath, cause)
-	}
-	moved, err := quarantine.Lstat(retired)
-	if err != nil || !moved.IsDir() || !os.SameFile(before, moved) {
-		return retain(fmt.Errorf("the moved cache is not the previously verified owned directory"))
-	}
-	owned, err := quarantine.OpenRoot(retired)
+	owned, err := openClaudeRetiredCache(quarantine, before)
 	if err != nil {
 		return retain(err)
 	}
 	defer func() { _ = owned.Close() }()
-	pinned, err := owned.Stat(".")
-	if err != nil || !os.SameFile(before, pinned) {
-		return retain(fmt.Errorf("the retired cache handle does not reference the owned directory"))
-	}
-	if err := verifyClaudeRetiredCache(ctx, request, cache, retiredPath); err != nil {
+	if err := verifyAndRemoveClaudeRetiredCache(ctx, request, cache, parent, quarantine, owned, before, verify); err != nil {
 		return retain(err)
 	}
-	if err := ctx.Err(); err != nil {
-		return retain(err)
-	}
-	// Remove children via the pinned directory handle, not via a basename
-	// that might have been replaced after verification. Only an empty
-	// directory is removed by name at the end.
-	directory, err := owned.Open(".")
-	if err != nil {
-		return retain(err)
-	}
-	entries, readErr := directory.ReadDir(-1)
-	closeErr := directory.Close()
-	if readErr != nil {
-		return retain(readErr)
-	}
-	if closeErr != nil {
-		return retain(closeErr)
-	}
-	for _, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			return retain(err)
-		}
-		if err := owned.RemoveAll(entry.Name()); err != nil {
-			return retain(err)
-		}
-	}
-	current, err := quarantine.Lstat(retired)
-	if err != nil || !os.SameFile(before, current) {
-		return retain(fmt.Errorf("the retired cache name changed during cleanup"))
-	}
-	if err := owned.Close(); err != nil {
-		return retain(err)
-	}
-	if err := quarantine.Remove(retired); err != nil {
-		return retain(err)
-	}
-	if err := quarantine.Close(); err != nil {
-		return retain(err)
-	}
-	current, err = parent.Lstat(quarantineName)
-	if err != nil || !os.SameFile(held, current) {
-		return retain(fmt.Errorf("the private cache quarantine changed before final cleanup"))
-	}
-	if err := parent.Remove(quarantineName); err != nil {
+	if err := finishClaudeCacheRetirement(parent, quarantine, owned, before); err != nil {
 		return retain(err)
 	}
 	*effect = domain.NativeEffectCommitted
 	return nil
+}
+
+func newClaudeCacheQuarantine(parent *os.Root) (*os.Root, error) {
+	var nonce [16]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return nil, fmt.Errorf("create Claude cache retirement identity: %w", err)
+	}
+	name := ".agentplugins-cache-retire-" + hex.EncodeToString(nonce[:])
+	if err := parent.Mkdir(name, 0700); err != nil {
+		return nil, fmt.Errorf("create exclusive Claude cache quarantine: %w", err)
+	}
+	quarantine, err := parent.OpenRoot(name)
+	if err != nil {
+		return nil, fmt.Errorf("open private Claude cache quarantine %q: %w", filepath.Join(parent.Name(), name), err)
+	}
+	if err := claudeCacheQuarantineIdentity(parent, quarantine); err != nil {
+		_ = quarantine.Close()
+		return nil, fmt.Errorf("private Claude cache quarantine at %q requires inspection: %w", filepath.Join(parent.Name(), name), err)
+	}
+	return quarantine, nil
+}
+
+func claudeCacheQuarantineIdentity(parent, quarantine *os.Root) error {
+	held, err := quarantine.Stat(".")
+	if err != nil {
+		return err
+	}
+	named, err := parent.Lstat(filepath.Base(quarantine.Name()))
+	if err != nil || !named.IsDir() || !os.SameFile(held, named) {
+		return fmt.Errorf("the private Claude cache quarantine changed")
+	}
+	return nil
+}
+
+func openClaudeRetiredCache(quarantine *os.Root, before os.FileInfo) (*os.Root, error) {
+	moved, err := quarantine.Lstat("retired")
+	if err != nil || !moved.IsDir() || !os.SameFile(before, moved) {
+		return nil, fmt.Errorf("the moved cache is not the previously verified owned directory")
+	}
+	owned, err := quarantine.OpenRoot("retired")
+	if err != nil {
+		return nil, err
+	}
+	pinned, err := owned.Stat(".")
+	if err != nil || !os.SameFile(before, pinned) {
+		_ = owned.Close()
+		return nil, fmt.Errorf("the retired cache handle does not reference the owned directory")
+	}
+	return owned, nil
+}
+
+func verifyAndRemoveClaudeRetiredCache(ctx context.Context, request domain.DeactivationRequest, original string, parent, quarantine, owned *os.Root, before os.FileInfo, verify claudeRetiredCacheVerifier) error {
+	if err := claudeCacheRetirementIdentity(request.Client.ConfigRoot, original, parent, quarantine, owned, before); err != nil {
+		return err
+	}
+	// Snapshot hashing uses a pathname, while deletion uses a held handle.
+	// Rejoin both identities around the read before authorizing any deletion.
+	if err := verify(ctx, request, original, filepath.Join(quarantine.Name(), "retired")); err != nil {
+		return err
+	}
+	if err := claudeCacheRetirementIdentity(request.Client.ConfigRoot, original, parent, quarantine, owned, before); err != nil {
+		return err
+	}
+	return removeClaudeRetiredCacheEntries(ctx, owned)
+}
+
+func claudeCacheRetirementIdentity(configRoot, original string, parent, quarantine, owned *os.Root, before os.FileInfo) error {
+	if err := claudeProjectCacheParentIdentity(configRoot, original, parent); err != nil {
+		return err
+	}
+	if err := claudeCacheQuarantineIdentity(parent, quarantine); err != nil {
+		return err
+	}
+	named, err := quarantine.Lstat("retired")
+	if err != nil || !named.IsDir() || !os.SameFile(before, named) {
+		return fmt.Errorf("the retired Claude cache name changed during verification")
+	}
+	pinned, err := owned.Stat(".")
+	if err != nil || !os.SameFile(before, pinned) {
+		return fmt.Errorf("the retired Claude cache handle changed during verification")
+	}
+	return nil
+}
+
+func removeClaudeRetiredCacheEntries(ctx context.Context, owned *os.Root) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// Remove children via the pinned directory handle. Final directory cleanup
+	// is nonrecursive, so a replacement at either private basename survives.
+	directory, err := owned.Open(".")
+	if err != nil {
+		return err
+	}
+	entries, readErr := directory.ReadDir(-1)
+	closeErr := directory.Close()
+	if readErr != nil {
+		return readErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := owned.RemoveAll(entry.Name()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func finishClaudeCacheRetirement(parent, quarantine, owned *os.Root, before os.FileInfo) error {
+	current, err := quarantine.Lstat("retired")
+	if err != nil || !os.SameFile(before, current) {
+		return fmt.Errorf("the retired cache name changed during cleanup")
+	}
+	if err := owned.Close(); err != nil {
+		return err
+	}
+	if err := quarantine.Remove("retired"); err != nil {
+		return err
+	}
+	held, err := quarantine.Stat(".")
+	if err != nil {
+		return err
+	}
+	if err := quarantine.Close(); err != nil {
+		return err
+	}
+	current, err = parent.Lstat(filepath.Base(quarantine.Name()))
+	if err != nil || !os.SameFile(held, current) {
+		return fmt.Errorf("the private cache quarantine changed before final cleanup")
+	}
+	return parent.Remove(filepath.Base(quarantine.Name()))
 }
 
 func verifyClaudeRetiredCache(ctx context.Context, request domain.DeactivationRequest, original, retired string) error {

@@ -201,3 +201,59 @@ func TestClaudeProjectMarketplaceCacheCleanupRetainsForeignSwapAfterIdentityChec
 		t.Fatalf("expected one quarantined foreign replacement, got %d", retained)
 	}
 }
+
+func TestClaudeProjectCacheRetirementRefusesReplacedDigestNamespace(t *testing.T) {
+	request, cache := claudeCachedRemoval(t)
+	parent, err := os.OpenRoot(filepath.Dir(cache))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = parent.Close() }()
+	before, err := parent.Stat(filepath.Base(cache))
+	if err != nil {
+		t.Fatal(err)
+	}
+	skill := filepath.Join(ClaudeRuntimeDirectory, "skills", "first", "SKILL.md")
+	originalBody, err := os.ReadFile(filepath.Join(cache, skill))
+	if err != nil {
+		t.Fatal(err)
+	}
+	effect := domain.NativeEffectCommitted
+	var moved, replacement string
+	verifiedReplacement := false
+	err = retireClaudeProjectCacheWithVerifier(t.Context(), request, cache, parent, before, &effect,
+		func(ctx context.Context, request domain.DeactivationRequest, original, retired string) error {
+			// Held handles now reference the real original. Replace its public
+			// private-directory name before the real pathname digest is read.
+			name := filepath.Base(filepath.Dir(retired))
+			if err := parent.Rename(name, name+"-moved"); err != nil {
+				return err
+			}
+			moved = filepath.Join(parent.Name(), name+"-moved", "retired")
+			replacement = retired
+			if err := filetree.CopyDir(moved, replacement); err != nil {
+				return err
+			}
+			claudeMarketplaceWrite(t, filepath.Join(moved, "foreign.txt"), "preserve newly added foreign bytes")
+			err := verifyClaudeRetiredCache(ctx, request, original, retired)
+			verifiedReplacement = err == nil
+			return err
+		})
+	if err == nil || effect != domain.NativeEffectUncertain || !verifiedReplacement {
+		t.Fatalf("path/handle replacement was not refused after real digest verification: %s %v", effect, err)
+	}
+	if !strings.Contains(err.Error(), "original private path") || strings.Contains(err.Error(), "retained at") {
+		t.Fatalf("recovery claimed a current location after external rename: %v", err)
+	}
+	assertClaudeRetirementFile(t, filepath.Join(moved, skill), string(originalBody))
+	assertClaudeRetirementFile(t, filepath.Join(moved, "foreign.txt"), "preserve newly added foreign bytes")
+	assertClaudeRetirementFile(t, filepath.Join(replacement, skill), string(originalBody))
+}
+
+func assertClaudeRetirementFile(t *testing.T, path, expected string) {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil || string(body) != expected {
+		t.Fatalf("retirement changed bytes at %s: got %q, want %q, err %v", path, body, expected, err)
+	}
+}
