@@ -19,7 +19,7 @@ env:
   AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
 
 concurrency:
-  group: live-install-audit-${{ github.event.pull_request.number || github.ref }}
+  group: live-install-audit-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
