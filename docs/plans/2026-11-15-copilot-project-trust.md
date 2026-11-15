@@ -9,8 +9,8 @@ existing install review discloses that Copilot will remember this project;
 
 GitHub documents `trustedFolders` in the selected Copilot home's `config.json`:
 https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/configure-copilot-cli
-This is separate from tool, path and URL permissions. The existing plan remains
-honest about native discovery, authentication and session policy.
+This is separate from tool, path and URL permissions. The recorded Prepared
+state remains honest about native discovery, authentication and session policy.
 
 ## Implementation
 
@@ -50,10 +50,31 @@ Run focused parser/adapter and public CLI lifecycle tests, `make lint`,
 Keep native executable pins and hosted-runner evidence checks intact. A skipped
 or queued case is not a pass. Push each coherent commit and maintain a Draft PR.
 
-## Evidence (in progress)
+## Implementation and review checkpoint
+
+Implemented the exact-file trust transaction and JSONC patch. A small optional
+read-only activation-readiness contract was necessary for repeated installation:
+trust is a user choice, so it cannot be represented as plugin-owned projection
+drift. A confirmed operation reuses the existing package and activation path.
+Readiness errors never trigger an acting retry. Component authority is checked
+before the trust writer lock and rechecked during component application.
+
+Two independent review rounds covered the transaction and readiness contract,
+including conditional rollback, committed cleanup, profile capture, and the
+native proof. The native subtest now includes an actual MCP config in untrusted B;
+its compact proof is retained in the existing frontend test log.
+
+Focused parser, component, Copilot adapter/provider and readiness tests passed.
+The full local lint gate passed without expanding exclusions. Runtime Python
+admission contracts passed (130 tests). Local process E2E refuses before launch
+because this container lacks Linux proc-task child enumeration; the same refusal
+was reproduced on unchanged main. Final native and three-platform qualification
+is tracked in [Draft PR #935](https://github.com/777genius/universal-agent-plugins/pull/935).
+
+## Initial native mechanism evidence
 
 Copilot 1.0.103 was checked in an isolated profile without credentials: an
 untrusted A exposes no project MCP entries, adding only A to `trustedFolders`
 enables A in two fresh processes, and sibling B remains undiscovered. This
-confirms the native mechanism; product implementation and final validation are
-still pending.
+confirmed the native mechanism before implementation. It is separate from the
+new mandatory public-installer-to-native-tool-call test and final CI results.

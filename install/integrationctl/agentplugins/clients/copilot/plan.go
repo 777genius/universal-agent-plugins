@@ -26,8 +26,8 @@ func (*Adapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *doma
 		}
 		shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, shared.OnlyNativeComponents(plan.Components))
 		plan.Activation = domain.ActivationPrepared
-		plan.UserActions = shared.AppendUnique(plan.UserActions, "agentplugins will configure repository skills and MCP entries and remember the selected project folder in Copilot for future sessions; this trusts repository configuration without granting tool, path or URL permissions; native discovery and session policy remain unobserved")
-		plan.LocalActions = shared.AppendUnique(plan.LocalActions, fmt.Sprintf("remember only project folder %s in selected Copilot profile %s; retain this folder trust on plugin removal", plan.TargetContext.ProjectRoot, plan.TargetContext.UserConfigRoot))
+		plan.UserActions = shared.AppendUnique(plan.UserActions, "install project skills and MCP servers, and let Copilot remember trust for this project; tool permissions stay unchanged")
+		plan.LocalActions = shared.AppendUnique(plan.LocalActions, fmt.Sprintf("Copilot will trust %s for future sessions using profile %s; this choice remains after plugin removal", plan.TargetContext.ProjectRoot, plan.TargetContext.UserConfigRoot))
 		return nil
 	}
 	executable := in.Client.ExecutablePath

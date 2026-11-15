@@ -61,7 +61,7 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 		Automatic:         request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components),
 		UnavailableAction: "select supported Copilot project skills and MCP components",
 		RepairAction:      "repair exact managed Copilot project components", RetryAction: "retry Copilot project component installation",
-		CompletedAction: "Copilot project components are configured and the selected folder is remembered for future sessions; native discovery, plugin/session/admin precedence, disabled selection and MCP initialization remain unobserved",
+		CompletedAction: "project skills and MCP servers are installed, and Copilot remembers this folder; start a new Copilot session to load them",
 		Verify: func() error {
 			if err := verifyCopilotTrust(env, request, true); err != nil {
 				return err
