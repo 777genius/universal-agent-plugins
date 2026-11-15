@@ -8,14 +8,14 @@ import (
 )
 
 type cancellationWorkflow struct {
-	On map[string]any `yaml:"on"`
+	On          map[string]any    `yaml:"on"`
 	Permissions map[string]string `yaml:"permissions"`
 	Concurrency struct {
-		Group string `yaml:"group"`
+		Group  string `yaml:"group"`
 		Cancel string `yaml:"cancel-in-progress"`
 	} `yaml:"concurrency"`
 	Jobs map[string]struct {
-		If string `yaml:"if"`
+		If    string `yaml:"if"`
 		Steps []struct {
 			Run string `yaml:"run"`
 		} `yaml:"steps"`
