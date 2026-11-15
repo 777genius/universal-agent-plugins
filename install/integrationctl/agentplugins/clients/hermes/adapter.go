@@ -190,6 +190,11 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 	return nil
 }
 
+// projectMCPUnavailableReason tells the user why Project MCP is refused and what
+// to do next. A Hermes installed from source has no verified bundle manifest, so
+// it cannot host the explicitly confirmed Project session.
+const projectMCPUnavailableReason = "Project MCP needs a standalone Hermes distribution with a verified manifest; a Hermes installed from source is not eligible. Install this MCP server with --scope user, or install only the Skills in this project"
+
 // A package with required MCP/hooks/extensions must not silently become
 // Skills-only. Project MCP requires the explicitly selected bundled client.
 func (*Adapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) error {
@@ -203,7 +208,7 @@ func (*Adapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) err
 			for index := range plan.Components {
 				if plan.Components[index].Kind == domain.ComponentMCPServer {
 					plan.Components[index].Support = domain.SupportUnsupported
-					plan.Components[index].Reason = "Project MCP requires the qualified standalone Hermes distribution"
+					plan.Components[index].Reason = projectMCPUnavailableReason
 				}
 			}
 		}
