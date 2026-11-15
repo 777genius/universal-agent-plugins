@@ -310,6 +310,7 @@ def readonly_arguments(fixture):
 TRACE_STRING = r'"(?:[\x20-\x21\x23-\x5b\x5d-\x7e]|\\["\\n])*"'
 TRACE_ARRAY = r'\[(?:' + TRACE_STRING + r'(?:, ' + TRACE_STRING + r')*)?\]'
 TRACE_PID = r'[1-9][0-9]{0,9}'
+TRACE_PID_REFERENCE = TRACE_PID + r"(?: /\* " + TRACE_PID + r" in strace's PID NS \*/)?"
 TRACE_CLONE_FLAGS = (
     r'CLONE_CHILD_CLEARTID\|CLONE_CHILD_SETTID\|SIGCHLD, child_tidptr=0x[0-9a-f]+',
     r'CLONE_NEWNS\|CLONE_NEWUTS\|CLONE_NEWIPC\|CLONE_NEWUSER\|CLONE_NEWPID\|CLONE_NEWNET\|SIGCHLD',
@@ -325,10 +326,25 @@ def trace_pid(value):
     return int(value)
 
 
+def trace_reference(value):
+    match = re.fullmatch(r'(' + TRACE_PID + r')(?: /\* (' + TRACE_PID
+                         + r") in strace's PID NS \*/)?", value)
+    trace_require(match is not None)
+    return trace_pid(match[1]), trace_pid(match[2]) if match[2] is not None else None
+
+
+def trace_child(state, pid, reference):
+    local, observer = trace_reference(reference)
+    children = state['processes'][pid]['children']
+    trace_require(local in children and (observer is None or children[local] == observer))
+    return children[local]
+
+
 def trace_process(state, pid, position=None):
     if pid not in state['processes']:
         trace_require(len(state['processes']) < 64)
-        state['processes'][pid] = dict(first=None, pending=None, exiting=None, terminal=None)
+        state['processes'][pid] = dict(first=None, pending=None, exiting=None, terminal=None,
+                                       children={}, namespace=False, network=None)
     process = state['processes'][pid]
     if position is not None and process['first'] is None:
         process['first'] = position
@@ -344,7 +360,10 @@ def trace_join(process, body, position):
         return pending[1] + resumed[2], pending[2]
     trace_require(process['pending'] is None)
     if body.endswith('<unfinished ...>'):
-        prefix = body[:-len('<unfinished ...>')]
+        # strace inserts one separator before this marker, including when an
+        # execve or exit_group resumes at its closing parenthesis.
+        trace_require(body.endswith(' <unfinished ...>'))
+        prefix = body[:-len(' <unfinished ...>')]
         call = re.match(r'(execve|clone|wait4|exit_group)\(', prefix)
         trace_require(call is not None)
         process['pending'] = (call[1], prefix, position)
@@ -366,16 +385,54 @@ def trace_exec(body):
 
 
 def trace_wait(state, pid, body, position):
-    success = re.fullmatch(r'wait4\((-1|' + TRACE_PID
+    success = re.fullmatch(r'wait4\((-1|' + TRACE_PID_REFERENCE
         + r'),[ \t]+\[\{WIFEXITED\(s\) && WEXITSTATUS\(s\) == 0\}\], (0|WNOHANG), NULL\)'
         + r'[ \t]+= (' + TRACE_PID + r')', body)
     if success:
-        child = trace_pid(success[3])
-        trace_require(success[1] == '-1' or trace_pid(success[1]) == child)
+        child = trace_child(state, pid, success[3])
+        trace_require(success[1] == '-1' or trace_child(state, pid, success[1]) == child)
         state['waits'].append((pid, child, position))
         return
-    trace_require(re.fullmatch(r'wait4\(-1, 0x[0-9a-f]+, WNOHANG, NULL\)'
+    trace_require(re.fullmatch(r'wait4\(-1, 0x[0-9a-f]+, (?:0|WNOHANG), NULL\)'
                               r'[ \t]+= -1 ECHILD \(No child processes\)', body) is not None)
+    trace_require(all(any(row[:2] == (pid, child) and row[2] < position for row in state['waits'])
+                      for child in state['processes'][pid]['children'].values()))
+
+
+def trace_network(state, pid, body):
+    # Only the complete seven-row loopback setup observed in strace6.8/bwrap0.9
+    # is admitted, and only in the recorded NEWPID/NEWNET child before payload.
+    # These records do not establish endpoint or native protocol qualification.
+    process = state['processes'][pid]
+    trace_require(process['namespace'] and not process['children']
+                  and not any(row[0] == pid for row in state['execs']))
+    if process['network'] is None:
+        match = re.fullmatch(r'socket\(AF_UNIX, SOCK_DGRAM\|SOCK_CLOEXEC, 0\) = ([0-9]{1,6})', body)
+        trace_require(match is not None and 3 <= int(match[1]) < 1 << 20)
+        process['network'] = (match[1], 1)
+        return
+    fd, step = process['network']
+    port = f"1 /* {pid} in strace's PID NS */"
+    first = ('{nlmsg_len=40, nlmsg_type=0x14 /* NLMSG_??? */, '
+             'nlmsg_flags=NLM_F_REQUEST|NLM_F_ACK|0x600, nlmsg_seq=0, nlmsg_pid=' + port + '}')
+    second = ('{nlmsg_len=32, nlmsg_type=0x10 /* NLMSG_??? */, '
+              'nlmsg_flags=NLM_F_REQUEST|NLM_F_ACK, nlmsg_seq=1, nlmsg_pid=' + port + '}')
+    reply = '{nlmsg_len=36, nlmsg_type=NLMSG_ERROR, nlmsg_flags=NLM_F_CAPPED, nlmsg_seq='
+    destination = '{sa_family=AF_NETLINK, nl_pid=0, nl_groups=00000000}'
+    rows = (
+        f'socket(AF_NETLINK, SOCK_RAW|SOCK_CLOEXEC, NETLINK_ROUTE) = {fd}',
+        f'bind({fd}, ' + '{sa_family=AF_NETLINK, nl_pid=' + port + ', nl_groups=00000000}, 12) = 0',
+        f'sendto({fd}, [' + first + r', "\x02\x08\x80\xfe\x01\x00\x00\x00\x08\x00\x02\x00'
+        + r'\x7f\x00\x00\x01\x08\x00\x01\x00\x7f\x00\x00\x01"], 40, 0, ' + destination + ', 12) = 40',
+        f'recvfrom({fd}, [' + reply + '0, nlmsg_pid=' + port + '}, {error=0, msg=' + first
+        + '}], 1024, 0, NULL, NULL) = 36',
+        f'sendto({fd}, [' + second + r', "\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00'
+        + r'\x01\x00\x00\x00"], 32, 0, ' + destination + ', 12) = 32',
+        f'recvfrom({fd}, [' + reply + '1, nlmsg_pid=' + port + '}, {error=0, msg=' + second
+        + '}], 1024, 0, NULL, NULL) = 36',
+    )
+    trace_require(1 <= step <= len(rows) and body == rows[step - 1])
+    process['network'] = (fd, step + 1)
 
 
 def trace_event(state, pid, body, started, position):
@@ -385,16 +442,22 @@ def trace_event(state, pid, body, started, position):
         process['terminal'] = position
         return
     trace_require(process['exiting'] is None)
+    if body.startswith(('socket(', 'bind(', 'sendto(', 'recvfrom(')):
+        trace_network(state, pid, body)
+        return
+    trace_require(process['network'] is None or process['network'][1] == 7)
     if body.startswith('execve('):
         state['execs'].append((pid, started, trace_exec(body)))
         return
-    clone = re.fullmatch(r'clone\(child_stack=NULL, flags=(?:'
-                         + '|'.join(TRACE_CLONE_FLAGS) + r')\)[ \t]+= (' + TRACE_PID + r')', body)
+    clone = re.fullmatch(r'clone\(child_stack=NULL, flags=('
+                         + '|'.join(TRACE_CLONE_FLAGS) + r')\)[ \t]+= (' + TRACE_PID_REFERENCE + r')', body)
     if clone:
-        child = trace_pid(clone[1])
-        trace_require(child != pid and child not in state['forks'])
+        local, observer = trace_reference(clone[2])
+        child = observer if observer is not None else local
+        trace_require(child != pid and child not in state['forks'] and local not in process['children'])
+        process['children'][local] = child
         state['forks'][child] = (pid, started, position)
-        trace_process(state, child)
+        trace_process(state, child)['namespace'] = clone[1].startswith('CLONE_NEWNS|')
         return
     if body.startswith('wait4('):
         trace_wait(state, pid, body, position)
@@ -406,7 +469,7 @@ def trace_event(state, pid, body, started, position):
         + TRACE_PID + r'), si_uid=([0-9]{1,10}), si_status=0, si_utime=([0-9]{1,10}),'
         + r' si_stime=([0-9]{1,10})\} ---', body)
     trace_require(signal_row is not None and all(int(value) < 1 << 32 for value in signal_row.groups()[1:]))
-    state['signals'].append((pid, trace_pid(signal_row[1]), position))
+    state['signals'].append((pid, trace_child(state, pid, signal_row[1]), position))
 
 
 def trace_family(state, root_pid, deadline):
@@ -415,7 +478,8 @@ def trace_family(state, root_pid, deadline):
     for pid, process in processes.items():
         remaining(deadline)
         trace_require(process['first'] is not None and process['terminal'] is not None
-                      and process['pending'] is None)
+                      and process['pending'] is None
+                      and (process['network'] is None or process['network'][1] == 7))
         if pid != root_pid:
             parent, started, finished = forks[pid]
             trace_require(started < process['first'] and parent in processes

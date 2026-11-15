@@ -308,7 +308,7 @@ func TestEnablementRepeatStateChangeDoesNotReportEnabled(t *testing.T) {
 }
 
 func TestEnablementRemovalDecisionRefusesLostParentBeforeConfigIO(t *testing.T) {
-	fixture, desired := removalEnablementFixture(t)
+	fixture, desired := removalEnablementFixture(t, 3)
 	applyRemovalFixture(t, fixture)
 	before := fixture.loaded(t)
 	beforeDigest, desiredDigest := enablementStateDigest(before), enablementStateDigest(desired)

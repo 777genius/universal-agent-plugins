@@ -66,7 +66,7 @@ func applyRemovalFixture(t *testing.T, fixture enablementFixture) {
 func TestEnablementRemovalDecisionReopensExactCoreBoundaries(t *testing.T) {
 	for _, boundary := range []string{"journal", "native", "decision", "state", "cleanup"} {
 		t.Run(boundary, func(t *testing.T) {
-			fixture, desired := removalEnablementFixture(t)
+			fixture, desired := removalEnablementFixture(t, 3)
 			if boundary != "journal" {
 				applyRemovalFixture(t, fixture)
 			}
@@ -100,6 +100,23 @@ func TestEnablementRemovalDecisionReopensExactCoreBoundaries(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEnablementRemovalDecisionRefusesLegacyBeforeConfigIO(t *testing.T) {
+	fixture, desired := removalEnablementFixture(t, 2)
+	applyRemovalFixture(t, fixture)
+	journal, err := fixture.recovery.recordRoot(fixture.record.OperationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originals := capturePrototypeFiles(t, fixture.config, fixture.state.Path, journal)
+	cold, files := coldEnablementRecovery(fixture), &parentRefusalFileIO{}
+	cold.Kernel = nativeconfig.NewWithFileIO(files)
+	handled, err := cold.PrepareNativeRemovalDecision(t.Context(), fixture.record.InstallationID, fixture.record.BindingID, fixture.loaded(t), desired)
+	if !handled || !errors.Is(err, errEnablementUnqualified) || files.reads != 0 || files.writes != 0 || files.removes != 0 {
+		t.Fatalf("legacy record reached config/footer effects: handled=%t %v %+v", handled, err, files)
+	}
+	assertPrototypeFilesUnchanged(t, originals)
 }
 
 func appendFixtureFooter(t *testing.T, fixture enablementFixture, footer []byte) {
@@ -185,7 +202,7 @@ func TestEnablementRemovalDecisionRetryRequiresIdenticalDigestPrefix(t *testing.
 func TestEnablementRemovalDecisionWriteFailuresAndSubstitutionsRetainAttempt(t *testing.T) {
 	for _, point := range []string{"before_decision_write", "decision_written", "decision_synced"} {
 		t.Run(point, func(t *testing.T) {
-			fixture, desired := removalEnablementFixture(t)
+			fixture, desired := removalEnablementFixture(t, 3)
 			applyRemovalFixture(t, fixture)
 			fixture.recovery.journalPoint = func(observed string) error {
 				if observed == point {
@@ -218,7 +235,7 @@ func TestEnablementRemovalDecisionWriteFailuresAndSubstitutionsRetainAttempt(t *
 func TestEnablementRemovalProcessDeathAndRealPartialAppend(t *testing.T) {
 	for _, point := range []string{"before_callback", "short_footer", "decision_written", "decision_synced", "decision_cleared", "state_committed", "before_package_delete"} {
 		t.Run(point, func(t *testing.T) {
-			fixture, desired := removalEnablementFixture(t)
+			fixture, desired := removalEnablementFixture(t, 3)
 			applyRemovalFixture(t, fixture)
 			runEnablementCrashChild(t, fixture, point, desired)
 			if point == "short_footer" {

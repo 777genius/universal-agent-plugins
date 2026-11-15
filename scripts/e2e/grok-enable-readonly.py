@@ -16,6 +16,39 @@ BINARY = "22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9"
 URL = "https://x.ai/cli/grok-1.0.70-linux-x86_64.gz"
 
 
+def private_parent_mounts(body):
+    """Validate the actual delegated parent; report no mount paths or sources."""
+    if not body or len(body) > 262144 or not body.endswith(b"\n") or b"\x00" in body or b"\r" in body:
+        raise ValueError("delegated parent mount table is empty, truncated or overbound")
+    lines = body[:-1].split(b"\n")
+    if len(lines) > 4096:
+        raise ValueError("delegated parent mount count exceeds its bound")
+    identities, unbindable = set(), 0
+    for line in lines:
+        fields = line.split(b" ")
+        if not 10 <= len(fields) <= 16 or not all(fields):
+            raise ValueError("delegated parent mount row is malformed")
+        try:
+            separator = fields.index(b"-", 6)
+        except ValueError:
+            raise ValueError("delegated parent mount separator is missing") from None
+        numbers = [*fields[:2], *fields[2].split(b":")]
+        if separator + 4 != len(fields) or len(numbers) != 4 or any(
+                not value.isdigit() or len(value) > 20 or int(value) >= 1 << 64 or
+                str(int(value)).encode() != value for value in numbers) or any(int(value) >= 1 << 32 for value in numbers[2:]):
+            raise ValueError("delegated parent mount identity or trailer is malformed")
+        if int(fields[0]) == 0 or int(fields[1]) == 0 or fields[0] in identities or not all(
+                value.startswith(b"/") for value in fields[3:5]):
+            raise ValueError("delegated parent mount identity or path is malformed")
+        identities.add(fields[0])
+        optional = fields[6:separator]
+        if optional not in ([], [b"unbindable"]):
+            raise ValueError("delegated parent mount propagation is not private")
+        unbindable += bool(optional)
+    return dict(qualification=False, producer="actual delegated Python parent", private=True,
+                mount_count=len(lines), unbindable_count=unbindable)
+
+
 def prepare_writer_lock(config):
     """Prepare the permanent UAP writer lock before freezing fixture originals."""
     parent = os.open(config.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -104,6 +137,7 @@ def fixture_delta(before, after, home, project):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", type=Path, required=True)
+    parser.add_argument("--public-test", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
@@ -114,6 +148,8 @@ def main():
     evidence = dict(passed=False, commands=[], model_invoked=False, authentication_used=False)
     status = 1
     try:
+        with open("/proc/self/mountinfo", "rb") as source:
+            evidence["delegated_parent_mounts"] = private_parent_mounts(source.read(262145))
         with urllib.request.urlopen(URL, timeout=60) as response:
             archive = response.read((96 << 20) + 1)
         if len(archive) > 96 << 20 or hashlib.sha256(archive).hexdigest() != ARCHIVE:
@@ -136,17 +172,23 @@ def main():
                 NO_COLOR="1", GROK_DISABLE_AUTOUPDATER="1", GIT_CONFIG_NOSYSTEM="1",
                 GIT_CONFIG_GLOBAL="/dev/null", GIT_TERMINAL_PROMPT="0")
 
-            def run(label, argv):
-                result = subprocess.run(list(map(str, argv)), cwd=project, env=env,
-                    capture_output=True, timeout=45, check=False)
-                if len(result.stdout) + len(result.stderr) > 1 << 20:
+            def run(label, argv, timeout=45):
+                timed_out = False
+                try:
+                    result = subprocess.run(list(map(str, argv)), cwd=project, env=env,
+                        capture_output=True, timeout=timeout, check=False)
+                    stdout, stderr, code = result.stdout, result.stderr, result.returncode
+                except subprocess.TimeoutExpired as error:
+                    stdout, stderr, code = error.stdout or b"", error.stderr or b"", None
+                    timed_out = True
+                if len(stdout) + len(stderr) > 1 << 20:
                     raise ValueError("native fixture output exceeds its bound")
-                record = dict(label=label, argv=list(map(str, argv)), exit=result.returncode,
-                    stdout=result.stdout.decode("utf-8", "strict"), stderr=result.stderr.decode("utf-8", "strict"))
+                record = dict(label=label, argv=list(map(str, argv)), exit=code, timed_out=timed_out,
+                    stdout=stdout.decode("utf-8", "strict"), stderr=stderr.decode("utf-8", "strict"))
                 evidence["commands"].append(record)
-                if result.returncode:
+                if code != 0:
                     raise ValueError("native gate failed: " + label)
-                return result.stdout
+                return stdout
 
             if run("version", [binary, "--version"]) != b"grok 1.0.70 (f50904eaee6c)\n":
                 raise ValueError("native version differs")
@@ -182,6 +224,20 @@ def main():
                 raise ValueError("readonly native inventory changed the original fixture")
             if original_binary != hashlib.sha256(binary.read_bytes()).hexdigest():
                 raise ValueError("native executable changed")
+            public = run("public-native-saved-lifecycle", [args.public_test.resolve(),
+                "-test.run=^TestProjectGrokNativeSavedEnablementLifecycle$", "-test.count=1", "-test.v", "-test.timeout=420s",
+                "-grok-public-native=" + str(binary), "-grok-public-inventory-test=" + str(args.test.resolve())], timeout=450)
+            if b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS" not in public:
+                raise ValueError("selected public native lifecycle did not complete")
+            # A separate public native child runs after the readonly inventory.
+            # The original protected HOME/project must survive BOTH children.
+            after_public = {str(path): snapshot(path) for path in (home, project)}
+            if before != after_public:
+                evidence["fixture_delta"] = fixture_delta(before, after_public, home, project)
+                raise ValueError("public native lifecycle changed the original fixture")
+            if original_binary != hashlib.sha256(binary.read_bytes()).hexdigest():
+                raise ValueError("public lifecycle changed native executable")
+            evidence["public_native_saved_lifecycle_passed"] = True
         # Qualification is committed only after the disposable fixture is cleaned up.
         evidence.update(passed=True, fixture_unchanged=True, archive_sha256=ARCHIVE, binary_sha256=BINARY)
         status = 0

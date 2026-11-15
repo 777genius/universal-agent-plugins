@@ -2877,7 +2877,7 @@ def public_stdio_events(path, nonce, *, captured=None):
 
 
 def cold_report(value, pins, bundle, head, temporary):
-    require(type(value) is dict and set(value) == set("kind entrypoint installer_executed source_head installer_sha256 bundle_executable runner_os architecture original_source restored_source restored_binding commands root_publications removed_state activation native_tools_call vendor_authentication model_invoked".split()), "cold report schema")
+    require(type(value) is dict and set(value) == set("kind entrypoint installer_executed source_head installer_sha256 bundle_executable runner_os architecture original_source restored_source original_binding restored_binding commands root_publications removed_state activation native_tools_call vendor_authentication model_invoked".split()), "cold report schema")
     require(value["kind"] == "hermes-bundle-cold-restore" and value["source_head"] == head
             and value["entrypoint"] == "public-cobra-in-process" and value["installer_executed"] is False
             and value["installer_sha256"] == pins["uap"]["sha256"] and value["bundle_executable"] == str(bundle)
@@ -2886,29 +2886,34 @@ def cold_report(value, pins, bundle, head, temporary):
     require(value["runner_os"] == {"linux": "linux", "darwin": "darwin", "win32": "windows"}.get(sys.platform)
             and value["architecture"] == {"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}.get(platform.machine().lower()), "cold actual platform differs")
     binding, source = value["restored_binding"], value["restored_source"]
-    require(re.fullmatch(r"[a-f0-9]{40}", source.get("resolved_revision", ""))
-            and source.get("tree_digest") == binding["package_revision"]["tree_digest"]
-            and source["resolved_revision"] == binding["package_revision"]["resolved_revision"]
-            and binding["client_id"] == "hermes" and binding["scope"] == "project"
-            and binding["activation"] == "prepared" and binding["verification"] == "installation_verified"
-            and binding.get("pending_native_intent") is None
-            and (binding.get("native_activation_attempt") is None or type(binding["native_activation_attempt"]) is str and binding["native_activation_attempt"] == ""), "cold exact restored binding differs")
-    selected = str(Path(binding["native_profile_root"]) / "uap-session")
-    objects = [item for item in binding["native_objects"] if item.get("kind") == "hermes_project_session_mcp"]
-    require(len(objects) == 1 and objects[0].get("logical_name") == "docs"
-            and objects[0].get("object_id") == "hermes_project_session_mcp:docs"
-            and objects[0].get("path") == str(Path(selected) / "config.yaml")
-            and objects[0].get("protection_class") == "managed", "cold owned MCP selector differs")
+    bindings, owned = (value["original_binding"], binding), []
+    for current in bindings:
+        require(re.fullmatch(r"[a-f0-9]{40}", source.get("resolved_revision", ""))
+                and source.get("tree_digest") == current["package_revision"]["tree_digest"]
+                and source["resolved_revision"] == current["package_revision"]["resolved_revision"]
+                and current["client_id"] == "hermes" and current["scope"] == "project"
+                and current["activation"] == "prepared" and current["verification"] == "installation_verified"
+                and current.get("pending_native_intent") is None
+                and (current.get("native_activation_attempt") is None or type(current["native_activation_attempt"]) is str and current["native_activation_attempt"] == ""), "cold exact restored binding differs")
+        selected = str(Path(current["native_profile_root"]) / "uap-session")
+        objects = [item for item in current["native_objects"] if item.get("kind") == "hermes_project_session_mcp"]
+        require(len(objects) == 2 and {item.get("logical_name") for item in objects} == {"docs", "data"}
+                and all(item.get("object_id") == "hermes_project_session_mcp:" + item["logical_name"]
+                        and item.get("path") == str(Path(selected) / "config.yaml")
+                        and item.get("protection_class") == "managed" for item in objects), "cold owned MCP selector differs")
+        owned.append({item["logical_name"]: item for item in objects})
     rows = value["commands"]
     require(type(rows) is list and [row.get("step") for row in rows] == ["original-inspect", "cold-inspect", "repaired-inspect"], "cold actual command sequence differs")
     inventories = []
-    for row in rows:
+    for index, row in enumerate(rows):
+        world = 0 if index == 0 else 1
         require(set(row) == set("step argv public_argv directory selected_root exit_code stdout_base64 stderr_base64 stdout_bytes stderr_bytes stdout_sha256 stderr_sha256 cleanup_complete no_child_started".split()), "cold command schema")
         project = Path(row["directory"])
         require(project.is_absolute() and project.resolve() == project and project.is_relative_to(temporary)
                 and row["argv"] == [str(bundle), "config", "get", "mcp_servers", "--json"]
                 and row["public_argv"] == ["run", "--target", "hermes", "--scope", "project", "--project-root", str(project), "--inspect", "--confirm-client-start"]
                 and row["selected_root"] == str(project / ".hermes/uap-session")
+                and row["selected_root"] == str(Path(bindings[world]["native_profile_root"]) / "uap-session")
                 and type(row["exit_code"]) is int and row["exit_code"] == 0 and row["cleanup_complete"] is True
                 and row["no_child_started"] is False, "cold actual native command/cleanup differs")
         for stream in ("stdout", "stderr"):
@@ -2922,11 +2927,12 @@ def cold_report(value, pins, bundle, head, temporary):
             require(stream != "stdout" or bool(body), "cold native inventory is empty")
             if stream == "stdout":
                 inventory = public_json(body)
-                require(type(inventory) is dict and set(inventory) == {"docs"}
-                        and public_mcp_digest("docs", inventory["docs"]) == objects[0].get("managed_digest"),
+                require(type(inventory) is dict and set(inventory) == {"docs", "data"}
+                        and all(public_mcp_digest(name, inventory[name]) == owned[world][name].get("managed_digest") for name in ("docs", "data")),
                         "cold native inventory differs from owned receipt")
                 inventories.append(inventory)
-    require(inventories[0] == inventories[1] == inventories[2], "cold selected inventories differ")
+    require(inventories[0]["docs"] == inventories[1]["docs"] == inventories[2]["docs"]
+            and inventories[1] == inventories[2], "cold selected inventories differ")
     require(rows[0]["directory"] != rows[1]["directory"], "cold restored environment was not fresh")
     roots = [row for row in value["root_publications"] if str(row.get("after_digest", "")).startswith("native-root-v1:")]
     require(len(value["root_publications"]) == len(roots) == 1 and roots[0].get("active_path") == selected and roots[0].get("phase") == "committed"

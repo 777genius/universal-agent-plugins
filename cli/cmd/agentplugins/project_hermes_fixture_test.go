@@ -388,13 +388,20 @@ func (input *hermesColdInputs) writeReport(t *testing.T, original, restored doma
 	if err := input.ctx.Err(); err != nil {
 		t.Fatal("native cold report refused after cancellation", err)
 	}
+	if len(original.Clients) != 1 {
+		t.Fatal("native cold report requires the original singleton binding")
+	}
+	var originalBinding domain.ClientBinding
+	for _, retained := range original.Clients {
+		originalBinding = retained
+	}
 	body, err := json.Marshal(map[string]any{
 		"kind": "hermes-bundle-cold-restore", "source_head": input.head,
 		"installer_sha256": input.uapDigest, "bundle_executable": input.bundle,
 		"entrypoint": "public-cobra-in-process", "installer_executed": false,
 		"runner_os": runtime.GOOS, "architecture": runtime.GOARCH,
 		"original_source": original.Source, "restored_source": restored.Source,
-		"restored_binding": binding, "commands": input.commands,
+		"original_binding": originalBinding, "restored_binding": binding, "commands": input.commands,
 		"root_publications": publications, "removed_state": removed,
 		"activation": "prepared", "native_tools_call": false,
 		"vendor_authentication": false, "model_invoked": false,

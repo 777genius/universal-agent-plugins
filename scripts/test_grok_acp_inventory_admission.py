@@ -2307,10 +2307,10 @@ class FixedCLIObservationContracts(unittest.TestCase):
 class ReadonlyInventoryContracts(unittest.TestCase):
     """Finite parser/authority counterexamples; no vendor, bwrap or sudo."""
 
-    def request(self):
+    def request(self, *, uid=1000, gid=1000):
         import stat
         from project_native_collectors.grok import ACQUISITION
-        nonce, uid, gid = 'c' * 32, 1000, 1000
+        nonce = 'c' * 32
         root = '/tmp/uap-grok-acp-input-' + nonce
         sealed = '/tmp/uap-grok-acp-sealed-123456'
         req = dict(schema_version=1, source_commit='a' * 40, source_tree='b' * 40,
@@ -2761,7 +2761,7 @@ class ReadonlyInventoryContracts(unittest.TestCase):
 
     def test_clean_controller_keeps_original_pipe_owner_and_private_manager_clock(self):
         import project_native_runtime as runtime
-        req, _ = self.request()
+        req, _ = self.request(uid=os.getuid(), gid=os.getgid())
         original, children, contexts = case.subprocess.Popen, [], []
         env = dict(GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted',
                    AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED='1', EXPECTED_COMMIT=req['source_commit'])
@@ -2789,8 +2789,7 @@ class ReadonlyInventoryContracts(unittest.TestCase):
                     ['/usr/bin/systemd-run', '--version'], root, manager, 2)
                 self.assertEqual((record, stdout, stderr), ({'exit':0, 'error':None}, b'systemd 255\n', b''))
                 return capture(['/usr/bin/sudo', '-n', '/usr/bin/systemd-run', '--pipe'], manager)
-            with (mock.patch.dict(os.environ, env), mock.patch.object(case.os, 'getuid', return_value=req['uid']),
-                  mock.patch.object(case.os, 'getgid', return_value=req['gid']),
+            with (mock.patch.dict(os.environ, env),
                   mock.patch.object(case.subprocess, 'Popen', side_effect=inert),
                   mock.patch.object(runtime, 'grok_readonly_controller_service', side_effect=service)):
                 self.assertEqual(case.readonly_controller_capture(root / 'helper', root, req, clean), {'closed':True})
@@ -2811,7 +2810,7 @@ class ReadonlyInventoryContracts(unittest.TestCase):
         for phase, role in (('before', 'env'), ('capture', 'python3.12'), ('after', 'bwrap'), ('after', 'runtime')):
             with self.subTest(phase=phase, role=role), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                req, _ = self.request()
+                req, _ = self.request(uid=os.getuid(), gid=os.getgid())
                 def replace(clean):
                     if role == 'runtime':
                         clean.rename(root / 'original-runtime')
@@ -2834,9 +2833,7 @@ class ReadonlyInventoryContracts(unittest.TestCase):
                         if phase == 'capture':
                             replace(clean)
                         return 0, b'{"closed":true}\n', b''
-                    with (mock.patch.object(case.os, 'getuid', return_value=req['uid']),
-                          mock.patch.object(case.os, 'getgid', return_value=req['gid']),
-                          mock.patch.object(runtime, 'grok_readonly_controller_service', side_effect=service),
+                    with (mock.patch.object(runtime, 'grok_readonly_controller_service', side_effect=service),
                           mock.patch.object(case, 'readonly_transport', side_effect=transport) as launch,
                           self.assertRaisesRegex(ValueError, 'input ancestry changed|held input changed')):
                         case.readonly_controller_capture(root / 'helper', root, req, clean)

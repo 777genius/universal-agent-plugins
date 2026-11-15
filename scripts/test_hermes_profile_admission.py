@@ -2292,22 +2292,65 @@ class PublicLifecycleContracts(unittest.TestCase):
         first,last=temporary/'original/project',temporary/'cold/project'
         executable=str(temporary/'build/uap'); bundle=str(temporary/'payload/bin/hermes')
         server={'url':'http://127.0.0.1:9/mcp'}
-        mcp_digest='sha256:'+hashlib.sha256(b'agentplugins-native-mcp-v1\0hermes-mcp-servers-yaml\0docs\0'+json.dumps(server,sort_keys=True,separators=(',',':')).encode()).hexdigest()
-        binding=dict(client_id='hermes',client_binding_id='binding',scope='project',activation='prepared',verification='installation_verified',native_profile_root=str(last/'.hermes'),package_revision=source,
-                     native_objects=[dict(kind='hermes_project_session_mcp',object_id='hermes_project_session_mcp:docs',logical_name='docs',path=str(last/'.hermes/uap-session/config.yaml'),protection_class='managed',managed_digest=mcp_digest)])
+        bindings, inventories = [], []
+        for identity, project in (('original-binding', first), ('binding', last)):
+            target, data = project/'.uap/managed/clients/hermes/cold-owned', project/'.uap/plugin-data/cold-owned'
+            launcher = target/'io.github.777genius.agentplugins/managed-stdio-v1'/('agentplugins.exe' if CASE['sys'].platform == 'win32' else 'agentplugins')
+            inventory = {'docs': server, 'data': dict(command=str(launcher), cwd=str(target),
+                args=['--internal-stdio-v1', str(target), str(data), str(target), 'plugin', '--argv-base64-v1', 'Z28=', 'dmVyc2lvbg=='],
+                env={'DATA': str(data), 'PLUGIN_ROOT': str(target), 'PLUGIN_DATA': str(data)})}
+            objects = [dict(kind='hermes_project_session_mcp', object_id='hermes_project_session_mcp:'+name,
+                logical_name=name, path=str(project/'.hermes/uap-session/config.yaml'), protection_class='managed',
+                managed_digest='sha256:'+hashlib.sha256(b'agentplugins-native-mcp-v1\0hermes-mcp-servers-yaml\0'+name.encode()+b'\0'+json.dumps(entry,sort_keys=True,separators=(',',':')).encode()).hexdigest())
+                for name, entry in inventory.items()]
+            bindings.append(dict(client_id='hermes', client_binding_id=identity, scope='project', activation='prepared',
+                verification='installation_verified', native_profile_root=str(project/'.hermes'), package_revision=source, native_objects=objects))
+            inventories.append(inventory)
+        binding = bindings[1]
         receipt=dict(after_digest='native-root-v1:'+'c'*64,active_path=str(last/'.hermes/uap-session'),staging_path=str(last/'.hermes/.stage'),backup_path=str(last/'.hermes/.backup'),
                      publication_parent_authority=self.parent_authority(last/'.hermes'),phase='committed',client_binding_id='binding',mutation_type='directory_swap',sequence=1)
         commands=[]
-        for step,project in zip(('original-inspect','cold-inspect','repaired-inspect'),(first,last,last)):
+        for step,project,inventory in zip(('original-inspect','cold-inspect','repaired-inspect'),(first,last,last),(inventories[0],inventories[1],inventories[1])):
             row=dict(step=step,directory=str(project),argv=[bundle,'config','get','mcp_servers','--json'],
                      public_argv=['run','--target','hermes','--scope','project','--project-root',str(project),'--inspect','--confirm-client-start'],
                      selected_root=str(project/'.hermes/uap-session'),exit_code=0,cleanup_complete=True,no_child_started=False)
-            for name,body in (('stdout',json.dumps({'docs':server},separators=(',',':')).encode()+b'\n'),('stderr',b'')):
+            for name,body in (('stdout',json.dumps(inventory,separators=(',',':')).encode()+b'\n'),('stderr',b'')):
                 row.update({name+'_base64':base64.b64encode(body).decode(),name+'_bytes':len(body),name+'_sha256':hashlib.sha256(body).hexdigest()})
             commands.append(row)
         pins={'uap':dict(path=executable,sha256='d'*64)}
-        report=dict(kind='hermes-bundle-cold-restore',entrypoint='public-cobra-in-process',installer_executed=False,source_head='e'*40,installer_sha256='d'*64,bundle_executable=bundle,runner_os={'linux':'linux','darwin':'darwin','win32':'windows'}.get(CASE['sys'].platform),architecture={'x86_64':'amd64','amd64':'amd64','arm64':'arm64','aarch64':'arm64'}.get(CASE['platform'].machine().lower()),original_source=dict(source),restored_source=dict(source),restored_binding=binding,commands=commands,root_publications=[receipt],removed_state=dict(transaction_receipts=[receipt],installations=[dict(clients={})]),activation='prepared',native_tools_call=False,vendor_authentication=False,model_invoked=False)
+        report=dict(kind='hermes-bundle-cold-restore',entrypoint='public-cobra-in-process',installer_executed=False,source_head='e'*40,installer_sha256='d'*64,bundle_executable=bundle,runner_os={'linux':'linux','darwin':'darwin','win32':'windows'}.get(CASE['sys'].platform),architecture={'x86_64':'amd64','amd64':'amd64','arm64':'arm64','aarch64':'arm64'}.get(CASE['platform'].machine().lower()),original_source=dict(source),restored_source=dict(source),original_binding=bindings[0],restored_binding=binding,commands=commands,root_publications=[receipt],removed_state=dict(transaction_receipts=[receipt],installations=[dict(clients={})]),activation='prepared',native_tools_call=False,vendor_authentication=False,model_invoked=False)
         return report,pins
+
+    def test_cold_worlds_require_both_issued_receipts_and_original_data_authority(self):
+        import copy
+        temporary = Path(tempfile.gettempdir()).resolve()/'cold-test'
+        report, pins = self.cold(temporary)
+        read = lambda value: CASE['cold_report'](value, pins, Path(report['bundle_executable']), 'e'*40, temporary)
+        self.assertEqual(read(report), report)
+        self.assertNotEqual(report['commands'][0]['stdout_sha256'], report['commands'][1]['stdout_sha256'])
+        for world in ('original_binding', 'restored_binding'):
+            original = report[world]['native_objects']
+            self.assertEqual({item['logical_name'] for item in original}, {'docs', 'data'})
+            for effect in ('missing', 'duplicate', 'extra', 'object-id', 'path', 'class', 'digest', 'source'):
+                value = copy.deepcopy(report)
+                objects = value[world]['native_objects']
+                if effect == 'missing': objects.pop()
+                elif effect == 'duplicate': objects[1] = copy.deepcopy(objects[0])
+                elif effect == 'extra': objects.append(copy.deepcopy(objects[0]))
+                elif effect == 'object-id': objects[1]['object_id'] = 'hermes_project_session_mcp:foreign'
+                elif effect == 'path': objects[1]['path'] = str(temporary/'foreign/config.yaml')
+                elif effect == 'class': objects[1]['protection_class'] = 'owned'
+                elif effect == 'digest': objects[1]['managed_digest'] = 'sha256:'+'0'*64
+                else: value[world]['package_revision']['resolved_revision'] = 'f'*40
+                with self.subTest(world=world, effect=effect), self.assertRaises(RuntimeError): read(value)
+        for effect in ('missing-original', 'borrowed-restored', 'crossed-stream'):
+            value = copy.deepcopy(report)
+            if effect == 'missing-original': value.pop('original_binding')
+            elif effect == 'borrowed-restored': value['original_binding'] = copy.deepcopy(value['restored_binding'])
+            else:
+                for field in ('stdout_base64', 'stdout_bytes', 'stdout_sha256'):
+                    value['commands'][0][field] = value['commands'][1][field]
+            with self.subTest(effect=effect), self.assertRaises(RuntimeError): read(value)
 
     def test_cold_report_requires_three_genuine_cleanup_stream_and_retained_root_joins(self):
         import copy

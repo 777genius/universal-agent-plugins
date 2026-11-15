@@ -705,6 +705,64 @@ class NativeProfileContracts(unittest.TestCase):
         self.assertEqual(self.writer_calls, 0)
         self.assertFalse(self.journey.evidence["native_profile_preparation"]["complete"])
 
+    def test_original_snapshot_survives_two_uap_writer_lock_cycles(self):
+        import fcntl
+        self.prepare()
+        (self.root / profile_case.CONFIG).write_bytes(b"[plugins]\nenabled = []\ndisabled = []\n")
+        before = snapshot(self.root)
+        lock = self.journey.home / ".grok/config.toml.agentplugins.lock"
+        for _ in range(2):
+            descriptor = os.open(lock, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+            finally:
+                os.close(descriptor)
+        self.assertEqual(snapshot(self.root), before)
+        self.journey.check()
+
+    def test_uap_writer_lock_collision_is_not_adopted_or_overwritten(self):
+        original = profile_case.prepare_uap_writer_lock
+        saved = {}
+        def collide(journey):
+            path = self.root / profile_case.UAP_LOCK
+            path.write_bytes(b"foreign coordination leaf")
+            saved["identity"] = profile_case.stable(path.lstat())
+            return original(journey)
+        with mock.patch.object(profile_case, "prepare_uap_writer_lock", side_effect=collide):
+            with self.assertRaises(FileExistsError):
+                self.prepare()
+        path = self.root / profile_case.UAP_LOCK
+        self.assertEqual(path.read_bytes(), b"foreign coordination leaf")
+        self.assertEqual(profile_case.stable(path.lstat()), saved["identity"])
+        self.assertNotIn(profile_case.UAP_LOCK, self.journey.native_profile)
+        self.assertFalse(self.journey.evidence["native_profile_preparation"]["complete"])
+
+    def test_retained_uap_writer_lock_changes_are_refused_without_mutation(self):
+        base = self.root
+        for kind in ("nonempty", "mode", "hardlink", "symlink", "replacement"):
+            with self.subTest(kind=kind):
+                root = base / kind
+                root.mkdir()
+                self.start_journey(root)
+                self.prepare()
+                lock = root / profile_case.UAP_LOCK
+                if kind == "nonempty": lock.write_bytes(b"foreign")
+                elif kind == "mode": lock.chmod(0o644)
+                elif kind == "hardlink": os.link(lock, root / "foreign-link")
+                elif kind == "symlink":
+                    lock.unlink()
+                    lock.symlink_to(self.journey.grok)
+                else:
+                    lock.rename(root / "original-uap-lock")
+                    lock.touch(mode=0o600)
+                before = profile_case.stable(lock.lstat())
+                body = os.readlink(lock) if lock.is_symlink() else lock.read_bytes()
+                with self.assertRaises((ValueError, OSError)):
+                    self.journey.check()
+                self.assertEqual(profile_case.stable(lock.lstat()), before)
+                self.assertEqual(os.readlink(lock) if lock.is_symlink() else lock.read_bytes(), body)
+
     def test_existing_profile_refuses_without_overwriting_any_member(self):
         profile = self.journey.home / ".grok"
         profile.mkdir()
@@ -1618,6 +1676,102 @@ class InertProcessTraceContracts(unittest.TestCase):
     def decode(self, lines, argv, payload=None):
         import time
         return trace_case.decode_process_trace(self.encoded(lines), argv, payload or argv, time.monotonic() + 2)
+
+    def hosted_readonly_original(self):
+        # Original 58d/run43736745240, artifact14172629455: no tracer execution.
+        # Keep the complete captured bytes, including the namespace annotations.
+        body = (
+            b'21262 execve("/usr/bin/bwrap", ["/usr/bin/bwrap", "--unshare-user", "--uid", "1001", "--gid", "1001", "--unshare-pid", "--unshare-net", "--unshare-ipc", "--unshare-uts", "--disable-userns", "--die-with-parent", "--new-session", "--cap-drop", "ALL", "--tmpfs", "/", "--ro-bind", "/usr", "/usr", "--symlink", "usr/bin", "/bin", "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64", "--ro-bind", "/home/runner/work/_temp/grok-inert-tracer-step0/fixture", "/home/runner/work/_temp/grok-inert-tracer-step0/fixture", "--proc", "/proc", "--remount-ro", "/proc", "--dev", "/dev", "--remount-ro", "/dev/null", "--remount-ro", "/dev/zero", "--remount-ro", "/dev/full", "--remount-ro", "/dev/random", "--remount-ro", "/dev/urandom", "--remount-ro", "/dev/tty", "--remount-ro", "/dev/pts", "--remount-ro", "/dev", "--remount-ro", "/", "--chdir", "/home/runner/work/_temp/grok-inert-tracer-step0/fixture", "--", "/usr/bin/python3", "-I", "-B", "-c", "import errno, os, sys\\npid = os.fork()\\nif pid == 0:\\n    os.execve(\'/usr/bin/true\', [\'/usr/bin/true\'], {\'PATH\': \'/usr/bin:/bin\'})\\ngot, status = os.waitpid(pid, 0)\\nif got != pid or not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:\\n    raise SystemExit(72)\\ntarget, readonly = sys.argv[1], sys.argv[2] == \'readonly\'\\ntry:\\n    fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)\\nexcept OSError as error:\\n    if not readonly or error.errno != errno.EROFS:\\n        raise\\n    os.write(1, b\'STEP0_READONLY_EROFS\\\\n\')\\nelse:\\n    os.close(fd)\\n    os.unlink(target)\\n    if readonly:\\n        raise SystemExit(73)\\n    os.write(1, b\'STEP0_DIRECT_DONE\\\\n\')\\n", "/home/runner/work/_temp/grok-inert-tracer-step0/fixture/read-only-attempt", "readonly"], ["HOME=/home/runner/work/_temp/grok-inert-tracer-step0/fixture", "PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C"]) = 0\n'
+            b'21262 wait4(-1, 0x7ffc43fc9020, WNOHANG, NULL) = -1 ECHILD (No child processes)\n'
+            b'21262 clone(child_stack=NULL, flags=CLONE_NEWNS|CLONE_NEWUTS|CLONE_NEWIPC|CLONE_NEWUSER|CLONE_NEWPID|CLONE_NEWNET|SIGCHLD) = 21263\n'
+            b'21263 socket(AF_UNIX, SOCK_DGRAM|SOCK_CLOEXEC, 0) = 5\n'
+            b'21263 socket(AF_NETLINK, SOCK_RAW|SOCK_CLOEXEC, NETLINK_ROUTE) = 5\n'
+            b"21263 bind(5, {sa_family=AF_NETLINK, nl_pid=1 /* 21263 in strace's PID NS */, nl_groups=00000000}, 12) = 0\n"
+            b'21263 sendto(5, [{nlmsg_len=40, nlmsg_type=0x14 /* NLMSG_??? */, nlmsg_flags=NLM_F_REQUEST|NLM_F_ACK|0x600, nlmsg_seq=0, nlmsg_pid=1 /* 21263 in strace\'s PID NS */}, "\\x02\\x08\\x80\\xfe\\x01\\x00\\x00\\x00\\x08\\x00\\x02\\x00\\x7f\\x00\\x00\\x01\\x08\\x00\\x01\\x00\\x7f\\x00\\x00\\x01"], 40, 0, {sa_family=AF_NETLINK, nl_pid=0, nl_groups=00000000}, 12) = 40\n'
+            b"21263 recvfrom(5, [{nlmsg_len=36, nlmsg_type=NLMSG_ERROR, nlmsg_flags=NLM_F_CAPPED, nlmsg_seq=0, nlmsg_pid=1 /* 21263 in strace's PID NS */}, {error=0, msg={nlmsg_len=40, nlmsg_type=0x14 /* NLMSG_??? */, nlmsg_flags=NLM_F_REQUEST|NLM_F_ACK|0x600, nlmsg_seq=0, nlmsg_pid=1 /* 21263 in strace's PID NS */}}], 1024, 0, NULL, NULL) = 36\n"
+            b'21263 sendto(5, [{nlmsg_len=32, nlmsg_type=0x10 /* NLMSG_??? */, nlmsg_flags=NLM_F_REQUEST|NLM_F_ACK, nlmsg_seq=1, nlmsg_pid=1 /* 21263 in strace\'s PID NS */}, "\\x00\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x01\\x00\\x00\\x00\\x01\\x00\\x00\\x00"], 32, 0, {sa_family=AF_NETLINK, nl_pid=0, nl_groups=00000000}, 12) = 32\n'
+            b"21263 recvfrom(5, [{nlmsg_len=36, nlmsg_type=NLMSG_ERROR, nlmsg_flags=NLM_F_CAPPED, nlmsg_seq=1, nlmsg_pid=1 /* 21263 in strace's PID NS */}, {error=0, msg={nlmsg_len=32, nlmsg_type=0x10 /* NLMSG_??? */, nlmsg_flags=NLM_F_REQUEST|NLM_F_ACK, nlmsg_seq=1, nlmsg_pid=1 /* 21263 in strace's PID NS */}}], 1024, 0, NULL, NULL) = 36\n"
+            b"21263 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=0x7f0d2366a4d0) = 2 /* 21267 in strace's PID NS */\n"
+            b'21267 execve("/usr/bin/python3", ["/usr/bin/python3", "-I", "-B", "-c", "import errno, os, sys\\npid = os.fork()\\nif pid == 0:\\n    os.execve(\'/usr/bin/true\', [\'/usr/bin/true\'], {\'PATH\': \'/usr/bin:/bin\'})\\ngot, status = os.waitpid(pid, 0)\\nif got != pid or not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:\\n    raise SystemExit(72)\\ntarget, readonly = sys.argv[1], sys.argv[2] == \'readonly\'\\ntry:\\n    fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)\\nexcept OSError as error:\\n    if not readonly or error.errno != errno.EROFS:\\n        raise\\n    os.write(1, b\'STEP0_READONLY_EROFS\\\\n\')\\nelse:\\n    os.close(fd)\\n    os.unlink(target)\\n    if readonly:\\n        raise SystemExit(73)\\n    os.write(1, b\'STEP0_DIRECT_DONE\\\\n\')\\n", "/home/runner/work/_temp/grok-inert-tracer-step0/fixture/read-only-attempt", "readonly"], ["HOME=/home/runner/work/_temp/grok-inert-tracer-step0/fixture", "PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C", "PWD=/home/runner/work/_temp/grok-inert-tracer-step0/fixture"] <unfinished ...>\n'
+            b'21263 wait4(-1,  <unfinished ...>\n'
+            b'21267 <... execve resumed>)             = 0\n'
+            b"21267 clone(child_stack=NULL, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=0x7f2f4d745350) = 3 /* 21268 in strace's PID NS */\n"
+            b"21267 wait4(3 /* 21268 in strace's PID NS */,  <unfinished ...>\n"
+            b'21268 execve("/usr/bin/true", ["/usr/bin/true"], ["PATH=/usr/bin:/bin"]) = 0\n'
+            b'21268 exit_group(0)                     = ?\n'
+            b'21268 +++ exited with 0 +++\n'
+            b'21267 <... wait4 resumed>[{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL) = 3\n'
+            b'21267 --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=3, si_uid=1001, si_status=0, si_utime=0, si_stime=0} ---\n'
+            b'21267 exit_group(0)                     = ?\n'
+            b'21267 +++ exited with 0 +++\n'
+            b'21263 <... wait4 resumed>[{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL) = 2\n'
+            b'21263 wait4(-1, 0x7ffc43fc900c, 0, NULL) = -1 ECHILD (No child processes)\n'
+            b'21262 exit_group(0 <unfinished ...>\n'
+            b'21263 exit_group(0 <unfinished ...>\n'
+            b'21262 <... exit_group resumed>)         = ?\n'
+            b'21263 <... exit_group resumed>)         = ?\n'
+            b'21262 +++ exited with 0 +++\n'
+            b'21263 +++ exited with 0 +++\n'
+        )
+        self.assertEqual(len(body), 5837)
+        self.assertEqual(hashlib.sha256(body).hexdigest(),
+                         "2ed7928f15cba51340611cb41fb67162458a3babe606eed507b96a269e07af2c")
+        fixture = Path("/home/runner/work/_temp/grok-inert-tracer-step0/fixture")
+        with mock.patch.object(trace_case.os, "getuid", return_value=1001), \
+                mock.patch.object(trace_case.os, "getgid", return_value=1001), \
+                mock.patch.object(trace_case.os, "readlink", side_effect=lambda path: {
+                    "/bin": "usr/bin", "/lib": "usr/lib", "/lib64": "usr/lib64"}[path]):
+            argv = trace_case.readonly_arguments(fixture)
+        return body, argv, self.python_argv(fixture, "readonly")
+
+    def test_hosted_readonly_trace_joins_network_and_namespace_children(self):
+        import time
+        body, argv, payload = self.hosted_readonly_original()
+        self.assertEqual(trace_case.decode_process_trace(body, argv, payload, time.monotonic() + 2),
+                         dict(complete=True, processes=4, execs=3, silent_child_execs=1))
+
+    def test_hosted_readonly_altered_network_or_namespace_records_refuse(self):
+        body, argv, payload = self.hosted_readonly_original()
+        original = body.decode("ascii").splitlines()
+        variants = {}
+        changes = {
+            "unknown-family": (3, "AF_UNIX", "AF_INET"),
+            "unknown-socket-kind": (3, "SOCK_DGRAM", "SOCK_STREAM"),
+            "different-netlink-fd": (4, "= 5", "= 6"),
+            "different-bind-fd": (5, "bind(5", "bind(6"),
+            "wrong-netlink-observer": (5, "21263 in", "21267 in"),
+            "wrong-netlink-local-pid": (5, "nl_pid=1", "nl_pid=2"),
+            "unknown-send-payload": (6, r"\x7f", r"\x7e"),
+            "unknown-netlink-sequence": (6, "nlmsg_seq=0", "nlmsg_seq=2"),
+            "failed-netlink-ack": (7, "error=0", "error=-EPERM"),
+            "partial-netlink-ack": (7, ") = 36", ") = 35"),
+            "unknown-loopback-flags": (8, "NLM_F_REQUEST|NLM_F_ACK", "NLM_F_REQUEST"),
+            "different-network-process": (3, "21263 socket", "21262 socket"),
+            "wrong-clone-observer": (10, "21267 in", "21266 in"),
+            "missing-clone-observer": (10, " /* 21267 in strace's PID NS */", ""),
+            "wrong-wait-observer": (15, "21268 in", "21263 in"),
+            "wrong-wait-local-pid": (15, "wait4(3", "wait4(2"),
+            "wrong-wait-return": (19, "= 3", "= 2"),
+            "wrong-signal-local-pid": (20, "si_pid=3", "si_pid=2"),
+            "unknown-echild-option": (24, ", 0, NULL)", ", __WALL, NULL)"),
+        }
+        for name, (index, before, after) in changes.items():
+            self.assertIn(before, original[index], name)
+            changed = list(original)
+            changed[index] = changed[index].replace(before, after)
+            variants[name] = changed
+        for index in range(3, 10):
+            variants[f"missing-network-row-{index}"] = original[:index] + original[index + 1:]
+        variants["network-row-after-setup"] = original[:10] + [original[3]] + original[10:]
+        variants["network-row-after-payload"] = original[:14] + [original[3]] + original[14:]
+        variants["echild-before-wait"] = original[:15] + [
+            "21267 wait4(-1, 0x7ffc, 0, NULL) = -1 ECHILD (No child processes)"] + original[15:]
+        variants["missing-silent-terminal"] = [row for row in original if row != "21268 +++ exited with 0 +++"]
+        variants["missing-parent-terminal"] = original[:-1]
+        variants["unmatched-payload-resume"] = original[:11] + original[12:]
+        for name, lines in variants.items():
+            with self.subTest(case=name), self.assertRaisesRegex(RuntimeError, "^process-trace-refused$"):
+                self.decode(lines, argv, payload)
 
     def test_hosted_direct_shape_observes_the_silent_child(self):
         argv = self.python_argv(Path("/home/runner/work/_temp/grok-inert-tracer-step0/fixture"))

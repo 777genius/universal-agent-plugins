@@ -1,7 +1,8 @@
 """Prepare a disposable profile through the pinned native configuration writer.
 
-The harness never creates the native init lock. This is fixture preparation,
-before public lifecycle assertions; it does not qualify authentication or MCP.
+The native writer creates its init lock. The harness exclusively prepares the
+separate permanent UAP coordination lock before the original fixture snapshots.
+This does not qualify authentication or MCP.
 """
 import base64
 from contextlib import contextmanager, ExitStack
@@ -22,6 +23,7 @@ from project_native_research import Budget, verify_files
 
 CONFIG = PREFIX + "config.toml"
 LOCK = PREFIX + ".config-init.lock"
+UAP_LOCK = PREFIX + "config.toml.agentplugins.lock"
 WITNESS = "native-profile-witness.py"
 MARKER = "native-profile-unexpected-witness"
 WITNESS_BODY = (b"import pathlib,sys\npathlib.Path(sys.argv[1]).write_bytes(b'unexpected')\n"
@@ -91,15 +93,39 @@ def check_native_lock(journey):
     if receipt is None:
         return
     with profile_descriptors(journey.root, receipt) as (_, parent, check):
-        descriptor = os.open(".config-init.lock", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
-                             dir_fd=parent)
+        for relative in ((LOCK, UAP_LOCK) if UAP_LOCK in receipt else (LOCK,)):
+            name = relative.removeprefix(PREFIX)
+            descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                                 dir_fd=parent)
+            try:
+                require(held_bytes(parent, name, descriptor, receipt[relative], 0) == b"",
+                        "native profile lock is not empty")
+                check()
+            finally:
+                os.close(descriptor)
+    require(not os.path.lexists(journey.root / MARKER), "native profile witness executed")
+
+
+def prepare_uap_writer_lock(journey):
+    """Create this fixture's UAP leaf once, through its original held profile."""
+    receipt = journey.native_profile
+    require(receipt is not None and UAP_LOCK not in receipt, "UAP writer lock preparation repeated")
+    with profile_descriptors(journey.root, receipt) as (_, parent, check):
+        name = UAP_LOCK.removeprefix(PREFIX)
+        descriptor = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                             0o600, dir_fd=parent)
         try:
-            require(held_bytes(parent, ".config-init.lock", descriptor, receipt[LOCK], 0) == b"",
-                    "native profile lock is not empty")
+            expected = stable(os.fstat(descriptor))
+            require(expected[0] == receipt["."][0] and expected[2] == stat.S_IFREG | 0o600
+                    and expected[3] == 1 and expected[4:6] == tuple(receipt["."][3:])
+                    and expected[6] == 0, "UAP writer lock metadata differs")
+            require(stable(os.stat(name, dir_fd=parent, follow_symlinks=False)) == expected,
+                    "UAP writer lock named identity differs")
             check()
         finally:
             os.close(descriptor)
-    require(not os.path.lexists(journey.root / MARKER), "native profile witness executed")
+    receipt[UAP_LOCK] = expected
+    check_native_lock(journey)
 
 
 def remove_fixture(journey, after, config):
@@ -215,5 +241,7 @@ def prepare_native_profile(journey):
                 == {name: value for name, value in after.items() if name not in (CONFIG, WITNESS)},
                 "temporary native profile removal changed other members")
         check_native_lock(journey)
+        prepare_uap_writer_lock(journey)
         verify_files({journey.grok: ACQUISITION["binary_sha256"]}, budget)
-        proof.update(complete=True, native_lock_created=True, temporary_fixture_removed=True)
+        proof.update(complete=True, native_lock_created=True, temporary_fixture_removed=True,
+                     uap_writer_lock_created=True, uap_writer_lock=journey.native_profile[UAP_LOCK])
