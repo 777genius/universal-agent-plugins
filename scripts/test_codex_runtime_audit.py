@@ -31,8 +31,8 @@ class RemotionTemporaryRootTest(unittest.TestCase):
         self.base = Path(self.temporary.name).resolve(strict=True)
         self.root = self.base / "owned"
         self.root.mkdir()
-        self.handoff = run_path(str(Path(__file__).with_name(
-            "remotion_windows_long_temp_e2e.py")))["physical_temp_root"]
+        self.script = run_path(str(Path(__file__).with_name("remotion_windows_long_temp_e2e.py")))
+        self.handoff = self.script["physical_temp_root"]
 
     def test_same_object_lexical_alias_uses_physical_root_before_baseline(self):
         # A real same-object lexical alias; this is not a Windows 8.3 proof.
@@ -79,6 +79,114 @@ class RemotionTemporaryRootTest(unittest.TestCase):
                         with self.assertRaisesRegex(ValueError, "ancestor is redirected"):
                             self.handoff(self.root)
                         resolve.assert_not_called()
+
+    def run_setup_failure(self, failed_handoff, replace=False, late_replace=False):
+        """Exercise real main/creation/retention, without running a native case."""
+        runner = self.base / "runner-temp"
+        default = self.base / "default-temp-with-a-longer-physical-spelling"
+        runner.mkdir()
+        default.mkdir()
+        cli = self.base / "inert-source-cli.exe"
+        cli.write_bytes(b"never executed by this setup-only unit fixture")
+        fixture = Path(__file__).resolve().parents[1] / "tests/live-install/fixtures.json"
+        fixture_bytes = fixture.read_bytes()
+        created, moved, late = [], [], []
+        calls = 0
+        capture_authority = self.script["temp_root_authority"]
+
+        def create(**options):
+            path = Path(tempfile.mkdtemp(prefix=options["prefix"], dir=options.get("dir", default)))
+            created.append(path)
+            return str(path)
+
+        def replace_root(path):
+            (path / "owned.txt").write_text("original owned content")
+            retained = path.with_name(path.name + "-moved-original")
+            path.rename(retained)
+            moved.append(retained)
+            path.mkdir()
+            (path / "foreign.txt").write_text("foreign replacement must survive")
+
+        def handoff(path, authority):
+            nonlocal calls
+            calls += 1
+            if calls != failed_handoff:
+                return self.handoff(path, authority)
+            if late_replace:
+                late.append(path)
+            if not replace:
+                raise ValueError("injected handoff refusal")
+            replace_root(path)
+            return self.handoff(path, authority)
+
+        def observe_authority(path):
+            observed = capture_authority(path)
+            if path in late:
+                late.remove(path)
+                replace_root(path)  # Swap after the final authority observation.
+            return observed
+
+        native = SimpleNamespace(
+            validate_fixtures=lambda _: None,
+            do_case=lambda *args: self.fail("native case ran after TEMP setup failed"))
+        loader = SimpleNamespace(exec_module=lambda _: None)
+        imports = SimpleNamespace(util=SimpleNamespace(
+            spec_from_file_location=lambda *args: SimpleNamespace(loader=loader),
+            module_from_spec=lambda _: native))
+        environment = SimpleNamespace(name="nt", environ={
+            "RUNNER_TEMP": str(runner), "UAP_SOURCE_CLI": str(cli)})
+        git = SimpleNamespace(check_output=lambda *args, **kwargs:
+                              "inert-test-head" if kwargs.get("text") else fixture_bytes)
+        main = self.script["main"]
+        with patch.dict(main.__globals__, {
+                "os": environment, "subprocess": git, "importlib": imports,
+                "tempfile": SimpleNamespace(mkdtemp=create), "physical_temp_root": handoff,
+                "temp_root_authority": observe_authority}), patch.object(shutil, "rmtree") as remove:
+            with self.assertRaisesRegex(SystemExit, "TEMP setup"):
+                main()
+            remove.assert_not_called()
+        report = runner / "remotion-windows-source-longtemp.json"
+        self.assertTrue(report.is_file(), "TEMP setup failure lost its evidence")
+        return json.loads(report.read_text()), created, moved
+
+    def test_first_handoff_failure_reports_and_retains_unchanged_owned_root(self):
+        evidence, created, _ = self.run_setup_failure(1)
+        self.assertEqual(len(created), 1)
+        self.assertTrue(created[0].is_dir())
+        self.assertEqual(evidence["results"], {})
+        self.assertEqual(evidence["temp_roots"]["runner-temp"]["cleanup"], "retained-for-evidence")
+        self.assertEqual(evidence["temp_roots"]["runner-temp"]["created_root_chars"],
+                         len(str(created[0] / "skill-24")))
+        self.assertEqual(evidence["setup_error"]["error_type"], "ValueError")
+
+    def test_second_handoff_failure_reports_and_retains_both_owned_roots(self):
+        evidence, created, _ = self.run_setup_failure(2)
+        self.assertEqual(len(created), 2)
+        self.assertTrue(all(path.is_dir() for path in created))
+        self.assertEqual({row["cleanup"] for row in evidence["temp_roots"].values()},
+                         {"retained-for-evidence"})
+        self.assertEqual(evidence["temp_roots"]["runner-temp"]["root_chars"],
+                         len(str(created[0] / "skill-24")))
+        self.assertEqual(evidence["temp_roots"]["default-windows-temp"]["created_root_chars"],
+                         len(str(created[1] / "skill-24")))
+
+    def test_changed_root_is_retained_and_foreign_replacement_is_not_removed(self):
+        evidence, created, moved = self.run_setup_failure(2, replace=True)
+        self.assertTrue(created[0].is_dir(), "verified first root was not retained")
+        self.assertEqual((created[1] / "foreign.txt").read_text(), "foreign replacement must survive")
+        self.assertEqual((moved[0] / "owned.txt").read_text(), "original owned content")
+        retained = evidence["temp_roots"]["default-windows-temp"]
+        self.assertEqual(retained["cleanup"], "retained-unverified")
+        self.assertEqual(retained["created_path"], str(created[1]))
+        self.assertEqual(retained["cleanup_error_type"], "ValueError")
+
+    def test_late_swap_after_authority_observation_cannot_delete_foreign_bytes(self):
+        evidence, created, moved = self.run_setup_failure(2, late_replace=True)
+        self.assertTrue(all(path.is_dir() for path in created))
+        self.assertEqual((created[1] / "foreign.txt").read_text(), "foreign replacement must survive")
+        self.assertEqual((moved[0] / "owned.txt").read_text(), "original owned content")
+        self.assertEqual(evidence["temp_roots"]["default-windows-temp"]["cleanup"],
+                         "retained-for-evidence")
 
 
 class RemotionRepeatNativePhaseTest(unittest.TestCase):
