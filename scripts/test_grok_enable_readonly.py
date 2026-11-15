@@ -1,5 +1,6 @@
 """Inert driver verdict tests; no native processes, network or model calls."""
 import contextlib
+import glob
 import gzip
 import hashlib
 import io
@@ -186,6 +187,92 @@ class NativeDriverVerdict(unittest.TestCase):
                                            "inode_changed", "mode_changed", "content_changed"})
             self.assertEqual(change["role"], "home")
             self.assertRegex(change["relative_sha256"], r"^[a-f0-9]{64}$")
+
+    def test_snapshot_refuses_original_directory_scan_error(self):
+        module = runpy.run_path(str(Path(__file__).with_name("e2e") / "grok-enable-readonly.py"))
+        snapshot = module["snapshot"]
+        original_scan = module["os"].scandir
+        failure = PermissionError(13, "inert directory scan refusal")
+        with tempfile.TemporaryDirectory(prefix="grok-snapshot-scan-test-") as temporary:
+            root = Path(temporary)
+            protected = root / "protected"
+            protected.mkdir()
+            (protected / "retained").write_bytes(b"original bytes")
+            before = snapshot(root)
+            self.assertEqual(set(before), {".", "protected", "protected/retained"})
+            scans = []
+
+            def scan(path):
+                if Path(path) == protected:
+                    scans.append(path)
+                    raise failure
+                return original_scan(path)
+
+            observed = None
+            with contextlib.ExitStack() as patches:
+                patches.enter_context(patch("os.scandir", side_effect=scan))
+                globber = getattr(glob, "_StringGlobber", None)
+                if globber is not None:
+                    patches.enter_context(patch.object(globber, "scandir", staticmethod(scan)))
+                try:
+                    snapshot(root)
+                except PermissionError as error:
+                    observed = error
+            self.assertTrue(scans, "the original directory was not scanned")
+            self.assertEqual(snapshot(root), before)
+            self.assertIs(observed, failure, "the original scan error was suppressed")
+
+    def test_snapshot_does_not_skip_failed_entry_classification(self):
+        module = runpy.run_path(str(Path(__file__).with_name("e2e") / "grok-enable-readonly.py"))
+        snapshot = module["snapshot"]
+        original_scan = module["os"].scandir
+        failure = PermissionError(13, "inert entry classification refusal")
+
+        class Entry:
+            def __init__(self, entry):
+                self.entry = entry
+
+            def __getattr__(self, name):
+                return getattr(self.entry, name)
+
+            def is_dir(self, *args, **kwargs):
+                raise failure
+
+        with tempfile.TemporaryDirectory(prefix="grok-snapshot-entry-test-") as temporary:
+            root = Path(temporary)
+            protected = root / "protected"
+            protected.mkdir()
+            (protected / "retained").write_bytes(b"original bytes")
+            before = snapshot(root)
+            self.assertEqual(set(before), {".", "protected", "protected/retained"})
+            wrapped = []
+
+            class Scan:
+                def __init__(self, path):
+                    self.entries = original_scan(path)
+
+                def __enter__(self):
+                    self.entries.__enter__()
+                    return self
+
+                def __exit__(self, *args):
+                    return self.entries.__exit__(*args)
+
+                def __iter__(self):
+                    return self
+
+                def __next__(self):
+                    entry = next(self.entries)
+                    if Path(entry.path) == protected:
+                        wrapped.append(entry.path)
+                        return Entry(entry)
+                    return entry
+
+            with patch("os.scandir", side_effect=Scan):
+                observed = snapshot(root)
+            self.assertTrue(wrapped, "the original directory entry was not enumerated")
+            self.assertEqual(snapshot(root), before)
+            self.assertEqual(observed, before, "a directory classification error omitted its descendants")
 
 
 if __name__ == "__main__":

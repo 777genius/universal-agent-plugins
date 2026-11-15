@@ -100,8 +100,16 @@ def producer_context():
 
 
 def snapshot(root):
+    paths, pending = [], [root]
+    while pending:
+        with os.scandir(pending.pop()) as entries:
+            for entry in entries:
+                path = Path(entry.path)
+                paths.append(path)
+                if stat.S_ISDIR(path.lstat().st_mode):
+                    pending.append(path)
     result = {}
-    for path in [root, *sorted(root.rglob("*"))]:
+    for path in [root, *sorted(paths)]:
         info = path.lstat()
         if not stat.S_ISREG(info.st_mode) and not stat.S_ISDIR(info.st_mode):
             raise ValueError("inert fixture acquired an unexpected filesystem kind")
