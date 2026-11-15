@@ -16,6 +16,31 @@ BINARY = "22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9"
 URL = "https://x.ai/cli/grok-1.0.70-linux-x86_64.gz"
 
 
+def prepare_writer_lock(config):
+    """Prepare the permanent UAP writer lock before freezing fixture originals."""
+    parent = os.open(config.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        original = os.fstat(parent)
+        name = config.name + ".agentplugins.lock"
+        lock = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
+        try:
+            held = os.fstat(lock)
+            named = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            facts = lambda value: (value.st_dev, value.st_ino, value.st_mode, value.st_uid,
+                                   value.st_gid, value.st_nlink, value.st_size)
+            if not stat.S_ISREG(held.st_mode) or stat.S_IMODE(held.st_mode) != 0o600 or \
+                    (held.st_uid, held.st_gid, held.st_nlink, held.st_size) != (os.getuid(), os.getgid(), 1, 0) or facts(held) != facts(named):
+                raise ValueError("prepared UAP writer lock has unsafe metadata or identity")
+            current = config.parent.lstat()
+            if (original.st_dev, original.st_ino, original.st_mode, original.st_uid, original.st_gid) != \
+                    (current.st_dev, current.st_ino, current.st_mode, current.st_uid, current.st_gid):
+                raise ValueError("prepared UAP writer lock parent changed")
+        finally:
+            os.close(lock)
+    finally:
+        os.close(parent)
+
+
 def producer_context():
     """Read the delegated Python launcher, not the Go or namespaced child."""
     result = dict(qualification=False, producer="delegated Python launcher before Go helper exec; not Go/bwrap child state",
@@ -141,6 +166,7 @@ def main():
                 raise ValueError("native config lock was not established")
             config.write_text('[marketplace]\ndefault_skills_installs_purged = true\n'
                 '[features]\nturn_summary = false\n')
+            prepare_writer_lock(config)
             before = {str(path): snapshot(path) for path in (home, project)}
             original_binary = hashlib.sha256(binary.read_bytes()).hexdigest()
             output = run("readonly-production-inventory", [args.test.resolve(),

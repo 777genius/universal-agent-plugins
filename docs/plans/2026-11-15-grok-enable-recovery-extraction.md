@@ -32,6 +32,11 @@ the same disabled, untrusted full identity, unchanged original fixture bytes and
 physical entries. A failed test remains failed and retains its bounded output.
 This lane does not claim public enablement or recovery acceptance.
 
+Fixture preparation creates the empty permanent UAP config writer lock before
+the original snapshots, alongside the native lock. Complete snapshot comparisons
+remain exact. This accounts for a source-proven Go setup effect; the earlier
+wrapper failure retained no entry delta and does not prove this was its sole change.
+
 ## Measured feasibility and remaining gates
 
 Official archive SHA256:
