@@ -193,6 +193,11 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 // projectMCPUnavailableReason tells the user why Project MCP is refused and what
 // to do next. A Hermes installed from source has no verified bundle manifest, so
 // it cannot host the explicitly confirmed Project session.
+//
+// Hermes has no project-level config.yaml, so a project server must never be
+// written to the user config (it would run in every repository). A dedicated
+// Hermes profile for the project may be a future option for source installs. That
+// is deliberately not implemented and not decided; see issue #942.
 const projectMCPUnavailableReason = "Project MCP needs a standalone Hermes distribution with a verified manifest; a Hermes installed from source is not eligible. Install this MCP server with --scope user, or install only the Skills in this project"
 
 // A package with required MCP/hooks/extensions must not silently become
