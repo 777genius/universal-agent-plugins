@@ -87,7 +87,7 @@ jobs:
               | select(
                   any(.pull_requests[]?;
                       .number == $pr and .head.repo.id == $head and .base.repo.id == $base)
-                  or ($unique and (.pull_requests | length) == 0 and .head_branch == $branch)
+                  or ($unique and (.pull_requests | type == "array" and length == 0) and .head_branch == $branch)
                 )
               | .id' "${response}" >> "${candidates}"
           done
