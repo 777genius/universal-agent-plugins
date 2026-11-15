@@ -1,6 +1,43 @@
 # Consistent CLI installation review and progress
 
-Status: implemented and locally qualified; full Git-backed CI qualification pending.
+Status: native installation completion in progress; final qualification pending.
+
+## Owner follow-up: complete native setup (2026-11-15)
+
+The owner clarified that a successful file copy followed by generic "setup
+required" guidance is insufficient. First qualify ordinary Skills and plugin
+installation in real Codex and Claude Code without model requests, subscriptions
+or API credentials. Perform available discovery/setup automatically, while
+preserving the client's actual trust and policy decisions. Then review, merge,
+and qualify the same behavior in other supported clients. This supersedes the
+earlier assumption that all native setup can remain a manual next step.
+
+Use the existing client adapters, bounded native command runner and lifecycle
+result fields. The CLI presents returned evidence; it must not upgrade a file
+copy to native readiness or branch on individual client IDs. Reuse the same
+installation/verification path for raw Skills and plugins containing Skills.
+Interactive trust is explicit; do not fabricate trust flags or model execution.
+
+| Follow-up | Production LOC estimate | Test LOC estimate | Complexity /10 | Reliability /10 | Confidence /10 |
+|---|---:|---:|---:|---:|---:|
+| Codex native Skills discovery through its existing app-server protocol | 150–250 | 150–250 | 5 | 9 | 9 |
+| Claude native setup/discovery correction, after reproduction | 40–120 | 60–120 | 5 | 8 | 7 |
+| Evidence-based final summary and loader error isolation | 30–70 | 50–90 | 3 | 9 | 9 |
+
+Critique 1: avoid a second setup engine or client-ID switches in CLI code. Native
+protocol handling stays in each adapter. Missing/disabled/mis-scoped discovery
+cannot count as success; deadlines and cancellation must release the owned child.
+
+Critique 2: installation confirmation is not blanket project trust. Qualify the
+real client's supported no-model path before implementing automation. Keep
+noninteractive refusal honest and distinguish credentials required by an MCP
+server from credential-free installation of Skills. Do not retain a blanket
+"unverified" footer when the adapter has actually verified the installation.
+
+Initial source verification also found a corrupted tail in
+`skills_progress_test.go` that prevented the CLI test package from compiling.
+Restore its prior intended assertions before treating earlier test reports as
+evidence. The npm progress observer must not be able to crash a verified download.
 
 ## Goal and scope
 

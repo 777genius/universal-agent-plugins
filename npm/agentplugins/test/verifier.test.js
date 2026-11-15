@@ -44,6 +44,45 @@ test("canonical downloader closes before verified success with or without Conten
   }
 });
 
+test("throwing progress observers cannot interrupt or authorize a download", async t => {
+  const create = fs.createWriteStream;
+  let output;
+  t.mock.method(fs, "createWriteStream", (...args) => {
+    output = create(...args);
+    return output;
+  });
+  for (const bytes of [BODY, Buffer.alloc(BODY.length), BODY.subarray(1)]) {
+    const file = destination();
+    const observed = [];
+    try {
+      const download = v.downloadFile(URL, file, PIN, {
+        onProgress(progress) {
+          observed.push(progress);
+          throw new Error("injected presentation failure");
+        },
+        request: transport((res, req) => {
+          req.emit("response", res);
+          res.write(bytes.subarray(0, 2));
+          res.end(bytes.subarray(2));
+        })
+      });
+      if (bytes === BODY) {
+        await download;
+        assert.deepEqual(fs.readFileSync(file), BODY);
+      } else {
+        await assert.rejects(download, /SHA-256 verification/);
+      }
+      assert.deepEqual(observed, [
+        { received: 2, total: PIN.size },
+        { received: bytes.length, total: PIN.size }
+      ], "every chunk still reaches the isolated observer");
+      assert.equal(output.closed, true, "verification settles only after output closes");
+    } finally {
+      fs.rmSync(path.dirname(file), { recursive: true, force: true });
+    }
+  }
+});
+
 for (const delta of [0, -1, 1]) {
   test(`real HTTP parser preserves padded Content-Length with size delta ${delta}`, async () => {
     const length = "000" + (BODY.length + delta);

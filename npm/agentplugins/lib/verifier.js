@@ -184,7 +184,9 @@ async function downloadFileOnce(value, destination, expected, options = {}, redi
           return;
         }
         hash.update(chunk);
-        options.onProgress?.({ received: size, total: expected.size });
+        // Progress is presentation only. A failed observer must neither escape
+        // the stream callback nor change the pinned download verification.
+        try { options.onProgress?.({ received: size, total: expected.size }); } catch {}
       });
       response.pipe(output);
       output.once("finish", () => {
