@@ -2,6 +2,8 @@ package domain
 
 import (
 	"encoding/json"
+	"fmt"
+	"path/filepath"
 )
 
 const (
@@ -185,21 +187,46 @@ type NativeObjectOwnership struct {
 }
 
 type MutationReceipt struct {
-	DirectoryProof       json.RawMessage        `json:"physical_directory_proof,omitempty"`
-	ProfileOwners        []PhysicalProfileOwner `json:"profile_owners,omitempty"`
-	DataReceiptID        string                 `json:"data_receipt_id,omitempty"`
-	OperationID          string                 `json:"operation_id"`
-	OperationGroupID     string                 `json:"operation_group_id,omitempty"`
-	Sequence             int                    `json:"sequence"`
-	MutationType         string                 `json:"mutation_type"`
-	ClientBindingID      string                 `json:"client_binding_id"`
-	ActivePath           string                 `json:"active_path,omitempty"`
-	StagingPath          string                 `json:"staging_path,omitempty"`
-	BackupPath           string                 `json:"backup_path,omitempty"`
-	BeforeDigest         string                 `json:"before_digest,omitempty"`
-	AfterDigest          string                 `json:"after_digest,omitempty"`
-	Phase                string                 `json:"phase"`
-	EnvironmentAuthority *EnvironmentAuthority  `json:"environment_authority,omitempty"`
+	// PublicationParentAuthority records ancestry for a fresh standalone swap;
+	// it is structural evidence, not a physical profile ownership grant.
+	PublicationParentAuthority *ProfileAuthority      `json:"publication_parent_authority,omitempty"`
+	DirectoryProof             json.RawMessage        `json:"physical_directory_proof,omitempty"`
+	ProfileOwners              []PhysicalProfileOwner `json:"profile_owners,omitempty"`
+	DataReceiptID              string                 `json:"data_receipt_id,omitempty"`
+	OperationID                string                 `json:"operation_id"`
+	OperationGroupID           string                 `json:"operation_group_id,omitempty"`
+	Sequence                   int                    `json:"sequence"`
+	MutationType               string                 `json:"mutation_type"`
+	ClientBindingID            string                 `json:"client_binding_id"`
+	ActivePath                 string                 `json:"active_path,omitempty"`
+	StagingPath                string                 `json:"staging_path,omitempty"`
+	BackupPath                 string                 `json:"backup_path,omitempty"`
+	BeforeDigest               string                 `json:"before_digest,omitempty"`
+	AfterDigest                string                 `json:"after_digest,omitempty"`
+	Phase                      string                 `json:"phase"`
+	EnvironmentAuthority       *EnvironmentAuthority  `json:"environment_authority,omitempty"`
+}
+
+// ValidatePublicationParent checks the exact original role without filesystem I/O.
+func (r MutationReceipt) ValidatePublicationParent(standalone bool) error {
+	parent := r.PublicationParentAuthority
+	if parent == nil {
+		if standalone && r.MutationType == "directory_swap" {
+			return fmt.Errorf("standalone publication parent authority is required")
+		}
+		return nil
+	}
+	if !standalone || r.MutationType != "directory_swap" || parent.IsZero() || r.BeforeDigest != "" ||
+		(r.Phase != "state_committed" && r.Phase != "committed") {
+		return fmt.Errorf("invalid standalone publication parent role")
+	}
+	root := parent.Facts().CanonicalRoot
+	for _, path := range []string{r.ActivePath, r.StagingPath, r.BackupPath} {
+		if !filepath.IsAbs(path) || filepath.Clean(path) != path || filepath.Dir(path) != root {
+			return fmt.Errorf("standalone publication parent differs from receipt paths")
+		}
+	}
+	return nil
 }
 
 // ClientPackageRevision records the exact portable package revision that was

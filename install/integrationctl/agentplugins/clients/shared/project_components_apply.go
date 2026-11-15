@@ -26,6 +26,9 @@ func (mutation ProjectComponentMutation) Apply(ctx context.Context) error {
 }
 
 func (mutation ProjectComponentMutation) commit(ctx context.Context, requests []nativeconfig.Request, txn *projectSkillSwap) error {
+	if err := mutation.revalidate(); err != nil {
+		return rollbackProjectSkills(txn, err, true)
+	}
 	if err := txn.swap(ctx); err != nil {
 		return rollbackProjectSkills(txn, err, true)
 	}
@@ -33,6 +36,9 @@ func (mutation ProjectComponentMutation) commit(ctx context.Context, requests []
 		return rollbackProjectSkills(txn, err, true)
 	}
 	if err := ctx.Err(); err != nil {
+		return rollbackProjectSkills(txn, err, true)
+	}
+	if err := mutation.revalidate(); err != nil {
 		return rollbackProjectSkills(txn, err, true)
 	}
 	_, err := mutation.Kernel.ApplyBatch(requests)

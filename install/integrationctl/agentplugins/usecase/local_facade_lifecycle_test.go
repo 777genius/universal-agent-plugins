@@ -18,9 +18,11 @@ import (
 
 	"github.com/tailscale/hujson"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
@@ -1152,13 +1154,13 @@ func TestReviewR2InitialJournalWithNativeIntent(t *testing.T) {
 				}
 				return nil
 			}}
-			receipt, err := manager.Apply(t.Context(), dirswap.Input{OperationID: "TEST-observed-journal-r2", ClientBindingID: "TEST-journal-binding", Sequence: 1, OwnedBase: owned, ActivePath: filepath.Join(owned, "active"), StagingPath: staging, RequireAbsent: true})
+			receipt, err := manager.Apply(t.Context(), dirswap.Input{PublicationParentAuthority: lifecycleOriginalParent(t, owned), OperationID: "TEST-observed-journal-r2", ClientBindingID: "TEST-journal-binding", Sequence: 1, OwnedBase: owned, ActivePath: filepath.Join(owned, "active"), StagingPath: staging, RequireAbsent: true})
 			if err == nil || receipt.Phase != dirswap.PhaseActivated {
 				t.Fatalf("TEST pending publication: %+v %v", receipt, err)
 			}
 			store := statev2.Store{Path: filepath.Join(root, "state", "state-v2.json")}
 			state := mustLoadFacadeState(t, root)
-			state.TransactionReceipts = append(state.TransactionReceipts, domain.MutationReceipt{OperationID: receipt.OperationID, ClientBindingID: receipt.ClientBindingID, Sequence: receipt.Sequence, MutationType: "directory_swap", ActivePath: receipt.ActivePath, StagingPath: receipt.StagingPath, BackupPath: receipt.BackupPath, Phase: "state_committed"})
+			state.TransactionReceipts = append(state.TransactionReceipts, domain.MutationReceipt{PublicationParentAuthority: lifecycleRecordedParent(t, receipt), OperationID: receipt.OperationID, ClientBindingID: receipt.ClientBindingID, Sequence: receipt.Sequence, MutationType: "directory_swap", ActivePath: receipt.ActivePath, StagingPath: receipt.StagingPath, BackupPath: receipt.BackupPath, Phase: "state_committed"})
 			if err := store.Save(state); err != nil {
 				t.Fatal(err)
 			}
@@ -1245,13 +1247,13 @@ func TestReviewR2InitialKernelLateTerminalReceipt(t *testing.T) {
 		}
 		return nil
 	}}
-	receipt, err := manager.Apply(t.Context(), dirswap.Input{OperationID: "TEST-observed-journal-r2", ClientBindingID: "TEST-journal-binding", Sequence: 1, OwnedBase: owned, ActivePath: filepath.Join(owned, "active"), StagingPath: staging, RequireAbsent: true})
+	receipt, err := manager.Apply(t.Context(), dirswap.Input{PublicationParentAuthority: lifecycleOriginalParent(t, owned), OperationID: "TEST-observed-journal-r2", ClientBindingID: "TEST-journal-binding", Sequence: 1, OwnedBase: owned, ActivePath: filepath.Join(owned, "active"), StagingPath: staging, RequireAbsent: true})
 	if err == nil || receipt.Phase != dirswap.PhaseActivated {
 		t.Fatalf("TEST publication: %+v %v", receipt, err)
 	}
 	store := statev2.Store{Path: filepath.Join(root, "state", "state-v2.json")}
 	state := mustLoadFacadeState(t, root)
-	state.TransactionReceipts = append(state.TransactionReceipts, domain.MutationReceipt{OperationID: receipt.OperationID, ClientBindingID: receipt.ClientBindingID, Sequence: receipt.Sequence, MutationType: "directory_swap", ActivePath: receipt.ActivePath, StagingPath: receipt.StagingPath, BackupPath: receipt.BackupPath, Phase: "state_committed"})
+	state.TransactionReceipts = append(state.TransactionReceipts, domain.MutationReceipt{PublicationParentAuthority: lifecycleRecordedParent(t, receipt), OperationID: receipt.OperationID, ClientBindingID: receipt.ClientBindingID, Sequence: receipt.Sequence, MutationType: "directory_swap", ActivePath: receipt.ActivePath, StagingPath: receipt.StagingPath, BackupPath: receipt.BackupPath, Phase: "state_committed"})
 	if err := store.Save(state); err != nil {
 		t.Fatal(err)
 	}
@@ -1321,6 +1323,27 @@ func TestReviewR2InitialKernelLateTerminalReceipt(t *testing.T) {
 	}
 }
 
+func lifecycleOriginalParent(t *testing.T, owned string) *directoryidentity.Authority {
+	t.Helper()
+	authority, err := directoryidentity.Capture(t.Context(), owned)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &authority
+}
+
+func lifecycleRecordedParent(t *testing.T, receipt dirswap.Receipt) *domain.ProfileAuthority {
+	t.Helper()
+	if receipt.PublicationParentAuthority == nil {
+		t.Fatal("publication lost original parent")
+	}
+	authority, err := profileauthority.FromNeutral(*receipt.PublicationParentAuthority)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &authority
+}
+
 func lifecycleObservedPublication(t *testing.T, root, id string, stateCommitted bool) dirswap.Receipt {
 	t.Helper()
 	owned := filepath.Join(root, "TEST-"+id)
@@ -1337,13 +1360,13 @@ func lifecycleObservedPublication(t *testing.T, root, id string, stateCommitted 
 		}
 		return nil
 	}}
-	receipt, err := manager.Apply(t.Context(), dirswap.Input{OperationID: id, ClientBindingID: "TEST-journal-binding", Sequence: 1, OwnedBase: owned, ActivePath: filepath.Join(owned, "active"), StagingPath: staging, RequireAbsent: true})
+	receipt, err := manager.Apply(t.Context(), dirswap.Input{PublicationParentAuthority: lifecycleOriginalParent(t, owned), OperationID: id, ClientBindingID: "TEST-journal-binding", Sequence: 1, OwnedBase: owned, ActivePath: filepath.Join(owned, "active"), StagingPath: staging, RequireAbsent: true})
 	if err == nil || receipt.Phase != dirswap.PhaseActivated {
 		t.Fatalf("TEST publication: %+v %v", receipt, err)
 	}
 	if stateCommitted {
 		state := mustLoadFacadeState(t, root)
-		state.TransactionReceipts = append(state.TransactionReceipts, domain.MutationReceipt{OperationID: receipt.OperationID, ClientBindingID: receipt.ClientBindingID, Sequence: receipt.Sequence, MutationType: "directory_swap", ActivePath: receipt.ActivePath, StagingPath: receipt.StagingPath, BackupPath: receipt.BackupPath, Phase: "state_committed"})
+		state.TransactionReceipts = append(state.TransactionReceipts, domain.MutationReceipt{PublicationParentAuthority: lifecycleRecordedParent(t, receipt), OperationID: receipt.OperationID, ClientBindingID: receipt.ClientBindingID, Sequence: receipt.Sequence, MutationType: "directory_swap", ActivePath: receipt.ActivePath, StagingPath: receipt.StagingPath, BackupPath: receipt.BackupPath, Phase: "state_committed"})
 		if err := (statev2.Store{Path: filepath.Join(root, "state", "state-v2.json")}).Save(state); err != nil {
 			t.Fatal(err)
 		}

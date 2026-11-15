@@ -14,7 +14,7 @@ func TestSessionCapabilityIsOptIn(t *testing.T) {
 	registry := clientregistry.Project()
 	// Registration exposes planning; it does not qualify a runtime or scope.
 	// Each adapter still owns PlanSession and VerifySession admission.
-	expected := map[domain.ClientID]bool{domain.ClientCline: true}
+	expected := map[domain.ClientID]bool{domain.ClientCline: true, domain.ClientHermes: true}
 	for _, definition := range domain.ClientDefinitions() {
 		_, ok := clients.As[clients.SessionPlanner](registry, definition.ID)
 		if ok != expected[definition.ID] {
