@@ -173,7 +173,7 @@ func newAgentpluginsLifecycle(dataRoot string, v2Store statev2.Store, paths path
 	return usecase.Service{
 		ClientPreparation: providers.NewOpenCodeClientPreparation(clientRegistry),
 		StateStore:        v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager,
-		Activator: providers.Activator{ProjectRoots: projectRoots, OpenCodeTransitions: transitions, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
+		Activator: providers.Activator{ProjectRoots: projectRoots, OpenCodeTransitions: transitions, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel, Concurrent: true},
 		Lock:      mutationLock, Kernel: directoryKernel,
 		NativeObserver:     providers.NativeIdentityObserver{ProjectRoots: projectRoots, Stager: stager, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
 		NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeKernel},

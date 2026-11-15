@@ -9,22 +9,48 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
-// Independent effects are opt-in. Other adapters may mutate the shared kernel
-// during activation, so they retain the original serial coordinator.
-func (session *groupSession) independentGroupActivator() (ports.IndependentClientActivator, bool) {
-	activator, ok := session.service.Activator.(ports.IndependentClientActivator)
+// Independent effects are opt-in per client. Adapters that may mutate the shared
+// kernel during activation keep the serial coordinator. When at least two
+// distinct clients can run independently they are moved to the front of the plan
+// and run concurrently with the serial remainder; one client alone gains nothing.
+// The planned order never decides result order: results are addressed by index.
+//
+// The reorder is temporary: operation identifiers and staging cleanup address
+// planned targets by their original position, so restore puts that order back.
+func (session *groupSession) independentGroupActivator() (activator ports.IndependentClientActivator, count int, restore func(), ok bool) {
+	activator, ok = session.service.Activator.(ports.IndependentClientActivator)
 	if !ok || len(session.planned) < 2 {
-		return nil, false
+		return nil, 0, nil, false
 	}
 	seen := map[domain.ClientID]bool{}
-	for _, target := range session.planned {
+	var independentAt, serialAt []int
+	for position, target := range session.planned {
 		request := domain.ActivationRequest{Client: target.input.Client, Plan: target.plan}
-		if seen[target.input.Client.ClientID] || !target.plan.SelectedDelivery.IsZero() || !activator.SupportsIndependentActivation(request) {
-			return nil, false
+		if !seen[target.input.Client.ClientID] && target.plan.SelectedDelivery.IsZero() && activator.SupportsIndependentActivation(request) {
+			seen[target.input.Client.ClientID] = true
+			independentAt = append(independentAt, position)
+			continue
 		}
-		seen[target.input.Client.ClientID] = true
+		serialAt = append(serialAt, position)
 	}
-	return activator, true
+	if len(independentAt) < 2 {
+		return nil, 0, nil, false
+	}
+	order := append(independentAt, serialAt...)
+	original := session.planned
+	reordered := make([]plannedGroupTarget, len(original))
+	for position, from := range order {
+		reordered[position] = original[from]
+	}
+	session.planned = reordered
+	restore = func() {
+		put := make([]plannedGroupTarget, len(original))
+		for position, from := range order {
+			put[from] = session.planned[position]
+		}
+		session.planned = put
+	}
+	return activator, len(independentAt), restore, true
 }
 
 type independentActivationResult struct {
@@ -38,6 +64,8 @@ type independentActivationResult struct {
 type independentClientOperation func(context.Context) (domain.ActivationOutcome, error)
 
 type independentActivationRun struct {
+	// count is the planned prefix that runs independently.
+	count      int
 	session    *groupSession
 	activator  ports.IndependentClientActivator
 	ctx        context.Context
@@ -49,20 +77,58 @@ type independentActivationRun struct {
 
 // Only client effects run in goroutines. Request preparation, journal changes,
 // host callbacks, publication, and progress callbacks stay on this coordinator.
-func (session *groupSession) activateIndependentGroupTargets(activator ports.IndependentClientActivator) (GroupResult, error) {
+// Serial targets run on the coordinator while the independent effects are in
+// flight; their results are published only after the serial remainder returns.
+func (session *groupSession) activateIndependentGroupTargets(activator ports.IndependentClientActivator, count int) (GroupResult, error) {
 	session.externalCompleted, session.externalFailed = 0, 0
 	session.firstActivationErr = nil
 	effectContext, cancel := context.WithCancelCause(session.ctx)
 	defer cancel(nil)
-	run := independentActivationRun{session: session, activator: activator, ctx: effectContext, cancel: cancel,
-		results: make(chan independentActivationResult, len(session.planned))}
+	run := independentActivationRun{session: session, activator: activator, ctx: effectContext, cancel: cancel, count: count,
+		results: make(chan independentActivationResult, count)}
 	run.dispatch()
+	serialCause := run.activateSerialRemainder()
 	run.collect()
+	if serialCause != nil {
+		// The serial stop happened before the independent results were
+		// published; classify and count again with every outcome in.
+		session.classifyActivationFailure()
+		return session.result, session.activationFailureError(serialCause)
+	}
 	return run.finish()
 }
 
+// activateSerialRemainder runs the planned targets that cannot be independent
+// and returns the cause that stopped the group, nil when every one was reached.
+// A stop here cancels in-flight independent effects so they are joined quickly;
+// a stop raised by an independent effect (uncertain or unclosed client process,
+// cancellation) stops the remaining serial targets too, as it would serially.
+func (run *independentActivationRun) activateSerialRemainder() error {
+	session := run.session
+	if run.dispatched < run.count {
+		return nil
+	}
+	for index := run.count; index < len(session.planned); index++ {
+		if run.ctx.Err() != nil {
+			cause := context.Cause(run.ctx)
+			stage, message := groupActivationStopReason(session.ctx, cause)
+			session.markRemainingNotAttempted(index, stage, message)
+			return cause
+		}
+		if err := session.activateOneGroupTarget(index, session.planned[index]); err != nil {
+			cause := errors.Unwrap(err)
+			if cause == nil {
+				cause = err
+			}
+			run.cancel(cause)
+			return cause
+		}
+	}
+	return nil
+}
+
 func (run *independentActivationRun) dispatch() {
-	for index, target := range run.session.planned {
+	for index, target := range run.session.planned[:run.count] {
 		if run.ctx.Err() != nil {
 			run.stopErr = context.Cause(run.ctx)
 			break
@@ -70,10 +136,15 @@ func (run *independentActivationRun) dispatch() {
 		operation, result := run.prepare(index, target)
 		run.dispatched++
 		if result.err != nil {
+			// The failure belongs to this target and is published as such. Only a
+			// failure that makes later activation unsafe stops the others.
 			run.results <- result
-			run.stopErr = result.err
-			run.cancel(result.err)
-			break
+			if stopsGroupActivation(run.session.ctx, result.err) {
+				run.stopErr = result.err
+				run.cancel(result.err)
+				break
+			}
+			continue
 		}
 		go run.execute(operation, result)
 	}
@@ -148,7 +219,8 @@ func (run *independentActivationRun) collect() {
 
 func (run *independentActivationRun) finish() (GroupResult, error) {
 	session := run.session
-	if run.dispatched < len(session.planned) {
+	if run.dispatched < run.count {
+		// The independent prefix stopped early; the serial remainder never started.
 		stage, message := groupActivationStopReason(session.ctx, run.stopErr)
 		session.markRemainingNotAttempted(run.dispatched, stage, message)
 	}
