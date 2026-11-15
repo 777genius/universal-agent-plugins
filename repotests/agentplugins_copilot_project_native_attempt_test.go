@@ -269,8 +269,10 @@ func (f *copilotProjectAttempt) setup(t *testing.T) {
 }
 func (f *copilotProjectAttempt) setupPrepared(t *testing.T, extraArgs ...string) {
 	t.Helper()
-	args := []string{f.installer, "add", f.base.Package, "--no-save", "--scope", "project", "--project-root", f.base.Project, "--target", "copilot", "--format", "json"}
-	r := f.command(t, "add-A", f.base.Project, f.env(), append(args, extraArgs...), 30*time.Second)
+	args := make([]string, 0, 12+len(extraArgs))
+	args = append(args, f.installer, "add", f.base.Package, "--no-save", "--scope", "project", "--project-root", f.base.Project, "--target", "copilot", "--format", "json")
+	args = append(args, extraArgs...)
+	r := f.command(t, "add-A", f.base.Project, f.env(), args, 30*time.Second)
 	if string(r.Stderr) != "Resolving and validating one Agent Plugin package for every selected target...\nInstalling native-proof for 1 selected clients...\n" {
 		t.Fatal("unexpected public installer diagnostic")
 	}

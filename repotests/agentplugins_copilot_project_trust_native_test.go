@@ -32,6 +32,10 @@ func testCopilotProjectTrustInstallation(t *testing.T) {
 	if err := os.Mkdir(foreign, 0700); err != nil {
 		t.Fatal(err)
 	}
+	otherConfig := filepath.Join(f.other, ".github", "mcp.json")
+	otherBody := []byte(`{"mcpServers":{"untrusted-project-b":{"type":"http","url":"http://127.0.0.1:9/mcp","tools":["*"]}}}`)
+	projectNativeRuntimeWrite(t, otherConfig, otherBody, 0600)
+	f.protected[otherConfig] = copilotProjectConfigHash(otherBody)
 	original := map[string]any{
 		"firstLaunchAt":  f.started.UTC().Format(time.RFC3339Nano),
 		"trustedFolders": []any{foreign},
@@ -71,11 +75,13 @@ func testCopilotProjectTrustInstallation(t *testing.T) {
 		"tool_permissions_preserved": true, "native_skills_catalog_verified": true,
 		"mcp_initialize": true, "mcp_tools_list": true, "mcp_tools_call": true,
 		"vendor_authentication_qualified": false, "real_model_qualified": false}
-	encoded, err := json.MarshalIndent(proof, "", "  ")
+	encoded, err := json.Marshal(proof)
 	if err != nil {
 		t.Fatal(err)
 	}
-	projectNativeRuntimeWrite(t, filepath.Join(f.output, "project-trust-proof.json"), append(encoded, '\n'), 0600)
+	// The existing frontend receipt retains bounded -test.v output, including
+	// this proof, while the original cycle's closed archive stays unchanged.
+	t.Logf("Copilot remembered trust evidence: %s", encoded)
 	t.Log("Fresh pinned Copilot loaded installed project Skills/MCP and completed initialize/list/call after public --yes installation; B and foreign settings remained unchanged.")
 }
 
@@ -94,11 +100,26 @@ func copilotTrustConfigEqual(t *testing.T, path string, expected map[string]any)
 func copilotTrustMcpList(t *testing.T, f *copilotProjectAttempt, label, project string, installed bool) {
 	t.Helper()
 	r := f.command(t, "trust-list-"+label, project, f.env(), []string{f.client, "mcp", "list", "--json"}, 30*time.Second)
-	if _, err := projectNativeRuntimeJSON(r.Stdout); err != nil || len(r.Stderr) != 0 {
+	value, err := projectNativeRuntimeJSON(r.Stdout)
+	if err != nil || len(r.Stderr) != 0 {
 		t.Fatal("fresh Copilot MCP listing did not return clean JSON", err)
 	}
-	if bytes.Contains(r.Stdout, []byte("uapcopilota")) != installed {
-		t.Fatal("fresh Copilot MCP listing crossed the selected project boundary")
+	document, ok := value.(map[string]any)
+	if !ok {
+		t.Fatal("Copilot MCP listing is not an object")
+	}
+	servers, ok := document["mcpServers"].(map[string]any)
+	if !ok {
+		t.Fatal("Copilot MCP listing has no server object")
+	}
+	if !installed && len(servers) != 0 {
+		t.Fatal("Copilot loaded an MCP from the untrusted sibling project")
+	}
+	if installed {
+		server, ok := servers["uapcopilota"].(map[string]any)
+		if !ok || server["enabled"] != true || server["source"] != "workspace" || server["sourcePath"] != filepath.Join(project, ".github", "mcp.json") {
+			t.Fatal("Copilot did not load the installed MCP from the exact trusted project")
+		}
 	}
 	f.check(t)
 }

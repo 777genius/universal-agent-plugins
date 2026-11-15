@@ -15,6 +15,29 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+var _ clients.ActivationReadiness = (*Adapter)(nil)
+
+// RequiresActivation checks only the captured profile, never ambient native
+// configuration. Explicit verification remains a separate read-only operation.
+func (*Adapter) RequiresActivation(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if plan.Scope != domain.ScopeProject && plan.TargetContext.Scope != domain.ScopeProject {
+		return false, nil
+	}
+	path, err := copilotTrustPath(client, plan)
+	if err != nil {
+		return false, err
+	}
+	file, err := env.NativeConfig.ReadExactFileBounded(path, 1<<20)
+	if err != nil {
+		return false, err
+	}
+	_, trusted, err := copilotTrustDocument(file, plan.TargetContext.ProjectRoot)
+	return !trusted && err == nil, err
+}
+
 // Folder trust is a remembered user choice, not plugin ownership. It therefore
 // remains after removal; only a failed installation compensates a new grant.
 func copilotTrustPath(client domain.DetectedClient, plan domain.DeliveryPlan) (string, error) {

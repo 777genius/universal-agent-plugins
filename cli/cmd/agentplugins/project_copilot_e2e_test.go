@@ -40,8 +40,12 @@ func TestProjectCopilotComposedSavedLifecycle(t *testing.T) {
 		projectCopilotTrust(t, trustPath, append([]string{"/foreign-project"}, []string{journey.a, journey.b}[:index+1]...))
 	}
 	userAfter := securityFixtureTree(t, user)
+	if projectJourneyRead(t, trustPath+".agentplugins.lock") != "" {
+		t.Fatal("Copilot trust writer lock contains unexpected data")
+	}
 	delete(userBefore, "config.json")
 	delete(userAfter, "config.json")
+	delete(userAfter, "config.json.agentplugins.lock")
 	if !reflect.DeepEqual(userBefore, userAfter) {
 		t.Fatal("Copilot project installation changed unrelated user files")
 	}

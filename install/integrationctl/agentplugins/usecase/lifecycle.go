@@ -64,7 +64,7 @@ func (service Service) resume(
 	outcome = service.resumeActivationOutcome(input, result.Plan, client, outcome, activationErr)
 	result.Activation = outcome
 	changed, updateErr := service.updateActivationResultWithObservation(installationID, clientBindingID, outcome, activationErr, client.NativeObjects, previousObservation)
-	result.Mutated = changed
+	result.Mutated = changed || committedActivationEffect(request, outcome, activationErr)
 	if updateErr != nil {
 		if activationErr != nil {
 			return result, fmt.Errorf("resume client activation: %w; persist activation state: %w", activationErr, updateErr)
@@ -78,6 +78,10 @@ func (service Service) resume(
 	// cannot finish it, and a later one the adapter can act on will.
 	result.NoChange = !changed && (complete && (service.verifiedRegistrationUnchanged(input, result.Plan, client, outcome) || settled) || service.verifiedPreparedObservationUnchanged(input, result.Plan, client, delivery, outcome, complete))
 	return result, nil
+}
+
+func committedActivationEffect(request domain.ActivationRequest, outcome domain.ActivationOutcome, err error) bool {
+	return !request.VerifyOnly && err == nil && outcome.NativeEffect == domain.NativeEffectCommitted
 }
 
 func unresolvedNativeAttemptID(client domain.ClientBinding) string {

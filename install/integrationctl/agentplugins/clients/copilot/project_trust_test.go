@@ -233,3 +233,35 @@ func TestProjectCopilotDetectionBindsSelectedHome(t *testing.T) {
 		t.Fatal("relative profile admitted")
 	}
 }
+
+func TestProjectCopilotReadinessDistinguishesMissingTrustFromUnsafeConfiguration(t *testing.T) {
+	env, request, path := trustFixture(t)
+	a := New()
+	required, err := a.RequiresActivation(t.Context(), env, request.Client, request.Plan)
+	if err != nil || !required {
+		t.Fatalf("absent trust readiness: %v %v", required, err)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatal("readiness created native config")
+	}
+	if err := withCopilotTrust(t.Context(), env, request, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	before := trustRead(t, path)
+	if required, err := a.RequiresActivation(t.Context(), env, request.Client, request.Plan); err != nil || required {
+		t.Fatalf("remembered folder requires activation: %v %v", required, err)
+	}
+	if !bytes.Equal(before, trustRead(t, path)) {
+		t.Fatal("readiness changed native config")
+	}
+	malformed := []byte(`{"trustedFolders":true}`)
+	if err := os.WriteFile(path, malformed, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if required, err := a.RequiresActivation(t.Context(), env, request.Client, request.Plan); err == nil || required {
+		t.Fatal("unsafe config treated as recoverable missing trust")
+	}
+	if !bytes.Equal(malformed, trustRead(t, path)) {
+		t.Fatal("readiness rewrote unsafe native config")
+	}
+}

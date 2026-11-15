@@ -79,10 +79,12 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 					servers[object.LogicalName] = server
 				}
 			}
-			return withCopilotTrust(ctx, env, request, func() error {
-				return (shared.ProjectComponentMutation{Layout: layout, ActivePath: request.Delivery.ActivePath,
-					Previous: copilotNativeObjects(request.PreviousNativeObjects), Desired: copilotNativeObjects(request.Delivery.NativeObjects), Servers: servers, Kernel: env.NativeConfig}).Apply(ctx)
-			})
+			mutation := shared.ProjectComponentMutation{Layout: layout, ActivePath: request.Delivery.ActivePath,
+				Previous: copilotNativeObjects(request.PreviousNativeObjects), Desired: copilotNativeObjects(request.Delivery.NativeObjects), Servers: servers, Kernel: env.NativeConfig}
+			if err := mutation.Preflight(ctx); err != nil {
+				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+			}
+			return withCopilotTrust(ctx, env, request, func() error { return mutation.Apply(ctx) })
 		},
 	})
 	if err == nil && outcome.Verification == domain.VerificationInstalled {
