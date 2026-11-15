@@ -279,7 +279,7 @@ def completed(row):
 def readonly_failure_reason(row):
     # An exact original hosted bwrap denial is diagnostic, never a native pass.
     # Keep every other missing/partial/truncated result in the generic refusal.
-    message = b'bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\\n'
+    message = b'bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\n'
     streams = row['streams']
     if (row['exit'] == 1 and row['error'] is None and row['wait_observed']
             and all(stream['eof'] for stream in streams.values())

@@ -1403,7 +1403,7 @@ os._exit(0)
         signal_group.assert_not_called()
 
     def test_bwrap_loopback_denial_is_only_a_specific_readonly_refusal(self):
-        message = b'bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\\n'
+        message = b'bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted' + bytes([10])
         row = {'exit': 1, 'error': None, 'wait_observed': True, 'streams': {
             'stdout': {'body': bytearray(), 'eof': True},
             'stderr': {'body': bytearray(message), 'eof': True},
