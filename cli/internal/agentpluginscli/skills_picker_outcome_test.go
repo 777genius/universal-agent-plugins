@@ -34,13 +34,13 @@ func TestSkillsPickerOutcomeRequiresObservedReadiness(t *testing.T) {
 			if setup != test.setup || len(outcome.Items) != 1 || outcome.Items[0].Message == nil || !strings.Contains(*outcome.Items[0].Message, test.message) {
 				t.Fatalf("lost readiness or item guidance: %+v", outcome)
 			}
-			if test.ready && (!strings.Contains(*outcome.Items[0].Message, "discovery was not checked") || !strings.Contains(outcome.Result.Message, "not verified")) {
+			if test.ready && (!strings.Contains(*outcome.Items[0].Message, "discovery was not checked") || !strings.Contains(outcome.Result.Message, "Model execution was not tested.")) {
 				t.Fatalf("native projection was misrepresented as agent-side discovery: %+v", outcome)
 			}
 			if strings.Contains(*outcome.Items[0].Message, "detected by the agent") || strings.Contains(outcome.Result.Message, "detected in the selected agents") {
 				t.Fatalf("unobserved agent discovery was claimed: %+v", outcome)
 			}
-			if strings.Contains(*outcome.Items[0].Message, "private-secret") || len(outcome.Result.RepairInstructions) != 1 {
+			if strings.Contains(*outcome.Items[0].Message, "private-secret") || len(outcome.Result.RepairInstructions) != 1 || outcome.Result.RepairInstructions[0] != "Retained recovery instruction" {
 				t.Fatalf("provider output escaped or recovery was lost: %+v", outcome)
 			}
 		})

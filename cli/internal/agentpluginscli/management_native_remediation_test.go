@@ -18,7 +18,7 @@ func managementNativeRemediationFixture(t *testing.T, id domain.ClientID) (*Mana
 	t.Helper()
 	repo := dependencyRepo(t)
 	sha := savedJourneyGit(t, repo, "rev-parse", "HEAD")
-	fixture, _, runner := dependencySpecHarness(t, repo, dependencyClientSpec{id: id, executable: true})
+	fixture, _, runner := managementDependencySpecHarness(t, repo, dependencyClientSpec{id: id, executable: true})
 	detected, err := fixture.app.Detector.Detect(t.Context())
 	if err != nil {
 		t.Fatal(err)

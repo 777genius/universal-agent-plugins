@@ -21,6 +21,7 @@ func TestManagementHistoricalUnattestedRemovalRequiresFreshRecovery(t *testing.T
 	j := newSavedJourney(t, repo)
 	backend := managementJourneyBackend(t, j)
 	managementApply(t, managementPrepare(t, backend, managementInstallRequest("github:acme/demo@"+sha)))
+	backend = managementWithoutCodexCLI(t, &j, backend)
 	if _, _, err := j.cli.execute(false, "remove", "demo", "--format", "json"); err == nil {
 		t.Fatal("legacy removal unexpectedly completed without attestation")
 	}
@@ -42,6 +43,8 @@ func TestManagementHistoricalUnattestedRemovalRequiresFreshRecovery(t *testing.T
 	var blocked management.Plan
 	managementRemovalHTTP(t, server, "POST", "/api/v1/plans", request, 200, &blocked)
 	assertManagementRemovalConflict(t, blocked)
+	// This exact native registration has now been removed by the operator.
+	clear(j.runner.inner.codexIDs)
 	request.ExternalUninstalled = true
 	var recovery management.Plan
 	managementRemovalHTTP(t, server, "POST", "/api/v1/plans", request, 200, &recovery)

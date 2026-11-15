@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
@@ -17,6 +18,21 @@ import (
 func TestProjectBareInstallCreatesAndReplaysExactAgreement(t *testing.T) {
 	transport := newProjectJourneyTransport(t, "git")
 	journey := newProjectJourney(t, transport)
+	// Project trust is a persistent user preference. Seed only this legitimate
+	// project grant (and a foreign deny) before the strict whole-profile snapshot.
+	trust, err := json.Marshal(map[string]string{journey.a: "TRUST_FOLDER", journey.b: "DO_NOT_TRUST"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	trustPath := filepath.Join(journey.nativeRoot(""), "trustedFolders.json")
+	projectJourneyWrite(t, trustPath, string(trust))
+	guard, err := nativeconfig.New().BeginExactFile(trustPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := guard.Close(); err != nil {
+		t.Fatal(err)
+	}
 	projectJourneyWrite(t, filepath.Join(journey.cache, "uap.toml"), "schema_version = 1\n[dependencies]\n[targets]\n")
 	userManifest := projectJourneyRead(t, filepath.Join(journey.cache, "uap.toml"))
 	userNative := securityFixtureTree(t, journey.nativeRoot(""))
@@ -51,6 +67,7 @@ func TestProjectBareInstallCreatesAndReplaysExactAgreement(t *testing.T) {
 		t.Fatal("explicit user override changed project state or native profiles")
 	}
 }
+
 // Reuse the production Git/CLI/project composition fixture for a required MCP
 // children. Git acquisition, lock, transactions and receipts are real; the Gemini
 // detector is a fixture and this does not claim a native MCP tools/call.

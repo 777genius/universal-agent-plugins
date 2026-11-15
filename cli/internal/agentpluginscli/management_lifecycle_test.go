@@ -108,7 +108,7 @@ func TestManagementRetainsPreparationAndInstallerIdentity(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(binding.TargetLocator, "drift.txt")); !os.IsNotExist(err) {
 		t.Fatal("repair retained projection drift", err)
 	}
-	managementApply(t, managementPrepare(t, backend, management.ChangeRequest{Action: management.Remove, Aliases: []string{"demo"}, TargetIds: []string{"profile-codex"}, ExternalUninstalled: true}))
+	managementApply(t, managementPrepare(t, backend, management.ChangeRequest{Action: management.Remove, Aliases: []string{"demo"}, TargetIds: []string{"profile-codex"}}))
 	if len(j.state(t).EnvironmentReceipts) != 0 {
 		t.Fatal("remove retained live environment receipts")
 	}

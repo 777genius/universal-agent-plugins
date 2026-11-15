@@ -173,8 +173,11 @@ func TestInstallConvergesDependencyEnvironment(t *testing.T) {
 	}
 	dependencyWrite(t, lp, savedLock)
 
-	// e) Removal attestation stays consistent with deps sync: removal requires
-	// --external-uninstalled, and only the attested run removes the projection.
+	// e) Keep the missing-CLI fallback distinct from the automatic native
+	// removal covered by the all-client matrix. Only this unavailable selected
+	// client needs external-uninstalled before its owned projection is removed.
+	client.ExecutablePath = ""
+	f.app.Detector = staticDetector{clients: []domain.DetectedClient{client}}
 	dependencyWrite(t, mp, "schema_version = 1\n[targets]\n")
 	run("deps", "lock", "--format", "json")
 	beforeRemoval := dependencyRead(t, f.store.Path)
