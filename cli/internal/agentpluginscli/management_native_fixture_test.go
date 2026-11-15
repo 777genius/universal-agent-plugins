@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tailscale/hujson"
+	"gopkg.in/yaml.v3"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/management"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -18,8 +21,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
-	"github.com/tailscale/hujson"
-	"gopkg.in/yaml.v3"
 )
 
 // These recovery cases need known local native setup, not a remote HTTP
@@ -189,10 +190,11 @@ func managementOpenCodeConfig(profile string) (map[string]any, error) {
 	}
 	return document, nil
 }
-func managementDependencySpecHarness(t *testing.T, repo string, spec dependencyClientSpec) (cliFixture, *dependencyTestSource, *dependencyFixtureRunner) {
+func managementDependencySpecHarness(t *testing.T, repo string, spec dependencyClientSpec) (cliFixture, *dependencyFixtureRunner) {
 	t.Helper()
 	if spec.id != domain.ClientOpenCode {
-		return dependencySpecHarness(t, repo, spec)
+		fixture, _, runner := dependencySpecHarness(t, repo, spec)
+		return fixture, runner
 	}
 	client := fixtureClient(t, spec.id)
 	if spec.executable {
@@ -204,6 +206,6 @@ func managementDependencySpecHarness(t *testing.T, repo string, spec dependencyC
 		runner.probes++
 		return clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: "1.18.34", Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "fixture:" + target.Executable}}, nil
 	}}
-	fixture, source := newDependencyHarness(t, repo, []domain.DetectedClient{client}, cfg)
-	return fixture, source, runner
+	fixture, _ := newDependencyHarness(t, repo, []domain.DetectedClient{client}, cfg)
+	return fixture, runner
 }

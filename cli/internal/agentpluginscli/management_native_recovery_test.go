@@ -23,7 +23,7 @@ func TestManagementRecoveryRequiresCompleteNativeProjectionAndReviewedRepair(t *
 	dependencyGit(t, repo, "add", ".")
 	dependencyGit(t, repo, "commit", "-m", "test: second independently owned native Skill")
 	sha := savedJourneyGit(t, repo, "rev-parse", "HEAD")
-	fixture, _, _ := managementDependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientOpenCode, executable: true, activation: "active"})
+	fixture, _ := managementDependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientOpenCode, executable: true, activation: "active"})
 	detected, err := fixture.app.Detector.Detect(t.Context())
 	if err != nil {
 		t.Fatal(err)
