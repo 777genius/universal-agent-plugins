@@ -6,7 +6,6 @@ import io
 import json
 from pathlib import Path
 import runpy
-import shutil
 import stat
 import subprocess
 import tempfile
@@ -67,7 +66,8 @@ class NativeDriverVerdict(unittest.TestCase):
                             open=inert_open, producer_context=lambda: dict(qualification=False)), \
                     patch("urllib.request.urlopen", return_value=io.BytesIO(archive)) as download, \
                     patch("subprocess.run", side_effect=inert_run) as native, \
-                    patch("shutil.rmtree", wraps=shutil.rmtree, side_effect=cleanup_error) as cleanup, \
+                    patch.object(tempfile.TemporaryDirectory, "_rmtree",
+                                 wraps=tempfile.TemporaryDirectory._rmtree, side_effect=cleanup_error) as cleanup, \
                     patch("argparse.ArgumentParser.parse_args", return_value=SimpleNamespace(
                         test=directory / "readonly-test", public_test=directory / "public-test",
                         output=directory)), contextlib.redirect_stdout(output):
