@@ -30,7 +30,12 @@ func sessionEnvironment(base []string) []string {
 // nothing and grants no ownership or cleanup authority over that namespace.
 func sessionEnvironmentOverrides(project string, inspect bool, base []string) map[string]string {
 	result := map[string]string{"HERMES_HOME": projectSessionRoot(project)}
-	if !inspect || runtime.GOOS != "linux" {
+	if !inspect {
+		return result
+	}
+	// Explicit inspection must not populate caller-owned Python bytecode caches.
+	result["PYTHONDONTWRITEBYTECODE"] = "1"
+	if runtime.GOOS != "linux" {
 		return result
 	}
 	for _, item := range base {

@@ -105,7 +105,7 @@ func TestProjectSessionFreshLinuxStartupRetainsEffectiveEnvironment(t *testing.T
 		t.Run(name, func(t *testing.T) {
 			fixture := newFreshSessionStartupFixture(t)
 			env := fixture.env
-			wanted := map[string]string{"HERMES_HOME": projectSessionRoot(fixture.req.ProjectRoot)}
+			wanted := map[string]string{"HERMES_HOME": projectSessionRoot(fixture.req.ProjectRoot), "PYTHONDONTWRITEBYTECODE": "1"}
 			if supplied {
 				env.SessionEnvironment = append(slices.Clone(env.SessionEnvironment), "TEMP="+t.TempDir())
 			} else {

@@ -81,11 +81,11 @@ func TestProjectSessionSourceUsesOneChildOverrideAndExactReceipts(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(plan.Environment, map[string]string{"HERMES_HOME": projectSessionRoot(req.ProjectRoot)}) || !reflect.DeepEqual(plan.Arguments, []string{"config", "get", "mcp_servers", "--json"}) {
+	if !reflect.DeepEqual(plan.Environment, map[string]string{"HERMES_HOME": projectSessionRoot(req.ProjectRoot), "PYTHONDONTWRITEBYTECODE": "1"}) || !reflect.DeepEqual(plan.Arguments, []string{"config", "get", "mcp_servers", "--json"}) {
 		t.Fatal("unexpected selected process", plan)
 	}
 	child := plan.ChildEnvironment([]string{"HOME=/original-os-home", "HERMES_HOME=/foreign", "KEEP=unchanged"})
-	if !reflect.DeepEqual(child, []string{"HOME=/original-os-home", "KEEP=unchanged", "HERMES_HOME=" + projectSessionRoot(req.ProjectRoot)}) {
+	if !reflect.DeepEqual(child, []string{"HOME=/original-os-home", "KEEP=unchanged", "HERMES_HOME=" + projectSessionRoot(req.ProjectRoot), "PYTHONDONTWRITEBYTECODE=1"}) {
 		t.Fatal("changed ordinary HOME", child)
 	}
 	if err := verifyProjectSessionSource(context.Background(), plan, owner); err != nil {
