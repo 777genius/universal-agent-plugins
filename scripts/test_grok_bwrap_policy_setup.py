@@ -212,39 +212,40 @@ class KernelABIContracts(unittest.TestCase):
                     self.assert_closed([row[0] for row in held.values()])
 
     def test_last_feature_read_revalidates_earlier_original_identities(self):
-        for change in ("early-feature", "feature-root"):
-            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
-                parent = Path(temporary)
-                root = self.fixture(parent)
-                with mock.patch.object(policy, "KERNEL_FEATURE_DIRECTORY", root):
-                    deadline = policy.time.monotonic() + 10
-                    held = policy.open_kernel_features(deadline)
-                    try:
-                        final_fd = held["domain/post_nnp_subset"][0]
-                        original_read = policy.read_kernel_feature
-                        triggered = [False]
+        for module in (policy, devin_policy):
+            for change in ("early-feature", "feature-root"):
+                with self.subTest(module=module.__name__, change=change), tempfile.TemporaryDirectory() as temporary:
+                    parent = Path(temporary)
+                    root = self.fixture(parent)
+                    with mock.patch.object(module, "KERNEL_FEATURE_DIRECTORY", root):
+                        deadline = module.time.monotonic() + 10
+                        held = module.open_kernel_features(deadline)
+                        try:
+                            final_fd = held["domain/post_nnp_subset"][0]
+                            original_read = module.read_kernel_feature
+                            triggered = [False]
 
-                        def replace_after_final_read(fd, value):
-                            body = original_read(fd, value)
-                            if fd == final_fd and not triggered[0]:
-                                triggered[0] = True
-                                if change == "early-feature":
-                                    leaf = root / "io_uring/mask"
-                                    leaf.rename(parent / "retained-mask")
-                                    leaf.write_bytes(b"sqpoll override_creds\n")
-                                    leaf.chmod(0o444)
-                                else:
-                                    root.rename(parent / "retained-features")
-                                    self.fixture(parent)
-                            return body
+                            def replace_after_final_read(fd, value):
+                                body = original_read(fd, value)
+                                if fd == final_fd and not triggered[0]:
+                                    triggered[0] = True
+                                    if change == "early-feature":
+                                        leaf = root / "io_uring/mask"
+                                        leaf.rename(parent / "retained-mask")
+                                        leaf.write_bytes(b"sqpoll override_creds\n")
+                                        leaf.chmod(0o444)
+                                    else:
+                                        root.rename(parent / "retained-features")
+                                        self.fixture(parent)
+                                return body
 
-                        with mock.patch.object(policy, "read_kernel_feature", side_effect=replace_after_final_read):
-                            with self.assertRaisesRegex(ValueError, "^original policy kernel feature changed$"):
-                                policy.verify_kernel_features(held, deadline)
-                        self.assertTrue(triggered[0])
-                    finally:
-                        policy.close_kernel_features(held)
-                self.assert_closed([row[0] for row in held.values()])
+                            with mock.patch.object(module, "read_kernel_feature", side_effect=replace_after_final_read):
+                                with self.assertRaisesRegex(ValueError, "^original policy kernel feature changed$"):
+                                    module.verify_kernel_features(held, deadline)
+                            self.assertTrue(triggered[0])
+                        finally:
+                            module.close_kernel_features(held)
+                    self.assert_closed([row[0] for row in held.values()])
 
     def test_full_actual_abi_and_original_deadline_survive_export(self):
         for module in (policy, devin_policy):

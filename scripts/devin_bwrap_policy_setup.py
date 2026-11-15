@@ -209,6 +209,16 @@ def verify_kernel_features(held, deadline):
             require(identity(os.fstat(fd)) == identity(original)
                     == identity(os.stat(name, dir_fd=parent_fd, follow_symlinks=False)),
                     "original policy kernel feature changed")
+    # Recheck all held and named identities after the final content read.
+    # A later feature read can replace an earlier feature or ancestor.
+    for relative, (fd, original, _) in held.items():
+        remaining(deadline)
+        path = Path(relative)
+        parent_fd = None if relative == "." else held[str(path.parent)][0]
+        name = KERNEL_FEATURE_DIRECTORY if relative == "." else path.name
+        require(identity(os.fstat(fd)) == identity(original)
+                == identity(os.stat(name, dir_fd=parent_fd, follow_symlinks=False)),
+                "original policy kernel feature changed")
     remaining(deadline)
 
 
