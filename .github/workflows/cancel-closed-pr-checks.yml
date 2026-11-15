@@ -33,6 +33,7 @@ jobs:
           cancelled=0
           declare -A seen=()
           for status in queued pending in_progress waiting requested; do
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&status=${status}&per_page=100" > "${RUNNER_TEMP}/closed-pr-${status}.json"
             while IFS= read -r run_id; do
               [[ "${run_id}" =~ ^[1-9][0-9]*$ ]] || continue
               [[ -z "${seen[$run_id]:-}" ]] || continue
@@ -45,16 +46,16 @@ jobs:
                 [[ "${current}" == completed ]] || exit 1
               fi
             done < <(
-              gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&status=${status}&per_page=100" \
-                --jq '.workflow_runs[]? | select(.event == "pull_request")
-                  | select(.head_repository.id == (env.HEAD_REPOSITORY_ID | tonumber))
-                  | select(.path | type == "string" and startswith(".github/workflows/"))
-                  | select((.path | test("release|publish|sign|deploy|checkpoint|skillspector"; "i")) | not)
-                  | select(any(.pull_requests[]?;
-                      .number == (env.PR_NUMBER | tonumber)
-                      and .head.repo.id == (env.HEAD_REPOSITORY_ID | tonumber)
-                      and .base.repo.id == (env.BASE_REPOSITORY_ID | tonumber)))
-                  | .id'
+              jq -r --argjson pr "${PR_NUMBER}" \
+                --argjson head "${HEAD_REPOSITORY_ID}" \
+                --argjson base "${BASE_REPOSITORY_ID}" '
+                .workflow_runs[]? | select(.event == "pull_request")
+                | select(.head_repository.id == $head)
+                | select(.path | type == "string" and startswith(".github/workflows/"))
+                | select((.path | test("release|publish|sign|deploy|checkpoint|skillspector"; "i")) | not)
+                | select(any(.pull_requests[]?;
+                    .number == $pr and .head.repo.id == $head and .base.repo.id == $base))
+                | .id' "${RUNNER_TEMP}/closed-pr-${status}.json"
             )
           done
           echo "Cancelled ${cancelled} obsolete ordinary check runs for PR #${PR_NUMBER}"
