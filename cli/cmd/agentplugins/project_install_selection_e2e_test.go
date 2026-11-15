@@ -20,6 +20,8 @@ func TestProjectBareInstallCreatesAndReplaysExactAgreement(t *testing.T) {
 	projectJourneyWrite(t, filepath.Join(journey.cache, "uap.toml"), "schema_version = 1\n[dependencies]\n[targets]\n")
 	userManifest := projectJourneyRead(t, filepath.Join(journey.cache, "uap.toml"))
 	userNative := securityFixtureTree(t, journey.nativeRoot(""))
+	trustPath := filepath.Join(journey.nativeRoot(""), "trustedFolders.json")
+	projectJourneyAbsent(t, trustPath)
 	projectJourneyWrite(t, filepath.Join(journey.a, "uap.toml"), fmt.Sprintf("schema_version = 1\n[dependencies.docs]\ngit = %q\nref = \"main\"\n[targets]\ngemini = [\"docs\"]\n", transport.endpoint))
 	projectJourneyAbsent(t, filepath.Join(journey.a, "uap.lock"))
 	t.Chdir(journey.a)
@@ -39,15 +41,28 @@ func TestProjectBareInstallCreatesAndReplaysExactAgreement(t *testing.T) {
 	if gitBefore != transport.diagnostic.countSnapshot() {
 		t.Fatal("repeat bare install performed Git lookup or acquisition")
 	}
-	if userManifest != projectJourneyRead(t, filepath.Join(journey.cache, "uap.toml")) || !reflect.DeepEqual(userNative, securityFixtureTree(t, journey.nativeRoot(""))) {
-		t.Fatal("inferred project install changed user agreement or native profile")
+	// Project trust is the single intentionally authorized user-profile effect.
+	// Every other native file and the user agreement must remain byte-identical.
+	var trusted map[string]string
+	if err := json.Unmarshal([]byte(projectJourneyRead(t, trustPath)), &trusted); err != nil || len(trusted) != 1 || trusted[journey.a] != "TRUST_FOLDER" {
+		t.Fatalf("project install did not grant exactly the selected Gemini workspace: %v %v", trusted, err)
+	}
+	trustedNative := securityFixtureTree(t, journey.nativeRoot(""))
+	withoutTrust := make(map[string]string, len(trustedNative))
+	for path, digest := range trustedNative {
+		if path != "trustedFolders.json" {
+			withoutTrust[path] = digest
+		}
+	}
+	if userManifest != projectJourneyRead(t, filepath.Join(journey.cache, "uap.toml")) || !reflect.DeepEqual(userNative, withoutTrust) {
+		t.Fatal("inferred project install changed user agreement or unrelated native profile bytes")
 	}
 	projectJourneyAbsent(t, filepath.Join(journey.cache, "uap.lock"), filepath.Join(journey.cache, "state-v2.json"))
 	// Explicit user scope must bypass the cwd project and create only its empty
 	// user lock. The shared immutable content cache is intentionally scope-neutral.
 	journey.run(t, "", "install", "--scope", "user", "--yes")
 	journey.assertPortablePair(t, journey.cache)
-	if !reflect.DeepEqual(projectBefore, securityFixtureTree(t, journey.a)) || !reflect.DeepEqual(userNative, securityFixtureTree(t, journey.nativeRoot(""))) {
+	if !reflect.DeepEqual(projectBefore, securityFixtureTree(t, journey.a)) || !reflect.DeepEqual(trustedNative, securityFixtureTree(t, journey.nativeRoot(""))) {
 		t.Fatal("explicit user override changed project state or native profiles")
 	}
 }
