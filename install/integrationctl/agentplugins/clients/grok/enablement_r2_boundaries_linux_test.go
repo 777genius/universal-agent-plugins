@@ -104,8 +104,8 @@ func TestR2FirstACPRefusalMustNotReportNativeUnchanged(t *testing.T) {
 	if recordErr != nil || len(records) != 0 {
 		t.Fatalf("unexpected pre-ACP recovery record: %v %v", records, recordErr)
 	}
-	if New().SupportsPluginEnablement(domain.ScopeProject) || New().SupportsPluginEnablement(domain.ScopeUser) {
-		t.Fatal("unqualified enablement is advertised")
+	if !New().SupportsPluginEnablement(domain.ScopeProject) || New().SupportsPluginEnablement(domain.ScopeUser) {
+		t.Fatal("enablement lost its explicit Linux Project scope")
 	}
 	assertPrototypeFilesUnchanged(t, originals)
 }
