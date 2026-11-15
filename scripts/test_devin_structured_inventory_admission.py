@@ -643,6 +643,123 @@ class FixedDefinitionCacheContracts(unittest.TestCase):
 
 
 
+class RefusedDefinitionCacheContracts(unittest.TestCase):
+    def fixture(self, root):
+        ctx, effects, user, cache, body, _fixed = FixedDefinitionCacheContracts().fixture(root)
+        body += b"x" * 220
+        cache.write_bytes(body)
+        summary, state = ClosedDevinReadoutContracts().fixture()
+        summary.update(metadata_recipe="ordinary-global", commands=[dict(probe="skills-b", exit=0, error=None)],
+                       command_effects=[dict(label="skills-b", changes={}, outer_changes={})])
+        summary.pop("error")
+        state.update(phase="skills-b", reason="capture-incomplete")
+        ctx.summary, ctx.global_readout_state, ctx.process_cleanup_proved = summary, state, True
+        return ctx, effects, user, cache, body
+
+    def test_changed_size_is_measured_from_the_refused_held_cache_without_admission(self):
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, user, cache, body = self.fixture(root)
+            baseline, user_before = copy.deepcopy(effects.baseline), user.read_bytes()
+            real_open, real_read, opens, reads = os.open, os.read, [], []
+            def opened(path, *args, **kwargs):
+                if path == cache.name: opens.append(path)
+                return real_open(path, *args, **kwargs)
+            def short_read(fd, count):
+                reads.append(count)
+                return real_read(fd, min(count, 32768))
+            with patch.object(case.os, "open", side_effect=opened), patch.object(case.os, "read", side_effect=short_read):
+                with self.assertRaisesRegex(ValueError, "^bootstrap opened file differs$"):
+                    effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+            expected = dict(bytes=674560, sha256=hashlib.sha256(body).hexdigest())
+            self.assertEqual(ctx.summary["definition_cache_refusal"], expected)
+            self.assertEqual(opens, [cache.name])
+            self.assertGreater(len(reads), 2)
+            self.assertTrue(all(0 < count <= 65536 for count in reads))
+            self.assertEqual((effects.baseline, effects.proofs, effects.definitions_identity), (baseline, [], None))
+            self.assertEqual(user.read_bytes(), user_before)
+            self.assertEqual(cache.read_bytes(), body)
+            ctx.summary["error"] = "ValueError: bootstrap opened file differs"
+            ctx.global_readout_state["reason"] = "unclassified-refusal"
+            value = case.closed_readout(ctx.summary, ctx.global_readout_state)
+            self.assertEqual(value["definition_cache_refusal"], expected)
+            self.assertEqual((value["reason"], value["phase"], value["collection_complete"]),
+                             ("unclassified-refusal", "skills-b", False))
+            self.assertEqual(ctx.summary["qualification"], dict.fromkeys(case.shared.QUALIFICATION_CASES, False))
+            self.assertNotIn("PRIVATE_CACHE_BYTES", json.dumps(value))
+
+    def test_diagnostic_never_reads_unsettled_oversize_or_substituted_cache(self):
+        for change in ("oversize", "mode", "hardlink", "substitute", "in-flight", "unsettled", "phase"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, _effects, _user, cache, body = self.fixture(root)
+                if change == "oversize": cache.write_bytes(b"x" * ((1 << 20) + 1))
+                elif change == "mode": cache.chmod(0o644)
+                inventory = case.metadata_inventory(ctx.root, ctx.budget)
+                expected = inventory[case.DEFINITIONS_CACHE]
+                if change == "hardlink": os.link(cache, cache.with_name("alias.bin"))
+                elif change == "substitute":
+                    cache.rename(cache.with_name("original.bin")); cache.write_bytes(body); cache.chmod(0o600)
+                elif change == "in-flight": ctx.summary["in_flight_command"] = "skills-b"
+                elif change == "unsettled": ctx.process_cleanup_proved = False
+                elif change == "phase": ctx.global_readout_state["phase"] = "skills-user"
+                with patch.object(case.os, "read", side_effect=AssertionError("unowned diagnostic read")) as reader:
+                    with self.assertRaisesRegex(ValueError, "^bootstrap opened file differs$"):
+                        case.read_bootstrap_file(ctx, case.DEFINITIONS_CACHE, expected, inventory)
+                    reader.assert_not_called()
+                self.assertNotIn("definition_cache_refusal", ctx.summary)
+
+    def test_diagnostic_drops_leaf_and_parent_drift_and_read_errors(self):
+        for change in ("leaf", "parent", "read-error", "deadline"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, _effects, _user, cache, body = self.fixture(root)
+                inventory = case.metadata_inventory(ctx.root, ctx.budget)
+                real_read, changed, expired = os.read, [], []
+                def check():
+                    if expired: raise case.shared.legacy.CollectorDeadline("inert original deadline")
+                ctx.budget.check = check
+                def mutate(fd, count):
+                    if change == "read-error": raise OSError("inert failed read")
+                    chunk = real_read(fd, count)
+                    if change == "deadline":
+                        if not chunk: expired.append(True)
+                    elif not changed:
+                        changed.append(True)
+                        if change == "leaf": cache.write_bytes(body + b"changed")
+                        else:
+                            cache.parent.rename(cache.parent.with_name("original-cli"))
+                            cache.parent.mkdir(mode=0o755)
+                            cache.write_bytes(body); cache.chmod(0o600)
+                    return chunk
+                with patch.object(case.os, "read", side_effect=mutate):
+                    with self.assertRaisesRegex(ValueError, "^bootstrap opened file differs$"):
+                        case.read_bootstrap_file(ctx, case.DEFINITIONS_CACHE, inventory[case.DEFINITIONS_CACHE], inventory)
+                self.assertNotIn("definition_cache_refusal", ctx.summary)
+
+    def test_optional_projection_refuses_malformed_or_unsettled_failure(self):
+        with tempfile.TemporaryDirectory() as root:
+            ctx, _effects, _user, _cache, body = self.fixture(root)
+            ctx.summary.update(error="ValueError: bootstrap opened file differs",
+                               definition_cache_refusal=dict(bytes=len(body), sha256=hashlib.sha256(body).hexdigest()))
+            ctx.global_readout_state["reason"] = "unclassified-refusal"
+            for change in ("size-bool", "oversize", "known-size", "hash", "extra", "error", "complete",
+                           "in-flight", "phase", "recipe", "command"):
+                summary, state = copy.deepcopy(ctx.summary), dict(ctx.global_readout_state)
+                if change == "size-bool": summary["definition_cache_refusal"]["bytes"] = True
+                elif change == "oversize": summary["definition_cache_refusal"]["bytes"] = (1 << 20) + 1
+                elif change == "known-size": summary["definition_cache_refusal"]["bytes"] = case.DEFINITIONS_BYTES
+                elif change == "hash": summary["definition_cache_refusal"]["sha256"] = "A" * 64
+                elif change == "extra": summary["definition_cache_refusal"]["path"] = "PRIVATE_PATH"
+                elif change == "error": summary["error"] = "ValueError: unrelated failure"
+                elif change == "complete": summary["metadata_capture_complete"] = True
+                elif change == "in-flight": summary["in_flight_command"] = "skills-b"
+                elif change == "phase": state["phase"] = "skills-user"
+                elif change == "recipe": summary["metadata_recipe"] = "ordinary"
+                else: summary["commands"][-1]["exit"] = 1
+                with self.subTest(change=change), self.assertRaisesRegex(ValueError, "readout definition cache"):
+                    case.closed_readout(summary, state)
+        summary, state = ClosedDevinReadoutContracts().complete_fixture()
+        self.assertNotIn("definition_cache_refusal", case.closed_readout(summary, state))
+
+
 class OriginalConfigReadoutContracts(unittest.TestCase):
     def test_only_two_original_config_phases_extend_the_global_readout(self):
         import devin_global_lifecycle_admission as global_case

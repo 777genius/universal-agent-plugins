@@ -1381,6 +1381,53 @@ os._exit(0)
         start.assert_not_called()
         fifo.assert_not_called()
 
+    def test_untraced_control_reuses_original_capture_without_a_trace_channel(self):
+        import time
+        argv = [sys.executable, "-I", "-B", "-c", "import os; os.write(1,b'STEP0_READONLY_EROFS\\n')"]
+        original_popen, original_signal = trace_case.subprocess.Popen, os.killpg
+        waits = []
+
+        def spawn(command, **kwargs):
+            self.assertEqual(command, argv)
+            self.assertEqual(kwargs["env"], self.env)
+            self.assertEqual(kwargs["cwd"], self.fixture)
+            self.assertTrue(kwargs["close_fds"])
+            self.assertTrue(kwargs["start_new_session"])
+            self.assertNotIn("pass_fds", kwargs)
+            child = original_popen(command, **kwargs)
+            original_wait = child.wait
+
+            def wait(*args, **kwargs):
+                waits.append(child.pid)
+                return original_wait(*args, **kwargs)
+
+            child.wait = wait
+            return child
+
+        receipt = dict(runs=[], complete_process_family_admitted=False, native_qualification=False)
+        before = trace_case.fixture_snapshot(self.fixture)
+        with mock.patch.object(trace_case.subprocess, "Popen", side_effect=spawn), \
+                mock.patch.object(trace_case.os, "mkfifo") as channel, \
+                mock.patch.object(trace_case.os, "killpg", wraps=original_signal) as signal_group:
+            trace_case.untraced_readonly_control(receipt, argv, self.root, self.fixture, self.env,
+                                                time.monotonic() + 3, before)
+        row = receipt["runs"][0]
+        self.assertEqual(waits, [row["root_pid"]])
+        self.assertEqual(set(row["streams"]), {"stdout", "stderr"})
+        self.assertTrue(row["wait_observed"])
+        self.assertTrue(all(stream["eof"] for stream in row["streams"].values()))
+        self.assertEqual(receipt["readonly_untraced_fixture_after"], before)
+        self.assertNotIn("process_observation", row)
+        self.assertFalse(receipt["complete_process_family_admitted"])
+        self.assertFalse(receipt["native_qualification"])
+        for name, body in (("stdout", b"STEP0_READONLY_EROFS\n"), ("stderr", b"")):
+            stream = row["streams"][name]
+            self.assertEqual(base64.b64decode(stream["base64"], validate=True), body)
+            self.assertEqual(stream["bytes"], len(body))
+            self.assertEqual(stream["sha256"], hashlib.sha256(body).hexdigest())
+        channel.assert_not_called()
+        signal_group.assert_not_called()
+
     def test_unexpected_original_reap_cannot_become_a_successful_wait(self):
         import time
         original_observe = trace_case.observe_unreaped
@@ -1621,8 +1668,9 @@ class InertProcessTraceContracts(unittest.TestCase):
             "11260 +++ exited with 0 +++",
         ]
 
-    def run_controls(self, fault=None):
+    def run_controls(self, fault=None, observations=None):
         import time
+        clock = [time.monotonic()]
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             fixture = root / "fixture"
@@ -1634,8 +1682,30 @@ class InertProcessTraceContracts(unittest.TestCase):
 
             def collect(label, argv, *args, **kwargs):
                 labels.append(label)
+                if observations is not None:
+                    observations.append(dict(label=label, argv=list(argv), cwd=args[1],
+                                             environment=dict(args[2]), deadline=args[3],
+                                             trace=kwargs.get("trace", False)))
                 streams = {name: dict(body=bytearray(), eof=True) for name in ("stdout", "stderr")}
                 row = dict(label=label, argv=argv, exit=0, error=None, wait_observed=True, streams=streams)
+                if label == "readonly-untraced":
+                    streams["stdout"]["body"] = bytearray(b"STEP0_READONLY_EROFS\n")
+                    if fault == "untraced-loopback":
+                        row["exit"] = 1
+                        streams["stdout"]["body"] = bytearray()
+                        streams["stderr"]["body"] = bytearray(b"bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted\n")
+                    elif fault == "untraced-partial":
+                        streams["stderr"]["eof"] = False
+                    elif fault == "untraced-binary":
+                        row["exit"] = 1
+                        streams["stderr"]["body"] = bytearray(b"\xff\x00\\unknown")
+                    elif fault == "untraced-marker":
+                        streams["stdout"]["body"] = bytearray(b"STEP0_DIRECT_DONE\n")
+                    elif fault == "untraced-mutation":
+                        (fixture / "unexpected").write_bytes(b"inert unexpected effect")
+                    elif fault == "untraced-deadline":
+                        clock[0] = args[3] + 0.01
+                    return row
                 if label not in ("direct", "readonly"):
                     return row
                 payload = argv if label == "direct" else self.python_argv(fixture, "readonly")
@@ -1655,9 +1725,11 @@ class InertProcessTraceContracts(unittest.TestCase):
             error = None
             with mock.patch.object(trace_case, "collect", side_effect=collect), \
                     mock.patch.object(trace_case.os, "readlink", side_effect=lambda path: {
-                        "/bin": "usr/bin", "/lib": "usr/lib", "/lib64": "usr/lib64"}[path]):
+                        "/bin": "usr/bin", "/lib": "usr/lib", "/lib64": "usr/lib64"}[path]), \
+                    mock.patch.object(trace_case.time, "monotonic", side_effect=lambda: clock[0]):
                 try:
-                    trace_case.controls(receipt, root, fixture, {}, time.monotonic() + 2)
+                    env = dict(HOME=str(fixture), PATH="/usr/bin:/bin", LANG="C", LC_ALL="C")
+                    trace_case.controls(receipt, root, fixture, env, time.monotonic() + 2)
                 except RuntimeError as caught:
                     error = str(caught)
             self.assertFalse(receipt["complete_process_family_admitted"])
@@ -1667,9 +1739,10 @@ class InertProcessTraceContracts(unittest.TestCase):
     def test_actual_control_path_requires_decoder_for_both_captures(self):
         receipt, labels, error = self.run_controls()
         self.assertIsNone(error)
-        self.assertEqual(labels, ["strace-version", "bwrap-version", "direct", "readonly"])
-        self.assertEqual([row["process_observation"] for row in receipt["runs"]], [
+        self.assertEqual(labels, ["strace-version", "bwrap-version", "direct", "readonly-untraced", "readonly"])
+        self.assertEqual([row.get("process_observation") for row in receipt["runs"]], [
             dict(complete=True, processes=2, execs=2, silent_child_execs=1),
+            None,
             dict(complete=True, processes=3, execs=3, silent_child_execs=1)])
         for label in ("direct", "readonly"):
             with self.subTest(control=label):
@@ -1684,7 +1757,51 @@ class InertProcessTraceContracts(unittest.TestCase):
         self.assertEqual(labels[-1], "readonly")
         self.assertEqual(error, "readonly-bwrap-loopback-permission")
         self.assertTrue(receipt["runs"][0]["process_observation"]["complete"])
+        self.assertNotIn("process_observation", receipt["runs"][-1])
+
+    def test_untraced_and_traced_readonly_use_the_same_original_inputs_and_budget(self):
+        observations = []
+        receipt, _, error = self.run_controls(observations=observations)
+        self.assertIsNone(error)
+        before, after = observations[-2:]
+        self.assertEqual(before["label"], "readonly-untraced")
+        self.assertEqual(after["label"], "readonly")
+        for key in ("argv", "cwd", "environment", "deadline"):
+            self.assertEqual(before[key], after[key])
+        self.assertFalse(before["trace"])
+        self.assertTrue(after["trace"])
+        self.assertEqual(len({row["deadline"] for row in observations}), 1)
+        self.assertEqual(receipt["readonly_fixture_before"], receipt["readonly_untraced_fixture_after"])
+        self.assertEqual(receipt["readonly_fixture_before"], receipt["readonly_fixture_after"])
         self.assertNotIn("process_observation", receipt["runs"][1])
+
+    def test_untraced_failures_are_retained_before_any_traced_readonly_attempt(self):
+        faults = {"untraced-loopback": "readonly-untraced-bwrap-loopback-permission",
+                  "untraced-partial": "readonly-untraced-refused", "untraced-marker": "readonly-untraced-refused",
+                  "untraced-binary": "readonly-untraced-refused",
+                  "untraced-mutation": "fixture-members"}
+        for fault, reason in faults.items():
+            with self.subTest(fault=fault):
+                receipt, labels, error = self.run_controls(fault)
+                self.assertEqual(error, reason)
+                self.assertEqual(labels[-1], "readonly-untraced")
+                self.assertNotIn("readonly", labels)
+                row = receipt["runs"][-1]
+                self.assertNotIn("process_observation", row)
+                self.assertEqual(set(row["streams"]), {"stdout", "stderr"})
+                for stream in row["streams"].values():
+                    raw = base64.b64decode(stream["base64"], validate=True)
+                    self.assertEqual(len(raw), stream["bytes"])
+                    self.assertEqual(hashlib.sha256(raw).hexdigest(), stream["sha256"])
+
+    def test_untraced_budget_exhaustion_does_not_start_the_traced_control(self):
+        observations = []
+        receipt, labels, error = self.run_controls("untraced-deadline", observations)
+        self.assertEqual(error, "original-deadline")
+        self.assertEqual(labels[-1], "readonly-untraced")
+        self.assertNotIn("readonly", labels)
+        self.assertEqual(len({row["deadline"] for row in observations}), 1)
+        self.assertEqual(receipt["runs"][-1]["exit"], 0)
 
 
 if __name__ == "__main__":

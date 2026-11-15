@@ -372,3 +372,83 @@ func TestReadonlyRuntimeFailureCannotCarryProgressOrUnknownText(t *testing.T) {
 		})
 	}
 }
+
+func TestReadonlyRuntimeMemberPreservesNegativeTransport(t *testing.T) {
+	r := inertRequest()
+	r.Mode = readonlyMode
+	body := readonlyRuntimeFailureFixture(t, r, "runtime:readonly-census-writable")
+	proof := body["readonly"].(map[string]any)
+	proof["runtime_member"] = map[string]any{"member": "local/observed", "mode": uint32(unix.S_IFREG | 0o664),
+		"uid": 1000, "gid": 1000, "links": 1, "bytes": 17}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateResult(encoded, r, 1); err != nil {
+		t.Fatal("closed original runtime failure metadata refused", err)
+	}
+	var resultBody map[string]json.RawMessage
+	if err := json.Unmarshal(encoded, &resultBody); err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodeReadonlyProof(resultBody["readonly"])
+	if err != nil || decoded.Stage != "runtime:readonly-census-writable" || decoded.Control == nil || *decoded.Control {
+		t.Fatal("negative result or stage changed", err)
+	}
+	if string(decoded.Original) != "null" || string(decoded.Marker) != "null" {
+		t.Fatal("metadata created native observation authority")
+	}
+}
+
+func TestReadonlyRuntimeMemberRejectsMalformedOrProgressRecords(t *testing.T) {
+	r := inertRequest()
+	r.Mode = readonlyMode
+	for _, test := range []struct {
+		name  string
+		key   string
+		value any
+	}{
+		{"absolute", "member", "/usr/private"},
+		{"escape", "member", "../private"},
+		{"alias", "member", "a//b"},
+		{"control", "member", "line\nvalue"},
+		{"bound", "member", strings.Repeat("x", 1025)},
+		{"nonwritable", "mode", uint32(unix.S_IFREG | 0o644)},
+		{"symlink", "mode", uint32(unix.S_IFLNK | 0o777)},
+		{"boolean", "uid", true},
+		{"null-uid", "uid", nil},
+		{"null-gid", "gid", nil},
+		{"null-bytes", "bytes", nil},
+		{"negative", "gid", -1},
+		{"overflow", "uid", uint64(1) << 32},
+		{"unlinked", "links", 0},
+		{"oversize", "bytes", uint64(1) << 63},
+		{"extra", "extra", "unadmitted"},
+		{"null", "", nil},
+		{"other-stage", "stage", "runtime:readonly-runtime-owner"},
+		{"progress", "control_complete", true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			body := readonlyRuntimeFailureFixture(t, r, "runtime:readonly-census-writable")
+			proof := body["readonly"].(map[string]any)
+			row := map[string]any{"member": "local/observed", "mode": uint32(unix.S_IFREG | 0o664),
+				"uid": 1000, "gid": 1000, "links": 1, "bytes": 17}
+			proof["runtime_member"] = row
+			switch test.key {
+			case "":
+				proof["runtime_member"] = nil
+			case "stage", "control_complete":
+				proof[test.key] = test.value
+			default:
+				row[test.key] = test.value
+			}
+			encoded, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := validateResult(encoded, r, 1); err == nil {
+				t.Fatal("malformed/progress metadata admitted")
+			}
+		})
+	}
+}

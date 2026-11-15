@@ -2132,7 +2132,7 @@ def readonly_walk(descriptor, req, limit, *, runtime=False, maps=None):
             relative = name if prefix == '.' else prefix + '/' + name
             require(len(relative.encode()) <= 4096, 'readonly-census-path')
             info = os.stat(name, dir_fd=parent, follow_symlinks=False)
-            require(info.st_mode & 0o022 == 0 or stat.S_ISLNK(info.st_mode), 'readonly-census-writable')
+            readonly_writable_member(info, relative, runtime=runtime, maps=maps)
             if runtime:
                 uid = maps['uid']['overflow'] if maps else 0
                 require(info.st_uid == uid and type(info.st_gid) is int and 0 <= info.st_gid < 2**32
@@ -2667,6 +2667,35 @@ def readonly_control_marker(req):
         os.close(descriptor)
 
 
+def readonly_runtime_member(value):
+    """Failure-only metadata from one already observed /usr entry; no I/O."""
+    closed(value, 'member mode uid gid links bytes')
+    member = value['member']
+    require(type(member) is str and 0 < len(member.encode('utf-8')) <= 1024
+            and not member.startswith('/') and os.path.normpath(member) == member
+            and all(part not in ('', '.', '..') for part in member.split('/'))
+            and all(ord(char) >= 32 and ord(char) != 127 for char in member), 'readonly-member-path')
+    for key, maximum in (('mode', 2**32), ('uid', 2**32), ('gid', 2**32),
+                         ('links', 2**64), ('bytes', 2**63)):
+        require(type(value[key]) is int and 0 <= value[key] < maximum, 'readonly-member-integer')
+    require(value['links'] > 0 and value['mode'] & 0o022 != 0
+            and not stat.S_ISLNK(value['mode']), 'readonly-member-predicate')
+    return dict(value)
+
+
+def readonly_writable_member(info, relative, *, runtime, maps):
+    try:
+        require(info.st_mode & 0o022 == 0 or stat.S_ISLNK(info.st_mode), 'readonly-census-writable')
+    except ValueError as error:
+        if runtime and maps is None:
+            try:
+                error.runtime_member = readonly_runtime_member(dict(member=relative, mode=info.st_mode,
+                    uid=info.st_uid, gid=info.st_gid, links=info.st_nlink, bytes=info.st_size))
+            except (ValueError, UnicodeError):
+                pass  # Optional detail never replaces the original refusal.
+        raise
+
+
 def readonly_runtime_failure_stage(error):
     if (type(error) is ValueError and len(error.args) == 1 and type(error.args[0]) is str
             and error.args[0] in READONLY_RUNTIME_REFUSALS):
@@ -2736,6 +2765,12 @@ def readonly_collector_result(req):
             raise
         if result['readonly']['stage'] == 'runtime':
             result['readonly']['stage'] = readonly_runtime_failure_stage(error)
+            if (type(error) is ValueError and result['readonly']['stage'] == 'runtime:readonly-census-writable'
+                    and 'runtime_member' in error.__dict__):
+                try:
+                    result['readonly']['runtime_member'] = readonly_runtime_member(error.__dict__['runtime_member'])
+                except (ValueError, UnicodeError):
+                    pass
     return result
 
 
@@ -2820,7 +2855,9 @@ def validate_readonly_receipt(receipt, request):
     require(type(result['semantic_complete']) is bool and result['reason'] in
             ('complete', 'protocol-refused', 'help-refused', 'isolation-refused', 'collector-refused')
             and result['semantic_complete'] == (result['reason'] == 'complete'), 'readonly-result-state')
-    selected = closed(result['readonly'], 'authority stage control_complete original control_marker')
+    selected = result['readonly']
+    selected = closed(selected, 'authority stage control_complete original control_marker'
+                      + (' runtime_member' if type(selected) is dict and 'runtime_member' in selected else ''))
     require(type(selected['control_complete']) is bool and type(selected['stage']) is str
             and (selected['stage'] in ('isolation', 'runtime', 'control', 'native', 'complete')
                  or selected['stage'] in READONLY_RUNTIME_FAILURE_STAGES), 'readonly-stage')
@@ -2829,6 +2866,9 @@ def validate_readonly_receipt(receipt, request):
                 and result['commands'] == [] and selected['original'] is None
                 and selected['control_complete'] is False and selected['control_marker'] is None
                 and result['rpc'] == rpc_state(), 'readonly-runtime-failure-state')
+    if 'runtime_member' in selected:
+        require(selected['stage'] == 'runtime:readonly-census-writable', 'readonly-member-stage')
+        readonly_runtime_member(selected['runtime_member'])
     proof = closed(result['isolation'], 'uid gid euid egid groups network_namespace parent_network_namespace interfaces capabilities_zero no_new_privileges')
     require(proof['uid'] == proof['euid'] == request['uid'] and proof['gid'] == proof['egid'] == request['gid']
             and proof['groups'] == [] and proof['interfaces'] == ['lo'] and proof['capabilities_zero'] is True
@@ -3147,11 +3187,14 @@ def readonly_readout(members, packet, deadline):
     if summary.get('error') is None:
         require(result['semantic_complete'] is True and unchanged and ledger['witness_absent'], 'readonly-readout-verdict')
     require(time.monotonic() < deadline, 'readonly-readout-deadline')
-    return dict(schema_version=1, mode=READONLY_MODE, reason='complete' if summary.get('error') is None else 'admission-refused',
+    readout = dict(schema_version=1, mode=READONLY_MODE, reason='complete' if summary.get('error') is None else 'admission-refused',
                 measurement_complete=True, cleanup_complete=True, semantic_complete=result['semantic_complete'],
                 protected_originals_unchanged=unchanged, witness_absent=ledger['witness_absent'],
                 stage=result['readonly']['stage'], control_complete=result['readonly']['control_complete'],
                 commands=len(result['commands']), qualification=dict(FALSE))
+    if 'runtime_member' in result['readonly']:
+        readout['runtime_member'] = dict(result['readonly']['runtime_member'])
+    return readout
 
 
 if __name__ == '__main__':

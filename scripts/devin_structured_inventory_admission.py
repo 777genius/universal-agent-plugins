@@ -297,6 +297,25 @@ MAINTENANCE = "home/data/devin/cli/logs/.log-maintenance.lock"
 BOOTSTRAP_LOG = re.compile(r"home/data/devin/cli/logs/devin_[0-9]{8}-[0-9]{6}_[1-9][0-9]{0,9}\.log\Z")
 
 
+def definition_cache_failure_context(summary, state):
+    """Only a settled initial Global inventory can describe a refused cache."""
+    if type(summary) is not dict or type(state) is not dict:
+        return False
+    commands = summary.get("commands")
+    command = commands[-1] if type(commands) is list and commands else None
+    return (summary.get("metadata_recipe") == "ordinary-global"
+            and summary.get("collection_complete") is False
+            and summary.get("metadata_capture_complete") is False
+            and summary.get("ordinary_metadata_capture_complete", False) is False
+            and summary.get("global_lifecycle_capture_complete", False) is False
+            and summary.get("admission_qualified") is False
+            and "in_flight_command" not in summary
+            and type(state.get("phase")) is str and state["phase"] in INVENTORY_PROBES
+            and type(command) is dict and command.get("probe") == state["phase"]
+            and type(command.get("exit")) is int and command["exit"] == 0
+            and "error" in command and command["error"] is None)
+
+
 def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, digest_only=False, package_digest=None):
     """Only the prospective fixed bootstrap recipe calls this anchored reader."""
     def stable(info):
@@ -325,6 +344,35 @@ def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, dig
         before = os.fstat(descriptor)
         maximum = (DEFINITIONS_BYTES if relative == DEFINITIONS_CACHE else 16384) if maximum is None else maximum
         require(type(maximum) is int and 0 < maximum <= 512 << 20, "declared research file bound")
+        def unchanged(count):
+            require(count == before.st_size and stable(os.fstat(descriptor)) == stable(before)
+                    and stable(os.stat(name, dir_fd=parent, follow_symlinks=False)) == stable(before), "bootstrap file changed")
+            for ancestor, leaf, child, identity in chain:
+                require(KnownFileDiagnostics.identity(os.fstat(child)) == identity
+                        and KnownFileDiagnostics.identity(os.stat(leaf, dir_fd=ancestor, follow_symlinks=False)) == identity, "bootstrap parent changed")
+            require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap root changed during read")
+        if (relative == DEFINITIONS_CACHE and before.st_size != DEFINITIONS_BYTES
+                and stable(before) == tuple(expected) and before.st_mode == stat.S_IFREG | 0o600
+                and before.st_nlink == 1 and 0 <= before.st_size <= 1 << 20
+                and before.st_dev == ctx.original_output_identity[0]
+                and (before.st_uid, before.st_gid) == ctx.original_output_identity[3:]
+                and getattr(ctx, "process_cleanup_proved", False) is True
+                and definition_cache_failure_context(getattr(ctx, "summary", None),
+                                                     getattr(ctx, "global_readout_state", None))):
+            # Measure only this held refused leaf; never admit or retain its bytes.
+            try:
+                digest, count = hashlib.sha256(), 0
+                while count <= 1 << 20:
+                    ctx.budget.check()
+                    chunk = os.read(descriptor, min(65536, (1 << 20) + 1 - count))
+                    if not chunk: break
+                    digest.update(chunk); count += len(chunk)
+                unchanged(count)
+                ctx.budget.check()
+            except Exception:
+                pass  # Diagnostic failure cannot replace the original refusal.
+            else:
+                ctx.summary["definition_cache_refusal"] = {"bytes": count, "sha256": digest.hexdigest()}
         require(stable(before) == tuple(expected) and stat.S_ISREG(before.st_mode) and before.st_nlink == 1
                 and before.st_size <= maximum and (before.st_uid, before.st_gid) == ctx.original_output_identity[3:]
                 and (relative != DEFINITIONS_CACHE or before.st_size == DEFINITIONS_BYTES), "bootstrap opened file differs")
@@ -338,12 +386,7 @@ def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, dig
             if package_digest is not None: package_digest.update(chunk)
             remaining -= len(chunk)
         body = b"".join(chunks)
-        require(count == before.st_size and stable(os.fstat(descriptor)) == stable(before)
-                and stable(os.stat(name, dir_fd=parent, follow_symlinks=False)) == stable(before), "bootstrap file changed")
-        for ancestor, leaf, child, identity in chain:
-            require(KnownFileDiagnostics.identity(os.fstat(child)) == identity
-                    and KnownFileDiagnostics.identity(os.stat(leaf, dir_fd=ancestor, follow_symlinks=False)) == identity, "bootstrap parent changed")
-        require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap root changed during read")
+        unchanged(count)
         return digest.hexdigest() if digest_only else body
 
 
@@ -637,6 +680,21 @@ def closed_native_skill_refusal(summary, state, phases):
     return reason
 
 
+def closed_definition_cache_refusal(summary, state):
+    if "definition_cache_refusal" not in summary:
+        return None
+    value = summary["definition_cache_refusal"]
+    require(definition_cache_failure_context(summary, state)
+            and type(summary.get("error")) is str
+            and summary.get("error") == "ValueError: bootstrap opened file differs"
+            and state.get("reason") == "unclassified-refusal", "readout definition cache context")
+    require(type(value) is dict and set(value) == {"bytes", "sha256"}
+            and type(value["bytes"]) is int and 0 <= value["bytes"] <= 1 << 20
+            and value["bytes"] != DEFINITIONS_BYTES and type(value["sha256"]) is str
+            and re.fullmatch(r"[0-9a-f]{64}", value["sha256"]), "readout definition cache shape")
+    return dict(value)
+
+
 def closed_readout(summary, state):
     def budget():
         require(type(state['deadline']) is float and time.monotonic() < state['deadline'], 'readout deadline')
@@ -707,6 +765,8 @@ def closed_readout(summary, state):
     if membership_refusal is not None: value['membership_refusal'] = membership_refusal
     native_skill_refusal = closed_native_skill_refusal(summary, state, native_skill_phases)
     if native_skill_refusal is not None: value['native_skill_refusal'] = native_skill_refusal
+    definition_cache_refusal = closed_definition_cache_refusal(summary, state)
+    if definition_cache_refusal is not None: value['definition_cache_refusal'] = definition_cache_refusal
     budget()
     require(len(json.dumps(value).encode()) <= 16 << 10, 'readout output bound')
     return value

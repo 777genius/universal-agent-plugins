@@ -405,14 +405,8 @@ func validateReadonlyResult(body []byte, got result, r request) error {
 	if e := json.Unmarshal(body, &envelope); e != nil || envelope.Complete == nil {
 		return errors.New("readonly-proof-type-refused")
 	}
-	var proof struct {
-		Authority json.RawMessage `json:"authority"`
-		Stage     string          `json:"stage"`
-		Control   *bool           `json:"control_complete"`
-		Original  json.RawMessage `json:"original"`
-		Marker    json.RawMessage `json:"control_marker"`
-	}
-	if e := closed(envelope.Proof, &proof, "authority stage control_complete original control_marker"); e != nil {
+	proof, e := decodeReadonlyProof(envelope.Proof)
+	if e != nil {
 		return e
 	}
 	if readonlyRuntimeFailureStage(proof.Stage) {

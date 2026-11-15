@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fixed inert tracer mechanics only; never Grok or process-family admission."""
 import argparse
+import base64
 from contextlib import ExitStack
 import errno
 import hashlib
@@ -258,13 +259,15 @@ def collect(label, argv, root, fixture, env, deadline, *, trace=False):
                 error=state['error'], elapsed_seconds=time.monotonic() - started, streams=streams)
 
 
-def record_streams(row, root, *, version=False):
+def record_streams(row, root, *, version=False, inline=False):
     for name, capture in row['streams'].items():
         body = bytes(capture.pop('body'))
         require(len(body) <= LIMITS[name], 'retained-stream-bound')
         capture.update(bytes=len(body), sha256=hashlib.sha256(body).hexdigest())
         if version:
             capture['text'] = body.decode('ascii', errors='backslashreplace')
+        elif inline:
+            capture['base64'] = base64.b64encode(body).decode('ascii')
         else:
             path = root / (row['label'] + '.' + name)
             with path.open('xb') as target:
@@ -484,6 +487,22 @@ def observe_inert_trace(row, body, initial_argv, payload_argv, deadline):
         raise
 
 
+def untraced_readonly_control(receipt, argv, root, fixture, env, deadline, before):
+    row = collect('readonly-untraced', argv, root, fixture, env, deadline)
+    body = bytes(row['streams'].get('stdout', {}).get('body', b''))
+    reason = ('readonly-untraced-bwrap-loopback-permission'
+              if readonly_failure_reason(row) == 'readonly-bwrap-loopback-permission'
+              else 'readonly-untraced-refused')
+    # Keep both bounded original streams inside the already uploaded receipt;
+    # this control has no trace channel or process-observation claim.
+    record_streams(row, root, inline=True)
+    receipt['runs'].append(row)
+    after = fixture_snapshot(fixture)
+    receipt['readonly_untraced_fixture_after'] = after
+    require(completed(row) and body == b'STEP0_READONLY_EROFS\n' and after == before, reason)
+    remaining(deadline)
+
+
 def controls(receipt, root, fixture, env, deadline):
     for label, binary in (('strace-version', TOOLS[0]), ('bwrap-version', TOOLS[1])):
         row = collect(label, [binary, '--version'], root, fixture, env, deadline)
@@ -500,14 +519,16 @@ def controls(receipt, root, fixture, env, deadline):
             and direct['streams']['trace']['bytes'] > 0, 'direct-tracer-refused')
     observe_inert_trace(direct, direct_trace, direct_argv, direct_argv, deadline)
     before = fixture_snapshot(fixture)
+    receipt['readonly_fixture_before'] = before
     readonly_argv = readonly_arguments(fixture)
+    untraced_readonly_control(receipt, readonly_argv, root, fixture, env, deadline, before)
     readonly = collect('readonly', readonly_argv, root, fixture, env, deadline, trace=True)
     readonly_body = bytes(readonly['streams'].get('stdout', {}).get('body', b''))
     readonly_trace = bytes(readonly['streams'].get('trace', {}).get('body', b''))
     refusal_reason = readonly_failure_reason(readonly)
     record_streams(readonly, root)
     receipt['runs'].append(readonly)
-    receipt['readonly_fixture_before'], receipt['readonly_fixture_after'] = before, fixture_snapshot(fixture)
+    receipt['readonly_fixture_after'] = fixture_snapshot(fixture)
     require(completed(readonly) and readonly_body == b'STEP0_READONLY_EROFS\n'
             and readonly['streams']['trace']['bytes'] > 0 and receipt['readonly_fixture_after'] == before,
             refusal_reason)

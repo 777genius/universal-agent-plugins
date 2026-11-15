@@ -372,6 +372,99 @@ class OriginalLedgerCapture(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "receipt changed"):
                 processes.rejoin_commands(api, {"inert": capture}, root, time.monotonic() + 3)
 
+    def test_dry_run_controls_use_supported_run_arguments(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            owner = object.__new__(control.HistoryControl)
+            owner.outer = Path(temporary).resolve()
+            owner.code = owner.outer / "inert-code"
+            owner.project = owner.outer / "public-history/public-a"
+            owner.selected = owner.project / ".hermes/uap-session"
+            owner.pins, owner.nonce = {"uap": {"path": "inert-uap"}}, NONCE
+            key = (owner.selected / control.LEDGER).relative_to(owner.outer).as_posix()
+            owner.current, after = {key: "passive"}, {key: "active"}
+            owner.baseline, owner.phases, owner.config = {}, [], {"owned-server": {}}
+            receipt, calls, challenges, purposes = {"original": "receipt"}, [], [], []
+            owner.forged_digest = control.digest(receipt)
+            owner.history = lambda _image: (receipt, {})
+            owner.snapshot = lambda: (after, {})
+            owner.preserved = lambda: None
+            owner.observer = lambda *_args: ["inert-selector"]
+            owner.sentinel = SimpleNamespace(child=SimpleNamespace(pid=23),
+                challenge=lambda nonce, phase: challenges.append((nonce, phase)))
+            def purpose(value):
+                purposes.append(value)
+                return b"authored active purpose"
+            owner.ledger = SimpleNamespace(purpose=purpose)
+            expected = {"noninspect": ["run", "--dry-run", "--format", "json"],
+                        "active": ["run", "--inspect", "--dry-run", "--format", "json"]}
+            def command(label, argv, **options):
+                calls.append(label)
+                if label in expected:
+                    self.assertEqual(argv, ["inert-uap", *expected[label], "--target", "hermes",
+                                           "--scope", "project", "--project-root", str(owner.project)])
+                    self.assertEqual(options, {"refused": True})
+                    return {}
+                value = owner.config
+                if label == "selection":
+                    value = dict(nonce=NONCE, pid=29, recorded=[23], selected=[23])
+                return dict(status={"pid": 29}, stdout=processes.encoded(json.dumps(value).encode()))
+            owner.run_command = command
+            owner.exercise()
+            self.assertEqual(calls, ["selection", "inspect", "noninspect", "active"])
+            self.assertEqual(purposes, ["cli"])
+            self.assertEqual(challenges, [(NONCE, phase) for phase in (
+                "before-select", "after-select", "before-inspect", "after-inspect", "after-noninspect", "after-active")])
+            self.assertEqual(owner.phases, [dict(label="active-authored", original_sha256=control.digest({}))])
+            self.assertEqual(owner.current, after)
+
+    def test_private_permission_policy_precedes_capture_and_preserves_original_history(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve()
+            code = outer / "inert-code"
+            code.mkdir()
+            env = dict(HERMES_CALL_NONCE=NONCE, HERMES_BIN="inert-hermes", HERMES_PROFILE_PYTHON="inert-python",
+                       HERMES_PROFILE_RUNTIME_ROOT=str(code))
+            original = dict(env)
+            helpers = {name: CASE[name] for name in control.HELPERS}
+            helpers["public_spawn_install"] = lambda *_: (CASE["directory_identity"](code), "c" * 64)
+            deadline = time.monotonic() + 180
+            owner = control.HistoryControl(helpers, outer, {}, {}, env, {}, deadline)
+            native_environments, permissions = [], []
+            try:
+                owner.selected.mkdir(parents=True, mode=0o700)
+                path = owner.selected / control.LEDGER
+                path.write_bytes(b"[]")
+                owner.ledger = processes.LedgerHandle(ledger_api(), path, b"[]", deadline)
+                owner.snapshot = lambda: ({}, {})
+                def capture(_api, _argv, _cwd, environment, *_args, **_options):
+                    native_environments.append(dict(environment))
+                    # The pinned native directory policy performs this same-mode
+                    # write unless its ordinary operator chmod-skip is selected.
+                    if not environment.get("HERMES_SKIP_CHMOD"):
+                        permissions.append("chmod")
+                        os.chmod(owner.selected, 0o700)
+                    return {}, None
+                with mock.patch.object(control, "capture_command", capture):
+                    owner.run_command("selection", ["inert-native-metadata"], native=True)
+                owner.ledger.verify()
+                self.assertEqual(permissions, [])
+                self.assertEqual(native_environments, [dict(original, HERMES_SKIP_CHMOD="1",
+                    AGENTPLUGINS_HOME=str(owner.private / "public-uap-state"), HERMES_HOME=str(owner.selected))])
+                self.assertEqual(env, original)
+                self.assertEqual(path.read_bytes(), b"[]")
+            finally:
+                owner.close_handles()
+            for name in ("HERMES_HOME_MODE", "HERMES_UID", "HERMES_GID"):
+                for value in ("700", " ", None):
+                    with self.subTest(name=name, value=value):
+                        conflict = dict(env, **{name: value})
+                        untouched = dict(conflict)
+                        with mock.patch.object(control.HistoryControl, "hold", side_effect=AssertionError("captured before policy")), \
+                             mock.patch.dict(helpers, public_spawn_install=mock.Mock(side_effect=AssertionError("runtime read before policy"))), \
+                             self.assertRaisesRegex(RuntimeError, "private inspection permission policy"):
+                            control.HistoryControl(helpers, outer, {}, {}, conflict, {}, deadline)
+                        self.assertEqual(conflict, untouched)
+
     def test_original_live_capture_succeeds_but_oversized_retained_stream_refuses(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

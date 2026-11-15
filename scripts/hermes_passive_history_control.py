@@ -57,7 +57,10 @@ class HistoryControl:
         self.private, self.project = outer / "public-history", outer / "public-history/public-a"
         self.source, self.evidence = self.private / "public-source-a", self.private / "evidence"
         self.selected = self.project / ".hermes/uap-session"
-        self.env = dict(env, AGENTPLUGINS_HOME=str(self.private / "public-uap-state"))
+        require(all(name not in env or type(env[name]) is str and env[name] == ""
+                    for name in ("HERMES_HOME_MODE", "HERMES_UID", "HERMES_GID")),
+                "private inspection permission policy conflicts with inherited selectors")
+        self.env = dict(env, AGENTPLUGINS_HOME=str(self.private / "public-uap-state"), HERMES_SKIP_CHMOD="1")
         self.nonce = env["HERMES_CALL_NONCE"]
         self.deadline = min(deadline - 50, time.monotonic() + 120)
         require(remaining(self.deadline) > 40, "insufficient original control/cold reserve")
@@ -293,7 +296,7 @@ class HistoryControl:
         self.retained_digest = digest(self.retained_receipt)
         require(self.retained_digest == self.forged_digest, "actual inspect changed original forged receipt")
         self.sentinel.challenge(self.nonce, "after-inspect")
-        self.run_command("noninspect", self.uap(["run", "--dry-run", "--yes", "--format", "json"]), refused=True)
+        self.run_command("noninspect", self.uap(["run", "--dry-run", "--format", "json"]), refused=True)
         self.preserved()
         self.sentinel.challenge(self.nonce, "after-noninspect")
         self.active_control()
@@ -307,7 +310,7 @@ class HistoryControl:
                 "active-purpose authoring changed another member")
         self.spawn = self.history(after)[0]
         self.phase("active-authored", after)
-        self.run_command("active", self.uap(["run", "--inspect", "--dry-run", "--yes", "--format", "json"]), refused=True)
+        self.run_command("active", self.uap(["run", "--inspect", "--dry-run", "--format", "json"]), refused=True)
         self.preserved()
         self.sentinel.challenge(self.nonce, "after-active")
 

@@ -6982,6 +6982,11 @@ class ImportedHistoryDiagnosticContracts(unittest.TestCase):
                                         deadline=time.monotonic() + 180)
                 except RuntimeError as error:
                     result = error
+                except AssertionError as error:
+                    if (type(error) is not AssertionError or os.name != "nt" or effect != "label"
+                            or error.args != ("poison equality",)):
+                        raise
+                    result = error
                 else:
                     self.fail("original imported control should refuse")
             for descriptor in denied:
@@ -7097,6 +7102,46 @@ class ImportedHistoryDiagnosticContracts(unittest.TestCase):
                         mock.patch.object(Path, "read_bytes", side_effect=AssertionError("new body")), \
                         mock.patch.object(Path, "lstat", side_effect=AssertionError("new stat")):
                     self.assertEqual(CASE["admission_failure_readout"](self.encoded(proof), None), original)
+
+
+class WorkflowScopeContracts(unittest.TestCase):
+    def test_source_research_is_manual_opt_in_without_weakening_native_gates(self):
+        import re
+        workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/hermes-noauth-tool-call.yml").read_text()
+        triggers, rest = workflow.split("permissions:\n", 1)
+        self.assertEqual(re.findall(r"^  ([a-z_]+):", triggers, re.MULTILINE),
+                         ["pull_request", "push", "workflow_dispatch"])
+        self.assertIn("  workflow_dispatch:\n", triggers)
+        dispatch = triggers.split("  workflow_dispatch:\n", 1)[1]
+        self.assertEqual(re.findall(r"^      ([a-z_]+):", dispatch, re.MULTILINE), ["source_custom_root_research"])
+        for field in ("type: boolean", "required: false", "default: false"):
+            self.assertIn("        " + field + "\n", dispatch)
+        self.assertEqual(rest.split("concurrency:\n", 1)[0], "  contents: read\n")
+        native, bundled = workflow.split("  native-call:\n", 1)[1].split("  bundled-custom-root:\n", 1)
+        self.assertNotRegex(native.split("    steps:\n", 1)[0], re.compile(r"^    if:", re.MULTILINE))
+        self.assertNotIn("source_custom_root_research", bundled)
+        self.assertNotIn("continue-on-error:", workflow)
+        steps = {block.splitlines()[0]: block for block in native.split("    - name: ")[1:]}
+        for name in ("Inert provider, nonce and unchanged shared wire contracts",
+                     "Inert custom-root contracts in official dependency-prepared runtime",
+                     "Real pinned Hermes legacy driver User MCP calls without vendor authentication"):
+            self.assertNotRegex(steps[name], re.compile(r"^      if:", re.MULTILINE))
+        user_evidence = steps["Retain original nonce, provider, native process and lifecycle evidence"]
+        self.assertIn("      if: ${{ always() }}\n", user_evidence)
+        self.assertIn("hermes-native-call-evidence-*/", user_evidence)
+        source = steps["Observe the official source runtime with bytecode disabled and preserved User authority"]
+        evidence = steps["Retain original source custom-root observations"]
+        manual = "github.event_name == 'workflow_dispatch' && inputs.source_custom_root_research"
+        self.assertEqual(re.findall(r"^      if: (.+)$", source, re.MULTILINE), ["${{ " + manual + " }}"])
+        self.assertEqual(re.findall(r"^      if: (.+)$", evidence, re.MULTILINE), ["${{ always() && " + manual + " }}"])
+        self.assertEqual(workflow.count("inputs.source_custom_root_research"), 2)
+        self.assertIn("        HERMES_PROFILE_SOURCE_CAPTURE: '1'\n", source)
+        self.assertIn("      run: ${{ matrix.python }} scripts/e2e/hermes-profile-admission.py\n", source)
+        self.assertIn("hermes-profile-source-evidence-*/upload/", evidence)
+        for upload in (user_evidence, evidence):
+            self.assertIn("        if-no-files-found: error\n", upload)
+        self.assertLess(native.index("    - name: Real pinned Hermes legacy driver User MCP calls"),
+                        native.index("    - name: Observe the official source runtime"))
 
 
 if __name__ == "__main__":

@@ -2862,6 +2862,110 @@ class ReadonlyInventoryContracts(unittest.TestCase):
         self.assertFalse(readout['control_complete'])
         self.assertTrue(all(value is False for value in readout['qualification'].values()))
 
+    def test_actual_writable_runtime_member_reaches_closed_negative_readout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            root.chmod(0o755)
+            leaf = root / 'unexpected-writable'
+            leaf.write_bytes(b'original system member')
+            leaf.chmod(0o664)
+            info = leaf.lstat()
+            expected = dict(member=leaf.name, mode=info.st_mode, uid=info.st_uid,
+                            gid=info.st_gid, links=info.st_nlink, bytes=info.st_size)
+            descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+            original_stat, original_fstat = os.stat, os.fstat
+            fields = ('st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_uid', 'st_gid',
+                      'st_size', 'st_mtime_ns', 'st_ctime_ns')
+            def root_owned(fd):
+                values = {key:getattr(original_fstat(fd), key) for key in fields}
+                return SimpleNamespace(**dict(values, st_uid=0))
+            def census(req, **_options):
+                with (mock.patch.object(case.os, 'stat', original_stat),
+                      mock.patch.object(case.os, 'fstat', side_effect=root_owned)):
+                    return case.readonly_walk(descriptor, req, 4096, runtime=True)
+            try:
+                with self.runtime_collector() as (req, parent, command):
+                    parent.side_effect = census
+                    result = case.readonly_collector_result(req)
+                    command.assert_not_called()
+            finally:
+                os.close(descriptor)
+            self.assertEqual(result['readonly']['stage'], 'runtime:readonly-census-writable')
+            self.assertEqual(result['readonly']['runtime_member'], expected)
+            self.assertEqual((result['commands'], result['rpc']), ([], case.rpc_state()))
+            self.assertFalse(result['semantic_complete'])
+            self.assertFalse(result['readonly']['control_complete'])
+            receipt, request, before = self.receipt()
+            receipt['result'] = result
+            # The original request/authority from the real collector is the same
+            # fixed inert request used by the receipt fixture.
+            case.validate_readonly_receipt(receipt, request)
+            ledger = dict(before=before, after=copy.deepcopy(before), profiles_before={},
+                          profiles_after={}, protected_originals_unchanged=True, witness_absent=True)
+            members = {'acquisition.json': b'{}', 'readonly.ledger.json': json.dumps(ledger).encode(),
+                       'readonly.rpc.json': json.dumps(result.pop('rpc')).encode()}
+            summary = {key:request[key] for key in
+                       ('schema_version', 'source_commit', 'source_tree', 'nonce', 'start_monotonic_ns')}
+            summary.update(mode=case.READONLY_MODE, collection_complete=False, measurement_complete=True,
+                           cleanup_complete=True, qualification=dict(case.FALSE), scopes=[receipt],
+                           run='1', attempt='1', elapsed_ns=1, error='admission-refused')
+            members['admission.json'] = json.dumps(summary).encode()
+            packet = {key:request[key] for key in ('source_commit', 'source_tree', 'nonce')}
+            readout = case.readonly_readout(members, packet, time.monotonic() + 5)
+            self.assertEqual(readout['runtime_member'], expected)
+            self.assertEqual(readout['commands'], 0)
+            self.assertTrue(all(value is False for value in readout['qualification'].values()))
+            self.assertEqual(leaf.read_bytes(), b'original system member')
+
+    def test_optional_runtime_member_is_bounded_and_cannot_admit_progress(self):
+        import stat
+        valid = dict(member='local/observed', mode=stat.S_IFREG | 0o664, uid=1000, gid=1000, links=1, bytes=17)
+        for key, value in (('member', '../private'), ('member', '/usr/absolute'), ('member', 'a//b'),
+                ('member', 'line\nvalue'), ('member', 'x' * 1025), ('member', '\ud800'),
+                ('mode', stat.S_IFLNK | 0o777), ('mode', stat.S_IFREG | 0o644),
+                ('uid', True), ('uid', None), ('gid', None), ('bytes', None),
+                ('uid', 2**32), ('gid', -1), ('links', 0), ('bytes', 2**63)):
+            changed = dict(valid, **{key:value})
+            with self.subTest(key=key, value=repr(value)), self.assertRaises((ValueError, UnicodeError)):
+                case.readonly_runtime_member(changed)
+            error = ValueError('readonly-census-writable')
+            error.runtime_member = changed
+            with self.runtime_collector() as (req, parent, command):
+                parent.side_effect = error
+                result = case.readonly_collector_result(req)
+                command.assert_not_called()
+                self.assertEqual(result['readonly']['stage'], 'runtime:readonly-census-writable')
+                self.assertNotIn('runtime_member', result['readonly'])
+        for mutation in ('stage', 'progress', 'unknown', 'null'):
+            receipt, request, _ = self.receipt()
+            result = receipt['result']
+            result.update(semantic_complete=False, reason='isolation-refused', commands=[], rpc=case.rpc_state())
+            selected = result['readonly']
+            selected.update(stage='runtime:readonly-census-writable', control_complete=False,
+                            original=None, control_marker=None, runtime_member=dict(valid))
+            if mutation == 'stage':
+                selected['stage'] = 'runtime:readonly-runtime-owner'
+            elif mutation == 'progress':
+                selected['control_complete'] = True
+            elif mutation == 'unknown':
+                selected['runtime_member']['extra'] = 'unadmitted'
+            else:
+                selected['runtime_member'] = None
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                case.validate_readonly_receipt(receipt, request)
+
+    def test_runtime_member_capture_is_host_runtime_only_and_uses_no_new_io(self):
+        import stat
+        info = SimpleNamespace(st_mode=stat.S_IFREG | 0o664, st_uid=0, st_gid=0, st_nlink=1, st_size=9)
+        for runtime, maps in ((False, None), (True, {'namespace': 'child'}), (True, None)):
+            with (mock.patch.object(case.os, 'stat', side_effect=AssertionError('new stat')),
+                  mock.patch.object(case.os, 'open', side_effect=AssertionError('new open')),
+                  self.assertRaisesRegex(ValueError, '^readonly-census-writable$') as caught):
+                case.readonly_writable_member(info, 'observed', runtime=runtime, maps=maps)
+            self.assertEqual('runtime_member' in caught.exception.__dict__, runtime and maps is None)
+        info.st_mode = stat.S_IFLNK | 0o777
+        case.readonly_writable_member(info, 'link', runtime=True, maps=None)
+
     def test_runtime_census_keeps_original_groups_and_refuses_unmapped_child_groups(self):
         import stat
         req, _ = self.request()

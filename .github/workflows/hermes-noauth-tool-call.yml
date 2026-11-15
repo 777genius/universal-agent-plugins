@@ -57,7 +57,13 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     - go.sum
     - go.work
     - go.work.sum
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      source_custom_root_research:
+        description: Run separate source-installed custom-root research (not Project qualification)
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -267,13 +273,14 @@ jobs:
         if-no-files-found: error
         retention-days: 14
     - name: Observe the official source runtime with bytecode disabled and preserved User authority
+      if: ${{ github.event_name == 'workflow_dispatch' && inputs.source_custom_root_research }}
       shell: bash
       env:
         HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         HERMES_PROFILE_SOURCE_CAPTURE: '1'
       run: ${{ matrix.python }} scripts/e2e/hermes-profile-admission.py
     - name: Retain original source custom-root observations
-      if: ${{ always() }}
+      if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.source_custom_root_research }}
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
         name: hermes-source-profile-admission-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
