@@ -25,13 +25,23 @@ func projectPreparationAction(components []domain.ComponentDecision) string {
 	return "Grok project " + label + " delivery is prepared; Project MCP requires Grok 1.0.70; open the selected project, enable and trust the plugin in Grok, then reload and verify effective MCP discovery; UAP has not activated it"
 }
 
-func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequest) error {
+func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRequest) error {
 	if request.Plan.Scope != domain.ScopeProject && request.Plan.TargetContext.Scope != domain.ScopeProject && request.Plan.TargetContext.ProjectRoot == "" {
 		return nil
+	}
+	if request.ConfirmPluginEnable {
+		return errEnablementUnqualified
 	}
 	if _, err := grokPlanRoot(request.Client, request.Plan); err != nil {
 		return err
 	}
+	if err := preflightRetainedEnablement(env, request); err != nil {
+		return err
+	}
+	return preflightProjectDelivery(request)
+}
+
+func preflightProjectDelivery(request domain.ActivationRequest) error {
 	if request.Plan.Status == domain.PlanUnsupported {
 		return fmt.Errorf("grok project package is unsupported")
 	}
@@ -55,26 +65,31 @@ func (*Adapter) PreflightActivation(_ clients.Env, request domain.ActivationRequ
 	return nil
 }
 func activateProject(ctx context.Context, env clients.Env, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	outcome := shared.StartedActivation(request)
+	outcome.NativeEffect = domain.NativeEffectUnchanged
+	outcome.Activation = domain.ActivationPrepared
+	outcome.UserActions = []string{projectPreparationAction(request.Plan.Components)}
 	if err := New().PreflightActivation(env, request); err != nil {
-		return domain.ActivationOutcome{}, err
+		return outcome, err
 	}
 	if request.Delivery.ClientID != domain.ClientGrok || request.Delivery.ActivePath != request.Plan.ActivePath || request.Delivery.OwnedBase != request.Plan.TargetRoot || request.DeclaredName != request.Plan.DeclaredName {
-		return domain.ActivationOutcome{}, fmt.Errorf("grok project delivered identity differs from plan")
+		return outcome, fmt.Errorf("grok project delivered identity differs from plan")
 	}
 	finding, err := inspectProject(ctx, env, request.Client, request.Plan, true, true)
 	if err != nil {
-		return domain.ActivationOutcome{}, err
+		return outcome, err
 	}
 	if finding != clients.RegistryExpected {
-		return domain.ActivationOutcome{}, fmt.Errorf("grok prepared project plugin source is absent, foreign or indeterminate")
+		return outcome, fmt.Errorf("grok prepared project plugin source is absent, foreign or indeterminate")
 	}
-	outcome := shared.StartedActivation(request)
-	outcome.Activation = domain.ActivationPrepared
-	outcome.UserActions = []string{projectPreparationAction(request.Plan.Components)}
+	if request.ConfirmPluginEnable && !request.VerifyOnly {
+		return enableProject(ctx, env, request, outcome)
+	}
 	return outcome, nil
 }
 func deactivateProject(_ context.Context, _ clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
+	outcome.NativeEffect = domain.NativeEffectUnchanged
 	root, err := grokProjectRoot(request.Client, request.TargetContext, request.NativeRegistryRoot)
 	if err != nil {
 		return outcome, err
@@ -85,6 +100,9 @@ func deactivateProject(_ context.Context, _ clients.Env, request domain.Deactiva
 	}
 	if filepath.Dir(request.ManagedArtifactPath) != filepath.Join(root, "plugins") {
 		return outcome, fmt.Errorf("grok project removal path differs from owned directory")
+	}
+	if hasEnabledOwnership(binding) {
+		return outcome, errEnablementUnqualified
 	}
 	if !request.Confirmed {
 		outcome.UserActions = []string{"agentplugins will remove only its exact prepared Grok project plugin directory"}

@@ -251,5 +251,7 @@ func automatedMutation(app App, opts *options) bool {
 }
 
 func mutationConfirmed(app App, opts *options) bool {
-	return opts.yes || automatedMutation(app, opts) || strings.TrimSpace(opts.target) != ""
+	// Explicit native enablement still presents the ordinary interactive repair
+	// confirmation. Its required target selector alone must not skip that choice.
+	return opts.yes || automatedMutation(app, opts) || !opts.confirmPluginEnable && strings.TrimSpace(opts.target) != ""
 }

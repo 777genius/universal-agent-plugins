@@ -22,6 +22,17 @@ type ActivationPreflighter interface {
 	PreflightActivation(env Env, req domain.ActivationRequest) error
 }
 
+// PluginEnablement declares a separate explicit consent supported by an
+// adapter. It never promotes the ordinary confirmation or activation state.
+type PluginEnablement interface {
+	SupportsPluginEnablement(domain.InstallScope) bool
+}
+
+func SupportsPluginEnablement(registry *Registry, id domain.ClientID, scope domain.InstallScope) bool {
+	adapter, ok := As[PluginEnablement](registry, id)
+	return ok && adapter.SupportsPluginEnablement(scope)
+}
+
 // RemovalAttestationPolicy reports whether an owned binding requires an explicit
 // host confirmation that its native plugin was removed or never activated. The
 // answer is read-only policy, independent of Confirmed or ExternalUninstalled.

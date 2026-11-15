@@ -29,6 +29,9 @@ type repairSession struct {
 }
 
 func (session *repairSession) validateRepairInput() error {
+	if session.input.ConfirmPluginEnable && (session.input.Scope != domain.ScopeProject || session.input.InstallationID == "" || session.input.Client.ClientID == "" || session.input.refreshSelectedDelivery) {
+		return fmt.Errorf("explicit plugin enablement requires one selected Project repair")
+	}
 	if err := session.input.InstallIntent.Validate(session.input.Client.ClientID); err != nil {
 		return err
 	}

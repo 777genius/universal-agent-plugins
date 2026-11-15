@@ -137,8 +137,9 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		projectArgs:  e.cfg.ProjectArgs,
 		facts:        facts,
 	}
-	transitions := opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, PackageVerifier: stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeKernel}
-	inner := providers.Activator{OpenCodeTransitions: transitions, Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
+	legacyTransitions := opencode.NativeTransitions{ProjectRoot: e.cfg.ProjectRoot, PackageVerifier: stager, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeKernel}
+	transitions := providers.NewNativeTransitions(e.cfg.Registry, clients.NativeTransitionContext{ProjectRoot: e.cfg.ProjectRoot, UserHome: e.cfg.UserHome, OperationsDir: e.cfg.OperationsDir, State: transaction.Kernel{StateStore: e.store}, Kernel: nativeKernel, PackageVerifier: stager}, legacyTransitions)
+	inner := providers.Activator{UserHome: e.cfg.UserHome, NativeTransitions: transitions, OpenCodeTransitions: legacyTransitions, Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
 	var observer usecase.NativeIdentityObserver
 	identity := providers.NativeIdentityObserver{Stager: stager, NativeConfig: &nativeKernel, Registry: e.cfg.Registry}
 	if e.cfg.EnableNativeObserver && e.cfg.Runner != nil {

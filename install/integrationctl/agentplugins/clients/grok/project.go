@@ -15,6 +15,10 @@ import (
 var _ clients.Projector = (*Adapter)(nil)
 
 func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	retained, err := retainedEnabledObjects(in.Plan)
+	if err != nil {
+		return nil, err
+	}
 	project := in.Plan.Scope == domain.ScopeProject || in.Plan.TargetContext.Scope == domain.ScopeProject || in.Plan.TargetContext.ProjectRoot != ""
 	if project {
 		if err := validateProjectProjection(in); err != nil {
@@ -52,7 +56,7 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 			return nil, err
 		}
 	}
-	return nil, nil
+	return retained, nil
 }
 
 func validateProjectProjection(in clients.ProjectionInput) error {
