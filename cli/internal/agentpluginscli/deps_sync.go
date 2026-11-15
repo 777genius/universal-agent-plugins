@@ -227,7 +227,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	// A preceding target may have created the shared installation. Resolve
 	// identity only from this alias's live owner receipt, never a package name.
-	if err := resolveDependencyBindingIdentity(view, &action); err != nil {
+	if err := adapter.resolvePreparedDependencyClient(ctx, view, &action, &client); err != nil {
 		return nil, err
 	}
 	operationID := adapter.operationIDs[action.Alias+"\x00"+action.ClientID]
