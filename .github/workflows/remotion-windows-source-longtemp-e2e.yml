@@ -8,6 +8,11 @@ on:
       - '.github/workflows/remotion-windows-source-longtemp-e2e.yml'
   workflow_dispatch:
 
+# Replace superseded PR checks; preserve exact push, scheduled and manual runs.
+concurrency:
+  group: remotion-win-longtemp-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

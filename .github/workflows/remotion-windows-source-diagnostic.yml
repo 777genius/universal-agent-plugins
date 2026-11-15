@@ -5,6 +5,11 @@ on:
     paths: ['.github/workflows/remotion-windows-source-diagnostic.yml', 'scripts/remotion_published_windows_long_temp_e2e.py']
   workflow_dispatch:
 
+# Replace superseded PR checks; preserve exact push, scheduled and manual runs.
+concurrency:
+  group: remotion-win-diagnostic-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
