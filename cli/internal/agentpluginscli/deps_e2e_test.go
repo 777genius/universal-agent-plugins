@@ -555,7 +555,7 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	adapter := &dependencyInstaller{app: f.app, opts: &options{scope: "user", format: "json"}, cmd: &cobra.Command{}, detected: detected}
 	interrupted := &dependencyInterruptedMutator{dependencyInstaller: adapter}
 	results, e := (environment.Coordinator{Mutator: interrupted}).ApplySync(context.Background(), environment.PreparedSync{Bindings: actions}, true)
-	if e == nil || len(results) != 2 || results[0].Outcome != installer.OutcomeCompleted {
+	if e == nil || len(results) != 2 || results[0].Result == nil || results[0].Result.Outcome != installer.OutcomeCompleted {
 		t.Fatalf("partial update: %+v %v", results, e)
 	}
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")

@@ -194,7 +194,7 @@ func TestSavedRegistryNoLaterReleaseRechecksRecordedEligibility(t *testing.T) {
 
 func TestUpdateAllDoesNotCountPartiallyAttemptedSavedAliasAsUpdated(t *testing.T) {
 	session := updateAllSession{result: updateAllResult{Installations: []updateAllInstallation{{Name: "shared", Saved: true, Status: "planned"}}}, saved: &preparedSavedUpdateAll{rows: map[string]int{"shared": 0}, request: dependencySyncRequest{prepared: []dependencyAction{{Alias: "shared", ClientID: "claude", Action: environment.ActionUpdate}, {Alias: "shared", ClientID: "codex", Action: environment.ActionUpdate}}}}}
-	session.recordSavedBindings(dependencyApplicationResult{Published: true, Results: []installer.Result{{Outcome: installer.OutcomeCompleted, Mutated: true}}})
+	session.recordSavedBindings(dependencyApplicationResult{Published: true, Outcomes: []environment.BindingOutcome{{Status: environment.BindingApplied, Result: &installer.Result{Outcome: installer.OutcomeCompleted, Mutated: true}}, {Status: environment.BindingNotAttempted}}})
 	if session.result.Updated != 0 || session.result.Failed != 1 || session.result.Installations[0].Status != "apply_failed" || !strings.Contains(session.result.Installations[0].Reason, "partially") {
 		t.Fatal(session.result)
 	}

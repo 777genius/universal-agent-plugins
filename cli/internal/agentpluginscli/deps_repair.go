@@ -74,8 +74,8 @@ func applyDependencyRepairs(cmd *cobra.Command, app App, opts *options, actions 
 		return renderDependencySync(cmd, opts, actions, true)
 	}
 	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
-	results, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: actions}, true)
-	if renderErr := renderDependencyResults(cmd, opts, actions, results, err); err == nil {
+	outcomes, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: actions}, true)
+	if renderErr := renderDependencyResults(cmd, opts, actions, environment.Results(outcomes), err); err == nil {
 		err = renderErr
 	}
 	return err

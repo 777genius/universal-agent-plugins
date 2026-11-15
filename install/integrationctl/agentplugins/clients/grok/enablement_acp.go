@@ -15,6 +15,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -66,7 +67,7 @@ func readEnablementInventory(ctx context.Context, runner ports.CommandRunner, in
 		return err
 	})
 	if err != nil {
-		return nil, err
+		return nil, &domain.UnclosedClientProbe{Operation: "Grok readonly inventory", Err: err}
 	}
 	if !inventory.complete {
 		return nil, fmt.Errorf("grok ACP inventory response is incomplete")
