@@ -173,24 +173,17 @@ func TestInstallConvergesDependencyEnvironment(t *testing.T) {
 	}
 	dependencyWrite(t, lp, savedLock)
 
-	// e) Keep the missing-CLI fallback distinct from the automatic native
-	// removal covered by the all-client matrix. Only this unavailable selected
-	// client needs external-uninstalled before its owned projection is removed.
-	client.ExecutablePath = ""
-	f.app.Detector = staticDetector{clients: []domain.DetectedClient{client}}
+	// e) The captured Codex CLI removes its exact managed registration and
+	// verifies native absence without an external-uninstall attestation.
 	dependencyWrite(t, mp, "schema_version = 1\n[targets]\n")
 	run("deps", "lock", "--format", "json")
-	beforeRemoval := dependencyRead(t, f.store.Path)
-	if _, _, err := f.execute(false, "install", "--locked", "--yes", "--format", "json"); err == nil {
-		t.Fatal("removal without external uninstall attestation reported success")
+	if len(runner.codexIDs) != 1 {
+		t.Fatalf("expected an owned native registration before removal: %v", runner.codexIDs)
 	}
-	if dependencyRead(t, f.store.Path) != beforeRemoval {
-		t.Fatal("refused removal changed state")
+	run("install", "--locked", "--yes", "--format", "json")
+	if len(runner.codexIDs) != 0 {
+		t.Fatalf("native removal did not clear the managed registration: %v", runner.codexIDs)
 	}
-	if _, err := os.Stat(binding.TargetPath); err != nil {
-		t.Fatal("refused removal deleted the projection")
-	}
-	run("install", "--locked", "--yes", "--external-uninstalled", "--format", "json")
 	after, err := f.store.Load()
 	if err != nil || len(after.EnvironmentReceipts) != 0 {
 		t.Fatalf("terminal removal retained owner: %+v %v", after, err)
