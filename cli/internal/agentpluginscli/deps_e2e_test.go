@@ -185,12 +185,19 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	failedProjection := failedView.Installations[0].Bindings[0].ProjectionDigest
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
 	resumedView, err := f.app.Installer.Inspect(context.Background())
-	if err != nil || resumedView.Installations[0].Bindings[0].Activation != string(domain.ActivationActive) || resumedView.Installations[0].Bindings[0].Verification != "installation_verified" || resumedView.Installations[0].Bindings[0].ProjectionDigest != failedProjection {
+	if err != nil || resumedView.Installations[0].Bindings[0].Activation != string(domain.ActivationPrepared) || resumedView.Installations[0].Bindings[0].Verification != "installation_verified" || resumedView.Installations[0].Bindings[0].ProjectionDigest != failedProjection {
 		t.Fatalf("same-pin retry did not resume lifecycle: %+v %v", resumedView, err)
+	}
+	// Retry restores the exact remote MCP projection, while native remote
+	// initialization/authentication remains intentionally unobserved.
+	resumed := resumedView.Installations[0].Bindings[0]
+	servers, inspectErr := savedProjectedMCP(resumed.TargetPath)
+	if inspectErr != nil || len(servers) != 1 || !maps.Equal(servers["demo"], map[string]any{"type": "http", "url": "https://example.test/mcp"}) || resumed.Authentication != string(domain.AuthenticationNotChecked) || resumed.LifecycleConverged {
+		t.Fatalf("same-pin remote retry lost its exact prepared boundary: %+v servers=%#v error=%v", resumed, servers, inspectErr)
 	}
 	status = run(f, "deps", "status", "--format", "json")
 	facts = readDependencyStatusTestFacts(t, status)
-	if !facts["auth_unverified"] || facts["partial"] {
+	if !facts["activation_prepared"] || !facts["auth_unverified"] || facts["partial"] {
 		t.Fatal("unchecked authentication must remain visible: " + status)
 	}
 	beforeDownloads, beforeLookups := source.downloads, source.lookups
@@ -441,17 +448,15 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		t.Fatal(e)
 	}
 	run(f, "deps", "lock", "--format", "json")
-	if _, _, err := f.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil {
-		t.Fatal("removal without external uninstall attestation reported success")
+	// The exact owned native registration can now be removed and verified by
+	// Codex itself; no external-uninstall attestation is needed.
+	if len(runners[0].codexIDs) != 1 {
+		t.Fatalf("expected one owned native plugin before removal: %v", runners[0].codexIDs)
 	}
-	beforeRemoval, err := f.store.Load()
-	if err != nil || len(beforeRemoval.EnvironmentReceipts) != 1 {
-		t.Fatalf("incomplete removal dropped owner: %+v %v", beforeRemoval, err)
+	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
+	if len(runners[0].codexIDs) != 0 {
+		t.Fatalf("automatic removal retained native plugin: %v", runners[0].codexIDs)
 	}
-	if _, err := os.Stat(managed); err != nil {
-		t.Fatal("incomplete removal deleted projection")
-	}
-	run(f, "deps", "sync", "--locked", "--yes", "--external-uninstalled", "--format", "json")
 	state, e = f.store.Load()
 	if e != nil || len(state.EnvironmentReceipts) != 0 {
 		t.Fatalf("terminal removal retained owner: %+v %v", state, e)

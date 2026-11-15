@@ -201,6 +201,11 @@ func TestProjectFileLifecycleWithoutLiveObserver(t *testing.T) {
 	for _, id := range []string{"cline", "codex", "vscode"} {
 		t.Run(id, func(t *testing.T) {
 			f := newProjectFilesFixture(t, id, "disabled-with-runner")
+			if id == "codex" {
+				// Keep this file-only lifecycle independent of confirmed-install trust
+				// publication, without relaxing its user/B immutability assertion.
+				seedCodexProjectTrust(t, f.user, f.project)
+			}
 			other := f.untouched(t)
 			first := f.apply(t, OpInstall)
 			if !first.Mutated {
@@ -209,6 +214,9 @@ func TestProjectFileLifecycleWithoutLiveObserver(t *testing.T) {
 			binding := f.binding(t)
 			if binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
 				t.Fatalf("invented native activation %+v", binding)
+			}
+			if id == "codex" && binding.Authentication != domain.AuthenticationNotChecked {
+				t.Fatalf("unobserved remote MCP invented authentication: %+v", binding)
 			}
 			before := f.state(t)
 			again := f.apply(t, OpInstall)

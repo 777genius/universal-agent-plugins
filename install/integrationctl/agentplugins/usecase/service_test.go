@@ -1836,16 +1836,19 @@ func TestRemoveCleansNativeCodexMarketplaceBeforeManagedArtifactDeletion(t *test
 	}
 	marketplace := shared.ManagedMarketplaceName(installed.Plan.PhysicalArtifactID)
 	wantCleanup := []string{"/test/bin/codex", "plugin", "marketplace", "remove", marketplace, "--json"}
-	if got := runner.commands[len(runner.commands)-1].Argv; !reflect.DeepEqual(got, wantCleanup) {
-		t.Fatalf("last command = %#v, want cleanup %#v", got, wantCleanup)
+	if got := runner.commands[len(runner.commands)-2].Argv; !reflect.DeepEqual(got, wantCleanup) {
+		t.Fatalf("marketplace cleanup command = %#v, want %#v", got, wantCleanup)
 	}
 	// The plugin's own registration must be cleared before its marketplace
 	// source, not just the marketplace: a stale `[plugins."id"] enabled`
 	// config.toml entry left behind is what let a freshly started Codex
 	// app-server silently re-materialize an already-"removed" plugin.
 	wantPluginRemove := []string{"/test/bin/codex", "plugin", "remove", "demo@" + marketplace, "--json"}
-	if got := runner.commands[len(runner.commands)-2].Argv; !reflect.DeepEqual(got, wantPluginRemove) {
-		t.Fatalf("second-to-last command = %#v, want plugin cleanup %#v", got, wantPluginRemove)
+	if got := runner.commands[len(runner.commands)-3].Argv; !reflect.DeepEqual(got, wantPluginRemove) {
+		t.Fatalf("plugin cleanup command = %#v, want %#v", got, wantPluginRemove)
+	}
+	if got := runner.commands[len(runner.commands)-1].Argv; !reflect.DeepEqual(got, []string{"/test/bin/codex", "plugin", "list", "--json"}) {
+		t.Fatalf("final exact native absence probe = %#v", got)
 	}
 	config, err := os.ReadFile(filepath.Join(client.ConfigRoot, "config.toml"))
 	if err != nil {
@@ -2053,22 +2056,43 @@ type codexCleanupUsecaseRunner struct {
 	configRoot         string
 	managedMarketplace string
 	managedPath        string
+	installed          bool
 }
 
 func (runner *codexCleanupUsecaseRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	runner.commands = append(runner.commands, command)
-	if len(command.Argv) >= 5 && command.Argv[1] == "plugin" && command.Argv[2] == "marketplace" && command.Argv[3] == "add" {
+	if len(command.Argv) == 0 || command.Argv[0] != "/test/bin/codex" {
+		return legacyports.CommandResult{}, fmt.Errorf("unexpected Codex cleanup fixture executable: %v", command.Argv)
+	}
+	if len(command.Argv) == 5 && command.Argv[1] == "plugin" && command.Argv[2] == "add" && command.Argv[4] == "--json" {
+		if command.Argv[3] != "demo@"+runner.managedMarketplace {
+			return legacyports.CommandResult{}, fmt.Errorf("unexpected managed plugin add: %v", command.Argv)
+		}
+		runner.installed = true
+		return legacyports.CommandResult{}, nil
+	}
+	if len(command.Argv) == 5 && command.Argv[1] == "plugin" && command.Argv[2] == "remove" && command.Argv[4] == "--json" {
+		if command.Argv[3] != "demo@"+runner.managedMarketplace {
+			return legacyports.CommandResult{}, fmt.Errorf("unexpected managed plugin removal: %v", command.Argv)
+		}
+		runner.installed = false
+		return legacyports.CommandResult{}, nil
+	}
+	if len(command.Argv) == 6 && command.Argv[1] == "plugin" && command.Argv[2] == "marketplace" && command.Argv[3] == "add" && command.Argv[5] == "--json" {
 		runner.managedPath = command.Argv[4]
 		runner.managedMarketplace = shared.ManagedMarketplaceName(filepath.Base(command.Argv[4]))
 		return runner.writeConfig(true), nil
 	}
-	if len(command.Argv) >= 5 && command.Argv[1] == "plugin" && command.Argv[2] == "marketplace" && command.Argv[3] == "remove" {
+	if len(command.Argv) == 6 && command.Argv[1] == "plugin" && command.Argv[2] == "marketplace" && command.Argv[3] == "remove" && command.Argv[5] == "--json" {
 		if command.Argv[4] != runner.managedMarketplace {
 			return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("unexpected marketplace")}, nil
 		}
 		return runner.writeConfig(false), nil
 	}
-	if len(command.Argv) >= 4 && command.Argv[1] == "plugin" && command.Argv[2] == "list" {
+	if reflect.DeepEqual(command.Argv[1:], []string{"plugin", "list", "--json"}) {
+		if !runner.installed {
+			return legacyports.CommandResult{Stdout: []byte(`{"installed":[]}`)}, nil
+		}
 		marketplace := ""
 		name := "demo"
 		for _, prior := range runner.commands {
@@ -2084,7 +2108,7 @@ func (runner *codexCleanupUsecaseRunner) Run(_ context.Context, command legacypo
 			name+"@"+marketplace, name, marketplace,
 		))}, nil
 	}
-	return legacyports.CommandResult{}, nil
+	return legacyports.CommandResult{}, fmt.Errorf("unexpected Codex cleanup fixture command: %v", command.Argv)
 }
 
 func (runner *codexCleanupUsecaseRunner) writeConfig(includeManaged bool) legacyports.CommandResult {

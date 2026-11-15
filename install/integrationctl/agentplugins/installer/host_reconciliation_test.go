@@ -116,7 +116,7 @@ func TestHostReconciliationRepeat(t *testing.T) {
 			if err != nil || repeated.Outcome != OutcomeUnchanged || !repeated.NoChange {
 				t.Fatalf("repeat: %+v %v", repeated, err)
 			}
-			if repeated.Client.Authentication != string(domain.AuthenticationNotChecked) || repeated.Client.Activation != string(domain.ActivationActive) || repeated.Client.Verification != string(domain.VerificationInstalled) {
+			if repeated.Client.Authentication != string(domain.AuthenticationNotRequired) || repeated.Client.Activation != string(domain.ActivationActive) || repeated.Client.Verification != string(domain.VerificationInstalled) {
 				t.Fatalf("observation: %+v", repeated.Client)
 			}
 			if repeated.Binding.BindingID != first.Binding.BindingID || repeated.Binding.TreeDigest != first.Binding.TreeDigest {
@@ -140,11 +140,11 @@ func TestHostReconciliationRepeat(t *testing.T) {
 			if callbacks != wantCallbacks || effects != 1 {
 				t.Fatalf("callbacks=%d effects=%d", callbacks, effects)
 			}
-			if !argvHas(runner.calls, "plugin", "list") {
+			if !argvHas(runner.calls, "plugin", "list") || !argvHas(runner.calls, "app-server") {
 				t.Fatalf("no VerifyOnly listing: %v", runner.calls)
 			}
 			for _, argv := range runner.calls {
-				if !containsArgSeq(argv, "plugin", "list") {
+				if !containsArgSeq(argv, "plugin", "list") && !(len(argv) == 2 && argv[1] == "app-server") {
 					t.Fatalf("repeat mutated client: %v", argv)
 				}
 			}
@@ -164,7 +164,10 @@ func TestHostReconciliationRepeat(t *testing.T) {
 			} else if err == nil || bad.Outcome != OutcomeIncomplete || bad.Client.Activation != string(domain.ActivationFailed) {
 				t.Fatalf("foreign listing did not fail activation: %+v %v", bad, err)
 			}
-			if bad.Client.Authentication != string(domain.AuthenticationNotChecked) || callbacks != wantCallbacks || effects != 1 {
+			// The earlier exact stdio handshake proved no native authentication
+			// is needed. A negative listing must preserve that fact, not replay
+			// the host side effect or turn its absence into a new attestation.
+			if bad.Client.Authentication != string(domain.AuthenticationNotRequired) || callbacks != wantCallbacks || effects != 1 {
 				t.Fatalf("negative observation escalated auth or repeated callback: %+v callbacks=%d effects=%d", bad, callbacks, effects)
 			}
 			if failFirst {

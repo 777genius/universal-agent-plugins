@@ -23,6 +23,10 @@ type preparedSetupProbe struct {
 	request domain.ActivationRequest
 }
 
+func (*preparedSetupProbe) PreparedSetupVerifierAvailable(domain.DetectedClient, domain.DeliveryPlan, string) bool {
+	return true
+}
+
 func (probe *preparedSetupProbe) CanCompletePreparedSetup(request domain.ActivationRequest, observed domain.ActivationOutcome) bool {
 	probe.calls++
 	probe.request = request

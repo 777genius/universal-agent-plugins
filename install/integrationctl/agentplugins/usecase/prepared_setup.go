@@ -5,6 +5,20 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
+func (service Service) preparedSetupVerifierAvailable(input AddInput, plan domain.DeliveryPlan) bool {
+	classifier, ok := service.Activator.(ports.PreparedSetupClassifier)
+	return ok && classifier.PreparedSetupVerifierAvailable(clonePreparedVerifierClient(input.Client), clonePreparedVerifierPlan(plan), input.BackendExecutable)
+}
+
+func (a profileActivator) PreparedSetupVerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, executable string) bool {
+	classifier, ok := a.ClientActivator.(ports.PreparedSetupClassifier)
+	if !ok || a.check() != nil {
+		return false
+	}
+	available := classifier.PreparedSetupVerifierAvailable(clonePreparedVerifierClient(client), clonePreparedVerifierPlan(plan), executable)
+	return a.check() == nil && available
+}
+
 func (session *repairSession) canCompletePreparedSetup(delivery domain.StagedDelivery, observed domain.ActivationOutcome) bool {
 	if observed.Activation != domain.ActivationPrepared || observed.Verification != domain.VerificationInstalled || observed.Policy != domain.PolicyAllowed {
 		return false

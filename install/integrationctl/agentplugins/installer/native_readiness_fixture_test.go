@@ -10,8 +10,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
+	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -40,7 +44,7 @@ func fixtureCodexDiscovery(command legacyports.Command, registeredIDs map[string
 	}
 	version := manifest.Version
 	if version == "" {
-		version = "0.0.0"
+		version = "1.0.0"
 	}
 	marketplaceBody, err := os.ReadFile(filepath.Join(command.Dir, ".agents", "plugins", "marketplace.json"))
 	if err != nil {
@@ -159,6 +163,7 @@ func fixtureProjectedMCP(root string) (map[string]map[string]any, error) {
 }
 
 func (r *recordingCodexRunner) RunDuplexToCompletion(_ context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+	r.calls = append(r.calls, append([]string(nil), command.Argv...))
 	return fixtureCodexDiscovery(command, map[string]bool{r.pluginID: r.installed}, exchange)
 }
 
@@ -179,7 +184,7 @@ func fixtureCodexEntry(id, root string, enabled bool) (map[string]any, error) {
 		return nil, errors.New("fixture plugin manifest differs from registration")
 	}
 	if manifest.Version == "" {
-		manifest.Version = "0.0.0"
+		manifest.Version = "1.0.0"
 	}
 	return map[string]any{"pluginId": id, "name": name, "marketplaceName": market, "installed": true, "enabled": enabled, "version": manifest.Version, "source": map[string]string{"source": "local", "path": root}}, nil
 }
@@ -226,4 +231,59 @@ func fixtureClaudeHealth(selector string, listings []map[string]any) ([]byte, er
 		return nil, fmt.Errorf("unsupported delivered fixture MCP transport %q", kind)
 	}
 	return []byte(fmt.Sprintf("%s:\n  Scope: Dynamic config (from command line)\n  Status: ✔ Connected\n  Type: %s\n", selector, kind)), nil
+}
+
+// Each explicit CODEX_HOME has an independent inert native registry. Value
+// listingRunner copies share only that profile's fixture client, as real CLI
+// subprocesses would; no real native client is launched.
+type fixtureCodexState struct {
+	mu    sync.Mutex
+	codex recordingCodexRunner
+}
+
+var fixtureCodexStates sync.Map
+
+func fixtureCodexStateForCommand(command legacyports.Command) (*fixtureCodexState, bool) {
+	for _, entry := range command.Env {
+		if profile, ok := strings.CutPrefix(entry, "CODEX_HOME="); ok && profile != "" {
+			state, _ := fixtureCodexStates.LoadOrStore(profile, &fixtureCodexState{})
+			return state.(*fixtureCodexState), true
+		}
+	}
+	return nil, false
+}
+func (r listingRunner) RunDuplexToCompletion(ctx context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+	state, ok := fixtureCodexStateForCommand(command)
+	if !ok {
+		return errors.New("fixture discovery has no selected Codex profile")
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	return state.codex.RunDuplexToCompletion(ctx, command, exchange)
+}
+func (r *groupHostReconciliationRunner) RunDuplexToCompletion(ctx context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+	r.calls = append(r.calls, append([]string(nil), command.Argv...))
+	return r.codex.RunDuplexToCompletion(ctx, command, exchange)
+}
+func (r *activationStopListingRunner) RunDuplexToCompletion(ctx context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+	return r.inner.RunDuplexToCompletion(ctx, command, exchange)
+}
+func (r *capturingRunner) RunDuplexToCompletion(ctx context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+	r.calls = append(r.calls, append([]string(nil), command.Argv...))
+	return r.inner.RunDuplexToCompletion(ctx, command, exchange)
+}
+
+func seedCodexProjectTrust(t *testing.T, profile, project string) {
+	t.Helper()
+	path := filepath.Join(profile, "config.toml")
+	deathWrite(t, path, "projects."+strconv.Quote(project)+".trust_level = 'trusted'\n")
+	// Seed the normal exact-file guard too, so the untouched-user assertion
+	// remains byte-for-byte strict throughout later confirmed operations.
+	handle, err := nativeconfig.New().BeginExactFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := handle.Close(); err != nil {
+		t.Fatal(err)
+	}
 }

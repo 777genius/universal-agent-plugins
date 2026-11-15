@@ -28,7 +28,12 @@ type listingRunner struct {
 	configRoot string
 }
 
-func (r listingRunner) Run(_ context.Context, command ports.Command) (ports.CommandResult, error) {
+func (r listingRunner) Run(ctx context.Context, command ports.Command) (ports.CommandResult, error) {
+	if state, ok := fixtureCodexStateForCommand(command); ok {
+		state.mu.Lock()
+		defer state.mu.Unlock()
+		return state.codex.Run(ctx, command)
+	}
 	root := filepath.Join(r.configRoot, "skills")
 	entries, err := os.ReadDir(root)
 	if os.IsNotExist(err) {

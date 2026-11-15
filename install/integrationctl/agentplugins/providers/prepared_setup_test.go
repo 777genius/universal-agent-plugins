@@ -13,8 +13,44 @@ func (setupIdentityOnly) ID() domain.ClientID { return "codex" }
 
 type setupOptIn struct {
 	setupIdentityOnly
-	calls int
-	allow bool
+	calls     int
+	allow     bool
+	available bool
+}
+
+func (adapter *setupOptIn) VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, executable string) bool {
+	return adapter.available && client.ClientID == adapter.ID() && plan.Scope == domain.ScopeProject && executable == "/native"
+}
+
+type setupVerifierOnly struct{ setupIdentityOnly }
+
+func (setupVerifierOnly) VerifierAvailable(domain.DetectedClient, domain.DeliveryPlan, string) bool {
+	return true
+}
+
+func TestPreparedSetupVerifierRequiresOptInAndExactScopedVerifier(t *testing.T) {
+	client := domain.DetectedClient{ClientID: "codex"}
+	plan := domain.DeliveryPlan{Scope: domain.ScopeProject}
+	registry, err := clients.NewRegistry(setupVerifierOnly{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if (Activator{Registry: registry}).PreparedSetupVerifierAvailable(client, plan, "/native") {
+		t.Fatal("legacy verifier gained setup opt-in")
+	}
+	adapter := &setupOptIn{available: true}
+	registry, err = clients.NewRegistry(adapter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := Activator{Registry: registry}
+	if !actor.PreparedSetupVerifierAvailable(client, plan, "/native") || adapter.calls != 0 {
+		t.Fatal("scoped read-only capability was not queried independently")
+	}
+	plan.Scope = domain.ScopeUser
+	if actor.PreparedSetupVerifierAvailable(client, plan, "/native") {
+		t.Fatal("another scope borrowed setup verification")
+	}
 }
 
 func (adapter *setupOptIn) CanCompletePreparedSetup(request domain.ActivationRequest, observed domain.ActivationOutcome) bool {

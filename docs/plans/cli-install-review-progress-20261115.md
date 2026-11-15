@@ -309,6 +309,13 @@ qualified without vendor credentials, model requests or silent trust changes.
   timestamp on uninstall. Only this validated metadata is normalized in a
   private bounded snapshot; the remaining digest must match the original
   receipt. Foreign entries, other versions and plugin data remain protected.
+  Retirement moves that verified version under an exclusive private
+  `.agentplugins-cache-retire-*/retired` directory and retains its bytes. It
+  does not recursively delete the retired tree: an already running native
+  client may still hold a cwd or file descriptor and append new data. The
+  active version path must be absent before retirement reports success, so a
+  same-identity reinstall can create a fresh native cache without adopting
+  retained bytes. No automatic cleanup command or new ownership state is added.
 - Pure normalized raw Skills have an explicit Codex/Claude no-authentication
   installation policy. This does not change arbitrary plugin, catalog, MCP or
   other-client authentication claims.

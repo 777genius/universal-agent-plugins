@@ -6667,6 +6667,17 @@ type recordingCodexRunner struct {
 func (r *recordingCodexRunner) Run(_ context.Context, cmd ports.Command) (ports.CommandResult, error) {
 	argv := append([]string(nil), cmd.Argv...)
 	r.calls = append(r.calls, argv)
+	if containsArgSeq(argv, "plugin", "remove") {
+		if r.pluginID != "" && argv[3] != r.pluginID {
+			return ports.CommandResult{}, errors.New("fixture removal selected another plugin")
+		}
+		r.installed = false
+		return ports.CommandResult{Stdout: []byte(`{"ok":true}`)}, nil
+	}
+	if containsArgSeq(argv, "plugin", "marketplace", "remove") {
+		delete(r.marketRoots, argv[4])
+		return ports.CommandResult{Stdout: []byte(`{"ok":true}`)}, nil
+	}
 	if containsArgSeq(argv, "plugin", "marketplace", "update") && r.marketRoots[argv[4]] == "" {
 		return ports.CommandResult{ExitCode: 1, Stderr: []byte("marketplace not configured or installed")}, nil
 	}

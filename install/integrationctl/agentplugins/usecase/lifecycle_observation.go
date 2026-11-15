@@ -195,7 +195,7 @@ func (service Service) verifyClientReadOnly(ctx context.Context, input AddInput,
 		delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}
 		return service.observePreparedProjectFiles(ctx, input, result.Plan, result.InstallationID, client, delivery)
 	}
-	if result.Plan.SelectedDelivery.IsZero() && !domain.ShouldReadOnlyVerifyForScope(input.Client.ClientID, input.Scope, input.BackendExecutable, input.InstallIntent) && !service.confirmedPreparedUserObservation(input, result.Plan, client) {
+	if result.Plan.SelectedDelivery.IsZero() && !domain.ShouldReadOnlyVerifyForScope(input.Client.ClientID, input.Scope, input.BackendExecutable, input.InstallIntent) && !service.preparedSetupVerifierAvailable(input, result.Plan) && !service.confirmedPreparedUserObservation(input, result.Plan, client) {
 		return domain.ActivationOutcome{}, nil
 	}
 	delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}

@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -267,4 +269,17 @@ func (r *dependencyClaudeListing) fixtureCodexPluginEntry(id, name, market strin
 		version = "0.0.0"
 	}
 	return map[string]any{"pluginId": id, "name": name, "marketplaceName": market, "version": version, "source": map[string]string{"source": "local", "path": root}, "installed": true, "enabled": true}, nil
+}
+
+func (r *dependencyClaudeListing) RunDuplexToCompletion(_ context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+	r.calls++
+	return savedCodexDiscovery(command, r.codexIDs, exchange)
+}
+
+func (r *dependencyFixtureRunner) RunDuplexToCompletion(ctx context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+	r.calls++
+	if r.id != domain.ClientCodex {
+		return fmt.Errorf("unexpected native fixture completion client %s", r.id)
+	}
+	return r.claude.RunDuplexToCompletion(ctx, command, exchange)
 }
