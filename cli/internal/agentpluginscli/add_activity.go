@@ -64,7 +64,7 @@ func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opt
 		return err
 	}
 	if loaded.cleanup != nil {
-		defer loaded.cleanup()
+		defer func() { _ = loaded.cleanup() }()
 	}
 	return runAddManyLoaded(ctx, cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected), false)
 }

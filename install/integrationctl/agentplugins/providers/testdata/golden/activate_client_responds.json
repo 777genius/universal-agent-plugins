@@ -46,22 +46,32 @@
         "plugin",
         "list",
         "--json"
+      ],
+      [
+        "\u003croot\u003e/bin/claude",
+        "plugin",
+        "list",
+        "--json"
       ]
     ],
-    "Error": "",
+    "Error": "claude MCP approval requires a verified delivery",
     "Outcome": {
-      "Activation": "active",
+      "Activation": "failed",
       "ActivationAttested": false,
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
-      "LocalActions": null,
+      "LocalActions": [
+        "retry exact Claude Code MCP approval"
+      ],
       "LocalEntryObservation": null,
       "NativeEffect": "",
       "NativeObjects": null,
       "Policy": "allowed",
-      "UserActions": null,
-      "Verification": "installation_verified"
+      "UserActions": [
+        "retry client activation and verify client visibility"
+      ],
+      "Verification": "failed"
     }
   },
   "cline": {
@@ -300,10 +310,16 @@
     }
   },
   "opencode": {
-    "Commands": [],
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/opencode",
+        "debug",
+        "config"
+      ]
+    ],
     "Error": "",
     "Outcome": {
-      "Activation": "active",
+      "Activation": "prepared",
       "ActivationAttested": false,
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
@@ -314,7 +330,9 @@
       "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
-        "restart OpenCode to load the installed plugin"
+        "restart OpenCode to load the installed plugin",
+        "OpenCode user configuration is installed; effective config, native skill discovery, permissions and MCP initialization remain unobserved; start OpenCode in the neutral selected user profile and inspect debug config, debug skill and mcp list",
+        "OpenCode merges ancestor, user, custom-directory, inline and managed configuration; preserved higher-priority settings or same-name skills can shadow the managed project components"
       ],
       "Verification": "installation_verified"
     }

@@ -143,3 +143,20 @@ func TestCursorCompletionPropagatesUnclosedProbeMetadata(t *testing.T) {
 		t.Fatalf("parent cancellation lost: %v", err)
 	}
 }
+
+func TestCursorApprovalRefusesPolicyDirectoryAlias(t *testing.T) {
+	request, kernel := cursorApprovalFixture(t)
+	foreign := t.TempDir()
+	if err := os.Symlink(foreign, filepath.Join(request.Client.ConfigRoot, "projects")); err != nil {
+		t.Skip(err)
+	}
+	runner := &cursorApprovalRunner{}
+	env := clients.Env{NativeConfig: kernel, Runner: runner, LookupExecutable: func(string) (string, error) { return "/fake/cursor-agent", nil }}
+	if err := approveCursorMCP(context.Background(), env, request, "audit"); err == nil {
+		t.Fatal("approval followed a foreign policy directory alias")
+	}
+	entries, err := os.ReadDir(foreign)
+	if err != nil || len(entries) != 0 || len(runner.commands) != 0 {
+		t.Fatal("policy refusal changed foreign data or started native code")
+	}
+}

@@ -2,6 +2,7 @@ package providers_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -23,6 +24,9 @@ func projectGeminiRequest(t *testing.T) (domain.ActivationRequest, string, strin
 		projectGeminiWrite(t, filepath.Join(root, "settings.json"), "{\n // preserve foreign settings\n \"mcpServers\": {\"foreign\": {\"url\":\"https://foreign.test/mcp\"}}, \"theme\":\"foreign\"\n}\n")
 		projectGeminiWrite(t, filepath.Join(root, "skills", "foreign", "SKILL.md"), "foreign skill\n")
 	}
+	// These cases isolate component ownership with exact workspace trust
+	// already configured; trust creation is covered by the client contract.
+	projectTrustFixture(t, filepath.Join(user, "trustedFolders.json"), fmt.Sprintf("{%q:\"TRUST_FOLDER\"}\n", projectA))
 	client := domain.DetectedClient{ClientID: domain.ClientGemini, ConfigRoot: user, Status: domain.DetectionDetected}
 	target, err := domain.NewTargetContext(domain.ScopeProject, projectA, user)
 	if err != nil {

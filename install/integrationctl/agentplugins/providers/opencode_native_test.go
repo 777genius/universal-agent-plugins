@@ -474,7 +474,9 @@ func assertOpenCodeCommittedActivation(t *testing.T, outcome domain.ActivationOu
 	if err != nil {
 		t.Fatalf("committed activation returned error: %v", err)
 	}
-	if outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled || len(outcome.UserActions) < 1 {
+	// Committed configuration is successful even without a native observer;
+	// it must remain Prepared until native component discovery is confirmed.
+	if outcome.Activation != domain.ActivationPrepared || outcome.Verification != domain.VerificationInstalled || len(outcome.UserActions) < 1 {
 		t.Fatalf("committed activation outcome = %+v", outcome)
 	}
 	if !strings.Contains(outcome.UserActions[0], "committed") {

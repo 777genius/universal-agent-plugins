@@ -3,8 +3,9 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 	"io"
+
+	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 func (runner *unchangedSkillsRunner) RunDuplexToCompletion(_ context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
