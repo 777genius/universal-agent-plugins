@@ -144,7 +144,7 @@ func TestHostReconciliationRepeat(t *testing.T) {
 				t.Fatalf("no VerifyOnly listing: %v", runner.calls)
 			}
 			for _, argv := range runner.calls {
-				if !containsArgSeq(argv, "plugin", "list") && !(len(argv) == 2 && argv[1] == "app-server") {
+				if !(containsArgSeq(argv, "plugin", "list") || len(argv) == 2 && argv[1] == "app-server") {
 					t.Fatalf("repeat mutated client: %v", argv)
 				}
 			}

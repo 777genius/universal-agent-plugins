@@ -30,7 +30,8 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 		return outcome, nil
 	}
 	layout, err := openCodeActivationLayout(request)
-	if err != nil || (layout.Scope == domain.ScopeProject && openCodeProjectSkillAliases(layout, skills)) {
+	observable := err == nil && (layout.Scope != domain.ScopeProject || !openCodeProjectSkillAliases(layout, skills))
+	if !observable {
 		return outcome, nil
 	}
 	observed, err := openCodeCatalogsObserved(ctx, env, request, layout, skills, servers)

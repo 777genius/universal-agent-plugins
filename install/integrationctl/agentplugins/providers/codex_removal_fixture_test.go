@@ -8,10 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
-	"github.com/pelletier/go-toml/v2"
 )
 
 // This finite fixture models native CLI cleanup of only this request's exact
@@ -46,7 +47,7 @@ func codexRemovalRunner(t *testing.T, request domain.DeactivationRequest, alread
 			}
 		}
 		args := command.Argv[1:]
-		group, key := "", ""
+		var group, key string
 		switch {
 		case len(args) == 4 && args[0] == "plugin" && args[1] == "remove" && args[2] == pluginID && args[3] == "--json":
 			group, key = "plugins", pluginID

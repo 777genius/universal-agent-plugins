@@ -620,12 +620,13 @@ func TestPreparedInstallIdentitySurvivesPublicHandoff(t *testing.T) {
 						if facts.BindingID != binding.BindingID || facts.Scope != binding.Scope || facts.TargetPath != binding.TargetPath || facts.DataRoot != binding.DataRoot || facts.TreeDigest != binding.TreeDigest {
 							t.Errorf("callback differs from inspect: callback=%+v inspect=%+v", facts, binding)
 						}
-						wantActivation := domain.ActivationActive
-						if group && binding.ClientID == "codex" {
-							wantActivation = domain.ActivationManual
-						}
-						if binding.Materialization != string(domain.MaterializationMaterialized) || binding.Activation != string(wantActivation) {
+						if binding.Materialization != string(domain.MaterializationMaterialized) || binding.Activation != string(domain.ActivationActive) {
 							t.Errorf("binding not materialized/activated: %+v", binding)
+						}
+						// Both the single and grouped runners now provide the exact
+						// native discovery contract for this local stdio fixture.
+						if binding.ClientID == "codex" && (binding.Authentication != string(domain.AuthenticationNotRequired) || binding.Verification != string(domain.VerificationInstalled)) {
+							t.Errorf("Codex stdio readiness was not preserved through handoff: %+v", binding)
 						}
 					}
 					if !matched {

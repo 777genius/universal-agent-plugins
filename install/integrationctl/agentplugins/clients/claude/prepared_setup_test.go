@@ -38,6 +38,23 @@ func TestClaudePreparedCompletionRequiresKnownAutomaticIntactScope(t *testing.T)
 			t.Fatalf("unsupported completion admitted: %s", change)
 		}
 	}
+	for _, test := range []struct {
+		name, action string
+		allowed      bool
+	}{
+		{"legacy-user-precedence", (projectListObservation{state: projectListOtherSource}).action(), false},
+		{"legacy-disabled", (projectListObservation{state: projectListDisabled}).action(), false},
+		{"marketplace-disabled", "the owned Claude Code project plugin is disabled; review its enablement in Claude Code", false},
+		{"duplicate-native-name", "Claude Code does not expose one unique enabled plugin named demo; review same-name plugin precedence before using its MCP servers", false},
+		{"missing-workspace-trust", "the selected Claude Code project has no recorded workspace trust; retry its confirmed installation to finish exact project setup", true},
+		{"pending-mcp-approval", "Claude Code has not connected the selected MCP server plugin:demo:local; review its existing rejection, policy or authentication", true},
+	} {
+		observed := outcome
+		observed.UserActions = []string{test.action}
+		if got := New().CanCompletePreparedSetup(request, observed); got != test.allowed {
+			t.Fatalf("%s completion=%v, want %v", test.name, got, test.allowed)
+		}
+	}
 	request.Plan.Scope, request.Plan.TargetContext.Scope = domain.ScopeUser, domain.ScopeUser
 	request.Plan.TargetAnchor, request.Plan.TargetRoot = root, filepath.Join(root, "skills")
 	request.Plan.ActivePath = filepath.Join(root, "skills", "demo")
