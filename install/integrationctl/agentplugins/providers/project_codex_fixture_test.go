@@ -2,6 +2,7 @@ package providers_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -51,6 +52,14 @@ func newProjectCodexFixture(t *testing.T) projectCodexFixture {
 	for _, config := range []string{filepath.Join(f.user, "config.toml"), filepath.Join(f.a, ".codex", "config.toml"), filepath.Join(f.b, ".codex", "config.toml")} {
 		projectCodexWrite(t, config, "# foreign native policy\nmodel = 'foreign-model'\n[mcp_servers.foreign]\nurl='https://foreign.test/mcp' # keep server\n")
 	}
+	// Scope-isolation fixtures start with the selected project already trusted;
+	// dedicated client tests cover the separately authorized trust mutation.
+	userConfig := filepath.Join(f.user, "config.toml")
+	body, err := os.ReadFile(userConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectTrustFixture(t, userConfig, string(body)+fmt.Sprintf("\n[projects.%q]\ntrust_level='trusted'\n", f.a))
 	projectCodexWrite(t, filepath.Join(f.user, "plugins", "cache", "foreign", "keep.txt"), "user plugin cache\n")
 	for _, root := range []string{f.a, f.b} {
 		projectCodexWrite(t, filepath.Join(root, ".agents", "skills", "foreign", "SKILL.md"), "foreign repository skill\n")

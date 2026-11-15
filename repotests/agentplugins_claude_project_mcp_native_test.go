@@ -296,7 +296,7 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	f.requireForeign(t)
 	stages["install_and_foreign_mcp"] = nativeStage{Status: "passed", Reason: "UAP project skill install preserved exact foreign project MCP and disposable user/A/B configuration"}
 
-	claudeProjectRunScripted(t, f, f.project, true)
+	claudeTrustedRunScriptedProfile(t, f, f.project, true)
 	methods, err := os.ReadFile(events)
 	if err != nil || len(methods) > 2048 {
 		t.Fatal("native Claude stdio MCP methods absent/unbounded", err)
@@ -310,7 +310,7 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	}
 	stages["actual_native_tool_call"] = nativeStage{Status: "passed", Reason: "real pinned Claude project session invoked stdio tools/call exactly once and returned uap-pong to local scripted model"}
 
-	claudeProjectRunScripted(t, f, f.otherProject, false)
+	claudeTrustedRunScriptedProfile(t, f, f.otherProject, false)
 	afterB, err := os.ReadFile(events)
 	if err != nil || !bytes.Equal(afterB, methods) {
 		t.Fatal("trusted project B started project A MCP subprocess")
@@ -343,8 +343,7 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	f.foreign[profilePath] = nativeSHA(t, profilePath)
 	evidence["native_profile_baseline_refreshed_before_remove"] = true
 
-	c.succeed(t, "trusted-foreign-mcp-remove", "remove", commandsPluginName)
-	f.requireForeign(t)
+	claudeTrustedRemoveWithProfileDiagnostic(t, f, c, profile)
 	claudeProjectRunScripted(t, f, f.project, true)
 	afterRemoval, err := os.ReadFile(events)
 	if err != nil || len(afterRemoval) > 3072 {

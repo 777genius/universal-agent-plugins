@@ -149,7 +149,8 @@ func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (l
 		return legacyports.CommandResult{NoChildStarted: true}, fmt.Errorf("inert unavailable native listing")
 	}
 	r.calls++
-	if !reflect.DeepEqual(command.Argv[1:], []string{"plugin", "list", "--json"}) {
+	health := len(command.Argv) == 4 && command.Argv[1] == "mcp" && command.Argv[2] == "get"
+	if !health && !reflect.DeepEqual(command.Argv[1:], []string{"plugin", "list", "--json"}) {
 		return r.marketplaceCommand(command.Argv[1:])
 	}
 	listing := claudeSDKListing(r.t, r.user, "user")
@@ -173,6 +174,10 @@ func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (l
 	}
 
 	listing = append(listing, r.marketplaceListing()...)
+	if health {
+		body, err := claudeSDKHealth(command.Argv[3], listing)
+		return legacyports.CommandResult{Stdout: body}, err
+	}
 	body, err := json.Marshal(listing)
 	return legacyports.CommandResult{Stdout: body}, err
 }
@@ -200,4 +205,48 @@ func claudeSDKListing(t *testing.T, root, scope string) []map[string]any {
 		listing = append(listing, map[string]any{"id": fmt.Sprint(manifest["name"]) + "@skills-dir", "version": manifest["version"], "scope": scope, "enabled": true, "installPath": path})
 	}
 	return listing
+}
+
+func claudeSDKHealth(selector string, listings []map[string]any) ([]byte, error) {
+	parts := strings.Split(selector, ":")
+	if len(parts) != 3 || parts[0] != "plugin" || parts[1] == "" || parts[2] == "" {
+		return nil, fmt.Errorf("invalid fixture MCP selector")
+	}
+	matches := 0
+	var selected map[string]any
+	for _, row := range listings {
+		id, _ := row["id"].(string)
+		name, _, _ := strings.Cut(id, "@")
+		if name != parts[1] || row["enabled"] != true {
+			continue
+		}
+		root, _ := row["installPath"].(string)
+		body, err := os.ReadFile(filepath.Join(root, ".mcp.json"))
+		if err != nil {
+			return nil, err
+		}
+		var servers map[string]map[string]any
+		if err := json.Unmarshal(body, &servers); err != nil {
+			return nil, err
+		}
+		server, exists := servers[parts[2]]
+		if !exists {
+			return nil, fmt.Errorf("selected fixture plugin has no MCP server %q", parts[2])
+		}
+		selected = server
+		matches++
+	}
+	if matches != 1 {
+		return nil, fmt.Errorf("fixture MCP selector must resolve exactly once, got %d", matches)
+	}
+	kind, _ := selected["type"].(string)
+	if kind == "" {
+		if command, _ := selected["command"].(string); command != "" {
+			kind = "stdio"
+		}
+	}
+	if kind != "stdio" && kind != "http" && kind != "sse" {
+		return nil, fmt.Errorf("unsupported delivered fixture MCP transport %q", kind)
+	}
+	return []byte(fmt.Sprintf("%s:\n  Scope: Dynamic config (from command line)\n  Status: ✔ Connected\n  Type: %s\n", selector, kind)), nil
 }

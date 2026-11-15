@@ -34,6 +34,9 @@ func (session *repairSession) repairNative() (AddResult, error) {
 		}
 		return session.reapplyIntactNative(delivery)
 	}
+	if session.canCompletePreparedSetup(delivery, verified) {
+		return session.reapplyIntactNative(delivery)
+	}
 	return session.correctIntactLifecycle(verified)
 }
 

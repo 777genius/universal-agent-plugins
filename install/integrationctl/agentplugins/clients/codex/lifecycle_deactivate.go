@@ -12,10 +12,10 @@ import (
 
 var _ clients.RemovalAttestationPolicy = (*Adapter)(nil)
 
-// RequiresExternalUninstalled preserves Codex's user-plugin external-removal
-// contract, including plugins that were prepared but never activated.
-func (*Adapter) RequiresExternalUninstalled(_ clients.Env, request domain.DeactivationRequest) bool {
-	return request.TargetContext.Scope != domain.ScopeProject
+// RequiresExternalUninstalled keeps a manual fallback only when native cleanup
+// cannot run. Confirmed CLI-backed removal uses the exact managed namespace.
+func (*Adapter) RequiresExternalUninstalled(env clients.Env, request domain.DeactivationRequest) bool {
+	return request.TargetContext.Scope != domain.ScopeProject && !shared.HasClientCLI(env, request.BackendExecutable)
 }
 
 // Deactivate removes the managed Codex plugin and marketplace after the
@@ -66,8 +66,37 @@ func deactivateConfirmedCodex(ctx context.Context, env clients.Env, request doma
 			return outcome, err
 		}
 	}
+	if err := verifyCodexNativeRemoval(ctx, env, request, marketplace); err != nil {
+		outcome.ArtifactRemovalAllowed = false
+		return outcome, err
+	}
 	outcome.ExternalRemovalComplete = true
 	return outcome, nil
+}
+
+func verifyCodexNativeRemoval(ctx context.Context, env clients.Env, request domain.DeactivationRequest, marketplace string) error {
+	listed, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "list", "--json")
+	if err != nil {
+		return shared.NativeProbeFailure(listed, err)
+	}
+	if CodexRegistryFinding(listed.Stdout, request.DeclaredName, marketplace, true) != clients.RegistryClear {
+		return fmt.Errorf("codex did not confirm exact managed plugin absence")
+	}
+	present, err := ManagedCodexPluginEntryPresent(request.Client.ConfigRoot, request.DeclaredName, marketplace)
+	if err != nil {
+		return err
+	}
+	if present {
+		return fmt.Errorf("codex retained the managed plugin enablement entry")
+	}
+	registered, err := ManagedCodexMarketplaceRegistered(request.Client.ConfigRoot, marketplace, request.ManagedArtifactPath)
+	if err != nil {
+		return err
+	}
+	if registered {
+		return fmt.Errorf("codex retained the managed marketplace source")
+	}
+	return nil
 }
 
 func deactivateCodexWithoutCLI(outcome domain.DeactivationOutcome, request domain.DeactivationRequest, marketplace string, registered, pluginEntryPresent bool) (domain.DeactivationOutcome, error) {

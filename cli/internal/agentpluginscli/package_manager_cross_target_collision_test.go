@@ -52,7 +52,7 @@ func pmAdversarialCrossTargetForeignSkill(t *testing.T) {
 	if err != nil || view.Recovery.Required {
 		t.Fatalf("failed multi-target operation left an uninspectable recovery state: %+v %v", view.Recovery, err)
 	}
-	codexActive := false
+	codexPrepared := false
 	for _, installation := range view.Installations {
 		for _, binding := range installation.Bindings {
 			if binding.Owner == nil || binding.Owner.Alias != "a" {
@@ -64,8 +64,9 @@ func pmAdversarialCrossTargetForeignSkill(t *testing.T) {
 					t.Fatalf("foreign Gemini Skill was falsely reported installed: %+v", binding)
 				}
 			case "codex":
-				if binding.Activation == "active" && binding.Verification == "installation_verified" {
-					codexActive = true
+				pmArchiveCodexRemotePrepared(t, binding, "a")
+				if binding.Materialization == "materialized" && binding.Verification == "installation_verified" {
+					codexPrepared = true
 					if got := dependencyRead(t, filepath.Join(binding.TargetPath, "marker.txt")); got != pmArchiveMarker("a") {
 						t.Fatalf("Codex partial binding has incorrect source bytes: %q", got)
 					}
@@ -81,7 +82,7 @@ func pmAdversarialCrossTargetForeignSkill(t *testing.T) {
 	if len(view.EnvironmentReceipts) != 0 && !facts["partial"] {
 		t.Fatalf("failed installation with persisted receipts was not marked partial: %v", facts)
 	}
-	if codexActive {
+	if codexPrepared {
 		owned := false
 		for _, receipt := range view.EnvironmentReceipts {
 			if receipt.ClientID == "codex" && receipt.Alias == "a" {
@@ -108,8 +109,8 @@ func pmAdversarialCrossTargetForeignSkill(t *testing.T) {
 		t.Fatalf("locked retry did not converge both client targets: %+v", bindings)
 	}
 	facts = readDependencyStatusTestFacts(t, fixture.run(t, "deps", "status", "--format", "json"))
-	if facts["partial"] || facts["not_synced"] || facts.hasMismatch() {
-		t.Fatalf("successful mixed-target retry still reports incomplete installation: %v", facts)
+	if !facts["activation_prepared"] || !facts["auth_unverified"] || facts["partial"] || facts["not_synced"] || facts.hasMismatch() {
+		t.Fatalf("mixed-target retry must retain remote Codex readiness without agreement drift: %v", facts)
 	}
 	pmArchiveAssertEqual(t, "retry changed unrelated user data", userDataBefore,
 		freshRestoreFiles(t, userData))

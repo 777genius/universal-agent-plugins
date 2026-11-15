@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -97,7 +98,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 	for _, action := range actions {
 		if action.Action == environment.ActionUnchanged {
 			if err := adapter.verifyUnchangedProjection(ctx, action); err != nil {
-				return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+				return nil, &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
 			}
 			continue
 		}
@@ -107,7 +108,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		}
 		prepared, err := adapter.Prepare(ctx, action)
 		if err != nil {
-			return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+			return nil, &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
 		}
 		plan := prepared.Plan()
 		if adapter.previewExternalUninstalled != nil && action.Action == environment.ActionRemove && plan.RequiresExternalUninstalled {
@@ -116,7 +117,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		if adapter.previewPaths != nil {
 			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
-		adapter.recordDependencyComponents(action, plan)
+		adapter.recordDependencyReview(action, plan)
 
 		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
 			updates[action.Alias] = prepared
@@ -176,7 +177,19 @@ func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context
 	return ensureSelectedProjectVersions(ctx, adapter.app, adapter.opts, targets, adapter.detected)
 }
 
-func (adapter *dependencyInstaller) recordDependencyComponents(action dependencyAction, plan installer.Plan) {
+func (adapter *dependencyInstaller) recordDependencyReview(action dependencyAction, plan installer.Plan) {
+	if adapter.previewWarnings != nil {
+		for _, warning := range plan.Delivery.Warnings {
+			switch warning {
+			case catalogSchemaOnlyWarning, catalogNotTestedWarning, catalogRuntimeNotTestedWarning:
+				continue
+			}
+			message := reviewWarningText(warning)
+			if !slices.Contains(*adapter.previewWarnings, message) {
+				*adapter.previewWarnings = append(*adapter.previewWarnings, message)
+			}
+		}
+	}
 	opts := adapter.opts
 	if opts.dependencyComponents == nil {
 		opts.dependencyComponents = map[string][]domain.ComponentDecision{}

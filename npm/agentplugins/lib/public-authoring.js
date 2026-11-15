@@ -69,7 +69,7 @@ function validateRelease(product, packageRoot, target, read = json, inputBytes) 
     "engines", "publishConfig", "files", "bin", "scripts", "private", ...(product === "agentplugins" ? ["os", "cpu"] : [])], "public package");
   const closure = ["LICENSE", "README.md", "package.json", `bin/${product}.js`, "bin/package.json", "lib/package.json",
     "lib/platform.js", "lib/verifier.js", "lib/public-authoring.js", "scripts/package.json", "scripts/dual-authoring-candidate.js",
-    product === "agentplugins" ? "lib/bootstrap.js" : "lib/install.js", "public-release.json", "release-manifest.json"];
+    ...(product === "agentplugins" ? ["lib/bootstrap.js", "lib/bootstrap-progress.js"] : ["lib/install.js"]), "public-release.json", "release-manifest.json"];
   if (v2) closure.push("native-inputs.json");
   if (v2 || pkg.private === false) closure.push("lib/public-authoring-contract.js", "lib/public-authoring-input.js");
   if (v2 && (pkg.private !== false || (product === "agentplugins" &&

@@ -3,20 +3,82 @@
 import asyncio
 import copy
 from contextlib import closing
+import errno
+import json
 import os
 from pathlib import Path
 import shutil
 import signal
 import sqlite3
+import stat
 import subprocess
 import sys
 import tempfile
 import textwrap
 import time
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
+from runpy import run_path
 
 import codex_runtime_audit as audit
+
+
+class RemotionTemporaryRootTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="remotion-root-inert-")
+        self.addCleanup(self.temporary.cleanup)
+        self.base = Path(self.temporary.name).resolve(strict=True)
+        self.root = self.base / "owned"
+        self.root.mkdir()
+        self.handoff = run_path(str(Path(__file__).with_name(
+            "remotion_windows_long_temp_e2e.py")))["physical_temp_root"]
+
+    def test_same_object_lexical_alias_uses_physical_root_before_baseline(self):
+        # A real same-object lexical alias; this is not a Windows 8.3 proof.
+        (self.base / "spelling").mkdir()
+        alias = self.base / "spelling" / ".." / self.root.name
+        before = self.root.lstat()
+        with self.assertRaisesRegex(ValueError, "Codex audit directory is redirected"):
+            audit._real_directory(alias)
+        physical = self.handoff(alias)
+        self.assertEqual(physical, self.root, "fresh TEMP spelling did not retain its physical object")
+        self.assertTrue(os.path.samestat(before, audit._real_directory(physical)))
+        self.assertEqual(self.root.lstat(), before)
+        with self.assertRaisesRegex(ValueError, "Codex audit directory is redirected"):
+            audit._real_directory(alias)
+
+    def test_resolving_to_another_real_directory_refuses_original_identity(self):
+        foreign = self.base / "foreign"
+        foreign.mkdir()
+        original_resolve = Path.resolve
+
+        def redirected(path, *args, **kwargs):
+            return foreign if path == self.root else original_resolve(path, *args, **kwargs)
+
+        with patch.object(Path, "resolve", redirected):
+            with self.assertRaisesRegex(ValueError, "differs from the created original"):
+                self.handoff(self.root)
+        self.assertTrue(self.root.is_dir() and foreign.is_dir())
+
+    def test_original_reparse_or_symlink_metadata_refuses_before_resolving(self):
+        original_lstat = Path.lstat
+        for member in (self.root, self.base):
+            for kind in ("reparse", "symlink"):
+                with self.subTest(member=member.name, kind=kind):
+                    def marked(path):
+                        info = original_lstat(path)
+                        if path != member:
+                            return info
+                        return SimpleNamespace(st_mode=(info.st_mode if kind == "reparse"
+                            else stat.S_IFLNK | stat.S_IMODE(info.st_mode)),
+                            st_file_attributes=0x400 if kind == "reparse" else 0,
+                            st_reparse_tag=0)
+
+                    with patch.object(Path, "lstat", marked), patch.object(Path, "resolve") as resolve:
+                        with self.assertRaisesRegex(ValueError, "ancestor is redirected"):
+                            self.handoff(self.root)
+                        resolve.assert_not_called()
 
 
 class CodexRuntimeStateTest(unittest.TestCase):
@@ -169,6 +231,9 @@ class CodexNativeQualificationTest(unittest.TestCase):
         self.project = Path(self.temporary.name).resolve()
         self.selected = self.project / ".agents/skills/selected/SKILL.md"
         self.foreign = self.project / ".agents/skills/foreign-neighbor/SKILL.md"
+        for path in (self.selected, self.foreign):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("inert native inventory fixture\n")
         self.listing = {"data": [{"cwd": str(self.project), "errors": [], "skills": [
             {"name": "selected", "path": str(self.selected), "scope": "repo", "enabled": True, "pluginId": None},
             {"name": "foreign-neighbor", "path": str(self.foreign), "scope": "repo", "enabled": True, "pluginId": None},
@@ -215,6 +280,24 @@ class CodexNativeQualificationTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.verify(listing)
 
+    def test_samefile_hardlinks_at_another_native_location_do_not_qualify(self):
+        self.verify(self.listing)
+        with tempfile.TemporaryDirectory() as temporary:
+            elsewhere = Path(temporary).resolve() / self.selected.name
+            renamed = self.selected.with_name("different-skill.md")
+            for linked in (elsewhere, renamed):
+                with self.subTest(path=str(linked)):
+                    os.link(self.selected, linked)
+                    try:
+                        self.assertTrue(linked.samefile(self.selected))
+                        listing = copy.deepcopy(self.listing)
+                        listing["data"][0]["skills"][0]["path"] = str(linked)
+                        with self.assertRaises(ValueError):
+                            self.verify(listing)
+                    finally:
+                        linked.unlink()
+        self.verify(self.listing)
+
     def test_public_ready_requires_exact_native_states(self):
         self.assertTrue(audit.public_skill_ready(self.added, self.matches, "selected"))
         repeat = copy.deepcopy(self.added)
@@ -232,6 +315,117 @@ class CodexNativeQualificationTest(unittest.TestCase):
                 added = copy.deepcopy(self.added)
                 added[key] = value
                 self.assertFalse(audit.public_skill_ready(added, self.matches, "selected"))
+
+
+class CodexSkillProfileGuardTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.case = Path(self.temporary.name).resolve()
+        self.home, self.project = self.case / "home", self.case / "project"
+        self.profile = self.home / ".codex"
+        for path in (self.home, self.profile, self.project, self.case / "tmp"):
+            path.mkdir()
+        self.foreign = self.project / ".agents/skills/foreign-neighbor/SKILL.md"
+        self.foreign.parent.mkdir(parents=True)
+        self.foreign.write_text("independently owned fixture\n", encoding="utf-8")
+        self.selected = self.project / ".agents/skills/selected/SKILL.md"
+        # Mock only the finite native exchange. Constructor, four-phase guard,
+        # exact inventory checks and complete SQLite reads remain real.
+        observer = patch.object(audit, "_exchange", side_effect=self.discover)
+        self.exchange = observer.start()
+        self.addCleanup(observer.stop)
+        self.observer = audit.CodexRuntimeAudit(
+            Path(sys.executable), self.case, self.home, self.project, {}, "selected", self.foreign)
+        self.original = self.observer.config_bytes
+
+    async def discover(self, binary, project, profile, environment):
+        self.assertEqual(binary, Path(sys.executable))
+        self.assertEqual(project, self.project)
+        self.assertEqual(profile, self.profile)
+        self.assertEqual(environment["CODEX_HOME"], str(self.profile))
+        database = self.home / ".local/state/codex-sqlite/state_5.sqlite"
+        if not database.exists():
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("CREATE TABLE fixture_rows (id INTEGER PRIMARY KEY, value TEXT)")
+                connection.execute("INSERT INTO fixture_rows VALUES (1, 'unchanged')")
+                connection.commit()
+        skills = [{"name": "foreign-neighbor", "path": str(self.foreign),
+                   "scope": "repo", "enabled": True, "pluginId": None}]
+        if self.selected.exists():
+            skills.append({"name": "selected", "path": str(self.selected),
+                           "scope": "repo", "enabled": True, "pluginId": None})
+        return {"data": [{"cwd": str(self.project), "errors": [], "skills": skills}]}
+
+    def test_raw_skill_lifecycle_requires_unchanged_profile_without_trust(self):
+        baseline = copy.deepcopy(self.observer.baseline)
+        self.selected.parent.mkdir()
+        self.selected.write_text("inert selected Skill\n", encoding="utf-8")
+        self.assertTrue(self.observer.checkpoint("installed", True))
+        self.assertTrue(self.observer.checkpoint("repeat", True))
+        self.selected.unlink()
+        self.assertTrue(self.observer.checkpoint("removed", False))
+        self.assertEqual(self.exchange.call_count, 4)
+        self.assertEqual(self.observer.config.read_bytes(), self.original)
+        self.assertEqual(self.observer.baseline, baseline)
+        self.assertEqual(self.foreign.read_text(encoding="utf-8"), "independently owned fixture\n")
+        observations = self.observer.evidence()["observations"]
+        self.assertEqual([row["phase"] for row in observations],
+                         ["before-install", "installed", "repeat", "removed"])
+        self.assertEqual([row["selected_skill_present"] for row in observations], [False, True, True, False])
+        self.assertTrue(all(row["foreign_skill_present"] and row["native_exit_code"] == 0
+                            and row["runtime_integrity_verified"] and row["runtime_semantics_unchanged"]
+                            and set(row["runtime_files_fully_read"]) == {"state_5.sqlite"}
+                            for row in observations))
+
+    def test_all_unexpected_profile_bytes_fail_before_or_after_discovery(self):
+        trust = ("\n[projects." + json.dumps(str(self.project)) + ']\ntrust_level = "trusted"\n').encode()
+        cases = {
+            "selected trust": self.original + trust,
+            "formatting": self.original + b"\n",
+            "unknown preference": self.original + b'model = "foreign"\n',
+            "runtime changed": self.original.replace(b"codex-sqlite", b"foreign-sqlite"),
+            "runtime omitted": b"",
+        }
+        calls = self.exchange.call_count
+        for name, body in cases.items():
+            with self.subTest(name=name):
+                self.observer.config.write_bytes(body)
+                with self.assertRaisesRegex(ValueError, "runtime configuration changed"):
+                    self.observer.checkpoint("refused", False)
+                self.assertEqual(self.exchange.call_count, calls)
+                self.observer.config.write_bytes(self.original)
+                self.observer.guard()
+
+        async def mutate_during_discovery(*args):
+            listing = await self.discover(*args)
+            self.observer.config.write_bytes(self.original + trust)
+            return listing
+
+        with patch.object(audit, "_exchange", side_effect=mutate_during_discovery):
+            with self.assertRaisesRegex(ValueError, "runtime configuration changed"):
+                self.observer.checkpoint("changed-during-discovery", False)
+        self.assertEqual(len(self.observer.observations), 1)
+
+    def test_redirected_configuration_is_rejected_without_a_native_process(self):
+        foreign = self.case / "foreign-config.toml"
+        self.observer.config.rename(foreign)
+        calls = self.exchange.call_count
+        os.link(foreign, self.observer.config)
+        try:
+            with self.assertRaisesRegex(ValueError, "exclusively linked"):
+                self.observer.checkpoint("hardlinked-config", False)
+            self.assertEqual(self.exchange.call_count, calls)
+        finally:
+            self.observer.config.unlink()
+        try:
+            self.observer.config.symlink_to(foreign)
+        except OSError as error:
+            self.skipTest(str(error))
+        with self.assertRaises(ValueError):
+            self.observer.checkpoint("redirected-config", False)
+        self.assertEqual(self.exchange.call_count, calls)
+        self.assertEqual(foreign.read_bytes(), self.original)
 
 
 def process_running(pid):
@@ -268,6 +462,48 @@ def process_running(pid):
 
 
 class CodexNativeProcessCleanupTest(unittest.TestCase):
+    def observed_exit(self, exit_code, stderr):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            profile = root / "profile"
+            profile.mkdir()
+            # Valid finite protocol replies isolate the exit/diagnostic gate;
+            # this real process fixture is not native Codex discovery evidence.
+            script = textwrap.dedent("""
+                import json, os, sys
+                first = json.loads(sys.stdin.readline())
+                print(json.dumps({'id': first['id'], 'result': {
+                    'codexHome': os.environ['CODEX_HOME'], 'userAgent': 'agentplugins/0.153.4 (fixture)'}}), flush=True)
+                json.loads(sys.stdin.readline())
+                second = json.loads(sys.stdin.readline())
+                print(json.dumps({'id': second['id'], 'result': {'data': []}}), flush=True)
+                sys.stdin.read()
+            """)
+            script += f"sys.stderr.buffer.write(bytes.fromhex({stderr.hex()!r}))\n"
+            script += f"sys.stderr.buffer.flush()\nraise SystemExit({exit_code})\n"
+            (root / "app-server").write_text(script, encoding="utf-8")
+            environment = {key: value for key, value in os.environ.items()
+                           if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR"}}
+            environment.update(HOME=str(root), USERPROFILE=str(root), CODEX_HOME=str(profile))
+            return asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment))
+
+    def test_nonzero_exit_still_refuses_with_observed_diagnostic(self):
+        self.assertEqual(self.observed_exit(0, b""), {"data": []})
+        with self.assertRaises(ValueError) as raised:
+            self.observed_exit(7, b"")
+        self.assertIn("did not exit cleanly: exit_code=7, stderr_bytes=0, stderr_prefix=b''", str(raised.exception))
+
+    def test_stderr_still_refuses_with_bounded_escaped_diagnostic(self):
+        stderr = b"\x1b[31mfirst\n" + b"x" * 4096 + b"omitted-tail"
+        with self.assertRaises(ValueError) as raised:
+            self.observed_exit(0, stderr)
+        message = str(raised.exception)
+        self.assertIn(f"exit_code=0, stderr_bytes={len(stderr)}", message)
+        self.assertIn("\\x1b[31mfirst\\n", message)
+        self.assertNotIn("\x1b", message)
+        self.assertNotIn("omitted-tail", message)
+        self.assertLess(len(message), 4 * 2048 + 160)
+
     def test_exited_launcher_with_child_held_pipes_cannot_pass_or_leak(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -294,9 +530,35 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
             environment.update(HOME=str(root), USERPROFILE=str(root), CODEX_HOME=str(profile))
             child_pid = None
             started = time.monotonic()
+            processes, pipes = [], []
+            start_native = audit._start_native
+
+            async def capture_owned_pipes(*args):
+                process, job = await start_native(*args)
+                processes.append(process)  # Prevent GC from supplying cleanup.
+                for descriptor in (1, 2):
+                    pipe = process._transport.get_pipe_transport(descriptor).get_extra_info("pipe")
+                    pipes.append((descriptor, pipe, pipe.fileno()))
+                return process, job
+
+            async def exercise_fault():
+                with patch.object(audit, "_start_native", side_effect=capture_owned_pipes):
+                    with self.assertRaises(TimeoutError):
+                        await audit._exchange(Path(sys.executable), root, profile, environment)
+                self.assertEqual([descriptor for descriptor, _, _ in pipes], [1, 2])
+                # Check at the observer boundary, before asyncio.run closes the
+                # loop or garbage collection can close a retained pipe object.
+                for descriptor, pipe, owned_fd in pipes:
+                    with self.subTest(descriptor=descriptor):
+                        with self.assertRaises(ValueError):
+                            pipe.fileno()
+                        if os.name != "nt":
+                            with self.assertRaises(OSError) as closed:
+                                os.fstat(owned_fd)
+                            self.assertEqual(closed.exception.errno, errno.EBADF)
+
             try:
-                with self.assertRaises(TimeoutError):
-                    asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment))
+                asyncio.run(exercise_fault())
                 import json
                 pids = json.loads((root / "owned-pids.json").read_text())
                 child_pid = pids["child"]

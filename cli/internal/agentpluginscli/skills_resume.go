@@ -3,8 +3,8 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
-	"fmt"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -16,21 +16,56 @@ import (
 func prepareSkillsResumes(ctx context.Context, adapter *dependencyInstaller, view installer.Inspection, actions []dependencyAction, paths map[string]string) error {
 	for i, action := range actions {
 		binding, exact := unchangedSkillsBinding(view, action, adapter.app.environmentID(), string(adapter.app.scope()), paths[action.Alias+"\x00"+action.ClientID])
-		if !exact || !skillsResumeCandidate(binding) {
+		if !exact {
+			continue
+		}
+		resume := skillsResumeCandidate(binding)
+		if !resume {
+			var err error
+			resume, err = skillsReadySetupNeedsRepair(ctx, adapter, action, binding)
+			if err != nil {
+				return &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
+			}
+		}
+		if !resume {
 			continue
 		}
 		resumed, plan, err := prepareSkillsResume(ctx, adapter, action)
 		if err != nil {
-			return fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+			return &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
 		}
 		// Unknown authentication alone never authorizes a mutation. The current
 		// native planner must positively admit credential-free installation.
-		if binding.Activation == string(domain.ActivationActive) && plan.Delivery.Authentication != string(domain.AuthenticationNotRequired) {
+		if binding.Activation == string(domain.ActivationActive) && binding.Authentication == string(domain.AuthenticationNotChecked) && plan.Delivery.Authentication != string(domain.AuthenticationNotRequired) {
 			continue
 		}
 		actions[i] = resumed
 	}
 	return nil
+}
+
+func skillsReadySetupNeedsRepair(ctx context.Context, adapter *dependencyInstaller, action dependencyAction, binding installer.InspectedBinding) (bool, error) {
+	if !unchangedSkillsLifecycleReady(binding) {
+		return false, nil
+	}
+	if _, supported := clients.As[clients.PreparedSetupCompleter](adapter.app.ClientRegistry, domain.ClientID(action.ClientID)); !supported {
+		return false, nil
+	}
+	// Capability presence admits only a reviewed repair candidate. After
+	// acceptance the core asks that client to classify the actual fresh native
+	// outcome before any setup effect. A saved Active value is never proof.
+	pin := *action.Package
+	action.Package = &pin
+	coherent, err := managementNativeBindingCoherent(ctx, adapter, action)
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	if errors.Is(err, installer.ErrPlanChanged) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || domain.IsUnclosedClientProbe(err) {
+		return false, err
+	}
+	// Unavailable observation does not authorize setup. Preserve the existing
+	// unchanged-but-unverified result rather than inventing a Prepared outcome.
+	return err == nil && !coherent, nil
 }
 
 func skillsResumeCandidate(binding installer.InspectedBinding) bool {
@@ -76,8 +111,17 @@ func prepareSkillsResumeRepair(ctx context.Context, adapter *dependencyInstaller
 		return installer.Plan{}, err
 	}
 	defer func() { _ = prepared.Close() }()
-	_, err = adapter.app.Installer.VerifyPreparedProjection(ctx, prepared)
-	return prepared.Plan(), err
+	projectionAndRegistrationComplete, err := adapter.app.Installer.VerifyPreparedProjection(ctx, prepared)
+	if err != nil {
+		return installer.Plan{}, err
+	}
+	if !projectionAndRegistrationComplete {
+		// A prepared CLI registration can be incomplete while the immutable
+		// package and repair authority remain valid. Keep the explicit repair
+		// in review; only its accepted native result may qualify readiness.
+		return prepared.Plan(), nil
+	}
+	return prepared.Plan(), nil
 }
 
 func skillsProjectionRefreshRequired(err error) bool {

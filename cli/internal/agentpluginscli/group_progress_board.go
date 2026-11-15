@@ -11,6 +11,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
@@ -54,11 +55,11 @@ type groupProgressBoard struct {
 }
 
 func startGroupProgressBoard(app App, opts *options, selected []domain.DetectedClient) *groupProgressBoard {
-	if opts.format != "human" || opts.plain || !app.Terminal || len(selected) == 0 || os.Getenv("TERM") == "dumb" {
+	if opts.format != "human" || !app.Terminal || len(selected) == 0 {
 		return nil
 	}
 	writer := app.errorOutput()
-	if !terminaltheme.IsTerminal(terminaltheme.Unwrap(writer)) {
+	if terminalprompts.DetectMode(app.input(), app.output(), writer, opts.plain) != terminalprompts.Rich {
 		return nil
 	}
 	return newGroupProgressBoard(writer, selected, app.scope())

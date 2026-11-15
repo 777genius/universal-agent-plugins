@@ -2,12 +2,12 @@ package agentpluginscli
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminalprompts"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -40,7 +40,7 @@ func startSkillsProgressBoard(app App, opts *options, actions []SkillsAction) *s
 		}
 	}
 	progress.board = configuredGroupProgressBoard(app.errorOutput(), clients, app.scope(), func(board *groupProgressBoard) {
-		board.forcePlain = opts.plain || os.Getenv("TERM") == "dumb" || !terminaltheme.IsTerminal(terminaltheme.Unwrap(app.errorOutput()))
+		board.forcePlain = terminalprompts.DetectMode(app.input(), app.output(), app.errorOutput(), opts.plain) != terminalprompts.Rich
 		for i := range board.rows {
 			for _, item := range progress.items {
 				if item.ClientID == string(board.rows[i].id) {

@@ -43,7 +43,7 @@ These are classifications of the existing state machine, not new persisted activ
 | Claude Code | Project Skills and plugin projection | Workspace trust, /plugin, /mcp, reload/restart |
 | OpenCode | .opencode/skills, opencode.json or opencode.jsonc | Effective v1 **or** v2 config, native MCP status, no silent generation switch |
 | Gemini CLI | .gemini/skills and .gemini/settings.json | Workspace trust, Skills discovery, MCP status |
-| GitHub Copilot CLI | .github/skills and project MCP config | CLI trust and fresh project session |
+| GitHub Copilot CLI | .github/skills, project MCP config and remembered selected-folder trust after confirmed installation | Fresh project session, effective MCP discovery and real tool call |
 | Cursor | .cursor/skills and project MCP | Editor trust, native server status |
 | Pi | .pi/extensions, .pi/skills and .pi/mcp.json | Explicit Pi trust, fresh extension loading and real MCP tool |
 | Kimi Code | .kimi-code/skills and .kimi-code/mcp.json | Correct selected Git root, native loaded Skill |
@@ -53,6 +53,16 @@ These are classifications of the existing state machine, not new persisted activ
 | VS Code | .github/skills and .vscode/mcp.json | Folder trust, explicit MCP activation |
 
 No vendor executable, provider authentication or model is started by the new readiness matrix. File presence alone never implies effective discovery.
+
+Copilot project installation discloses remembered folder trust in its existing
+review. Confirmation (or `--yes`) adds only the selected canonical project to the
+selected Copilot profile's `config.json` `trustedFolders`; `COPILOT_HOME` is
+respected. Tool permissions and other settings are preserved. A later ordinary
+`copilot` launch can use that remembered trust without a separate folder prompt.
+Removing a plugin retains this user choice. Doctor remains read-only; revoked
+trust or an older installation can be restored by a confirmed installation.
+This describes the source change in [#935](https://github.com/777genius/universal-agent-plugins/pull/935),
+not availability in an already published CLI release.
 
 ## Bounded Codex file audit
 

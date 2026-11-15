@@ -17,8 +17,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: vscode-native-research-${{ github.ref }}
-  cancel-in-progress: true
+  group: vscode-native-research-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   research:

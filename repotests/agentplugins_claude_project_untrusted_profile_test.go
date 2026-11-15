@@ -88,3 +88,33 @@ func TestClaudeUntrustedNativeProfileAllowsOnlyUsageChanges(t *testing.T) {
 		t.Fatal("native baseline profile disappeared without refusal")
 	}
 }
+
+func TestClaudeNativeProfileAllowsOnlyExactSelectedTrustGrant(t *testing.T) {
+	for _, test := range []struct {
+		name, before, after string
+		invalid             bool
+	}{
+		{"existing false", `{"projects":{"/A":{"hasTrustDialogAccepted":false},"/B":{"hasTrustDialogAccepted":false}},"foreign":1}`, `{"projects":{"/A":{"hasTrustDialogAccepted":true},"/B":{"hasTrustDialogAccepted":false}},"foreign":1}`, false},
+		{"new entry", `{"userID":"native"}`, `{"userID":"native","projects":{"/A":{"hasTrustDialogAccepted":true}}}`, false},
+		{"existing metadata", `{"projects":{"/A":{"metadata":1}}}`, `{"projects":{"/A":{"metadata":1,"hasTrustDialogAccepted":true}}}`, false},
+		{"wrong root", `{}`, `{"projects":{"/A-other":{"hasTrustDialogAccepted":true}}}`, true},
+		{"other project", `{"projects":{"/B":{"hasTrustDialogAccepted":false}}}`, `{"projects":{"/A":{"hasTrustDialogAccepted":true},"/B":{"hasTrustDialogAccepted":true}}}`, true},
+		{"extra entry", `{}`, `{"projects":{"/A":{"hasTrustDialogAccepted":true},"/B":{}}}`, true},
+		{"extra selected field", `{}`, `{"projects":{"/A":{"hasTrustDialogAccepted":true,"extra":1}}}`, true},
+		{"foreign mutation", `{"foreign":1}`, `{"foreign":2,"projects":{"/A":{"hasTrustDialogAccepted":true}}}`, true},
+		{"malformed trust", `{}`, `{"projects":{"/A":{"hasTrustDialogAccepted":"true"}}}`, true},
+		{"duplicate trust", `{}`, `{"projects":{"/A":{"hasTrustDialogAccepted":false,"hasTrustDialogAccepted":true}}}`, true},
+		{"revoked existing false", `{"projects":{"/A":{"hasTrustDialogAccepted":false}}}`, `{"projects":{"/A":{}}}`, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			f := &claudeProjectNativeFixture{base: &claudeNativeFixture{ConfigDir: t.TempDir()}, project: "/A", untrustedProfile: true, untrustedProfileBaseline: []byte(test.before)}
+			nativeWrite(t, filepath.Join(f.base.ConfigDir, ".claude.json"), []byte(test.after), 0600)
+			if err := f.checkUntrustedProfile(); (err != nil) != test.invalid {
+				t.Fatalf("exact selected trust validation error=%v, invalid=%v", err, test.invalid)
+			}
+			if string(f.untrustedProfileBaseline) != test.before {
+				t.Fatal("original native baseline changed")
+			}
+		})
+	}
+}

@@ -80,6 +80,19 @@ func codexNativeProjectInstall(t *testing.T, f *codexProjectNativeFixture, stage
 	t.Helper()
 	nativeAttempt(stages, "project_install", "project-add-installer.json")
 	added := f.run(t, "project-add", "add", f.base.Package, "--no-save")
+	outcome, observationErr := commandsTargetOutcome(added)
+	activation, _ := outcome["activation"].(map[string]any)
+	if observationErr != nil || activation["activation"] != string(domain.ActivationActive) || activation["verification"] != string(domain.VerificationInstalled) || activation["activation_attested"] == true {
+		// A human repeat captures private setup guidance without changing the
+		// public JSON contract. It does not prove the first attempt's cause.
+		diagnostic, diagnosticErr := nativeCommand(t, f.base, f.installer, "project-install-repeat-diagnostic",
+			"add", f.base.Package, "--target", "codex", "--scope", "project",
+			"--project-root", f.base.Project, "--yes", "--no-save", "--format", "human")
+		if len(diagnostic) > 8192 {
+			diagnostic = diagnostic[len(diagnostic)-8192:]
+		}
+		t.Logf("repeat diagnostic only (not first-attempt cause): %v; stdout=%q", diagnosticErr, diagnostic)
+	}
 	codexNativeProjectSkillsReady(t, added)
 	if err := commandsPlanSelection(added, "echo", "wizard"); err != nil {
 		t.Fatal(err)

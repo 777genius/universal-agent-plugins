@@ -1,0 +1,111 @@
+name: Cancel closed PR checks
+
+# This workflow runs trusted base code only; never checkout the PR head.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+  pull-requests: read
+
+jobs:
+  cancel-obsolete:
+    name: Cancel obsolete PR runs
+    # Merged PR-head CI may be used as release evidence; clean abandoned PRs only.
+    if: github.event.pull_request.base.repo.full_name == github.repository && github.event.pull_request.merged == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Cancel only ordinary checks linked to the closed PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REPOSITORY_ID: ${{ github.event.pull_request.head.repo.id }}
+          BASE_REPOSITORY_ID: ${{ github.event.pull_request.base.repo.id }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_OWNER: ${{ github.event.pull_request.head.repo.owner.login }}
+          CLOSED_AT: ${{ github.event.pull_request.closed_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${HEAD_REPOSITORY_ID}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${BASE_REPOSITORY_ID}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${HEAD_OWNER}" =~ ^[A-Za-z0-9_.-]+$ ]]
+          [[ -n "${HEAD_REF}" ]]
+          jq -en --arg date "${CLOSED_AT}" '$date | fromdateiso8601 | type == "number"' >/dev/null
+
+          # Event snapshots may be stale if a closed PR is reopened before this job.
+          # A new close also gets a different timestamp; never clean its new runs.
+          still_closed() {
+            local state
+            state="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+            jq -e --argjson pr "${PR_NUMBER}" --argjson head "${HEAD_REPOSITORY_ID}" \
+              --argjson base "${BASE_REPOSITORY_ID}" --arg ref "${HEAD_REF}" \
+              --arg closed "${CLOSED_AT}" '
+              .number == $pr and .state == "closed" and .merged == false
+              and .closed_at == $closed and .head.ref == $ref
+              and .head.repo.id == $head and .base.repo.id == $base' <<< "${state}" >/dev/null
+          }
+          if ! still_closed; then
+            echo 'PR no longer matches the original unmerged close event; leaving its runs alone'
+            exit 0
+          fi
+
+          # GitHub may clear run.pull_requests after ANY PR closes, including
+          # same-repository PRs. Unlinked runs require a unique owner/branch
+          # association in this base repo, matching both repository IDs.
+          # Ambiguous or missing association leaves the run untouched.
+          head_unique=false
+          head_filter="$(jq -nr --arg value "${HEAD_OWNER}:${HEAD_REF}" '$value | @uri')"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=all&head=${head_filter}&per_page=100" \
+            > "${RUNNER_TEMP}/closed-pr-head-associations.json"
+          if jq -s -e --argjson pr "${PR_NUMBER}" --argjson head "${HEAD_REPOSITORY_ID}" \
+              --argjson base "${BASE_REPOSITORY_ID}" --arg ref "${HEAD_REF}" '
+              [ .[][] ] | length == 1 and .[0].number == $pr
+              and .[0].head.repo.id == $head and .[0].base.repo.id == $base
+              and .[0].head.ref == $ref' "${RUNNER_TEMP}/closed-pr-head-associations.json" >/dev/null; then
+            head_unique=true
+          fi
+
+          # Keep release/sign/deploy/scan evidence, even if triggered by a PR.
+          # List and validate ALL pages before ANY cancellation.
+          candidates="${RUNNER_TEMP}/closed-pr-candidates.txt"
+          : > "${candidates}"
+          for status in queued pending in_progress waiting requested; do
+            response="${RUNNER_TEMP}/closed-pr-${status}.json"
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&status=${status}&per_page=100" > "${response}"
+            jq -r --argjson pr "${PR_NUMBER}" --argjson head "${HEAD_REPOSITORY_ID}" \
+              --argjson base "${BASE_REPOSITORY_ID}" --arg branch "${HEAD_REF}" \
+              --argjson unique "${head_unique}" --arg closed "${CLOSED_AT}" '
+              .workflow_runs[]? | select(.event == "pull_request")
+              | select(.head_repository.id == $head)
+              | select(.path | type == "string" and startswith(".github/workflows/"))
+              | select((.path | test("release|publish|sign|deploy|checkpoint|skillspector"; "i")) | not)
+              | select((.created_at | fromdateiso8601) <= ($closed | fromdateiso8601))
+              | select(
+                  any(.pull_requests[]?;
+                      .number == $pr and .head.repo.id == $head and .base.repo.id == $base)
+                  or ($unique and (.pull_requests | type == "array" and length == 0) and .head_branch == $branch)
+                )
+              | .id' "${response}" >> "${candidates}"
+          done
+          sort -un "${candidates}" > "${RUNNER_TEMP}/closed-pr-unique.txt"
+          cancelled=0
+          while IFS= read -r run_id; do
+            [[ "${run_id}" =~ ^[1-9][0-9]*$ ]] || exit 1
+            # Rechecking before each cancellation protects a reopened PR.
+            if ! still_closed; then
+              echo 'PR reopened or re-closed during cleanup; stopping'
+              exit 0
+            fi
+            if gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel"; then
+              cancelled=$((cancelled + 1))
+            else
+              # A check can finish between listing and cancellation.
+              current="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+              [[ "${current}" == completed ]] || exit 1
+            fi
+          done < "${RUNNER_TEMP}/closed-pr-unique.txt"
+          echo "Cancelled ${cancelled} obsolete ordinary check runs for PR #${PR_NUMBER}"

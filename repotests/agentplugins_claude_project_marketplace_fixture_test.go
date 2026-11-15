@@ -135,7 +135,7 @@ func validateClaudeMarketplaceRow(row map[string]any, f *claudeProjectNativeFixt
 func claudeProjectInitializeUntrusted(t *testing.T, f *claudeProjectNativeFixture) {
 	t.Helper()
 	// Keep this guard armed even when the first native list creates no profile.
-	// A later initialization may create one, but must never grant project trust.
+	// Only a confirmed install may later grant trust to the exact selected project.
 	f.untrustedProfile = true
 	claudeProjectMarketplaceObservation(t, f, "untrusted-baseline", "", "", false)
 	// First SDK initialization adds native profile metadata. Prime it before
@@ -150,7 +150,7 @@ func claudeProjectInitializeUntrusted(t *testing.T, f *claudeProjectNativeFixtur
 		t.Fatal(err)
 	}
 	// This profile was created by the native client, not authored by the fixture.
-	// Keep its original bytes; only native plugin usage metadata may later vary.
+	// Keep its original bytes; only plugin usage and exact selected-project trust may vary.
 	f.untrustedProfileBaseline = body
 }
 
@@ -165,7 +165,11 @@ func (f *claudeProjectNativeFixture) checkUntrustedProfile() error {
 	if err != nil {
 		return err
 	}
-	current, err := claudeUntrustedProfileContent(body)
+	selected := ""
+	if len(f.untrustedProfileBaseline) != 0 {
+		selected = filepath.ToSlash(f.project)
+	}
+	current, err := claudeUntrustedProfileContent(body, selected)
 	if err != nil || len(f.untrustedProfileBaseline) == 0 {
 		return err
 	}
@@ -173,13 +177,14 @@ func (f *claudeProjectNativeFixture) checkUntrustedProfile() error {
 	if err != nil {
 		return err
 	}
+	normalizeClaudeSelectedTrust(original, current, selected)
 	if !reflect.DeepEqual(original, current) {
-		return fmt.Errorf("native untrusted profile changed outside plugin usage metadata")
+		return fmt.Errorf("native untrusted profile changed outside plugin usage and exact selected-project trust")
 	}
 	return nil
 }
 
-func claudeUntrustedProfileContent(body []byte) (map[string]any, error) {
+func claudeUntrustedProfileContent(body []byte, selected ...string) (map[string]any, error) {
 	value, err := shared.DecodeUniqueJSONValue(json.NewDecoder(bytes.NewReader(body)))
 	profile, ok := value.(map[string]any)
 	if err != nil || !json.Valid(body) || !ok {
@@ -199,14 +204,39 @@ func claudeUntrustedProfileContent(body []byte) (map[string]any, error) {
 	if !ok {
 		return nil, fmt.Errorf("native untrusted profile projects are malformed")
 	}
-	for _, value := range projects {
+	for project, value := range projects {
 		entry, ok := value.(map[string]any)
 		if !ok {
 			return nil, fmt.Errorf("native untrusted project entry is malformed")
 		}
-		if trusted, exists := entry["hasTrustDialogAccepted"]; exists && trusted != false {
+		if trusted, exists := entry["hasTrustDialogAccepted"]; exists && trusted != false && (len(selected) != 1 || selected[0] == "" || project != selected[0] || trusted != true) {
 			return nil, fmt.Errorf("credential-free installation fixture unexpectedly trusts a project or has malformed trust metadata")
 		}
 	}
 	return profile, nil
+}
+
+// Normalize only the authorized preference; every other field stays comparable.
+func normalizeClaudeSelectedTrust(original, current map[string]any, selected string) {
+	if selected == "" {
+		return
+	}
+	projects, _ := current["projects"].(map[string]any)
+	entry, _ := projects[selected].(map[string]any)
+	if entry == nil || entry["hasTrustDialogAccepted"] != true {
+		return
+	}
+	beforeProjects, _ := original["projects"].(map[string]any)
+	before, existed := beforeProjects[selected].(map[string]any)
+	if trust, exists := before["hasTrustDialogAccepted"]; exists {
+		entry["hasTrustDialogAccepted"] = trust
+	} else {
+		delete(entry, "hasTrustDialogAccepted")
+	}
+	if !existed && len(entry) == 0 {
+		delete(projects, selected)
+	}
+	if _, existed := original["projects"]; !existed && len(projects) == 0 {
+		delete(current, "projects")
+	}
 }

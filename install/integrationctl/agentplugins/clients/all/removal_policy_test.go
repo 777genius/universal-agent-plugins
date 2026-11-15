@@ -29,7 +29,7 @@ type removalPolicyCase struct {
 // The Copilot cases compare its new observation with the unchanged shared path.
 func TestRemovalPoliciesMatchExistingDeactivationBranches(t *testing.T) {
 	cases := []removalPolicyCase{
-		{name: "codex active", client: domain.ClientCodex, executable: true, runner: true, activation: domain.ActivationActive, required: true},
+		{name: "codex automatic", client: domain.ClientCodex, executable: true, runner: true, activation: domain.ActivationActive},
 		{name: "codex never activated", client: domain.ClientCodex, required: true},
 		{name: "grok automatic", client: domain.ClientGrok, executable: true, runner: true},
 		{name: "grok missing executable", client: domain.ClientGrok, runner: true, required: true},

@@ -11,7 +11,7 @@ import (
 
 // The actual public Git transport supplies two inert Agent Skills; no native
 // command or trust setting is injected into the installation under test.
-const nativeRawProjectSkillsSource = "777genius/universal-agent-plugins@b5d80336b53397be5bbb72c84f680e5885a6ac0d//tests/fixtures/uap_apm/skills"
+const nativeRawProjectSkillsSource = "https://github.com/777genius/universal-agent-plugins/tree/b5d80336b53397be5bbb72c84f680e5885a6ac0d/tests/fixtures/uap_apm/skills"
 
 var nativeRawProjectSkills = map[string]string{
 	"benchmark-note":      "53e39c4f1dcaa4c2ed1196654678ede091b71fb837f77a1beb07ba556abc1198",

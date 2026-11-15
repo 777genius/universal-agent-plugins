@@ -113,7 +113,9 @@ observed evidence. User-scope native passes do not qualify project behavior.
 
 Pinned observations and per-client limits are preserved in the
 [implementation and research records](plans/project-install-e2e/client-plans.md).
-Claude's observed untrusted suppression, Codex's trust-gated configuration,
+Current-source confirmed installation can complete exact project trust and
+selected local MCP approvals for qualified clients, then reobserve their native
+state. Explicit user rejection and managed/session policy remain authoritative.
 Cline's process-wide source selection and Qoder's global native cache remain
-explicit restrictions. Installation does not grant trust or promise arbitrary
-user/admin/session configuration is overridden.
+explicit restrictions. See [native setup completion](NATIVE_SETUP_COMPLETION.md)
+for the scope and limits; this does not upgrade historical release evidence.

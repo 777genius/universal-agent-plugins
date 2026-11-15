@@ -35,6 +35,9 @@ const (
 type Request struct {
 	Scope       domain.InstallScope
 	ProjectRoot string `json:"-"`
+	// OnlinePreview permits read-only host probing during normal-operation
+	// review. The default Prepare contract remains offline and grants no effects.
+	OnlinePreview bool `json:"-"`
 	// Completion flags attest explicit host-observed lifecycle completion.
 	ActivationComplete, AuthComplete bool
 	physical                         map[domain.ClientID]domain.DetectedClient

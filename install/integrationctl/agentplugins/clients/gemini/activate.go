@@ -51,7 +51,7 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request d
 	if err != nil {
 		return outcome, err
 	}
-	return geminiProjectStatus(env, request, outcome)
+	return completeGeminiProject(ctx, env, request, outcome)
 }
 
 // Deactivate removes managed Gemini native objects.

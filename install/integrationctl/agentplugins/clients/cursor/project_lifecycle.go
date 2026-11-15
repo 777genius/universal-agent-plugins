@@ -67,6 +67,9 @@ func (adapter *Adapter) activateProject(ctx context.Context, env clients.Env, re
 		outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
 		outcome.UserActions = shared.AppendUnique(outcome.UserActions, "Cursor project configuration is installed; native discovery, aliases, enablement, approvals, team policy and MCP initialization remain unobserved")
 	}
+	if err == nil && outcome.Verification == domain.VerificationInstalled {
+		outcome, err = completeCursorProjectMCP(ctx, env, request, outcome)
+	}
 	return outcome, err
 }
 

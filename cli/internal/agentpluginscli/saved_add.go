@@ -90,22 +90,10 @@ func resolveSavedAddContext(ctx context.Context, app App, opts *options, source 
 		}
 	} else {
 		var err error
-		pin, err = matchSavedRegistry(snapshot.Lock, source, opts.alias)
+		requirement, pin, alias, err = savedRegistryAddCandidate(snapshot, source, opts.alias)
 		if err != nil {
 			return environment.Requirement{}, environment.LockedPackage{}, err
 		}
-		alias = dependencyRootKey(snapshot.Requirements, snapshot.Lock, pin.Alias)
-		if alias != "" {
-			requirement = snapshot.Requirements.Dependencies[alias]
-			if requirement.Registry == nil && pin.Source.Registry != nil {
-				source := pin.Source.Registry
-				requirement = environment.Requirement{Alias: alias, Registry: &environment.RegistrySource{
-					Distribution: source.DistributionID,
-					Selector:     environment.Selector{Kind: environment.SelectorRelease, Value: fmt.Sprint(source.ReleaseSequence)},
-				}}
-			}
-		}
-
 	}
 	if alias != "" {
 		if opts.alias != "" && opts.alias != alias {
@@ -125,4 +113,24 @@ func resolveSavedAddContext(ctx context.Context, app App, opts *options, source 
 	}
 	requirement.Alias = alias
 	return requirement, pin, nil
+}
+
+func savedRegistryAddCandidate(snapshot environmentSnapshot, source, requestedAlias string) (environment.Requirement, environment.LockedPackage, string, error) {
+	pin, err := matchSavedRegistry(snapshot.Lock, source, requestedAlias)
+	if err != nil {
+		return environment.Requirement{}, environment.LockedPackage{}, "", err
+	}
+	alias := dependencyRootKey(snapshot.Requirements, snapshot.Lock, pin.Alias)
+	var requirement environment.Requirement
+	if alias != "" {
+		requirement = snapshot.Requirements.Dependencies[alias]
+		if requirement.Registry == nil && pin.Source.Registry != nil {
+			source := pin.Source.Registry
+			requirement = environment.Requirement{Alias: alias, Registry: &environment.RegistrySource{
+				Distribution: source.DistributionID,
+				Selector:     environment.Selector{Kind: environment.SelectorRelease, Value: fmt.Sprint(source.ReleaseSequence)},
+			}}
+		}
+	}
+	return requirement, pin, alias, nil
 }

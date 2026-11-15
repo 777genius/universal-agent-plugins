@@ -207,8 +207,19 @@ async def _start_native(binary, project, environment):
             elif process.returncode is None:
                 process.kill()  # The unreleased bootstrap has no native descendants.
         finally:
-            await asyncio.wait_for(process.wait(), 5)
+            try:
+                await asyncio.wait_for(process.wait(), 5)
+            finally:
+                await _close_native_transport(process)
         raise
+
+
+async def _close_native_transport(process):
+    # CPython Process has no public close API. Its owned subprocess transport
+    # closes all three pipe transports; one loop turn runs their close callbacks.
+    # Use this private adapter only after the bounded process cleanup/reap.
+    process._transport.close()
+    await asyncio.sleep(0)
 
 
 async def _finish_native(process, job, completed, readers):
@@ -225,10 +236,13 @@ async def _finish_native(process, job, completed, readers):
                     pass
             await asyncio.wait_for(process.wait(), 5)
     finally:
-        for reader in readers:
-            if not reader.done():
-                reader.cancel()
-        await asyncio.gather(*readers, return_exceptions=True)
+        try:
+            for reader in readers:
+                if not reader.done():
+                    reader.cancel()
+            await asyncio.gather(*readers, return_exceptions=True)
+        finally:
+            await _close_native_transport(process)
 
 
 async def _exchange(binary, project, profile, environment):
@@ -280,7 +294,10 @@ async def _exchange(binary, project, profile, environment):
             await tail
             stderr = await errors
             if process.returncode != 0 or stderr:
-                raise ValueError("Codex native discovery did not exit cleanly")
+                raise ValueError(
+                    "Codex native discovery did not exit cleanly: "
+                    f"exit_code={process.returncode}, stderr_bytes={len(stderr)}, "
+                    f"stderr_prefix={stderr[:2048]!r}")
             while _windows_active(job) if job is not None else _posix_group_active(process.pid):
                 await asyncio.sleep(.02)  # Still inside the same finite 15-second budget.
             completed = True
@@ -298,7 +315,17 @@ async def _exchange(binary, project, profile, environment):
 def _path_equal(value, expected):
     if not isinstance(value, str) or not Path(value).is_absolute():
         return False
-    return os.path.normcase(str(Path(value).resolve())) == os.path.normcase(str(expected))
+    path = Path(value)
+    try:
+        # Real Windows paths may have extended-length spelling. Directory/file
+        # identity admits that form without accepting redirected aliases.
+        return (not any(member.is_symlink() or member.is_junction()
+                        for member in (path, *path.parents))
+                and os.path.normcase(path.name) == os.path.normcase(expected.name)
+                and path.parent.samefile(expected.parent)
+                and path.samefile(expected))
+    except (OSError, ValueError):
+        return False
 
 
 def verify_skill_inventory(listing, project, identity, selected, foreign, present):

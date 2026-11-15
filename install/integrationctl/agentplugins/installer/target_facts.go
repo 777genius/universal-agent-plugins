@@ -32,22 +32,12 @@ func (e *Engine) knownTargetIndex(operation Operation, facts []TargetFacts) (map
 
 func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.DetectedClient, error) {
 	detected := map[domain.ClientID]domain.DetectedClient{}
-	add := func(client domain.DetectedClient) error {
-		if current, exists := detected[client.ClientID]; exists {
-			if current.ConfigRoot != client.ConfigRoot || current.ExecutablePath != client.ExecutablePath {
-				return fmt.Errorf("%w: conflicting paths for %s", ErrTargetFactsUnavailable, client.ClientID)
-			}
-			return nil
-		}
-		detected[client.ClientID] = client
-		return nil
-	}
 	if len(req.Targets) == 0 {
 		client, err := e.detectedClient(req)
 		if err != nil {
 			return nil, err
 		}
-		if err := add(client); err != nil {
+		if err := addDetectedClient(detected, client); err != nil {
 			return nil, err
 		}
 	} else {
@@ -60,7 +50,7 @@ func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.Detect
 			if err != nil {
 				return nil, err
 			}
-			if err := add(client); err != nil {
+			if err := addDetectedClient(detected, client); err != nil {
 				return nil, err
 			}
 		}
@@ -77,11 +67,22 @@ func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.Detect
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrTargetFactsUnavailable, err)
 		}
-		if err := add(client); err != nil {
+		if err := addDetectedClient(detected, client); err != nil {
 			return nil, err
 		}
 	}
 	return detected, nil
+}
+
+func addDetectedClient(detected map[domain.ClientID]domain.DetectedClient, client domain.DetectedClient) error {
+	if current, exists := detected[client.ClientID]; exists {
+		if current.ConfigRoot != client.ConfigRoot || current.ExecutablePath != client.ExecutablePath {
+			return fmt.Errorf("%w: conflicting paths for %s", ErrTargetFactsUnavailable, client.ClientID)
+		}
+		return nil
+	}
+	detected[client.ClientID] = client
+	return nil
 }
 
 // inspectedManagedPaths projects existing native ownership receipts for hosts

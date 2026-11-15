@@ -7,7 +7,7 @@ import (
 )
 
 // The historical selector now qualifies automatic project installation with
-// the pinned real Claude CLI. No trust, authentication or model call is needed.
+// the pinned real Claude CLI. Confirmed installation grants only exact project trust; no authentication or model call is needed.
 func TestAgentpluginsClaudeNativeProjectPreparedLifecycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CLAUDE_PROJECT_NATIVE_E2E") != "1" {
 		t.Skip("opt-in source project native client execution")
@@ -20,7 +20,7 @@ func TestAgentpluginsClaudeNativeProjectPreparedLifecycle(t *testing.T) {
 	}
 	evidence := claudeProjectNativeIdentity(t, f)
 	evidence["project_contract"] = "project_marketplace_installation_v1"
-	evidence["native_surface"] = "explicit scoped native marketplace install, enabled A/disabled B inventory and exact native Skill details; no trust/model/authentication or MCP initialization"
+	evidence["native_surface"] = "explicit scoped native marketplace install, enabled A/disabled B inventory and exact native Skill details; exact selected-project trust; no model/authentication or MCP initialization"
 	defer f.writeEvidence(t, evidence, stages)
 	claudeProjectInitializeUntrusted(t, f)
 	copyTree(t, commandsFixtureSource(t), f.base.PackageRoot)
@@ -29,6 +29,7 @@ func TestAgentpluginsClaudeNativeProjectPreparedLifecycle(t *testing.T) {
 	nativeAttempt(stages, "install", "add-installer.json")
 	added := c.succeed(t, "add", "add", c.pkg)
 	requireClaudeProjectActive(t, added)
+	requireClaudeSelectedProjectTrust(t, f)
 	if err := commandsPlanSelection(claudePreparedEnvelope(added), "echo", "wizard"); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +37,7 @@ func TestAgentpluginsClaudeNativeProjectPreparedLifecycle(t *testing.T) {
 	f.requireProjectSkills(t, managed, "echo")
 	claudeProjectMarketplaceObservation(t, f, "after-add", managed, "echo", true)
 	claudeProjectInitializedSkills(t, f, "after-add", []string{commandsPluginName + ":" + commandsGuideSkill, commandsPluginName + ":" + commandsSkill("echo")}, true)
-	stages["install"] = nativeStage{Status: "passed", Reason: "production add installed and activated the exact scoped native plugin without project trust", Artifacts: []string{"add-installer.json", "binding-after-add.json"}}
+	stages["install"] = nativeStage{Status: "passed", Reason: "production add installed and activated the exact scoped native plugin with exact selected-project trust", Artifacts: []string{"add-installer.json", "binding-after-add.json"}}
 	stages["native_skill_discovery"] = nativeStage{Status: "passed", Reason: "native plugin details expose exactly the installed selected Skills and their verified cached bytes"}
 	stages["command_skill_discovery"] = nativeStage{Status: "passed", Reason: "native plugin details expose the exact ordinary command rendered as a Skill"}
 	stages["explicit_command_withheld"] = nativeStage{Status: "passed", Reason: "the plan, owned files and native Skill inventory all withhold the explicit-only command"}
@@ -103,8 +104,20 @@ func TestAgentpluginsClaudeNativeProjectPreparedLifecycle(t *testing.T) {
 	}
 	claudeProjectMarketplaceObservation(t, f, "after-remove", managed, "", false)
 	claudeProjectInitializedSkills(t, f, "after-remove", []string{commandsPluginName + ":" + commandsGuideSkill, commandsPluginName + ":" + commandsSkill("wizard")}, false)
+	requireClaudeSelectedProjectTrust(t, f)
 	stages["remove"] = nativeStage{Status: "passed", Reason: "production removal withdrew the exact project registration and owned directory; native A/B inventories no longer contain it"}
 	f.requireForeign(t)
 	stages["project_scope_preservation"] = nativeStage{Status: "passed", Reason: "foreign user/cache/B bytes and A settings keys preserved; B disabled the A registration and refused its details"}
 	claudeNativeProjectRawSkills(t, f, stages)
+}
+
+func requireClaudeSelectedProjectTrust(t *testing.T, f *claudeProjectNativeFixture) {
+	t.Helper()
+	profile, err := readClaudeTrustedProfile(filepath.Join(f.base.ConfigDir, ".claude.json"))
+	content, parseErr := claudeUntrustedProfileContent(profile, filepath.ToSlash(f.project))
+	projects, _ := content["projects"].(map[string]any)
+	selected, _ := projects[filepath.ToSlash(f.project)].(map[string]any)
+	if err != nil || parseErr != nil || selected["hasTrustDialogAccepted"] != true {
+		t.Fatal("confirmed installation's exact project trust was not preserved", err, parseErr)
+	}
 }

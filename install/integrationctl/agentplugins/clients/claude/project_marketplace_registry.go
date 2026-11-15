@@ -35,6 +35,15 @@ func inspectClaudeProjectRegistry(ctx context.Context, body []byte, client domai
 			return clients.RegistryIndeterminate, err
 		}
 	}
+	if observed.sourceMissing {
+		if managed == nil || !registered {
+			return clients.RegistryIndeterminate, fmt.Errorf("the unavailable Claude source has no owned native registration")
+		}
+		if err := requireMissingClaudeProjectSource(plan.ActivePath); err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		return clients.RegistryExpected, nil
+	}
 	return claudeProjectRegistryFinding(body, client, plan, managed), nil
 }
 
@@ -140,8 +149,9 @@ func observeClaudeMarketplacePlugin(body []byte, name, physical, active, project
 }
 
 type claudeMarketplaceObservation struct {
-	state projectListState
-	cache string
+	state         projectListState
+	cache         string
+	sourceMissing bool
 }
 
 func inspectClaudeMarketplacePlugin(body []byte, name, physical, active, project, user, version string) claudeMarketplaceObservation {
@@ -207,6 +217,9 @@ func claudeMarketplaceCandidate(entry map[string]any, row projectListRow, q proj
 	}
 	if version != "" && observedVersion != version {
 		return claudeMarketplaceObservation{}
+	}
+	if row.enabled && claudeMarketplaceSourceMissing(entry, marketplace) {
+		return claudeMarketplaceObservation{state: projectListAbsent, cache: cache, sourceMissing: true}
 	}
 	enabled, valid := claudeMarketplaceFolderFields(entry, q.active, version, row.enabled)
 	if !valid {

@@ -47,6 +47,9 @@ func refineCodexProjectPlan(input clients.PlanInput, plan *domain.DeliveryPlan) 
 		return nil
 	}
 	shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, true)
+	if len(shared.SupportedMCPNames(*plan)) > 0 {
+		plan.Warnings = shared.AppendUnique(plan.Warnings, fmt.Sprintf("After confirmation, Codex may mark the exact project folder %q as trusted in the selected user profile. This persistent trust remains after removing the installed components.", plan.NativeRegistryRoot))
+	}
 	plan.UserActions = shared.AppendUnique(plan.UserActions, codexProjectSetupAction(*plan))
 	return nil
 }

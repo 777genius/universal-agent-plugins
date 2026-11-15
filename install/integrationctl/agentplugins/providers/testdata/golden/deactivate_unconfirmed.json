@@ -59,14 +59,12 @@
     "Commands": [],
     "Error": "",
     "Outcome": {
-      "Activation": "manual_activation_required",
-      "ArtifactRemovalAllowed": false,
-      "ExternalRemovalComplete": false,
+      "Activation": "not_required",
+      "ArtifactRemovalAllowed": true,
+      "ExternalRemovalComplete": true,
       "LocalActions": null,
       "NativeEffect": "",
-      "UserActions": [
-        "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
-      ]
+      "UserActions": null
     }
   },
   "copilot": {

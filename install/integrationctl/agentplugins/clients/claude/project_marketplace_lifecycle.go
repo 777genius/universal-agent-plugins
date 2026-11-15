@@ -56,8 +56,7 @@ func activateClaudeProjectMarketplace(ctx context.Context, env clients.Env, requ
 		return outcome, nil
 	}
 	if verifyClaudeProjectInstalled(ctx, request, body) == nil {
-		outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled
-		return outcome, nil
+		return finishClaudeMarketplaceTrust(env, request, outcome)
 	}
 	if request.VerifyOnly {
 		return fail(fmt.Errorf("%w: exact Claude project plugin content is not enabled", shared.ErrRecognizedNegativeEvidence))
@@ -74,8 +73,7 @@ func activateClaudeProjectMarketplace(ctx context.Context, env clients.Env, requ
 		return fail(err)
 	}
 	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
-	outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled
-	return outcome, nil
+	return finishClaudeMarketplaceTrust(env, request, outcome)
 }
 
 func claudeProjectInstallPreflight(ctx context.Context, env clients.Env, request domain.ActivationRequest, command legacyports.Command) ([]byte, bool, claudeMarketplaceObservation, error) {

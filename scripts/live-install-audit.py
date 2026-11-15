@@ -283,6 +283,28 @@ def snapshot(root):
     return found
 
 
+def snapshot_change_evidence(before, after):
+    """Describe existing snapshot differences without reading or exporting file bytes."""
+    changed = sorted(path for path in before.keys() | after.keys()
+                     if before.get(path) != after.get(path))
+    entries = [{"path": path[:2048], "path_truncated": len(path) > 2048,
+                "before": before.get(path), "after": after.get(path)}
+               for path in changed[:100]]
+    return {"total": len(changed), "omitted": max(0, len(changed) - len(entries)),
+            "entries": entries}
+
+
+def failed_case_diagnostics(row):
+    """Expose existing failed-case evidence in logs; never change qualification."""
+    keys = ("codex_public_add_ready", "codex_public_repeat_ready",
+            "repeat_native_unchanged", "repeat_native_changes", "repeat_verified",
+            "removal_verified", "sentinels_preserved")
+    evidence = {key: row[key] for key in keys if row.get(key) is not None}
+    if "error" in row:
+        evidence["error"] = str(row["error"])[:8192]
+    return evidence
+
+
 def scoped_snapshot(roots, *, snapshotter=None):
     """Record protected file and directory identities without following links."""
     roots = tuple(Path(root) for root in roots)
@@ -1958,6 +1980,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_list = None
     repeat_identity_ids = []
     repeat_native_unchanged = None
+    repeat_native_changes = None
     repeat_lock_unchanged = None
     repeat_project_unchanged = None
     repeat_verified = False
@@ -1990,7 +2013,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_runtime.checkpoint("repeat-installed", True)
             codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
                 repeat_add_json, repeat_matches, identity)
-        repeat_native_unchanged = snapshot(native_roots) == before_repeat_native
+        after_repeat_native = snapshot(native_roots)
+        repeat_native_unchanged = after_repeat_native == before_repeat_native
+        if not repeat_native_unchanged:
+            repeat_native_changes = snapshot_change_evidence(
+                before_repeat_native, after_repeat_native)
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
@@ -2234,6 +2261,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
+            "repeat_native_changes": repeat_native_changes,
             "repeat_lock_unchanged": repeat_lock_unchanged,
             "repeat_project_unchanged": repeat_project_unchanged,
             "repeat_verified": repeat_verified,
@@ -2469,6 +2497,8 @@ def main():
             save()
             line = {"target": args.target, "kind": args.kind, "index": i,
                     "status": result["status"]}
+            if result["status"] != "passed":
+                line.update(failed_case_diagnostics(result))
             if result["status"] == "incomplete-native-proof" and args.kind == "plugin":
                 line["observed_signed_release"] = result.get("signed_release_observation", [])
                 line["expected_signed_release"] = doc["signed_release_pins"].get(item)

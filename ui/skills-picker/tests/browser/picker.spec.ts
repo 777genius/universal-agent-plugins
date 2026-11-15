@@ -57,15 +57,15 @@ test('partial result limits file readiness to successful and unchanged targets',
 });
 
 for (const setupRequired of [false, true]) {
-  test(`completed files show ${setupRequired ? 'remaining setup' : 'verified native configuration; agent discovery unverified'} on desktop and mobile`, async ({ page }, testInfo) => {
+  test(`completed files show ${setupRequired ? 'remaining setup' : 'verified installation'} on desktop and mobile`, async ({ page }, testInfo) => {
     const state = await serveFixtures(page);
     const operation = await fixture<Operation>('operation');
     const summary = setupRequired
       ? 'Skill files installed. Some agents still need setup; check each result below.'
-      : 'Skill files and owned native configuration verified. Agent discovery and activation are not verified by this Skills flow.';
+      : 'Skills installation verified.';
     const message = setupRequired
       ? 'Files installed. Agent setup still needs verification; run agentplugins doctor for the next step.'
-      : 'The Skill files and owned native projection were verified. Agent-session discovery was not checked.';
+      : 'Skill installed and verified.';
     await page.route('**/api/v1/operations/*', (route) => route.fulfill({ json: {
       ...operation, total: 1, completed: 1, items: [{ ...operation.items[0], message }],
       diagnostics: setupRequired ? [{ code: 'NATIVE_SETUP_REQUIRED', severity: 'warning', message: 'Run agentplugins doctor to verify the installed Skills and see any remaining setup steps.' }] : [],
@@ -91,7 +91,7 @@ for (const setupRequired of [false, true]) {
       await expect(page.getByRole('status', { name: 'Skills readiness' })).toHaveClass(/neutral/);
       await expect(progress).not.toContainText('setup required');
       await expect(progress).not.toContainText('agentplugins doctor');
-      await expect(progress).toContainText('Agent-session discovery was not checked.');
+      await expect(progress).not.toContainText('Agent-session discovery was not checked.');
       await expect(progress).not.toContainText('detected by the agent');
     }
     const name = setupRequired ? 'setup' : 'ready';

@@ -309,6 +309,13 @@ qualified without vendor credentials, model requests or silent trust changes.
   timestamp on uninstall. Only this validated metadata is normalized in a
   private bounded snapshot; the remaining digest must match the original
   receipt. Foreign entries, other versions and plugin data remain protected.
+  Retirement moves that verified version under an exclusive private
+  `.agentplugins-cache-retire-*/retired` directory and retains its bytes. It
+  does not recursively delete the retired tree: an already running native
+  client may still hold a cwd or file descriptor and append new data. The
+  active version path must be absent before retirement reports success, so a
+  same-identity reinstall can create a fresh native cache without adopting
+  retained bytes. No automatic cleanup command or new ownership state is added.
 - Pure normalized raw Skills have an explicit Codex/Claude no-authentication
   installation policy. This does not change arbitrary plugin, catalog, MCP or
   other-client authentication claims.
@@ -351,3 +358,82 @@ qualified without vendor credentials, model requests or silent trust changes.
   their activity/error adaptation has been moved into existing cohesive helpers.
   Final hosted lint, full core, native lifecycle, terminal/browser visual checks
   and independent review must pass on the published candidate before merge.
+
+## Integrated setup and E2E corrections
+
+The existing review is the consent boundary for persistent project trust and
+selected MCP approval. Native warnings name the exact project or explain when a
+supported native MCP inspection starts all enabled servers in the selected
+profile/project. Skills and plugin review use the same warning path. No extra
+prompt, installer protocol or source restaging was added.
+
+- Pure Codex Skills discovery does not change trust or read project configuration.
+  Selected MCP discovery requires stable 0.162.0-or-newer metadata from the same
+  finite app-server process before sending the selected-server filter. Current
+  native matrix pins use official 0.162.0 archives and upstream SHA-256 digests.
+  The independent published/live npm 0.153.4 audit remains separately pinned.
+- Gemini and qualified OpenCode V1 defer native MCP connections in verify-only
+  mode. A fresh owned-state marker permits the existing reviewed repair path;
+  confirmation then allows the disclosed native startup behavior. OpenCode V2
+  and unknown profiles cannot enter the V1 observer.
+- Conditional trust/approval writes preserve typed native effects after failures,
+  including uncertain rollback. Subsequent probes stop on an uncertain effect.
+  Existing ownership, locks, receipts, deny policy and source pins remain required.
+- Terminal/browser copy says that installation was verified without claiming a
+  model turn. Concrete per-agent setup actions survive partial results and are
+  sanitized and deduplicated. Generic doctor advice is only a fallback.
+- Windows Remotion case roots normalize a short TEMP spelling only after a fresh
+  directory has been created and its canonical identity checked. The auditor's
+  strict path, configuration-byte and SQLite checks remain intact.
+- Native failure diagnostics retain the original failing assertion. A human
+  repeat is diagnostic only; it cannot convert the failed operation to success.
+  Repeat-state deltas expose bounded paths and digests, not file contents.
+
+### Qualification status for the integration candidate
+
+Before the execution environment disconnected, the local integration completed
+all eight golangci passes and the lint baseline, the npm suite passed 167 tests,
+and the Codex audit unit suite passed 22 tests. The full core run failed: it
+included unavailable local containment/socket capabilities and unresolved
+Codex fixture/golden mismatches. These results do not qualify the later source
+reconstruction.
+
+The 42556f4 CI evidence includes successful Windows native/PowerShell terminal
+flows and the ordinary browser suite. The separate native browser chain stopped
+before Apply because an unscoped locator matched the hidden sidebar. The
+candidate scopes the review and loading checks to the visible `.bottom-bar`;
+the native installation and inventory assertions remain required. Native Claude
+and Codex E2E, Linux terminal fallbacks and the live/Remotion audits exposed
+remaining failures. A native Codex initial install that stays Prepared still
+requires its private diagnostic cause; removing the later raw-Skill trust
+requirement is a separate integration correction. The Claude MCP removal
+foreign-profile mismatch also requires the
+actual native before/after evidence. No failure, skip, queued job or source-only
+review is recorded as an E2E pass.
+
+The execution environment was restored on 2026-11-15. The reconstructed candidate
+is checked separately at
+`/workspace/scratch/3e101078f946/uap-pr932-candidate`; the interrupted integration
+worktree remains untouched. From the candidate's `scripts` directory,
+`python3 -m unittest -v test_codex_runtime_audit test_live_install_audit_components`
+passed all 33 tests (23 Codex runtime-audit tests and 10 live-audit component
+tests) in 15.435 seconds, with zero skips. This includes the real orphan-process
+negative, bounded exit/stderr diagnostics, SQLite and exact profile-byte guards,
+and physical-root identity checks. The exact source hashes and full output are
+recorded under
+`/workspace/scratch/3e101078f946/candidate-qualification/python-audit/`.
+These focused Python results do not qualify a native client installation,
+Windows process execution, or the candidate's browser chain. Historical passes
+above are not transferred to this candidate.
+
+With the lock-identical cached dependency tree and TypeScript 7.0.2, the new
+candidate also passed `npm run typecheck`, `npm run test:model` (two tests, zero
+skips), and `npm run bundle:go`, all with exit code zero. The output is retained
+in `/workspace/scratch/3e101078f946/candidate-ui-validation.log`. Local browser
+startup remains blocked by `AF_UNIX` `EPERM`; the actual browser installation
+chain still requires its hosted run.
+
+The candidate reconstructed through Git objects must receive fresh compile,
+lint, core, native lifecycle and visual results on its own published commit.
+Independent source review covers the reconstructed changes; merge remains
+conditional on resolving actual failures and completing the required checks.

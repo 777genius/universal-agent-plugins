@@ -59,6 +59,7 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 	}
 	preview, err := e.previewHostedPackage(ctx, handle, svc, usecase.AddInput{
 		Envelope: handle.envelope, Client: handle.client, Scope: e.scope(), DryRun: true, Confirmed: false,
+		OnlinePreview:                    req.OnlinePreview,
 		PersistAuthoritativeObservations: e.persistObservations,
 		InstallationID:                   req.InstallationID, OperationID: req.OperationID, BackendExecutable: req.ClientExecutable,
 		OriginMode: snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(snapshot.Directory), Hints: hints,

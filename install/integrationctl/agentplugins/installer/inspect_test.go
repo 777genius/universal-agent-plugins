@@ -28,7 +28,12 @@ type listingRunner struct {
 	configRoot string
 }
 
-func (r listingRunner) Run(_ context.Context, _ ports.Command) (ports.CommandResult, error) {
+func (r listingRunner) Run(ctx context.Context, command ports.Command) (ports.CommandResult, error) {
+	if state, ok := fixtureCodexStateForCommand(command); ok {
+		state.mu.Lock()
+		defer state.mu.Unlock()
+		return state.codex.Run(ctx, command)
+	}
 	root := filepath.Join(r.configRoot, "skills")
 	entries, err := os.ReadDir(root)
 	if os.IsNotExist(err) {
@@ -56,6 +61,10 @@ func (r listingRunner) Run(_ context.Context, _ ports.Command) (ports.CommandRes
 			"id": name + "@skills-dir", "version": manifest["version"], "scope": "user",
 			"enabled": true, "installPath": path,
 		})
+	}
+	if len(command.Argv) == 4 && command.Argv[1] == "mcp" && command.Argv[2] == "get" {
+		body, err := fixtureClaudeHealth(command.Argv[3], listed)
+		return ports.CommandResult{Stdout: body}, err
 	}
 	body, err := json.Marshal(listed)
 	return ports.CommandResult{Stdout: body}, err

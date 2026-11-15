@@ -53,6 +53,10 @@ func TestClaudeProjectMarketplaceRemovalReplaysNativeAbsence(t *testing.T) {
 	if _, err := os.Lstat(cache); !os.IsNotExist(err) {
 		t.Fatalf("current owned cache survived: %v", err)
 	}
+	retired, err := filepath.Glob(filepath.Join(filepath.Dir(cache), ".agentplugins-cache-retire-*", "retired", ClaudeRuntimeDirectory, "skills", "first", "SKILL.md"))
+	if err != nil || len(retired) != 1 {
+		t.Fatalf("owned bytes were not retained in one private retirement: %v %v", retired, err)
+	}
 	for _, path := range siblings {
 		body, err := os.ReadFile(path)
 		if err != nil || string(body) != "unowned bytes" {
@@ -255,5 +259,93 @@ func assertClaudeRetirementFile(t *testing.T, path, expected string) {
 	body, err := os.ReadFile(path)
 	if err != nil || string(body) != expected {
 		t.Fatalf("retirement changed bytes at %s: got %q, want %q, err %v", path, body, expected, err)
+	}
+}
+
+func TestClaudeCacheRetirementRetainsWritesThroughPreexistingDirectoryAndFileHandles(t *testing.T) {
+	request, cache := claudeCachedRemoval(t)
+	parent, err := os.OpenRoot(filepath.Dir(cache))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = parent.Close() }()
+	before, err := parent.Stat(filepath.Base(cache))
+	if err != nil {
+		t.Fatal(err)
+	}
+	relative := filepath.Join(ClaudeRuntimeDirectory, "skills", "first")
+	writer, err := os.OpenRoot(filepath.Join(cache, relative))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = writer.Close() }()
+	existing, err := writer.OpenFile("SKILL.md", os.O_WRONLY|os.O_APPEND, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = existing.Close() }()
+	original, err := os.ReadFile(filepath.Join(cache, relative, "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	effect := domain.NativeEffectCommitted
+	var retained string
+	err = retireClaudeProjectCacheWithVerifier(t.Context(), request, cache, parent, before, &effect, func(ctx context.Context, request domain.DeactivationRequest, original, retired string) error {
+		if err := verifyClaudeRetiredCache(ctx, request, original, retired); err != nil {
+			return err
+		}
+		retained = retired
+		// The genuine pathname digest has finished. These handles were opened
+		// before retirement and still reach the same inode after its rename.
+		if _, err := existing.WriteString("\nlate append after verification\n"); err != nil {
+			return err
+		}
+		late, err := writer.OpenFile("foreign-after-verification.txt", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			return err
+		}
+		if _, err := late.WriteString("late foreign bytes"); err != nil {
+			_ = late.Close()
+			return err
+		}
+		return late.Close()
+	})
+	if err != nil || effect != domain.NativeEffectCommitted {
+		t.Fatalf("safe retirement failed: %s %v", effect, err)
+	}
+	if _, err := os.Lstat(cache); !os.IsNotExist(err) {
+		t.Fatalf("active version path survived retirement: %v", err)
+	}
+	assertClaudeRetirementFile(t, filepath.Join(retained, relative, "SKILL.md"), string(original)+"\nlate append after verification\n")
+	assertClaudeRetirementFile(t, filepath.Join(retained, relative, "foreign-after-verification.txt"), "late foreign bytes")
+}
+
+func TestClaudeCacheRetirementRetainsNewActiveReplacementAndRefusesSuccess(t *testing.T) {
+	request, cache := claudeCachedRemoval(t)
+	parent, err := os.OpenRoot(filepath.Dir(cache))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = parent.Close() }()
+	before, err := parent.Stat(filepath.Base(cache))
+	if err != nil {
+		t.Fatal(err)
+	}
+	effect := domain.NativeEffectCommitted
+	var retained string
+	err = retireClaudeProjectCacheWithVerifier(t.Context(), request, cache, parent, before, &effect, func(ctx context.Context, request domain.DeactivationRequest, original, retired string) error {
+		if err := verifyClaudeRetiredCache(ctx, request, original, retired); err != nil {
+			return err
+		}
+		retained = retired
+		claudeMarketplaceWrite(t, filepath.Join(original, "foreign.txt"), "new active native cache")
+		return nil
+	})
+	if err == nil || effect != domain.NativeEffectUncertain {
+		t.Fatalf("new active cache was not refused: %s %v", effect, err)
+	}
+	assertClaudeRetirementFile(t, filepath.Join(cache, "foreign.txt"), "new active native cache")
+	if _, err := os.Stat(filepath.Join(retained, ClaudeRuntimeDirectory, "skills", "first", "SKILL.md")); err != nil {
+		t.Fatalf("retired original was removed: %v", err)
 	}
 }

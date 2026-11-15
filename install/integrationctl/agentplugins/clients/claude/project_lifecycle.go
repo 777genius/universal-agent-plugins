@@ -24,11 +24,14 @@ func activateClaudeProject(ctx context.Context, env clients.Env, request domain.
 		return activateClaudeProjectMarketplace(ctx, env, request, probe.Command)
 	}
 	outcome.NativeEffect = domain.NativeEffectUnchanged
-	listed, err := runPreparedClaudeList(ctx, env, probe.Command)
+	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
+	observation, err := observeClaudeProjectActivation(ctx, env, request, probe, &outcome.NativeEffect)
 	if err != nil {
+		if domain.IsUnclosedClientProbe(err) {
+			outcome.NativeEffect = domain.NativeEffectUncertain
+		}
 		return shared.FailedActivation(outcome, "retry exact Claude Code project listing", err)
 	}
-	observation := observeClaudeProjectList(listed.Stdout, request.DeclaredName, probe.ActivePath, request.Plan.TargetContext.ProjectRoot, request.Client.ConfigRoot)
 	switch observation.state {
 	case projectListEnabled:
 		outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled

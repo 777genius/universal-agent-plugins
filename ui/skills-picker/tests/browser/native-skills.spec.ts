@@ -76,8 +76,9 @@ test('public browser installs one raw Skill into real Codex and Claude profiles'
       await held;
       await route.fulfill({ response });
     }, { times: 1 });
-    await page.getByRole('button', { name: 'Review installation', exact: true }).first().click();
-    await expect(page.getByText('Checking installation…', { exact: true }).first()).toBeVisible();
+    const installBar = page.locator('.bottom-bar');
+    await installBar.getByRole('button', { name: 'Review installation', exact: true }).click();
+    await expect(installBar.getByText('Checking installation…', { exact: true })).toBeVisible();
     await expect.poll(() => prepared, { timeout: 90_000 }).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('native-picker-checking.png'), fullPage: true });
     releasePrepare();
@@ -101,7 +102,10 @@ test('public browser installs one raw Skill into real Codex and Claude profiles'
     expect(applyRequests).toBe(1);
     expect(external).toEqual([]);
     expect(errors).toEqual([]);
-    await expect(page.getByRole('status', { name: 'Skills readiness' })).toContainText('Files:');
+    const readiness = page.getByRole('status', { name: 'Skills readiness' });
+    await expect(readiness).toContainText('Files:');
+    await expect(readiness).toContainText('Skills installation verified.');
+    await expect(readiness).not.toContainText('not verified');
     await page.screenshot({ path: testInfo.outputPath('native-picker-complete.png'), fullPage: true });
     await writeFile(join(root, 'native-browser-installation.json'), JSON.stringify({
       schema_version: 1,
