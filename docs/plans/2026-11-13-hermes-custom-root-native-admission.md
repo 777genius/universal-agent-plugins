@@ -3586,3 +3586,36 @@ forward/inverse patch replay, original body-preservation checks, commands and
 complete logs. Independent final source review, coherent publication and real
 three-OS bundled execution remain separate gates. Old generic repaired-run
 failures are not retrospectively attributed to this control.
+
+## 2026-11-15 — passive-history fixture parent and held-ledger replacement
+
+The original macOS bundled job [132633926192](https://github.com/777genius/universal-agent-plugins/actions/runs/43650863143/job/132633926192)
+at `82fa4933` refused the durable-root receipt predicate in
+`public_binding` before the new history control completed. Its safe failure
+frame retained that predicate location; the raw state and individual failed
+receipt field were withheld. The source establishes a fixture mismatch:
+`HistoryControl.prepare` created a fresh Project without `.hermes`,
+so `prepareNativeRoot` publishes that parent as the active directory,
+whereas the reused public oracle requires the selected `.hermes/uap-session`
+directory and the original `.hermes` publication parent. The ordinary A/B
+fixture already creates its parent before add.
+
+The private fixture now creates and holds that original parent during authored
+setup, before the real public add, and never captures a replacement parent
+after add. The singleton receipt, exact active path, digest and parent-authority
+predicates are unchanged. One inert causal test reaches the actual prepare
+method, requires the original parent handle before the mocked add boundary,
+and checks that the same retained tuple survives selected-root creation.
+
+The two original Windows jobs `132633926268` and `132633926279` stopped
+in the existing same-byte ledger replacement test with typed WinError 5.
+The test creates its replacement sibling before the original directory capture.
+Only that exact Windows source/destination denial keeps the original held file,
+parent and candidate metadata/bytes, verifies the original lease, closes it,
+and requires the same replacement to succeed afterward. A successful in-flight
+replacement still requires the original refusal. Neither production handle
+policy nor the shared receipt oracle is changed.
+
+These corrections have source review only. The 16 existing mechanics methods
+remain, with one additional parent-preparation control; hosted execution and
+the complete bundled lifecycle are still required.

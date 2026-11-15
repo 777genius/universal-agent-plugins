@@ -225,6 +225,7 @@ const vendorInstall = computed(() =>
           kind="add"
           :command="commands.add"
         />
+        <NativeCliCheckbox v-if="commands" />
       </div>
       <p v-if="guidedWebSelected && commands" class="install-panel__notice" role="status">
         {{ t('registryUi.install.guidedChatgptSetup') }}

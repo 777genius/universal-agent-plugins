@@ -16,6 +16,7 @@ const defaults = () => ({
 export const useInstallPreferencesStore = defineStore('installPreferences', {
   state: () => ({
     channelId: null as string | null,
+    useNativeCli: false,
     channelUserSelected: false,
     package: defaults(),
   }),

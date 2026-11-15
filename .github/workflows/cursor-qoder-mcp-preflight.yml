@@ -1,0 +1,72 @@
+name: Cursor Qoder no-auth Project MCP lifecycle E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'scripts/project_native_missing_call_runner.py'
+      - 'scripts/project_native_missing_call_proof.py'
+      - 'scripts/test_project_native_missing_call_runner.py'
+      - 'scripts/test_project_native_missing_call_proof.py'
+      - '.github/workflows/cursor-qoder-mcp-preflight.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/project_native_missing_call_runner.py'
+      - 'scripts/project_native_missing_call_proof.py'
+      - 'scripts/test_project_native_missing_call_runner.py'
+      - 'scripts/test_project_native_missing_call_proof.py'
+      - '.github/workflows/cursor-qoder-mcp-preflight.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cursor-qoder-preflight-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main' }}
+  cancel-in-progress: true
+
+jobs:
+  native-project-preflight:
+    # One trusted source build, two independently isolated genuine native clients.
+    # Both named client receipts are required; neither proves model tools/call.
+    if: >-
+      ${{ (github.event_name == 'pull_request' &&
+           github.event.pull_request.head.repo.full_name == github.repository) ||
+          (github.event_name == 'push' &&
+           github.ref == 'refs/heads/main' &&
+           github.repository == '777genius/universal-agent-plugins') }}
+    name: pinned Cursor + Qoder / shared source build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 27
+    env:
+      AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Check strict receipt and native runner contracts after merge
+        if: ${{ github.event_name == 'push' }}
+        run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_*.py' -v
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Both genuine pinned native CLIs with one source build, isolated A/B and removal
+        env:
+          RUNNER_TEMP: ${{ runner.temp }}
+        run: |
+          python3 scripts/project_native_missing_call_runner.py \
+            --client both \
+            --expected-head '${{ github.event.pull_request.head.sha || github.sha }}' \
+            --output '${{ runner.temp }}/mcp-preflight-both-proof' \
+            --preflight-only
+      - name: Publish both separate no-model native lifecycle receipts
+        if: ${{ success() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: mcp-preflight-both-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/mcp-preflight-both-proof/
+          if-no-files-found: error
+          retention-days: 14

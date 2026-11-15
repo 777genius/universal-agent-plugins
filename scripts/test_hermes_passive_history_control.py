@@ -157,6 +157,53 @@ class HeldHistoryProcesses(unittest.TestCase):
 
 
 class OriginalLedgerCapture(unittest.TestCase):
+    def test_prepare_holds_original_parent_before_add_without_recapture(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            owner = object.__new__(control.HistoryControl)
+            owner.private = Path(temporary).resolve() / "public-history"
+            owner.project, owner.source = owner.private / "public-a", owner.private / "public-source-a"
+            owner.evidence, owner.selected = owner.private / "evidence", owner.project / ".hermes/uap-session"
+            owner.api, owner.held, owner.ledger = ledger_api(), [], None
+            owner.api.ordinary_bytes, owner.api.public_stdio_recipe = CASE["ordinary_bytes"], lambda *_: {"command": "inert-probe"}
+            owner.pins = {"uap": {"path": "inert-uap"}, "probe": {}}
+            owner.probes = {"a": SimpleNamespace(url="http://127.0.0.1:9/mcp")}
+            owner.nonce, owner.deadline = NONCE, time.monotonic() + 5
+            proof, commands, original = None, [], []
+            owner.phase, owner.snapshot = lambda *_: None, lambda: ({}, {"a": proof})
+
+            def command(label, argv, **_):
+                nonlocal proof
+                commands.append(label)
+                if label == "git":
+                    return
+                self.assertEqual(label, "add")
+                self.assertTrue(owner.selected.parent.is_dir())
+                self.assertFalse(owner.selected.exists())
+                parents = [row for row in owner.held if row[0] == owner.selected.parent]
+                self.assertEqual(len(parents), 1)
+                original.append(parents[0])
+                self.assertEqual(control.directory_facts(owner.selected.parent.lstat()), parents[0][2])
+                self.assertEqual(control.directory_facts(os.fstat(parents[0][1])), parents[0][3])
+                owner.selected.mkdir(mode=0o700)
+                data = owner.project / "data"
+                data.mkdir(mode=0o700)
+                servers = {"hermes-public-a-http": {"url": owner.probes["a"].url},
+                           "hermes-public-a-stdio": {"command": "inert-probe"}}
+                (owner.selected / "config.yaml").write_bytes(json.dumps({"mcp_servers": servers}).encode())
+                proof = {"data": data}
+
+            owner.run_command = command
+            try:
+                with mock.patch.dict(sys.modules, {"hermes_yaml": SimpleNamespace(safe_load=json.loads)}):
+                    owner.prepare()
+                self.assertEqual(commands, ["git", "add"])
+                self.assertEqual([row for row in owner.held if row[0] == owner.selected.parent], original)
+                self.assertEqual(control.directory_facts(owner.selected.parent.lstat()), original[0][2])
+                self.assertEqual(control.directory_facts(os.fstat(original[0][1])), original[0][3])
+            finally:
+                owner.close_handles()
+            self.assertEqual(owner.held, [])
+
     def test_post_open_fstat_fault_closes_original_directory_descriptor(self):
         import errno
         real_fstat = os.fstat
@@ -258,15 +305,39 @@ class OriginalLedgerCapture(unittest.TestCase):
             path = root / "spawn-ledger.json"
             body = b'[{"purpose":"mcp-helper","pid":23}]'
             path.write_bytes(body)
-            lease = processes.LedgerHandle(ledger_api(), path, body, time.monotonic() + 5)
+            replacement = root / "replacement"
+            replacement.write_bytes(b'[{"pid":23,"purpose":"cli"}]')
+            api = ledger_api()
+            lease = processes.LedgerHandle(api, path, body, time.monotonic() + 5)
             try:
                 original = path.stat()
                 self.assertEqual(processes.document(lease.purpose("cli")), [{"purpose": "cli", "pid": 23}])
                 self.assertEqual(path.stat().st_ino, original.st_ino)
                 lease.verify()
-                replacement = root / "replacement"
-                replacement.write_bytes(lease.body)
-                os.replace(replacement, path)
+                self.assertEqual(replacement.read_bytes(), lease.body)
+                named, held = api.stable_file(path.lstat()), api.stable_file(os.fstat(lease.fd))
+                candidate = replacement.lstat()
+                try:
+                    os.replace(replacement, path)
+                except PermissionError as error:
+                    self.assertEqual(os.name, "nt")
+                    self.assertEqual(error.winerror, 5)
+                    self.assertEqual(error.filename, str(replacement))
+                    self.assertEqual(error.filename2, str(path))
+                    self.assertEqual(api.stable_file(path.lstat()), named)
+                    self.assertEqual(api.stable_file(os.fstat(lease.fd)), held)
+                    self.assertEqual(api.stable_file(replacement.lstat()), api.stable_file(candidate))
+                    self.assertEqual(path.read_bytes(), lease.body)
+                    self.assertEqual(replacement.read_bytes(), lease.body)
+                    lease.verify()
+                    lease.close()
+                    self.assertIsNone(lease.fd)
+                    self.assertIsNone(lease.parent)
+                    os.replace(replacement, path)
+                    self.assertFalse(replacement.exists())
+                    self.assertEqual(processes.physical(path.lstat()), processes.physical(candidate))
+                    self.assertEqual(path.read_bytes(), lease.body)
+                    return  # Kernel prevention followed by the same mutation after release.
                 with self.assertRaisesRegex(RuntimeError, "inventory directory changed|authored ledger replaced"):
                     lease.verify()
             finally:

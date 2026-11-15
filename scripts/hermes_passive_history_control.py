@@ -117,7 +117,7 @@ class HistoryControl:
         require(not self.private.exists() and not self.private.is_symlink(), "fresh private fixture required")
         self.private.mkdir(mode=0o700)
         self.hold(self.private)
-        for directory in (self.project, self.source, self.evidence, self.private / "public-uap-state"):
+        for directory in (self.project, self.selected.parent, self.source, self.evidence, self.private / "public-uap-state"):
             directory.mkdir(mode=0o700)
             self.hold(directory)
         self.api.evidence_identity = self.api.directory_identity(self.evidence)
@@ -135,7 +135,7 @@ class HistoryControl:
         self.run_command("add", self.uap(["add", str(self.source), "--no-save", "--yes", "--format", "json"]))
         self.accepted = self.snapshot()[1]["a"]
         require(self.accepted is not None, "actual public add has no binding")
-        for path in (self.selected.parent, self.selected, self.accepted["data"]):
+        for path in (self.selected, self.accepted["data"]):
             self.hold(path)
         import hermes_yaml as yaml
         self.config = yaml.safe_load(self.api.ordinary_bytes(self.selected / "config.yaml", deadline=self.deadline))["mcp_servers"]

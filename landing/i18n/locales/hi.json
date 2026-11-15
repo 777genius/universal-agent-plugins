@@ -599,6 +599,7 @@
     },
     "command": {
       "terminal": "टर्मिनल",
+      "useNativeCli": "npx के बजाय इंस्टॉल किया हुआ agentplugins CLI इस्तेमाल करें",
       "copiedLabel": "कमांड कॉपी हो गई",
       "copyLabel": "कमांड कॉपी करें",
       "copied": "कॉपी हो गया",

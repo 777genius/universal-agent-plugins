@@ -45,7 +45,7 @@ remain unqualified.
 ## Explicit startup from a source checkout
 
 The additive `run` command is implemented in the source checkout for
-[PR #878](https://github.com/777genius/universal-agent-plugins/pull/878).
+[PR #920](https://github.com/777genius/universal-agent-plugins/pull/920).
 The CLI 0.1.93 release statement above covers project preparation; it does not
 announce published release availability of this startup command. Run these
 examples from a checkout containing that implementation, using the toolchain
