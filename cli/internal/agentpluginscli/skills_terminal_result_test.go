@@ -19,7 +19,7 @@ func TestSkillsHumanResultSeparatesFilesDiscoveryAndActivation(t *testing.T) {
 			{Alias: "review", ClientID: "claude", Status: "unchanged"},
 		},
 	}
-	if err := renderSkillsResult(cmd, &options{format: "human"}, result); err != nil {
+	if err := renderSkillsResult(cmd, &options{format: "human"}, result, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
@@ -49,7 +49,7 @@ func TestSkillsHumanPartialResultPrintsRecoveryWithoutSuccessClaim(t *testing.T)
 		Items:              []SkillsBatchItem{{Alias: "review", ClientID: "codex", Status: "failed"}},
 		RepairInstructions: []string{"Inspect agentplugins deps status and follow recovery steps."},
 	}
-	if err := renderSkillsResult(cmd, &options{format: "human"}, result); err != nil {
+	if err := renderSkillsResult(cmd, &options{format: "human"}, result, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{"Skills installation partial", "review — failed", "Next steps:", "Inspect agentplugins deps status"} {
@@ -75,7 +75,7 @@ func TestSkillsHumanPartialWithAppliedItemsStillReportsUnverifiedNativeReadiness
 		},
 		RepairInstructions: []string{"Repair the failed target."},
 	}
-	if err := renderSkillsResult(cmd, &options{format: "human"}, result); err != nil {
+	if err := renderSkillsResult(cmd, &options{format: "human"}, result, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
@@ -106,5 +106,28 @@ func TestSkillsHumanCLIEndToEndReportsReadiness(t *testing.T) {
 	}
 	if got := len(journey.state(t).EnvironmentReceipts); got != 1 {
 		t.Fatalf("human CLI report had no actual persisted installation: %d receipts", got)
+	}
+}
+
+func TestSkillsHumanClassifiedFailureKeepsManualActionsAndTechnicalLog(t *testing.T) {
+	var output bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&output)
+	failure := &installFailure{Kind: failureTargetUnavailable, Summary: "This agent needs native setup.", Next: "Retry the selected agent.", Retryable: true, Detail: "raw native stderr"}
+	result := SkillsBatchResult{Status: "partial", Items: []SkillsBatchItem{
+		{Alias: "one", ClientID: "codex", Status: "failed", Reason: failure.Detail, failure: failure, ManualActions: []string{"Reload the selected integration"}},
+		{Alias: "one", ClientID: "claude", Status: "completed", Client: completedSkillClient()},
+	}}
+	if err := renderSkillsResult(cmd, &options{format: "human"}, result, "fixture-install.log"); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	for _, want := range []string{"Needs attention", failure.Summary, failure.Next, "Reload the selected integration", "Technical details: fixture-install.log"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing merged result guidance %q: %s", want, text)
+		}
+	}
+	if strings.Contains(text, failure.Detail) || strings.Contains(text, skillsReadyMessage) {
+		t.Fatal("partial failure leaked raw diagnostics or claimed complete readiness")
 	}
 }

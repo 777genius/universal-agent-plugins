@@ -31,6 +31,8 @@ type TargetChoice struct {
 	Label string
 }
 type TargetSelectionRequest struct {
+	// Title overrides the adapter's default heading, for example a retry step.
+	Title         string
 	Choices       []TargetChoice
 	DefaultIDs    []domain.ClientID
 	SkippedLabels []string

@@ -29,6 +29,8 @@ type SkillsBatchItem struct {
 	Alias, ClientID, Action, TargetPath, CandidateID, Status, Reason string
 	Client                                                           installer.ClientResult
 	ManualActions                                                    []string
+	// failure explains a binding that did not succeed; nil otherwise.
+	failure *installFailure
 }
 type SkillsProgress struct {
 	Alias, ClientID, Action, Phase string
@@ -41,6 +43,7 @@ type SkillsBatchResult struct {
 }
 type PreparedSkillsBatch struct {
 	warnings        []string
+	selections      []SkillsSelection
 	app, preview    App
 	request         dependencySyncRequest
 	actions         []SkillsAction
@@ -123,9 +126,7 @@ func (p *PreparedSkillsBatch) ApplyWithProgress(ctx context.Context, progress fu
 	}
 	p.applied = true
 	adapter := &dependencyInstaller{app: p.app, opts: p.app.skillsOptions(), detected: p.request.detected, beforeApply: p.checkInputs}
-	var started string
 	adapter.onPrepare = func(action environment.PreparedBinding) {
-		started = skillsBindingKey(action.Alias, action.ClientID, string(action.Action))
 		emitSkillsProgress(progress, SkillsProgress{Alias: action.Alias, ClientID: action.ClientID, Action: string(action.Action), Phase: "preparing"})
 	}
 	adapter.onApply = func(action environment.PreparedBinding) {
@@ -144,7 +145,8 @@ func (p *PreparedSkillsBatch) ApplyWithProgress(ctx context.Context, progress fu
 		return err
 	}
 	applied, applyErr := applyPreparedDependencies(ctx, p.app, &p.request, adapter, checked)
-	result.Items = skillsBatchItems(p.actions, applied.Results, applyErr, started)
+	var mutated bool
+	result.Items, mutated = skillsBatchItems(p.actions, applied.Outcomes, applyErr)
 	for i := range result.Items {
 		item := &result.Items[i]
 		if item.Action == string(environment.ActionUnchanged) {
@@ -152,7 +154,7 @@ func (p *PreparedSkillsBatch) ApplyWithProgress(ctx context.Context, progress fu
 		}
 	}
 	if applyErr != nil {
-		if len(applied.Results) > 0 || applied.Published {
+		if mutated || applied.Published {
 			result.Status = "partial"
 		}
 		result.RepairInstructions = append(result.RepairInstructions, "Inspect agentplugins deps status and follow existing recovery/repair instructions.")
@@ -162,29 +164,36 @@ func (p *PreparedSkillsBatch) ApplyWithProgress(ctx context.Context, progress fu
 	return result, nil
 }
 
-func skillsBatchItems(actions []SkillsAction, results []installer.Result, applyErr error, started string) []SkillsBatchItem {
+func skillsBatchItems(actions []SkillsAction, outcomes []environment.BindingOutcome, applyErr error) ([]SkillsBatchItem, bool) {
+	byBinding := make(map[string]environment.BindingOutcome, len(outcomes))
+	mutated := false
+	for _, outcome := range outcomes {
+		binding := outcome.Binding
+		byBinding[skillsBindingKey(binding.Alias, binding.ClientID, string(binding.Action))] = outcome
+		mutated = mutated || outcome.Status == environment.BindingApplied || (outcome.Result != nil && outcome.Result.Mutated)
+	}
 	items := make([]SkillsBatchItem, 0, len(actions))
-	cursor := 0
 	for _, action := range actions {
 		item := SkillsBatchItem{Alias: action.Alias, ClientID: action.ClientID, Action: action.Action, TargetPath: action.TargetPath, CandidateID: action.CandidateID, Status: "not_attempted"}
-		if action.Action == "unchanged" {
+		outcome, observed := byBinding[skillsBindingKey(action.Alias, action.ClientID, action.Action)]
+		switch {
+		case action.Action == "unchanged":
 			item.Status = "unchanged"
-		} else if cursor < len(results) {
-			r := results[cursor]
-			cursor++
-			item.Status = string(r.Outcome)
-			item.Reason = r.Reason
-			item.Client, item.ManualActions = r.Client, append([]string(nil), r.ManualActions...)
-			if item.Status == "" && applyErr != nil {
-				item.Status, item.Reason = "failed", applyErr.Error()
+		case observed:
+			item.Status, item.Reason = outcomeStatusReason(outcome)
+			item.failure = describeBindingFailure(outcome)
+			if outcome.Result != nil {
+				item.Client = outcome.Result.Client
+				item.ManualActions = append([]string(nil), outcome.Result.ManualActions...)
 			}
-		} else if applyErr != nil && started == skillsBindingKey(action.Alias, action.ClientID, action.Action) {
-			item.Status = "failed"
+		case applyErr != nil:
+			// Nothing ran: the sync failed before reaching this binding.
 			item.Reason = applyErr.Error()
+			item.failure = describeSyncFailure(applyErr)
 		}
 		items = append(items, item)
 	}
-	return items
+	return items, mutated
 }
 
 func emitSkillsProgress(observer func(SkillsProgress), event SkillsProgress) {

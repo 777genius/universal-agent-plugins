@@ -20,7 +20,7 @@ func TestAgentSkillsSuccessAndPartialMachineOutcomes(t *testing.T) {
 			var output bytes.Buffer
 			cmd := &cobra.Command{Use: "skills"}
 			cmd.SetOut(&output)
-			if err := renderSkillsResult(cmd, &options{format: "json", scope: "user"}, SkillsBatchResult{Status: test.status}); err != nil {
+			if err := renderSkillsResult(cmd, &options{format: "json", scope: "user"}, SkillsBatchResult{Status: test.status}, ""); err != nil {
 				t.Fatal(err)
 			}
 			var doc struct {

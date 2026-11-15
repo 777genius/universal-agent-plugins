@@ -437,3 +437,29 @@ The candidate reconstructed through Git objects must receive fresh compile,
 lint, core, native lifecycle and visual results on its own published commit.
 Independent source review covers the reconstructed changes; merge remains
 conditional on resolving actual failures and completing the required checks.
+
+### Current-main integration and publication candidate
+
+The reconstructed Git tree `049aa31584384df963a3b473e667eb197766e29f`
+was compared with the complete local index after execution resumed; the trees
+matched exactly. The generated golden files and reviewed corrections were
+preserved as exact Git blobs, without regenerating expected values.
+
+The subsequent main commit `eda3812fe8af4b4a670ed9211ce685808f177a80`
+(PR 940) added per-agent failure isolation, private logs and interactive retry.
+Its changes are preserved in the same candidate through an ordinary merge.
+The integration retains reviewed setup, native effect and closure requirements,
+progress during initial and repeated attempts, and explicit binding identity
+when a preparation failure precedes another agent's successful result.
+
+After this merge, the complete `environment`, `environmentapp` and `usecase`
+test packages passed. Earlier focused qualification also passed the OpenCode
+package, six Claude profile contracts, 37 native-matrix Python tests and the
+35 npm cases that had failed because of local fixture prerequisites. The full
+local core result remains a failure: 59 packages passed, while socket/process
+prerequisites and wrapped Git errors remained unresolved in that executor.
+The old incorrect OpenCode negative fixture was corrected to explicit prepare
+intent and its package then passed. Full lint processes and the large CLI test
+process were killed locally; neither is recorded as a successful full gate.
+Fresh hosted lint, core, native and visual checks must qualify the publication
+candidate, including the new main integration.

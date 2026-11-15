@@ -12,8 +12,9 @@ func (session *groupSession) activateGroupTargets() (GroupResult, error) {
 	if err := session.recheckGroupPreparedSetups(); err != nil {
 		return session.result, err
 	}
-	if prepared, ok := session.independentGroupActivator(); ok {
-		return session.activateIndependentGroupTargets(prepared)
+	if activator, count, restore, ok := session.independentGroupActivator(); ok {
+		defer restore()
+		return session.activateIndependentGroupTargets(activator, count)
 	}
 	session.externalCompleted = 0
 	session.externalFailed = 0
@@ -85,8 +86,7 @@ func (session *groupSession) publishGroupActivation(remainingFrom int, target pl
 	if session.firstActivationErr == nil {
 		session.firstActivationErr = activationErr
 	}
-	if session.ctx.Err() != nil || domain.IsUnclosedClientProbe(activationErr) || errors.Is(activationErr, context.Canceled) ||
-		(errors.Is(activationErr, context.DeadlineExceeded) && !domain.IsIsolatedProbeTimeout(activationErr)) {
+	if stopsGroupActivation(session.ctx, activationErr) {
 		session.classifyActivationFailure()
 		stage, message := groupActivationStopReason(session.ctx, activationErr)
 		session.markRemainingNotAttempted(remainingFrom, stage, message)
@@ -135,4 +135,12 @@ func (session *groupSession) groupActivationRequest(target plannedGroupTarget) (
 		BackendExecutable: target.input.BackendExecutable, PreviousNativeObjects: previous,
 		VerifyOnly: target.noChange && nativeComplete && !target.completePreparedSetup, ActivationComplete: target.input.ActivationComplete,
 	}, domain.ActivationOutcome{}, delivery, nativeComplete, nil
+}
+
+// stopsGroupActivation separates a failure that makes activating the remaining
+// clients unsafe (cancellation, an unconfirmed client process, an unbounded
+// deadline) from one that belongs to a single client.
+func stopsGroupActivation(ctx context.Context, err error) bool {
+	return ctx.Err() != nil || domain.IsUnclosedClientProbe(err) || errors.Is(err, context.Canceled) ||
+		(errors.Is(err, context.DeadlineExceeded) && !domain.IsIsolatedProbeTimeout(err))
 }
