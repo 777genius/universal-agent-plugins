@@ -75,8 +75,8 @@ test('production Go bridge installs two raw Skills and recovers a lost apply res
     await expect(page.getByRole('region', { name: 'Installation progress' })).toContainText('claude');
     const readiness = page.getByRole('status', { name: 'Skills readiness' });
     await expect(readiness).toContainText('Files:');
-    await expect(readiness).toContainText('Skills installed and detected in the selected agents.');
-    await expect(readiness).not.toContainText('Not verified');
+    await expect(readiness).toContainText('Skill files and owned native configuration verified. Agent discovery and activation are not verified by this Skills flow.');
+    await expect(readiness).not.toContainText('detected by the agent');
     expect(external).toEqual([]);
     expect(errors).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath('live-picker-complete.png'), fullPage: true });

@@ -98,7 +98,7 @@ func TestSkillsHumanCLIEndToEndReportsReadiness(t *testing.T) {
 		"Skills installation succeeded",
 		"review — installed",
 		"Files: installed or already up to date.",
-		"Skills installed and detected in the selected agents.",
+		"Skill files and owned native configuration verified. Agent discovery and activation are not verified by this Skills flow.",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("real CLI human output is missing %q: %q", expected, out)
