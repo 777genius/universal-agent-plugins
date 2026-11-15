@@ -18,8 +18,11 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -184,7 +187,7 @@ func TestProjectHermesBundleColdRestoreAndRepair(t *testing.T) {
 	publications := cold.state(t, cold.a).TransactionReceipts
 	hermesColdRemove(t, input, cold)
 	if calls.Load() != 0 || len(input.commands) != 3 {
-		t.Fatal("native configuration inspection unexpectedly called MCP or omitted a selected process")
+		t.Fatal("native configuration inspection called the HTTP MCP endpoint or omitted a selected process")
 	}
 	// CGI uses the original outer process group, not a context-aware runner.
 	// Its actual server join is required before any successful report. A blocked
@@ -216,17 +219,8 @@ func hermesColdOwned(t *testing.T, journey projectJourney, endpoint string) (dom
 		binding.PendingNativeIntent != nil || binding.NativeActivationAttempt != "" || len(binding.Receipts) == 0 {
 		t.Fatalf("Hermes cold binding lost scoped ownership or conservative status: %+v", binding)
 	}
-	config := filepath.Join(journey.a, ".hermes", "uap-session", "config.yaml")
-	found := 0
-	for _, object := range binding.NativeObjects {
-		if object.Kind == "hermes_project_session_mcp" {
-			found++
-			if object.LogicalName != "docs" || object.Path != config || object.ManagedDigest == "" {
-				t.Fatal("Hermes native MCP object is not joined to the selected Project")
-			}
-		}
-	}
-	if found != 1 || len(installation.Source.ResolvedRevision) != 40 || installation.Source.TreeDigest == "" {
+	servers := hermesColdMCPAuthority(t, journey, binding, receipt, endpoint)
+	if len(installation.Source.ResolvedRevision) != 40 || installation.Source.TreeDigest == "" {
 		t.Fatal("Hermes cold restore lacks its exact Git/native source identity")
 	}
 	for _, path := range []string{
@@ -237,14 +231,60 @@ func hermesColdOwned(t *testing.T, journey projectJourney, endpoint string) (dom
 			t.Fatal("Hermes cold restore followed a moving source or lost the recorded Skill")
 		}
 	}
-	servers := hermesColdServers(t, config)
-	entry, ok := servers["docs"].(map[string]any)
-	if len(servers) != 1 || !ok || entry["url"] != endpoint || entry["command"] != nil {
-		t.Fatal("Hermes cold config is not the one owned HTTP source")
-	}
 	journey.inspectNoRecovery(t, journey.a)
 	hermesColdRootAuthority(t, journey, binding)
 	return installation, binding, servers
+}
+
+func hermesColdMCPAuthority(t *testing.T, journey projectJourney, binding domain.ClientBinding, data domain.DataReceipt, endpoint string) map[string]any {
+	t.Helper()
+	config := filepath.Join(journey.a, ".hermes", "uap-session", "config.yaml")
+	desired := map[string]nativeconfig.Server{
+		"docs": {Type: "remote", URL: endpoint},
+		"data": {
+			Type: "stdio", StdioValuesResolved: true, CWDResolved: true,
+			Command: filepath.Join(binding.TargetLocator, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName),
+			Args:    managedstdio.EncodedArguments(binding.TargetLocator, data.Locator, binding.TargetLocator, pathcontract.Plugin, "go", []string{"version"}),
+			CWD:     binding.TargetLocator,
+			Env:     map[string]string{"DATA": data.Locator, "PLUGIN_ROOT": binding.TargetLocator, "PLUGIN_DATA": data.Locator},
+		},
+	}
+	found := map[string]bool{}
+	for _, object := range binding.NativeObjects {
+		if object.Kind != "hermes_project_session_mcp" {
+			continue
+		}
+		server, selected := desired[object.LogicalName]
+		if !selected || found[object.LogicalName] {
+			t.Fatal("Hermes cold binding contains an unexpected or duplicate MCP object")
+		}
+		receipt, err := nativeconfig.DesiredReceipt(config, nativeconfig.CodecHermes, object.LogicalName, server, nativeconfig.Placeholders{})
+		expected := domain.NativeObjectOwnership{ObjectID: object.Kind + ":" + object.LogicalName, Kind: object.Kind, LogicalName: object.LogicalName,
+			Path: config, ManagedDigest: receipt.Digest, ProtectionClass: "managed"}
+		if err != nil || object != expected {
+			t.Fatal("Hermes cold MCP object differs from its complete selected receipt", err)
+		}
+		found[object.LogicalName] = true
+	}
+	servers := hermesColdServers(t, config)
+	if len(found) != len(desired) || len(servers) != len(desired) {
+		t.Fatal("Hermes cold config lacks its exact HTTP and retained-data selection")
+	}
+	for name, server := range desired {
+		body, err := json.Marshal(server)
+		if err != nil {
+			t.Fatal(err)
+		}
+		entry, err := shared.DecodeStrictJSONObject(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		delete(entry, "type") // The reviewed Hermes codec has no native transport tag.
+		if !reflect.DeepEqual(servers[name], entry) {
+			t.Fatal("Hermes cold config changed its exact HTTP or managed stdio entry")
+		}
+	}
+	return servers
 }
 
 func hermesColdServers(t *testing.T, path string) map[string]any {

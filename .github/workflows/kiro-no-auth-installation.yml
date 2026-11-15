@@ -77,11 +77,11 @@ jobs:
         shell: bash
         working-directory: cli
         run: |
-          go test -json -count=1 -timeout=180s ./cmd/agentplugins -run '^TestProjectKiroComposedSourceLifecycle$' | tee "$RUNNER_TEMP/kiro-composed-cli.log"
+          go test -json -count=1 -timeout=180s ./cmd/agentplugins -run '^Test(ProjectKiroComposedSourceLifecycle|KiroContinuityRejectsDetachedAuthority|KiroUserArchivePreservesAuthored(Bytes|Skill)WithAutocrlf)$' | tee "$RUNNER_TEMP/kiro-composed-cli.log"
       - name: Run SDK repair cold-restart retained-data removal lifecycle
         shell: bash
         working-directory: install/integrationctl/agentplugins
-        run: go test -json -count=1 -timeout=180s ./installer -run '^TestProjectKiroPublicSDKStdioDataRepairRestartAndRemove$' | tee "$RUNNER_TEMP/kiro-composed-sdk.log"
+        run: go test -json -count=1 -timeout=180s ./installer -run '^Test(ProjectKiroPublicSDKStdioDataRepairRestartAndRemove|FacadeHostedPreparation(PinsIntentAndSnapshot|PreservesAutomaticAndOtherFailures|RefusesAppearingRetainedInstallation|PreservesRecordedModesAndOwnership|EligibilityDoesNotBroadenScopeOrConsent|RejectsRetainedStateAtMutationLock))$' | tee "$RUNNER_TEMP/kiro-composed-sdk.log"
       - name: Admit actual named cases and unchanged source
         if: ${{ always() }}
         shell: bash
@@ -98,8 +98,38 @@ jobs:
           if before != after or after['status'] or after['commit'] != os.environ['EXPECTED_COMMIT']:
               raise SystemExit('source changed during lifecycle')
           cli = 'TestProjectKiroComposedSourceLifecycle'
-          required = {'cli': [cli, cli + '/git', cli + '/zip'],
-                      'sdk': ['TestProjectKiroPublicSDKStdioDataRepairRestartAndRemove']}
+          continuity = 'TestKiroContinuityRejectsDetachedAuthority'
+          required = {'cli': [cli, cli + '/git', cli + '/git/user', cli + '/zip', cli + '/zip/user',
+                             continuity, continuity + '/unchanged', continuity + '/appended-receipt',
+                             continuity + '/source', continuity + '/installation', continuity + '/binding',
+                             continuity + '/data', continuity + '/receipt-history',
+                             'TestKiroUserArchivePreservesAuthoredBytesWithAutocrlf',
+                             'TestKiroUserArchivePreservesAuthoredSkillWithAutocrlf'],
+                      'sdk': ['TestProjectKiroPublicSDKStdioDataRepairRestartAndRemove',
+                              'TestFacadeHostedPreparationPinsIntentAndSnapshot',
+                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures',
+                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/available',
+                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/wrapped-preflight',
+                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/second-check-available',
+                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/canceled',
+                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/invalid-source',
+                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/project',
+                              'TestFacadeHostedPreparationRefusesAppearingRetainedInstallation',
+                              'TestFacadeHostedPreparationRefusesAppearingRetainedInstallation/retry',
+                              'TestFacadeHostedPreparationRefusesAppearingRetainedInstallation/apply',
+                              'TestFacadeHostedPreparationPreservesRecordedModesAndOwnership',
+                              'TestFacadeHostedPreparationPreservesRecordedModesAndOwnership/recorded-automatic',
+                              'TestFacadeHostedPreparationPreservesRecordedModesAndOwnership/retained-preference',
+                              'TestFacadeHostedPreparationPreservesRecordedModesAndOwnership/owned-drift',
+                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent',
+                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/supported',
+                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/unsupported',
+                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/project',
+                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/personal-mapping',
+                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/attested',
+                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/update',
+                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/recorded',
+                              'TestFacadeHostedPreparationRejectsRetainedStateAtMutationLock']}
           receipts = []
           for label, tests in required.items():
               path = root / ('kiro-composed-' + label + '.log')

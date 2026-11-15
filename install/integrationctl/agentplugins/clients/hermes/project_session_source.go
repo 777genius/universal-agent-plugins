@@ -370,7 +370,7 @@ func inspectBootstrapDirectory(root *os.Root, name string, members, admitted map
 	}
 	names, err := file.Readdirnames(limit + 1)
 	if err != nil && !errors.Is(err, io.EOF) || len(names) > limit {
-		return fmt.Errorf("hermes bootstrap membership exceeds the fixed catalog")
+		return fmt.Errorf("hermes bootstrap membership exceeds the fixed catalog: directory=%q limit=%d entries=%d read_failed=%t", name, limit, len(names), err != nil && !errors.Is(err, io.EOF))
 	}
 	for _, child := range names {
 		relative := filepath.ToSlash(filepath.Join(name, child))
