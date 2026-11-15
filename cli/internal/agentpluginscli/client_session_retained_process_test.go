@@ -8,7 +8,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -102,11 +104,25 @@ func assertRetainedProcessClosed(t *testing.T, fixture *sessionExecutionFixture,
 		!runner.result.CleanupComplete || runner.result.NoChildStarted {
 		t.Fatalf("actual retained child or original resource did not settle: calls=%d starts=%d ordinary=%d closes=%d cleanup=%t no-child=%t exit=%d error=%v", fixture.calls, fixture.starts, fixture.ordinary, fixture.closes, runner.result.CleanupComplete, runner.result.NoChildStarted, runner.result.ExitCode, runner.err)
 	}
-	if _, err := fixture.original.Stat(); !errors.Is(err, os.ErrClosed) {
-		t.Fatal("original descriptor survived the actual final child", err)
-	}
+	assertRetainedOriginalClosed(t, fixture.original)
 	if body, err := os.ReadFile(fixture.path + ".started"); err != nil || string(body) != "started" {
 		t.Fatal("actual final child never reached the fixture", err)
+	}
+}
+
+func assertRetainedOriginalClosed(t *testing.T, original *os.File) {
+	t.Helper()
+	_, statErr := original.Stat()
+	var pathErr *os.PathError
+	// Windows Stat exposes GetFileType's invalid-handle result after Close.
+	windowsClosed := runtime.GOOS == "windows" && errors.As(statErr, &pathErr) &&
+		pathErr.Op == "GetFileType" && pathErr.Path == original.Name() && errors.Is(pathErr.Err, syscall.Errno(6))
+	if !errors.Is(statErr, os.ErrClosed) && !windowsClosed {
+		t.Fatal("original descriptor was not closed", statErr)
+	}
+	// Require Go's already-closed state, not just an unusable OS handle.
+	if err := original.Close(); !errors.Is(err, os.ErrClosed) {
+		t.Fatal("original descriptor was not already closed", err)
 	}
 }
 
@@ -172,9 +188,7 @@ func TestSessionRetainedRejectsIncompleteAuthorityBeforeVerification(t *testing.
 				fixture.verifies != 0 || fixture.calls != 0 || fixture.starts != 0 || fixture.ordinary != 0 {
 				t.Fatal("incomplete/noninspect authority reached a verifier or native child", err)
 			}
-			if _, err := fixture.original.Stat(); !errors.Is(err, os.ErrClosed) {
-				t.Fatal("invalid execution leaked its original handle", err)
-			}
+			assertRetainedOriginalClosed(t, fixture.original)
 		})
 	}
 }
