@@ -71,7 +71,7 @@ func TestCISupersession_ClosedPRCleanupCannotCancelOtherIdentities(t *testing.T)
 		".number == $pr and .head.repo.id == $head and .base.repo.id == $base",
 		"still_closed", ".state == \"closed\"", ".closed_at == $closed",
 		"closed-pr-head-associations.json", "length == 1", "head_unique", "head_unique=false", "head_unique=true",
-		"(.pull_requests | length) == 0", ".head_branch == $branch",
+		"(.pull_requests | type == \"array\" and length == 0)", ".head_branch == $branch",
 		"fromdateiso8601", "sort -un", "--method POST", "current", "completed",
 	} {
 		if !strings.Contains(script, required) {
