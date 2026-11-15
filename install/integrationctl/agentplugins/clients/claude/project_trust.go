@@ -54,22 +54,8 @@ func renderClaudeProjectTrust(body []byte, project string) ([]byte, error) {
 	}
 	// Native Claude uses slash-separated profile keys on Windows.
 	project = filepath.ToSlash(project)
-	decoder := json.NewDecoder(bytes.NewReader(body))
-	decoder.UseNumber()
-	value, err := shared.DecodeUniqueJSONValue(decoder)
+	doc, err := decodeClaudeTrustDocument(body)
 	if err != nil {
-		return nil, fmt.Errorf("decode Claude Code project trust: %w", err)
-	}
-	if _, err = decoder.Token(); !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("claude Code project trust contains trailing data")
-	}
-	if _, ok := value.(map[string]any); !ok {
-		return nil, fmt.Errorf("claude Code project trust must be an object")
-	}
-	// Keep unrelated native values as raw JSON: the strict duplicate-key
-	// decoder's empty-array representation must not turn [] into null.
-	doc := map[string]json.RawMessage{}
-	if err := json.Unmarshal(body, &doc); err != nil {
 		return nil, err
 	}
 	projects := map[string]json.RawMessage{}
@@ -108,6 +94,28 @@ func renderClaudeProjectTrust(body []byte, project string) ([]byte, error) {
 		return nil, err
 	}
 	return append(next, '\n'), nil
+}
+
+func decodeClaudeTrustDocument(body []byte) (map[string]json.RawMessage, error) {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	value, err := shared.DecodeUniqueJSONValue(decoder)
+	if err != nil {
+		return nil, fmt.Errorf("decode Claude Code project trust: %w", err)
+	}
+	if _, err = decoder.Token(); !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("claude Code project trust contains trailing data")
+	}
+	if _, ok := value.(map[string]any); !ok {
+		return nil, fmt.Errorf("claude Code project trust must be an object")
+	}
+	// Keep unrelated native values as raw JSON: the strict duplicate-key
+	// decoder's empty-array representation must not turn [] into null.
+	doc := map[string]json.RawMessage{}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return nil, err
+	}
+	return doc, nil
 }
 
 func observeClaudeProjectActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, probe ClaudeActivationProbe) (projectListObservation, error) {
