@@ -133,8 +133,8 @@ func claudeSDKInterruptedUpdateAndRestart(t *testing.T, f *claudeSDKFixture) {
 	fresh.dataRoot = f.dataRoot
 	*f = *fresh
 	f.apply(t, installer.OpRepair, "repair-after-process-restart")
-	if binding := f.binding(t); binding.Activation != domain.ActivationActive || binding.Verification != domain.VerificationInstalled {
-		t.Fatalf("fresh public SDK did not complete native project registration=%+v", binding)
+	if binding := f.binding(t); binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
+		t.Fatalf("fresh public SDK did not preserve the registered but ambiguous MCP namespace=%+v", binding)
 	}
 }
 
