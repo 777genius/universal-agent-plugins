@@ -428,7 +428,8 @@ class OriginalLedgerCapture(unittest.TestCase):
             helpers = {name: CASE[name] for name in control.HELPERS}
             helpers["public_spawn_install"] = lambda *_: (CASE["directory_identity"](code), "c" * 64)
             deadline = time.monotonic() + 180
-            owner = control.HistoryControl(helpers, outer, {}, {}, env, {}, deadline)
+            baseline = CASE["inventory"](outer)
+            owner = control.HistoryControl(helpers, outer, baseline, {}, env, {}, deadline)
             native_environments, permissions = [], []
             try:
                 owner.selected.mkdir(parents=True, mode=0o700)
