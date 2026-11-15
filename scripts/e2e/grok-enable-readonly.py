@@ -107,7 +107,13 @@ def main():
         evidence["error"] = type(error).__name__ + ": " + str(error)
     finally:
         (args.output / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
-        print(json.dumps(dict(passed=evidence["passed"], output=str(args.output))))
+        commands = []
+        for command in evidence["commands"]:
+            record = {key: command[key] for key in ("label", "exit")}
+            for name in ("stdout", "stderr"):
+                record[name + "_tail"] = command[name].encode("utf-8")[-4096:].decode("utf-8", errors="backslashreplace")
+            commands.append(record)
+        print(json.dumps(dict(evidence, output=str(args.output), commands=commands), ensure_ascii=True))
     return status
 
 

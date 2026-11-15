@@ -2,6 +2,7 @@ package antigravity
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -113,6 +114,9 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
 	outcome.UserActions = append(outcome.UserActions,
 		"Open or reload Antigravity and verify native plugin discovery/enablement; files alone do not establish runtime activation")
+	if request.Plan.Scope == domain.ScopeUser {
+		return userInventoryOutcome(ctx, env, request, outcome)
+	}
 	return outcome, nil
 }
 
@@ -133,5 +137,34 @@ func (*Adapter) Deactivate(ctx context.Context, _ clients.Env, request domain.De
 	outcome.NativeEffect = domain.NativeEffectUnchanged
 	outcome.UserActions = append(outcome.UserActions,
 		"Reload Antigravity to clear the plugin from a running session")
+	return outcome, nil
+}
+
+func userInventoryOutcome(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
+	required := request.VerifyOnly || request.PackageUnchanged
+	if !New().VerifierAvailable(request.Client, request.Plan, request.BackendExecutable) || env.Runner == nil {
+		// An unqualified profile retains file-only ownership on every operation.
+		// SDK callers do not supply the detector's canonical HOME provenance.
+		return outcome, nil
+	}
+	enabled, present, attempted, err := observeUserInventory(ctx, env, request)
+	err = errors.Join(err, ctx.Err())
+	if err != nil {
+		if !required && !attempted && errors.Is(err, errInventoryConfigAbsent) &&
+			!errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			return outcome, nil // Initial file delivery need not bootstrap native settings.
+		}
+		if attempted {
+			outcome.NativeEffect = domain.NativeEffectUncertain
+		}
+		return outcome, err
+	}
+	outcome.AuthoritativeObservation = !present || !enabled
+	outcome.UserActions = []string{"The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading"}
+	if !present {
+		outcome.UserActions = []string{"The exact UAP-owned plugin is absent from native User inventory; inspect it in Antigravity"}
+	} else if !enabled {
+		outcome.UserActions = []string{"The selected User plugin remains disabled; decide whether to enable it in Antigravity"}
+	}
 	return outcome, nil
 }
