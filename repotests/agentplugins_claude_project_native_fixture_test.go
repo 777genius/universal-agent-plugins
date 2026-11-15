@@ -58,7 +58,10 @@ func (f *claudeProjectNativeFixture) requireForeign(t *testing.T) {
 		t.Fatal("native project registration changed the foreign disabled plugin")
 	}
 	for path, want := range f.foreign {
-		if nativeSHA(t, path) != want {
+		if got := nativeSHA(t, path); got != want {
+			if path == filepath.Join(f.base.ConfigDir, ".claude.json") {
+				t.Logf("foreign Claude profile SHA mismatch: expected=%s observed=%s", want, got)
+			}
 			t.Fatalf("foreign user/project configuration changed: %s", path)
 		}
 	}
@@ -72,7 +75,13 @@ func (f *claudeProjectNativeFixture) run(t *testing.T, label string, args ...str
 	// Project registration owns one settings object; its foreign keys remain checked.
 	delete(f.foreign, filepath.Join(f.project, ".claude", "settings.json"))
 	args = append(args, "--scope", "project", "--project-root", f.project)
+	if label == "trusted-foreign-mcp-remove" {
+		claudeTrustedRecordRemoveBaseline(t, f)
+	}
 	result, err := commandsRunInstaller(t, f.base.Root, f.project, f.base.env(filepath.Dir(f.client)), f.installer, label, args...)
+	if label == "trusted-foreign-mcp-remove" {
+		claudeTrustedRecordProfile(t, f, "trusted-foreign-mcp-remove-after-profile.json")
+	}
 	if err != nil && !f.diagnosticAttempted {
 		f.diagnosticAttempted = true
 		records, logs := claudeFailureListingRecords(f.client, f.project, f.otherProject, f.base.env(filepath.Dir(f.client)), captureClaudeDiagnostic)

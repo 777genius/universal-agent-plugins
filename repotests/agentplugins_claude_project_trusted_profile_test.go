@@ -59,6 +59,28 @@ func claudeTrustedRecordProfile(t *testing.T, f *claudeProjectNativeFixture, nam
 	return body
 }
 
+func claudeTrustedRunScriptedProfile(t *testing.T, f *claudeProjectNativeFixture, project string, wantCall bool) {
+	t.Helper()
+	before, after := "trusted-foreign-mcp-native-A-before-profile.json", "trusted-foreign-mcp-native-A-after-profile.json"
+	if project == f.otherProject {
+		before, after = "trusted-foreign-mcp-native-B-before-profile.json", "trusted-foreign-mcp-native-B-after-profile.json"
+	} else if project != f.project {
+		t.Fatal("trusted profile capture requires the original project A or B")
+	}
+	claudeTrustedRecordProfile(t, f, before)
+	claudeProjectRunScripted(t, f, project, wantCall)
+	claudeTrustedRecordProfile(t, f, after)
+}
+
+func claudeTrustedRecordRemoveBaseline(t *testing.T, f *claudeProjectNativeFixture) {
+	t.Helper()
+	body := claudeTrustedRecordProfile(t, f, "trusted-foreign-mcp-remove-before-profile.json")
+	want := f.foreign[filepath.Join(f.base.ConfigDir, ".claude.json")]
+	if fmt.Sprintf("%x", sha256.Sum256(body)) != want {
+		t.Fatal("trusted foreign profile differs from original pre-remove baseline")
+	}
+}
+
 func readClaudeTrustedProfile(path string) (body []byte, readErr error) {
 	named, err := os.Lstat(path)
 	if err != nil {

@@ -76,8 +76,8 @@ test('public browser installs one raw Skill into real Codex and Claude profiles'
       await held;
       await route.fulfill({ response });
     }, { times: 1 });
-    await page.getByRole('button', { name: 'Review installation', exact: true }).first().click();
-    await expect(page.getByText('Checking installation…', { exact: true }).first()).toBeVisible();
+    await page.locator('.bottom-bar').getByRole('button', { name: 'Review installation', exact: true }).click();
+    await expect(page.locator('.bottom-bar').getByText('Checking installation…', { exact: true })).toBeVisible();
     await expect.poll(() => prepared, { timeout: 90_000 }).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('native-picker-checking.png'), fullPage: true });
     releasePrepare();
