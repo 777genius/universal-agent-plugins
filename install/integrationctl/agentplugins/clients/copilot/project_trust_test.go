@@ -230,12 +230,17 @@ func TestProjectCopilotDetectionBindsSelectedHome(t *testing.T) {
 	expected := filepath.Join(physicalHome, "chosen")
 	host := clients.NewHost(clients.HostProbes{HomeDir: home, Environment: map[string]string{"COPILOT_HOME": selected}, Lstat: os.Lstat, EvalSymlinks: filepath.EvalSymlinks})
 	detected := New().DetectSurfaces(host)
-	// Windows may return different casing for an existing parent and a
-	// non-existent selected child; that does not change the profile identity.
-	matchesSelected := detected.ConfigRoot == expected ||
-		(os.PathSeparator == '\\' && strings.EqualFold(detected.ConfigRoot, expected))
-	if detected.Err != nil || !matchesSelected {
+	if detected.Err != nil {
 		t.Fatalf("selected COPILOT_HOME not captured: %+v", detected)
+	}
+	// Resolve the existing parent for both macOS /var aliases and Windows
+	// short names; the selected child intentionally does not exist yet.
+	parent, err := filepath.EvalSymlinks(filepath.Dir(detected.ConfigRoot))
+	if err != nil || filepath.Join(parent, filepath.Base(detected.ConfigRoot)) != expected {
+		t.Fatalf("selected COPILOT_HOME has a different physical path: %+v, %v", detected, err)
+	}
+	if _, err := os.Lstat(selected); !os.IsNotExist(err) {
+		t.Fatal("detection created the selected profile")
 	}
 	host = clients.NewHost(clients.HostProbes{HomeDir: home, Environment: map[string]string{"COPILOT_HOME": "relative"}, Lstat: os.Lstat, EvalSymlinks: filepath.EvalSymlinks})
 	if New().DetectSurfaces(host).Err == nil {
