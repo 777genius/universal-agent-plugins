@@ -13,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 func enablementState(state domain.StateFileV2, index int, binding domain.ClientBinding) domain.StateFileV2 {
@@ -255,4 +256,41 @@ func (recovery EnablementRecovery) rollbackHeldRecord(ctx context.Context, profi
 		return err
 	}
 	return recovery.finishRecord(ctx, before, desired, record, record.Edit.BeforeDigest)
+}
+
+// A known durable removal can discard only its completed private undo. This
+// entrypoint never dispatches to rollback, even if state changes after preflight.
+func (recovery EnablementRecovery) finishSettledRemoval(ctx context.Context, observed ports.NativeTransitionObservation) (resultErr error) {
+	record, err := recovery.readRecord(observed.OperationID)
+	if err != nil {
+		return err
+	}
+	if record.Version != 3 || record.Action != "remove" || record.decisionDigest == "" {
+		return errEnablementUnqualified
+	}
+	state, err := recovery.State.Load()
+	if err != nil {
+		return err
+	}
+	if enablementStateDigest(state) != record.decisionDigest {
+		return errEnablementUnqualified
+	}
+	current, err := recovery.recordObservation(state, record)
+	if err != nil {
+		return err
+	}
+	current.EnvironmentID = observed.EnvironmentID
+	if !reflect.DeepEqual(current, observed) {
+		return fmt.Errorf("grok completed removal observation changed")
+	}
+	recovery = recovery.withRecoveryContext(ctx)
+	profile, err := recovery.openRecordedProfile(ctx, record)
+	if err != nil {
+		return err
+	}
+	defer func() { resultErr = errors.Join(resultErr, profile.close(), ctx.Err()) }()
+	if err := recovery.requireState(state); err != nil {
+		return err
+	}
+	return recovery.finishCompleteRecord(ctx, profile, state, record, record.Edit.AfterDigest)
 }
