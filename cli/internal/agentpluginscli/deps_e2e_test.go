@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -357,33 +359,40 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	var pending domain.MutationReceipt
 	for key, binding := range state.Installations[0].Clients {
 		n := len(binding.Receipts) - 1
 		binding.Receipts[n].Phase = "state_committed"
-		pending = binding.Receipts[n]
 		state.Installations[0].Clients[key] = binding
 	}
-	foreign := pending
-	foreign.OperationID = "foreign-pending"
-	foreign.EnvironmentAuthority = nil
+	// Grouped removal retains a standalone receipt after its binding is removed.
+	// A binding's package replacement is not a fresh standalone publication.
+	foreign := domain.MutationReceipt{
+		OperationID: "foreign-pending", ClientBindingID: "foreign-binding", Sequence: 1,
+		MutationType: "directory_remove", ActivePath: filepath.Join(t.TempDir(), "foreign-target"),
+		Phase: "state_committed",
+	}
 	state.TransactionReceipts = []domain.MutationReceipt{foreign}
 	if e := f.store.Save(state); e != nil {
 		t.Fatal(e)
 	}
-	beforeRecovery, e := os.ReadFile(f.store.Path)
-	if e != nil {
-		t.Fatal(e)
-	}
-	if _, _, e := f.execute(false, "deps", "recover", "--yes", "--format", "json"); e == nil {
-		t.Fatal("mixed recovery was accepted")
-	}
-	if _, _, e := f.execute(false, "repair", id, "--target", "codex", "--format", "json"); e == nil {
-		t.Fatal("repair bypassed foreign pending recovery")
-	}
-	afterRecovery, _ := os.ReadFile(f.store.Path)
-	if string(beforeRecovery) != string(afterRecovery) {
-		t.Fatal("refused recovery changed state")
+	beforeRecovery := snapshotBytes()
+	nativeBefore, callsBefore := maps.Clone(runners[0].codexIDs), runners[0].calls
+	// Full environment recovery must report the foreign owner; ordinary
+	// repair refuses earlier because any pending recovery blocks preflight.
+	// Both refusals must leave the original native and state bytes unchanged.
+	for _, test := range []struct {
+		args []string
+		want error
+	}{
+		{[]string{"deps", "recover", "--yes", "--format", "json"}, transaction.ErrEnvironmentAuthority},
+		{[]string{"repair", id, "--target", "codex", "--format", "json"}, installer.ErrRecoveryRequired},
+	} {
+		if _, _, e := f.execute(false, test.args...); !errors.Is(e, test.want) {
+			t.Fatalf("mixed recovery %v returned %v, want %v", test.args, e, test.want)
+		}
+		if !maps.Equal(beforeRecovery, snapshotBytes()) || !maps.Equal(nativeBefore, runners[0].codexIDs) || runners[0].calls != callsBefore {
+			t.Fatal("refused recovery changed state, native registration or original files")
+		}
 	}
 	state.TransactionReceipts = nil
 	if e := f.store.Save(state); e != nil {
@@ -617,9 +626,11 @@ type dependencyClaudeListing struct {
 	root             string
 	codexIDs         map[string]bool
 	failNextCodexAdd bool
+	calls            int
 }
 
 func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	r.calls++
 	for _, value := range command.Env {
 		if strings.HasPrefix(value, "CODEX_HOME=") {
 			args := command.Argv[1:]

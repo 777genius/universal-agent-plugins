@@ -20,6 +20,10 @@ export function projectComponentSupported(client: ClientID, component: Component
 }
 
 export function scopedComponentSupported(client: ClientID, component: ComponentID, scope: InstallScope): boolean {
+  // The generated matrix describes current source. Published CLI 0.1.108
+  // still refuses Hermes Project MCP; keep its install commands unavailable.
+  if (PINNED_CATALOG_CLI_VERSION === '0.1.108' && client === 'hermes' &&
+      scope === 'project' && component === 'mcp') return false;
   const row = clientCapabilities.get(client);
   const scoped = scope === 'user' ? row : row && 'project' in row ? row.project : undefined;
   if (!scoped) return false;

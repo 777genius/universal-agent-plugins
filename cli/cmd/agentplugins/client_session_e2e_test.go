@@ -44,7 +44,7 @@ func configureSessionJourney(t *testing.T, app agentpluginscli.App, detector ses
 	app.SessionEnv = clients.Env{NativeConfig: kernel, Runner: sessionInventoryRunner{calls: detector.probes}}
 	app.Lifecycle.NativeObserver = providers.NativeIdentityObserver{Registry: app.ClientRegistry,
 		Stager: app.Lifecycle.Stager, NativeConfig: &kernel}
-	app.StartNativeSession = func(_ context.Context, plan clients.SessionPlan) error {
+	app.StartNativeSession = func(_ context.Context, plan clients.SessionPlan, _ []string) error {
 		*starts = append(*starts, plan)
 		return nil
 	}

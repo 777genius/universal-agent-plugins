@@ -395,6 +395,7 @@ func TestStateMigrationClassifiesPersistedPendingWork(t *testing.T) {
 			receipt := domain.MutationReceipt{OperationID: "pending-op", Sequence: 1, MutationType: "directory_swap", ClientBindingID: binding.ClientBindingID, Phase: "state_committed"}
 			switch kind {
 			case "transaction-receipt":
+				receipt.MutationType = "directory_remove"
 				state.TransactionReceipts = []domain.MutationReceipt{receipt}
 			case "binding-receipt":
 				binding.Receipts = []domain.MutationReceipt{receipt}

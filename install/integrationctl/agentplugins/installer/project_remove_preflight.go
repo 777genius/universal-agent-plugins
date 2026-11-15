@@ -7,6 +7,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 // Observe the recorded native file set at each existing removal fence. Empty
@@ -28,7 +29,8 @@ func (e *Engine) confirmProjectRemovalFiles(ctx context.Context, client domain.D
 	client.ProfileAuthority = domain.CloneProfileAuthority(client.ProfileAuthority)
 	managed := projectRemovalObservationBinding(binding)
 	kernel := nativeconfig.New()
-	observer := providers.NativeIdentityObserver{Stager: providers.Stager{}, NativeConfig: &kernel, Registry: e.cfg.Registry}
+	observer := providers.NativeIdentityObserver{Stager: providers.Stager{}, NativeConfig: &kernel, Registry: e.cfg.Registry,
+		ProjectRoots: transaction.ProjectRootPublisher{Kernel: transaction.Kernel{StateStore: e.store}}}
 	observed, err := observer.ObservePreparedIdentity(ctx, client, plan, &managed)
 	if err != nil {
 		return fmt.Errorf("%w: project native file removal preflight: %w", ErrInvalidRequest, err)
