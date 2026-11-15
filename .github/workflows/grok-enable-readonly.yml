@@ -5,6 +5,7 @@ on:
       - 'install/integrationctl/adapters/process/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
       - 'scripts/e2e/grok-enable-readonly.py'
+      - 'scripts/grok_bwrap_policy_setup.py'
       - '.github/workflows/grok-enable-readonly.yml'
   push:
     branches: [main]
@@ -12,6 +13,7 @@ on:
       - 'install/integrationctl/adapters/process/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
       - 'scripts/e2e/grok-enable-readonly.py'
+      - 'scripts/grok_bwrap_policy_setup.py'
       - '.github/workflows/grok-enable-readonly.yml'
 permissions:
   contents: read
@@ -95,6 +97,10 @@ jobs:
               runtime_package_note='grok-runtime-packages.txt records the distro baseline; /usr/bin/bwrap is this pinned upstream build'),
               sort_keys=True))
           PYTHON
+      - name: Install the pinned per-bwrap policy and prove the clean-runtime child
+        run: |
+          sudo -n /usr/bin/python3 -B scripts/grok_bwrap_policy_setup.py "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/grok-bwrap-policy.json"
       - name: Build exact tagged helpers without ambient Go flags
         env:
           GOENV: 'off'
@@ -234,6 +240,7 @@ jobs:
             ${{ runner.temp }}/grok-runtime-build.json
             ${{ runner.temp }}/grok-runtime-packages.txt
             ${{ runner.temp }}/grok-bubblewrap-build.json
+            ${{ runner.temp }}/grok-bwrap-policy.json
             ${{ runner.temp }}/grok-bubblewrap-help.txt
           if-no-files-found: error
           retention-days: 14
