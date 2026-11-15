@@ -1,9 +1,13 @@
-name: Grok Enablement Native Admission
+name: Grok Enablement Native Lifecycle
 on:
   pull_request:
     paths:
       - 'install/integrationctl/adapters/process/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'cli/cmd/agentplugins/project_grok_public_native_linux_test.go'
+      - 'install/integrationctl/agentplugins/installer/**'
+      - 'install/integrationctl/agentplugins/usecase/**'
+      - 'install/integrationctl/agentplugins/ports/**'
       - 'scripts/e2e/grok-enable-readonly.py'
       - 'scripts/grok_bwrap_policy_setup.py'
       - 'scripts/test_grok_bwrap_policy_*.py'
@@ -13,6 +17,10 @@ on:
     paths:
       - 'install/integrationctl/adapters/process/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'cli/cmd/agentplugins/project_grok_public_native_linux_test.go'
+      - 'install/integrationctl/agentplugins/installer/**'
+      - 'install/integrationctl/agentplugins/usecase/**'
+      - 'install/integrationctl/agentplugins/ports/**'
       - 'scripts/e2e/grok-enable-readonly.py'
       - 'scripts/grok_bwrap_policy_setup.py'
       - 'scripts/test_grok_bwrap_policy_*.py'
@@ -123,15 +131,18 @@ jobs:
           git diff --exit-code HEAD --
           go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-readonly-test" ./install/integrationctl/agentplugins/clients/grok
           go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-runtime-metadata-test" ./install/integrationctl/adapters/process
+          go test -tags=grokpublicnative -c -o "$RUNNER_TEMP/grok-public-test" ./cli/cmd/agentplugins
           "$RUNNER_TEMP/grok-runtime-metadata-test" \
             -test.run='^TestReadonlyRuntimeMetadataDiagnostic(Controls|VisitBound)$' -test.count=1 -test.v -test.timeout=30s
           sudo install -m 0555 "$RUNNER_TEMP/grok-readonly-test" "$RUNNER_TEMP/grok-runtime-input/grok-readonly-test"
+          sudo install -m 0555 "$RUNNER_TEMP/grok-public-test" "$RUNNER_TEMP/grok-runtime-input/grok-public-test"
           sudo install -m 0555 "$RUNNER_TEMP/grok-runtime-metadata-test" "$RUNNER_TEMP/grok-runtime-input/grok-runtime-metadata-test"
           sudo install -m 0444 scripts/e2e/grok-enable-readonly.py "$RUNNER_TEMP/grok-runtime-input/grok-enable-readonly.py"
           python3 -I -B - <<'PYTHON' > "$RUNNER_TEMP/grok-runtime-build.json"
           import hashlib, json, os, pathlib, stat, subprocess
           temporary = pathlib.Path(os.environ['RUNNER_TEMP'])
           sources = {'grok-readonly-test': temporary / 'grok-readonly-test',
+                     'grok-public-test': temporary / 'grok-public-test',
                      'grok-runtime-metadata-test': temporary / 'grok-runtime-metadata-test',
                      'grok-enable-readonly.py': pathlib.Path('scripts/e2e/grok-enable-readonly.py')}
           copied = {}
@@ -150,6 +161,7 @@ jobs:
               source_tree=command('git', 'rev-parse', 'HEAD^{tree}'), go_version=command('go', 'version'),
               build_environment={key: os.environ[key] for key in ('GOENV','GOFLAGS','GOEXPERIMENT','GOTOOLCHAIN','GOOS','GOARCH','GOAMD64','CGO_ENABLED','GOWORK')},
               build_flags={'grok-readonly-test': ['test', '-tags=grokreadonlynative', '-c'],
+                           'grok-public-test': ['test', '-tags=grokpublicnative', '-c'],
                            'grok-runtime-metadata-test': ['test', '-tags=grokreadonlynative', '-c']},
               copied_inputs=copied), sort_keys=True))
           PYTHON
@@ -176,10 +188,10 @@ jobs:
             --property="RootDirectory=$RUNNER_TEMP/grok-runtime-root" --property=MountAPIVFS=yes \
             --property="BindReadOnlyPaths=$RUNNER_TEMP/grok-runtime-input:/opt/uap-input" \
             --property="BindPaths=$RUNNER_TEMP/grok-readonly-evidence:/work /sys/fs/cgroup" \
-            --property=RuntimeMaxSec=180s --property=TimeoutStopSec=15s \
+            --property=RuntimeMaxSec=660s --property=TimeoutStopSec=15s \
             /usr/bin/env -i PATH=/usr/bin:/bin \
             /usr/bin/python3 -I -B /opt/uap-input/grok-enable-readonly.py \
-            --test /opt/uap-input/grok-readonly-test --output /work
+            --test /opt/uap-input/grok-readonly-test --public-test /opt/uap-input/grok-public-test --output /work
       - name: Retain bounded kernel context without qualification
         if: always()
         continue-on-error: true
