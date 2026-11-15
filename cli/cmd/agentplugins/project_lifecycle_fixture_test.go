@@ -14,12 +14,15 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
+	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
+	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 type projectJourneyDetector struct{ root string }
@@ -42,6 +45,8 @@ type projectJourneyTransport struct {
 	mu         sync.Mutex
 	archive    []byte
 	diagnostic *projectGitDiagnostic
+	ctx        context.Context
+	tempRoot   string
 }
 
 type projectJourney struct {
@@ -88,21 +93,30 @@ func projectJourneyGit(t *testing.T, root string, args ...string) {
 
 func newProjectJourneyTransport(t *testing.T, kind string) *projectJourneyTransport {
 	t.Helper()
-	gitHome := projectJourneyTemp(t)
+	return newProjectJourneyTransportIn(context.Background(), t, kind, "")
+}
+
+func newProjectJourneyTransportIn(ctx context.Context, t *testing.T, kind string, tempRoot string) *projectJourneyTransport {
+	t.Helper()
+	transport := &projectJourneyTransport{tempRoot: tempRoot}
+	if tempRoot != "" {
+		transport.ctx = ctx
+	}
+	gitHome := transport.temporary(t)
 	for _, name := range []string{"HOME", "USERPROFILE", "XDG_CONFIG_HOME"} {
 		t.Setenv(name, gitHome)
 	}
 	projectJourneyWrite(t, filepath.Join(gitHome, ".gitconfig"), "[credential]\n helper =\n[http]\n schannelUseSSLCAInfo = true\n")
-	transport := &projectJourneyTransport{repo: projectJourneyTemp(t)}
+	transport.repo = transport.temporary(t)
 	projectJourneyWrite(t, filepath.Join(transport.repo, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"project-demo","version":"1.0.0"}`)
 	projectJourneyWrite(t, filepath.Join(transport.repo, "skills", "docs", "SKILL.md"), projectJourneySkill)
 	projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"stdio","command":"go","args":["version"],"env":{"DATA":"${PLUGIN_DATA}"}}}}`)
-	projectJourneyGit(t, transport.repo, "init", "-b", "main")
-	projectJourneyGit(t, transport.repo, "add", ".")
-	projectJourneyGit(t, transport.repo, "commit", "-m", "disposable project source")
-	remoteRoot := projectJourneyTemp(t)
+	transport.git(t, transport.repo, "init", "-b", "main")
+	transport.git(t, transport.repo, "add", ".")
+	transport.git(t, transport.repo, "commit", "-m", "disposable project source")
+	remoteRoot := transport.temporary(t)
 	transport.remote = filepath.Join(remoteRoot, "repo.git")
-	projectJourneyGit(t, transport.repo, "clone", "--quiet", "--bare", transport.repo, transport.remote)
+	transport.git(t, transport.repo, "clone", "--quiet", "--bare", transport.repo, transport.remote)
 	git, err := exec.LookPath("git")
 	if err != nil {
 		t.Fatal(err)
@@ -110,6 +124,10 @@ func newProjectJourneyTransport(t *testing.T, kind string) *projectJourneyTransp
 	backend := &cgi.Handler{Path: git, Args: []string{"http-backend"}, Env: []string{"GIT_PROJECT_ROOT=" + remoteRoot, "GIT_HTTP_EXPORT_ALL=1"}}
 	transport.archive = projectJourneyArchive(t, transport.repo)
 	transport.server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if ctx != nil && ctx.Err() != nil {
+			http.Error(w, "fixture canceled", http.StatusServiceUnavailable)
+			return
+		}
 		if strings.HasPrefix(r.URL.Path, "/repo.git/") {
 			backend.ServeHTTP(w, r)
 			return
@@ -119,7 +137,7 @@ func newProjectJourneyTransport(t *testing.T, kind string) *projectJourneyTransp
 		_, _ = w.Write(transport.archive)
 	}))
 	t.Cleanup(transport.server.Close)
-	ca := filepath.Join(projectJourneyTemp(t), "ca.pem")
+	ca := filepath.Join(transport.temporary(t), "ca.pem")
 	projectJourneyWrite(t, ca, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: transport.server.Certificate().Raw})))
 	t.Setenv("GIT_SSL_CAINFO", ca)
 	transport.endpoint = transport.server.URL + "/package.zip"
@@ -127,6 +145,39 @@ func newProjectJourneyTransport(t *testing.T, kind string) *projectJourneyTransp
 		transport.endpoint = transport.server.URL + "/repo.git"
 	}
 	return transport
+}
+
+// An explicit caller root belongs to the caller until it accepts the completed
+// native evidence. Never register automatic deletion of these directories.
+func (transport *projectJourneyTransport) temporary(t *testing.T) string {
+	t.Helper()
+	if transport.tempRoot == "" {
+		return projectJourneyTemp(t)
+	}
+	root, err := os.MkdirTemp(transport.tempRoot, "journey-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func (transport *projectJourneyTransport) git(t *testing.T, root string, args ...string) {
+	t.Helper()
+	if transport.ctx == nil {
+		projectJourneyGit(t, root, args...)
+		return
+	}
+	ctx, cancel := context.WithTimeout(transport.ctx, 15*time.Second)
+	defer cancel()
+	argv := append([]string{"git", "-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"}, args...)
+	env := append(os.Environ(), "GIT_AUTHOR_NAME=UAP fixture", "GIT_AUTHOR_EMAIL=fixture@example.test", "GIT_COMMITTER_NAME=UAP fixture", "GIT_COMMITTER_EMAIL=fixture@example.test")
+	result, err := (processadapter.OS{}).RunWithTreeExitGrace(ctx, legacyports.Command{Argv: argv, Dir: root, Env: env, StdoutLimitBytes: 1 << 20}, time.Second)
+	if !result.CleanupComplete && !result.NoChildStarted {
+		t.Fatal("fixture Git cleanup is unconfirmed; caller retains its directories")
+	}
+	if err != nil || result.ExitCode != 0 {
+		t.Fatalf("fixture Git failed after settlement: %v (exit %d)", err, result.ExitCode)
+	}
 }
 
 func projectJourneyArchive(t *testing.T, root string) []byte {
@@ -153,7 +204,7 @@ func newProjectJourney(t *testing.T, transport *projectJourneyTransport) project
 	if transport.diagnostic == nil {
 		transport.diagnostic = &projectGitDiagnostic{counts: map[string]uint16{}, endpoint: transport.server.URL + "/repo.git", log: func(record string) { t.Log(record) }}
 	}
-	journey := projectJourney{home: projectJourneyTemp(t), a: projectJourneyTemp(t), b: projectJourneyTemp(t), transport: transport}
+	journey := projectJourney{home: transport.temporary(t), a: transport.temporary(t), b: transport.temporary(t), transport: transport}
 	journey.cache = filepath.Join(journey.home, "uap")
 	for _, native := range []string{filepath.Join(journey.home, ".gemini"), filepath.Join(journey.a, ".gemini"), filepath.Join(journey.b, ".gemini")} {
 		projectJourneyWrite(t, filepath.Join(native, "settings.json"), "{\n// retained foreign settings\n\"mcpServers\":{\"foreign\":{\"url\":\"https://foreign.test/mcp\"}},\"theme\":\"foreign\"\n}\n")
@@ -178,9 +229,10 @@ func configureProjectJourney(app agentpluginscli.App, home string, transport *pr
 	app.SecurityIndex, app.DirectoryClient, app.DiscoveryClient = nil, nil, nil
 	app.SecurityEvaluator = projectJourneySecurity{}
 	app.SecurityEvaluatorForDryRun = func(string) ports.PackageSecurityEvaluator { return projectJourneySecurity{} }
-	app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: home, HTTPClient: transport.server.Client(), Runner: projectGitDiagnosticRunner{recorder: transport.diagnostic, root: home}}
+	runner := sourceacquisition.OSRunner{ReportCleanupEvidence: transport.ctx != nil}
+	app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: home, HTTPClient: transport.server.Client(), Runner: projectGitDiagnosticRunner{recorder: transport.diagnostic, root: home, delegate: runner}}
 	app.SourceAcquirerForDryRun = func(root string) agentpluginscli.SourceAcquirer {
-		return sourceacquisition.Acquirer{TempRoot: root, HTTPClient: transport.server.Client(), Runner: projectGitDiagnosticRunner{recorder: transport.diagnostic, root: root}}
+		return sourceacquisition.Acquirer{TempRoot: root, HTTPClient: transport.server.Client(), Runner: projectGitDiagnosticRunner{recorder: transport.diagnostic, root: root, delegate: runner}}
 	}
 	app.DirectoryClientForDryRun, app.CommitDirectoryPreview = nil, nil
 	compose := app.ForScope

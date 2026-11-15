@@ -12,6 +12,11 @@ on:
     - cron: "0 4 * * 1"
   workflow_dispatch:
 
+# Replace superseded PR checks; preserve exact push, scheduled and manual runs.
+concurrency:
+  group: docs-canary-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

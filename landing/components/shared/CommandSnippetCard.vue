@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { renderHighlightedCommand } from '~/utils/commandHighlight';
+import { withNativeCliInvocation } from '~/utils/cliInvocation';
+import { useInstallPreferencesStore } from '~/stores/installPreferences';
 
 const { t } = useI18n();
+const preferences = useInstallPreferencesStore();
 
 const props = withDefaults(
   defineProps<{
@@ -19,6 +22,9 @@ const props = withDefaults(
 );
 
 const copied = ref(false);
+const renderedCommand = computed(() =>
+  withNativeCliInvocation(props.command, preferences.useNativeCli),
+);
 
 let copiedTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -50,7 +56,7 @@ const copyCommand = async () => {
 
   copied.value = false;
   if (copiedTimer) clearTimeout(copiedTimer);
-  const text = props.command.trim();
+  const text = renderedCommand.value.trim();
   let success = false;
   try {
     if (navigator.clipboard?.writeText) {
@@ -74,7 +80,7 @@ const copyCommand = async () => {
   }, 1800);
 };
 
-const commandLines = computed(() => renderHighlightedCommand(props.command));
+const commandLines = computed(() => renderHighlightedCommand(renderedCommand.value));
 const copyStateLabel = computed(() =>
   copied.value ? (props.copiedLabel ?? t('download.copied')) : (props.copyLabel ?? t('download.copy')),
 );

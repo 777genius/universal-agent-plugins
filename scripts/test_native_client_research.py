@@ -1,6 +1,7 @@
 """Inert process-capture regressions; no native client or hosted guard spoofing."""
 import errno
 import importlib.util
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -8,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
 research = None
@@ -15,6 +17,31 @@ if os.name == "posix":
     SPEC = importlib.util.spec_from_file_location("bounded_research", Path(__file__).with_name("native_client_research.py"))
     research = importlib.util.module_from_spec(SPEC)
     SPEC.loader.exec_module(research)
+
+
+class PortableReadTests(unittest.TestCase):
+    def load(self):
+        spec = importlib.util.spec_from_file_location("portable_research", Path(__file__).with_name("native_client_research.py"))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_import_and_bounded_reads_do_not_require_posix_resource(self):
+        with patch.dict(sys.modules, {"resource": None}):
+            module = self.load()
+            self.assertEqual(module.bounded_read(io.BytesIO(b"bounded"), 7), b"bounded")
+            with self.assertRaises(ModuleNotFoundError):
+                module.child_limits()
+
+    def test_unsupported_probe_refuses_before_files_or_processes(self):
+        module = self.load()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(module, "os", SimpleNamespace(name="unsupported")), patch.object(module.subprocess, "Popen") as spawn:
+                with self.assertRaisesRegex(ValueError, "requires POSIX"):
+                    module.run_probe(["never-executed"], root, {}, root, "refused")
+                spawn.assert_not_called()
+            self.assertEqual(list(root.iterdir()), [])
 
 
 @unittest.skipUnless(os.name == "posix", "requires POSIX process-group signaling")

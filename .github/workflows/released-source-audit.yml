@@ -44,8 +44,30 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  harness-unit:
+    name: Harness unit tests
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install pinned native config parser
+        run: python3 -m pip install PyYAML==6.0.3
+      - name: Exercise receipt refusals
+        run: python3 scripts/test_released_source_audit.py
+
+  # Live qualification of the published release. Manual only: it is run after a
+  # new public release is cut, so merging harness changes never depends on the
+  # release that is currently published.
   source-lifecycle:
     name: Public .108 / ${{ matrix.client }} / ${{ matrix.target }}
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     strategy:

@@ -195,13 +195,22 @@ func (service Service) verifyClientReadOnly(ctx context.Context, input AddInput,
 		delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}
 		return service.observePreparedProjectFiles(ctx, input, result.Plan, result.InstallationID, client, delivery)
 	}
-	if result.Plan.SelectedDelivery.IsZero() && !domain.ShouldReadOnlyVerifyForScope(input.Client.ClientID, input.Scope, input.BackendExecutable, input.InstallIntent) {
+	if result.Plan.SelectedDelivery.IsZero() && !domain.ShouldReadOnlyVerifyForScope(input.Client.ClientID, input.Scope, input.BackendExecutable, input.InstallIntent) && !service.confirmedPreparedUserObservation(input, result.Plan, client) {
 		return domain.ActivationOutcome{}, nil
 	}
 	delivery := domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: result.Plan.TargetRoot, ActivePath: client.TargetLocator, ArtifactDigest: managedDigest(client), NativeObjects: client.NativeObjects}
 	outcome, err := service.activateReadOnlyWithObservation(ctx, client, domain.ActivationRequest{Client: input.Client, Plan: result.Plan, Delivery: delivery, DeclaredName: input.Envelope.Manifest.Name, Replacing: true, BackendExecutable: input.BackendExecutable, PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...), VerifyOnly: true})
 	outcome = preserveManagedAuthentication(outcome, client.Authentication)
 	return outcome, err
+}
+
+// A confirmed repair may observe an intact Prepared User binding through the
+// same scoped verifier used by repeated add. Preview and file-only profiles do
+// not acquire native authority, and successful inventory does not mean Active.
+func (service Service) confirmedPreparedUserObservation(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding) bool {
+	return input.Scope == domain.ScopeUser && plan.Scope == domain.ScopeUser && client.Scope == string(domain.ScopeUser) &&
+		client.Materialization == domain.MaterializationMaterialized && client.Activation == domain.ActivationPrepared &&
+		input.Confirmed && !input.DryRun && service.canResumePreparedObservation(input, plan)
 }
 
 func preserveManagedAuthentication(outcome domain.ActivationOutcome, current domain.AuthenticationState) domain.ActivationOutcome {

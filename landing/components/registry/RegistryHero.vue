@@ -2,9 +2,10 @@
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import type { RegistryIndex } from '~/types/registry';
 import { installTargets, canonicalInstallTargets, cliInstallTargets, reconcileLocalChatGPTTargets, type InstallTargetID } from '~/data/installTargets';
-import { pluginInstallAvailability } from '~/utils/pluginInstallAvailability';
+import { pluginInstallAvailability, reconcilePluginSourceTargets } from '~/utils/pluginInstallAvailability';
 import { pluginTargetDescription } from '~/utils/pluginTargetDescription';
 import { pluginCommands } from '~/utils/commands';
+import { pinnedCatalogCommands, pinnedCatalogRepairLimitation } from '~/utils/projectCatalogSource';
 import { countAtElapsed, PLUGIN_COUNT_ANIMATION_MS } from '~/utils/countAnimation';
 import { catalogVisiblePlugins, groupCatalogPlugins } from '~/utils/filter';
 import { expectedDistribution, resolveDistribution } from '~/utils/registry';
@@ -181,10 +182,18 @@ const fallbackReason = computed(() => {
   );
 });
 defineExpose({ fallbackReason });
+const pinnedSelection = computed(() => {
+  const available = pluginInstallAvailability(demoPlugin.value, selectedTargets.value);
+  return !autoDetect.value && current.value && available?.kind === 'pinned_git'
+    ? available.selection : undefined;
+});
+const pinnedRepairLimitation = computed(() => pinnedCatalogRepairLimitation(pinnedSelection.value));
 const command = computed(() => {
   const available = pluginInstallAvailability(demoPlugin.value, selectedTargets.value);
   if (!current.value || (!autoDetect.value && !available))
     return '';
+  if (pinnedSelection.value)
+    return pinnedCatalogCommands(demoPlugin.value, pinnedSelection.value.client, 'user').add;
   return pluginCommands(
     demoPlugin.value,
     autoDetect.value ? undefined : cliInstallTargets(selectedClients.value.map((client) => client.id)),
@@ -197,7 +206,9 @@ function updateTargets(values: string[]) {
   if (!next.length) return;
   preferences.selectPackage(
     selectionIdentity.value,
-    { ...choice.value, targetIds: reconcileLocalChatGPTTargets(next, selectedTargets.value) },
+    { ...choice.value, targetIds: reconcileLocalChatGPTTargets(
+      reconcilePluginSourceTargets(demoPlugin.value, next, selectedTargets.value), selectedTargets.value,
+    ) },
     availableTargets.value,
   );
 }
@@ -286,6 +297,12 @@ function updateTargets(values: string[]) {
                     >
                   </div>
                   <div class="hero-quick-start__command">
+                    <p v-if="pinnedSelection" class="install-panel__notice" role="status">
+                      {{ t('registryUi.install.pinnedCatalogSource') }}
+                      <template v-if="pinnedRepairLimitation">
+                        {{ t(pinnedRepairLimitation.key, pinnedRepairLimitation.params) }}
+                      </template>
+                    </p>
                     <CommandSnippet v-if="command" :command="command" kind="add" inline />
                     <p v-else class="install-panel__notice" role="status">
                       {{ t('shell.hero.refreshNotice') }}

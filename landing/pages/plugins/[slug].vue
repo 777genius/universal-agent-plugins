@@ -41,6 +41,8 @@ const clientDelivery = installTargets.flatMap((client) => {
     );
     return policy ? [{ client, delivery: policy.delivery, route: 'user' }] : [];
   }
+  if (user?.kind === 'pinned_git')
+    return [{ client, delivery: 'source', route: 'pinned_source' }];
   const project = pluginInstallAvailability(plugin, [client.id], 'project');
   if (project?.kind === 'signed') {
     const policy = project.resolution.distribution?.targets.find(
@@ -49,7 +51,7 @@ const clientDelivery = installTargets.flatMap((client) => {
     return policy ? [{ client, delivery: policy.delivery, route: 'signed_project' }] : [];
   }
   return project?.kind === 'pinned_git'
-    ? [{ client, delivery: 'prepared', route: 'pinned_project' }]
+    ? [{ client, delivery: 'source', route: 'pinned_source' }]
     : [];
 });
 const supportedClients = clientDelivery.map(({ client }) => client);
@@ -77,9 +79,9 @@ const clientGroups = computed(() =>
         .map(({ client }) => client),
     },
     {
-      label: t('registryUi.detail.exactGitProjectSource'),
+      label: t('registryUi.detail.exactGitSource'),
       clients: clientDelivery
-        .filter(({ route }) => route === 'pinned_project')
+        .filter(({ route }) => route === 'pinned_source')
         .map(({ client }) => client),
     },
   ].filter((group) => group.clients.length > 0),

@@ -3,7 +3,11 @@
   See site/NOTICE.md for the complete attribution.
 -->
 <script setup lang="ts">
+import { useInstallPreferencesStore } from '~/stores/installPreferences';
+import { withNativeCliInvocation } from '~/utils/cliInvocation';
+
 const { t } = useI18n();
+const preferences = useInstallPreferencesStore();
 type CommandKind = 'terminal' | 'add' | 'update' | 'repair' | 'remove';
 
 const props = withDefaults(
@@ -22,11 +26,14 @@ const props = withDefaults(
   },
 );
 const copied = ref(false);
+const renderedCommand = computed(() =>
+  withNativeCliInvocation(props.command, preferences.useNativeCli),
+);
 const visibleCommand = computed(() => {
-  if (!props.compact) return props.command;
-  if (props.command.includes(' --target '))
-    return props.command.replace(' --target ', '\n--target ');
-  return props.command.replace(/^(npx -y universal-agent-plugins\s+\S+)\s+/, '$1\n');
+  if (!props.compact) return renderedCommand.value;
+  if (renderedCommand.value.includes(' --target '))
+    return renderedCommand.value.replace(' --target ', '\n--target ');
+  return renderedCommand.value.replace(/^(npx -y universal-agent-plugins\s+\S+|agentplugins\s+(?:add|update|repair|remove|switch))\s+/, '$1\n');
 });
 let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -39,11 +46,11 @@ async function copyCommand() {
   if (timer) clearTimeout(timer);
   let success = false;
   try {
-    await navigator.clipboard.writeText(props.command);
+    await navigator.clipboard.writeText(renderedCommand.value);
     success = true;
   } catch {
     const field = document.createElement('textarea');
-    field.value = props.command;
+    field.value = renderedCommand.value;
     field.style.position = 'fixed';
     field.style.opacity = '0';
     try {

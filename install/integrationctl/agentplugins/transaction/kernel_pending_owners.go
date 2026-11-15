@@ -50,7 +50,7 @@ func (kernel Kernel) pendingOwners(ctx context.Context, state domain.StateFileV2
 }
 
 func checkJournalStateAgreement(state domain.StateFileV2, journal dirswap.Receipt) error {
-	if journal.SchemaVersion != 5 && journal.SchemaVersion != 7 {
+	if journal.SchemaVersion != 5 && journal.SchemaVersion != 7 && journal.PublicationParentAuthority == nil && !hasPublicationReceipt(state, journal.OperationID) {
 		return nil
 	}
 	_, _, _, matched := findReceipt(state, journal)

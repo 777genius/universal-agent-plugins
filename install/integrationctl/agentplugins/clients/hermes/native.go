@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/pathcontract"
 )
 
 const (
@@ -34,8 +37,8 @@ func components(plan domain.DeliveryPlan, selectedPackage string) (shared.Projec
 	}
 	layout := shared.ProjectComponents{
 		SkillsRoot: filepath.Join(authority, "skills"),
-		// There is no project-local Hermes MCP authority. The sentinel path
-		// is never written: this layout admits Skills alone.
+		// Project Skills keep their original authority. componentLayout adds
+		// the separately owned selected-session MCP path for Project requests.
 		ConfigPaths:        nativeconfig.Paths{JSON: filepath.Join(authority, "config.yaml")},
 		Codec:              nativeconfig.CodecHermes,
 		SkillKind:          userSkillKind,
@@ -63,8 +66,8 @@ func components(plan domain.DeliveryPlan, selectedPackage string) (shared.Projec
 	return layout, nil
 }
 
-func buildSkillObjects(ctx context.Context, staged string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
-	layout, err := components(plan, staged)
+func (adapter *Adapter) buildSkillObjects(ctx context.Context, staged string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) ([]domain.NativeObjectOwnership, error) {
+	layout, err := adapter.componentLayout(plan, staged)
 	if err != nil {
 		return nil, err
 	}
@@ -73,44 +76,62 @@ func buildSkillObjects(ctx context.Context, staged string, envelope domain.Packa
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if component.Kind == domain.ComponentMCPServer {
-			if plan.Scope != domain.ScopeUser || component.Support == domain.SupportUnsupported {
-				return nil, fmt.Errorf("hermes MCP has User authority only")
-			}
-			server, err := readHermesMCPServer(staged, component.Name)
-			if err != nil {
-				return nil, err
-			}
-			object, err := layout.MCPObject(component.Name, server, layout.ConfigPaths.JSON)
-			if err != nil {
-				return nil, err
-			}
-			objects = append(objects, object)
-			continue
-		}
-		if component.Kind != domain.ComponentSkill || component.Support == domain.SupportUnsupported {
-			return nil, fmt.Errorf("hermes package contains an unsupported component")
-		}
-		skill, ok := envelope.Skills[component.Name]
-		if !ok {
-			return nil, fmt.Errorf("hermes selected skill %q is missing from verified package", component.Name)
-		}
-		relative := filepath.ToSlash(filepath.Join("skills", component.Name))
-		if skill.RelativePath != "" {
-			relative = filepath.ToSlash(filepath.Dir(filepath.FromSlash(skill.RelativePath)))
-		}
-		object, err := layout.SkillObject(component.Name, relative, staged)
+		object, err := adapter.projectComponent(staged, envelope, plan.Scope, layout, component)
 		if err != nil {
 			return nil, err
 		}
 		objects = append(objects, object)
 	}
+	if err := layout.ValidateObjects(objects); err != nil {
+		return nil, err
+	}
+	if adapter.hasProjectSession(plan) {
+		objects = append(objects, sessionRootObject(plan.TargetContext.ProjectRoot))
+	}
 	sort.Slice(objects, func(i, j int) bool { return objects[i].ObjectID < objects[j].ObjectID })
-	return objects, layout.ValidateObjects(objects)
+	return objects, nil
 }
 
-func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
-	if in.Plan.Scope == domain.ScopeUser {
+func (adapter *Adapter) projectComponent(staged string, envelope domain.PackageEnvelope, scope domain.InstallScope, layout shared.ProjectComponents, component domain.ComponentDecision) (domain.NativeObjectOwnership, error) {
+	if component.Support == domain.SupportUnsupported {
+		return domain.NativeObjectOwnership{}, fmt.Errorf("hermes package contains an unsupported component")
+	}
+	if component.Kind == domain.ComponentMCPServer {
+		server, err := readHermesMCPServer(staged, component.Name)
+		if err != nil {
+			return domain.NativeObjectOwnership{}, err
+		}
+		if scope == domain.ScopeProject {
+			if err := hermesLiteralServer(server); err != nil {
+				return domain.NativeObjectOwnership{}, err
+			}
+		}
+		return layout.MCPObject(component.Name, server, layout.ConfigPaths.JSON)
+	}
+	if component.Kind != domain.ComponentSkill {
+		return domain.NativeObjectOwnership{}, fmt.Errorf("hermes package contains an unsupported component")
+	}
+	skill, ok := envelope.Skills[component.Name]
+	if !ok {
+		return domain.NativeObjectOwnership{}, fmt.Errorf("hermes selected skill %q is missing from verified package", component.Name)
+	}
+	relative := filepath.ToSlash(filepath.Join("skills", component.Name))
+	if skill.RelativePath != "" {
+		relative = filepath.ToSlash(filepath.Dir(filepath.FromSlash(skill.RelativePath)))
+	}
+	return layout.SkillObject(component.Name, relative, staged)
+}
+
+func (adapter *Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	if adapter.hasProjectSession(in.Plan) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if err := shared.DeliverManagedStdio(in.DeliverLauncher(), in.StagingPath, in.Envelope, in.Plan); err != nil {
+			return nil, err
+		}
+	}
+	if in.Plan.Scope == domain.ScopeUser || adapter.hasProjectSession(in.Plan) {
 		if err := shared.ProjectMCPServers(shared.MCPProjection{
 			Root: in.StagingPath, Envelope: in.Envelope,
 			Names:   shared.SupportedMCPNames(in.Plan),
@@ -120,14 +141,19 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 			return nil, err
 		}
 	}
-	return buildSkillObjects(ctx, in.StagingPath, in.Envelope, in.Plan)
+	if adapter.hasProjectSession(in.Plan) {
+		if err := bindHermesProjectStdio(in); err != nil {
+			return nil, err
+		}
+	}
+	return adapter.buildSkillObjects(ctx, in.StagingPath, in.Envelope, in.Plan)
 }
 
-func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
+func (adapter *Adapter) ProjectActiveNative(ctx context.Context, root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, _ string) ([]domain.NativeObjectOwnership, error) {
 	if root != plan.ActivePath {
 		return nil, fmt.Errorf("hermes active package differs from recorded installation")
 	}
-	return buildSkillObjects(ctx, root, envelope, plan)
+	return adapter.buildSkillObjects(ctx, root, envelope, plan)
 }
 
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, _ string) bool {
@@ -201,7 +227,7 @@ func readHermesMCPServer(root, name string) (nativeconfig.Server, error) {
 func hermesDesiredServers(root string, objects []domain.NativeObjectOwnership) (map[string]nativeconfig.Server, error) {
 	out := make(map[string]nativeconfig.Server)
 	for _, object := range objects {
-		if object.Kind != userMCPKind {
+		if object.Kind != userMCPKind && object.Kind != projectSessionMCPKind {
 			continue
 		}
 		server, err := readHermesMCPServer(root, object.LogicalName)
@@ -211,4 +237,67 @@ func hermesDesiredServers(root string, objects []domain.NativeObjectOwnership) (
 		out[object.LogicalName] = server
 	}
 	return out, nil
+}
+
+// Bind only the persisted expanded selection, preserving the authored command
+// for the trusted launcher's path contract. Repair reads this final document.
+func bindHermesProjectStdio(in clients.ProjectionInput) error {
+	var document map[string]any
+	path := filepath.Join(in.StagingPath, "mcp.json")
+	for _, name := range shared.SupportedMCPNames(in.Plan) {
+		source := in.Envelope.MCP.Servers[name]
+		if source.Type != "stdio" {
+			continue
+		}
+		if document == nil {
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			document, err = shared.DecodeStrictJSONObject(body)
+			if err != nil {
+				return err
+			}
+		}
+		server, err := readHermesMCPServer(in.StagingPath, name)
+		if err != nil {
+			return err
+		}
+		rawCWD, _ := source.Decoded["cwd"].(string)
+		cwd, err := pathcontract.ExpandCWD(rawCWD, in.Plan.ActivePath, in.PluginDataPath)
+		if err != nil {
+			return err
+		}
+		command, ok := source.Decoded["command"].(string)
+		servers, collectionOK := document["mcpServers"].(map[string]any)
+		entry, entryOK := servers[name].(map[string]any)
+		if !ok || command == "" || !collectionOK || !entryOK {
+			return fmt.Errorf("hermes selected stdio projection is incomplete")
+		}
+		entry["args"] = managedstdio.EncodedArguments(in.Plan.ActivePath, in.PluginDataPath, server.CWD, cwd.Anchor, command, server.Args)
+		entry["command"] = filepath.Join(in.Plan.ActivePath, filepath.FromSlash(managedstdio.RelativeDirectory), managedstdio.ExecutableName)
+	}
+	if document == nil {
+		return nil
+	}
+	return shared.WriteJSON(path, document)
+}
+
+// Pinned Hermes recursively interpolates every string value with this pattern.
+// Encoded child command/args survive it; other Project values must be literal.
+var hermesInterpolation = regexp.MustCompile(`\$\{[^}]+\}`)
+
+func hermesLiteralServer(server nativeconfig.Server) error {
+	values := append([]string{server.Command, server.CWD, server.URL}, server.Args...)
+	for _, mapping := range []map[string]string{server.Env, server.Headers} {
+		for _, value := range mapping {
+			values = append(values, value)
+		}
+	}
+	for _, value := range values {
+		if hermesInterpolation.MatchString(value) {
+			return fmt.Errorf("hermes Project MCP contains unsupported native interpolation")
+		}
+	}
+	return nil
 }

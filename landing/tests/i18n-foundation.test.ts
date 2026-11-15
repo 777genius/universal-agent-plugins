@@ -62,6 +62,10 @@ test('bounded UI selections survive remount and reject stale identities/IDs', ()
   assert.deepEqual(useInstallPreferencesStore(pinia).readPackage('gitlab@source', ['codex']).targetIds, ['codex']);
   assert.deepEqual(install.readPackage('other@source', ['codex']).targetIds, []);
   install.reconcilePackage('gitlab@source', ['cursor']);
+  assert.equal(install.package.identity, 'gitlab@source');
+  assert.deepEqual(install.package.targetIds, ['codex']);
+  assert.equal(install.package.autoDetect, false, 'Ineligibility cannot replace an explicit known choice');
+  install.reconcilePackage('other@source', ['cursor']);
   assert.equal(install.package.identity, '');
   install.reconcileChannels(['npm']);
   assert.equal(install.channelId, null);

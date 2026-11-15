@@ -28,6 +28,7 @@ type packageVerifier interface {
 // injected test/provider implementations, but OS execution never claims cleanup
 // based on descendant sampling.
 type NativeIdentityObserver struct {
+	ProjectRoots     ports.NativeProjectRootPublisher
 	Stager           packageVerifier
 	Runner           ports.CommandRunner
 	DiscoveryTimeout time.Duration
@@ -61,7 +62,7 @@ func (observer NativeIdentityObserver) requireRegistry() error {
 }
 
 func (observer NativeIdentityObserver) env() clients.Env {
-	return clients.Env{Runner: observer.Runner, NativeConfig: observer.nativeConfigKernel()}
+	return clients.Env{ProjectRoots: observer.ProjectRoots, Runner: observer.Runner, NativeConfig: observer.nativeConfigKernel()}
 }
 
 func (observer NativeIdentityObserver) nativeConfigKernel() nativeconfig.Kernel {

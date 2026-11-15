@@ -4,11 +4,14 @@ package transaction
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/directoryidentity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/profileauthority"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -34,6 +37,124 @@ func committedDirectoryObjects(before domain.StateFileV2, installationID, bindin
 		break
 	}
 	return objects
+}
+
+// Assemble durable facts from the actual directory result, preserving its origin.
+func recordedDirectoryMutation(mutation DirectoryMutation, raw dirswap.Receipt, owners []domain.PhysicalProfileOwner) (domain.MutationReceipt, error) {
+	parent, err := recordedPublicationParent(raw.PublicationParentAuthority)
+	if err != nil {
+		return domain.MutationReceipt{}, err
+	}
+	return domain.MutationReceipt{PublicationParentAuthority: parent, DirectoryProof: directoryProof(raw), ProfileOwners: copyOwners(owners), DataReceiptID: raw.DataReceiptID,
+		OperationID:          mutation.OperationID,
+		OperationGroupID:     mutation.OperationID,
+		Sequence:             mutation.Sequence,
+		MutationType:         "directory_swap",
+		ClientBindingID:      mutation.ClientBindingID,
+		ActivePath:           raw.ActivePath,
+		StagingPath:          raw.StagingPath,
+		BackupPath:           raw.BackupPath,
+		BeforeDigest:         mutation.BeforeDigest,
+		AfterDigest:          mutation.AfterDigest,
+		EnvironmentAuthority: mutation.EnvironmentAuthority,
+		Phase:                ReceiptPhaseStateCommitted,
+	}, nil
+}
+
+func recordDirectoryMutation(state *domain.StateFileV2, before domain.StateFileV2, index int, client domain.ClientBinding, mutation DirectoryMutation, receipt domain.MutationReceipt) {
+	if mutation.Standalone {
+		receipt.PublicationParentAuthority = domain.CloneProfileAuthority(receipt.PublicationParentAuthority)
+		state.TransactionReceipts = append(state.TransactionReceipts, receipt)
+		return
+	}
+	client.Receipts = append(client.Receipts, receipt)
+	client.NativeObjects = committedDirectoryObjects(before, mutation.InstallationID, mutation.ClientBindingID, mutation.NativeObjects)
+	client.Materialization = domain.MaterializationMaterialized
+	client.Activation = mutation.Activation
+	client.Authentication = mutation.Authentication
+	client.Policy = mutation.Policy
+	client.Verification = mutation.Verification
+	installation := state.Installations[index]
+	installation.OperationGroupID = mutation.OperationID
+	installation.Clients[mutation.ClientBindingID] = client
+	state.Installations[index] = installation
+}
+
+func validateStandalonePublication(mutation DirectoryMutation, before []byte) error {
+	if !mutation.Standalone {
+		if mutation.PublicationParentAuthority != nil {
+			return fmt.Errorf("publication parent is only valid for standalone publication")
+		}
+		return nil
+	}
+	if !mutation.RequireAbsent || mutation.Verify == nil || mutation.BeforeDigest != "" ||
+		len(mutation.NativeObjects) != 0 || mutation.Activation != "" || mutation.Authentication != "" ||
+		mutation.Policy != "" || mutation.Verification != "" {
+		return fmt.Errorf("standalone publication requires verified fresh contents without binding changes")
+	}
+	if mutation.PublicationParentAuthority == nil || mutation.PublicationParentAuthority.IsZero() || mutation.PublicationParentAuthority.Facts().CanonicalRoot != mutation.OwnedBase {
+		return fmt.Errorf("standalone publication original parent is required")
+	}
+	desired, err := marshalComparableState(mutation.DesiredState)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(before, desired) {
+		return fmt.Errorf("standalone publication cannot change installation state")
+	}
+	return nil
+}
+
+// Injected state stores receive the same early ancestry check as concrete stores.
+func (Kernel) validatePublicationParents(ctx context.Context, state domain.StateFileV2) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	for _, installation := range state.Installations {
+		for _, binding := range installation.Clients {
+			for _, receipt := range binding.Receipts {
+				if err := receipt.ValidatePublicationParent(false); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	for _, receipt := range state.TransactionReceipts {
+		if err := receipt.ValidatePublicationParent(true); err != nil {
+			return err
+		}
+		if receipt.PublicationParentAuthority == nil {
+			continue
+		}
+		if err := profileauthority.Revalidate(ctx, *receipt.PublicationParentAuthority); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func neutralPublicationParent(parent *domain.ProfileAuthority) (*directoryidentity.Authority, error) {
+	if parent == nil {
+		return nil, nil
+	}
+	authority, err := profileauthority.ToNeutral(*parent)
+	return &authority, err
+}
+
+func recordedPublicationParent(parent *directoryidentity.Authority) (*domain.ProfileAuthority, error) {
+	if parent == nil {
+		return nil, nil
+	}
+	authority, err := profileauthority.FromNeutral(*parent)
+	return &authority, err
+}
+
+func samePublicationParent(recorded *domain.ProfileAuthority, journal *directoryidentity.Authority) bool {
+	if recorded == nil || journal == nil {
+		return recorded == nil && journal == nil
+	}
+	converted, err := profileauthority.FromNeutral(*journal)
+	return err == nil && recorded.Equal(converted)
 }
 
 func groupReceipts(items []appliedGroupMutation) []domain.MutationReceipt {
@@ -99,4 +220,13 @@ func (kernel Kernel) verifyReceiptProof(r domain.MutationReceipt) error {
 		return err
 	}
 	return manager.VerifyRecorded(proof)
+}
+
+func hasPublicationReceipt(state domain.StateFileV2, operationID string) bool {
+	for _, receipt := range state.TransactionReceipts {
+		if receipt.OperationID == operationID && receipt.PublicationParentAuthority != nil {
+			return true
+		}
+	}
+	return false
 }

@@ -163,6 +163,10 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 			// Parallelism preserves real isolated Git transport without multiplying its
 			// process-containment startup latency across a serial eleven-client matrix.
 			t.Parallel()
+			if spec.id == domain.ClientKiro && runtime.GOOS == "windows" {
+				// Fresh User preparation does not authorize the unsupported ACP route.
+				spec.activation = string(domain.ActivationPrepared)
+			}
 			repo := dependencyRepo(t)
 			f, source, runner := dependencySpecHarness(t, repo, spec)
 			dependencyRun(t, f, "deps", "init", "--format", "json")
@@ -176,10 +180,6 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 				t.Fatal(err)
 			}
 			sourceID := githubIdentity("acme/demo", strings.TrimSpace(string(head)), "")
-			if spec.id == domain.ClientKiro && runtime.GOOS == "windows" {
-				dependencyKiroPlatformRefusal(t, f, runner, sourceID)
-				return
-			}
 			out := dependencyRun(t, f, "add", sourceID, "--target", string(spec.id), "--format", "json")
 			var saved struct {
 				Data struct {
@@ -198,7 +198,7 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 			dependencyWrite(t, mp, manifest)
 			dependencyRun(t, f, "deps", "lock", "--format", "json")
 			dependencyRun(t, f, "deps", "sync", "--locked", "--yes", "--format", "json")
-			binding := dependencyBinding(t, f)
+			binding := dependencyLifecycleBinding(t, f, spec)
 			if binding.Activation != spec.activation {
 				t.Fatalf("activation: got %s want %s", binding.Activation, spec.activation)
 			}
@@ -225,7 +225,7 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 				// The composed provider accepts explicit activation attestation before
 				// dispatching to the adapter. This is not native runtime observation.
 				dependencyRun(t, f, "add", githubIdentity("acme/demo", binding.Revision, ""), "--target", string(spec.id), "--activation-complete", "--format", "json")
-				attested := dependencyBinding(t, f)
+				attested := dependencyLifecycleBinding(t, f, spec)
 				if attested.Activation != "active" || attested.Verification != "installation_verified" {
 					t.Fatalf("attestation failed: %+v", attested)
 				}
@@ -253,7 +253,7 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 			beforeLookups := source.lookups
 			dependencyRun(t, f, "deps", "update", "demo", "--format", "json")
 			dependencyRun(t, f, "deps", "sync", "--locked", "--yes", "--format", "json")
-			binding = dependencyBinding(t, f)
+			binding = dependencyLifecycleBinding(t, f, spec)
 			if binding.TreeDigest == firstDigest || source.lookups != beforeLookups+1 {
 				t.Fatal("targeted update did not advance exactly one pin")
 			}
@@ -275,7 +275,7 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 			}
 			id := state.EnvironmentReceipts[0].InstallationID
 			dependencyRun(t, f, "repair", id, "--target", string(spec.id), "--format", "json")
-			repaired := dependencyBinding(t, f)
+			repaired := dependencyLifecycleBinding(t, f, spec)
 			if repaired.TreeDigest != binding.TreeDigest || repaired.ProjectionStatus != "" {
 				t.Fatalf("repair changed pin or retained drift: %+v", repaired)
 			}
@@ -283,12 +283,12 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 				t.Fatal("repair lost PLUGIN_DATA")
 			}
 			// Transfer only the portable agreement, then use real immutable Git fetch.
-			f2, _, _ := dependencySpecHarness(t, repo, spec)
+			f2, _, transferredRunner := dependencySpecHarness(t, repo, spec)
 			mp2, lp2 := f2.app.dependencyPaths()
 			dependencyWrite(t, mp2, dependencyRead(t, mp))
 			dependencyWrite(t, lp2, dependencyRead(t, lp))
 			dependencyRun(t, f2, "deps", "sync", "--locked", "--yes", "--format", "json")
-			if transferred := dependencyBinding(t, f2); transferred.TreeDigest != binding.TreeDigest {
+			if transferred := dependencyLifecycleBinding(t, f2, spec); transferred.TreeDigest != binding.TreeDigest {
 				t.Fatal("transfer changed package digest")
 			}
 			if status := dependencyRun(t, f2, "deps", "status", "--format", "json"); strings.Contains(status, "mismatch") || strings.Contains(status, "not_synced") {
@@ -300,7 +300,7 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 				if _, _, err := f.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil {
 					t.Fatal("missing external uninstall accepted")
 				}
-				_ = dependencyBinding(t, f)
+				_ = dependencyLifecycleBinding(t, f, spec)
 				dependencyRun(t, f, "deps", "sync", "--locked", "--yes", "--external-uninstalled", "--format", "json")
 			} else {
 				dependencyRun(t, f, "deps", "sync", "--locked", "--yes", "--format", "json")
@@ -318,43 +318,51 @@ func TestDependencyAllClientsLifecycle(t *testing.T) {
 			if _, err := f.app.dependencyStore().Get(context.Background(), domain.TreeDigestAlgorithm, binding.TreeDigest); err != nil {
 				t.Fatalf("remove lost store: %v", err)
 			}
+			if spec.id == domain.ClientKiro && runtime.GOOS == "windows" {
+				for _, observed := range []*dependencyFixtureRunner{runner, transferredRunner} {
+					if observed.calls != 0 || observed.duplex != 0 || observed.probes != 0 {
+						t.Fatalf("prepared Kiro lifecycle performed native work: %+v", observed)
+					}
+				}
+			}
 		})
 	}
 }
 
-// Windows deliberately cannot authorize automatic Kiro ACP containment or
-// settlement. Exercise the real preflight refusal, before any installed effects,
-// instead of advertising a successful fixture capability on that platform.
-func dependencyKiroPlatformRefusal(t *testing.T, f cliFixture, runner *dependencyFixtureRunner, source string) {
+// Windows keeps the public file lifecycle prepared throughout every observed
+// binding. Automatic ACP containment and settlement remain unsupported.
+func dependencyLifecycleBinding(t *testing.T, f cliFixture, spec dependencyClientSpec) installer.InspectedBinding {
 	t.Helper()
-	mp, lp := f.app.dependencyPaths()
-	manifest := dependencyRead(t, mp)
-	out, stderr, err := f.execute(false, "add", source, "--target", "kiro", "--format", "json")
-	if err == nil || !strings.Contains(out+stderr+err.Error(), "containment preflight failed") {
-		t.Fatalf("Kiro platform preflight did not refuse honestly: %v\n%s\n%s", err, out, stderr)
+	binding := dependencyBinding(t, f)
+	if spec.id != domain.ClientKiro || runtime.GOOS != "windows" {
+		return binding
 	}
-	if runner.duplex != 0 || runner.mutations != 0 {
-		t.Fatalf("unsupported Kiro platform performed native work: %+v", runner)
+	if binding.Activation != string(domain.ActivationPrepared) || binding.Verification != string(domain.VerificationPackageValid) || binding.Authentication != string(domain.AuthenticationNotChecked) {
+		t.Fatalf("Kiro preparation promoted runtime or authentication evidence: %+v", binding)
 	}
-	if dependencyRead(t, mp) != manifest {
-		t.Fatal("Kiro platform refusal changed manifest")
+	state, err := f.store.Load()
+	if err != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+		t.Fatalf("Kiro preparation lost its single saved binding: %+v %v", state, err)
 	}
-	for _, path := range []string{lp, f.store.Path, f.app.ManagedRoot, runner.claude.root} {
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			t.Fatalf("Kiro platform refusal wrote installed effect %s: %v", path, err)
-		}
+	saved, ok := state.Installations[0].Clients[binding.BindingID]
+	if !ok || saved.InstallIntent != domain.InstallIntentPrepare || saved.Scope != string(domain.ScopeUser) ||
+		saved.Activation != domain.ActivationPrepared || saved.Verification != domain.VerificationPackageValid || saved.Authentication != domain.AuthenticationNotChecked ||
+		saved.PendingNativeIntent != nil || saved.NativeActivationAttempt != "" {
+		t.Fatalf("Kiro preparation lost its persisted file-only intent: %+v", saved)
 	}
+	return binding
 }
 
 type dependencyFixtureRunner struct {
-	id                        domain.ClientID
-	claude                    dependencyClaudeListing
-	copilot                   liveCopilotRunner
-	grokPath                  string
-	mutations, duplex, probes int
+	id                               domain.ClientID
+	claude                           dependencyClaudeListing
+	copilot                          liveCopilotRunner
+	grokPath                         string
+	calls, mutations, duplex, probes int
 }
 
 func (r *dependencyFixtureRunner) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	r.calls++
 	args := command.Argv[1:]
 	if len(args) >= 2 && args[0] == "plugin" && args[1] != "list" {
 		r.mutations++
