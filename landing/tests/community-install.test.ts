@@ -42,8 +42,8 @@ function panelState({ installable = true, autoDetect = true, current = true, sta
     usePluginInstallSelection: () => ({
       scope: ref('user'), targetDistributions: ref(new Map()), projectAvailable: ref(false),
       guidedWebSelected: ref(false),
-      pinnedPiSource: ref(undefined), pinnedPiSelected: ref(false),
-      pinnedPiReleaseSource: ref(undefined),
+      pinnedSourceCommands: ref(undefined), pinnedSourceSelected: ref(false),
+      pinnedReleaseSource: ref(undefined),
       resolution: ref({ unavailable_reason: 'No compatible source.' }),
       updateTargets() {}, updateAutoDetect() {}, updateScope() {},
     }),

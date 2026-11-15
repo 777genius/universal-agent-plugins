@@ -8,6 +8,7 @@ import { installTargets, canonicalInstallTarget } from '../data/installTargets.t
 import { hasPluginInstallTarget, pluginInstallAvailability } from '../utils/pluginInstallAvailability.ts';
 import { agentInstallExample } from '../utils/agentInstallExample.ts';
 import { pluginCommands } from '../utils/commands.ts';
+import { pinnedCatalogCommands } from '../utils/projectCatalogSource.ts';
 import { resolveDistribution, vendorInstallSource } from '../utils/registry.ts';
 import { isFullyRetired } from '../utils/filter.ts';
 import { isKnownLocale } from '../data/i18n.ts';
@@ -52,7 +53,7 @@ for (const base of ['/', '/universal-agent-plugins/']) {
             catalogVisiblePlugins,
             pluginBenefit,
             installTargets, canonicalInstallTarget, hasPluginInstallTarget,
-            pluginInstallAvailability, agentInstallExample, pluginCommands,
+            pluginInstallAvailability, agentInstallExample, pluginCommands, pinnedCatalogCommands,
             resolveDistribution, vendorInstallSource, isFullyRetired,
             useDirectoryStatus: () => ({
               current: ref(true), expired: ref(false), published: ref(true),
