@@ -22,6 +22,12 @@ func TestOSRunnerFiniteProtocolRequiresCleanEOFExit(t *testing.T) {
 		}
 		_, _ = fmt.Fprintln(os.Stdout, "observed")
 		_, _ = io.Copy(io.Discard, reader)
+		if mode == "delayed" {
+			// A finite native server can flush its state after stdin closes.
+			// This exceeds the ordinary duplex grace but remains within the
+			// caller's explicitly bounded completion deadline.
+			time.Sleep(3 * time.Second)
+		}
 		if mode == "nonzero" {
 			os.Exit(17)
 		}
@@ -33,9 +39,13 @@ func TestOSRunnerFiniteProtocolRequiresCleanEOFExit(t *testing.T) {
 		os.Exit(0)
 	}
 	requireOrdinaryPreflight(t)
-	for _, mode := range []string{"success", "nonzero", "stalled"} {
+	for _, mode := range []string{"success", "delayed", "nonzero", "stalled"} {
 		t.Run(mode, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			timeout := 8 * time.Second
+			if mode == "stalled" {
+				timeout = time.Second
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			err := (OS{}).RunDuplexToCompletion(ctx, ports.Command{
 				Argv: []string{os.Args[0], "-test.run=^TestOSRunnerFiniteProtocolRequiresCleanEOFExit$"},
@@ -53,7 +63,8 @@ func TestOSRunnerFiniteProtocolRequiresCleanEOFExit(t *testing.T) {
 				}
 				return nil
 			})
-			if mode == "success" && err != nil || mode != "success" && err == nil {
+			success := mode == "success" || mode == "delayed"
+			if success && err != nil || !success && err == nil {
 				t.Fatalf("mode=%s result=%v", mode, err)
 			}
 			if mode == "nonzero" && !strings.Contains(err.Error(), "17") {
@@ -61,6 +72,9 @@ func TestOSRunnerFiniteProtocolRequiresCleanEOFExit(t *testing.T) {
 			}
 			if mode == "stalled" && !strings.Contains(err.Error(), "forced") {
 				t.Fatalf("forced cleanup was accepted as natural completion: %v", err)
+			}
+			if mode == "stalled" && !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("completion deadline was not preserved: %v", err)
 			}
 		})
 	}

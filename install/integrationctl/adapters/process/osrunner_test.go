@@ -636,7 +636,7 @@ func TestOSRunnerDuplexPlannedShutdownRejectsNaturalNonzeroExitAtTeardownBoundar
 		containment: func(*exec.Cmd) (duplexCommandContainment, error) {
 			return &naturalExitBoundaryContainment{}, nil
 		},
-	}, true)
+	}, true, duplexExitGrace)
 	if err == nil || !strings.Contains(err.Error(), "exited before planned process-tree shutdown") {
 		t.Fatalf("natural nonzero teardown-boundary exit error = %v", err)
 	}

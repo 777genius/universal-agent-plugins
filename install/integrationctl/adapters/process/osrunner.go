@@ -175,7 +175,7 @@ func (OS) RunDuplexWithPlannedShutdown(ctx context.Context, command ports.Comman
 	if err := duplexContainmentPreflight(); err != nil {
 		return err
 	}
-	return runDuplexMode(ctx, command, exchange, defaultDuplexPipeFactory, true)
+	return runDuplexMode(ctx, command, exchange, defaultDuplexPipeFactory, true, duplexExitGrace)
 }
 
 // DuplexCapability proves that both duplex lifecycle modes can place a child
@@ -185,10 +185,10 @@ func (OS) RunDuplexWithPlannedShutdown(ctx context.Context, command ports.Comman
 func (OS) DuplexCapability() error { return duplexContainmentPreflight() }
 
 func runDuplex(ctx context.Context, command ports.Command, exchange func(io.Writer, io.Reader) error, pipes duplexPipeFactory) error {
-	return runDuplexMode(ctx, command, exchange, pipes, false)
+	return runDuplexMode(ctx, command, exchange, pipes, false, duplexExitGrace)
 }
 
-func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.Writer, io.Reader) error, pipes duplexPipeFactory, plannedShutdownEnabled bool) (resultErr error) {
+func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.Writer, io.Reader) error, pipes duplexPipeFactory, plannedShutdownEnabled bool, exitGrace time.Duration) (resultErr error) {
 	if len(command.Argv) == 0 {
 		return exec.ErrNotFound
 	}
@@ -320,7 +320,7 @@ func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.
 		// stable process-tree identity; do not wait for a natural exit that the
 		// protocol intentionally never performs.
 	} else if !exited && exchangeDone && exchangeErr == nil {
-		grace := time.NewTimer(duplexExitGrace)
+		grace := time.NewTimer(exitGrace)
 		defer grace.Stop()
 		exited, exchangeErr = awaitDuplexExit(ctx, poll.C, grace.C, containment.exited)
 		forced = !exited || exchangeErr != nil

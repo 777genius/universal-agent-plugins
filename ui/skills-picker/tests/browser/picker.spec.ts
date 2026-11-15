@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { fixture, serveFixtures } from './fixtures';
-import type { Operation, Plan } from '../../src/shared/api/types';
+import type { Operation, Plan, Session } from '../../src/shared/api/types';
 
 test('cross-folder selection, safe preview, explicit review and completed result', async ({ page }) => {
   const fixture = await serveFixtures(page);
@@ -83,8 +83,12 @@ for (const setupRequired of [false, true]) {
     await expect(progress).toContainText(message);
     if (setupRequired) {
       await expect(progress).toContainText('1 / 1 · setup required');
+      await expect(progress).toContainText('Agent setup required');
+      await expect(progress).not.toContainText('NATIVE_SETUP_REQUIRED');
+      await expect(page.getByRole('status', { name: 'Skills readiness' })).not.toHaveClass(/neutral/);
       await expect(page.getByRole('heading', { name: 'Installation applied' })).toHaveCount(0);
     } else {
+      await expect(page.getByRole('status', { name: 'Skills readiness' })).toHaveClass(/neutral/);
       await expect(progress).not.toContainText('setup required');
       await expect(progress).not.toContainText('agentplugins doctor');
       await expect(progress).toContainText('Agent-session discovery was not checked.');
@@ -97,6 +101,91 @@ for (const setupRequired of [false, true]) {
     await expect(progress).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`picker-${name}-mobile.png`), fullPage: true });
+  });
+}
+
+test('mobile confirmation reveals the accepted operation without taking focus on polling', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const state = await serveFixtures(page);
+  const operation = await fixture<Operation>('operation');
+  let completed = false, unavailable = false, observations = 0;
+  await page.route('**/api/v1/operations/*', (route) => {
+    observations++;
+    if (unavailable) return route.fulfill({ status: 503, json: {
+      code: 'UNAVAILABLE', message: 'The operation could not be checked. Reconnect before retrying.', retryable: true,
+    } });
+    return route.fulfill({ json: {
+      ...operation, state: completed ? 'succeeded' : 'running', phase: 'Installing skills',
+      total: 1, completed: completed ? 1 : 0, items: completed ? [operation.items[0]] : [],
+      result: completed ? operation.result : undefined,
+    } });
+  });
+  await page.goto('/#capability=test-capability');
+  await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).check();
+  await page.getByRole('tab', { name: /^Selection/ }).click();
+  await page.getByRole('checkbox', { name: `Target ${state.targets.targets[0].label}` }).check();
+  await page.getByRole('tab', { name: 'skills', exact: true }).click();
+  await page.locator('.bottom-bar').getByRole('button', { name: 'Review installation' }).click();
+  await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: /^Selection/ })).toHaveAttribute('aria-selected', 'true');
+  const heading = page.getByRole('heading', { name: 'Installing skills', exact: true });
+  await expect(heading).toBeFocused();
+  await expect.poll(async () => {
+    const bounds = await heading.boundingBox();
+    const footer = await page.locator('.bottom-bar').boundingBox();
+    return !!bounds && !!footer && bounds.y >= 0 && bounds.y + bounds.height <= footer.y;
+  }).toBe(true);
+  const search = page.getByRole('textbox', { name: 'Search skills', exact: true });
+  await search.focus();
+  const beforePoll = observations;
+  await expect.poll(() => observations).toBeGreaterThan(beforePoll);
+  await expect(search).toBeFocused();
+  unavailable = true;
+  await expect(page.getByRole('alert')).toContainText('The operation could not be checked');
+  await expect(search).not.toBeFocused();
+  await search.focus();
+  const beforeFailures = observations;
+  await expect.poll(() => observations).toBeGreaterThan(beforeFailures + 1);
+  await expect(search).toBeFocused();
+  unavailable = false;
+  completed = true;
+  await expect(page.getByRole('heading', { name: 'Installation applied' })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(search).toBeFocused();
+  expect(state.counts().applyCount).toBe(1);
+});
+
+for (const failure of ['stale confirmation', 'unavailable operation', 'unknown outcome']) {
+  test(`mobile ${failure} exposes its alert above the footer`, async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const state = await serveFixtures(page, { stale: failure === 'stale confirmation', loseApply: failure === 'unknown outcome' });
+    if (failure === 'unknown outcome') {
+      const session = await fixture<Session>('session');
+      await page.route('**/api/v1/session', (route) => route.fulfill({ json: { ...session, operationId: undefined, state: 'ready' } }));
+    }
+    if (failure === 'unavailable operation') await page.route('**/api/v1/operations/*', (route) => route.fulfill({
+      status: 503, json: { code: 'UNAVAILABLE', message: 'The operation could not be checked. Reconnect before retrying.', retryable: true },
+    }));
+    await page.goto('/#capability=test-capability');
+    await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).check();
+    await page.getByRole('tab', { name: /^Selection/ }).click();
+    await page.getByRole('checkbox', { name: `Target ${state.targets.targets[0].label}` }).check();
+    await page.getByRole('tab', { name: 'skills', exact: true }).click();
+    await page.locator('.bottom-bar').getByRole('button', { name: 'Review installation' }).click();
+    await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: /^Selection/ })).toHaveAttribute('aria-selected', 'true');
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText(failure === 'stale confirmation' ? 'Plan is stale' : failure === 'unknown outcome' ? 'Installation status is unknown' : 'The operation could not be checked');
+    await expect.poll(async () => {
+      const bounds = await alert.boundingBox();
+      const footer = await page.locator('.bottom-bar').boundingBox();
+      return !!bounds && !!footer && bounds.y >= 0 && bounds.y + bounds.height <= footer.y;
+    }).toBe(true);
+    await expect(page.getByRole('region', { name: 'Selection basket' })).toContainText('docs/review');
+    await expect(page.getByRole('heading', { name: 'Installation applied' })).toHaveCount(0);
+    expect(state.counts().applyCount).toBe(1);
   });
 }
 
@@ -153,6 +242,9 @@ test('lost apply response recovers the fast terminal operation without another a
   await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Installation applied' })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).uncheck();
+  await expect(page.getByRole('alert')).toHaveCount(0);
   expect(fixture.counts().applyCount).toBe(1);
 });
 
