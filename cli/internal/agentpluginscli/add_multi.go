@@ -85,23 +85,6 @@ func runAddMany(ctx context.Context, cmd *cobra.Command, app App, opts *options,
 	return runAddManyWithClients(ctx, cmd, app, opts, source, targets, activationComplete, authComplete, nil)
 }
 
-func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
-	stop := startCommandActivity(cmd, app, opts, "Checking selected agents")
-	_, detected, err := preflightAddTargets(ctx, app, opts, source, targets, clients)
-	stop()
-	if err != nil {
-		return err
-	}
-	loaded, err := loadAddPackageFor(ctx, cmd, app, opts, source, withDetectedClients(app.addResolutionRequest(source, targets), detected), "Resolving and validating one Agent Plugin package for every selected target...")
-	if err != nil {
-		return err
-	}
-	if loaded.cleanup != nil {
-		defer loaded.cleanup()
-	}
-	return runAddManyLoaded(ctx, cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected), false)
-}
-
 func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
 	if err := rejectImperativePackageRequirements(loaded); err != nil {
 		return err

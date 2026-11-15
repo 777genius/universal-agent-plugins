@@ -209,8 +209,20 @@ func TestClaudeProjectMarketplaceNativeAdapterLifecycle(t *testing.T) {
 	if err != nil || observeClaudeMarketplacePlugin(listed.Stdout, request.DeclaredName, request.Plan.PhysicalArtifactID, request.Plan.ActivePath, request.Plan.TargetContext.ProjectRoot, request.Client.ConfigRoot, "") != projectListAbsent {
 		t.Fatalf("negative native discovery: %s %v", listed.Stdout, err)
 	}
-	if _, err := os.Stat(cache); err != nil {
-		t.Fatalf("native --keep-data cache was unexpectedly deleted: %v", err)
+	if _, err := os.Stat(cache); !os.IsNotExist(err) {
+		t.Fatalf("current owned cache survived removal: %v", err)
+	}
+	// A saved raw skill reuses its installation ID after the old client binding
+	// and its native receipts have been removed by the ordinary installer.
+	request.Replacing, request.PreviousNativeObjects = false, nil
+	readded, err := New().Activate(t.Context(), env, request)
+	if err != nil || readded.Activation != domain.ActivationActive || readded.NativeEffect != domain.NativeEffectCommitted {
+		t.Fatalf("same-identity add after removal: %+v %v", readded, err)
+	}
+	request.PreviousNativeObjects = readded.NativeObjects
+	removed, err = New().Deactivate(t.Context(), env, claudeMarketplaceRemoval(request))
+	if err != nil || !removed.ExternalRemovalComplete {
+		t.Fatalf("remove re-added native installation: %+v %v", removed, err)
 	}
 }
 

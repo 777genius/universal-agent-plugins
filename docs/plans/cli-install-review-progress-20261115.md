@@ -288,3 +288,66 @@ actual diagnosis. No new renderer, installation engine, or model calls.
 - Follow-up actual Go additions relative to the previous implementation commit:
   126 production and 156 test lines. Production includes lint-driven extraction
   of existing result/review logic into smaller helpers, not just new behavior.
+
+## Automatic native completion qualification
+
+The owner's follow-up requires the ordinary Skills flow to finish supported
+native setup itself, then report the observed result. Native file discovery is
+qualified without vendor credentials, model requests or silent trust changes.
+
+- Codex now uses a bounded, finite `app-server` initialization and `skills/list`
+  exchange for supported project Skills. It checks the exact project, profile,
+  enabled names and owned paths, then rechecks owned bytes. The existing process
+  containment remains required; the new finite exchange does not change Kiro's
+  duplex execution.
+- Claude now registers an owned project-scoped local marketplace containing the
+  existing sanitized selected projection, then uses native install/list/cache
+  evidence. A different project must not enable or load that registration.
+  Same-version content updates refresh the native cache.
+- A removed Claude project binding retires only its exact receipt-verified current
+  cache version. Real Claude 2.1.263 and 2.1.325 add a native `.orphaned_at`
+  timestamp on uninstall. Only this validated metadata is normalized in a
+  private bounded snapshot; the remaining digest must match the original
+  receipt. Foreign entries, other versions and plugin data remain protected.
+- Pure normalized raw Skills have an explicit Codex/Claude no-authentication
+  installation policy. This does not change arbitrary plugin, catalog, MCP or
+  other-client authentication claims.
+- Repeating a completed Skills selection reobserves its exact native binding
+  without rewriting state. An incomplete selection reviews an existing repair
+  or projection-refresh operation before consent, preserving source pins,
+  receipts, stale-plan checks and ordinary dependency-sync policy.
+- Terminal and browser results use the actual per-item native evidence. The
+  browser shows completed setup, remaining setup and partial failures distinctly;
+  repair/refresh actions use the generated API contract. TypeScript is pinned to
+  7.0.2 with only its official platform packages changed in the lockfile.
+
+### Observed results and remaining gates
+
+- Real Codex 0.153.4 and 0.167.0-alpha.4 independently listed the installed project
+  Skills without account credentials or a model request.
+- Real Claude 2.1.263 and 2.1.325 passed adapter project/user lifecycle probes.
+  Project probes include install, unchanged verification, same-version refresh,
+  modified-cache refusal, removal, fresh same-ID reinstall without previous
+  native receipts, and final removal. Independent review inspected the native
+  transcripts and found no remaining cache-removal blocker.
+- The public native repotest now additionally requires two immutable raw Skills
+  to report ready, appear exactly once in credential-free SDK initialization in
+  project A and never in B, preserve state on repeat, and complete removal and
+  reinstall with the same owned identity and paths.
+- Native SDK initialization itself creates profile metadata and plugin-usage
+  counters. The untrusted fixture captures its original baseline before UAP,
+  validates trust on every observation and permits only the observed native
+  usage field to change. Authored foreign files retain their exact byte checks.
+- Focused ownership, raw authentication, saved repair/refresh, readiness,
+  generated contract, TypeScript/model and native evidence-parser tests passed.
+  The full core run also exposed obsolete prepared-Claude fixtures, which are
+  updated in the candidate to the current scoped native contract; the combined
+  hosted run remains required.
+- Local ordinary UAP execution cannot satisfy this sandbox's process-containment
+  prerequisite (`/proc/.../children`); Unix sockets are also denied, including
+  browser startup. These failures are not counted as passes or bypassed.
+- All eight golangci passes completed successfully before the execution
+  environment interruption. The baseline then found growth in two legacy files;
+  their activity/error adaptation has been moved into existing cohesive helpers.
+  Final hosted lint, full core, native lifecycle, terminal/browser visual checks
+  and independent review must pass on the published candidate before merge.

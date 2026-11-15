@@ -188,4 +188,10 @@ func TestProjectClaudeNativeInitialAddReplayStatusAndChangedBytes(t *testing.T) 
 	if _, err := os.Stat(binding.TargetLocator); !os.IsNotExist(err) {
 		t.Fatalf("inactive owned artifact survived=%v", err)
 	}
+	f.apply(t, installer.OpInstall, "re-add-retained-installation-id")
+	returned := f.binding(t)
+	if returned.PhysicalArtifact != binding.PhysicalArtifact || returned.TargetLocator != binding.TargetLocator || returned.Activation != domain.ActivationActive || returned.Verification != domain.VerificationInstalled {
+		t.Fatalf("same-identity reinstall was not natively complete: before=%+v after=%+v", binding, returned)
+	}
+	f.apply(t, installer.OpRemove, "remove-re-added-project")
 }

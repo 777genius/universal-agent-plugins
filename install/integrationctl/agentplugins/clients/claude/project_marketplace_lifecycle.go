@@ -158,12 +158,22 @@ func deactivateClaudeProjectMarketplace(ctx context.Context, env clients.Env, re
 			return outcome, err
 		}
 	}
+	cache, err := claudeProjectRemovalCache(ctx, request, observed.state == projectListAbsent)
+	if err != nil {
+		return outcome, err
+	}
 	command, err := claudeProjectListCommand(request.BackendExecutable, request.Client, request.TargetContext, request.NativeRegistryRoot, request.ManagedArtifactPath)
 	if err != nil {
 		return outcome, err
 	}
 	err = uninstallClaudeProjectMarketplace(ctx, env, request, command, observed.state, registered, &outcome.NativeEffect)
 	if err != nil {
+		return outcome, err
+	}
+	if err := verifyClaudeProjectBindings(request.Client.ConfigRoot, request.DeclaredName, request.PhysicalArtifactID, request.TargetContext.ProjectRoot, ""); err != nil {
+		return outcome, err
+	}
+	if err := removeClaudeProjectCache(ctx, request, cache, &outcome.NativeEffect); err != nil {
 		return outcome, err
 	}
 	outcome.ExternalRemovalComplete = true

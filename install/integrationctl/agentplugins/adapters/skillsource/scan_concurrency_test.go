@@ -50,7 +50,11 @@ func TestScanMetadataConcurrencyPreservesCanonicalAggregateBudget(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	t.Cleanup(func() {
+		if err := session.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	catalog, err := session.Scan(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
