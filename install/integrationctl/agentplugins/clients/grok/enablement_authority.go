@@ -5,22 +5,42 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 var _ clients.PluginEnablement = (*Adapter)(nil)
 
 var errEnablementUnqualified = errors.New("grok Project enablement requires verified recovery of native startup effects and original parent identity")
 
-// The prototype member journal preserves original User parent authority but
-// does not recover ACP startup writes. Prepared delivery remains available.
-func (*Adapter) SupportsPluginEnablement(domain.InstallScope) bool {
-	return false
+// Enablement uses the Linux readonly transport only. File installation on other
+// platforms remains independent; selected runtime admission is checked below.
+func (*Adapter) SupportsPluginEnablement(scope domain.InstallScope) bool {
+	return runtime.GOOS == "linux" && scope == domain.ScopeProject
+}
+
+func preflightEnablementRuntime(env clients.Env, client domain.DetectedClient, backend string) error {
+	if !New().SupportsPluginEnablement(domain.ScopeProject) || client.ClientID != domain.ClientGrok || client.Version != "1.0.70" ||
+		!filepath.IsAbs(backend) || filepath.Clean(backend) != backend || backend == string(filepath.Separator) || backend != client.ExecutablePath {
+		return fmt.Errorf("%w: exact Grok 1.0.70 Linux executable is required", errEnablementUnqualified)
+	}
+	if _, ok := env.Runner.(ports.ReadonlyDuplexCommandRunner); !ok {
+		return fmt.Errorf("%w: contained readonly execution is required", errEnablementUnqualified)
+	}
+	capability, ok := env.Runner.(ports.DuplexCapabilityRunner)
+	if !ok {
+		return fmt.Errorf("%w: process containment capability is unavailable", errEnablementUnqualified)
+	}
+	if err := capability.DuplexCapability(); err != nil {
+		return errors.Join(errEnablementUnqualified, err)
+	}
+	return nil
 }
 
 func enablementAuthority(env clients.Env, project, userRoot string) (*EnablementRecovery, error) {

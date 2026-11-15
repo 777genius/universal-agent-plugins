@@ -125,3 +125,9 @@ func TestUnqualifiedJournalValidatesOperationBeforeAbsence(t *testing.T) {
 		}
 	}
 }
+
+func TestNonLinuxEnablementRemainsUnsupported(t *testing.T) {
+	if New().SupportsPluginEnablement(domain.ScopeProject) || New().SupportsPluginEnablement(domain.ScopeUser) {
+		t.Fatal("unqualified platform advertised native enablement")
+	}
+}
