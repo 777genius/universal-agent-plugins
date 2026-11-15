@@ -9,7 +9,6 @@ import importlib.util
 import json
 import os
 from pathlib import Path
-import shutil
 import stat
 import subprocess
 import tempfile
@@ -17,8 +16,8 @@ import tempfile
 FIXTURE_SHA256 = "7399eaed15b3eb0981a6be12082dd8825529e896a59ea125b9500a666c21112e"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
 
-def physical_temp_root(path):
-    """Hand off the same freshly created directory before any case baseline."""
+def temp_root_authority(path):
+    """Capture only real directory identities, including every named ancestor."""
     def identity(info):
         if (not stat.S_ISDIR(info.st_mode)
                 or getattr(info, "st_file_attributes", 0) & 0x400
@@ -27,13 +26,17 @@ def physical_temp_root(path):
         return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
                 getattr(info, "st_file_attributes", None), getattr(info, "st_reparse_tag", None))
 
-    original = [(member, identity(member.lstat())) for member in (path, *path.parents)]
+    return tuple((member, identity(member.lstat())) for member in (path, *path.parents))
+
+
+def physical_temp_root(path, original=None):
+    """Hand off the same freshly created directory before any case baseline."""
+    original = temp_root_authority(path) if original is None else original
     physical = path.resolve(strict=True)
-    for member, before in original:
-        if identity(member.lstat()) != before:
-            raise ValueError("created TEMP directory authority changed during handoff")
-    if (identity(physical.lstat()) != original[0][1]
-            or identity(physical.parent.lstat()) != original[1][1]):
+    if temp_root_authority(path) != original:
+        raise ValueError("created TEMP directory authority changed during handoff")
+    resolved = temp_root_authority(physical)
+    if resolved[0][1] != original[0][1] or resolved[1][1] != original[1][1]:
         raise ValueError("physical TEMP directory differs from the created original")
     return physical
 
@@ -70,12 +73,6 @@ def main():
     cli = Path(os.environ["UAP_SOURCE_CLI"]).resolve(strict=True)
     if not cli.is_file() or cli.suffix.lower() != ".exe":
         raise SystemExit("source-built Windows CLI executable missing")
-    short_created = Path(tempfile.mkdtemp(prefix="uap-remotion-short-", dir=os.environ["RUNNER_TEMP"]))
-    short = physical_temp_root(short_created)
-    long_created = Path(tempfile.mkdtemp(prefix="uap-live-30x30-"))
-    long = physical_temp_root(long_created)
-    created_lengths = {"runner-temp": len(str(short_created / "skill-24")),
-                       "default-windows-temp": len(str(long_created / "skill-24"))}
     evidence = {
         "source_checkout_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(),
         "fixture_sha256": FIXTURE_SHA256,
@@ -83,9 +80,27 @@ def main():
         "remotion_commit": REMOTION_SHA,
         "cli_path_kind": "source-built-windows",
         "results": {},
+        "temp_roots": {},
     }
     failures = []
+    created_roots, physical_roots = {}, {}
     try:
+        for label, options in (
+                ("runner-temp", {"prefix": "uap-remotion-short-", "dir": os.environ["RUNNER_TEMP"]}),
+                ("default-windows-temp", {"prefix": "uap-live-30x30-"})):
+            created = Path(tempfile.mkdtemp(**options))
+            created_roots[label] = (created, None)
+            evidence["temp_roots"][label] = {
+                "created_path": str(created), "created_root_chars": len(str(created / "skill-24")),
+                "cleanup": "retained-unverified",
+            }
+            authority = temp_root_authority(created)
+            created_roots[label] = (created, authority)
+            physical_roots[label] = physical_temp_root(created, authority)
+            evidence["temp_roots"][label]["root_chars"] = len(str(physical_roots[label] / "skill-24"))
+        short, long = physical_roots["runner-temp"], physical_roots["default-windows-temp"]
+        created_lengths = {label: row["created_root_chars"]
+                           for label, row in evidence["temp_roots"].items()}
         short_length = len(str(short / "skill-24"))
         long_length = len(str(long / "skill-24"))
         for shorter, longer in ((created_lengths["runner-temp"], created_lengths["default-windows-temp"]),
@@ -113,10 +128,25 @@ def main():
                     "root_chars": len(str(root / "skill-24")),
                     "created_root_chars": created_lengths[label]}).update({
                         "error_type": type(error).__name__, "error": str(error)[:1800]})
+    except Exception as error:
+        failures.append(f"TEMP setup: {type(error).__name__}")
+        evidence["setup_error"] = {"error_type": type(error).__name__, "error": str(error)[:1800]}
     finally:
+        # Retain these two ephemeral fixture roots for evidence. Even a final
+        # identity check cannot authorize a later recursive pathname deletion.
+        # Product uninstall inside each case remains part of audit.do_case.
+        for label, (created, authority) in created_roots.items():
+            try:
+                if authority is None or temp_root_authority(created) != authority:
+                    raise ValueError("created TEMP root authority is unverified or changed")
+                evidence["temp_roots"][label]["cleanup"] = "retained-for-evidence"
+            except Exception as error:
+                failures.append(f"{label}: TEMP ownership {type(error).__name__}")
+                evidence["temp_roots"][label].update({
+                    "cleanup": "retained-unverified", "cleanup_error_type": type(error).__name__,
+                    "cleanup_error": str(error)[:1800],
+                })
         report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
-        for root in (short, long):
-            shutil.rmtree(root, ignore_errors=True)
     if failures:
         raise SystemExit("; ".join(failures))
     print("Real Codex Remotion native lifecycle PASS in both short and default-long Windows TEMP")
