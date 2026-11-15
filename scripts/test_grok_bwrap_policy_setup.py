@@ -230,7 +230,7 @@ class KernelABIContracts(unittest.TestCase):
                                 if change == "early-feature":
                                     leaf = root / "io_uring/mask"
                                     leaf.rename(parent / "retained-mask")
-                                    leaf.write_bytes(b"sqpoll override_creds\\n")
+                                    leaf.write_bytes(b"sqpoll override_creds\n")
                                     leaf.chmod(0o444)
                                 else:
                                     root.rename(parent / "retained-features")
