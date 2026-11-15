@@ -229,6 +229,12 @@ def main():
                 "-grok-public-native=" + str(binary), "-grok-public-inventory-test=" + str(args.test.resolve())], timeout=450)
             if b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS" not in public:
                 raise ValueError("selected public native lifecycle did not complete")
+            # A separate public native child runs after the readonly inventory.
+            # The original protected HOME/project must survive BOTH children.
+            after_public = {str(path): snapshot(path) for path in (home, project)}
+            if before != after_public:
+                evidence["fixture_delta"] = fixture_delta(before, after_public, home, project)
+                raise ValueError("public native lifecycle changed the original fixture")
             if original_binary != hashlib.sha256(binary.read_bytes()).hexdigest():
                 raise ValueError("public lifecycle changed native executable")
             evidence["public_native_saved_lifecycle_passed"] = True

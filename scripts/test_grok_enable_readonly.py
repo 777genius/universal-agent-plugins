@@ -52,6 +52,8 @@ class NativeDriverVerdict(unittest.TestCase):
                     writer_lock.write_bytes(b"unexpected")
                 stdout = b"GROK_READONLY_NATIVE_INVENTORY_PASS\n"
             elif argv[1] == "-test.run=^TestProjectGrokNativeSavedEnablementLifecycle$":
+                if mutation == "public-added":
+                    (Path(kwargs["env"]["HOME"]) / ".grok/unexpected-public").write_bytes(b"unexpected")
                 stdout = b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS\n"
             else:
                 raise AssertionError("unexpected inert command: " + repr(argv))
@@ -85,7 +87,7 @@ class NativeDriverVerdict(unittest.TestCase):
         required = ["version", "git", "native-lock", "readonly-production-inventory"]
         self.assertIn(labels, [required, required + ["public-native-saved-lifecycle"]])
         self.assertTrue(all(entry["exit"] == 0 for entry in evidence["commands"]))
-        if len(labels) == 5:
+        if len(labels) == 5 and mutation != "public-added":
             self.assertTrue(evidence["public_native_saved_lifecycle_passed"])
         else:
             self.assertNotIn("public_native_saved_lifecycle_passed", evidence)
@@ -100,7 +102,8 @@ class NativeDriverVerdict(unittest.TestCase):
                 self.assertEqual(evidence["binary_sha256"], binary_digest)
             self.assertNotIn("fixture_delta", evidence)
         else:
-            self.assertEqual(labels, required)
+            expected = required + ["public-native-saved-lifecycle"] if mutation == "public-added" else required
+            self.assertEqual(labels, expected)
             self.assertEqual(printed["fixture_delta"], evidence["fixture_delta"])
         self.assertFalse(evidence["model_invoked"])
         self.assertFalse(evidence["authentication_used"])
@@ -137,6 +140,23 @@ class NativeDriverVerdict(unittest.TestCase):
                     relative_sha256=hashlib.sha256(member.encode("utf-8")).hexdigest(),
                     known_uap_config_lock=mutation == "changed", effect=mutation,
                     inode_changed=False, mode_changed=False, content_changed=mutation == "changed"))
+
+    def test_public_lifecycle_change_refuses_original_fixture_integrity(self):
+        status, evidence = self.run_driver(mutation="public-added")
+        self.assertEqual(status, 1)
+        self.assertFalse(evidence["passed"])
+        self.assertNotIn("fixture_unchanged", evidence)
+        self.assertNotIn("public_native_saved_lifecycle_passed", evidence)
+        self.assertEqual(evidence["error"],
+                         "ValueError: public native lifecycle changed the original fixture")
+        difference = evidence["fixture_delta"]
+        self.assertEqual(difference["count"], 1)
+        self.assertFalse(difference["truncated"])
+        change, = difference["changes"]
+        self.assertEqual(change, dict(role="home",
+            relative_sha256=hashlib.sha256(b".grok/unexpected-public").hexdigest(),
+            known_uap_config_lock=False, effect="added",
+            inode_changed=False, mode_changed=False, content_changed=False))
 
     def test_fixture_delta_is_bounded_and_does_not_expose_names_or_metadata(self):
         module = runpy.run_path(str(Path(__file__).with_name("e2e") / "grok-enable-readonly.py"))
