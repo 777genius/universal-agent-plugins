@@ -208,8 +208,17 @@ func (recovery EnablementRecovery) Recover(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if len(pending) != 0 {
-		return errEnablementUnqualified
+	// Ordinary recovery may only forget an already durable removal decision.
+	// Any unsettled scope still requires the caller's exact reviewed observation.
+	for _, item := range pending {
+		if err := recovery.requireSettledRemoval(item); err != nil {
+			return err
+		}
+	}
+	for _, item := range pending {
+		if err := recovery.finishSettledRemoval(ctx, item); err != nil {
+			return err
+		}
 	}
 	return nil
 }

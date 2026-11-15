@@ -26,19 +26,30 @@ func projectPreparationAction(components []domain.ComponentDecision) string {
 }
 
 func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRequest) error {
+	if request.ConfirmPluginEnable && !New().SupportsPluginEnablement(request.Plan.Scope) {
+		return errEnablementUnqualified
+	}
 	if request.Plan.Scope != domain.ScopeProject && request.Plan.TargetContext.Scope != domain.ScopeProject && request.Plan.TargetContext.ProjectRoot == "" {
 		return nil
-	}
-	if request.ConfirmPluginEnable {
-		return errEnablementUnqualified
 	}
 	if _, err := grokPlanRoot(request.Client, request.Plan); err != nil {
 		return err
 	}
-	if err := preflightRetainedEnablement(env, request); err != nil {
+	if err := preflightProjectDelivery(request); err != nil {
 		return err
 	}
-	return preflightProjectDelivery(request)
+	if request.ConfirmPluginEnable {
+		if request.Plan.NativeRegistryExecutable != request.BackendExecutable {
+			return fmt.Errorf("%w: selected native executable differs", errEnablementUnqualified)
+		}
+		if err := preflightEnablementRuntime(env, request.Client, request.BackendExecutable); err != nil {
+			return err
+		}
+		if _, err := enablementAuthority(env, request.Plan.TargetContext.ProjectRoot, request.Client.ConfigRoot); err != nil {
+			return err
+		}
+	}
+	return preflightRetainedEnablement(env, request)
 }
 
 func preflightProjectDelivery(request domain.ActivationRequest) error {
@@ -87,7 +98,7 @@ func activateProject(ctx context.Context, env clients.Env, request domain.Activa
 	}
 	return outcome, nil
 }
-func deactivateProject(_ context.Context, _ clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
+func deactivateProject(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
 	outcome.NativeEffect = domain.NativeEffectUnchanged
 	root, err := grokProjectRoot(request.Client, request.TargetContext, request.NativeRegistryRoot)
@@ -101,12 +112,15 @@ func deactivateProject(_ context.Context, _ clients.Env, request domain.Deactiva
 	if filepath.Dir(request.ManagedArtifactPath) != filepath.Join(root, "plugins") {
 		return outcome, fmt.Errorf("grok project removal path differs from owned directory")
 	}
-	if hasEnabledOwnership(binding) {
-		return outcome, errEnablementUnqualified
-	}
 	if !request.Confirmed {
 		outcome.UserActions = []string{"agentplugins will remove only its exact prepared Grok project plugin directory"}
 		return outcome, nil
+	}
+	if hasEnabledOwnership(binding) {
+		if err := preflightEnablementRuntime(env, request.Client, request.BackendExecutable); err != nil {
+			return outcome, err
+		}
+		return removeEnabledProject(ctx, env, request, outcome)
 	}
 	outcome.ExternalRemovalComplete = true
 	return outcome, nil
