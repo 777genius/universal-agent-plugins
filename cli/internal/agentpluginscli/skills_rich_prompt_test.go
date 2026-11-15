@@ -25,12 +25,12 @@ func (p skillsSelectionPrompter) SelectSkills(_ context.Context, request prompt.
 }
 
 func TestSkillsCatalogUsesRichCapabilityAndCanonicalSelection(t *testing.T) {
-	available := []skillsource.Candidate{{ID: "first", Name: "Review", Path: "engineering/review"}, {ID: "last", Name: "Docs", Path: "docs/review"}}
+	available := []skillsource.Candidate{{ID: "first", Name: "Review", Path: "engineering/review", Description: "Long description belongs in review, not the menu"}, {ID: "last", Name: "Docs", Path: "docs/review"}}
 	session, catalog := richCatalogFixture(available)
 	called := false
 	session.app.Prompter = skillsSelectionPrompter{selectSkills: func(request prompt.SkillsSelectionRequest) (prompt.SkillsSelectionResult, error) {
 		called = true
-		if len(request.Choices) != 2 || !strings.Contains(request.Choices[0].Label, "engineering/review") {
+		if len(request.Choices) != 2 || !strings.Contains(request.Choices[0].Label, "engineering/review") || strings.Contains(request.Choices[0].Label, "Long description") {
 			t.Fatalf("rich catalog lost path identity: %+v", request)
 		}
 		return prompt.SkillsSelectionResult{IDs: []string{"last", "first"}}, nil

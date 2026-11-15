@@ -46,9 +46,6 @@ func skillsCatalogRequest(available []skillsource.Candidate) prompt.SkillsSelect
 	request := prompt.SkillsSelectionRequest{}
 	for _, candidate := range available {
 		label := prompt.SafeText(candidate.Name) + " · " + prompt.SafeText(candidate.Path)
-		if candidate.Description != "" {
-			label += " — " + prompt.SafeText(candidate.Description)
-		}
 		request.Choices = append(request.Choices, prompt.SkillChoice{ID: candidate.ID, Label: label})
 	}
 	return request

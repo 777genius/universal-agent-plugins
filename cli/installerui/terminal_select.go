@@ -19,8 +19,28 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 		choices[i] = huh.NewOption(option.Label, option.ID)
 	}
 	validate := func(ids []string) error { _, err := terminalSelection(req, ids); return err }
-	field := huh.NewMultiSelect[string]().Title(req.Title).Options(choices...).Value(&ids).Filterable(req.Filterable).Validate(validate)
+	attempted := !req.Filterable
+	validateField := func(ids []string) error {
+		if !attempted {
+			return nil
+		}
+		return validate(ids)
+	}
+	field := huh.NewMultiSelect[string]().Title(req.Title).Options(choices...).Value(&ids).Filterable(req.Filterable).Validate(validateField)
 	layout := &selectionLayout{field: field, ids: &ids, validate: validate, title: req.Title, count: len(choices), filterable: req.Filterable}
+	if req.Filterable {
+		// Clip the rendered option, not its key: Huh uses full option keys for
+		// filtering and selection identity, so truncating keys can select twins.
+		field.WithTheme(huh.ThemeFunc(func(dark bool) *huh.Styles {
+			theme := semanticHuhTheme(dark)
+			for _, style := range []*huh.FieldStyles{&theme.Focused, &theme.Blurred} {
+				columns := max(1, layout.width-style.Base.GetHorizontalFrameSize()-lipgloss.Width(style.MultiSelectSelector.String())-lipgloss.Width(style.SelectedPrefix.String()))
+				style.SelectedOption = style.SelectedOption.MaxWidth(columns).MaxHeight(1)
+				style.UnselectedOption = style.UnselectedOption.MaxWidth(columns).MaxHeight(1)
+			}
+			return theme
+		}))
+	}
 	form := huh.NewForm(huh.NewGroup(field).WithShowHelp(false).WithShowErrors(false)).WithLayout(layout)
 	layout.form = form
 	_ = layout.resize(80, 24) // Private injected qualification has no terminal geometry.
@@ -30,7 +50,11 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 	}
 	// Enter while filtering only accepts the query; release the input handoff
 	// gate so the user can continue selecting instead of treating it as submit.
-	err := p.run(ctx, form, formInput{canSubmit: func() bool { return !field.GetFiltering() && validate(ids) == nil }, resize: resize})
+	err := p.run(ctx, form, formInput{canSubmit: func() bool { return !field.GetFiltering() && validate(ids) == nil }, resize: resize, onKey: func(key tea.KeyPressMsg) {
+		if key.String() == "enter" && !field.GetFiltering() {
+			attempted = true
+		}
+	}})
 	if _, canceled := err.(formCanceled); canceled { //nolint:errorlint // Only sole user cancellation is clean; wrapped cleanup errors must fail.
 		return Selection{Cancelled: true}, nil //nolint:misspell // Preserve the existing public cancellation API.
 	}
@@ -100,7 +124,11 @@ func (l *selectionLayout) resize(w, h int) error {
 		return fmt.Errorf("terminal too small for selection controls")
 	}
 	l.form.WithHeight(h)
-	resizeSelectionField(l.field, w, min(l.count+titleHeight, h-reserved), *l.ids, l.validate)
+	rows := l.count
+	if l.filterable {
+		rows = min(rows, 8)
+	}
+	resizeSelectionField(l.field, w, min(rows+titleHeight, h-reserved), *l.ids, l.validate)
 	return nil
 }
 
