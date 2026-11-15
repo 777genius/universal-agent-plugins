@@ -61,7 +61,8 @@ func TestCISupersession_ClosedPRCleanupCannotCancelOtherIdentities(t *testing.T)
 		t.Fatal("closed-PR cleanup must run only from trusted base with minimum actions permission")
 	}
 	job, ok := w.Jobs["cancel-obsolete"]
-	if !ok || !strings.Contains(job.If, "github.event.pull_request.base.repo.full_name == github.repository") || len(job.Steps) != 1 {
+	if !ok || !strings.Contains(job.If, "github.event.pull_request.base.repo.full_name == github.repository") ||
+		!strings.Contains(job.If, "github.event.pull_request.merged == false") || len(job.Steps) != 1 {
 		t.Fatal("missing closed-PR repository identity gate")
 	}
 	script := job.Steps[0].Run
