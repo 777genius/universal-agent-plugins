@@ -52,6 +52,30 @@ def snapshot(root):
     return result
 
 
+def fixture_delta(before, after, home, project):
+    # The fixture is disposable, but never expose native-provided filenames or
+    # content in failure artifacts. Stable relative-name hashes aid diagnosis.
+    changes = []
+    total = 0
+    for role, root in (("home", home), ("project", project)):
+        previous, current = before[str(root)], after[str(root)]
+        for relative in sorted(previous.keys() | current.keys()):
+            old, new = previous.get(relative), current.get(relative)
+            if old == new:
+                continue
+            total += 1
+            if len(changes) >= 16:
+                continue
+            changes.append(dict(role=role,
+                relative_sha256=hashlib.sha256(relative.encode("utf-8")).hexdigest(),
+                known_uap_config_lock=(role == "home" and relative == ".grok/config.toml.agentplugins.lock"),
+                effect="added" if old is None else "removed" if new is None else "changed",
+                inode_changed=(old is not None and new is not None and old["inode"] != new["inode"]),
+                mode_changed=(old is not None and new is not None and old["mode"] != new["mode"]),
+                content_changed=(old is not None and new is not None and old["digest"] != new["digest"])))
+    return dict(count=total, changes=changes, truncated=total > len(changes))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", type=Path, required=True)
@@ -126,7 +150,9 @@ def main():
                 "-grok-readonly-name=uap-inert-readonly", "-grok-readonly-version=1.0.0"])
             if b"GROK_READONLY_NATIVE_INVENTORY_PASS\n" not in output:
                 raise ValueError("selected native test did not complete")
-            if before != {str(path): snapshot(path) for path in (home, project)}:
+            after = {str(path): snapshot(path) for path in (home, project)}
+            if before != after:
+                evidence["fixture_delta"] = fixture_delta(before, after, home, project)
                 raise ValueError("readonly native inventory changed the original fixture")
             if original_binary != hashlib.sha256(binary.read_bytes()).hexdigest():
                 raise ValueError("native executable changed")
