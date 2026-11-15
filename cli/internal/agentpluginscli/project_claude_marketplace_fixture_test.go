@@ -156,5 +156,8 @@ func (r *preparedClaudeCLIRunner) writeObject(path string, object map[string]any
 	if err != nil {
 		r.t.Fatal(fmt.Errorf("fixture JSON: %w", err))
 	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		r.t.Fatal(err)
+	}
 	dependencyWrite(r.t, path, string(body))
 }
