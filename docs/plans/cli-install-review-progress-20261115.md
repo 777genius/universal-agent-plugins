@@ -194,3 +194,22 @@ verification failed. No other binding may be presented as installed from that ru
   production lines and 879 added test lines. This exceeds the original changed-
   line estimates, principally due to preserved public API compatibility, real PTY
   coverage and integration with the newer upstream confirmation layout.
+
+## Follow-up: owner reproduction with two Skills
+
+The owner reproduced a failure with `docx` + `frontend-design`, five agents,
+using the current local `go run` entry point. Earlier single-directory Claude
+qualification does not establish that a multi-directory response is accepted.
+
+- First verify actual Claude Code and Codex installations in disposable projects;
+  capture the bounded native observation and independently check installed files.
+- In parallel verify installed Cursor/Gemini clients and Copilot availability.
+  Separate real native runs, deterministic fixtures and environment restrictions.
+- Reproduce `d` in the complete selection → review flow, including input handoff,
+  rather than relying only on an isolated confirmation test.
+- Make every grouped action heading use the same style; retain exact content.
+- Extend Claude regressions with multiple suppressed project directories and
+  preserve fail-closed handling of unsupported native output.
+
+Additional estimate: 40–100 production LOC and 100–200 focused test LOC, subject to
+actual diagnosis. No new renderer, installation engine, or model calls.
