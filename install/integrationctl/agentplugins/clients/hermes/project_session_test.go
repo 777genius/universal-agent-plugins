@@ -70,6 +70,7 @@ func TestProjectSessionRootRequiresFreshOrExactReceipt(t *testing.T) {
 }
 
 func TestProjectSessionSourceUsesOneChildOverrideAndExactReceipts(t *testing.T) {
+	t.Setenv("TMPDIR", t.TempDir())
 	req, owner := newProjectSessionFixture(t)
 	userConfig := filepath.Join(req.Client.ConfigRoot, "config.yaml")
 	const foreign = "model: private\nmcp_servers:\n  foreign:\n    command: foreign\n"

@@ -5,10 +5,13 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 )
 
 // A session environment is private and transient. An explicitly empty base
@@ -20,6 +23,41 @@ func sessionEnvironment(base []string) []string {
 	result := make([]string, len(base))
 	copy(result, base)
 	return result
+}
+
+// An explicit Linux inspection uses the ordinary OS temporary namespace only
+// when the caller supplied no temporary or scratch selector. This allocates
+// nothing and grants no ownership or cleanup authority over that namespace.
+func sessionEnvironmentOverrides(project string, inspect bool, base []string) map[string]string {
+	result := map[string]string{"HERMES_HOME": projectSessionRoot(project)}
+	if !inspect || runtime.GOOS != "linux" {
+		return result
+	}
+	for _, item := range base {
+		key, _, _ := strings.Cut(item, "=")
+		switch key {
+		case "TMPDIR", "TMP", "TEMP", "HERMES_SCRATCH_DIR":
+			return result
+		}
+	}
+	result["TMPDIR"] = "/tmp"
+	return result
+}
+
+// Derive the exact child selection from the original base. Caller selections,
+// including explicit blanks and duplicates, never acquire a fallback override.
+func sessionPlanEnvironment(plan clients.SessionPlan, base []string) ([]string, error) {
+	inspect := len(plan.Arguments) != 0
+	if !maps.Equal(plan.Environment, sessionEnvironmentOverrides(plan.Directory, inspect, base)) {
+		return nil, fmt.Errorf("hermes session overrides differ")
+	}
+	result := plan.ChildEnvironment(base)
+	if inspect {
+		if _, err := sessionPassiveEnvironment(result); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
 
 // Keep both the named parent and the selected directory open. Terminal-dot

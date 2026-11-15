@@ -42,7 +42,16 @@ func prepareProjectSessionEnvironment(ctx context.Context, req clients.SessionRe
 	if err := New().CheckPlanPrecondition(clients.PlanInput{}, &plan); err != nil {
 		return clients.SessionPlan{}, err
 	}
-	if err := hermesProjectAuthority(req.ProjectRoot, req.Client.ConfigRoot, environment); err != nil {
+	var args []string
+	if req.Inspect {
+		args = []string{"config", "get", "mcp_servers", "--json"}
+	}
+	overrides := sessionEnvironmentOverrides(req.ProjectRoot, req.Inspect, environment)
+	effective, err := sessionPlanEnvironment(clients.SessionPlan{Directory: req.ProjectRoot, Arguments: args, Environment: overrides}, environment)
+	if err != nil {
+		return clients.SessionPlan{}, err
+	}
+	if err := hermesProjectAuthority(req.ProjectRoot, req.Client.ConfigRoot, effective); err != nil {
 		return clients.SessionPlan{}, err
 	}
 	names, err := sessionBindingNames(req, owner)
@@ -53,19 +62,15 @@ func prepareProjectSessionEnvironment(ctx context.Context, req clients.SessionRe
 	if err != nil {
 		return clients.SessionPlan{}, err
 	}
-	source, err := captureSessionSource(ctx, req.ProjectRoot, owner, names, sessionRuntimeSelection{req.Inspect, bundle, environment})
+	source, err := captureSessionSource(ctx, req.ProjectRoot, owner, names, sessionRuntimeSelection{req.Inspect, bundle, effective})
 	if err != nil {
 		return clients.SessionPlan{}, err
 	}
 	if err := verifySessionReceipts(req, source.body); err != nil {
 		return clients.SessionPlan{}, err
 	}
-	var args []string
-	if req.Inspect {
-		args = []string{"config", "get", "mcp_servers", "--json"}
-	}
 	return clients.SessionPlan{ClientID: domain.ClientHermes, Executable: bundle.executable, Arguments: args,
-		Directory: req.ProjectRoot, Environment: map[string]string{"HERMES_HOME": projectSessionRoot(req.ProjectRoot)}, Servers: names,
+		Directory: req.ProjectRoot, Environment: overrides, Servers: names,
 		ConfigDigest: source.digest}, ctx.Err()
 }
 
@@ -201,11 +206,15 @@ func verifyProjectSessionSource(ctx context.Context, plan clients.SessionPlan, o
 
 func verifiedSessionSource(ctx context.Context, plan clients.SessionPlan, owner domain.NativeObjectOwnership, environment []string) (sessionSourceSnapshot, error) {
 	inspect := []string{"config", "get", "mcp_servers", "--json"}
-	if plan.ClientID != domain.ClientHermes || len(plan.Environment) != 1 || plan.Environment["HERMES_HOME"] != projectSessionRoot(plan.Directory) ||
+	if plan.ClientID != domain.ClientHermes ||
 		len(plan.Servers) == 0 || len(plan.Arguments) != 0 && !slices.Equal(plan.Arguments, inspect) {
 		return sessionSourceSnapshot{}, fmt.Errorf("hermes session overrides differ")
 	}
-	if err := hermesSessionSignals(projectSessionRoot(plan.Directory), environment); err != nil {
+	effective, err := sessionPlanEnvironment(plan, environment)
+	if err != nil {
+		return sessionSourceSnapshot{}, err
+	}
+	if err := hermesSessionSignals(projectSessionRoot(plan.Directory), effective); err != nil {
 		return sessionSourceSnapshot{}, err
 	}
 	bundle, err := qualifyHermesBundle(plan.Executable)
@@ -213,7 +222,7 @@ func verifiedSessionSource(ctx context.Context, plan clients.SessionPlan, owner 
 		return sessionSourceSnapshot{}, fmt.Errorf("hermes selected bundle changed")
 	}
 	source, err := captureSessionSource(ctx, plan.Directory, owner, plan.Servers,
-		sessionRuntimeSelection{slices.Equal(plan.Arguments, inspect), bundle, environment})
+		sessionRuntimeSelection{slices.Equal(plan.Arguments, inspect), bundle, effective})
 	if err != nil {
 		return sessionSourceSnapshot{}, err
 	}
