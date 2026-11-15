@@ -78,6 +78,12 @@ func TestCISupersession_ClosedPRCleanupCannotCancelOtherIdentities(t *testing.T)
 			t.Fatalf("closed-PR cleanup lost guard %q", required)
 		}
 	}
+	// Scanner, SBOM and security reviews are durable evidence, not ordinary
+	// disposable product checks; closing an unmerged PR must not cancel them.
+	const protectedKinds = "test(\"release|publish|sign|deploy|checkpoint|skillspector|scan|audit|security|codeql|govulncheck|dependency-review|sbom\"; \"i\")"
+	if !strings.Contains(script, protectedKinds) {
+		t.Fatal("closed-PR cleanup may cancel retained security or audit evidence")
+	}
 	if strings.Contains(script, "IS_FORK") {
 		t.Fatal("same-repository PRs must use the same unique head association fallback")
 	}
