@@ -684,6 +684,39 @@ class NativeExtractionTests(unittest.TestCase):
                     audit.extract_antigravity_executable(self.archive(kind, **options), "native." + kind)
 
 
+
+class UnrelatedNativeMCPTests(unittest.TestCase):
+    def test_native_foreign_mapping_survives_owned_add_and_refuses_mutations(self):
+        for client in ("hermes", "pi"):
+            with self.subTest(client=client), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                profile = root / "selected"
+                profile.mkdir()
+                control = audit.seed_unrelated_native_mcp(profile, client, root)
+                self.assertIsNotNone(control)
+                audit.check_unrelated_native_mcp(control, root)
+                path = control[1]
+                if client == "hermes":
+                    body = ("mcp_servers:\n  " + audit.FOREIGN_NATIVE_MCP +
+                            ":\n    command: echo\n    args: [unrelated-native-audit]\n"
+                            "  notion:\n    url: https://mcp.notion.com/mcp\n")
+                    damaged = "mcp_servers: {}\n"
+                else:
+                    body = json.dumps({"mcpServers": {
+                        audit.FOREIGN_NATIVE_MCP: control[2],
+                        "notion": {"url": "https://mcp.notion.com/mcp"}}}) + "\n"
+                    damaged = '{"mcpServers":{}}\n'
+                path.write_text(body, encoding="utf-8")
+                audit.check_unrelated_native_mcp(control, root)
+                path.write_text(damaged, encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "unrelated native MCP"):
+                    audit.check_unrelated_native_mcp(control, root)
+                path.unlink()
+                with self.assertRaisesRegex(ValueError, "unrelated native MCP"):
+                    audit.check_unrelated_native_mcp(control, root)
+
+
+
 class NativeCleanupTests(unittest.TestCase):
     def test_empty_owned_entries_and_foreign_config_survive(self):
         with tempfile.TemporaryDirectory() as temp:

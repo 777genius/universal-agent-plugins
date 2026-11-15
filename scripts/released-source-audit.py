@@ -459,6 +459,41 @@ def checked_native_cleanup(selected_root, case, binding, root):
     return {"owned_logical_names": sorted(set(names)), "remaining": residuals}
 
 
+FOREIGN_NATIVE_MCP = "uap-unrelated-audit"
+
+
+def seed_unrelated_native_mcp(selected_root, client, root):
+    """Seed an inert foreign entry that must survive every native lifecycle step."""
+    if client not in ("hermes", "pi"):
+        return None
+    config = in_case(selected_root / ("config.yaml" if client == "hermes" else "mcp.json"), root)
+    require(not config.exists() and not config.is_symlink(), "foreign MCP seed would replace native configuration")
+    if client == "hermes":
+        entry = {"command": "echo", "args": ["unrelated-native-audit"]}
+        body = "mcp_servers:\n  " + FOREIGN_NATIVE_MCP + ":\n    command: echo\n    args: [unrelated-native-audit]\n"
+    else:
+        entry = {"url": "https://foreign.invalid/mcp", "enabled": False}
+        body = json.dumps({"mcpServers": {FOREIGN_NATIVE_MCP: entry}}) + "\n"
+    config.write_text(body, encoding="utf-8")
+    config.chmod(0o600)
+    return client, config, entry
+
+
+def check_unrelated_native_mcp(control, root):
+    if control is None:
+        return
+    client, path, expected = control
+    body, _ = read_saved_record(in_case(path, root))
+    require(body is not None, "unrelated native MCP configuration was removed")
+    document = (strict_native_yaml(body) if client == "hermes"
+                else json.loads(body, object_pairs_hook=live._unique_json_object))
+    collection = "mcp_servers" if client == "hermes" else "mcpServers"
+    require(isinstance(document, dict) and isinstance(document.get(collection), dict)
+            and document[collection].get(FOREIGN_NATIVE_MCP) == expected,
+            "unrelated native MCP entry changed during lifecycle")
+
+
+
 def run_case(binary, case, root, executable):
     root.mkdir()
     home, project, data = (root / name for name in ("home", "project", "uap-data"))
@@ -475,6 +510,8 @@ def run_case(binary, case, root, executable):
     sentinels = [home / "foreign.txt", project / "foreign.txt", native_root / "foreign.txt", project_native / "foreign.txt"]
     for path in sentinels:
         path.write_text("unmanaged source audit neighbor\n", encoding="utf-8")
+    foreign_mcp_control = seed_unrelated_native_mcp(
+        native_root if case["scope"] == "user" else project_native, case["client"], root)
     live.initialize_project_skill_git_root(project, env, root)
     scope = ["--scope", case["scope"]]
     if case["scope"] == "project":
@@ -494,6 +531,7 @@ def run_case(binary, case, root, executable):
         trace.append({"operation": operation, "argv": argv, **result})
         for path in sentinels:
             require(live.preserved_regular_text(path, "unmanaged source audit neighbor\n", root), "foreign state changed")
+        check_unrelated_native_mcp(foreign_mcp_control, root)
         require(protected_scope_snapshot(root, case["scope"], protected_root) == protected,
                 operation + " changed the other scope")
         if success:
