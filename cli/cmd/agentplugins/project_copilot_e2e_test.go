@@ -49,9 +49,7 @@ func TestProjectCopilotComposedSavedLifecycle(t *testing.T) {
 	if !reflect.DeepEqual(userBefore, userAfter) {
 		t.Fatal("Copilot project installation changed unrelated user files")
 	}
-	projectJourneyWrite(t, trustPath, `{"trustedFolders":["/foreign-project"],"allowedTools":["shell(git status)"],"theme":"dark"}`)
-	journey.run(t, journey.a, "add", transport.endpoint, "--alias", "docs", "--target", "copilot", "--yes")
-	projectCopilotTrust(t, trustPath, []string{"/foreign-project", journey.a})
+	projectCopilotRestoreTrust(t, journey, trustPath)
 	journey.run(t, journey.b, "add", transport.endpoint, "--alias", "docs", "--target", "copilot", "--yes")
 	projectCopilotTrust(t, trustPath, []string{"/foreign-project", journey.a, journey.b})
 	userBefore = securityFixtureTree(t, user)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/manifestedit"
 
@@ -159,11 +160,12 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	return request, nil
 }
 
-// Explicit saved add confirmation may finish native trust for the selected
-// Copilot project. A matching package receipt alone does not prove remembered
-// folder trust; ordinary deps sync and other projects stay unchanged.
+// Saved add may review native trust with explicit installation consent or the
+// existing interactive confirmation. A matching package receipt alone does not
+// prove folder trust; ordinary deps sync and other projects stay unchanged.
 func reviewedCopilotSavedAddActions(cmd *cobra.Command, app App, opts *options, targets []string, actions []dependencyAction) []dependencyAction {
-	if cmd.Name() != "add" || !opts.yes || app.scope() != domain.ScopeProject ||
+	canReview := opts.yes || strings.TrimSpace(opts.target) != "" || (app.Terminal && opts.format == "human")
+	if cmd.Name() != "add" || !canReview || app.scope() != domain.ScopeProject ||
 		len(targets) != 1 || !domain.ClientTraitsFor(domain.ClientID(targets[0])).SavedProjectRepairOnAdd {
 		return actions
 	}

@@ -31,8 +31,10 @@ state remains honest about native discovery, authentication and session policy.
 
 ## Scope and review
 
-No changes to other clients, generic installation orchestration, public JSON
-schemas, authentication, blanket tool approvals, or production release.
+No changes to other clients, public JSON schemas, authentication, blanket tool
+approvals, or production release. Shared orchestration uses only the existing
+activation transaction, a read-only readiness contract, and the client catalog
+policy for reviewing an exact-owned saved-add repair.
 
 Estimate: 150–220 production lines and 300–500 focused test lines. Complexity
 4/10; expected reliability 9/10; confidence 8/10 before execution. Two review
@@ -78,3 +80,17 @@ untrusted A exposes no project MCP entries, adding only A to `trustedFolders`
 enables A in two fresh processes, and sibling B remains undiscovered. This
 confirmed the native mechanism before implementation. It is separate from the
 new mandatory public-installer-to-native-tool-call test and final CI results.
+
+## Saved installation follow-up
+
+Hosted tests exposed a separate saved-add unchanged fast path, before the SDK
+could inspect missing trust. The opted-in Copilot policy now reviews the existing
+exact-owned native repair on repeated add and derives the same action during the
+final recheck. It preserves the package pin, receipts and ordinary deps sync.
+
+Repeat add uses the same explicit-target or interactive confirmation as the
+initial installation; it does not require an extra `--yes`. The composed public
+CLI regression covers explicit-target repeat, interactive acceptance and refusal,
+saved dry-run, targetless automation refusal and unchanged deps sync after trust
+loss. It also compares project B and retained package authority. The genuine
+native subtest and final-head three-platform checks remain required.
