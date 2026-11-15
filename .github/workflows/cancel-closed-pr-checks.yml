@@ -30,32 +30,33 @@ jobs:
           [[ "${BASE_REPOSITORY_ID}" =~ ^[1-9][0-9]*$ ]]
           # Keep release/sign/deploy/scan evidence, even if triggered by a PR.
           # Failed API calls stop cleanup rather than broaden identity matching.
-          cancelled=0
-          declare -A seen=()
+          candidates="${RUNNER_TEMP}/closed-pr-candidates.txt"
+          : > "${candidates}"
+          # Fail before ANY cancellation if a paged API response or jq filter fails.
           for status in queued pending in_progress waiting requested; do
-            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&status=${status}&per_page=100" > "${RUNNER_TEMP}/closed-pr-${status}.json"
-            while IFS= read -r run_id; do
-              [[ "${run_id}" =~ ^[1-9][0-9]*$ ]] || continue
-              [[ -z "${seen[$run_id]:-}" ]] || continue
-              seen[$run_id]=1
-              if gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel"; then
-                cancelled=$((cancelled + 1))
-              else
-                # A check can finish between listing and cancellation.
-                current="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
-                [[ "${current}" == completed ]] || exit 1
-              fi
-            done < <(
-              jq -r --argjson pr "${PR_NUMBER}" \
-                --argjson head "${HEAD_REPOSITORY_ID}" \
-                --argjson base "${BASE_REPOSITORY_ID}" '
-                .workflow_runs[]? | select(.event == "pull_request")
-                | select(.head_repository.id == $head)
-                | select(.path | type == "string" and startswith(".github/workflows/"))
-                | select((.path | test("release|publish|sign|deploy|checkpoint|skillspector"; "i")) | not)
-                | select(any(.pull_requests[]?;
-                    .number == $pr and .head.repo.id == $head and .base.repo.id == $base))
-                | .id' "${RUNNER_TEMP}/closed-pr-${status}.json"
-            )
+            response="${RUNNER_TEMP}/closed-pr-${status}.json"
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&status=${status}&per_page=100" > "${response}"
+            jq -r --argjson pr "${PR_NUMBER}" \
+              --argjson head "${HEAD_REPOSITORY_ID}" \
+              --argjson base "${BASE_REPOSITORY_ID}" '
+              .workflow_runs[]? | select(.event == "pull_request")
+              | select(.head_repository.id == $head)
+              | select(.path | type == "string" and startswith(".github/workflows/"))
+              | select((.path | test("release|publish|sign|deploy|checkpoint|skillspector"; "i")) | not)
+              | select(any(.pull_requests[]?;
+                  .number == $pr and .head.repo.id == $head and .base.repo.id == $base))
+              | .id' "${response}" >> "${candidates}"
           done
+          sort -un "${candidates}" > "${RUNNER_TEMP}/closed-pr-unique.txt"
+          cancelled=0
+          while IFS= read -r run_id; do
+            [[ "${run_id}" =~ ^[1-9][0-9]*$ ]] || exit 1
+            if gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel"; then
+              cancelled=$((cancelled + 1))
+            else
+              # A check can finish between listing and cancellation.
+              current="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+              [[ "${current}" == completed ]] || exit 1
+            fi
+          done < "${RUNNER_TEMP}/closed-pr-unique.txt"
           echo "Cancelled ${cancelled} obsolete ordinary check runs for PR #${PR_NUMBER}"
