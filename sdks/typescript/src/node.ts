@@ -89,22 +89,22 @@ export async function startUap(options: StartOptions) {
   child.stdin.on('error', () => undefined);
   let processExited = false;
   let exitCode: number | null = null;
-  const exited = new Promise<void>((resolve) => {
-    child.once('exit', (code) => { processExited = true; exitCode = code; resolve(); });
-    child.on('error', () => {
-      // A failed signal is not exit. No PID means spawning failed.
-      if (child.pid === undefined) { processExited = true; resolve(); }
-    });
+  child.once('exit', (code) => { processExited = true; exitCode = code; });
+  child.on('error', () => {
+    // A failed signal is not exit. No PID means spawning failed.
+    if (child.pid === undefined) processExited = true;
   });
+  // Exit alone does not settle the owned child's stdio streams.
+  const closed = new Promise<void>((resolve) => { child.once('close', () => resolve()); });
   let closing: Promise<void> | undefined;
   const close = (): Promise<void> => {
     closing ??= (async () => {
       child.stdin.end();
-      if (await settledWithin(exited, shutdownMs)) return;
-      child.kill('SIGTERM');
-      if (await settledWithin(exited, 1_000)) return;
-      child.kill('SIGKILL');
-      if (!await settledWithin(exited, 1_000)) throw new ManagementError('SHUTDOWN_TIMEOUT', 'The owned engine did not exit. Its accepted work requires inspection before retrying.');
+      if (await settledWithin(closed, shutdownMs)) return;
+      if (!processExited) child.kill('SIGTERM');
+      if (await settledWithin(closed, 1_000)) return;
+      if (!processExited) child.kill('SIGKILL');
+      if (!await settledWithin(closed, 1_000)) throw new ManagementError('SHUTDOWN_TIMEOUT', 'The owned engine did not finish shutdown. Its accepted work requires inspection before retrying.');
     })();
     return closing;
   };

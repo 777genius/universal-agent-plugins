@@ -39,6 +39,11 @@ func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...),
 		VerifyOnly:            true,
 	})
+	// A verifier may return an unclassified error after its caller canceled.
+	// Cancellation still leaves the native projection unobserved, not drifted.
+	if ctx.Err() != nil {
+		return nativeProjectionNotChecked(installation, binding)
+	}
 	var verification *ports.VerificationError
 	if err != nil {
 		// A canceled or time-bounded observer does not prove native drift.

@@ -2954,8 +2954,8 @@ def history_control_commands(value):
         "bootstrap": [uap, "run", "--inspect", "--confirm-client-start", *tail],
         "public-stdio-a": [runtime["native"], "mcp", "test", "hermes-public-a-stdio"],
         "inspect": [uap, "run", "--inspect", "--confirm-client-start", *tail],
-        "noninspect": [uap, "run", "--dry-run", "--yes", "--format", "json", *tail],
-        "active": [uap, "run", "--inspect", "--dry-run", "--yes", "--format", "json", *tail]}
+        "noninspect": [uap, "run", "--dry-run", "--format", "json", *tail],
+        "active": [uap, "run", "--inspect", "--dry-run", "--format", "json", *tail]}
     expected["selection"] = observer_runtime_command(runtime_command, root, Path(runtime["python"]),
         code=SELECT, args=[str(root), value["nonce"]])
     registration = value["registration"]

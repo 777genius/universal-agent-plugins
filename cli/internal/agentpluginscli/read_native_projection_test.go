@@ -95,13 +95,33 @@ func TestDoctorNativeProjectionCanceledContextDoesNotCallActivator(t *testing.T)
 	}
 }
 
+func TestDoctorNativeProjectionCanceledDuringVerificationIsInconclusive(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	activator := &doctorProjectionActivator{
+		err:    errors.New("native verifier returned a generic error after cancellation"),
+		cancel: cancel,
+	}
+	findings := checkNativeProjectionIntegrity(ctx, App{Lifecycle: usecasetest.NewService(usecase.Service{Activator: activator})},
+		domain.DetectedClient{ClientID: domain.ClientWindsurf, ConfigRoot: "/legacy"}, domain.DeliveryTarget{},
+		domain.Installation{InstallationID: "installation-id", DeclaredName: "demo"},
+		domain.ClientBinding{ClientID: string(domain.ClientWindsurf), Scope: string(domain.ScopeUser),
+			NativeObjects: []domain.NativeObjectOwnership{{Kind: "owned_native_projection"}}}, "sha256:package")
+	if len(findings) != 1 || findings[0].Status != "unknown" || findings[0].Code != "native_projection_not_checked" || len(activator.requests) != 1 {
+		t.Fatalf("cancellation during native verification was classified as drift: findings=%+v, calls=%d", findings, len(activator.requests))
+	}
+}
+
 type doctorProjectionActivator struct {
 	requests []domain.ActivationRequest
 	err      error
+	cancel   context.CancelFunc
 }
 
 func (activator *doctorProjectionActivator) Activate(_ context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	activator.requests = append(activator.requests, request)
+	if activator.cancel != nil {
+		activator.cancel()
+	}
 	return domain.ActivationOutcome{}, activator.err
 }
 

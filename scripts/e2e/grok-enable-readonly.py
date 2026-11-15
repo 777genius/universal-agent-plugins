@@ -16,6 +16,31 @@ BINARY = "22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9"
 URL = "https://x.ai/cli/grok-1.0.70-linux-x86_64.gz"
 
 
+def prepare_writer_lock(config):
+    """Prepare the permanent UAP writer lock before freezing fixture originals."""
+    parent = os.open(config.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        original = os.fstat(parent)
+        name = config.name + ".agentplugins.lock"
+        lock = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
+        try:
+            held = os.fstat(lock)
+            named = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            facts = lambda value: (value.st_dev, value.st_ino, value.st_mode, value.st_uid,
+                                   value.st_gid, value.st_nlink, value.st_size)
+            if not stat.S_ISREG(held.st_mode) or stat.S_IMODE(held.st_mode) != 0o600 or \
+                    (held.st_uid, held.st_gid, held.st_nlink, held.st_size) != (os.getuid(), os.getgid(), 1, 0) or facts(held) != facts(named):
+                raise ValueError("prepared UAP writer lock has unsafe metadata or identity")
+            current = config.parent.lstat()
+            if (original.st_dev, original.st_ino, original.st_mode, original.st_uid, original.st_gid) != \
+                    (current.st_dev, current.st_ino, current.st_mode, current.st_uid, current.st_gid):
+                raise ValueError("prepared UAP writer lock parent changed")
+        finally:
+            os.close(lock)
+    finally:
+        os.close(parent)
+
+
 def producer_context():
     """Read the delegated Python launcher, not the Go or namespaced child."""
     result = dict(qualification=False, producer="delegated Python launcher before Go helper exec; not Go/bwrap child state",
@@ -50,6 +75,30 @@ def snapshot(root):
         result[str(path.relative_to(root))] = dict(mode=info.st_mode, inode=info.st_ino,
             digest=hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None)
     return result
+
+
+def fixture_delta(before, after, home, project):
+    # The fixture is disposable, but never expose native-provided filenames or
+    # content in failure artifacts. Stable relative-name hashes aid diagnosis.
+    changes = []
+    total = 0
+    for role, root in (("home", home), ("project", project)):
+        previous, current = before[str(root)], after[str(root)]
+        for relative in sorted(previous.keys() | current.keys()):
+            old, new = previous.get(relative), current.get(relative)
+            if old == new:
+                continue
+            total += 1
+            if len(changes) >= 16:
+                continue
+            changes.append(dict(role=role,
+                relative_sha256=hashlib.sha256(relative.encode("utf-8")).hexdigest(),
+                known_uap_config_lock=(role == "home" and relative == ".grok/config.toml.agentplugins.lock"),
+                effect="added" if old is None else "removed" if new is None else "changed",
+                inode_changed=(old is not None and new is not None and old["inode"] != new["inode"]),
+                mode_changed=(old is not None and new is not None and old["mode"] != new["mode"]),
+                content_changed=(old is not None and new is not None and old["digest"] != new["digest"])))
+    return dict(count=total, changes=changes, truncated=total > len(changes))
 
 
 def main():
@@ -117,6 +166,7 @@ def main():
                 raise ValueError("native config lock was not established")
             config.write_text('[marketplace]\ndefault_skills_installs_purged = true\n'
                 '[features]\nturn_summary = false\n')
+            prepare_writer_lock(config)
             before = {str(path): snapshot(path) for path in (home, project)}
             original_binary = hashlib.sha256(binary.read_bytes()).hexdigest()
             output = run("readonly-production-inventory", [args.test.resolve(),
@@ -126,12 +176,15 @@ def main():
                 "-grok-readonly-name=uap-inert-readonly", "-grok-readonly-version=1.0.0"])
             if b"GROK_READONLY_NATIVE_INVENTORY_PASS\n" not in output:
                 raise ValueError("selected native test did not complete")
-            if before != {str(path): snapshot(path) for path in (home, project)}:
+            after = {str(path): snapshot(path) for path in (home, project)}
+            if before != after:
+                evidence["fixture_delta"] = fixture_delta(before, after, home, project)
                 raise ValueError("readonly native inventory changed the original fixture")
             if original_binary != hashlib.sha256(binary.read_bytes()).hexdigest():
                 raise ValueError("native executable changed")
-            evidence.update(passed=True, fixture_unchanged=True, archive_sha256=ARCHIVE, binary_sha256=BINARY)
-            status = 0
+        # Qualification is committed only after the disposable fixture is cleaned up.
+        evidence.update(passed=True, fixture_unchanged=True, archive_sha256=ARCHIVE, binary_sha256=BINARY)
+        status = 0
     except Exception as error:
         evidence["error"] = type(error).__name__ + ": " + str(error)
     finally:

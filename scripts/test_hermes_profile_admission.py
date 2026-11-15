@@ -6614,8 +6614,8 @@ class PassiveHistoryIntegrationContracts(unittest.TestCase):
                 [uap, "run", "--inspect", "--confirm-client-start", *tail],
                 [runtime["native"], "mcp", "test", "hermes-public-a-stdio"], selection_argv,
                 [uap, "run", "--inspect", "--confirm-client-start", *tail],
-                [uap, "run", "--dry-run", "--yes", "--format", "json", *tail],
-                [uap, "run", "--inspect", "--dry-run", "--yes", "--format", "json", *tail]]
+                [uap, "run", "--dry-run", "--format", "json", *tail],
+                [uap, "run", "--inspect", "--dry-run", "--format", "json", *tail]]
         values = [b"", b'{"result":"success"}', json.dumps(servers).encode(), b"native fixture", json.dumps(selection).encode(),
                   json.dumps(servers).encode(), REFUSALS["noninspect"].encode(), REFUSALS["active"].encode()]
         return [self.report_command(label, args, body, 101 if label == "public-stdio-a" else 1000 + index,
@@ -6648,6 +6648,53 @@ class PassiveHistoryIntegrationContracts(unittest.TestCase):
         elif effect == "order": changed["commands"][2:4] = reversed(changed["commands"][2:4])
         elif effect == "closed": changed["processes"]["sentinel"]["closed"]["pipes_closed"] = False
         return changed
+
+    def test_real_negative_recipes_reach_final_report_and_stale_yes_refuses(self):
+        import copy
+        import sys
+        from types import SimpleNamespace
+        from hermes_passive_history_control import HistoryControl, LEDGER
+        from hermes_passive_history_processes import digest, encoded
+        with tempfile.TemporaryDirectory() as temporary:
+            report, context, module = self.report_fixture(Path(temporary).resolve())
+            owner = object.__new__(HistoryControl)
+            owner.outer, owner.project = Path(context["outer"]), Path(report["fixture"]["project"])
+            owner.code, owner.selected = Path(report["runtime"]["code"]), owner.project / ".hermes/uap-session"
+            owner.pins, owner.nonce, owner.config = context["pins"], context["nonce"], report["servers"]
+            key = (owner.selected / LEDGER).relative_to(owner.outer).as_posix()
+            owner.current, owner.baseline, owner.phases = {key: "passive"}, {}, []
+            receipt = report["forged"]["receipt"]
+            owner.forged_digest = digest(receipt)
+            owner.history, owner.snapshot = lambda _image: (receipt, {}), lambda: ({key: "active"}, {})
+            owner.preserved = lambda: None
+            records = {row["label"]: row for row in report["commands"]}
+            owner.observer = lambda *_: records["selection"]["status"]["argv"]
+            owner.sentinel = SimpleNamespace(child=SimpleNamespace(pid=report["registration"]["child_pid"]),
+                                             challenge=lambda *_: None)
+            owner.ledger = SimpleNamespace(purpose=lambda value: b"authored active purpose")
+            calls = []
+            def command(label, argv, **options):
+                calls.append(label)
+                expected = {"native": True} if label == "selection" else (
+                    {"inspect": True} if label == "inspect" else {"refused": True})
+                self.assertEqual(options, expected)
+                row = records[label]
+                row["status"]["argv"] = list(argv)
+                row["status_raw"] = encoded(json.dumps(row["status"]).encode())
+                return row
+            owner.run_command = command
+            owner.exercise()
+            self.assertEqual(calls, ["selection", "inspect", "noninspect", "active"])
+            with mock.patch.dict(sys.modules, {"hermes_cli._launchers": module}):
+                self.assertEqual(CASE["history_control_report"](report, **context)["nonce"], context["nonce"])
+                for label in ("noninspect", "active"):
+                    with self.subTest(label=label):
+                        changed = copy.deepcopy(report)
+                        row = next(item for item in changed["commands"] if item["label"] == label)
+                        row["status"]["argv"].insert(2, "--yes")
+                        row["status_raw"] = encoded(json.dumps(row["status"]).encode())
+                        with self.assertRaisesRegex(RuntimeError, "history original command recipe differs"):
+                            CASE["history_control_report"](changed, **context)
 
     def test_full_parent_report_rejects_consistent_argv_source_and_baseline_forgeries(self):
         import sys
