@@ -19,47 +19,9 @@ func renderHumanSkillsResult(writer io.Writer, result SkillsBatchResult) error {
 			return err
 		}
 	}
-	theme := terminaltheme.For(writer)
-	clients := []string{}
-	byClient := map[string][]SkillsBatchItem{}
-	for _, item := range result.Items {
-		if _, found := byClient[item.ClientID]; !found {
-			clients = append(clients, item.ClientID)
-		}
-		byClient[item.ClientID] = append(byClient[item.ClientID], item)
-	}
-	manual, seen := []string{}, map[string]bool{}
-	for _, client := range clients {
-		if _, err := fmt.Fprintln(writer, theme.Text(terminaltheme.Label, prompt.SafeText(reviewClientName(domain.ClientID(client))))); err != nil {
-			return err
-		}
-		for _, item := range byClient[client] {
-			label := skillsItemPresentation(item)
-			role, mark := terminaltheme.Warning, "!"
-			switch label {
-			case "installed", "removed":
-				role, mark = terminaltheme.Success, "✓"
-			case "failed", "rolled back":
-				role, mark = terminaltheme.Error, "×"
-			case "not attempted", "unchanged", "canceled":
-				role, mark = terminaltheme.Muted, "·"
-			}
-			if _, err := fmt.Fprintf(writer, "  %s %s — %s\n", theme.Text(role, mark), prompt.SafeText(item.Alias), theme.Text(role, label)); err != nil {
-				return err
-			}
-			if item.Reason != "" {
-				if _, err := fmt.Fprintln(writer, "    "+prompt.SafeText(item.Reason)); err != nil {
-					return err
-				}
-			}
-			for _, action := range item.ManualActions {
-				text := reviewClientName(domain.ClientID(client)) + ": " + prompt.SafeText(action)
-				if !seen[text] {
-					manual = append(manual, text)
-					seen[text] = true
-				}
-			}
-		}
+	manual, err := renderHumanSkillsClientResults(writer, result.Items)
+	if err != nil {
+		return err
 	}
 	manual = append(manual, result.RepairInstructions...)
 	// Keep the published Skills flow's evidence boundary: native/file readiness
@@ -81,6 +43,58 @@ func renderHumanSkillsResult(writer io.Writer, result SkillsBatchResult) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+func renderHumanSkillsClientResults(writer io.Writer, items []SkillsBatchItem) ([]string, error) {
+	theme := terminaltheme.For(writer)
+	clients := []string{}
+	byClient := map[string][]SkillsBatchItem{}
+	for _, item := range items {
+		if _, found := byClient[item.ClientID]; !found {
+			clients = append(clients, item.ClientID)
+		}
+		byClient[item.ClientID] = append(byClient[item.ClientID], item)
+	}
+	manual, seen := []string{}, map[string]bool{}
+	for _, client := range clients {
+		if _, err := fmt.Fprintln(writer, theme.Text(terminaltheme.Label, prompt.SafeText(reviewClientName(domain.ClientID(client))))); err != nil {
+			return nil, err
+		}
+		for _, item := range byClient[client] {
+			if err := renderHumanSkillsItem(writer, theme, item); err != nil {
+				return nil, err
+			}
+			for _, action := range item.ManualActions {
+				text := reviewClientName(domain.ClientID(client)) + ": " + prompt.SafeText(action)
+				if !seen[text] {
+					manual = append(manual, text)
+					seen[text] = true
+				}
+			}
+		}
+	}
+	return manual, nil
+}
+
+func renderHumanSkillsItem(writer io.Writer, theme terminaltheme.Theme, item SkillsBatchItem) error {
+	label := skillsItemPresentation(item)
+	role, mark := terminaltheme.Warning, "!"
+	switch label {
+	case "installed", "removed":
+		role, mark = terminaltheme.Success, "✓"
+	case "failed", "rolled back":
+		role, mark = terminaltheme.Error, "×"
+	case "not attempted", "unchanged", "canceled":
+		role, mark = terminaltheme.Muted, "·"
+	}
+	if _, err := fmt.Fprintf(writer, "  %s %s — %s\n", theme.Text(role, mark), prompt.SafeText(item.Alias), theme.Text(role, label)); err != nil {
+		return err
+	}
+	if item.Reason != "" {
+		_, err := fmt.Fprintln(writer, "    "+prompt.SafeText(item.Reason))
+		return err
 	}
 	return nil
 }

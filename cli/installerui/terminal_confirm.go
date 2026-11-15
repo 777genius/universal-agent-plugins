@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode"
 
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -105,7 +106,7 @@ func (l *confirmationLayout) resize(w, h int) error {
 	return nil
 }
 
-// Summary rows have already passed normalizeConfirm. Decoration never decodes
+// Summary rows have already passed review normalization. Decoration never decodes
 // quoted authority values or replaces their text; wrapping retains every rune.
 func formatConfirmationSummary(summary string, width int, noColor bool) string {
 	heading := lipgloss.NewStyle()
@@ -116,13 +117,26 @@ func formatConfirmationSummary(summary string, width int, noColor bool) string {
 	blockStart := true
 	for i, row := range rows {
 		wrapped := wrapConfirmationSummaryRow(row, width)
-		if blockStart && row != "" && row == strings.TrimLeft(row, " ") {
+		if (blockStart || confirmationActionHeading(row)) && row != "" && row == strings.TrimLeft(row, " ") {
 			wrapped = heading.Render(wrapped)
 		}
 		rows[i] = wrapped
 		blockStart = row == ""
 	}
 	return strings.Join(rows, "\n")
+}
+
+func confirmationActionHeading(row string) bool {
+	kind, _, found := strings.Cut(row, " ")
+	if !found {
+		return false
+	}
+	switch kind {
+	case "install", "update", "remove", "unchanged":
+		return true
+	default:
+		return false
+	}
 }
 
 // Keep ordinary words together without discarding whitespace at line breaks.
@@ -148,13 +162,13 @@ func wrapConfirmationSummaryRow(row string, width int) string {
 }
 
 func (l *confirmationLayout) key(msg tea.KeyPressMsg) {
+	if detailsToggleKey(msg) && l.details != "" {
+		l.showDetails = !l.showDetails
+		_ = l.resize(l.width, l.height)
+		l.viewport.GotoTop()
+		return
+	}
 	switch msg.String() {
-	case "d":
-		if l.details != "" {
-			l.showDetails = !l.showDetails
-			_ = l.resize(l.width, l.height)
-			l.viewport.GotoTop()
-		}
 	case "up", "pgup":
 		l.viewport.ScrollUp(max(1, l.viewport.Height()/2))
 	case "down", "pgdown":
@@ -164,6 +178,21 @@ func (l *confirmationLayout) key(msg tea.KeyPressMsg) {
 	case "end":
 		l.viewport.GotoBottom()
 	}
+}
+
+// Keep the advertised physical D shortcut usable with Caps Lock, enhanced
+// keyboard events, and the Russian/Ukrainian layout. Modified cancel keys such
+// as Ctrl+D still belong to the form; held-key repeats do not toggle twice.
+func detailsToggleKey(msg tea.KeyPressMsg) bool {
+	if msg.IsRepeat || msg.Mod & ^(tea.ModShift|tea.ModCapsLock|tea.ModNumLock) != 0 {
+		return false
+	}
+	for _, code := range []rune{msg.Code, msg.BaseCode} {
+		if unicode.ToLower(code) == 'd' || unicode.ToLower(code) == 'в' {
+			return true
+		}
+	}
+	return strings.EqualFold(msg.Text, "d") || strings.EqualFold(msg.Text, "в")
 }
 
 func (l *confirmationLayout) View(f *huh.Form) string {

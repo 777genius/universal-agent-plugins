@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -37,6 +38,42 @@ func TestCurrentClaudeSuppressionMetadataRemainsSetupRequired(t *testing.T) {
 		DeclaredName: "demo", ActivePath: fixture.active, TargetContext: domain.TargetContext{ProjectRoot: fixture.root},
 	}, nil); finding != clients.RegistryClear {
 		t.Fatalf("suppression claimed native discovery: %v", finding)
+	}
+}
+
+func TestCurrentClaudePluralSuppressionMatchesExactNativeCountGrammar(t *testing.T) {
+	fixture := projectListFixture(t)
+	for _, count := range []string{"0", "1", "2", "3", "10", "100", "01", "02", "-2", "+2", "4294967296", "2 ", "two"} {
+		t.Run(count, func(t *testing.T) {
+			row := currentClaudeSuppression()
+			row["notes"] = []string{count + claudeUntrustedProjectsNoteSuffix}
+			body, err := json.Marshal([]any{row})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := observeClaudeProjectList(body, "demo", fixture.active, fixture.root, fixture.user)
+			n, err := strconv.ParseUint(count, 10, 32)
+			valid := err == nil && n > 1 && strconv.FormatUint(n, 10) == count
+			if valid {
+				if got.state != projectListSuppressed || !got.untrusted {
+					t.Fatalf("plural native suppression lost: %+v", got)
+				}
+			} else if got.state != projectListUnknown {
+				t.Fatalf("invalid count manufactured trust: %+v", got)
+			}
+		})
+	}
+}
+
+func TestCapturedClaudeTwoDirectorySuppressionRemainsSetupRequired(t *testing.T) {
+	fixture := projectListFixture(t)
+	body, err := os.ReadFile("testdata/claude-2.1.325-project-suppressed-two.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := observeClaudeProjectList(body, "demo", fixture.active, fixture.root, fixture.user)
+	if got.state != projectListSuppressed || !got.untrusted || !strings.Contains(got.action(), "trust") {
+		t.Fatalf("actual two-directory native listing became %+v", got)
 	}
 }
 
@@ -124,6 +161,14 @@ func TestCurrentClaudeSuppressionActivationRequiresIndependentDeliveryProof(t *t
 	outcome, err := activateClaudeProject(t.Context(), clients.Env{Runner: runner}, request)
 	if err != nil || outcome.Activation != domain.ActivationPrepared || outcome.Verification != domain.VerificationInstalled || len(outcome.UserActions) == 0 {
 		t.Fatalf("suppression was not preserved as setup-required: %+v %v", outcome, err)
+	}
+	body, err = os.ReadFile("testdata/claude-2.1.325-project-suppressed-two.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome, err = activateClaudeProject(t.Context(), clients.Env{Runner: runner}, request)
+	if err != nil || outcome.Activation != domain.ActivationPrepared || outcome.Verification != domain.VerificationInstalled || len(outcome.UserActions) == 0 {
+		t.Fatalf("actual plural suppression was not preserved as setup-required: %+v %v", outcome, err)
 	}
 	request.Delivery.ArtifactDigest = ""
 	if outcome, err = activateClaudeProject(t.Context(), clients.Env{Runner: runner}, request); err == nil || outcome.Verification == domain.VerificationInstalled {

@@ -188,21 +188,11 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 		return nil
 	}
 	if confirm {
-		request := prompt.ConfirmationRequest{Title: "Install these Skills?", Default: true}
-		if richReview {
-			request = skillsReviewConfirmation(review)
-		}
-		answer, err := app.Prompter.Confirm(cmd.Context(), request)
-		if errors.Is(err, prompt.ErrReviewTooLarge) {
-			if err := renderHumanSkillsReview(cmd, review); err != nil {
-				return err
-			}
-			answer, err = app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Install the reviewed Skills?", Default: true})
-		}
+		accepted, err := confirmSkillsReview(cmd, app, review, richReview)
 		if err != nil {
 			return err
 		}
-		if !answer.Accepted {
+		if !accepted {
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Installation canceled. No changes applied.")
 			return err
 		}
@@ -222,6 +212,21 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 	}
 	return err
 }
+func confirmSkillsReview(cmd *cobra.Command, app App, review skillspicker.Plan, rich bool) (bool, error) {
+	request := prompt.ConfirmationRequest{Title: "Install these Skills?", Default: true}
+	if rich {
+		request = skillsReviewConfirmation(review)
+	}
+	answer, err := app.Prompter.Confirm(cmd.Context(), request)
+	if errors.Is(err, prompt.ErrReviewTooLarge) {
+		if err := renderHumanSkillsReview(cmd, review); err != nil {
+			return false, err
+		}
+		answer, err = app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Install the reviewed Skills?", Default: true})
+	}
+	return answer.Accepted, err
+}
+
 func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchResult) error {
 	if opts.format != "json" {
 		return renderHumanSkillsResult(cmd.OutOrStdout(), result)

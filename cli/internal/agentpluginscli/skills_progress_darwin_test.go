@@ -164,7 +164,7 @@ func skillsProgressPTY(t *testing.T) (*os.File, *os.File) {
 	}
 	t.Cleanup(func() { _ = master.Close() })
 	var name [128]byte
-	_, _, errno := unix.Syscall(unix.SYS_IOCTL, master.Fd(), unix.TIOCPTYGNAME, uintptr(unsafe.Pointer(&name[0])))
+	_, _, errno := unix.Syscall(unix.SYS_IOCTL, master.Fd(), unix.TIOCPTYGNAME, uintptr(unsafe.Pointer(&name[0]))) //nolint:staticcheck // x/sys has no typed wrapper for this Darwin PTY name ioctl.
 	if errno != 0 {
 		t.Fatal(errno)
 	}

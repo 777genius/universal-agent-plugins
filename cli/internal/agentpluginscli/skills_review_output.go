@@ -77,7 +77,7 @@ func skillsReviewConfirmation(review skillspicker.Plan) prompt.ConfirmationReque
 		req.Details = append(req.Details, skillsActionDetail(action))
 	}
 	req.Summary = append(req.Summary, fmt.Sprintf("%d Skills · %d agents · %d bindings", len(aliases), len(agents), len(review.Actions)))
-	changes := []string{}
+	changes := make([]string, 0, len(order))
 	for _, kind := range order {
 		changes = append(changes, fmt.Sprintf("%d %s", counts[kind], prompt.SafeText(kind)))
 	}

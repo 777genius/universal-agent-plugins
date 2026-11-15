@@ -213,3 +213,32 @@ qualification does not establish that a multi-directory response is accepted.
 
 Additional estimate: 40–100 production LOC and 100–200 focused test LOC, subject to
 actual diagnosis. No new renderer, installation engine, or model calls.
+
+
+### Follow-up qualification
+
+- Root cause reproduced with real Claude Code 2.1.325: the two-directory native
+  trust note uses plural grammar. The earlier singular-only match rejected it.
+  Match canonical positive counts >=2 plus the exact observed suffix; keep typed
+  metadata and every other native-state validation unchanged. A captured two-
+  directory JSON fixture and malformed-count regressions cover this response.
+- Actual Codex project installs: two independent local Skill packages installed,
+  both native files independently byte-verified; no model calls. Actual UAP
+  Claude group installation stopped before mutation because this sandbox denies
+  Darwin process-group inspection. Real Claude read-only two-directory output
+  and the complete Claude race suite passed; this is not a full native install.
+- Actual Cursor, Gemini and Copilot project configuration installs: two independent
+  local Skill packages each, exact installed bytes, repeat first package produced
+  no change. Copilot CLI is absent; runtime discovery is not claimed. These local
+  source runs do not qualify the public-Git raw-Skills transport.
+- Codex, Copilot, Cursor and Gemini adapter packages passed. Focused Skills
+  review/progress/result and actual progress PTY tests passed. Full Git-backed
+  installation fixtures remain restricted by the local contained-process sandbox.
+- Uniform action headings and the full Skills → agents → review keyboard flow
+  are covered at 80x24 and 40x12, with Latin d, Russian в, uppercase D and enhanced
+  keyboard input. Ctrl+D cancellation remains separate. The exact reason for the
+  owner's original d key not responding is not proven; ASCII d also passed before
+  this change. Layout-compatible shortcuts close the reproduced Cyrillic gap.
+- Follow-up actual Go additions relative to the previous implementation commit:
+  126 production and 156 test lines. Production includes lint-driven extraction
+  of existing result/review logic into smaller helpers, not just new behavior.

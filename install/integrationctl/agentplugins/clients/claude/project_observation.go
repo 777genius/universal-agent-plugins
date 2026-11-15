@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -31,6 +32,20 @@ type projectListObservation struct {
 }
 
 const claudeUntrustedProjectNote = "1 project-scope directory under ./.claude/skills/ that may load as a plugin was skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies."
+
+const claudeUntrustedProjectsNoteSuffix = " project-scope directories under ./.claude/skills/ that may load as plugins were skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies."
+
+func knownClaudeUntrustedProjectNote(note string) bool {
+	if note == claudeUntrustedProjectNote {
+		return true
+	}
+	count, matches := strings.CutSuffix(note, claudeUntrustedProjectsNoteSuffix)
+	if !matches {
+		return false
+	}
+	n, err := strconv.ParseUint(count, 10, 32)
+	return err == nil && n > 1 && strconv.FormatUint(n, 10) == count
+}
 
 type projectListQuery struct {
 	name, active, project, user string
@@ -229,7 +244,7 @@ func projectSuppression(entry map[string]any) (bool, bool) {
 	}
 	trust := false
 	for _, note := range entry["notes"].([]any) {
-		if note == claudeUntrustedProjectNote {
+		if knownClaudeUntrustedProjectNote(note.(string)) {
 			trust = true
 		}
 	}

@@ -91,11 +91,6 @@ func normalizeMulti(req MultiSelectRequest) (MultiSelectRequest, error) {
 	return req, nil
 }
 
-func normalizeConfirm(req ConfirmRequest) (ConfirmRequest, error) {
-	review, err := normalizeConfirmationReview(confirmationReview{ConfirmRequest: req})
-	return review.ConfirmRequest, err
-}
-
 func normalizeConfirmationReview(req confirmationReview) (confirmationReview, error) {
 	total := len(req.Title)
 	title, err := displayField(req.Title, true)

@@ -5,6 +5,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestConfirmationDetailsShareExistingAuthorityBudget(t *testing.T) {
@@ -27,6 +30,36 @@ func TestConfirmationDetailsShareExistingAuthorityBudget(t *testing.T) {
 	got.Details[0] = "changed"
 	if req.Details[0] != "\x1b"+path {
 		t.Fatal("normalization mutated the caller's details")
+	}
+}
+
+func TestConfirmationStylesEveryActionHeadingUniformly(t *testing.T) {
+	rows := []string{"2 Skills · 5 agents · 10 bindings", "10 install", "", "install docx", "  → Claude Code, Codex", "install frontend-design", "  → Claude Code, Codex", "update pdf", "remove old", "unchanged keep"}
+	summary := strings.Join(rows, "\n")
+	styled := formatConfirmationSummary(summary, 100, false)
+	if ansi.Strip(styled) != summary {
+		t.Fatal("heading decoration changed review authority text")
+	}
+	for _, line := range strings.Split(styled, "\n") {
+		if confirmationActionHeading(ansi.Strip(line)) && !strings.Contains(line, "\x1b[") {
+			t.Fatalf("action heading was rendered without the shared label style: %q", line)
+		}
+	}
+	if got := formatConfirmationSummary(summary, 100, true); strings.Contains(got, "\x1b[") || got != summary {
+		t.Fatalf("no-color authority changed: %q", got)
+	}
+}
+
+func TestDetailsShortcutHandlesKeyboardLayoutsWithoutStealingCancel(t *testing.T) {
+	for _, key := range []tea.KeyPressMsg{{Code: 'd'}, {Code: 'D'}, {Code: 'в'}, {Code: 'В'}, {Code: 'ф', BaseCode: 'd'}, {Code: 'd', Mod: tea.ModCapsLock}} {
+		if !detailsToggleKey(key) {
+			t.Fatalf("physical details shortcut unavailable: %+v", key)
+		}
+	}
+	for _, key := range []tea.KeyPressMsg{{Code: 'd', Mod: tea.ModCtrl}, {Code: 'd', Mod: tea.ModAlt}, {Code: 'd', IsRepeat: true}, {Code: 'x'}} {
+		if detailsToggleKey(key) {
+			t.Fatalf("details shortcut captured a modified/repeated/unrelated key: %+v", key)
+		}
 	}
 }
 

@@ -7,9 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
-	"github.com/spf13/cobra"
 )
 
 func TestSkillsReviewGroupsActionsWithoutHidingWarningsOrPaths(t *testing.T) {

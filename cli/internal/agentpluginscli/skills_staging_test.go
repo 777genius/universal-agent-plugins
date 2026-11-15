@@ -52,7 +52,7 @@ func TestSkillsApplyRetainsReviewedBytesAndRechecksSecurity(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer plan.Close()
-			roots := []string{}
+			roots := make([]string, 0, len(plan.preview.dependencySnapshots.snapshots))
 			for _, snapshot := range plan.preview.dependencySnapshots.snapshots {
 				roots = append(roots, snapshot.Root)
 			}
