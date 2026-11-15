@@ -79,3 +79,52 @@ tests and the public/SDK `TestAntigravity` methods; Core's Project-only selector
 does not cover these new User methods. Queued, cancelled, skipped and unexecuted
 cases do not count as PASS.
 Publish through an ordinary push; no manual workflow dispatch, rerun or cancel.
+
+## Native inventory schema correction (2026-11-15)
+
+The first actual Linux User readback run on the composed Devin branch
+`3f36797cc5ebea2c5ab0f426850d14165d92dabc` reached the initial installation,
+absent-config repeat and ordinary native lifecycle, then refused the first
+configured repeat with a disabled foreign plugin ([job 132663029840](https://github.com/777genius/universal-agent-plugins/actions/runs/43665239507/job/132663029840)).
+Its inventory implementation is identical to Antigravity head `a1d55d6`.
+The original error does not expose the failing internal predicate.
+
+A separate disposable-profile reproduction with the exact pinned agy 1.5.3
+binary (`7ca212748ca0dfda718efbc39a776a104472e7e9344d4b6ea147c543684f96a3`)
+shows the concrete schema mismatch: manifest-only plugins have four mandatory
+fields; empty `skills` and `mcpServers` fields are omitted. Skill-only and
+MCP-only rows have five fields. All read-only lists preserve the original
+profile and foreign entries. The current six-field decoder rejects these
+valid rows before matching the selected plugin.
+
+R1 limits the correction to the existing inventory decoder and a new focused
+`inventory_schema_test.go`. Keep four mandatory typed fields and exactly two
+optional component-array keys. Treat only absence as an empty component list;
+explicit null, unknown keys, wrong types, duplicate names and missing required
+selected components still refuse. Retain every original identity, ownership,
+configuration, executable, process, deadline and Prepared-state check. The
+real native fixture remains unchanged and must finish on all three OSes.
+
+Verify the observed four/five-field rows through the configured public adapter
+path, preserve all existing negative tests, and run an original-source overlay
+that fails the new positive assertions. Require independent R2, full lint/core
+commands and actual final-commit CI before merging; this reproduction alone
+does not qualify the public native lifecycle.
+
+The final decoder and test allocation cleanup passed independent source review.
+The complete adapter ran 45 top-level tests / 213 test events, with no failures
+or skips; the four new methods account for 72 passing events. An overlay using
+the original decoder compiled and failed the 17 intended positive assertions
+(18 failure events including their parent), while 54 negative/control events
+passed. The later test-only slice preallocation preserves every test input and
+assertion. No existing test or native harness was weakened.
+
+Full `make lint` passed. Full `make test-core CORE_TEST_PARALLELISM=1` completed
+unsuccessfully in this local environment: 95 top-level failures / 137 failure
+events in 11 packages. The prior 93 failures remain; the two additional unchanged
+Gemini hook fixture tests combine Node stdout/stderr before JSON decoding. A
+direct Node 22.21.1 fixture reproduction returned valid JSON with exit zero but
+also emitted an inherited `UNDICI-EHPA` proxy-agent warning on stderr, matching
+the invalid leading-parenthesis failure. These are not reported as a local
+full-suite PASS. Final-source Core, Required, security and all three real native
+Antigravity jobs remain mandatory before merge.
