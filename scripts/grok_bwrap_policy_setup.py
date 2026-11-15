@@ -447,7 +447,7 @@ def setup(root, deadline, runtime, inputs, output, uid, gid, records):
         path = POLICY_DIRECTORY / PROFILE_NAME
         require(read_regular(path, 4096, deadline) == profile, "installed derived policy differs")
         command(root, "policy-add", ["/usr/sbin/apparmor_parser", "--config-file=/dev/null",
-                "--add", "--skip-cache", "--jobs=1", "--Werror=rule-not-enforced", str(path)], deadline, records)
+                "--add", "--skip-cache", "--jobs=1", "--warn=rule-not-enforced", "--Werror=rule-not-enforced", str(path)], deadline, records)
         check_policy_names(fd, installed=True)
         require(read_regular(path, 4096, deadline) == profile, "installed policy changed")
         control = prove_runtime(root, deadline, runtime, inputs, output, uid, gid, records)
