@@ -6,25 +6,25 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
+	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/processlock"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/all"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
-	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
 )
 
 func TestProjectPublisherRetainsScopedKernelAuthority(t *testing.T) {
 	for _, project := range []bool{false, true} {
 		name := "user"
 		root := ""
-		registry := clients.Default()
+		registry := clientregistry.Default()
 		if project {
 			name = "project"
 			root = t.TempDir()
-			registry = clients.Project()
+			registry = clientregistry.Project()
 		}
 		t.Run(name, func(t *testing.T) {
 			dataRoot := t.TempDir()
