@@ -98,9 +98,9 @@ func skillBatchOutcome(result SkillsBatchResult) skillspicker.Outcome {
 func skillBatchItemMessage(item SkillsBatchItem) string {
 	if skillsNativeReady([]SkillsBatchItem{item}) {
 		if item.Status == "unchanged" {
-			return "The Skill is up to date and detected by the agent."
+			return "The Skill is up to date and its owned native projection was verified. Agent-session discovery was not checked."
 		}
-		return "The Skill is installed and detected by the agent."
+		return "The Skill files and owned native projection were verified. Agent-session discovery was not checked."
 	}
 	switch skillsItemPresentation(item) {
 	case "setup required", "installed":

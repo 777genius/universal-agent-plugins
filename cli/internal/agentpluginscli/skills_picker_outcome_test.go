@@ -14,8 +14,8 @@ func TestSkillsPickerOutcomeRequiresObservedReadiness(t *testing.T) {
 		item                  SkillsBatchItem
 		ready, setup          bool
 	}{
-		{"observed", "succeeded", "installed and detected", SkillsBatchItem{Status: "completed", Client: completedSkillClient()}, true, false},
-		{"verified repeat", "succeeded", "up to date and detected", SkillsBatchItem{Status: "unchanged", Client: completedSkillClient()}, true, false},
+		{"observed", "succeeded", "owned native projection were verified", SkillsBatchItem{Status: "completed", Client: completedSkillClient()}, true, false},
+		{"verified repeat", "succeeded", "owned native projection was verified", SkillsBatchItem{Status: "unchanged", Client: completedSkillClient()}, true, false},
 		{"prepared", "succeeded", "setup still needs verification", SkillsBatchItem{Status: "completed", Client: installer.ClientResult{Activation: "prepared", Verification: "installation_verified", Authentication: "not_required"}}, false, true},
 		{"authentication pending", "succeeded", "Complete authentication", SkillsBatchItem{Status: "completed", Client: installer.ClientResult{Activation: "active", Verification: "installation_verified", Authentication: string(domain.AuthenticationPending)}}, false, true},
 		{"repeat without evidence", "succeeded", "setup could not be verified", SkillsBatchItem{Status: "unchanged"}, false, true},
@@ -33,6 +33,12 @@ func TestSkillsPickerOutcomeRequiresObservedReadiness(t *testing.T) {
 			}
 			if setup != test.setup || len(outcome.Items) != 1 || outcome.Items[0].Message == nil || !strings.Contains(*outcome.Items[0].Message, test.message) {
 				t.Fatalf("lost readiness or item guidance: %+v", outcome)
+			}
+			if test.ready && (!strings.Contains(*outcome.Items[0].Message, "discovery was not checked") || !strings.Contains(outcome.Result.Message, "not verified")) {
+				t.Fatalf("native projection was misrepresented as agent-side discovery: %+v", outcome)
+			}
+			if strings.Contains(*outcome.Items[0].Message, "detected by the agent") || strings.Contains(outcome.Result.Message, "detected in the selected agents") {
+				t.Fatalf("unobserved agent discovery was claimed: %+v", outcome)
 			}
 			if strings.Contains(*outcome.Items[0].Message, "private-secret") || len(outcome.Result.RepairInstructions) != 1 {
 				t.Fatalf("provider output escaped or recovery was lost: %+v", outcome)

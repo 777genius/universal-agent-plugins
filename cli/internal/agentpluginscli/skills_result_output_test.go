@@ -57,12 +57,12 @@ func TestSkillsHumanResultUsesObservedNativeReadiness(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := output.String()
-	for _, want := range []string{"Skills installation succeeded", "docx — installed", "frontend-design — installed", "Skills installed and detected in the selected agents."} {
+	for _, want := range []string{"Skills installation succeeded", "docx — installed", "frontend-design — installed", "Skill files and owned native configuration verified. Agent discovery and activation are not verified by this Skills flow."} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %q: %s", want, text)
 		}
 	}
-	for _, unwanted := range []string{"setup required", "not verified", "Next steps:", "sign-in"} {
+	for _, unwanted := range []string{"setup required", "detected in the selected agents", "Next steps:", "sign-in"} {
 		if strings.Contains(text, unwanted) {
 			t.Fatalf("verified native result retained obsolete guidance %q: %s", unwanted, text)
 		}
