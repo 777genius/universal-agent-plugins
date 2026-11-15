@@ -33,6 +33,41 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends bubblewrap
           /usr/bin/bwrap --version
+      - name: Prepare the observed non-writable runtime fixture
+        run: |
+          sudo -n /usr/bin/python3 -I -B - <<'PY' > "$RUNNER_TEMP/grok-readonly-runtime.json"
+          import json, os, stat
+          path = '/usr/share'
+          record = dict(kind='ci-runtime-permission-preparation', path=path, prepared=False)
+          fd = -1
+          def facts(value):
+              return dict(device=value.st_dev, inode=value.st_ino, uid=value.st_uid,
+                          gid=value.st_gid, mode=oct(value.st_mode), links=value.st_nlink)
+          try:
+              fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+              before = os.fstat(fd)
+              record['before'] = facts(before)
+              if before.st_uid != 0 or stat.S_IMODE(before.st_mode) not in (0o755, 0o777):
+                  raise ValueError('unexpected runtime fixture owner or permissions')
+              expected = before.st_mode & ~0o022
+              if before.st_mode != expected:
+                  os.fchmod(fd, stat.S_IMODE(expected))
+              after, named = os.fstat(fd), os.stat(path, follow_symlinks=False)
+              record['after'], record['named_after'] = facts(after), facts(named)
+              identity = lambda value: (value.st_dev, value.st_ino, value.st_uid, value.st_gid, value.st_nlink)
+              if identity(before) != identity(after) or identity(after) != identity(named):
+                  raise ValueError('runtime fixture identity or ownership changed')
+              if after.st_mode != expected or named.st_mode != expected:
+                  raise ValueError('runtime fixture changed beyond the two write bits')
+              record['prepared'] = True
+          except Exception as error:
+              record['error'] = type(error).__name__ + ': ' + str(error)
+              raise
+          finally:
+              print(json.dumps(record, sort_keys=True))
+              if fd >= 0:
+                  os.close(fd)
+          PY
       - name: Build the genuine tagged metadata test
         run: go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-readonly-test" ./install/integrationctl/agentplugins/clients/grok
       - name: Run exact native gate in a delegated ordinary-user service
@@ -51,6 +86,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: grok-readonly-${{ github.event.pull_request.head.sha || github.sha }}
-          path: ${{ runner.temp }}/grok-readonly-evidence/evidence.json
+          path: |
+            ${{ runner.temp }}/grok-readonly-evidence/evidence.json
+            ${{ runner.temp }}/grok-readonly-runtime.json
           if-no-files-found: error
           retention-days: 14
