@@ -154,7 +154,11 @@ func TestSessionRetainedActualProcessReturnsBeforeSettlement(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || out.String() != "retained-native-output\nPASS\n" || diagnostic.String() != "retained-native-diagnostic\n" {
+			expectedOutput := "retained-native-output\nPASS\n"
+			if testing.CoverMode() != "" {
+				expectedOutput += "coverage: 0.0% of statements\n"
+			}
+			if err != nil || out.String() != expectedOutput || diagnostic.String() != "retained-native-diagnostic\n" {
 				t.Fatalf("actual final child output/environment differs: err=%v out=%q stderr=%q", err, out.String(), diagnostic.String())
 			}
 		})
