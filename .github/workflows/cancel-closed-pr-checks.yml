@@ -1,0 +1,60 @@
+name: Cancel closed PR checks
+
+# This workflow runs trusted base code only; never checkout the PR head.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  actions: write
+  pull-requests: read
+
+jobs:
+  cancel-obsolete:
+    name: Cancel obsolete PR runs
+    if: github.event.pull_request.base.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Cancel only ordinary checks linked to the closed PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REPOSITORY_ID: ${{ github.event.pull_request.head.repo.id }}
+          BASE_REPOSITORY_ID: ${{ github.event.pull_request.base.repo.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${HEAD_REPOSITORY_ID}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${BASE_REPOSITORY_ID}" =~ ^[1-9][0-9]*$ ]]
+          # Keep release/sign/deploy/scan evidence, even if triggered by a PR.
+          # Failed API calls stop cleanup rather than broaden identity matching.
+          cancelled=0
+          declare -A seen=()
+          for status in queued pending in_progress waiting requested; do
+            while IFS= read -r run_id; do
+              [[ "${run_id}" =~ ^[1-9][0-9]*$ ]] || continue
+              [[ -z "${seen[$run_id]:-}" ]] || continue
+              seen[$run_id]=1
+              if gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/cancel"; then
+                cancelled=$((cancelled + 1))
+              else
+                # A check can finish between listing and cancellation.
+                current="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+                [[ "${current}" == completed ]] || exit 1
+              fi
+            done < <(
+              gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&status=${status}&per_page=100" \
+                --jq '.workflow_runs[]? | select(.event == "pull_request")
+                  | select(.head_repository.id == (env.HEAD_REPOSITORY_ID | tonumber))
+                  | select(.path | type == "string" and startswith(".github/workflows/"))
+                  | select((.path | test("release|publish|sign|deploy|checkpoint|skillspector"; "i")) | not)
+                  | select(any(.pull_requests[]?;
+                      .number == (env.PR_NUMBER | tonumber)
+                      and .head.repo.id == (env.HEAD_REPOSITORY_ID | tonumber)
+                      and .base.repo.id == (env.BASE_REPOSITORY_ID | tonumber)))
+                  | .id'
+            )
+          done
+          echo "Cancelled ${cancelled} obsolete ordinary check runs for PR #${PR_NUMBER}"
