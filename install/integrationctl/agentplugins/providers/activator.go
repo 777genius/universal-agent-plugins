@@ -15,6 +15,7 @@ import (
 )
 
 type Activator struct {
+	ProjectRoots        ports.NativeProjectRootPublisher
 	UserHome            string
 	NativeTransitions   NativeTransitions
 	OpenCodeTransitions ports.OpenCodeTransitionRecorder
@@ -44,7 +45,7 @@ func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel, s
 }
 
 func (activator Activator) env(id domain.ClientID) clients.Env {
-	return clients.Env{UserHome: activator.UserHome, NativeTransitions: activator.NativeTransitions.ForClient(id), OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel()}
+	return clients.Env{ProjectRoots: activator.ProjectRoots, UserHome: activator.UserHome, NativeTransitions: activator.NativeTransitions.ForClient(id), OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel()}
 }
 
 func (activator Activator) nativeConfigKernel() nativeconfig.Kernel {

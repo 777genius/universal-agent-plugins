@@ -37,6 +37,9 @@ type Adapter interface {
 type Env struct {
 	UserHome          string
 	NativeTransitions ports.NativeTransitionRecovery
+	ProjectRoots      ports.NativeProjectRootPublisher
+	// SessionEnvironment is transient explicit-session authority, never persisted.
+	SessionEnvironment []string `json:"-"`
 	// LookupExecutable is used only by an explicitly requested native session.
 	// File-only installation/detection never resolves this into execution authority.
 	LookupExecutable    func(string) (string, error)

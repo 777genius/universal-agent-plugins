@@ -95,20 +95,6 @@ func publicationProof(root string) (string, string, error) {
 	return identity, hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func matchesProof(path, expectedIdentity, expectedDigest string) error {
-	if expectedIdentity == "" || expectedDigest == "" {
-		return fmt.Errorf("directory ownership evidence unavailable for %q; recovery required", path)
-	}
-	identity, digest, err := publicationProof(path)
-	if err != nil {
-		return fmt.Errorf("verify directory ownership at %q: %w", path, err)
-	}
-	if identity != expectedIdentity || digest != expectedDigest {
-		return fmt.Errorf("directory changed or replaced at %q; recovery required", path)
-	}
-	return nil
-}
-
 func matchesPublication(receipt Receipt, path string) error {
 	if receipt.isPhysical() {
 		if err := matchesObject(path, receipt.PublishedObject); err != nil {

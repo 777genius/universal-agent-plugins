@@ -2,6 +2,7 @@ package statev2
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -124,6 +125,9 @@ func (store Store) Load() (domain.StateFileV2, error) {
 	if err := store.validateProject(state); err != nil {
 		return domain.StateFileV2{}, err
 	}
+	if err := revalidatePublicationParents(context.Background(), state); err != nil {
+		return domain.StateFileV2{}, err
+	}
 	return state, nil
 }
 
@@ -142,6 +146,9 @@ func (store Store) Save(state domain.StateFileV2) error {
 		return fmt.Errorf("refuse invalid state: %w", err)
 	}
 	if err := store.validateProject(state); err != nil {
+		return err
+	}
+	if err := revalidatePublicationParents(context.Background(), state); err != nil {
 		return err
 	}
 	state.Installations = append([]domain.Installation(nil), state.Installations...)
@@ -418,6 +425,9 @@ func Validate(state domain.StateFileV2) error {
 				objectIDs[object.ObjectID] = struct{}{}
 			}
 			for receiptIndex, receipt := range client.Receipts {
+				if err := receipt.ValidatePublicationParent(false); err != nil {
+					return err
+				}
 				if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
 					return fmt.Errorf("%s client binding %q receipt[%d] has invalid operation id: %w", prefix, client.ClientBindingID, receiptIndex, err)
 				}
@@ -439,32 +449,5 @@ func Validate(state domain.StateFileV2) error {
 			}
 		}
 	}
-	for index, receipt := range state.TransactionReceipts {
-		prefix := fmt.Sprintf("transaction_receipts[%d]", index)
-		if err := pathpolicy.ValidateLeafID(receipt.OperationID); err != nil {
-			return fmt.Errorf("%s has invalid operation id: %w", prefix, err)
-		}
-		sharedData := receipt.ClientBindingID == "" && receipt.DataReceiptID != "" && receipt.MutationType == "directory_remove" && len(receipt.ProfileOwners) > 0 && len(receipt.DirectoryProof) > 0
-		if (strings.TrimSpace(receipt.ClientBindingID) == "" && !sharedData) || receipt.Sequence < 1 || strings.TrimSpace(receipt.MutationType) == "" {
-			return fmt.Errorf("%s is incomplete", prefix)
-		}
-		if receipt.DataReceiptID != "" {
-			if err := pathpolicy.ValidateLeafID(receipt.DataReceiptID); err != nil {
-				return fmt.Errorf("%s has invalid data receipt id: %w", prefix, err)
-			}
-		}
-		if !validReceiptPhase(receipt.Phase) {
-			return fmt.Errorf("%s has invalid phase %q", prefix, receipt.Phase)
-		}
-		if receipt.OperationGroupID != "" {
-			if err := pathpolicy.ValidateLeafID(receipt.OperationGroupID); err != nil {
-				return fmt.Errorf("%s has invalid operation group id: %w", prefix, err)
-			}
-		}
-		if _, duplicate := operationIDs[receipt.OperationID]; duplicate {
-			return fmt.Errorf("duplicate receipt operation_id %q", receipt.OperationID)
-		}
-		operationIDs[receipt.OperationID] = struct{}{}
-	}
-	return nil
+	return validateStandaloneReceipts(state.TransactionReceipts, operationIDs)
 }

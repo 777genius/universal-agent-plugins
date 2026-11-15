@@ -15,6 +15,11 @@ func lockNativeConfig(path string) (func() error, error) {
 		return nil, err
 	}
 	file := os.NewFile(uintptr(fd), path)
+	return lockNativeConfigFile(file)
+}
+
+func lockNativeConfigFile(file *os.File) (func() error, error) {
+	fd := int(file.Fd())
 	closeOnError := func(err error) (func() error, error) {
 		_ = file.Close()
 		return nil, err

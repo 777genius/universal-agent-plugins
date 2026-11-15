@@ -13,6 +13,9 @@ import (
 // ProjectComponentMutation swaps exact skill directories around one kernel
 // batch. The adapter owns scope selection and prepares all native server values.
 type ProjectComponentMutation struct {
+	// Revalidate optionally retains adapter-owned physical authority across the
+	// existing component phases, including compensation and cleanup.
+	Revalidate        func() error
 	Layout            ProjectComponents
 	ActivePath        string
 	Previous, Desired []domain.NativeObjectOwnership
@@ -20,7 +23,17 @@ type ProjectComponentMutation struct {
 	Kernel            nativeconfig.Kernel
 }
 
+func (mutation ProjectComponentMutation) revalidate() error {
+	if mutation.Revalidate != nil {
+		return mutation.Revalidate()
+	}
+	return nil
+}
+
 func (mutation ProjectComponentMutation) prepare(ctx context.Context) ([]nativeconfig.Request, error) {
+	if err := mutation.revalidate(); err != nil {
+		return nil, err
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
