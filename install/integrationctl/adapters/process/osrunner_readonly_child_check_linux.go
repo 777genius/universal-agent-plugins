@@ -384,7 +384,7 @@ func readonlyChildMountLine(line string) (readonlyChildMount, error) {
 		separator++
 	}
 	if len(fields) != separator+4 || fields[separator] != "-" || fields[separator+1] == "" || fields[separator+2] == "" || fields[separator+3] == "" {
-		return row, errors.New("readonly child mount propagation or filesystem fields differ")
+		return row, readonlyChildMountShapeRefusal(fields, separator)
 	}
 	var err error
 	row, err = readonlyChildMountIDs(fields)

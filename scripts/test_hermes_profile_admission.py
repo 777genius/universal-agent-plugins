@@ -7044,8 +7044,9 @@ class ImportedHistoryDiagnosticContracts(unittest.TestCase):
                 except RuntimeError as error:
                     result = error
                 except AssertionError as error:
-                    if (type(error) is not AssertionError or os.name != "nt" or effect != "label"
-                            or error.args != ("poison equality",)):
+                    if (type(error) is not AssertionError or effect != "label"
+                            or not (error.args == ("poison hash",)
+                                    or (os.name == "nt" and error.args == ("poison equality",)))):
                         raise
                     result = error
                 else:
