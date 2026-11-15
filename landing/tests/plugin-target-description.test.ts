@@ -17,27 +17,32 @@ function hint(plugin: RegistryPlugin, id: InstallTargetID, context = current) {
   return pluginTargetDescription(plugin, installTargets.find(client => client.id === id)!, context);
 }
 
-test('explicit source, signed-v1 Project preparation and revoked policy have distinct explanations', () => {
+test('explicit sources, signed-v1 Project preparation, published CLI limits and revocation stay distinct', () => {
   const plugin = fixture();
   for (const id of ['hermes', 'antigravity', 'pi'] as const) {
     assert.equal(hint(plugin, id).key, 'registryUi.install.pinnedCatalogSource');
     assert.equal(pluginInstallAvailability(plugin, [id])?.kind, 'pinned_git');
   }
-  assert.equal(hint(plugin, 'hermes', { ...current, scope: 'project' }).key,
-    'registryUi.install.pinnedCatalogSource');
-  assert.equal(pluginInstallAvailability(plugin, ['hermes'], 'project')?.kind, 'pinned_git');
+  const project = { ...current, scope: 'project' as const };
+  // Source-built Hermes can prepare Project MCP, but the currently pinned
+  // published CLI cannot. Never show a Project installation command for it.
+  assert.equal(hint(plugin, 'hermes', project).key, 'registryUi.install.useComputerScope');
+  assert.equal(pluginInstallAvailability(plugin, ['hermes'], 'project'), undefined);
+  assert.equal(hint(plugin, 'pi', project).key, 'registryUi.install.pinnedCatalogSource');
+  assert.equal(pluginInstallAvailability(plugin, ['pi'], 'project')?.kind, 'pinned_git');
+  assert.equal(hint(plugin, 'codex', project).key, 'registryUi.delivery.prepared');
+  assert.equal(pluginInstallAvailability(plugin, ['codex'], 'project')?.kind, 'signed');
+
   const release = plugin.distributions[0]!.releases[0]!;
   plugin.distributions[0]!.kind = 'community';
   release.targets.push({ client: 'hermes', scopes: ['user'], delivery: 'managed', authentication: 'required' });
-  assert.equal(hint(plugin, 'hermes', { ...current, scope: 'project' }).key,
-    'registryUi.delivery.prepared');
-  assert.equal(pluginInstallAvailability(plugin, ['hermes'], 'project')?.kind, 'signed');
+  assert.equal(hint(plugin, 'hermes', project).key, 'registryUi.install.useComputerScope');
+  assert.equal(pluginInstallAvailability(plugin, ['hermes'], 'project'), undefined);
   release.release_status = 'revoked';
   assert.equal(hint(plugin, 'hermes').key, 'registryUi.install.noCompatibleSignedRelease');
   assert.equal(pluginInstallAvailability(plugin, ['hermes']), undefined);
   assert.equal(pluginInstallAvailability(plugin, ['hermes'], 'project'), undefined);
-  assert.equal(hint(plugin, 'hermes', { ...current, scope: 'project' }).key,
-    'registryUi.install.noCompatibleSignedRelease');
+  assert.equal(hint(plugin, 'hermes', project).key, 'registryUi.install.unsupportedPluginComponents');
 });
 
 test('known negative evidence cannot be explained as merely an unpublished target', () => {
