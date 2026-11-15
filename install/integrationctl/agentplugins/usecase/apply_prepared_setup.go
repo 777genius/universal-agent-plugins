@@ -9,7 +9,9 @@ import (
 // Explicit attestations keep their existing resume path. Otherwise an opted-in
 // verifier must observe the current client instead of retaining cached Active.
 func (session *applySession) freshExistingVerification() bool {
-	return !session.input.AuthComplete && !session.input.ActivationComplete &&
+	activation := session.result.Activation.Activation
+	return (activation == domain.ActivationActive || activation == domain.ActivationPrepared) &&
+		!session.input.AuthComplete && !session.input.ActivationComplete &&
 		session.service.preparedSetupVerifierAvailable(session.input, session.result.Plan)
 }
 
