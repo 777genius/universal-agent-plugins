@@ -115,7 +115,7 @@ func (service Service) resumeActivationOutcome(input AddInput, plan domain.Deliv
 	if (client.Authentication == domain.AuthenticationPending || client.Authentication == domain.AuthenticationNotChecked) && input.AuthComplete {
 		outcome.Authentication = domain.AuthenticationComplete
 		outcome.AuthenticationAttested = true
-	} else if client.Authentication != "" {
+	} else if client.Authentication != "" && !service.observedAuthenticationNotRequired(input, plan, client, outcome, activationErr) {
 		outcome.Authentication = client.Authentication
 	}
 	if activationErr != nil && outcome.Activation == "" {

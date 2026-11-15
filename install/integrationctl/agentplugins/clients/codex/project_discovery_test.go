@@ -54,7 +54,7 @@ func projectDiscoveryFixture(t *testing.T) (clients.Env, domain.ActivationReques
 		Components:    []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "first", Support: domain.SupportNative}, {Kind: domain.ComponentSkill, Name: "second", Support: domain.SupportNative}},
 	}
 	request := domain.ActivationRequest{Client: domain.DetectedClient{ClientID: domain.ClientCodex, ConfigRoot: profile}, Plan: plan,
-		BackendExecutable: filepath.Join(root, "codex"), Delivery: domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: active}}
+		BackendExecutable: filepath.Join(root, "codex"), Delivery: domain.StagedDelivery{ClientID: domain.ClientCodex, ActivePath: active, ArtifactDigest: "sha256:verified-test-delivery"}}
 	for _, name := range []string{"first", "second"} {
 		path := filepath.Join(active, "skills", name, "SKILL.md")
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -110,7 +110,10 @@ func projectDiscoveryResponses(t *testing.T, request domain.ActivationRequest, s
 	if err := encoder.Encode(initialize); err != nil {
 		t.Fatal(err)
 	}
-	if err := encoder.Encode(map[string]any{"id": 2, "result": map[string]any{"data": []any{group}}}); err != nil {
+	if err := encoder.Encode(map[string]any{"id": 2, "result": map[string]any{"config": map[string]any{"projects": map[string]any{root: map[string]any{"trust_level": "trusted"}}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := encoder.Encode(map[string]any{"id": 3, "result": map[string]any{"data": []any{group}}}); err != nil {
 		t.Fatal(err)
 	}
 	return response.String()
@@ -159,7 +162,7 @@ func TestCodexProjectDiscoveryPreservesRestrictionsAndCancellation(t *testing.T)
 			defer cancel()
 			if scenario == "canceled" {
 				cancel()
-				if err := observeCodexProjectSkills(ctx, env, request, request.Plan.NativeRegistryRoot); !errors.Is(err, context.Canceled) || runner.called {
+				if err := observeCodexProjectComponents(ctx, env, request, request.Plan.NativeRegistryRoot); !errors.Is(err, context.Canceled) || runner.called {
 					t.Fatalf("canceled observer started or lost cancellation: %v, %v", runner.called, err)
 				}
 				return
@@ -189,7 +192,7 @@ func TestCodexProjectDiscoveryRejectsMalformedProtocol(t *testing.T) {
 	} {
 		env, request, runner := projectDiscoveryFixture(t)
 		runner.response = response
-		if err := observeCodexProjectSkills(context.Background(), env, request, request.Plan.NativeRegistryRoot); err == nil {
+		if err := observeCodexProjectComponents(context.Background(), env, request, request.Plan.NativeRegistryRoot); err == nil {
 			t.Fatal("malformed protocol was accepted")
 		}
 	}

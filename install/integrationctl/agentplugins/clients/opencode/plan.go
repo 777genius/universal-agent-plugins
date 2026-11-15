@@ -48,6 +48,7 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 		root = layout.Root
 	}
 	shared.PromoteNativeReady(plan, root, shared.OnlyNativeComponents(plan.Components))
+	shared.QualifyRawSkillInstallationAuthentication(in.Envelope, plan)
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "agentplugins will install the package's skills and MCP servers; restart OpenCode when complete")
 	return nil
 }

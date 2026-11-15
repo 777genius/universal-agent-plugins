@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"golang.org/x/term"
@@ -133,7 +134,7 @@ func newScopedAgentpluginsCLIApp(home, cacheRoot, projectRoot string, directoryC
 		OperationsDir: filepath.Join(dataRoot, "operations-v2"), PluginDataBase: filepath.Join(dataRoot, "plugin-data"),
 		ManagedRoot: filepath.Join(dataRoot, "managed"), TempRoot: filepath.Join(dataRoot, "installer-tmp"),
 		HelperExecutable: helperExecutable, HelperVersion: version, Registry: clientRegistry, Runner: runner,
-		EnableNativeObserver: true,
+		EnableNativeObserver: true, LookupExecutable: exec.LookPath,
 	})
 	if err != nil {
 		return agentpluginscli.App{}, err
@@ -173,7 +174,7 @@ func newAgentpluginsLifecycle(dataRoot string, v2Store statev2.Store, paths path
 	return usecase.Service{
 		ClientPreparation: providers.NewOpenCodeClientPreparation(clientRegistry),
 		StateStore:        v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager,
-		Activator: providers.Activator{ProjectRoots: projectRoots, OpenCodeTransitions: transitions, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
+		Activator: providers.Activator{ProjectRoots: projectRoots, OpenCodeTransitions: transitions, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel, LookupExecutable: exec.LookPath},
 		Lock:      mutationLock, Kernel: directoryKernel,
 		NativeObserver:     providers.NativeIdentityObserver{ProjectRoots: projectRoots, Stager: stager, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
 		NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeKernel},

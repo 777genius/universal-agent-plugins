@@ -103,12 +103,6 @@ func (writer *onceWriteCloser) Close() error {
 const duplexExitGrace = 2 * time.Second
 const processReapTimeout = time.Second
 
-type duplexPipeFactory struct {
-	output      func() (*os.File, *os.File, error)
-	input       func(*exec.Cmd) (io.WriteCloser, error)
-	containment func(*exec.Cmd) (duplexCommandContainment, error)
-}
-
 type duplexCommandContainment interface {
 	attach(*exec.Cmd) error
 	terminate() terminationResult
@@ -142,14 +136,6 @@ func (observation *latchedExitObservation) observe(poll func() (bool, error)) (b
 		observation.observed = true
 	}
 	return exited, err
-}
-
-var defaultDuplexPipeFactory = duplexPipeFactory{
-	output: os.Pipe,
-	input:  func(cmd *exec.Cmd) (io.WriteCloser, error) { return cmd.StdinPipe() },
-	containment: func(cmd *exec.Cmd) (duplexCommandContainment, error) {
-		return newDuplexCommandContainment(cmd)
-	},
 }
 
 // RunDuplex runs one bounded-lifetime interactive exchange over a child's
@@ -189,6 +175,7 @@ func runDuplex(ctx context.Context, command ports.Command, exchange func(io.Writ
 }
 
 func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.Writer, io.Reader) error, pipes duplexPipeFactory, plannedShutdownEnabled bool) (resultErr error) {
+	defer func() { resultErr = pipes.closure.finish(resultErr) }()
 	if len(command.Argv) == 0 {
 		return exec.ErrNotFound
 	}
@@ -260,15 +247,17 @@ func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.
 	stderr := newBoundedDiagnosticBuffer(32 * 1024)
 	cmd.Stderr = stderr
 	cmd.WaitDelay = 100 * time.Millisecond
-	if err := cmd.Start(); err != nil {
+	startErr := cmd.Start()
+	pipes.closure.start(cmd.Process != nil)
+	if startErr != nil {
 		_ = stdin.Close()
 		_ = childStdout.Close()
-		return err
+		return startErr
 	}
 	_ = childStdout.Close()
 	if err := containment.attach(cmd); err != nil {
 		_ = stdin.Close()
-		return cleanupAttachFailure(err, containment.terminate, cmd.Process.Kill, containment.exited, closeContainment, cmd.Wait)
+		return pipes.closure.attachFailure(cleanupAttachFailure(err, containment.terminate, cmd.Process.Kill, containment.exited, closeContainment, cmd.Wait))
 	}
 	exchanged := make(chan error, 1)
 	go func() { exchanged <- exchange(stdin, stdout) }()
@@ -320,7 +309,7 @@ func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.
 		// stable process-tree identity; do not wait for a natural exit that the
 		// protocol intentionally never performs.
 	} else if !exited && exchangeDone && exchangeErr == nil {
-		grace := time.NewTimer(duplexExitGrace)
+		grace := time.NewTimer(pipes.exitTimeout())
 		defer grace.Stop()
 		exited, exchangeErr = awaitDuplexExit(ctx, poll.C, grace.C, containment.exited)
 		forced = !exited || exchangeErr != nil
@@ -334,7 +323,7 @@ func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.
 		// a recycled numeric process identity. Natural exit cleanup is part of
 		// the bounded-process contract and retains the leader's exact status.
 		termination = containment.terminate()
-		if errors.Is(termination.err, os.ErrProcessDone) {
+		if termination.err == os.ErrProcessDone { //nolint:errorlint // A joined process-done cause must not erase another cleanup failure.
 			// ESRCH/ErrProcessDone means the pre-reap group/job identity no longer has
 			// any signalable members, so cleanup is complete rather than uncertain.
 			termination.err = nil
@@ -356,6 +345,7 @@ func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.
 	// termination could not prove shutdown, the buffered sole-reaper goroutine
 	// retains ownership until a later exit while caller cleanup stays bounded.
 	waitErr := closeContainmentAndWait(closeContainment, cmd.Wait, processReapTimeout)
+	pipes.closure.record(termination, waitErr, containmentClosed)
 	if !exchangeDone {
 		observedExchangeErr := <-exchanged
 		exchangeDone = true
@@ -455,13 +445,13 @@ func cleanupAttachFailure(attachErr error, terminate func() terminationResult, k
 
 func cleanupAttachFailureWithin(attachErr error, terminate func() terminationResult, killLeader func() error, exited func() (bool, error), closeContainment, wait func() error, timeout time.Duration) error {
 	termination := terminate()
-	if errors.Is(termination.err, os.ErrProcessDone) {
+	if termination.err == os.ErrProcessDone { //nolint:errorlint // Preserve concurrent cleanup failures joined with process-done.
 		termination.err = nil
 	}
 	if !termination.leaderStopped {
 		termination = stopLeaderAfterContainmentFailure(termination, killLeader, exited)
 	}
-	return errors.Join(attachErr, termination.err, closeContainmentAndWait(closeContainment, wait, timeout))
+	return attachCleanupResult(attachErr, termination, closeContainmentAndWait(closeContainment, wait, timeout))
 }
 
 func closeContainmentAndWait(closeContainment, wait func() error, timeout time.Duration) error {

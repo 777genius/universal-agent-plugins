@@ -14,40 +14,29 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func exchangeCodexProjectSkills(stdin io.Writer, stdout io.Reader, profile, project string, plan domain.DeliveryPlan) error {
+func exchangeCodexProjectComponents(stdin io.Writer, stdout io.Reader, profile, project string, plan domain.DeliveryPlan) error {
 	reader := bufio.NewScanner(io.LimitReader(stdout, (4<<20)+1))
 	reader.Buffer(make([]byte, 4096), 2<<20)
 	writer := json.NewEncoder(stdin)
-	initialize := map[string]any{"id": 1, "method": "initialize", "params": map[string]any{
-		"clientInfo":   map[string]string{"name": "agentplugins", "version": "1"},
-		"capabilities": map[string]bool{"experimentalApi": true},
-	}}
-	if err := writer.Encode(initialize); err != nil {
+	if err := initializeCodexDiscovery(reader, writer, profile); err != nil {
 		return err
 	}
-	initialized, err := codexDiscoveryResponse(reader, "1")
-	if err != nil {
+	if err := verifyCodexNativeProjectConfig(reader, writer, project, plan); err != nil {
 		return err
 	}
-	if agent, ok := initialized["userAgent"].(string); !ok || agent == "" {
-		return fmt.Errorf("codex initialize returned no client identity")
-	}
-	if root, present := initialized["codexHome"]; present && !codexDiscoveryPathMatches(root, profile) {
-		return fmt.Errorf("codex initialized a different profile")
-	}
-	if err := writer.Encode(map[string]any{"method": "initialized"}); err != nil {
-		return err
-	}
-	if err := writer.Encode(map[string]any{"id": 2, "method": "skills/list", "params": map[string]any{
+	if err := writer.Encode(map[string]any{"id": 3, "method": "skills/list", "params": map[string]any{
 		"cwds": []string{project}, "forceReload": true,
 	}}); err != nil {
 		return err
 	}
-	listing, err := codexDiscoveryResponse(reader, "2")
+	listing, err := codexDiscoveryResponse(reader, "3")
 	if err != nil {
 		return err
 	}
-	return verifyCodexProjectSkillListing(listing, project, plan)
+	if err := verifyCodexProjectSkillListing(listing, project, plan); err != nil {
+		return err
+	}
+	return verifyCodexNativeMCP(reader, writer, plan, "")
 }
 
 func codexDiscoveryResponse(reader *bufio.Scanner, expectedID string) (map[string]any, error) {
@@ -106,6 +95,10 @@ func verifyCodexProjectSkillListing(listing map[string]any, project string, plan
 }
 
 func verifyCodexProjectSkillEntries(skills []any, wanted map[string]string) error {
+	return verifyCodexSkillEntries(skills, wanted, "repo", "")
+}
+
+func verifyCodexSkillEntries(skills []any, wanted map[string]string, scope, pluginID string) error {
 	found := make(map[string]bool)
 	for _, raw := range skills {
 		skill, ok := raw.(map[string]any)
@@ -118,12 +111,12 @@ func verifyCodexProjectSkillEntries(skills []any, wanted map[string]string) erro
 			continue
 		}
 		plugin := skill["pluginId"]
-		if found[name] || !codexDiscoveryPathMatches(skill["path"], expected) || skill["scope"] != "repo" || skill["enabled"] != true || plugin != nil && plugin != "" {
+		if found[name] || !codexDiscoveryPathMatches(skill["path"], expected) || skill["scope"] != scope || skill["enabled"] != true || !codexPluginMatches(plugin, pluginID) {
 			return fmt.Errorf("codex did not discover the exact enabled project skill %q", name)
 		}
 		found[name] = true
 	}
-	if len(wanted) == 0 || len(found) != len(wanted) {
+	if len(found) != len(wanted) {
 		return fmt.Errorf("codex did not discover every installed project skill")
 	}
 	return nil
@@ -150,4 +143,35 @@ func codexDiscoveryPathMatches(value any, expected string) bool {
 	}
 	expectedInfo, err := os.Lstat(expected)
 	return err == nil && expectedInfo.Mode()&os.ModeSymlink == 0 && os.SameFile(actualInfo, expectedInfo)
+}
+
+func initializeCodexDiscovery(reader *bufio.Scanner, writer *json.Encoder, profile string) error {
+	initialize := map[string]any{"id": 1, "method": "initialize", "params": map[string]any{
+		"clientInfo":   map[string]string{"name": "agentplugins", "version": "1"},
+		"capabilities": map[string]bool{"experimentalApi": true},
+	}}
+	if err := writer.Encode(initialize); err != nil {
+		return err
+	}
+	initialized, err := codexDiscoveryResponse(reader, "1")
+	if err != nil {
+		return err
+	}
+	if agent, ok := initialized["userAgent"].(string); !ok || agent == "" {
+		return fmt.Errorf("codex initialize returned no client identity")
+	}
+	if root, present := initialized["codexHome"]; present && !codexDiscoveryPathMatches(root, profile) {
+		return fmt.Errorf("codex initialized a different profile")
+	}
+	if err := writer.Encode(map[string]any{"method": "initialized"}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func codexPluginMatches(actual any, expected string) bool {
+	if expected != "" {
+		return actual == expected
+	}
+	return actual == nil || actual == ""
 }

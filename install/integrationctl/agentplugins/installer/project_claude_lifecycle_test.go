@@ -52,6 +52,11 @@ func TestProjectClaudePublicInstallerLifecycleSeparatesUserAndProjects(t *testin
 		claudeSDKWrite(t, filepath.Join(f.dataRoot, "keep.txt"), "retained scoped data\n")
 		binding := f.binding(t)
 		wantActivation := domain.ActivationActive
+		// The fixture retains the same-name user plugin. Claude MCP selectors
+		// omit scope/marketplace, so native readiness remains ambiguous here.
+		if project != "" {
+			wantActivation = domain.ActivationPrepared
+		}
 		if binding.Activation != wantActivation || binding.Scope != string(f.request.Scope) {
 			t.Fatalf("SDK scoped binding=%+v", binding)
 		}
@@ -67,7 +72,7 @@ func claudeSDKUpdateRepairRemove(t *testing.T, fixtures []*claudeSDKFixture, ori
 	beforeUser, beforeB := claudeSDKBytes(t, filepath.Join(fixtures[0].state, "state-v2.json")), claudeSDKBytes(t, filepath.Join(fixtures[2].state, "state-v2.json"))
 	binding := f.binding(t)
 	path := claudeSDKSkillPath(binding.TargetLocator, domain.InstallScope(binding.Scope))
-	if result := f.apply(t, installer.OpUpdate, "unchanged"); result.Outcome != installer.OutcomeUnchanged {
+	if result := f.apply(t, installer.OpUpdate, "unchanged"); result.Mutated || result.Client.Activation != string(domain.ActivationPrepared) || len(result.ManualActions) == 0 {
 		t.Fatalf("unchanged SDK update=%+v", result)
 	}
 	claudeSDKWrite(t, path, "external drift\n")

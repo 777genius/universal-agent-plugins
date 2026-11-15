@@ -214,7 +214,8 @@ func (service Service) confirmedPreparedUserObservation(input AddInput, plan dom
 }
 
 func preserveManagedAuthentication(outcome domain.ActivationOutcome, current domain.AuthenticationState) domain.ActivationOutcome {
-	if current == domain.AuthenticationComplete || outcome.Authentication == "" || outcome.Authentication == domain.AuthenticationNotChecked {
+	if current == domain.AuthenticationComplete || current == domain.AuthenticationPending || current == domain.AuthenticationFailed ||
+		outcome.Authentication == "" || outcome.Authentication == domain.AuthenticationNotChecked {
 		outcome.Authentication = current
 	}
 	return outcome

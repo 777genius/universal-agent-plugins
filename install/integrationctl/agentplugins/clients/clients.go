@@ -38,8 +38,8 @@ type Env struct {
 	ProjectRoots ports.NativeProjectRootPublisher
 	// SessionEnvironment is transient explicit-session authority, never persisted.
 	SessionEnvironment []string `json:"-"`
-	// LookupExecutable is used only by an explicitly requested native session.
-	// File-only installation/detection never resolves this into execution authority.
+	// LookupExecutable resolves a management CLI for an explicitly selected
+	// native operation or session. File-only detection never executes it.
 	LookupExecutable    func(string) (string, error)
 	OpenCodeTransitions ports.OpenCodeTransitionRecorder
 	Runner              ports.CommandRunner

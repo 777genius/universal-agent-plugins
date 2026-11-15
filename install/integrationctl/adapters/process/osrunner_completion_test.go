@@ -62,6 +62,10 @@ func TestOSRunnerFiniteProtocolRequiresCleanEOFExit(t *testing.T) {
 			if mode == "stalled" && !strings.Contains(err.Error(), "forced") {
 				t.Fatalf("forced cleanup was accepted as natural completion: %v", err)
 			}
+			var unclosed *ports.ProcessClosureError
+			if errors.As(err, &unclosed) {
+				t.Fatalf("fully cleaned command was mislabeled unclosed: %v", err)
+			}
 		})
 	}
 }

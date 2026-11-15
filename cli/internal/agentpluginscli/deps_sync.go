@@ -97,7 +97,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 	for _, action := range actions {
 		if action.Action == environment.ActionUnchanged {
 			if err := adapter.verifyUnchangedProjection(ctx, action); err != nil {
-				return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+				return nil, &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
 			}
 			continue
 		}
@@ -107,7 +107,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		}
 		prepared, err := adapter.Prepare(ctx, action)
 		if err != nil {
-			return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+			return nil, &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
 		}
 		plan := prepared.Plan()
 		if adapter.previewExternalUninstalled != nil && action.Action == environment.ActionRemove && plan.RequiresExternalUninstalled {

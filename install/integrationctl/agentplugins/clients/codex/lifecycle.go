@@ -95,6 +95,13 @@ func completeCodexActivation(ctx context.Context, env clients.Env, request domai
 	if err == nil {
 		outcome.Activation = domain.ActivationActive
 		outcome.Verification = domain.VerificationInstalled
+		outcome, err = completeCodexUserDiscovery(ctx, env, request, outcome)
+		if err != nil {
+			return outcome, err
+		}
+		if err := ctx.Err(); err != nil {
+			return outcome, err
+		}
 		if handoff := desktopPluginHandoff(request.Delivery.ActivePath, request.DeclaredName, request.Plan.PhysicalArtifactID, true, request.Client.ConfigRoot); handoff != "" {
 			outcome.LocalActions = append(outcome.LocalActions, "start a new Codex session; "+handoff)
 		}

@@ -154,7 +154,7 @@ func TestCurrentClaudeSuppressionActivationRequiresIndependentDeliveryProof(t *t
 		return legacyports.CommandResult{Stdout: body, NoChildStarted: true}, nil
 	}}
 	request := domain.ActivationRequest{
-		DeclaredName: "demo", BackendExecutable: filepath.Join(base, "claude"), Client: domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: user},
+		VerifyOnly: true, DeclaredName: "demo", BackendExecutable: filepath.Join(base, "claude"), Client: domain.DetectedClient{ClientID: domain.ClientClaude, ConfigRoot: user},
 		Plan:     domain.DeliveryPlan{Scope: domain.ScopeProject, TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: project, UserConfigRoot: user}, NativeRegistryRoot: filepath.Join(project, ".claude"), TargetAnchor: filepath.Join(project, ".claude"), TargetRoot: filepath.Join(project, ".claude", "skills"), ActivePath: active},
 		Delivery: domain.StagedDelivery{ActivePath: active, ArtifactDigest: "sha256:" + strings.Repeat("1", 64)},
 	}

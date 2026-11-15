@@ -14,8 +14,12 @@ const nativeRegistryTreeExitGrace = time.Second
 // tree-aware runner is used when available so Linux requires atomic cgroup
 // containment and Windows uses a Job Object.
 func RunNativeRegistry(ctx context.Context, runner ports.CommandRunner, command legacyports.Command) (legacyports.CommandResult, error) {
+	var result legacyports.CommandResult
+	var err error
 	if tree, ok := runner.(ports.TreeCommandRunner); ok {
-		return tree.RunWithTreeExitGrace(ctx, command, nativeRegistryTreeExitGrace)
+		result, err = tree.RunWithTreeExitGrace(ctx, command, nativeRegistryTreeExitGrace)
+	} else {
+		result, err = runner.Run(ctx, command)
 	}
-	return runner.Run(ctx, command)
+	return result, NativeProbeFailure(result, err)
 }

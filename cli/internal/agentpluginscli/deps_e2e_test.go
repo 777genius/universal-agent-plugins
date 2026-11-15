@@ -625,6 +625,7 @@ func (m *dependencyInterruptedMutator) Apply(ctx context.Context, prepared *inst
 type dependencyClaudeListing struct {
 	root             string
 	codexIDs         map[string]bool
+	codexRoots       map[string]string
 	failNextCodexAdd bool
 	calls            int
 }
@@ -634,6 +635,16 @@ func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Com
 	for _, value := range command.Env {
 		if strings.HasPrefix(value, "CODEX_HOME=") {
 			args := command.Argv[1:]
+			if len(args) == 5 && args[0] == "plugin" && args[1] == "marketplace" && args[2] == "add" && args[4] == "--json" {
+				return r.fixtureCodexMarketplace(args[3])
+			}
+			if len(args) == 5 && args[0] == "plugin" && args[1] == "marketplace" && args[2] == "update" && args[4] == "--json" && r.codexRoots[args[3]] == "" {
+				return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("fixture marketplace is not registered")}, nil
+			}
+			if len(args) == 4 && args[0] == "plugin" && args[1] == "remove" && args[3] == "--json" {
+				delete(r.codexIDs, args[2])
+				return legacyports.CommandResult{Stdout: []byte(`{"ok":true}`)}, nil
+			}
 			if len(args) >= 3 && args[0] == "plugin" && args[1] == "add" {
 				if r.failNextCodexAdd {
 					r.failNextCodexAdd = false
@@ -653,13 +664,20 @@ func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Com
 				sort.Strings(ids)
 				for _, id := range ids {
 					name, market, _ := strings.Cut(id, "@")
-					installed = append(installed, map[string]any{"pluginId": id, "name": name, "marketplaceName": market, "installed": true, "enabled": true})
+					entry, err := r.fixtureCodexPluginEntry(id, name, market)
+					if err != nil {
+						return legacyports.CommandResult{}, err
+					}
+					installed = append(installed, entry)
 				}
 				body, err := json.Marshal(map[string]any{"installed": installed})
 				return legacyports.CommandResult{Stdout: body}, err
 			}
 			return legacyports.CommandResult{Stdout: []byte(`{"ok":true}`)}, nil
 		}
+	}
+	if len(command.Argv) == 4 && command.Argv[1] == "mcp" && command.Argv[2] == "get" {
+		return r.fixtureClaudeMCP(command)
 	}
 	if strings.Join(command.Argv[1:], " ") != "plugin list --json" {
 		return legacyports.CommandResult{}, fmt.Errorf("unexpected fixture command: %v", command.Argv[1:])

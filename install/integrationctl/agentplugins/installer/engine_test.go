@@ -6658,14 +6658,32 @@ func TestCommittedBindingFailureKeepsManagedCommit(t *testing.T) {
 }
 
 type recordingCodexRunner struct {
-	calls     [][]string
-	installed bool
-	pluginID  string
+	calls       [][]string
+	installed   bool
+	pluginID    string
+	marketRoots map[string]string
 }
 
 func (r *recordingCodexRunner) Run(_ context.Context, cmd ports.Command) (ports.CommandResult, error) {
 	argv := append([]string(nil), cmd.Argv...)
 	r.calls = append(r.calls, argv)
+	if containsArgSeq(argv, "plugin", "marketplace", "update") && r.marketRoots[argv[4]] == "" {
+		return ports.CommandResult{ExitCode: 1, Stderr: []byte("marketplace not configured or installed")}, nil
+	}
+	if containsArgSeq(argv, "plugin", "marketplace", "add") {
+		body, err := os.ReadFile(filepath.Join(argv[4], ".agents", "plugins", "marketplace.json"))
+		if err != nil {
+			return ports.CommandResult{}, err
+		}
+		var manifest struct{ Name string }
+		if err := json.Unmarshal(body, &manifest); err != nil {
+			return ports.CommandResult{}, err
+		}
+		if r.marketRoots == nil {
+			r.marketRoots = map[string]string{}
+		}
+		r.marketRoots[manifest.Name] = argv[4]
+	}
 	if containsArgSeq(argv, "plugin", "marketplace", "add") || containsArgSeq(argv, "plugin", "marketplace", "update") || containsArgSeq(argv, "plugin", "add") {
 		r.installed = true
 		for _, arg := range argv {
@@ -6679,9 +6697,13 @@ func (r *recordingCodexRunner) Run(_ context.Context, cmd ports.Command) (ports.
 		if !r.installed || r.pluginID == "" || !strings.Contains(r.pluginID, "@") {
 			return ports.CommandResult{Stdout: []byte(`{"installed":[]}`)}, nil
 		}
-		name, market, _ := strings.Cut(r.pluginID, "@")
-		body := `{"installed":[{"pluginId":"` + r.pluginID + `","name":"` + name + `","marketplaceName":"` + market + `","installed":true,"enabled":true}]}`
-		return ports.CommandResult{Stdout: []byte(body)}, nil
+		_, market, _ := strings.Cut(r.pluginID, "@")
+		entry, err := fixtureCodexEntry(r.pluginID, r.marketRoots[market], true)
+		if err != nil {
+			return ports.CommandResult{}, err
+		}
+		body, err := json.Marshal(map[string]any{"installed": []any{entry}})
+		return ports.CommandResult{Stdout: body}, err
 	}
 	return ports.CommandResult{}, nil
 }

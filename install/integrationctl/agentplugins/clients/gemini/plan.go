@@ -19,6 +19,9 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 }
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if in.TargetContext.Scope == domain.ScopeProject {
+		shared.QualifyRawSkillInstallationAuthentication(in.Envelope, plan)
+	}
 	root := in.Client.ConfigRoot
 	if in.TargetContext.Scope == domain.ScopeProject {
 		root = plan.NativeRegistryRoot

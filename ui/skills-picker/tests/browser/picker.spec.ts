@@ -62,7 +62,7 @@ for (const setupRequired of [false, true]) {
     const operation = await fixture<Operation>('operation');
     const summary = setupRequired
       ? 'Skill files installed. Some agents still need setup; check each result below.'
-      : 'Skill files and owned native configuration verified. Agent discovery and activation are not verified by this Skills flow.';
+      : 'Skills installation verified. Model execution was not tested.';
     const message = setupRequired
       ? 'Files installed. Agent setup still needs verification; run agentplugins doctor for the next step.'
       : 'The Skill files and owned native projection were verified. Agent-session discovery was not checked.';

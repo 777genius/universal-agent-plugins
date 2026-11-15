@@ -3,7 +3,6 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
@@ -21,7 +20,7 @@ func prepareSkillsResumes(ctx context.Context, adapter *dependencyInstaller, vie
 		}
 		resumed, plan, err := prepareSkillsResume(ctx, adapter, action)
 		if err != nil {
-			return fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+			return &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
 		}
 		// Unknown authentication alone never authorizes a mutation. The current
 		// native planner must positively admit credential-free installation.
@@ -76,8 +75,17 @@ func prepareSkillsResumeRepair(ctx context.Context, adapter *dependencyInstaller
 		return installer.Plan{}, err
 	}
 	defer func() { _ = prepared.Close() }()
-	_, err = adapter.app.Installer.VerifyPreparedProjection(ctx, prepared)
-	return prepared.Plan(), err
+	projectionAndRegistrationComplete, err := adapter.app.Installer.VerifyPreparedProjection(ctx, prepared)
+	if err != nil {
+		return installer.Plan{}, err
+	}
+	if !projectionAndRegistrationComplete {
+		// A prepared CLI registration can be incomplete while the immutable
+		// package and repair authority remain valid. Keep the explicit repair
+		// in review; only its accepted native result may qualify readiness.
+		return prepared.Plan(), nil
+	}
+	return prepared.Plan(), nil
 }
 
 func skillsProjectionRefreshRequired(err error) bool {

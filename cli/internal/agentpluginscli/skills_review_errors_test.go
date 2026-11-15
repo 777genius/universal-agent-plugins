@@ -151,3 +151,28 @@ func TestSkillsReviewForeignDestinationRelativePath(t *testing.T) {
 		})
 	}
 }
+
+func TestSkillsPreflightRefusalIdentifiesAgentWithoutProviderOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		cause          error
+		code, guidance string
+	}{
+		{"unsupported version", errors.New("private-secret: /private/home: unqualified executable/version"), "TARGET_UNAVAILABLE", "doctor --target kimi"},
+		{"owned files changed", fmt.Errorf("private-secret: %w", installer.ErrManagedSkillChanged), "MANAGED_SKILL_CHANGED", "edited outside UAP"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cause := &dependencyPreflightError{Alias: "docx", ClientID: "kimi", Cause: tc.cause}
+			if !errors.Is(cause, tc.cause) || cause.Error() != "preflight docx/kimi: "+tc.cause.Error() {
+				t.Fatal("preflight error lost its existing diagnostic or cause")
+			}
+			refusal := (&skillsCatalogSession{}).reviewRefusal(cause)
+			if refusal.Code != tc.code || !strings.Contains(refusal.Message, `Skill "docx" for Kimi`) || !strings.Contains(refusal.Message, tc.guidance) {
+				t.Fatalf("missing binding-specific recovery guidance: %+v", refusal)
+			}
+			if strings.Contains(refusal.Message, "private-secret") || strings.Contains(refusal.Message, "/private/home") {
+				t.Fatalf("native diagnostics leaked: %s", refusal.Message)
+			}
+		})
+	}
+}

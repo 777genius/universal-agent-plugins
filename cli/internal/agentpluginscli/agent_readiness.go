@@ -7,7 +7,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
-const skillsReadyMessage = "Skill files and owned native configuration verified. Agent discovery and activation are not verified by this Skills flow."
+const skillsReadyMessage = "Skills installation verified. Model execution was not tested."
 
 // A readiness summary is an interpretation of existing evidence only. It
 // never persists state or attests that a client executed an MCP tool.

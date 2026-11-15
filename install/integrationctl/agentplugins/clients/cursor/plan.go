@@ -35,6 +35,7 @@ func (*Adapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *doma
 		return nil
 	}
 	if in.TargetContext.Scope == domain.ScopeProject {
+		shared.QualifyRawSkillInstallationAuthentication(in.Envelope, plan)
 		shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, shared.OnlyNativeComponents(plan.Components))
 		plan.Activation = domain.ActivationPrepared
 		plan.UserActions = shared.AppendUnique(plan.UserActions, "project skill directories and MCP entries can be configured automatically; discovery, enablement, approval and policy require observation in Cursor")
