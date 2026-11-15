@@ -12,6 +12,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import tomllib
 
 FIXTURE_SHA256 = "7399eaed15b3eb0981a6be12082dd8825529e896a59ea125b9500a666c21112e"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
@@ -42,11 +43,34 @@ def prepare_codex_runtime_case(root):
     return case, config, original, sqlite, logs
 
 
-def verify_codex_runtime_case(prepared):
+def verify_codex_runtime_case(prepared, audit):
     case, config, original, sqlite, logs = prepared
-    if config.is_symlink() or config.read_bytes() != original:
-        raise RuntimeError("native Codex runtime configuration changed during lifecycle")
     anchor = case.resolve(strict=True)
+    project = case / "project"
+    if (project.is_symlink() or not project.is_dir()
+            or project.resolve(strict=True).parent != anchor):
+        raise RuntimeError("Codex trust target escaped disposable case")
+    project = project.resolve(strict=True)
+    if config.is_symlink() or not config.resolve(strict=True).is_relative_to(anchor):
+        raise RuntimeError("native Codex runtime configuration escaped disposable case")
+    expected = tomllib.loads(original.decode("utf-8"))
+    observed = tomllib.loads(config.read_text(encoding="utf-8"))
+    projects = observed.pop("projects", None)
+    # Normal confirmed installation must grant this exact project's trust. It
+    # remains a user preference after removal; runtime keys and every other
+    # configuration value must retain their original meaning.
+    if observed != expected or not isinstance(projects, dict) or len(projects) != 1:
+        raise RuntimeError("native Codex configuration changed beyond exact project trust")
+    trusted_path, trust = next(iter(projects.items()))
+    trusted = Path(trusted_path)
+    # Reuse the auditor's physical containment for Windows extended-length
+    # spellings, then require this exact directory without redirected ancestry.
+    if (not audit.codex_marketplace_source_in_case(trusted, case)
+            or any(path.is_symlink() or path.is_junction()
+                   for path in (trusted, *trusted.parents))
+            or not project.samefile(trusted)
+            or trust != {"trust_level": "trusted"}):
+        raise RuntimeError("native Codex did not preserve exact selected project trust")
     counts = {"sqlite": 0, "logs": 0}
 
     def refuse_walk_error(error):
@@ -132,7 +156,7 @@ def main():
                 runtime = prepare_codex_runtime_case(root)
                 row = audit.do_case(str(cli), "codex", "skill", item, 24, root,
                                     fixtures["plugin_declared_names"], fixtures["signed_release_pins"])
-                runtime_counts = verify_codex_runtime_case(runtime)
+                runtime_counts = verify_codex_runtime_case(runtime, audit)
                 evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
                                               "codex_runtime_stores_checked": runtime_counts,
                                               "case": row}
