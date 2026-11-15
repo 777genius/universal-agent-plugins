@@ -182,8 +182,9 @@ def main():
                 raise ValueError("readonly native inventory changed the original fixture")
             if original_binary != hashlib.sha256(binary.read_bytes()).hexdigest():
                 raise ValueError("native executable changed")
-            evidence.update(passed=True, fixture_unchanged=True, archive_sha256=ARCHIVE, binary_sha256=BINARY)
-            status = 0
+        # Qualification is committed only after the disposable fixture is cleaned up.
+        evidence.update(passed=True, fixture_unchanged=True, archive_sha256=ARCHIVE, binary_sha256=BINARY)
+        status = 0
     except Exception as error:
         evidence["error"] = type(error).__name__ + ": " + str(error)
     finally:
