@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/filetree"
@@ -143,5 +144,60 @@ func TestClaudeProjectMarketplaceCacheCleanupRechecksAfterNativeMutation(t *test
 	}
 	if body, err := os.ReadFile(foreign); err != nil || string(body) != "preserve concurrent change" {
 		t.Fatalf("post-uninstall foreign bytes were lost: %v", err)
+	}
+}
+
+func TestClaudeProjectMarketplaceCacheCleanupRetainsForeignSwapAfterIdentityCheck(t *testing.T) {
+	request, cache := claudeCachedRemoval(t)
+	before, err := os.Lstat(cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parent, err := os.OpenRoot(filepath.Dir(cache))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = parent.Close() }()
+	if err := verifyClaudeProjectRemovalCache(t.Context(), request, cache, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := claudeProjectCacheRemovalIdentity(request.Client.ConfigRoot, cache, parent, before); err != nil {
+		t.Fatal(err)
+	}
+	// Exact interleaving: the already-verified owned cache is renamed away
+	// and a foreign same-name directory appears before retirement starts.
+	original := cache + "-original-preserved"
+	if err := os.Rename(cache, original); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(cache, 0700); err != nil {
+		t.Fatal(err)
+	}
+	claudeMarketplaceWrite(t, filepath.Join(cache, "foreign.txt"), "must not be deleted")
+	effect := domain.NativeEffectCommitted
+	if err := retireClaudeProjectCache(t.Context(), request, cache, parent, before, &effect); err == nil || effect != domain.NativeEffectUncertain {
+		t.Fatalf("post-check swapped foreign cache was accepted: %s %v", effect, err)
+	}
+	if _, err := os.Stat(original); err != nil {
+		t.Fatalf("original owned cache was changed: %v", err)
+	}
+	entries, err := os.ReadDir(filepath.Dir(cache))
+	if err != nil {
+		t.Fatal(err)
+	}
+	retained := 0
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), ".agentplugins-cache-retire-") {
+			continue
+		}
+		path := filepath.Join(filepath.Dir(cache), entry.Name(), "retired", "foreign.txt")
+		body, err := os.ReadFile(path)
+		if err != nil || string(body) != "must not be deleted" {
+			t.Fatalf("foreign replacement was not retained at %q: %v", path, err)
+		}
+		retained++
+	}
+	if retained != 1 {
+		t.Fatalf("expected one quarantined foreign replacement, got %d", retained)
 	}
 }
