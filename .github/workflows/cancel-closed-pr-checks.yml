@@ -12,7 +12,8 @@ permissions:
 jobs:
   cancel-obsolete:
     name: Cancel obsolete PR runs
-    if: github.event.pull_request.base.repo.full_name == github.repository
+    # Merged PR-head CI may be used as release evidence; clean abandoned PRs only.
+    if: github.event.pull_request.base.repo.full_name == github.repository && github.event.pull_request.merged == false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
