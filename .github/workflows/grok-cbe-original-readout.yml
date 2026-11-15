@@ -1,0 +1,46 @@
+name: Grok retained CBE original failure
+
+on:
+  push:
+    branches: [diagnostics/grok-cbe-original-readout-20261115]
+    paths:
+      - '.github/workflows/grok-cbe-original-readout.yml'
+      - 'scripts/read-grok-cbe-original.py'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-original:
+    if: github.repository == '777genius/universal-agent-plugins' && github.ref == 'refs/heads/diagnostics/grok-cbe-original-readout-20261115'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Verify exact parent and diagnostic-only delta
+        run: |
+          python3 -B - <<'PY'
+          import os, re, subprocess
+          base = 'ce4f11145b062a48faf827584a2617ffcbb1b844'
+          head = os.environ['GITHUB_SHA']
+          def git(*args):
+              return subprocess.check_output(['git', *args], text=True).strip()
+          assert re.fullmatch('[0-9a-f]{40}', head)
+          assert git('rev-parse', 'HEAD') == head
+          assert git('show', '-s', '--format=%P', head) == base
+          assert git('status', '--porcelain', '--untracked-files=all') == ''
+          assert set(git('diff', '--name-status', base, head).splitlines()) == {
+              'A\t.github/workflows/grok-cbe-original-readout.yml',
+              'A\tscripts/read-grok-cbe-original.py'}
+          PY
+      - name: Read one fixed completed failure artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_HOST: github.com
+          GH_PROMPT_DISABLED: '1'
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B scripts/read-grok-cbe-original.py
