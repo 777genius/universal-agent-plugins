@@ -132,16 +132,14 @@ def main():
                 runtime = prepare_codex_runtime_case(root)
                 row = audit.do_case(str(cli), "codex", "skill", item, 24, root,
                                     fixtures["plugin_declared_names"], fixtures["signed_release_pins"])
+                evidence["results"][label] = {"root_chars": len(str(root / "skill-24")), "case": row}
                 runtime_counts = verify_codex_runtime_case(runtime)
-                evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
-                                              "codex_runtime_stores_checked": runtime_counts,
-                                              "case": row}
+                evidence["results"][label]["codex_runtime_stores_checked"] = runtime_counts
                 if row.get("status") != "passed":
                     failures.append(f"{label}: native E2E case did not PASS")
             except Exception as error:
                 failures.append(f"{label}: {type(error).__name__}")
-                evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
-                                              "error_type": type(error).__name__}
+                evidence["results"].setdefault(label, {"root_chars": len(str(root / "skill-24"))})["error_type"] = type(error).__name__
     finally:
         report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
         for root in (short, long):
