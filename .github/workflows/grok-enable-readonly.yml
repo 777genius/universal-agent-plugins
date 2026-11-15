@@ -6,6 +6,7 @@ on:
       - 'install/integrationctl/agentplugins/clients/grok/**'
       - 'scripts/e2e/grok-enable-readonly.py'
       - 'scripts/grok_bwrap_policy_setup.py'
+      - 'scripts/test_grok_bwrap_policy_setup.py'
       - '.github/workflows/grok-enable-readonly.yml'
   push:
     branches: [main]
@@ -14,6 +15,7 @@ on:
       - 'install/integrationctl/agentplugins/clients/grok/**'
       - 'scripts/e2e/grok-enable-readonly.py'
       - 'scripts/grok_bwrap_policy_setup.py'
+      - 'scripts/test_grok_bwrap_policy_setup.py'
       - '.github/workflows/grok-enable-readonly.yml'
 permissions:
   contents: read
@@ -28,6 +30,8 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify original policy directory authority without loading a policy
+        run: python3 -B -m unittest discover -s scripts -p test_grok_bwrap_policy_setup.py -v
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.11'

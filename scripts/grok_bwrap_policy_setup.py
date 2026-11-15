@@ -154,7 +154,12 @@ def open_policy_directory(path=POLICY_DIRECTORY):
     except BaseException:
         os.close(fd)
         raise
-    return fd
+    return fd, before
+
+
+def verify_policy_directory(fd, original, path=POLICY_DIRECTORY):
+    require(identity(os.fstat(fd))[:5] == identity(path.lstat())[:5] == identity(original)[:5],
+            "policy directory authority changed")
 
 
 def require_absent(fd, name):
@@ -360,9 +365,8 @@ def prove_runtime(root, deadline, runtime, inputs, output, uid, gid, records):
     require(remaining(deadline) >= 30, "insufficient original policy-control budget")
     runtime_fd, input_fd, binary_fd = -1, -1, -1
     try:
-        runtime_fd = open_policy_directory(runtime)
-        input_fd = open_policy_directory(inputs)
-        root_info, input_info = os.fstat(runtime_fd), os.fstat(input_fd)
+        runtime_fd, root_info = open_policy_directory(runtime)
+        input_fd, input_info = open_policy_directory(inputs)
         out_info = output.lstat()
         require(stat.S_ISDIR(out_info.st_mode) and (out_info.st_uid, out_info.st_gid) == (uid, gid)
                 and stat.S_IMODE(out_info.st_mode) == 0o700, "control output authority")
@@ -429,7 +433,7 @@ def setup(root, deadline, runtime, inputs, output, uid, gid):
     require(restriction == b"1\n", "ordinary Ubuntu user-namespace restriction required")
     before = loaded_profiles()
     require_loaded(before)
-    fd = open_policy_directory()
+    fd, original_directory = open_policy_directory()
     try:
         check_policy_names(fd)
         remaining(deadline)
@@ -445,10 +449,7 @@ def setup(root, deadline, runtime, inputs, output, uid, gid):
         require_loaded(before, after)
         require(kernel_read("/proc/sys/kernel/apparmor_restrict_unprivileged_userns", 16) == restriction,
                 "user-namespace restriction changed")
-        held, named = os.fstat(fd), POLICY_DIRECTORY.lstat()
-        require((held.st_dev, held.st_ino, held.st_mode, held.st_uid, held.st_gid)
-                == (named.st_dev, named.st_ino, named.st_mode, named.st_uid, named.st_gid),
-                "policy directory authority changed")
+        verify_policy_directory(fd, original_directory)
         remaining(deadline)
     finally:
         os.close(fd)
