@@ -15,11 +15,13 @@ type scriptedMutator struct {
 	prepareErr map[string]error
 	applyErr   map[string]error
 	results    map[string]installer.Result
+	prepared   []string
 	applied    []string
 	current    string
 }
 
 func (mutator *scriptedMutator) Prepare(_ context.Context, binding PreparedBinding) (*installer.PreparedOperation, error) {
+	mutator.prepared = append(mutator.prepared, binding.ClientID)
 	if err := mutator.prepareErr[binding.ClientID]; err != nil {
 		return nil, err
 	}
@@ -73,6 +75,44 @@ func TestApplySyncOneFailingClientDoesNotBlockOthers(t *testing.T) {
 			}
 			if outcomes[1].Err == nil {
 				t.Fatal("the failed binding must carry its own cause")
+			}
+		})
+	}
+}
+
+func TestApplySyncUnclosedProbeStopsBeforeLaterBindings(t *testing.T) {
+	closeErr := errors.New("process containment close failed")
+	unclosed := &domain.UnclosedClientProbe{Operation: "Claude Code plugin listing", Err: closeErr}
+	for name, cause := range map[string]error{
+		"bare":    unclosed,
+		"wrapped": fmt.Errorf("observe native identity: %w", unclosed),
+	} {
+		t.Run(name, func(t *testing.T) {
+			mutator := &scriptedMutator{
+				applyErr: map[string]error{"claude": cause},
+				results:  map[string]installer.Result{"claude": {Outcome: installer.OutcomeIncomplete}},
+			}
+			outcomes, err := (Coordinator{Mutator: mutator}).ApplySync(context.Background(), bindings("codex", "claude", "gemini"), true)
+			want := []BindingStatus{BindingApplied, BindingFailed, BindingNotAttempted}
+			if got := statuses(outcomes); fmt.Sprint(got) != fmt.Sprint(want) {
+				t.Fatalf("statuses %v, want %v", got, want)
+			}
+			if fmt.Sprint(mutator.prepared) != "[codex claude]" || fmt.Sprint(mutator.applied) != "[codex claude]" {
+				t.Fatalf("later binding reached preparation or apply: prepared=%v applied=%v", mutator.prepared, mutator.applied)
+			}
+			var syncErr *SyncError
+			if !errors.As(err, &syncErr) || syncErr.Stopped == nil {
+				t.Fatalf("want a stopped SyncError, got %v", err)
+			}
+			var observed *domain.UnclosedClientProbe
+			if !errors.As(err, &observed) || observed != unclosed || !errors.Is(err, closeErr) {
+				t.Fatalf("original cleanup cause must stay classifiable, got %v", err)
+			}
+			if outcomes[1].Result == nil || outcomes[1].Result.Outcome != installer.OutcomeIncomplete {
+				t.Fatalf("failed binding must retain its incomplete result: %+v", outcomes[1])
+			}
+			if outcomes[2].Result != nil || !domain.IsUnclosedClientProbe(outcomes[2].Err) || !errors.Is(outcomes[2].Err, closeErr) {
+				t.Fatalf("skipped binding must retain the cleanup refusal without a result: %+v", outcomes[2])
 			}
 		})
 	}

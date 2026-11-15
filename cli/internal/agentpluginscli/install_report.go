@@ -13,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 // agentReport is everything a person needs to know about one agent after an
@@ -337,9 +338,41 @@ func retryFailedAgents(cmd *cobra.Command, app App, opts *options, err error, re
 
 // recordGroupOutcome stores a plugin group's per-agent result for the retry
 // step and the technical log. The group's own table stays the visible summary.
-func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined addMultiResult) {
-	outcome := app.finishInstall(opts, "add", groupAgentItems(combined.Plugin, combined.Targets))
+func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *addMultiResult, cause error) error {
+	items := groupAgentItems(combined.Plugin, combined.Targets)
+	unclosed := domain.IsUnclosedClientProbe(cause)
+	if unclosed {
+		// An unconfirmed process stops retries for this whole failed group.
+		// Preserve the original detail for the log before making the public
+		// per-target messages safe; successful targets remain unchanged.
+		for index := range items {
+			item := &items[index]
+			if item.failure == nil {
+				continue
+			}
+			status := environment.BindingFailed
+			if item.Status == "not_attempted" {
+				status = environment.BindingNotAttempted
+			}
+			detail := item.failure.Detail
+			item.failure = describeBindingFailure(environment.BindingOutcome{Status: status, Err: cause})
+			if detail != "" {
+				item.failure.Detail = detail + "\n" + item.failure.Detail
+			}
+			target := &combined.Targets[index]
+			target.Error = &usecase.GroupTargetFailure{Stage: "cleanup", Message: item.failure.Summary}
+			target.Output.Result.Failure = target.Error
+			target.RetryCommand = ""
+			target.NextAction = item.failure.Next
+			target.Output.NextAction = item.failure.Next
+		}
+	}
+	outcome := app.finishInstall(opts, "add", items)
 	if outcome.LogFile != "" && opts.format == "human" {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))
 	}
+	if unclosed {
+		return installFailureWithCause{summary: describeSyncFailure(cause).Summary, cause: cause}
+	}
+	return cause
 }

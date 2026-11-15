@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
@@ -16,6 +17,7 @@ type failureKind string
 
 const (
 	failureUnknown           failureKind = "FAILED"
+	failureProcessCleanup    failureKind = "PROCESS_CLEANUP_UNCONFIRMED"
 	failureRecovery          failureKind = "RECOVERY_REQUIRED"
 	failureSecurityBlocked   failureKind = "SECURITY_REVIEW_BLOCKED"
 	failureForeignTarget     failureKind = "FOREIGN_DESTINATION"
@@ -33,6 +35,8 @@ func failureKindOf(err error) failureKind {
 	switch {
 	case err == nil:
 		return failureUnknown
+	case domain.IsUnclosedClientProbe(err):
+		return failureProcessCleanup
 	case errors.Is(err, installer.ErrRecoveryRequired):
 		return failureRecovery
 	case errors.Is(err, installer.ErrAssessmentRejected):
@@ -91,6 +95,9 @@ func describeBindingFailure(outcome environment.BindingOutcome) *installFailure 
 	if failure.Kind == failureSkipped {
 		// A skipped agent is only worth retrying when what stopped the run can be fixed by retrying.
 		_, _, failure.Retryable = applyFailureWording(cause)
+		if cause == failureProcessCleanup {
+			_, failure.Next, _ = applyFailureWording(cause)
+		}
 	}
 	return &failure
 }
@@ -117,6 +124,8 @@ func failureKindOfOutcome(outcome installer.Outcome) failureKind {
 
 func applyFailureWording(kind failureKind) (summary, next string, retryable bool) {
 	switch kind {
+	case failureProcessCleanup:
+		return "The agent's process cleanup could not be confirmed.", "Confirm the agent's processes have stopped before starting another installation.", false
 	case failureRecovery:
 		return "An earlier installation was interrupted and needs recovery first.", "Run `agentplugins doctor`, follow its steps, then try again.", false
 	case failureSecurityBlocked:
@@ -141,4 +150,23 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 		return "Not attempted because an earlier problem stopped the installation.", "Retry this agent once the earlier problem is resolved.", true
 	}
 	return "The installation did not complete for this agent.", "Retry, or hand the technical log to an agent to diagnose.", true
+}
+
+// installFailureWithCause keeps a classifiable cause without putting its
+// technical detail in the public command error.
+type installFailureWithCause struct {
+	summary string
+	cause   error
+}
+
+func (err installFailureWithCause) Error() string { return err.summary }
+func (err installFailureWithCause) Unwrap() error { return err.cause }
+
+// retainUnclosedInstallCause keeps cleanup uncertainty through the group's
+// public aggregate. Ordinary group failures keep their existing presentation.
+func retainUnclosedInstallCause(summary, cause error) error {
+	if !domain.IsUnclosedClientProbe(cause) {
+		return summary
+	}
+	return installFailureWithCause{summary: summary.Error(), cause: cause}
 }
