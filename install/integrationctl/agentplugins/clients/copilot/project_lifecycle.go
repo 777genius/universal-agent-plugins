@@ -29,6 +29,9 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 	if err := env.NativeConfig.RequireFileIO(); err != nil {
 		return err
 	}
+	if err := verifyCopilotTrust(env, request, false); err != nil {
+		return err
+	}
 	if shared.ComponentKindPresent(request.Plan.Components, domain.ComponentMCPServer) {
 		layout, err := copilotComponents(root)
 		if err != nil {
@@ -58,8 +61,11 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 		Automatic:         request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components),
 		UnavailableAction: "select supported Copilot project skills and MCP components",
 		RepairAction:      "repair exact managed Copilot project components", RetryAction: "retry Copilot project component installation",
-		CompletedAction: "Copilot project components are configured; native discovery, folder trust, plugin/session/admin precedence, disabled selection and MCP initialization remain unobserved",
+		CompletedAction: "project skills and MCP servers are installed, and Copilot remembers this folder; start a new Copilot session to load them",
 		Verify: func() error {
+			if err := verifyCopilotTrust(env, request, true); err != nil {
+				return err
+			}
 			return layout.Verify(copilotNativeObjects(request.Delivery.NativeObjects), false, env.NativeConfig)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
@@ -73,8 +79,12 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 					servers[object.LogicalName] = server
 				}
 			}
-			return (shared.ProjectComponentMutation{Layout: layout, ActivePath: request.Delivery.ActivePath,
-				Previous: copilotNativeObjects(request.PreviousNativeObjects), Desired: copilotNativeObjects(request.Delivery.NativeObjects), Servers: servers, Kernel: env.NativeConfig}).Apply(ctx)
+			mutation := shared.ProjectComponentMutation{Layout: layout, ActivePath: request.Delivery.ActivePath,
+				Previous: copilotNativeObjects(request.PreviousNativeObjects), Desired: copilotNativeObjects(request.Delivery.NativeObjects), Servers: servers, Kernel: env.NativeConfig}
+			if err := mutation.Preflight(ctx); err != nil {
+				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+			}
+			return withCopilotTrust(ctx, env, request, func() error { return mutation.Apply(ctx) })
 		},
 	})
 	if err == nil && outcome.Verification == domain.VerificationInstalled {
@@ -90,7 +100,7 @@ func deactivateCopilotProject(ctx context.Context, env clients.Env, request doma
 		return outcome, err
 	}
 	if !request.Confirmed {
-		outcome.UserActions = append(outcome.UserActions, "agentplugins will remove only exact owned Copilot repository skills and MCP members")
+		outcome.UserActions = append(outcome.UserActions, "agentplugins will remove only exact owned Copilot repository skills and MCP members; remembered folder trust is retained")
 		return outcome, nil
 	}
 	layout, err := copilotComponents(root)
@@ -101,5 +111,6 @@ func deactivateCopilotProject(ctx context.Context, env clients.Env, request doma
 		return outcome, err
 	}
 	outcome.ExternalRemovalComplete = true
+	outcome.UserActions = append(outcome.UserActions, "Copilot remembered folder trust is retained as your project choice")
 	return outcome, nil
 }

@@ -25,6 +25,14 @@ func (*Adapter) ID() domain.ClientID { return domain.ClientCopilot }
 // DetectSurfaces probes the Copilot CLI and its configuration directory.
 func (*Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	configRoot := filepath.Join(host.HomeDir(), ".copilot")
+	if selected := host.Env("COPILOT_HOME"); selected != "" {
+		configRoot = selected
+	}
+	canonical, err := host.CanonicalDirectory(configRoot)
+	if err != nil {
+		return clients.Detection{Err: err}
+	}
+	configRoot = canonical
 	return clients.Detection{
 		ConfigRoot:     configRoot,
 		ExecutablePath: host.LookPath("copilot"),

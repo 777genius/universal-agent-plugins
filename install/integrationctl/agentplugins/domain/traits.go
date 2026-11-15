@@ -48,6 +48,9 @@ type ClientTraits struct {
 	// RecordsUserProfileOnCreate records a selected user profile only for a new
 	// binding. It never adopts a legacy or coalesced binding with missing proof.
 	RecordsUserProfileOnCreate bool
+	// SavedProjectRepairOnAdd admits a review of exact-owned native setup when
+	// an explicitly selected saved project add is confirmed, not deps sync.
+	SavedProjectRepairOnAdd bool
 	// RecordsSelectedNativeRootOnCreate records a separately selected native
 	// user root only on a new binding. Legacy bindings are never migrated.
 	RecordsSelectedNativeRootOnCreate bool
