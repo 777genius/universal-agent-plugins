@@ -20,9 +20,20 @@ func init() {
 	if os.Getenv("PLUGIN_KIT_AI_READONLY_DUPLEX_BOOTSTRAP") != "1" {
 		return
 	}
-	_ = runReadonlyChild()
-	_, _ = io.WriteString(os.Stderr, "readonly native child gate refused\n")
+	_, _ = io.WriteString(os.Stderr, readonlyChildRefusal(runReadonlyChild()))
 	os.Exit(2)
+}
+
+func readonlyChildRefusal(err error) string {
+	const prefix = "readonly native child gate refused"
+	if err == nil {
+		return prefix + "\n"
+	}
+	cause := err.Error()
+	preview := cause[:min(len(cause), 512)]
+	return prefix + ": cause=" + strconv.QuoteToASCII(preview) +
+		" cause_bytes=" + strconv.Itoa(len(cause)) +
+		" cause_truncated=" + strconv.FormatBool(len(preview) < len(cause)) + "\n"
 }
 
 func readonlyMappedFacts(policy readonlyPolicy, facts readonlyObjectFacts) readonlyObjectFacts {
