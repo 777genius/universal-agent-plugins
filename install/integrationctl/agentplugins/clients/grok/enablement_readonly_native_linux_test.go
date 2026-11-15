@@ -20,6 +20,7 @@ var (
 	readonlyNativeBinary  = flag.String("grok-readonly-native", "", "original pinned native executable")
 	readonlyNativePath    = flag.String("grok-readonly-path", "", "exact installed plugin path")
 	readonlyNativeName    = flag.String("grok-readonly-name", "", "exact installed plugin name")
+	readonlyNativeEnabled = flag.Bool("grok-readonly-enabled", false, "expected exact native enablement; trust must remain false")
 	readonlyNativeVersion = flag.String("grok-readonly-version", "", "exact installed plugin version")
 )
 
@@ -63,8 +64,8 @@ func TestEnablementReadonlyNativeInventory(t *testing.T) {
 			t.Fatal(err)
 		}
 		selected, err := selectEnablementPlugin(rows, *readonlyNativePath, *readonlyNativeName, *readonlyNativeVersion)
-		if err != nil || selected.enabled || selected.trusted {
-			t.Fatal("native inventory differs from the original untrusted disabled fixture", err)
+		if err != nil || selected.enabled != *readonlyNativeEnabled || selected.trusted {
+			t.Fatal("native inventory differs from the original untrusted fixture and expected enablement", err)
 		}
 	}
 	fmt.Println("GROK_READONLY_NATIVE_INVENTORY_PASS")

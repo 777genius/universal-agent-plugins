@@ -106,7 +106,7 @@ func (recovery EnablementRecovery) prepareRemoval(state domain.StateFileV2, inde
 	}
 	before := binding
 	before.NativeActivationAttempt = ""
-	record := enablementRecord{Version: 2, Action: "remove", OperationID: binding.NativeActivationAttempt,
+	record := enablementRecord{Version: 3, Action: "remove", OperationID: binding.NativeActivationAttempt,
 		InstallationID: state.Installations[index].InstallationID, BindingID: binding.ClientBindingID,
 		ProjectRoot: recovery.ProjectRoot, UserRoot: recovery.UserRoot, UserParentAuthority: parent, ArtifactPath: binding.TargetLocator,
 		PackageDigest: shared.ManagedPackageDigest(binding), PreviousObject: &owned, PluginID: plugin.id, PluginName: plugin.name,
