@@ -136,6 +136,8 @@ jobs:
           go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-readonly-test" ./install/integrationctl/agentplugins/clients/grok
           go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-runtime-metadata-test" ./install/integrationctl/adapters/process
           go test -tags=grokpublicnative -c -o "$RUNNER_TEMP/grok-public-test" ./cli/cmd/agentplugins
+          "$RUNNER_TEMP/grok-public-test" \
+            -test.run='^TestProjectGrokNativeFixturePreviewWithoutDirectory$' -test.count=1 -test.v -test.timeout=30s
           "$RUNNER_TEMP/grok-runtime-metadata-test" \
             -test.run='^TestReadonlyRuntimeMetadataDiagnostic(Controls|VisitBound)$' -test.count=1 -test.v -test.timeout=30s
           sudo install -m 0555 "$RUNNER_TEMP/grok-readonly-test" "$RUNNER_TEMP/grok-runtime-input/grok-readonly-test"

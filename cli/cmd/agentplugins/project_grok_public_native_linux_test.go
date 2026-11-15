@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"flag"
 	"fmt"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -43,6 +44,7 @@ func grokNativePublicApp(t *testing.T, journey projectJourney) agentpluginscli.A
 	var configure func(agentpluginscli.App) agentpluginscli.App
 	configure = func(app agentpluginscli.App) agentpluginscli.App {
 		app.SecurityIndex, app.DirectoryClient, app.DiscoveryClient = nil, nil, nil
+		app.DirectoryClientForDryRun, app.CommitDirectoryPreview = nil, nil
 		app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: journey.cache, HTTPClient: journey.transport.server.Client(), Runner: sourceacquisition.OSRunner{}}
 		app.SourceAcquirerForDryRun = func(root string) agentpluginscli.SourceAcquirer {
 			return sourceacquisition.Acquirer{TempRoot: root, HTTPClient: journey.transport.server.Client(), Runner: sourceacquisition.OSRunner{}}
@@ -58,6 +60,29 @@ func grokNativePublicApp(t *testing.T, journey projectJourney) agentpluginscli.A
 		return app
 	}
 	return configure(app)
+}
+
+func TestProjectGrokNativeFixturePreviewWithoutDirectory(t *testing.T) {
+	root := projectJourneyTemp(t)
+	journey := projectJourney{home: filepath.Join(root, "home"), cache: filepath.Join(root, "cache"), a: filepath.Join(root, "project"),
+		transport: &projectJourneyTransport{server: &httptest.Server{}}}
+	for _, path := range []string{journey.home, journey.cache, journey.a} {
+		if err := os.MkdirAll(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// No listener is started and the empty environment has no source to fetch.
+	// The public preview still exercises the real fixture's recursive composer.
+	journey.app = grokNativePublicApp(t, journey)
+	journey.run(t, journey.a, "deps", "init")
+	before := securityFixtureTree(t, root)
+	output := journey.run(t, journey.a, "deps", "lock", "--dry-run")
+	if !strings.Contains(output, `"dry_run": true`) {
+		t.Fatal("public lock preview did not report a dry run", output)
+	}
+	if !reflect.DeepEqual(before, securityFixtureTree(t, root)) {
+		t.Fatal("native fixture preview changed the original environment")
+	}
 }
 
 func grokNativeCommand(t *testing.T, home, project string, argv ...string) []byte {
