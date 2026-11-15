@@ -31,7 +31,7 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	if err != nil {
 		return fmt.Errorf("detect AI clients: %w", err)
 	}
-	selected, detectedMap, err := selectBoundClient(cmd, app, opts, installation, clients, true, stdin)
+	selected, detectedMap, err := selectRepairClient(ctx, cmd, app, opts, installation, clients, stdin)
 	if err != nil {
 		return err
 	}
@@ -285,7 +285,7 @@ func runRemove(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	}
 	writeProgress(app, opts.format, "Removing the selected managed package...")
 	input.Confirmed = true
-	result, removeErr := service.Remove(ctx, input)
+	result, removeErr := removeWithSelectedVersion(ctx, app, installation, input, service)
 	if renderErr := renderRemoveResult(cmd.OutOrStdout(), opts.format, installation, result, false); renderErr != nil && removeErr == nil {
 		removeErr = renderErr
 	}

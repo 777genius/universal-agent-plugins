@@ -32,7 +32,7 @@ func applyPreparedDependencies(ctx context.Context, app App, request *dependency
 		Plan: environment.PreparedSync{EnvironmentID: app.environmentID(),
 			ManifestDigest: request.lock.ManifestDigest, Bindings: request.prepared},
 		Lock: request.lock, Aliases: request.aliases, RepairOnly: request.repairOnly,
-		Recheck: check, CheckInputs: guard,
+		Recheck: adapter.removalVersionRecheck(check, request.prepared), CheckInputs: guard,
 	})
 }
 

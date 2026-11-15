@@ -1,5 +1,6 @@
 """Inert admission contracts only: no vendor imports, execution or hosted spoofing."""
 import json
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import runpy
@@ -2490,6 +2491,150 @@ class PublicLifecycleContracts(unittest.TestCase):
                 if effect=='pass':self.assertFalse(list(private.iterdir()))
                 elif effect=='replacement':self.assertEqual((outer/'original/retained').read_bytes(),b'owned Cold bytes');self.assertTrue((owned/'replacement').exists())
                 elif effect not in ('budget','hosted','preexisting'):self.assertEqual((owned/'retained').read_bytes(),b'owned Cold bytes')
+
+
+    @contextmanager
+    def cold_windows(self, owned):
+        """Use the real Windows API there, or model only its kernel boundary."""
+        import ctypes
+        import stat
+        import sys
+        from contextlib import ExitStack
+        if os.name == 'nt':
+            yield None
+            return
+        raw_lstat, raw_fstat, raw_unlink, raw_close = Path.lstat, os.fstat, os.unlink, os.close
+        opened, actions = {}, []
+        def projected(info):
+            values = {name: getattr(info, name) for name in CASE['STABLE_FIELDS']}
+            values.update(st_birthtime_ns=1, st_file_attributes=(16 if stat.S_ISDIR(info.st_mode) else 32)
+                          | (1 if stat.S_ISREG(info.st_mode) and not info.st_mode & 0o200 else 0)
+                          | (0x400 if stat.S_ISLNK(info.st_mode) else 0),
+                          st_reparse_tag=1 if stat.S_ISLNK(info.st_mode) else 0)
+            return SimpleNamespace(**values)
+        def create(path, access, sharing, security, disposition, flags, template):
+            self.assertEqual((security, disposition, template), (None, 3, None))
+            self.assertIn((access, sharing, flags), ((0x80000000, 3, 0x02200000),
+                          (0x80010000, 3, 0x00200000), (0x80000000, 7, 0x00200000)))
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | (os.O_DIRECTORY if flags & 0x02000000 else 0))
+            opened[fd] = Path(path)
+            return fd
+        def unlink(path, **options):
+            info = os.stat(path, follow_symlinks=False, **options)
+            if stat.S_ISREG(info.st_mode) and not info.st_mode & 0o200:
+                error = PermissionError(13, 'inert Windows readonly unlink')
+                error.winerror = 5
+                raise error
+            return raw_unlink(path, **options)
+        def dispose(handle, kind, pointer, size):
+            self.assertEqual((kind, size, ctypes.cast(pointer, ctypes.POINTER(ctypes.c_uint32)).contents.value),
+                             (21, 4, 0x11))
+            self.assertTrue(stat.S_ISREG(raw_fstat(handle).st_mode))
+            path = opened[handle]
+            live = {value for fd, value in opened.items() if self.cold_fd_live(raw_fstat, fd)}
+            expected, ancestor = {owned.parent}, path.parent
+            while ancestor != owned.parent:
+                expected.add(ancestor); ancestor = ancestor.parent
+            self.assertTrue(expected <= live, 'every original ancestor remains held through deletion')
+            actions.append(path)
+            raw_unlink(path)  # Models only disposition; it never chmods the shared file.
+            return True
+        kernel = SimpleNamespace(CreateFileW=mock.Mock(side_effect=create), CloseHandle=mock.Mock(side_effect=lambda h: (raw_close(h), True)[1]),
+                                 SetFileInformationByHandle=mock.Mock(side_effect=dispose))
+        with ExitStack() as stack:
+            stack.enter_context(mock.patch.object(CASE['artifacts'], 'WINDOWS', True))
+            stack.enter_context(mock.patch.object(Path, 'lstat', lambda path: projected(raw_lstat(path))))
+            stack.enter_context(mock.patch.object(os, 'fstat', lambda fd: projected(raw_fstat(fd))))
+            stack.enter_context(mock.patch.object(os, 'unlink', side_effect=unlink))
+            stack.enter_context(mock.patch.object(CASE['shutil'], '_use_fd_functions', False))
+            stack.enter_context(mock.patch.object(ctypes, 'WinDLL', return_value=kernel, create=True))
+            stack.enter_context(mock.patch.object(os, 'O_BINARY', 0, create=True))
+            stack.enter_context(mock.patch.dict(sys.modules, {'msvcrt': SimpleNamespace(open_osfhandle=lambda h, flags: h)}))
+            yield SimpleNamespace(opened=opened, actions=actions, kernel=kernel, fstat=raw_fstat)
+        for fd in opened:
+            with self.assertRaises(OSError): raw_fstat(fd)
+
+    @staticmethod
+    def cold_fd_live(fstat, descriptor):
+        try: fstat(descriptor)
+        except OSError: return False
+        return True
+
+    def test_cold_cleanup_removes_only_the_held_readonly_name_and_preserves_its_alias(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve(); private = outer / 'private'; private.mkdir()
+            evidence = outer / 'evidence'; evidence.mkdir(); owned = private / 'hermes-cold'
+            alias = outer / 'retained-object'; captured = {}
+            report, pins = self.cold(owned); pins['cold'] = {'path': str(outer / 'build/cold')}
+            env = {'GITHUB_ACTIONS': 'true', 'RUNNER_ENVIRONMENT': 'github-hosted', 'UAP_BIN': pins['uap']['path']}
+            def command(argv, cwd, child_env, prefix, *, timeout):
+                leaf = owned / 'journey-original/.git/objects/ab/cd'; leaf.parent.mkdir(parents=True)
+                leaf.write_bytes(b'owned Git object with a retained hardlink'); leaf.chmod(0o444)
+                os.link(leaf, alias); captured['alias'] = alias.lstat()
+                Path(child_env['UAP_HERMES_COLD_REPORT']).write_bytes(json.dumps(report).encode())
+                return ('HERMES_COLD_SOURCE ' + 'e' * 40 + ' ' + 'd' * 64 + ' (3 native selected commands)\n'
+                        '--- PASS: TestProjectHermesBundleColdRestoreAndRepair (1.00s)\nPASS\n').encode()
+            with self.cold_windows(owned) as model, mock.patch.dict(CASE['public_cold'].__globals__,
+                    public_runtime_pins=mock.Mock(return_value=pins), bounded=mock.Mock(side_effect=command)), \
+                    mock.patch.object(CASE['time'], 'monotonic', return_value=1000), mock.patch.object(CASE['time'], 'time', return_value=2000):
+                self.assertEqual(CASE['public_cold'](evidence, private, env, pins, 1080, 'e' * 40,
+                                                   Path(report['bundle_executable'])), report)
+                self.assertFalse(list(private.iterdir()))
+                after = alias.lstat(); before = captured['alias']
+                for field in ('st_dev', 'st_ino', 'st_mode', 'st_uid', 'st_gid', 'st_size', 'st_mtime_ns', 'st_file_attributes'):
+                    self.assertEqual(getattr(after, field), getattr(before, field), field)
+                self.assertEqual((before.st_nlink, after.st_nlink), (2, 1))
+                self.assertEqual(alias.read_bytes(), b'owned Git object with a retained hardlink')
+                if model is not None:
+                    self.assertEqual(model.actions, [owned / 'journey-original/.git/objects/ab/cd'])
+
+    def test_cold_cleanup_refuses_other_errors_and_replaced_or_unowned_members(self):
+        import ctypes
+        from contextlib import ExitStack
+        effects = ('operation', 'sharing', 'writable', 'outside', 'root', 'member', 'reparse', 'deadline', 'action', 'unsettled')
+        for effect in effects:
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer = Path(temporary).resolve(); parent = outer / 'private'; parent.mkdir()
+                owned = parent / 'hermes-cold'; owned.mkdir(); nested = owned / 'objects'; nested.mkdir()
+                leaf = nested / 'retained'; leaf.write_bytes(b'original'); leaf.chmod(0o444)
+                foreign = outer / 'foreign'; foreign.write_bytes(b'foreign'); foreign.chmod(0o444)
+                with self.cold_windows(owned) as model:
+                    named = {path: CASE['directory_identity'](path) for path in (parent, owned)}
+                    descriptors = {path: CASE['open_inventory_directory'](path) for path in (parent, owned)}
+                    held = {path: tuple(getattr(os.fstat(fd), field) for field in ('st_dev', 'st_ino', 'st_mode', 'st_uid', 'st_gid'))
+                            for path, fd in descriptors.items()}
+                    os.close(descriptors.pop(owned))
+                    error = PermissionError(13, 'original cleanup refusal'); error.winerror = 32 if effect == 'sharing' else 5
+                    target, operation = (foreign if effect == 'outside' else leaf), (os.rmdir if effect == 'operation' else os.unlink)
+                    if effect == 'writable': leaf.chmod(0o600)
+                    if effect == 'root':
+                        owned.rename(parent / 'original'); owned.mkdir(); nested.mkdir(); leaf.write_bytes(b'replacement'); leaf.chmod(0o444)
+                    lstat = Path.lstat; replaced = []
+                    def observed(path):
+                        info = lstat(path)
+                        if effect == 'member' and path == leaf and not replaced:
+                            leaf.rename(nested / 'original'); leaf.write_bytes(b'replacement'); leaf.chmod(0o444); replaced.append(True)
+                        if effect == 'reparse' and path == nested:
+                            fields = CASE['STABLE_FIELDS'] + ('st_birthtime_ns', 'st_file_attributes', 'st_reparse_tag')
+                            info = SimpleNamespace(**{field: getattr(info, field) for field in fields})
+                            info.st_file_attributes |= 0x400; info.st_reparse_tag = 1
+                        return info
+                    try:
+                        with ExitStack() as faults, mock.patch.object(Path, 'lstat', observed), mock.patch.object(CASE['time'], 'monotonic', return_value=1000):
+                            if effect in ('action', 'unsettled'):
+                                kernel = model.kernel if model is not None else ctypes.WinDLL('kernel32', use_last_error=True)
+                                action = mock.Mock(side_effect=PermissionError(13, 'inert kernel refusal')) if effect == 'action' else mock.Mock(return_value=True)
+                                faults.enter_context(mock.patch.object(kernel, 'SetFileInformationByHandle', action))
+                                faults.enter_context(mock.patch.object(ctypes, 'WinDLL', return_value=kernel, create=True))
+                            with self.assertRaises((PermissionError, ValueError, RuntimeError)):
+                                CASE['public_cold_unlink'](owned, named, held, descriptors,
+                                    999 if effect == 'deadline' else 1080, operation, str(target), error)
+                            if effect in ('action', 'unsettled'): action.assert_called_once()
+                        self.assertEqual(foreign.read_bytes(), b'foreign')
+                        self.assertEqual(leaf.read_bytes(), b'replacement' if effect in ('root', 'member') else b'original')
+                        if model is not None: self.assertFalse(model.actions)
+                    finally:
+                        for fd in descriptors.values(): os.close(fd)
 
 
 class SourceRuntimeContracts(unittest.TestCase):

@@ -3099,6 +3099,103 @@ def public_cleanup_complete(home, proof):
             and type(cold["sha256"]) is str and re.fullmatch(r"[a-f0-9]{64}", cold["sha256"]) is not None)
 
 
+def public_cold_unlink(owned, named, held, descriptors, deadline, function, path, failure):
+    """Finish only a refused readonly Windows unlink in the original Cold tree.
+
+    Git's retained local object copies may be hardlinks. Delete the held name
+    without changing the shared file's attributes or permitting POSIX deletion
+    through an unsettled handle. Every other rmtree error remains a refusal.
+    """
+    if not (artifacts.WINDOWS and function is os.unlink and type(failure) is PermissionError
+            and failure.errno == 13 and getattr(failure, "winerror", None) == 5 and type(path) is str):
+        raise failure
+    candidate = Path(path)
+    relative = candidate.relative_to(owned)
+    require(candidate.is_absolute() and 1 <= len(relative.parts) <= 64
+            and all(part not in ("", ".", "..") and ":" not in part
+                    and not part.endswith((".", " ")) for part in relative.parts), "cold cleanup member alias")
+    def physical(info):
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
+    def parent_unchanged():
+        require(time.monotonic() < deadline and directory_identity(owned.parent) == named[owned.parent]
+                and physical(os.fstat(descriptors[owned.parent])) == held[owned.parent],
+                "cold cleanup original parent changed or deadline expired")
+    parent_unchanged()
+    with ExitStack() as closing:
+        ancestors, directory = [], owned
+        for part in (None, *relative.parts[:-1]):
+            if part is not None: directory /= part
+            require(time.monotonic() < deadline, "cold cleanup deadline")
+            original = directory_identity(directory)
+            before = directory.lstat()
+            if directory == owned:
+                require(original == named[owned], "cold cleanup original root changed")
+            descriptor = open_inventory_directory(directory)
+            closing.callback(os.close, descriptor)
+            opened = os.fstat(descriptor)
+            check_inventory_directory(before, opened, "cold cleanup directory")
+            if directory == owned:
+                require(physical(opened) == held[owned], "cold cleanup held root changed")
+            ancestors.append((directory, descriptor, original, physical(opened)))
+        before = candidate.lstat()
+        attributes = getattr(before, "st_file_attributes", None)
+        require(stat.S_ISREG(before.st_mode) and type(attributes) is int and attributes & 1
+                and not attributes & 0x400 and artifacts.windows_identity(before),
+                "cold cleanup requires an ordinary readonly file")
+        import ctypes
+        from ctypes import wintypes
+        import msvcrt
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        create, close = kernel.CreateFileW, kernel.CloseHandle
+        create.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                           wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+        create.restype = wintypes.HANDLE
+        close.argtypes, close.restype = [wintypes.HANDLE], wintypes.BOOL
+        # GENERIC_READ | DELETE, share read/write only, OPEN_EXISTING,
+        # OPEN_REPARSE_POINT. No write-attributes access or inheritable handle.
+        handle = create(str(candidate), 0x80010000, 3, None, 3, 0x00200000, None)
+        if handle is None or handle == ctypes.c_void_p(-1).value:
+            raise ctypes.WinError(ctypes.get_last_error())
+        descriptor = None
+        try:
+            descriptor = msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)
+            require(descriptor >= 0, "cold cleanup handle transfer failed")
+            opened = os.fstat(descriptor)
+            require(same_opened_capture(before, opened) and stable_file(candidate.lstat()) == stable_file(before)
+                    and (opened.st_uid, opened.st_gid) == (before.st_uid, before.st_gid),
+                    "cold cleanup member changed at open")
+            parent_unchanged()
+            for directory, fd, original, original_opened in ancestors:
+                require(directory_identity(directory) == original and physical(os.fstat(fd)) == original_opened,
+                        "cold cleanup ancestor changed")
+            require(time.monotonic() < deadline and stable_file(os.fstat(descriptor)) == stable_file(opened)
+                    and stable_file(candidate.lstat()) == stable_file(before), "cold cleanup member changed")
+            class Disposition(ctypes.Structure):
+                _fields_ = [("Flags", ctypes.c_uint32)]  # FILE_DISPOSITION_INFO_EX: DWORD.
+            disposition = Disposition(0x11)  # DELETE | IGNORE_READONLY_ATTRIBUTE; no POSIX flag.
+            apply = kernel.SetFileInformationByHandle
+            apply.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+            apply.restype = wintypes.BOOL
+            if not apply(handle, 21, ctypes.byref(disposition), ctypes.sizeof(disposition)):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            if descriptor is not None and descriptor >= 0:
+                os.close(descriptor)
+            elif not close(handle):
+                raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            candidate.lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            require(False, "cold cleanup held deletion did not settle")
+        parent_unchanged()
+        for directory, fd, original, original_opened in ancestors:
+            require(directory_identity(directory) == original and physical(os.fstat(fd)) == original_opened,
+                    "cold cleanup ancestor changed after deletion")
+    require(time.monotonic() < deadline, "cold cleanup deadline")
+
+
 def public_cold(evidence, temporary, env, pins, deadline, head, bundle):
     public_runtime_pins(pins)
     report = evidence / "cold-restore.json"
@@ -3144,7 +3241,13 @@ def public_cold(evidence, temporary, env, pins, deadline, head, bundle):
         # Windows cannot remove an open directory; its unchanged parent stays
         # held. Reuse the existing owned-root cleanup after native closure only.
         os.close(descriptors.pop(owned))
-        shutil.rmtree(owned)
+        def remove_readonly(function, path, error):
+            try:
+                public_cold_unlink(owned, named, held, descriptors, deadline, function, path, error)
+            except Exception as failure:
+                if failure is error: raise
+                raise error from failure
+        shutil.rmtree(owned, **({"onexc": remove_readonly} if artifacts.WINDOWS else {}))
         require(directory_identity(temporary) == named[temporary] and not members(), "cold parent closure differs")
         return value
     finally:

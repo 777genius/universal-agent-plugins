@@ -16,6 +16,7 @@ import (
 )
 
 var _ clients.PluginEnablement = (*Adapter)(nil)
+var _ clients.RemovalVersionRequirement = (*Adapter)(nil)
 
 var errEnablementUnqualified = errors.New("grok Project enablement requires verified recovery of native startup effects and original parent identity")
 
@@ -23,6 +24,10 @@ var errEnablementUnqualified = errors.New("grok Project enablement requires veri
 // platforms remains independent; selected runtime admission is checked below.
 func (*Adapter) SupportsPluginEnablement(scope domain.InstallScope) bool {
 	return runtime.GOOS == "linux" && scope == domain.ScopeProject
+}
+
+func (adapter *Adapter) RequiresRemovalVersion(binding domain.ClientBinding) bool {
+	return binding.ClientID == string(domain.ClientGrok) && adapter.SupportsPluginEnablement(domain.InstallScope(binding.Scope)) && hasEnabledOwnership(binding)
 }
 
 func preflightEnablementRuntime(env clients.Env, client domain.DetectedClient, backend string) error {

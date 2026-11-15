@@ -191,7 +191,7 @@ func TestProjectGrokNativeSavedEnablementLifecycle(t *testing.T) {
 	transport := newProjectJourneyTransport(t, "zip")
 	// Keep MCP prepared and untrusted: this test never executes a tool or grants
 	// trust. Existing public source/stdio tests own their separate runtime proof.
-	projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"docs":{"type":"stdio","command":"/usr/bin/false","env":{"DATA":"${PLUGIN_DATA}"}}}}`)
+	projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), grokNativePreparedMCP)
 	transport.mu.Lock()
 	transport.archive = projectJourneyArchive(t, transport.repo)
 	transport.mu.Unlock()

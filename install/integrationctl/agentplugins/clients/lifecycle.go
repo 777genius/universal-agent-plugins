@@ -33,6 +33,12 @@ func SupportsPluginEnablement(registry *Registry, id domain.ClientID, scope doma
 	return ok && adapter.SupportsPluginEnablement(scope)
 }
 
+// RemovalVersionRequirement identifies owned bindings whose confirmed removal
+// needs the selected native executable's observed version. It performs no I/O.
+type RemovalVersionRequirement interface {
+	RequiresRemovalVersion(domain.ClientBinding) bool
+}
+
 // RemovalAttestationPolicy reports whether an owned binding requires an explicit
 // host confirmation that its native plugin was removed or never activated. The
 // answer is read-only policy, independent of Confirmed or ExternalUninstalled.
