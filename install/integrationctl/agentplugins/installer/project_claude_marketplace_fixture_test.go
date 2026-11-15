@@ -71,6 +71,14 @@ func (r *claudeSDKRunner) marketplaceCommand(args []string) (legacyports.Command
 			row := value.(map[string]any)
 			if row["scope"] != "project" || row["projectPath"] != r.project {
 				kept = append(kept, row)
+			} else if cache, ok := row["installPath"].(string); ok {
+				// Both qualified official versions retain the cache and write
+				// this root tombstone during uninstall, including --keep-data.
+				if _, err := os.Stat(cache); err == nil {
+					claudeSDKWrite(r.t, filepath.Join(cache, ".orphaned_at"), "1730000000000")
+				} else if !os.IsNotExist(err) {
+					r.t.Fatal(err)
+				}
 			}
 		}
 		if len(kept) == 0 {

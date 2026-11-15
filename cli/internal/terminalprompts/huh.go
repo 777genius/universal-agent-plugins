@@ -2,7 +2,6 @@ package terminalprompts
 
 import (
 	"context"
-	"errors"
 	"io"
 
 	"github.com/777genius/plugin-kit-ai/cli/installerui"
@@ -59,10 +58,7 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 		return prompt.ConfirmationResult{}, err
 	}
 	result, err := t.ConfirmWithDetails(ctx, confirmationRequest(r), append([]string(nil), r.Details...))
-	if len(r.Details) > 0 && errors.Is(err, installerui.ErrReviewTooLarge) {
-		return prompt.ConfirmationResult{}, errors.Join(prompt.ErrReviewTooLarge, err)
-	}
-	return confirmationResult(result, err)
+	return confirmationDetailsResult(result, err, r.Details)
 }
 
 // A factory-created adapter keeps the same UI mode across sequential prompts.

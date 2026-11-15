@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -133,27 +134,79 @@ func validateClaudeMarketplaceRow(row map[string]any, f *claudeProjectNativeFixt
 
 func claudeProjectInitializeUntrusted(t *testing.T, f *claudeProjectNativeFixture) {
 	t.Helper()
+	// Keep this guard armed even when the first native list creates no profile.
+	// A later initialization may create one, but must never grant project trust.
+	f.untrustedProfile = true
 	claudeProjectMarketplaceObservation(t, f, "untrusted-baseline", "", "", false)
+	// First SDK initialization adds native profile metadata. Prime it before
+	// recording foreign bytes and before any installer operation.
+	claudeProjectInitializedSkills(t, f, "untrusted-baseline", nil, false)
 	profile := filepath.Join(f.base.ConfigDir, ".claude.json")
-	body, err := os.ReadFile(profile)
+	body, err := readClaudeTrustedProfile(profile)
 	if os.IsNotExist(err) {
 		return
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	var data struct {
-		Projects map[string]struct {
-			Trusted bool `json:"hasTrustDialogAccepted"`
-		} `json:"projects"`
+	// This profile was created by the native client, not authored by the fixture.
+	// Keep its original bytes; only native plugin usage metadata may later vary.
+	f.untrustedProfileBaseline = body
+}
+
+func (f *claudeProjectNativeFixture) checkUntrustedProfile() error {
+	if !f.untrustedProfile {
+		return nil
 	}
-	if json.Unmarshal(body, &data) != nil {
-		t.Fatal("native project profile is not valid JSON")
+	body, err := readClaudeTrustedProfile(filepath.Join(f.base.ConfigDir, ".claude.json"))
+	if os.IsNotExist(err) && len(f.untrustedProfileBaseline) == 0 {
+		return nil
 	}
-	for _, entry := range data.Projects {
-		if entry.Trusted {
-			t.Fatal("credential-free installation fixture unexpectedly trusts a project")
+	if err != nil {
+		return err
+	}
+	current, err := claudeUntrustedProfileContent(body)
+	if err != nil || len(f.untrustedProfileBaseline) == 0 {
+		return err
+	}
+	original, err := claudeUntrustedProfileContent(f.untrustedProfileBaseline)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(original, current) {
+		return fmt.Errorf("native untrusted profile changed outside plugin usage metadata")
+	}
+	return nil
+}
+
+func claudeUntrustedProfileContent(body []byte) (map[string]any, error) {
+	value, err := shared.DecodeUniqueJSONValue(json.NewDecoder(bytes.NewReader(body)))
+	profile, ok := value.(map[string]any)
+	if err != nil || !json.Valid(body) || !ok {
+		return nil, fmt.Errorf("native untrusted profile is not unique whole JSON")
+	}
+	if usage, exists := profile["pluginUsage"]; exists {
+		if _, ok := usage.(map[string]any); !ok {
+			return nil, fmt.Errorf("native plugin usage metadata is malformed")
+		}
+		delete(profile, "pluginUsage")
+	}
+	value, exists := profile["projects"]
+	if !exists {
+		return profile, nil
+	}
+	projects, ok := value.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("native untrusted profile projects are malformed")
+	}
+	for _, value := range projects {
+		entry, ok := value.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("native untrusted project entry is malformed")
+		}
+		if trusted, exists := entry["hasTrustDialogAccepted"]; exists && trusted != false {
+			return nil, fmt.Errorf("credential-free installation fixture unexpectedly trusts a project or has malformed trust metadata")
 		}
 	}
-	f.foreign[profile] = nativeSHA(t, profile)
+	return profile, nil
 }

@@ -80,9 +80,10 @@ func (p skillsPickerPrepared) Apply(ctx context.Context) (skillspicker.Outcome, 
 func skillBatchOutcome(result SkillsBatchResult) skillspicker.Outcome {
 	outcome := skillspicker.Outcome{State: skillspicker.OperationState(result.Status), Items: []skillspicker.OperationItem{}, Diagnostics: []skillspicker.Diagnostic{}, Result: skillspicker.OperationResult{Message: fmt.Sprintf("Skills installation %s", result.Status), RepairInstructions: append([]string{}, result.RepairInstructions...)}}
 	readiness, _ := deriveSkillsReadiness(result.Status, result.Items...)
-	if readiness == "ready" {
+	switch readiness {
+	case "ready":
 		outcome.Result.Message = skillsReadyMessage
-	} else if readiness == "needs_action" {
+	case "needs_action":
 		outcome.Result.Message = "Skill files installed. Some agents still need setup; check each result below."
 		outcome.Diagnostics = append(outcome.Diagnostics, skillspicker.Diagnostic{Code: "NATIVE_SETUP_REQUIRED", Severity: skillspicker.Warning,
 			Message: "Run agentplugins doctor to verify the installed Skills and see any remaining setup steps."})

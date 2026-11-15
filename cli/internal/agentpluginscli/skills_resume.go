@@ -90,15 +90,16 @@ func prepareSkillsResumeRepair(ctx context.Context, adapter *dependencyInstaller
 
 func skillsProjectionRefreshRequired(err error) bool {
 	for err != nil {
-		if err == domain.ErrProjectionRefreshRequired || err == domain.ErrProjectionPinChangeRequired {
-			return true
-		}
 		// A joined failure may include a foreign-object or cleanup error. Only
 		// the single typed projection refusal selects another operation.
 		if _, multiple := err.(interface{ Unwrap() []error }); multiple {
 			return false
 		}
-		err = errors.Unwrap(err)
+		next := errors.Unwrap(err)
+		if next == nil {
+			return errors.Is(err, domain.ErrProjectionRefreshRequired) || errors.Is(err, domain.ErrProjectionPinChangeRequired)
+		}
+		err = next
 	}
 	return false
 }

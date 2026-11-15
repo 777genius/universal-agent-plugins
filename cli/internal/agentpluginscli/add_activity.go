@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // Retain existing stage text for automation/plain output, and animate only an
@@ -47,4 +48,23 @@ func loadAddPackageFor(ctx context.Context, cmd *cobra.Command, app App, opts *o
 	stop := startAddProgress(cmd, app, opts, message)
 	defer stop()
 	return stopPluginActivityOnWrite(app, stop).loadPackageFor(ctx, source, request)
+}
+
+// Keep discovery and acquisition activity together, ending each before review
+// or mutation starts in the existing grouped install flow.
+func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
+	stop := startCommandActivity(cmd, app, opts, "Checking selected agents")
+	_, detected, err := preflightAddTargets(ctx, app, opts, source, targets, clients)
+	stop()
+	if err != nil {
+		return err
+	}
+	loaded, err := loadAddPackageFor(ctx, cmd, app, opts, source, withDetectedClients(app.addResolutionRequest(source, targets), detected), "Resolving and validating one Agent Plugin package for every selected target...")
+	if err != nil {
+		return err
+	}
+	if loaded.cleanup != nil {
+		defer loaded.cleanup()
+	}
+	return runAddManyLoaded(ctx, cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected), false)
 }

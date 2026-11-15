@@ -15,6 +15,8 @@ type claudeProjectNativeFixture struct {
 	client, installer, project, otherProject string
 	foreign                                  map[string]string
 	diagnosticAttempted                      bool
+	untrustedProfile                         bool
+	untrustedProfileBaseline                 []byte
 }
 
 func newClaudeProjectNativeFixture(t *testing.T) *claudeProjectNativeFixture {
@@ -42,6 +44,9 @@ func (f *claudeProjectNativeFixture) keep(t *testing.T, path, body string) {
 
 func (f *claudeProjectNativeFixture) requireForeign(t *testing.T) {
 	t.Helper()
+	if err := f.checkUntrustedProfile(); err != nil {
+		t.Fatal(err)
+	}
 	body, err := os.ReadFile(filepath.Join(f.project, ".claude", "settings.json"))
 	var settings struct {
 		EnabledPlugins map[string]bool `json:"enabledPlugins"`

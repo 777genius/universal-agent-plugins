@@ -97,3 +97,10 @@ func confirmationResult(result installerui.Confirmation, err error) (prompt.Conf
 	}
 	return prompt.ConfirmationResult{Accepted: result.Accepted}, nil
 }
+
+func confirmationDetailsResult(result installerui.Confirmation, err error, details []string) (prompt.ConfirmationResult, error) {
+	if len(details) > 0 && errors.Is(err, installerui.ErrReviewTooLarge) {
+		return prompt.ConfirmationResult{}, errors.Join(prompt.ErrReviewTooLarge, err)
+	}
+	return confirmationResult(result, err)
+}

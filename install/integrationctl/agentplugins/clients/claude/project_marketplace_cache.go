@@ -54,19 +54,9 @@ func verifyClaudeProjectCache(ctx context.Context, configRoot, name, physical, p
 	} else if err != nil {
 		return err
 	}
-	var receipt *domain.NativeObjectOwnership
-	for i := range objects {
-		if objects[i].Kind == claudeProjectCacheKind {
-			if receipt != nil {
-				return fmt.Errorf("the Claude project cache ownership is duplicated")
-			}
-			receipt = &objects[i]
-		}
-	}
-	source := filepath.Join(project, ".claude", "skills", physical, claudeProjectBundleDirectory)
-	relative := filepath.ToSlash(filepath.Join("plugins", "cache", marketplace, name, filepath.Base(cache)))
-	if receipt == nil || receipt.ObjectID != "claude-project-cache:"+name+"@"+marketplace || receipt.Path != source || receipt.SourceRelative != relative || receipt.LogicalName != name || receipt.ProtectionClass != "managed" || receipt.UserModified || receipt.ManagedDigest == "" {
-		return fmt.Errorf("the Claude project cache has no exact prior ownership receipt")
+	receipt, err := claudeProjectCacheReceipt(name, physical, project, cache, objects)
+	if err != nil {
+		return err
 	}
 	digest, err := (packagesnapshot.Builder{}).Digest(ctx, cache)
 	if err != nil {
@@ -76,4 +66,23 @@ func verifyClaudeProjectCache(ctx context.Context, configRoot, name, physical, p
 		return fmt.Errorf("the Claude project cache was modified outside agentplugins; preserve it and inspect the native plugin")
 	}
 	return nil
+}
+
+func claudeProjectCacheReceipt(name, physical, project, cache string, objects []domain.NativeObjectOwnership) (*domain.NativeObjectOwnership, error) {
+	var receipt *domain.NativeObjectOwnership
+	for i := range objects {
+		if objects[i].Kind == claudeProjectCacheKind {
+			if receipt != nil {
+				return nil, fmt.Errorf("the Claude project cache ownership is duplicated")
+			}
+			receipt = &objects[i]
+		}
+	}
+	marketplace := ProjectMarketplaceName(physical, project)
+	source := filepath.Join(project, ".claude", "skills", physical, claudeProjectBundleDirectory)
+	relative := filepath.ToSlash(filepath.Join("plugins", "cache", marketplace, name, filepath.Base(cache)))
+	if receipt == nil || receipt.ObjectID != "claude-project-cache:"+name+"@"+marketplace || receipt.Path != source || receipt.SourceRelative != relative || receipt.LogicalName != name || receipt.ProtectionClass != "managed" || receipt.UserModified || receipt.ManagedDigest == "" {
+		return nil, fmt.Errorf("the Claude project cache has no exact prior ownership receipt")
+	}
+	return receipt, nil
 }
