@@ -29,7 +29,9 @@ before(async () => {
 }, { timeout: 190_000 });
 
 after(async () => {
-  if (directory) await rm(directory, { recursive: true, force: true });
+  // Windows can briefly keep the test executable busy after the engine exits.
+  // Retry cleanup finitely; a persistent lock must still fail this hook.
+  if (directory) await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 function request() { return { signal: AbortSignal.timeout(10_000) }; }
@@ -194,6 +196,9 @@ test('production CLI retains local Skill review, replay and exact restore across
     assert.notEqual((await host.client.operation(editResult.operationId, request())).resolvedBy, restored.operationId);
     await unchangedIntent();
   } finally {
-    await host?.close();
+    if (host) {
+      await host.close();
+      assert.equal(host.hasExited, true, 'the owned production engine must exit before fixture cleanup');
+    }
   }
 });
