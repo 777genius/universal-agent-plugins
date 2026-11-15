@@ -26,6 +26,13 @@ CONTROL_NAME = "grok-bwrap-policy-control.py"
 PROFILE_BYTES = 1936
 PROFILE_SHA256 = "11d39094f044f0cda0febb3ad517b830301da6b2ce929664af09ee9e4dd264f9"
 POLICY_DIRECTORY = Path("/etc/apparmor.d")
+KERNEL_FEATURE_DIRECTORY = Path("/sys/kernel/security/apparmor/features")
+KERNEL_REQUIRED_FEATURES = {
+    "io_uring/mask": frozenset((b"sqpoll", b"override_creds")),
+    "namespaces/mask": frozenset((b"userns_create",)),
+    "domain/stack": None,
+    "domain/post_nnp_subset": None,
+}
 OVERRIDES = ("local/bwrap-userns-restrict", "local/unpriv_bwrap")
 EXPECTED_LOADED = {PARENT_LABEL + " (enforce)", CHILD_LABEL + " (enforce)"}
 LIMIT = 1 << 20
@@ -56,6 +63,9 @@ def remaining(deadline):
 def command(root, label, argv, deadline, records, limit=LIMIT):
     record, stdout, stderr = run_probe(argv, root, ENV, root, label,
         timeout=min(30, remaining(deadline)), limit=limit, memory_only=True)
+    record.update(stdout_preview=stdout[:512].decode("utf-8", "backslashreplace"),
+                  stderr_preview=stderr[:512].decode("utf-8", "backslashreplace"),
+                  stdout_preview_truncated=len(stdout) > 512, stderr_preview_truncated=len(stderr) > 512)
     records.append(record)
     require(record["error"] is None and record["exit"] == 0, "Bubblewrap policy setup command refused: " + label)
     remaining(deadline)
@@ -129,6 +139,88 @@ def kernel_read(path, bound):
     return body
 
 
+def read_kernel_feature(fd, deadline):
+    # securityfs reports st_size=0 for nonempty feature files.
+    os.lseek(fd, 0, os.SEEK_SET)
+    body = b""
+    while True:
+        remaining(deadline)
+        part = os.read(fd, 4097 - len(body))
+        if not part:
+            break
+        body += part
+        require(len(body) <= 4096, "policy kernel feature bound")
+    remaining(deadline)
+    require(body and body.isascii() and b"\x00" not in body, "policy kernel feature content")
+    return body
+
+
+def open_kernel_features(deadline):
+    held = {}
+    try:
+        for relative in (".", "io_uring", "namespaces", "domain", *KERNEL_REQUIRED_FEATURES):
+            remaining(deadline)
+            path = Path(relative)
+            parent_fd = None if relative == "." else held[str(path.parent)][0]
+            name = KERNEL_FEATURE_DIRECTORY if relative == "." else path.name
+            original = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+            regular = relative in KERNEL_REQUIRED_FEATURES
+            require((stat.S_ISREG(original.st_mode) if regular else stat.S_ISDIR(original.st_mode))
+                    and (original.st_uid, original.st_gid) == (os.geteuid(), os.getegid())
+                    and not original.st_mode & 0o6022
+                    and (not regular or (original.st_nlink == 1 and 0 <= original.st_size <= 4096)),
+                    "policy kernel feature authority")
+            fd = os.open(name, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW
+                         | (0 if regular else os.O_DIRECTORY), dir_fd=parent_fd)
+            held[relative] = (fd, original, None)
+            require(identity(os.fstat(fd)) == identity(original), "policy kernel feature replaced")
+            if regular:
+                body = read_kernel_feature(fd, deadline)
+                wanted = KERNEL_REQUIRED_FEATURES[relative]
+                require((body == b"yes\n" if wanted is None else wanted <= set(body.split())),
+                        "required AppArmor kernel mediation is absent")
+                held[relative] = (fd, original, body)
+        verify_kernel_features(held, deadline)
+        return held
+    except BaseException:
+        close_kernel_features(held)
+        raise
+
+
+def verify_kernel_features(held, deadline):
+    for relative, (fd, original, body) in held.items():
+        remaining(deadline)
+        path = Path(relative)
+        parent_fd = None if relative == "." else held[str(path.parent)][0]
+        name = KERNEL_FEATURE_DIRECTORY if relative == "." else path.name
+        require(identity(os.fstat(fd)) == identity(original)
+                == identity(os.stat(name, dir_fd=parent_fd, follow_symlinks=False)),
+                "original policy kernel feature changed")
+        if body is not None:
+            require(read_kernel_feature(fd, deadline) == body, "policy kernel feature bytes changed")
+            require(identity(os.fstat(fd)) == identity(original)
+                    == identity(os.stat(name, dir_fd=parent_fd, follow_symlinks=False)),
+                    "original policy kernel feature changed")
+    remaining(deadline)
+
+
+def close_kernel_features(held):
+    for fd, _, _ in reversed(tuple(held.values())):
+        os.close(fd)
+
+
+def capture_kernel_abi(root, held, deadline, records, original=None):
+    verify_kernel_features(held, deadline)
+    stage = "policy-kernel-abi-before" if original is None else "policy-kernel-abi-after"
+    body = command(root, stage, ["/usr/bin/aa-features-abi", "--extract", "--stdout"],
+                   deadline, records, 65536)
+    require(0 < len(body) <= 65536 and all(byte in (9, 10, 13) or 32 <= byte <= 126 for byte in body),
+            "actual kernel ABI export shape")
+    verify_kernel_features(held, deadline)
+    require(original is None or body == original, "actual kernel ABI changed")
+    return body
+
+
 def loaded_profiles():
     body = kernel_read("/sys/kernel/security/apparmor/profiles", LIMIT)
     rows = body.decode("utf-8").splitlines()
@@ -154,7 +246,12 @@ def open_policy_directory(path=POLICY_DIRECTORY):
     except BaseException:
         os.close(fd)
         raise
-    return fd
+    return fd, before
+
+
+def verify_policy_directory(fd, original, path=POLICY_DIRECTORY):
+    require(identity(os.fstat(fd))[:5] == identity(path.lstat())[:5] == identity(original)[:5],
+            "policy directory authority changed")
 
 
 def require_absent(fd, name):
@@ -199,7 +296,6 @@ def write_owned(fd, name, body, mode=0o644):
                 == (os.geteuid(), os.getegid(), 1, len(body)), "installed policy shape")
     finally:
         os.close(target)
-
 
 
 def derive_profile(vendor):
@@ -340,6 +436,11 @@ def main():
         result = subprocess.run(argv, executable="/proc/self/fd/" + str(binary), pass_fds=tuple(held),
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             cwd="/", env={"PATH": "/usr/bin:/bin", "LANG": "C"}, timeout=10, check=False)
+        if result.returncode != 0 or result.stderr or len(result.stdout) > 4096:
+            print(json.dumps(dict(control="bwrap-control-refused", exit=result.returncode,
+                stderr_preview=result.stderr[:512].decode("utf-8", "backslashreplace"),
+                stdout_preview=result.stdout[:512].decode("utf-8", "backslashreplace"),
+                stderr_bytes=len(result.stderr), stdout_bytes=len(result.stdout)), ensure_ascii=True), file=sys.stderr)
         require(result.returncode == 0 and not result.stderr and len(result.stdout) <= 4096, "bwrap-control-refused")
         child = json.loads(result.stdout)
         check_child(child, expected)
@@ -360,9 +461,8 @@ def prove_runtime(root, deadline, runtime, inputs, output, uid, gid, records):
     require(remaining(deadline) >= 30, "insufficient original policy-control budget")
     runtime_fd, input_fd, binary_fd = -1, -1, -1
     try:
-        runtime_fd = open_policy_directory(runtime)
-        input_fd = open_policy_directory(inputs)
-        root_info, input_info = os.fstat(runtime_fd), os.fstat(input_fd)
+        runtime_fd, root_info = open_policy_directory(runtime)
+        input_fd, input_info = open_policy_directory(inputs)
         out_info = output.lstat()
         require(stat.S_ISDIR(out_info.st_mode) and (out_info.st_uid, out_info.st_gid) == (uid, gid)
                 and stat.S_IMODE(out_info.st_mode) == 0o700, "control output authority")
@@ -410,8 +510,7 @@ def prove_runtime(root, deadline, runtime, inputs, output, uid, gid, records):
                 os.close(fd)
 
 
-def setup(root, deadline, runtime, inputs, output, uid, gid):
-    records = []
+def setup(root, deadline, runtime, inputs, output, uid, gid, records):
     metadata = apt_metadata(command(root, "policy-metadata",
         ["/usr/bin/apt-cache", "show", PACKAGE + "=" + VERSION], deadline, records, 65536))
     command(root, "policy-download", ["/usr/bin/apt-get",
@@ -429,29 +528,37 @@ def setup(root, deadline, runtime, inputs, output, uid, gid):
     require(restriction == b"1\n", "ordinary Ubuntu user-namespace restriction required")
     before = loaded_profiles()
     require_loaded(before)
-    fd = open_policy_directory()
+    features = open_kernel_features(deadline)
+    fd = -1
     try:
+        kernel_abi = capture_kernel_abi(root, features, deadline, records)
+        fd, original_directory = open_policy_directory()
         check_policy_names(fd)
         remaining(deadline)
         write_owned(fd, PROFILE_NAME, profile)
         path = POLICY_DIRECTORY / PROFILE_NAME
         require(read_regular(path, 4096, deadline) == profile, "installed derived policy differs")
+        verify_kernel_features(features, deadline)
         command(root, "policy-add", ["/usr/sbin/apparmor_parser", "--config-file=/dev/null",
-                "--add", "--skip-cache", "--jobs=1", "--Werror=rule-not-enforced", str(path)], deadline, records)
+                "--add", "--skip-cache", "--jobs=1", "--override-policy-abi=<kernel>",
+                "--warn=rule-not-enforced", "--Werror=rule-not-enforced", str(path)], deadline, records)
         check_policy_names(fd, installed=True)
         require(read_regular(path, 4096, deadline) == profile, "installed policy changed")
         control = prove_runtime(root, deadline, runtime, inputs, output, uid, gid, records)
+        capture_kernel_abi(root, features, deadline, records, kernel_abi)
         after = loaded_profiles()
         require_loaded(before, after)
         require(kernel_read("/proc/sys/kernel/apparmor_restrict_unprivileged_userns", 16) == restriction,
                 "user-namespace restriction changed")
-        held, named = os.fstat(fd), POLICY_DIRECTORY.lstat()
-        require((held.st_dev, held.st_ino, held.st_mode, held.st_uid, held.st_gid)
-                == (named.st_dev, named.st_ino, named.st_mode, named.st_uid, named.st_gid),
-                "policy directory authority changed")
+        verify_policy_directory(fd, original_directory)
         remaining(deadline)
     finally:
-        os.close(fd)
+        try:
+            if fd >= 0:
+                os.close(fd)
+        finally:
+            close_kernel_features(features)
+    remaining(deadline)
     return {"schema": 1, "package": metadata, "vendor_profile_sha256": sha(vendor_profile),
             "control": control, "profile": {"path": str(path),
             "bytes": len(profile), "sha256": sha(profile)}, "added_profiles": sorted(EXPECTED_LOADED),
@@ -474,11 +581,19 @@ def main():
     uid, gid = map(int, ids)
     # Hosted-runner disposal owns final cleanup; unsettled setup never removes inputs.
     temporary = Path(tempfile.mkdtemp(prefix="grok-bwrap-policy-"))
-    result = setup(temporary, time.monotonic() + 150, runner / "grok-runtime-root",
-                   runner / "grok-runtime-input", runner / "grok-readonly-evidence", uid, gid)
-    text = json.dumps(result, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
-    require(len(text) <= 65536, "policy setup report bound")
-    print(text)
+    records = []
+    result = {"schema": 1, "qualification": False, "setup_completed": False, "commands": records}
+    try:
+        result = setup(temporary, time.monotonic() + 150, runner / "grok-runtime-root",
+                       runner / "grok-runtime-input", runner / "grok-readonly-evidence", uid, gid, records)
+        result["setup_completed"] = True
+    except Exception as error:
+        result["error"] = type(error).__name__ + ": " + str(error)[:512]
+        raise
+    finally:
+        text = json.dumps(result, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+        require(len(text) <= 65536, "policy setup report bound")
+        print(text)
 
 
 if __name__ == "__main__":

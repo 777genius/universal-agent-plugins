@@ -517,5 +517,113 @@ class OriginalLedgerCapture(unittest.TestCase):
             self.assertEqual((root / "oversized.stdout").stat().st_size, 65537)
 
 
+class RefusedControlLock(unittest.TestCase):
+    writer = r'''
+import json
+import os
+from pathlib import Path
+import sys
+import time
+
+effect = os.environ.get("HISTORY_LOCK_EFFECT", "")
+path = Path(".uap/mutation.lock")
+stamp = time.time_ns()
+if effect == "old-time": stamp = 946684800000000000
+if effect == "future-time": stamp += 86400000000000
+seconds, fraction = divmod(stamp, 1000000000)
+timestamp = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(seconds))
+if fraction: timestamp += "." + str(fraction).zfill(9).rstrip("0")
+value = {"pid": os.getpid() + int(effect == "wrong-pid"), "acquired_at": timestamp + "Z"}
+if effect == "extra-field": value["extra"] = True
+body = json.dumps(value, separators=(",", ":")).encode() + b"\n"
+if effect == "replace":
+    path.rename(".uap/original-lock")
+    path.write_bytes(body)
+    path.chmod(0o600)
+else:
+    with path.open("r+b") as stream:
+        stream.truncate(0)
+        stream.write(body)
+        stream.flush()
+        os.fsync(stream.fileno())
+if effect == "foreign": Path("protected").write_bytes(b"changed")
+reason = ("hermes passive registry purpose or selected install differs" if "--inspect" in sys.argv
+          else "hermes runtime history is restricted to passive inspection")
+print("unrelated refusal" if effect == "wrong-refusal" else reason, file=sys.stderr)
+raise SystemExit(7)
+'''
+
+    def fixture(self, temporary, effect=""):
+        owner = object.__new__(control.HistoryControl)
+        owner.outer = Path(temporary).resolve()
+        owner.private = owner.outer / "public-history"
+        owner.project = owner.private / "public-a"
+        owner.evidence = owner.private / "evidence"
+        for path in (owner.private, owner.project, owner.evidence, owner.project / ".uap"):
+            path.mkdir(mode=0o700)
+        (owner.project / "run").write_text(self.writer)
+        (owner.project / "protected").write_bytes(b"original")
+        lock = owner.project / ".uap/mutation.lock"
+        lock.write_bytes(b'{"pid":1,"acquired_at":"2000-01-01T00:00:00Z"}\n')
+        lock.chmod(0o600)
+        owner.pins = {"uap": {"path": sys.executable}}
+        names = ("bounded", "directory_identity", "held_census_evidence", "ordinary_bytes",
+                 "stable_file", "public_inspect_lock")
+        owner.api = SimpleNamespace(**{name: CASE[name] for name in names}, pins=owner.pins,
+            public_runtime_pins=lambda **_: {}, evidence_identity=CASE["directory_identity"](owner.evidence))
+        owner.env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", HISTORY_LOCK_EFFECT=effect)
+        owner.deadline = time.monotonic() + 25
+        owner.snapshot = lambda: (CASE["inventory"](owner.outer), {})
+        owner.current = owner.snapshot()[0]
+        owner.baseline = control.original_image(owner.current)
+        owner.records, owner.captures, owner.phases = [], {}, []
+        return owner, lock
+
+    def test_real_refused_commands_rewrite_only_the_original_owned_lock(self):
+        for label in ("noninspect", "active"):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                owner, lock = self.fixture(temporary)
+                before, original = owner.current, lock.stat()
+                args = ["run", *(["--inspect"] if label == "active" else []), "--dry-run", "--format", "json"]
+                record = owner.run_command(label, owner.uap(args), refused=True)
+                self.assertEqual(record["status"]["exit"], 7)
+                self.assertIsNone(record["status"]["error"])
+                self.assertEqual(json.loads(lock.read_bytes())["pid"], record["status"]["pid"])
+                self.assertEqual(CASE["public_lock_identity"](lock.stat()), CASE["public_lock_identity"](original))
+                expected = {lock.relative_to(owner.outer).as_posix(), *{
+                    (owner.evidence / (label + suffix)).relative_to(owner.outer).as_posix()
+                    for suffix in (".stdout", ".stderr", ".status.json")}}
+                changed = {key for key in set(before) | set(owner.current) if before.get(key) != owner.current.get(key)}
+                self.assertEqual(changed, expected)
+                self.assertEqual((owner.project / "protected").read_bytes(), b"original")
+                self.assertEqual(owner.records, [record])
+                self.assertEqual(owner.phases[-1]["label"], label)
+                processes.rejoin_commands(owner.api, owner.captures, owner.evidence, owner.deadline)
+
+    def test_unbound_lock_records_other_effects_and_wrong_commands_refuse(self):
+        for effect in ("wrong-pid", "old-time", "future-time", "extra-field", "replace", "foreign", "wrong-refusal"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                owner, _ = self.fixture(temporary, effect)
+                message = ("unmeasured command effect" if effect == "foreign" else
+                           "unrelated boundary" if effect == "wrong-refusal" else "public control")
+                with self.assertRaisesRegex(RuntimeError, message):
+                    owner.run_command("noninspect", owner.uap(["run", "--dry-run", "--format", "json"]), refused=True)
+                self.assertEqual(owner.records, [])
+                self.assertEqual(owner.phases, [])
+        for label, args, options in (
+            ("noninspect", ["run", "--inspect", "--dry-run", "--format", "json"], {"refused": True}),
+            ("active", ["run", "--dry-run", "--format", "json"], {"refused": True}),
+            ("noninspect", ["run", "--dry-run", "--format", "json"], {"refused": False}),
+            ("noninspect", ["run", "--dry-run", "--format", "json"], {"refused": True, "native": True}),
+        ):
+            with self.subTest(label=label, options=options), tempfile.TemporaryDirectory() as temporary:
+                owner, lock = self.fixture(temporary)
+                original = lock.read_bytes()
+                with mock.patch.object(control, "capture_command", side_effect=AssertionError("unexpected launch")), \
+                        self.assertRaisesRegex(RuntimeError, "refusal command differs"):
+                    owner.run_command(label, owner.uap(args), **options)
+                self.assertEqual(lock.read_bytes(), original)
+
+
 if __name__ == "__main__":
     unittest.main()

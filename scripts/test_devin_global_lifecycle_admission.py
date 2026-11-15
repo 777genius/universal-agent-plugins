@@ -1901,7 +1901,7 @@ class BwrapPolicySetupContracts(unittest.TestCase):
                     path.symlink_to(foreign)
                 before = foreign.stat()
                 with mock.patch.object(policy_setup, "POLICY_DIRECTORY", root):
-                    fd = policy_setup.open_policy_directory()
+                    fd, _ = policy_setup.open_policy_directory()
                     try:
                         with self.assertRaises(ValueError):
                             policy_setup.check_policy_names(fd)
@@ -1912,7 +1912,7 @@ class BwrapPolicySetupContracts(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); root.chmod(0o700)
             with mock.patch.object(policy_setup, "POLICY_DIRECTORY", root):
-                fd = policy_setup.open_policy_directory()
+                fd, _ = policy_setup.open_policy_directory()
                 try:
                     policy_setup.write_profile(fd, self.profile())
                     original = (root / policy_setup.PROFILE_NAME).stat()
@@ -1939,6 +1939,16 @@ class BwrapPolicySetupContracts(unittest.TestCase):
             root = Path(temporary)
             download, policies = root / "download", root / "policies"
             download.mkdir(mode=0o700); policies.mkdir(mode=0o700)
+            features = root / "features"
+            features.mkdir(mode=0o755)
+            for name in ("io_uring", "namespaces", "domain"):
+                (features / name).mkdir(mode=0o755)
+            for name, body in (("io_uring/mask", b"sqpoll override_creds\n"),
+                               ("namespaces/mask", b"userns_create\n"),
+                               ("domain/stack", b"yes\n"), ("domain/post_nnp_subset", b"yes\n")):
+                (features / name).write_bytes(body)
+                (features / name).chmod(0o444)
+            actual_abi = b"inert complete actual kernel ABI\n"
             deb = b"inert bounded archive"
             metadata = "\n".join(key + ": " + value for key, value in {
                 "Package": policy_setup.PACKAGE, "Version": policy_setup.VERSION, "Architecture": "all",
@@ -1955,13 +1965,19 @@ class BwrapPolicySetupContracts(unittest.TestCase):
                     (download / policy_setup.DEB_NAME).chmod(0o600)
                     return b""
                 if label == "policy-package-data": return self.archive()
+                if label in ("policy-kernel-abi-before", "policy-kernel-abi-after"):
+                    self.assertEqual(argv, ["/usr/bin/aa-features-abi", "--extract", "--stdout"])
+                    self.assertEqual(limit, 65536)
+                    return actual_abi
                 self.assertEqual(label, "policy-add")
                 self.assertEqual(argv, ["/usr/sbin/apparmor_parser", "--config-file=/dev/null",
-                    "--add", "--skip-cache", "--jobs=1", "--Werror=rule-not-enforced",
+                    "--add", "--skip-cache", "--jobs=1", "--override-policy-abi=<kernel>",
+                    "--warn=rule-not-enforced", "--Werror=rule-not-enforced",
                     str(policies / policy_setup.PROFILE_NAME)])
                 self.assertEqual((policies / policy_setup.PROFILE_NAME).read_bytes(), self.profile())
                 return b""
             with mock.patch.object(policy_setup, "POLICY_DIRECTORY", policies), \
+                 mock.patch.object(policy_setup, "KERNEL_FEATURE_DIRECTORY", features), \
                  mock.patch.object(policy_setup, "DEB_BYTES", len(deb)), \
                  mock.patch.object(policy_setup, "DEB_SHA256", case.sha(deb)), \
                  mock.patch.object(policy_setup, "command", side_effect=command), \
@@ -1970,11 +1986,75 @@ class BwrapPolicySetupContracts(unittest.TestCase):
                  mock.patch.object(policy_setup, "kernel_read", return_value=b"1\n"):
                 result = policy_setup.setup(download, policy_setup.time.monotonic() + 10)
             self.assertEqual([label for label, _ in observed],
-                             ["policy-metadata", "policy-download", "policy-package-data", "policy-add"])
+                             ["policy-metadata", "policy-download", "policy-package-data",
+                              "policy-kernel-abi-before", "policy-add", "policy-kernel-abi-after"])
             self.assertFalse(result["native_executed"])
             self.assertFalse(result["qualification"])
             self.assertTrue(result["restrict_userns_unchanged"])
             self.assertEqual(result["profile"]["sha256"], policy_setup.PROFILE_SHA256)
+
+
+    def test_original_policy_directory_survives_owned_entry_but_refuses_replacement_or_mode_drift(self):
+        for change in ("entry", "unsafe-mode", "tighter-mode", "replacement"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / "policies"
+                root.mkdir(mode=0o700)
+                with mock.patch.object(policy_setup, "POLICY_DIRECTORY", root):
+                    fd, original = policy_setup.open_policy_directory()
+                    try:
+                        if change == "entry":
+                            (root / "owned-entry").write_bytes(b"inert owned policy")
+                            policy_setup.verify_policy_directory(fd, original)
+                        else:
+                            if change == "replacement":
+                                root.rename(root.with_name("original-policies"))
+                                root.mkdir(mode=0o700)
+                            else:
+                                root.chmod(0o777 if change == "unsafe-mode" else 0o750)
+                                self.assertEqual(policy_setup.identity(os.fstat(fd))[:5],
+                                                 policy_setup.identity(root.lstat())[:5])
+                            with self.assertRaisesRegex(ValueError, "policy directory authority changed"):
+                                policy_setup.verify_policy_directory(fd, original)
+                    finally:
+                        os.close(fd)
+
+    def test_parser_diagnostic_preserves_original_failure_and_bounded_capture(self):
+        body = b"original prefix" * 200 + b"\n\x1b[31munsupported rule \xff\n"
+        for label, status, error in (("policy-add", 1, None), ("policy-add", None, "timeout"),
+                                     ("policy-add", 0, None), ("policy-metadata", 1, None)):
+            with self.subTest(label=label, status=status, error=error):
+                record = dict(exit=status, error=error, stderr_bytes=len(body), stderr_sha256=case.sha(body))
+                records, sink = [], io.StringIO()
+                with mock.patch.object(policy_setup, "run_probe", return_value=(record, b"stdout", body)) as capture, \
+                     mock.patch.object(policy_setup.sys, "stderr", sink):
+                    if status == 0:
+                        self.assertEqual(policy_setup.command(Path("/inert"), label, ["/inert/never-run"],
+                            policy_setup.time.monotonic() + 10, records), b"stdout")
+                    else:
+                        with self.assertRaisesRegex(ValueError, "Bubblewrap policy setup command refused: " + label):
+                            policy_setup.command(Path("/inert"), label, ["/inert/never-run"],
+                                policy_setup.time.monotonic() + 10, records)
+                capture.assert_called_once()
+                self.assertIs(records[0], record)
+                emitted = sink.getvalue()
+                if label == "policy-add" and status != 0:
+                    self.assertTrue(emitted.isascii())
+                    self.assertLessEqual(len(emitted), 16416)
+                    packet = json.loads(emitted.removeprefix("DEVIN_BWRAP_POLICY_FAILURE="))
+                    self.assertEqual((packet["exit"], packet["capture_error_present"]), (status, error is not None))
+                    self.assertEqual((packet["stderr_captured_bytes"], packet["stderr_captured_sha256"]),
+                                     (len(body), case.sha(body)))
+                    self.assertEqual(packet["stderr_tail"], body[-2048:].decode("utf-8", "backslashreplace"))
+                    self.assertTrue(packet["stderr_tail_truncated"])
+                else:
+                    self.assertEqual(emitted, "")
+        record = dict(exit=1, error=None, stderr_bytes=len(body), stderr_sha256=case.sha(body))
+        with mock.patch.object(policy_setup, "run_probe", return_value=(record, b"", body)), \
+             mock.patch.object(policy_setup.sys, "stderr") as sink:
+            sink.write.side_effect = OSError("inert diagnostic sink refusal")
+            with self.assertRaisesRegex(ValueError, "Bubblewrap policy setup command refused: policy-add"):
+                policy_setup.command(Path("/inert"), "policy-add", ["/inert/never-run"],
+                    policy_setup.time.monotonic() + 10, [])
 
 
 class ReadonlyViabilityContracts(unittest.TestCase):

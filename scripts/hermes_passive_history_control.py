@@ -149,18 +149,29 @@ class HistoryControl:
         return [self.pins["uap"]["path"], *args, "--target", "hermes", "--scope", "project", "--project-root", str(self.project)]
 
     def run_command(self, label, argv, *, native=False, authored=False, inspect=False, refused=False):
+        negative = label in REFUSALS
+        if negative:
+            args = ["run", *(["--inspect"] if label == "active" else []), "--dry-run", "--format", "json"]
+            require(refused is True and native is False and authored is False and inspect is False
+                    and argv == self.uap(args), "refusal command differs")
         before, _ = self.snapshot()
         require((authored and label == "git" and not self.records) or before == self.current, "unmeasured inter-command effect")
         with ExitStack() as handles:
             finish = None
-            if inspect:
+            if inspect or negative:
                 finish = handles.enter_context(self.api.public_inspect_lock(
                     self.private, self.project, projected(before), self.private_snapshot))
+            started_ns = time.time_ns() if negative else None
             record, capture = capture_command(self.api, argv, self.project,
                 dict(self.env, HERMES_HOME=str(self.selected)) if native else self.env,
                 self.evidence, label, self.deadline, refused=refused, lineage=os.name == "nt" and label == "public-stdio-a")
+            if negative:
+                ended_ns = time.time_ns()
+                text = decoded(record["stdout"]) + decoded(record["stderr"])
+                require(REFUSALS[label].encode() in text, "dry-run refused at an unrelated boundary")
             if finish is not None:
-                image, _ = finish()
+                image, _ = (finish(expected_pid=record["status"]["pid"], interval_ns=(started_ns, ended_ns))
+                            if negative else finish())
                 after = self.last_full
                 require(projected(after) == image, "inspect captured image differs")
             else:
@@ -170,13 +181,10 @@ class HistoryControl:
         if label == "add": allowed += ["public-history/public-a/.uap", "public-history/public-a/.hermes", "public-history/public-uap-state"]
         if label in {"bootstrap", "public-stdio-a"}: allowed += [self.selected.relative_to(self.outer).as_posix()]
         if label == "public-stdio-a": allowed += [(self.accepted["data"] / "hermes-events.jsonl").relative_to(self.outer).as_posix()]
-        if inspect: allowed += ["public-history/public-a/.uap/mutation.lock"]
-        require(all(any(key == prefix or key.startswith(prefix + "/") for prefix in allowed)
+        control_lock = "public-history/public-a/.uap/mutation.lock" if inspect or negative else None
+        require(all(key == control_lock or any(key == prefix or key.startswith(prefix + "/") for prefix in allowed)
                     for key in set(before) | set(after) if before.get(key) != after.get(key)), "unmeasured command effect")
         if label == "add": require(document(decoded(record["stdout"])).get("result") == "success", "public add failed")
-        if label in REFUSALS:
-            text = decoded(record["stdout"]) + decoded(record["stderr"])
-            require(REFUSALS[label].encode() in text, "dry-run refused at an unrelated boundary")
         self.records.append(record)
         self.captures[label] = capture
         self.phase(label, after)

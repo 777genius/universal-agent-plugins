@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Observe pinned bundled Hermes and its explicit UAP Project MCP composition."""
 import base64
+import calendar
 import hashlib
 from contextlib import ExitStack, contextmanager
 from concurrent.futures import ThreadPoolExecutor
@@ -3166,6 +3167,7 @@ def public_lock_record(body):
         raise RuntimeError("public control lock timestamp differs") from error
     canonical = json.dumps({"pid": value["pid"], "acquired_at": value["acquired_at"]}, separators=(",", ":")).encode() + b"\n"
     require(body == canonical, "public control lock encoding differs")
+    return value
 
 
 def public_lock_identity(info):
@@ -3231,23 +3233,36 @@ def public_inspect_lock(outer, project, before, snapshot):
             os.lseek(descriptor, 0, os.SEEK_SET)
             with os.fdopen(os.dup(descriptor), "rb") as stream:
                 body = stream.read(257)
-            public_lock_record(body)
+            value = public_lock_record(body)
             linked, final = original()
             require(len(body) == current.st_size and stable_file(linked) == stable_file(current)
                     and stable_file(final) == stable_file(opened), "public control lock changed during capture")
             row = {"type": "file", "mode": stat.S_IMODE(current.st_mode), "device": current.st_dev,
                    "inode": current.st_ino, "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
-            return row, current, opened
+            return row, current, opened, value
 
-        row, _, _ = capture()
+        row, _, _, _ = capture()
         require(public_same_record(before.get(key), row), "public control lock preimage differs")
         finished = False
 
-        def finish():
+        def finish(*, expected_pid=None, interval_ns=None):
             nonlocal finished
             require(not finished, "public control lock postimage already captured")
             finished = True
-            row, current, opened = capture()
+            row, current, opened, value = capture()
+            require((expected_pid is None) == (interval_ns is None), "public control command binding is incomplete")
+            if expected_pid is not None:
+                require(type(expected_pid) is int and 0 < expected_pid < 2**32
+                        and type(interval_ns) is tuple and len(interval_ns) == 2
+                        and all(type(item) is int for item in interval_ns)
+                        and 0 < interval_ns[0] <= interval_ns[1] < 2**63,
+                        "public control command interval differs")
+                stamp = value["acquired_at"]
+                seconds = calendar.timegm(time.strptime(stamp[:19], "%Y-%m-%dT%H:%M:%S"))
+                fraction = int(stamp[20:-1].ljust(9, "0")) if stamp[19] == "." else 0
+                require(value["pid"] == expected_pid
+                        and interval_ns[0] <= seconds * 10**9 + fraction <= interval_ns[1],
+                        "public control record is not from the captured command")
             result = snapshot()
             linked, final = original()
             require(stable_file(linked) == stable_file(current) and stable_file(final) == stable_file(opened)
