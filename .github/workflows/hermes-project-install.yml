@@ -111,7 +111,8 @@ jobs:
                           '--source', str(source), '--work', str(root / 'hermes-project-work'),
                           '--cache', str(root / 'hermes-project-cache'), '--out', str(root / 'hermes-project-payload'),
                           '--commit', pin], pathlib.Path.cwd(), os.environ, timeout=9000, limit=16 << 20, completed_builder_cleanup=True)
-          print(stdout.decode(errors='replace')); print(stderr.decode(errors='replace'))
+          sys.stdout.buffer.write(stdout); sys.stdout.buffer.flush()
+          sys.stderr.buffer.write(stderr); sys.stderr.buffer.flush()
           binary = root / 'hermes-project-payload' / 'bin' / ('hermes.exe' if os.name == 'nt' else 'hermes')
           assert binary.is_file()
           print(payload_contract(binary.parent.parent, source, pin))
@@ -137,7 +138,8 @@ jobs:
                      UAP_HERMES_COLD_REPORT=str(report), UAP_HERMES_COLD_DEADLINE_UNIX_MS=str(int(time.time() * 1000) + 360000))
           record, stdout, stderr = supervised([env['HERMES_COLD_BIN'], '-test.run=^TestProjectHermesBundleColdRestoreAndRepair$',
                                    '-test.v', '-test.count=1', '-test.timeout=6m'], pathlib.Path.cwd(), env, timeout=390)
-          print(stdout.decode(errors='replace')); print(stderr.decode(errors='replace'))
+          sys.stdout.buffer.write(stdout); sys.stdout.buffer.flush()
+          sys.stderr.buffer.write(stderr); sys.stderr.buffer.flush()
           assert report.is_file(), 'native test skipped or omitted its completion report'
           data = json.loads(report.read_text())
           assert data['kind'] == 'hermes-bundle-cold-restore' and data['source_head'] == env['EXPECTED_HEAD']

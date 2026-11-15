@@ -102,7 +102,10 @@ def supervised(argv, cwd, env, timeout=60, limit=1 << 20, *, completed_builder_c
         record['builder_preparation_continued_after_forced_cleanup'] = True
         (evidence / 'record.json').write_text(json.dumps(record, indent=2) + '\n')
     require(strict_success or builder_continuation,
-            'native command failed or lacks process settlement: ' + str(record))
+            'native command failed or lacks process settlement: ' + json.dumps({
+                'record': record,
+                'output_tails': {name: body[-4096:].decode('utf-8', errors='backslashreplace')
+                                 for name, body in (('stdout', stdout), ('stderr', stderr))}}, ensure_ascii=True))
     return record, stdout, stderr
 
 

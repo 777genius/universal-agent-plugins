@@ -3149,7 +3149,11 @@ func (fixtureNativeObserver) ObserveNativeIdentity(_ context.Context, _ domain.D
 
 func newCLIFixture(t *testing.T, clients []domain.DetectedClient) cliFixture {
 	t.Helper()
-	root := t.TempDir()
+	return newCLIFixtureAt(t, clients, t.TempDir())
+}
+
+func newCLIFixtureAt(t *testing.T, clients []domain.DetectedClient, root string) cliFixture {
+	t.Helper()
 	registry, err := specregistry.New()
 	if err != nil {
 		t.Fatal(err)
