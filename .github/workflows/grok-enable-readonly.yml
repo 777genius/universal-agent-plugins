@@ -160,6 +160,7 @@ jobs:
             --wait --pipe --collect --quiet --service-type=exec --expand-environment=no \
             --uid="$(id -u)" --gid="$(id -g)" --property=NoNewPrivileges=yes \
             --property="RootDirectory=$RUNNER_TEMP/grok-runtime-root" --property=MountAPIVFS=yes \
+            --property=MountFlags=private \
             --property="BindReadOnlyPaths=$RUNNER_TEMP/grok-runtime-input:/opt/uap-input" \
             --property="BindPaths=$RUNNER_TEMP/grok-readonly-evidence:/work" \
             --property=RuntimeMaxSec=45s --property=TimeoutStopSec=15s \
@@ -174,6 +175,7 @@ jobs:
             --uid="$(id -u)" --gid="$(id -g)" --property=Delegate=yes \
             --property=NoNewPrivileges=yes --property=KillMode=control-group \
             --property="RootDirectory=$RUNNER_TEMP/grok-runtime-root" --property=MountAPIVFS=yes \
+            --property=MountFlags=private \
             --property="BindReadOnlyPaths=$RUNNER_TEMP/grok-runtime-input:/opt/uap-input" \
             --property="BindPaths=$RUNNER_TEMP/grok-readonly-evidence:/work /sys/fs/cgroup" \
             --property=RuntimeMaxSec=180s --property=TimeoutStopSec=15s \

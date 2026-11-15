@@ -496,6 +496,7 @@ def prove_runtime(root, deadline, runtime, inputs, output, uid, gid, records):
                 "--service-type=exec", "--expand-environment=no", "--uid=" + str(uid), "--gid=" + str(gid),
                 "--property=Delegate=yes", "--property=NoNewPrivileges=yes", "--property=KillMode=control-group",
                 "--property=RootDirectory=" + str(runtime), "--property=MountAPIVFS=yes",
+                "--property=MountFlags=private",
                 "--property=BindReadOnlyPaths=" + str(inputs) + ":/opt/uap-input",
                 "--property=BindPaths=" + str(output) + ":/work /sys/fs/cgroup",
                 "--property=RuntimeMaxSec=20s", "--property=TimeoutStopSec=5s",
