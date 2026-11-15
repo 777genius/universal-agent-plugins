@@ -164,11 +164,11 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 // folder trust; ordinary deps sync and other projects stay unchanged.
 func reviewedCopilotSavedAddActions(cmd *cobra.Command, app App, opts *options, targets []string, actions []dependencyAction) []dependencyAction {
 	if cmd.Name() != "add" || !opts.yes || app.scope() != domain.ScopeProject ||
-		len(targets) != 1 || targets[0] != string(domain.ClientCopilot) {
+		len(targets) != 1 || !domain.ClientTraitsFor(domain.ClientID(targets[0])).SavedProjectRepairOnAdd {
 		return actions
 	}
 	for i, action := range actions {
-		if action.Action != environment.ActionUnchanged || action.ClientID != string(domain.ClientCopilot) ||
+		if action.Action != environment.ActionUnchanged || action.ClientID != targets[0] ||
 			action.Authority == nil || action.Authority.ReceiptID == "" || action.Package == nil {
 			continue
 		}
