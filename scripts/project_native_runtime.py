@@ -2106,6 +2106,7 @@ def grok_runtime_properties(case, inputs, output, runtime_root):
         if any(left == right or left in right.parents or right in left.parents for right in paths[index + 1:]):
             raise ValueError("overlapping Grok runtime roles refused")
     return ["--property=RootDirectory=" + str(runtime_root), "--property=MountAPIVFS=yes",
+            "--property=MountFlags=private",
             "--property=BindReadOnlyPaths=" + " ".join(str(path) for path in readonly),
             "--property=BindPaths=" + str(output) + " /sys/fs/cgroup"]
 
@@ -2173,6 +2174,7 @@ def grok_readonly_controller_argv(input_root, env, unit, uid, gid, origin_ns, *,
             "--property=RuntimeMaxSec=" + format((25_000_000_000 - elapsed) / 1e9, ".9g") + "s",
             "--property=TimeoutStopSec=5s", "--property=RootDirectory=" + str(runtime_root),
             "--property=MountAPIVFS=yes", "--property=BindReadOnlyPaths=" + str(input_root),
+            "--property=MountFlags=private",
             "--property=BindPaths=" + str(input_root / "readonly-witness") + " /sys/fs/cgroup",
             "--working-directory=" + str(input_root), "/usr/bin/env", "-i",
             *(key + "=" + selected[key] for key in sorted(selected)),
