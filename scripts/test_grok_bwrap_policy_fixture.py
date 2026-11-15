@@ -89,6 +89,12 @@ class ReadonlyFixtureTests(unittest.TestCase):
                     raise OSError("simulated fixture cleanup failure")
 
         calls = []
+        mount_reads = []
+
+        def inert_open(path, mode):
+            self.assertEqual((path, mode), ("/proc/self/mountinfo", "rb"))
+            mount_reads.append(path)
+            return io.BytesIO(b"21 1 0:5 / / rw - tmpfs tmpfs rw\n")
 
         def fake_run(argv, **kwargs):
             calls.append(list(argv))
@@ -103,6 +109,8 @@ class ReadonlyFixtureTests(unittest.TestCase):
                 output = b""
             elif len(calls) == 4:
                 output = b"GROK_READONLY_NATIVE_INVENTORY_PASS\n"
+            elif len(calls) == 5:
+                output = b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS\n"
             else:
                 raise AssertionError("unexpected process call")
             return SimpleNamespace(returncode=0, stdout=output, stderr=b"")
@@ -110,9 +118,11 @@ class ReadonlyFixtureTests(unittest.TestCase):
         with real_tempdir() as temporary:
             output_dir = Path(temporary) / "evidence"
             arguments = ["grok-enable-readonly.py", "--test", str(Path(temporary) / "inert-helper"),
+                         "--public-test", str(Path(temporary) / "inert-public-helper"),
                          "--output", str(output_dir)]
             constants = {"ARCHIVE": hashlib.sha256(archive).hexdigest(),
-                         "BINARY": hashlib.sha256(binary).hexdigest()}
+                         "BINARY": hashlib.sha256(binary).hexdigest(),
+                         "open": inert_open, "producer_context": lambda: dict(qualification=False)}
             with patch.dict(runner["main"].__globals__, constants), \
                  patch("urllib.request.urlopen", return_value=io.BytesIO(archive)), \
                  patch("subprocess.run", side_effect=fake_run), \
@@ -122,10 +132,17 @@ class ReadonlyFixtureTests(unittest.TestCase):
                 status = runner["main"]()
 
             evidence = json.loads((output_dir / "evidence.json").read_text())
-            self.assertEqual(len(calls), 4)
+            self.assertEqual(mount_reads, ["/proc/self/mountinfo"])
+            self.assertEqual(evidence["delegated_parent_mounts"], dict(qualification=False,
+                producer="actual delegated Python parent", private=True, mount_count=1, unbindable_count=0))
+            self.assertEqual(len(calls), 5)
+            self.assertIn("-test.run=^TestProjectGrokNativeSavedEnablementLifecycle$", calls[4])
+            self.assertTrue(evidence["public_native_saved_lifecycle_passed"])
             self.assertEqual(status, 1)
             self.assertFalse(evidence["passed"])
             self.assertNotIn("fixture_unchanged", evidence)
+            self.assertNotIn("archive_sha256", evidence)
+            self.assertNotIn("binary_sha256", evidence)
             self.assertIn("simulated fixture cleanup failure", evidence["error"])
 
 if __name__ == "__main__":
