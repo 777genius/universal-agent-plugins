@@ -45,3 +45,11 @@ Focused validation: all eight Go classifier subcases and both Python boundary me
 
 
 Independent review of this narrow correction approved the exact typed single-cause classification, unchanged owner failure, Windows-only exact builder opt-in, preserved original evidence, mandatory payload validation and strict native/UAP/cold callers. No concrete source blocker was found; fresh Windows build/native execution remains outstanding.
+
+## Preserved published CLI boundary
+
+The current source's generated Hermes Project MCP capability correctly becomes Prepared, but landing commands remain pinned to published CLI 0.1.108. Its actual release tag `agentplugins-v0.1.108` resolves to `8c3cfa28e332c533b0cc0845739c0275730a4285`, whose generated Hermes Project stdio and streamable-http capabilities are unsupported. The latest public release still has that exact version. Source availability must not silently enable an unsupported public install command.
+
+The original current-head combined Pages job 132704774463 failed three existing negative assertions when the new generated capability flowed directly into landing selection. The existing `scopedComponentSupported` presentation boundary now retains the exact Hermes/Project/MCP refusal while the landing pin is 0.1.108. It covers ordinary Project selection, explicit pinned sources and target descriptions. Source-generated metadata, native installation, User support, Project Skills, signed policy and other clients are unchanged; the release pin is not advanced.
+
+All 37 unchanged tests in the three affected landing test files pass with zero failures/skips on Node 24.22.1. The original hosted failures remain the causal evidence; no negative oracle was rewritten. This is a compatibility preservation fix, not website feature promotion or release qualification. Actual current-head hosted Pages and native gates remain required.
