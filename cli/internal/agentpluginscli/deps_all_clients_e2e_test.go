@@ -379,6 +379,8 @@ func (r *dependencyFixtureRunner) Run(ctx context.Context, command legacyports.C
 			return legacyports.CommandResult{Stdout: []byte("No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n")}, nil
 		}
 		return r.copilot.Run(ctx, command)
+	case domain.ClientOpenCode:
+		return fixtureOpenCodeNative(command)
 	case domain.ClientGrok:
 		if len(args) >= 2 && args[0] == "plugin" {
 			switch args[1] {
