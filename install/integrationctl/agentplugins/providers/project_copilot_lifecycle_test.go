@@ -2,6 +2,7 @@ package providers_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -49,10 +50,31 @@ func TestProjectCopilotComposedLifecycleSelectsEffectiveConfig(t *testing.T) {
 				t.Fatalf("Copilot removal changed foreign MCP data: %s, %v", remaining, err)
 			}
 			projectGeminiAssert(t, filepath.Join(f.data, "keep.txt"), "persistent data\n")
-			if !reflect.DeepEqual(user, projectGeminiInventory(t, f.user)) || !reflect.DeepEqual(other, projectGeminiInventory(t, f.other)) {
-				t.Fatal("Copilot project lifecycle mutated user or B")
+			remainingUser := projectGeminiInventory(t, f.user)
+			trust := filepath.Join(f.user, "config.json")
+			copilotAssertProjectTrust(t, trust, f.project)
+			projectGeminiAssert(t, trust+".agentplugins.lock", "")
+			delete(remainingUser, trust)
+			delete(remainingUser, trust+".agentplugins.lock")
+			if !reflect.DeepEqual(user, remainingUser) || !reflect.DeepEqual(other, projectGeminiInventory(t, f.other)) {
+				t.Fatal("Copilot project lifecycle changed unrelated user settings or B")
 			}
 		})
+	}
+}
+
+func copilotAssertProjectTrust(t *testing.T, path, project string) {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(body, &config); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(config, map[string]any{"trustedFolders": []any{project}}) {
+		t.Fatal("Copilot project lifecycle did not retain only its reviewed folder trust")
 	}
 }
 

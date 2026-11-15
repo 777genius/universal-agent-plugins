@@ -5,12 +5,15 @@ import (
 	"os"
 )
 
-// Claude 2.1.325 retains the exact cache registration when its directory
+// Claude 2.1.263 and 2.1.325 retain the exact cache registration when their directory
 // marketplace disappears. This is unavailable content, never active evidence.
 // Registry admission additionally requires the prior receipt, native index,
 // unchanged cache digest and physical source absence.
 func claudeMarketplaceSourceMissing(entry map[string]any, marketplace string) bool {
-	if entry["projectEnabled"] != true {
+	projectEnabled, hasProjectEnabled := entry["projectEnabled"]
+	detailValue, hasDetails := entry["errorDetails"]
+	// The older captured schema omits both members; partial newer metadata is unknown.
+	if hasProjectEnabled != hasDetails || hasProjectEnabled && projectEnabled != true {
 		return false
 	}
 	if _, exists := entry["readFromFolder"]; exists {
@@ -23,13 +26,15 @@ func claudeMarketplaceSourceMissing(entry map[string]any, marketplace string) bo
 	if !ok || len(errors) != 1 || errors[0] != "Marketplace "+marketplace+" failed to load: cache-miss" {
 		return false
 	}
-	details, ok := entry["errorDetails"].([]any)
-	if !ok || len(details) != 1 {
-		return false
-	}
-	detail, ok := details[0].(map[string]any)
-	if !ok || len(detail) != 2 || detail["type"] != "marketplace-load-failed" || detail["marketplace"] != marketplace {
-		return false
+	if hasDetails {
+		details, ok := detailValue.([]any)
+		if !ok || len(details) != 1 {
+			return false
+		}
+		detail, ok := details[0].(map[string]any)
+		if !ok || len(detail) != 2 || detail["type"] != "marketplace-load-failed" || detail["marketplace"] != marketplace {
+			return false
+		}
 	}
 	notes, present := entry["notes"]
 	if !present {

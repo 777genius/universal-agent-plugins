@@ -10,16 +10,75 @@ from pathlib import Path
 import shutil
 import signal
 import sqlite3
+import stat
 import subprocess
 import sys
 import tempfile
 import textwrap
 import time
 import unittest
+from types import SimpleNamespace
 from unittest.mock import patch
 from runpy import run_path
 
 import codex_runtime_audit as audit
+
+
+class RemotionTemporaryRootTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="remotion-root-inert-")
+        self.addCleanup(self.temporary.cleanup)
+        self.base = Path(self.temporary.name).resolve(strict=True)
+        self.root = self.base / "owned"
+        self.root.mkdir()
+        self.handoff = run_path(str(Path(__file__).with_name(
+            "remotion_windows_long_temp_e2e.py")))["physical_temp_root"]
+
+    def test_same_object_lexical_alias_uses_physical_root_before_baseline(self):
+        # A real same-object lexical alias; this is not a Windows 8.3 proof.
+        (self.base / "spelling").mkdir()
+        alias = self.base / "spelling" / ".." / self.root.name
+        before = self.root.lstat()
+        with self.assertRaisesRegex(ValueError, "Codex audit directory is redirected"):
+            audit._real_directory(alias)
+        physical = self.handoff(alias)
+        self.assertEqual(physical, self.root, "fresh TEMP spelling did not retain its physical object")
+        self.assertTrue(os.path.samestat(before, audit._real_directory(physical)))
+        self.assertEqual(self.root.lstat(), before)
+        with self.assertRaisesRegex(ValueError, "Codex audit directory is redirected"):
+            audit._real_directory(alias)
+
+    def test_resolving_to_another_real_directory_refuses_original_identity(self):
+        foreign = self.base / "foreign"
+        foreign.mkdir()
+        original_resolve = Path.resolve
+
+        def redirected(path, *args, **kwargs):
+            return foreign if path == self.root else original_resolve(path, *args, **kwargs)
+
+        with patch.object(Path, "resolve", redirected):
+            with self.assertRaisesRegex(ValueError, "differs from the created original"):
+                self.handoff(self.root)
+        self.assertTrue(self.root.is_dir() and foreign.is_dir())
+
+    def test_original_reparse_or_symlink_metadata_refuses_before_resolving(self):
+        original_lstat = Path.lstat
+        for member in (self.root, self.base):
+            for kind in ("reparse", "symlink"):
+                with self.subTest(member=member.name, kind=kind):
+                    def marked(path):
+                        info = original_lstat(path)
+                        if path != member:
+                            return info
+                        return SimpleNamespace(st_mode=(info.st_mode if kind == "reparse"
+                            else stat.S_IFLNK | stat.S_IMODE(info.st_mode)),
+                            st_file_attributes=0x400 if kind == "reparse" else 0,
+                            st_reparse_tag=0)
+
+                    with patch.object(Path, "lstat", marked), patch.object(Path, "resolve") as resolve:
+                        with self.assertRaisesRegex(ValueError, "ancestor is redirected"):
+                            self.handoff(self.root)
+                        resolve.assert_not_called()
 
 
 class CodexRuntimeStateTest(unittest.TestCase):

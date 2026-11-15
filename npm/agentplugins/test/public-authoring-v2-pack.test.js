@@ -20,7 +20,7 @@ const { fixture, source, LOCATOR } = require("./public-authoring-v2.test");
 const root = path.resolve(__dirname, "../../..");
 const inventory = p => ["LICENSE", "README.md", "package.json", `bin/${p}.js`, "bin/package.json", "lib/package.json",
   "lib/platform.js", "lib/verifier.js", "lib/public-authoring.js", "lib/public-authoring-contract.js", "lib/public-authoring-input.js",
-  p === "agentplugins" ? "lib/bootstrap.js" : "lib/install.js", "scripts/package.json", "scripts/dual-authoring-candidate.js",
+  ...(p === "agentplugins" ? ["lib/bootstrap.js", "lib/bootstrap-progress.js"] : ["lib/install.js"]), "scripts/package.json", "scripts/dual-authoring-candidate.js",
   "public-release.json", "release-manifest.json", "native-inputs.json"].sort();
 
 function loader(files, overrides = {}, processValue = process) {
@@ -56,9 +56,9 @@ async function launchers(f) {
   for (const p of c.PRODUCTS) for (const failed of [false, true]) for (const postinstall of p === "plugin-kit-ai" ? [false, true] : [false]) {
     const calls = [], child = new EventEmitter();
     const env = { KEEP: "yes", [LOCATOR]: "/custody/untrusted", NODE_OPTIONS: "preload", UAP_PRIVATE_NPM_ROOT: "private", AGENTPLUGINS_INTERNAL_PROOF_BINARY: "private" };
-    const proc = { env, argv: ["node", "launcher", "argument with spaces", "--format", "json"], pid: 12,
+    const proc = Object.assign(new EventEmitter(), { env, argv: ["node", "launcher", "argument with spaces", "--format", "json"], pid: 12,
       platform: "linux", arch: "x64", cwd: () => "/caller", stderr: { write: text => calls.push(["stderr", text]) },
-      exit: code => { proc.exitCode = code; }, kill: (pid, signal) => calls.push(["kill", pid, signal]) };
+      exit: code => { proc.exitCode = code; }, kill: (pid, signal) => calls.push(["kill", pid, signal]) });
     const fakeFS = { ...fs, lstatSync: () => ({ isFile: () => true }),
       readFileSync: file => { assert.equal(file, "/packed/package.json"); return f.pair[p]["package.json"]; } };
     const l = loader(f.pair[p], { fs: fakeFS, child_process: { spawn: (file, args, options) => {
@@ -92,7 +92,7 @@ if (require.main === module) {
 test("C2 closure both public packages remain self contained", async () => {
   const f = fixture();
   for (const p of c.PRODUCTS) {
-    const files = f.pair[p]; assert.deepEqual(Object.keys(files).sort(), inventory(p)); assert.equal(Object.keys(files).length, 17);
+    const files = f.pair[p]; assert.deepEqual(Object.keys(files).sort(), inventory(p)); assert.equal(Object.keys(files).length, p === "agentplugins" ? 18 : 17);
     const pkg = JSON.parse(files["package.json"]), base = JSON.parse(source[`npm/${p}/package.json`].bytes);
     assert.deepEqual(pkg, { ...base, version: f.input.identity.versions[p], private: false, files: inventory(p) });
     for (const dir of ["bin", "lib", "scripts"]) assert.deepEqual(JSON.parse(files[`${dir}/package.json`]), { type: "commonjs" });

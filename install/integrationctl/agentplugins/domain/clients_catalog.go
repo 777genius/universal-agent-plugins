@@ -123,6 +123,7 @@ var clientDefinitions = []ClientDefinition{
 		InstallIntents:             []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:              LifecycleCLIRegistry,
 		RecordsUserProfileOnCreate: true,
+		SavedProjectRepairOnAdd:    true,
 	})), LifecycleNativeConfig),
 	withProjectScope(withoutCommands(clientDefinition(ClientVSCode, "Visual Studio Code", "github-copilot", "prepared", "prepared", true, PackagePrepared, SupportPrepared, SupportPrepared, SupportPrepared, SupportUnsupported, SupportPrepared, ClientTraits{
 		SavedDependenciesDeferred: true,

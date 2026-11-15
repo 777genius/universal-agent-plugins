@@ -8,12 +8,14 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/manifestedit"
 
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -133,6 +135,7 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	if err != nil {
 		return request, err
 	}
+	prepared.Bindings = reviewedCopilotSavedAddActions(cmd, app, opts, targets, prepared.Bindings)
 	detected, err := detectDependencyClients(cmd.Context(), app)
 	if err != nil {
 		return request, err
@@ -155,6 +158,27 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	}
 	request = dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, intent: snapshot.intent(manifest, body), prepared: actions, detected: detected, consent: consent, aliases: aliases, attestation: attest}
 	return request, nil
+}
+
+// Saved add may review native trust with explicit installation consent or the
+// existing interactive confirmation. A matching package receipt alone does not
+// prove folder trust; ordinary deps sync and other projects stay unchanged.
+func reviewedCopilotSavedAddActions(cmd *cobra.Command, app App, opts *options, targets []string, actions []dependencyAction) []dependencyAction {
+	canReview := opts.yes || strings.TrimSpace(opts.target) != "" || (app.Terminal && opts.format == "human")
+	if cmd.Name() != "add" || !canReview || app.scope() != domain.ScopeProject ||
+		len(targets) != 1 || !domain.ClientTraitsFor(domain.ClientID(targets[0])).SavedProjectRepairOnAdd {
+		return actions
+	}
+	for i, action := range actions {
+		if action.Action != environment.ActionUnchanged || action.ClientID != targets[0] ||
+			action.Authority == nil || action.Authority.ReceiptID == "" || action.Package == nil {
+			continue
+		}
+		reviewed := managementNativeRepair(action)
+		reviewed.Reason = "Verify and finish selected Copilot project folder trust if missing"
+		actions[i] = reviewed
+	}
+	return actions
 }
 
 // Replaced only by disposable failure-injection tests.

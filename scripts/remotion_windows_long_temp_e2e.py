@@ -10,11 +10,33 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import tempfile
 
 FIXTURE_SHA256 = "7399eaed15b3eb0981a6be12082dd8825529e896a59ea125b9500a666c21112e"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
+
+def physical_temp_root(path):
+    """Hand off the same freshly created directory before any case baseline."""
+    def identity(info):
+        if (not stat.S_ISDIR(info.st_mode)
+                or getattr(info, "st_file_attributes", 0) & 0x400
+                or getattr(info, "st_reparse_tag", 0) != 0):
+            raise ValueError("created TEMP root or ancestor is redirected")
+        return (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
+                getattr(info, "st_file_attributes", None), getattr(info, "st_reparse_tag", None))
+
+    original = [(member, identity(member.lstat())) for member in (path, *path.parents)]
+    physical = path.resolve(strict=True)
+    for member, before in original:
+        if identity(member.lstat()) != before:
+            raise ValueError("created TEMP directory authority changed during handoff")
+    if (identity(physical.lstat()) != original[0][1]
+            or identity(physical.parent.lstat()) != original[1][1]):
+        raise ValueError("physical TEMP directory differs from the created original")
+    return physical
+
 
 def main():
     if os.name != "nt":
@@ -48,8 +70,12 @@ def main():
     cli = Path(os.environ["UAP_SOURCE_CLI"]).resolve(strict=True)
     if not cli.is_file() or cli.suffix.lower() != ".exe":
         raise SystemExit("source-built Windows CLI executable missing")
-    short = Path(tempfile.mkdtemp(prefix="uap-remotion-short-", dir=os.environ["RUNNER_TEMP"]))
-    long = Path(tempfile.mkdtemp(prefix="uap-live-30x30-"))
+    short_created = Path(tempfile.mkdtemp(prefix="uap-remotion-short-", dir=os.environ["RUNNER_TEMP"]))
+    short = physical_temp_root(short_created)
+    long_created = Path(tempfile.mkdtemp(prefix="uap-live-30x30-"))
+    long = physical_temp_root(long_created)
+    created_lengths = {"runner-temp": len(str(short_created / "skill-24")),
+                       "default-windows-temp": len(str(long_created / "skill-24"))}
     evidence = {
         "source_checkout_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(),
         "fixture_sha256": FIXTURE_SHA256,
@@ -62,13 +88,16 @@ def main():
     try:
         short_length = len(str(short / "skill-24"))
         long_length = len(str(long / "skill-24"))
-        if long_length < 65 or long_length <= short_length:
-            raise RuntimeError("default Windows TEMP is not longer than runner TEMP")
+        for shorter, longer in ((created_lengths["runner-temp"], created_lengths["default-windows-temp"]),
+                                (short_length, long_length)):
+            if longer < 65 or longer <= shorter:
+                raise RuntimeError("default Windows TEMP is not longer than runner TEMP")
         for label, root in (("runner-temp", short), ("default-windows-temp", long)):
             try:
                 row = audit.do_case(str(cli), "codex", "skill", item, 24, root,
                                     fixtures["plugin_declared_names"], fixtures["signed_release_pins"])
                 evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
+                                              "created_root_chars": created_lengths[label],
                                               "case": row}
                 if not row.get("codex_runtime_proof"):
                     raise RuntimeError("strict native Codex runtime proof is missing")
@@ -77,7 +106,8 @@ def main():
             except Exception as error:
                 failures.append(f"{label}: {type(error).__name__}")
                 evidence["results"].setdefault(label, {
-                    "root_chars": len(str(root / "skill-24"))}).update({
+                    "root_chars": len(str(root / "skill-24")),
+                    "created_root_chars": created_lengths[label]}).update({
                         "error_type": type(error).__name__, "error": str(error)[:1800]})
     finally:
         report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
