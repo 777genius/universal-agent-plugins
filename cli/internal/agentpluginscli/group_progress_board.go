@@ -27,11 +27,13 @@ const (
 )
 
 type groupProgressRow struct {
-	id                   domain.ClientID
-	label                string
-	step                 groupProgressStep
-	final                string
-	prepared, configured bool
+	id                               domain.ClientID
+	label                            string
+	step                             groupProgressStep
+	final                            string
+	prepared, configured             bool
+	bindingsTotal, bindingsCompleted int
+	bindingState, bindingAlias       string
 }
 
 // groupProgressBoard owns only terminal presentation. The use case emits
@@ -46,12 +48,13 @@ type groupProgressBoard struct {
 	painted         int
 	columns, height int
 	live            bool
+	forcePlain      bool
 	resized         func() bool
 	stopResize      func()
 }
 
 func startGroupProgressBoard(app App, opts *options, selected []domain.DetectedClient) *groupProgressBoard {
-	if opts.format != "human" || opts.plain || !app.Terminal || len(selected) < 2 || os.Getenv("TERM") == "dumb" {
+	if opts.format != "human" || opts.plain || !app.Terminal || len(selected) == 0 || os.Getenv("TERM") == "dumb" {
 		return nil
 	}
 	writer := app.errorOutput()
@@ -62,7 +65,11 @@ func startGroupProgressBoard(app App, opts *options, selected []domain.DetectedC
 }
 
 func newGroupProgressBoard(writer io.Writer, selected []domain.DetectedClient, scopes ...domain.InstallScope) *groupProgressBoard {
-	board := &groupProgressBoard{scope: selectedScope(scopes), writer: writer, theme: terminaltheme.For(writer)}
+	return configuredGroupProgressBoard(writer, selected, selectedScope(scopes), nil)
+}
+
+func configuredGroupProgressBoard(writer io.Writer, selected []domain.DetectedClient, scope domain.InstallScope, configure func(*groupProgressBoard)) *groupProgressBoard {
+	board := &groupProgressBoard{scope: scope, writer: writer, theme: terminaltheme.For(writer)}
 	for _, client := range selected {
 		label := prompt.SafeText(clientDisplayName(client))
 		if width := ansi.StringWidth(label); width > board.width {
@@ -70,8 +77,11 @@ func newGroupProgressBoard(writer io.Writer, selected []domain.DetectedClient, s
 		}
 		board.rows = append(board.rows, groupProgressRow{id: client.ClientID, label: label})
 	}
+	if configure != nil {
+		configure(board)
+	}
 	board.columns, board.height = board.terminalSize()
-	board.live = board.fits(board.columns, board.height)
+	board.live = !board.forcePlain && board.fits(board.columns, board.height)
 	if board.live {
 		board.resized, board.stopResize = watchProgressResize()
 	}
@@ -129,10 +139,17 @@ func (board *groupProgressBoard) finish(results []usecase.AddResult) {
 		}
 		row.step = progressFinished
 	}
+	board.finishLocked()
+}
+
+func (board *groupProgressBoard) finishLocked() {
+	defer func() { _ = recover() }() // Presentation must not change an installer result.
 	board.redrawLocked()
 	board.painted = 0
 	if board.stopResize != nil {
-		board.stopResize()
+		stop := board.stopResize
+		board.stopResize = nil
+		stop()
 	}
 	_, _ = fmt.Fprintln(board.writer)
 }
@@ -154,6 +171,9 @@ func (board *groupProgressBoard) terminalSize() (int, int) {
 }
 
 func (board *groupProgressBoard) fits(columns, height int) bool {
+	if len(board.rows) > 0 && board.rows[0].bindingsTotal > 0 {
+		return columns > 4+board.width+18 && height > len(board.rows)
+	}
 	// Reserve the final column to avoid autowrap, and a row for the cursor.
 	// Account for the widest possible final status before the first paint.
 	widest := 0
@@ -165,6 +185,11 @@ func (board *groupProgressBoard) fits(columns, height int) bool {
 }
 
 func (board *groupProgressBoard) redrawLocked() {
+	defer func() {
+		if recover() != nil {
+			board.live, board.painted = false, 0
+		}
+	}()
 	columns, height := board.terminalSize()
 	resized := board.resized != nil && board.resized()
 	if board.live && (resized || columns != board.columns || height != board.height || !board.fits(columns, height)) {
@@ -182,7 +207,11 @@ func (board *groupProgressBoard) redrawLocked() {
 			frame.WriteString("\r\033[2K")
 		}
 		padding := strings.Repeat(" ", board.width-ansi.StringWidth(row.label))
-		fmt.Fprintf(&frame, "  %s%s  %s\n", row.label, padding, progressPipeline(board.theme, row))
+		pipeline := progressPipeline(board.theme, row)
+		if row.bindingsTotal > 0 && columns > 0 {
+			pipeline = ansi.Truncate(pipeline, max(1, columns-5-board.width), "…")
+		}
+		fmt.Fprintf(&frame, "  %s%s  %s\n", row.label, padding, pipeline)
 	}
 	if board.columns > 0 {
 		frame.WriteString("\r")
@@ -197,6 +226,9 @@ func (board *groupProgressBoard) redrawLocked() {
 }
 
 func progressPipeline(theme terminaltheme.Theme, row groupProgressRow) string {
+	if row.bindingsTotal > 0 {
+		return bindingProgressPipeline(theme, row)
+	}
 	labels := [3]string{"preparing", "configuring", "installing"}
 	roles := [3]terminaltheme.Role{terminaltheme.Muted, terminaltheme.Muted, terminaltheme.Muted}
 	switch row.step {

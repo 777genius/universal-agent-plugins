@@ -1,6 +1,6 @@
 # Consistent CLI installation review and progress
 
-Status: implementation plan; follow-up to PR #932.
+Status: implemented and locally qualified; full Git-backed CI qualification pending.
 
 ## Goal and scope
 
@@ -162,3 +162,35 @@ verification failed. No other binding may be presented as installed from that ru
 - Run relevant UI, adapter, progress and npm regression suites. Distinguish
   pass/fail/skip and sandbox restrictions; do not claim a full E2E pass from a
   presentation-only test. Push each completed slice to the existing Draft PR.
+
+## Implementation evidence
+
+- Plan published first: `8b343f2`; Claude compatibility/plugin activity slice:
+  `0ca6b77`. Public three-field confirmation requests remain source-compatible.
+- Claude adapter: complete package passed with the race detector. Current
+  seven-field response, negative schemas, foreign state and artifact proof are
+  tested; trusted activation is not inferred from suppression.
+- Confirmation: six real PTY scenarios (80x24 / 40x12, accept / decline / cancel)
+  passed, including details toggle, scrolling, preserved choice and visible
+  controls. Combined-budget fallback and the unchanged consumer contract passed.
+- Skills progress: focused race tests passed for duplicate events, partial / early
+  failure, cancellation, unchanged, setup/sign-in, observer failure isolation and
+  final-result reconciliation. Actual Darwin PTY binding-count/resize test passed.
+- Plugin activity: focused race tests passed, including warnings before cleanup,
+  theme forwarding and writer failure propagation.
+- The existing live plugin board now also covers one selected agent; a real PTY
+  regression passed for that path. Multi-agent behavior remains on the same board.
+- Upstream's rounded confirmation card and explicit Skills discovery/activation
+  evidence notices were retained during integration; narrow Details views use
+  the compact layout so consent controls remain visible.
+- Installer UI, prompt adapter and prompt-port suites passed with exactly the two
+  existing sandbox-restricted `/dev/tty` scenarios explicitly excluded. They are
+  not counted as passing.
+- This local sandbox denies Darwin process-group inspection in the contained Git
+  runner. Git-backed Skills installation E2E is therefore delegated to the
+  existing `Core fast / test-core` CI gate on the exact PR head; queued work is not
+  a successful qualification. No extra workflow or second test engine is added.
+- Actual Go diff relative to the pre-plan PR head: 747 added / 121 removed
+  production lines and 879 added test lines. This exceeds the original changed-
+  line estimates, principally due to preserved public API compatibility, real PTY
+  coverage and integration with the newer upstream confirmation layout.

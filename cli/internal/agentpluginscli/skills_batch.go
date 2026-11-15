@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 var ErrSkillsPlanStale = errors.New("skill installation plan is stale")
@@ -24,7 +25,15 @@ type SkillsBatchRequest struct {
 	TargetIDs  []string
 }
 type SkillsAction struct{ Alias, ClientID, Action, TargetPath, CandidateID, FromPath, ToPath string }
-type SkillsBatchItem struct{ Alias, ClientID, TargetPath, CandidateID, Status, Reason string }
+type SkillsBatchItem struct {
+	Alias, ClientID, Action, TargetPath, CandidateID, Status, Reason string
+	Client                                                           installer.ClientResult
+	ManualActions                                                    []string
+}
+type SkillsProgress struct {
+	Alias, ClientID, Action, Phase string
+	Result                         installer.Result
+}
 type SkillsBatchResult struct {
 	Status             string
 	Items              []SkillsBatchItem
@@ -96,6 +105,12 @@ func (p *PreparedSkillsBatch) check(ctx context.Context) error {
 // Apply is called only after explicit confirmation by the caller. The existing
 // environment lock/rechecks and installer receipts own all durable effects.
 func (p *PreparedSkillsBatch) Apply(ctx context.Context) (SkillsBatchResult, error) {
+	return p.ApplyWithProgress(ctx, nil)
+}
+
+// ApplyWithProgress observes the same transaction as Apply. An observer is
+// presentation only; its panic cannot change native effects or receipts.
+func (p *PreparedSkillsBatch) ApplyWithProgress(ctx context.Context, progress func(SkillsProgress)) (SkillsBatchResult, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	result := SkillsBatchResult{Status: "failed", Items: []SkillsBatchItem{}, RepairInstructions: []string{}}
@@ -108,28 +123,21 @@ func (p *PreparedSkillsBatch) Apply(ctx context.Context) (SkillsBatchResult, err
 	}
 	p.applied = true
 	adapter := &dependencyInstaller{app: p.app, opts: p.app.skillsOptions(), detected: p.request.detected, beforeApply: p.checkInputs}
-	applied, applyErr := applyPreparedDependencies(ctx, p.app, &p.request, adapter, p.check)
-	results := applied.Results
-	cursor := 0
-	failedItem := false
-	for _, action := range p.actions {
-		item := SkillsBatchItem{Alias: action.Alias, ClientID: action.ClientID, TargetPath: action.TargetPath, CandidateID: action.CandidateID, Status: "not_attempted"}
-		if action.Action == "unchanged" {
-			item.Status = "unchanged"
-		} else if cursor < len(results) {
-			r := results[cursor]
-			cursor++
-			item.Status = string(r.Outcome)
-			item.Reason = r.Reason
-		} else if applyErr != nil && !failedItem {
-			item.Status = "failed"
-			item.Reason = applyErr.Error()
-			failedItem = true
-		}
-		result.Items = append(result.Items, item)
+	var started string
+	adapter.onPrepare = func(action environment.PreparedBinding) {
+		started = skillsBindingKey(action.Alias, action.ClientID, string(action.Action))
+		emitSkillsProgress(progress, SkillsProgress{Alias: action.Alias, ClientID: action.ClientID, Action: string(action.Action), Phase: "preparing"})
 	}
+	adapter.onApply = func(action environment.PreparedBinding) {
+		emitSkillsProgress(progress, SkillsProgress{Alias: action.Alias, ClientID: action.ClientID, Action: string(action.Action), Phase: "installing"})
+	}
+	adapter.onResult = func(action environment.PreparedBinding, result installer.Result) {
+		emitSkillsProgress(progress, SkillsProgress{Alias: action.Alias, ClientID: action.ClientID, Action: string(action.Action), Phase: "finished", Result: result})
+	}
+	applied, applyErr := applyPreparedDependencies(ctx, p.app, &p.request, adapter, p.check)
+	result.Items = skillsBatchItems(p.actions, applied.Results, applyErr, started)
 	if applyErr != nil {
-		if len(results) > 0 || applied.Published {
+		if len(applied.Results) > 0 || applied.Published {
 			result.Status = "partial"
 		}
 		result.RepairInstructions = append(result.RepairInstructions, "Inspect agentplugins deps status and follow existing recovery/repair instructions.")
@@ -137,4 +145,52 @@ func (p *PreparedSkillsBatch) Apply(ctx context.Context) (SkillsBatchResult, err
 	}
 	result.Status = "succeeded"
 	return result, nil
+}
+
+func skillsBatchItems(actions []SkillsAction, results []installer.Result, applyErr error, started string) []SkillsBatchItem {
+	items := make([]SkillsBatchItem, 0, len(actions))
+	cursor := 0
+	for _, action := range actions {
+		item := SkillsBatchItem{Alias: action.Alias, ClientID: action.ClientID, Action: action.Action, TargetPath: action.TargetPath, CandidateID: action.CandidateID, Status: "not_attempted"}
+		if action.Action == "unchanged" {
+			item.Status = "unchanged"
+		} else if cursor < len(results) {
+			r := results[cursor]
+			cursor++
+			item.Status = string(r.Outcome)
+			item.Reason = r.Reason
+			item.Client, item.ManualActions = r.Client, append([]string(nil), r.ManualActions...)
+			if item.Status == "" && applyErr != nil {
+				item.Status, item.Reason = "failed", applyErr.Error()
+			}
+		} else if applyErr != nil && started == skillsBindingKey(action.Alias, action.ClientID, action.Action) {
+			item.Status = "failed"
+			item.Reason = applyErr.Error()
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func emitSkillsProgress(observer func(SkillsProgress), event SkillsProgress) {
+	if observer == nil {
+		return
+	}
+	defer func() { _ = recover() }()
+	// The observer receives detached presentation facts, never a mutable native
+	// authority handle or slices shared with the transaction's returned result.
+	native := event.Result
+	client := native.Client
+	client.ProfileAuthority, client.SelectedDelivery = nil, domain.SelectedDelivery{}
+	client.RequiredComponents = append([]string(nil), client.RequiredComponents...)
+	if client.Failure != nil {
+		failure := *client.Failure
+		client.Failure = &failure
+	}
+	event.Result = installer.Result{Outcome: native.Outcome, Client: client, ManualActions: append([]string(nil), native.ManualActions...), Reason: native.Reason}
+	observer(event)
+}
+
+func skillsBindingKey(alias, client, action string) string {
+	return client + "\x00" + alias + "\x00" + action
 }

@@ -92,26 +92,40 @@ func normalizeMulti(req MultiSelectRequest) (MultiSelectRequest, error) {
 }
 
 func normalizeConfirm(req ConfirmRequest) (ConfirmRequest, error) {
+	review, err := normalizeConfirmationReview(confirmationReview{ConfirmRequest: req})
+	return review.ConfirmRequest, err
+}
+
+func normalizeConfirmationReview(req confirmationReview) (confirmationReview, error) {
 	total := len(req.Title)
 	title, err := displayField(req.Title, true)
 	if err != nil || strings.TrimSpace(title) == "" {
-		return ConfirmRequest{}, fmt.Errorf("%w: confirmation title", ErrInvalidRequest)
+		return confirmationReview{}, fmt.Errorf("%w: confirmation title", ErrInvalidRequest)
 	}
-	if len(req.Summary) > 128 {
-		return ConfirmRequest{}, fmt.Errorf("%w: summary exceeds 128 rows", ErrInvalidRequest)
+	if len(req.Summary)+len(req.Details) > 128 {
+		return confirmationReview{}, fmt.Errorf("%w: summary exceeds 128 rows: %w", ErrInvalidRequest, ErrReviewTooLarge)
 	}
-	summary := make([]string, len(req.Summary))
-	for i, row := range req.Summary {
-		total += len(row)
-		if len(row) > 4096 || !utf8.ValidString(row) {
-			return ConfirmRequest{}, fmt.Errorf("%w: invalid summary row", ErrInvalidRequest)
+	for _, rows := range []*[]string{&req.Summary, &req.Details} {
+		if *rows == nil {
+			continue
 		}
-		summary[i] = clean(row) // Authority rows are never clipped.
+		cleaned := make([]string, len(*rows))
+		for i, row := range *rows {
+			total += len(row)
+			if len(row) > 4096 {
+				return confirmationReview{}, fmt.Errorf("%w: confirmation row exceeds 4096 bytes: %w", ErrInvalidRequest, ErrReviewTooLarge)
+			}
+			if !utf8.ValidString(row) {
+				return confirmationReview{}, fmt.Errorf("%w: invalid summary row", ErrInvalidRequest)
+			}
+			cleaned[i] = clean(row) // Authority rows are never clipped.
+		}
+		*rows = cleaned
 	}
 	if total > 64*1024 {
-		return ConfirmRequest{}, fmt.Errorf("%w: display exceeds 64 KiB", ErrInvalidRequest)
+		return confirmationReview{}, fmt.Errorf("%w: display exceeds 64 KiB: %w", ErrInvalidRequest, ErrReviewTooLarge)
 	}
-	req.Title, req.Summary = title, summary
+	req.Title = title
 	return req, nil
 }
 

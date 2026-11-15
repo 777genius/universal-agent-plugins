@@ -201,10 +201,15 @@ type dependencyInstaller struct {
 	previewUpdate              *installer.PreparedOperation
 	operationIDs               map[string]string
 	onResult                   func(environment.PreparedBinding, installer.Result)
+	onPrepare                  func(environment.PreparedBinding)
+	onApply                    func(environment.PreparedBinding)
 	currentAction              environment.PreparedBinding
 }
 
 func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environment.PreparedBinding) (*installer.PreparedOperation, error) {
+	if adapter.onPrepare != nil {
+		adapter.onPrepare(action)
+	}
 	if adapter.beforeApply != nil {
 		if err := adapter.beforeApply(); err != nil {
 			return nil, err
@@ -268,6 +273,9 @@ func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *install
 		if err := adapter.beforeApply(); err != nil {
 			return installer.Result{}, err
 		}
+	}
+	if adapter.onApply != nil {
+		adapter.onApply(adapter.currentAction)
 	}
 	result, err := adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
 	if adapter.onResult != nil {

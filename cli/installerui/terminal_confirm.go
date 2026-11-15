@@ -18,13 +18,10 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 )
 
-func (p terminalRenderer) confirm(ctx context.Context, req ConfirmRequest, queued []byte) (Confirmation, error) {
+func (p terminalRenderer) confirm(ctx context.Context, req confirmationReview, queued []byte) (Confirmation, error) {
 	accepted := req.Default && len(queued) == 0
 	field := huh.NewConfirm().Title(req.Title).Affirmative("Yes").Negative("No").Inline(true).Value(&accepted)
-	layout := &confirmationLayout{summary: strings.Join(req.Summary, "\n"), title: req.Title, noColor: p.NoColor, viewport: viewport.New(viewport.WithWidth(76), viewport.WithHeight(10))}
-	if layout.summary != "" {
-		field.Inline(false).WithButtonAlignment(lipgloss.Left)
-	}
+	layout := &confirmationLayout{summary: strings.Join(req.Summary, "\n"), details: strings.Join(req.Details, "\n"), title: req.Title, noColor: p.NoColor, field: field, viewport: viewport.New(viewport.WithWidth(76), viewport.WithHeight(10))}
 	_ = layout.resize(80, 24) // Private injected qualification has no terminal geometry.
 	form := huh.NewForm(huh.NewGroup(field)).WithLayout(layout)
 	if err := p.initialSize(layout.resize); err != nil {
@@ -56,29 +53,55 @@ func (p terminalRenderer) confirm(ctx context.Context, req ConfirmRequest, queue
 }
 
 type confirmationLayout struct {
-	summary, title string
-	viewport       viewport.Model
-	noColor        bool
-	width          int
+	summary, details, title string
+	showDetails             bool
+	width, height           int
+	viewport                viewport.Model
+	noColor                 bool
+	framed                  bool
+	field                   *huh.Confirm
 }
 
 const confirmationSummaryHelp = "↑/↓ PgUp/PgDn: review summary"
 
 func (l *confirmationLayout) resize(w, h int) error {
 	titleHeight := lenLines(ansi.Wrap(l.title, max(1, w-4), ""))
+	hasReview := l.summary != "" || l.details != ""
+	// Preserve the upstream framed review when Details is absent. The opt-in
+	// review can use inline buttons on small terminals to keep paths and consent visible.
+	framed := l.summary != ""
+	if l.details != "" {
+		framed = w >= 50 && h >= 18
+	}
 	reserved := titleHeight + 5
-	if l.summary != "" {
-		// The frame and separate button row each add two rows. Wrap the hint
-		// as well, so narrow terminals keep buttons and help visible.
-		reserved += 4 + lenLines(ansi.Wrap(confirmationSummaryHelp, max(1, w), ""))
+	if framed {
+		reserved += 4 + lenLines(ansi.Wrap(l.controls(), max(1, w), ""))
+	} else if l.details != "" {
+		reserved = titleHeight + 4 + lenLines(ansi.Wrap(l.controls(), max(1, w), ""))
 	}
 	if w < 16 || h < reserved+1 {
 		return fmt.Errorf("terminal too small for confirmation controls")
 	}
-	l.width = w
-	l.viewport.SetWidth(w - 4) // Two border cells and two padding cells.
-	l.viewport.SetHeight(h - reserved)
-	l.viewport.SetContent(formatConfirmationSummary(l.summary, w-4, l.noColor))
+	l.width, l.height, l.framed = w, h, framed
+	if l.field != nil && hasReview {
+		l.field.Inline(!framed).WithButtonAlignment(lipgloss.Left)
+	}
+	viewportWidth, contentWidth := w-4, w-4
+	if l.details != "" && !framed {
+		viewportWidth, contentWidth = w, w-2
+	}
+	l.viewport.SetWidth(viewportWidth)
+	content := l.summary
+	if l.showDetails {
+		content = l.details
+	}
+	wrapped := formatConfirmationSummary(content, contentWidth, l.noColor)
+	rows := h - reserved
+	if l.details != "" {
+		rows = min(rows, lenLines(wrapped))
+	}
+	l.viewport.SetHeight(rows)
+	l.viewport.SetContent(wrapped)
 	return nil
 }
 
@@ -126,6 +149,12 @@ func wrapConfirmationSummaryRow(row string, width int) string {
 
 func (l *confirmationLayout) key(msg tea.KeyPressMsg) {
 	switch msg.String() {
+	case "d":
+		if l.details != "" {
+			l.showDetails = !l.showDetails
+			_ = l.resize(l.width, l.height)
+			l.viewport.GotoTop()
+		}
 	case "up", "pgup":
 		l.viewport.ScrollUp(max(1, l.viewport.Height()/2))
 	case "down", "pgdown":
@@ -139,16 +168,33 @@ func (l *confirmationLayout) key(msg tea.KeyPressMsg) {
 
 func (l *confirmationLayout) View(f *huh.Form) string {
 	base := huh.LayoutDefault.View(f)
-	if l.summary == "" {
+	if l.summary == "" && l.details == "" {
 		return base
 	}
-	frame := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
+	content := l.viewport.View()
 	help := lipgloss.NewStyle()
+	if l.framed {
+		frame := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
+		if !l.noColor {
+			frame = frame.BorderForeground(terminaltheme.Color(terminaltheme.Muted))
+		}
+		content = frame.Render(content)
+	}
 	if !l.noColor {
-		frame = frame.BorderForeground(terminaltheme.Color(terminaltheme.Muted))
 		help = help.Foreground(terminaltheme.Color(terminaltheme.Muted))
 	}
-	return lipgloss.JoinVertical(lipgloss.Left, frame.Render(l.viewport.View()), help.Render(ansi.Wrap(confirmationSummaryHelp, l.width, "")), base)
+	return lipgloss.JoinVertical(lipgloss.Left, content, help.Render(ansi.Wrap(l.controls(), l.width, "")), base)
+}
+
+func (l *confirmationLayout) controls() string {
+	text := confirmationSummaryHelp
+	if l.details != "" {
+		if l.showDetails {
+			return "↑/↓ PgUp/PgDn scroll · d hide paths"
+		}
+		return "↑/↓ PgUp/PgDn scroll · d show paths"
+	}
+	return text
 }
 
 func (*confirmationLayout) GroupWidth(_ *huh.Form, _ *huh.Group, w int) int { return w }

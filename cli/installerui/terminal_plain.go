@@ -68,7 +68,7 @@ func terminalCancel(line string) bool {
 	return strings.ContainsAny(line, "\x1b\x03\x04")
 }
 
-func (t *Terminal) confirmPlain(ctx context.Context, req ConfirmRequest, queued []byte) (Confirmation, error) {
+func (t *Terminal) confirmPlain(ctx context.Context, req confirmationReview, queued []byte) (Confirmation, error) {
 	u, err := t.PlainUI()
 	if err != nil {
 		return Confirmation{}, err
@@ -90,5 +90,5 @@ func (t *Terminal) confirmPlain(ctx context.Context, req ConfirmRequest, queued 
 		}
 		return line, err
 	}
-	return u.Confirm(ctx, req)
+	return u.ConfirmWithDetails(ctx, req.ConfirmRequest, req.Details)
 }

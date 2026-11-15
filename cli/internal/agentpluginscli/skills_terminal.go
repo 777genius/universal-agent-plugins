@@ -168,7 +168,18 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 	if opts.format == "json" && opts.dryRun {
 		return renderSkillsDryRun(cmd, review)
 	}
-	if opts.format != "json" {
+	if confirm {
+		var err error
+		app, err = withPrompter(cmd, app, opts)
+		if err != nil {
+			return err
+		}
+	}
+	richReview := false
+	if rich, ok := app.Prompter.(interface{ RichReview() bool }); ok {
+		richReview = confirm && !opts.plain && opts.format == "human" && rich.RichReview()
+	}
+	if opts.format != "json" && !richReview {
 		if err := renderHumanSkillsReview(cmd, review); err != nil {
 			return err
 		}
@@ -177,11 +188,17 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 		return nil
 	}
 	if confirm {
-		app, err := withPrompter(cmd, app, opts)
-		if err != nil {
-			return err
+		request := prompt.ConfirmationRequest{Title: "Install these Skills?", Default: true}
+		if richReview {
+			request = skillsReviewConfirmation(review)
 		}
-		answer, err := app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Install these Skills?", Default: true})
+		answer, err := app.Prompter.Confirm(cmd.Context(), request)
+		if errors.Is(err, prompt.ErrReviewTooLarge) {
+			if err := renderHumanSkillsReview(cmd, review); err != nil {
+				return err
+			}
+			answer, err = app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Install the reviewed Skills?", Default: true})
+		}
 		if err != nil {
 			return err
 		}
@@ -190,44 +207,24 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 			return err
 		}
 	}
-	stop := startCommandActivity(cmd, app, opts, "Installing selected Skills")
-	result, err := prepared.Apply(cmd.Context())
-	stop()
+	var result SkillsBatchResult
+	var err error
+	if board := startSkillsProgressBoard(app, opts, prepared.Actions()); board != nil {
+		result, err = prepared.ApplyWithProgress(cmd.Context(), board.observe)
+		board.finish(result)
+	} else {
+		stop := startCommandActivity(cmd, app, opts, "Installing selected Skills")
+		result, err = prepared.Apply(cmd.Context())
+		stop()
+	}
 	if writeErr := renderSkillsResult(cmd, opts, result); writeErr != nil {
-		return writeErr
+		return errors.Join(err, writeErr)
 	}
 	return err
 }
 func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchResult) error {
 	if opts.format != "json" {
-		writer := cmd.OutOrStdout()
-		if _, err := fmt.Fprintf(writer, "Skills installation %s\n", prompt.SafeText(result.Status)); err != nil {
-			return err
-		}
-		for _, item := range result.Items {
-			if _, err := fmt.Fprintf(writer, "  %s → %s: %s\n",
-				prompt.SafeText(item.Alias), prompt.SafeText(item.ClientID), prompt.SafeText(item.Status)); err != nil {
-				return err
-			}
-		}
-		if result.Status == "succeeded" {
-			_, err := fmt.Fprint(writer,
-				"Files: installed or already up to date.\n"+
-					"Agent discovery: not verified by this Skills flow.\n"+
-					"Activation: not verified.\n"+
-					"Next: open each agent, complete any trust/sign-in steps,\n"+
-					"      reload if prompted, and confirm the Skill is visible.\n")
-			return err
-		}
-		if err := renderPartialSkillsReadiness(writer, result); err != nil {
-			return err
-		}
-		for _, instruction := range result.RepairInstructions {
-			if _, err := fmt.Fprintln(writer, "Next:", prompt.SafeText(instruction)); err != nil {
-				return err
-			}
-		}
-		return nil
+		return renderHumanSkillsResult(cmd.OutOrStdout(), result)
 	}
 	outcome := skillBatchOutcome(result)
 	output := struct {
