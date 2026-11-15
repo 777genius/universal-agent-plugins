@@ -3,6 +3,7 @@
 package grok
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -69,7 +70,9 @@ func (tail *grokACPTail) close() error {
 
 // drain is called only after the runner returns successful family cleanup.
 // The original buffered reader's unread bytes are part of this same stream.
-func (tail *grokACPTail) drain(ctx context.Context, prefetched []byte) (resultErr error) {
+// measured, when non-nil, is the only exception: it may accept the complete
+// trailing bytes as one exact vendor event that the caller has not yet seen.
+func (tail *grokACPTail) drain(ctx context.Context, prefetched []byte, measured func([]byte) bool) (resultErr error) {
 	if tail == nil || tail.fd < 0 {
 		return fmt.Errorf("grok ACP retained stdout is unavailable")
 	}
@@ -100,8 +103,11 @@ func (tail *grokACPTail) drain(ctx context.Context, prefetched []byte) (resultEr
 	if err != nil {
 		return fmt.Errorf("grok ACP stdout did not finish with bounded EOF: %w", err)
 	}
-	if len(prefetched)+len(body) != 0 {
-		return fmt.Errorf("grok ACP emitted trailing output after its exact response")
+	if len(prefetched)+len(body) == 0 {
+		return nil
 	}
-	return nil
+	if measured != nil && len(prefetched)+len(body) <= grokACPFrameLimit && measured(append(bytes.Clone(prefetched), body...)) {
+		return nil
+	}
+	return fmt.Errorf("grok ACP emitted trailing output after its exact response")
 }

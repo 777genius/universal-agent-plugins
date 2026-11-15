@@ -77,7 +77,7 @@ func TestEnablementACPTailActualPipeDoesNotCompeteOrChangeFlags(t *testing.T) {
 	if err := r.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := tail.drain(context.Background(), nil); err != nil {
+	if err := tail.drain(context.Background(), nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	assertGrokTailClosed(t, fd)
@@ -119,7 +119,7 @@ func TestEnablementACPTailPrefetchedAndPartialFramesRefuse(t *testing.T) {
 			}
 			_ = w.Close()
 			_ = r.Close()
-			if err := tail.drain(context.Background(), pending); err == nil {
+			if err := tail.drain(context.Background(), pending, nil); err == nil {
 				t.Fatal("trailing partial frame accepted")
 			}
 			assertGrokTailClosed(t, fd)
@@ -143,7 +143,7 @@ func TestEnablementACPTailCancellationAndUnclosedWriterRefuse(t *testing.T) {
 				cancel()
 			}
 			start := time.Now()
-			if err := tail.drain(ctx, nil); err == nil {
+			if err := tail.drain(ctx, nil, nil); err == nil {
 				t.Fatal("unsettled pipe accepted")
 			}
 			if time.Since(start) > time.Second {
@@ -182,8 +182,50 @@ func TestEnablementACPTailOverflowDupFailureAndEarlyCleanup(t *testing.T) {
 	fd = tail.fd
 	_ = r.Close()
 	_ = w.Close()
-	if err := tail.drain(context.Background(), bytes.Repeat([]byte{'x'}, grokACPTailLimit+1)); err == nil {
+	if err := tail.drain(context.Background(), bytes.Repeat([]byte{'x'}, grokACPTailLimit+1), nil); err == nil {
 		t.Fatal("overflow accepted")
 	}
 	assertGrokTailClosed(t, fd)
+}
+
+// Grok can flush its single measured metadata event after the listing response.
+// Only that exact complete frame, seen at most once overall, is tolerated.
+func TestEnablementACPTailAcceptsOnlyOneUnseenMeasuredNotification(t *testing.T) {
+	const event = `{"jsonrpc":"2.0","method":"_x.ai/mcp/servers_updated","params":{"mcpServers":[]}}` + "\n"
+	cases := map[string]struct {
+		trailing string
+		seen     bool
+		accepted bool
+	}{
+		"exact-after-response":    {event, false, true},
+		"already-seen-before":     {event, true, false},
+		"duplicate":               {event + event, false, false},
+		"partial-frame":           {strings.TrimSuffix(event, "\n"), false, false},
+		"foreign-method":          {strings.ReplaceAll(event, "_x.ai/mcp/servers_updated", "session/update"), false, false},
+		"non-empty-servers":       {strings.ReplaceAll(event, `[]`, `[{"name":"x"}]`), false, false},
+		"extra-member":            {strings.ReplaceAll(event, `"params"`, `"id":1,"params"`), false, false},
+		"response-instead":        {`{"jsonrpc":"2.0","id":2,"result":{}}` + "\n", false, false},
+		"event-then-extra-output": {event + "x\n", false, false},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			r, w := grokTailPipe(t)
+			tail, err := captureGrokACPTail(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := io.WriteString(w, tc.trailing); err != nil {
+				t.Fatal(err)
+			}
+			_ = w.Close()
+			_ = r.Close()
+			var measured func([]byte) bool
+			if !tc.seen {
+				measured = acceptTrailingMeasuredNotification
+			}
+			if err := tail.drain(context.Background(), nil, measured); (err == nil) != tc.accepted {
+				t.Fatalf("accepted=%v want %v: %v", err == nil, tc.accepted, err)
+			}
+		})
+	}
 }

@@ -71,7 +71,11 @@ func readEnablementInventory(ctx context.Context, runner ports.CommandRunner, in
 	if !inventory.complete {
 		return nil, fmt.Errorf("grok ACP inventory response is incomplete")
 	}
-	if err := tail.drain(bounded, pending); err != nil {
+	var measured func([]byte) bool
+	if !inventory.notified {
+		measured = acceptTrailingMeasuredNotification
+	}
+	if err := tail.drain(bounded, pending, measured); err != nil {
 		return nil, err
 	}
 	return inventory.plugins, nil
@@ -147,6 +151,24 @@ func (state *grokACPInventory) accept(value map[string]any, project string) erro
 	}
 	state.plugins, state.complete = plugins, true
 	return nil
+}
+
+// Grok may flush its single measured empty metadata event after the listing
+// response instead of before it. Only that exact complete frame is accepted, and
+// only when it was not already seen: the notification budget stays one.
+func acceptTrailingMeasuredNotification(trailing []byte) bool {
+	line, ok := bytes.CutSuffix(trailing, []byte("\n"))
+	if !ok || bytes.IndexByte(line, '\n') >= 0 {
+		return false
+	}
+	value, err := shared.DecodeStrictJSONObject(line)
+	if err != nil || value["jsonrpc"] != "2.0" {
+		return false
+	}
+	if _, present := value["method"]; !present {
+		return false
+	}
+	return (&grokACPInventory{}).acceptNotification(value) == nil
 }
 
 func (state *grokACPInventory) acceptNotification(value map[string]any) error {
