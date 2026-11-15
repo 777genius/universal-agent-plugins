@@ -31,7 +31,7 @@ func TestProjectPublisherRetainsScopedKernelAuthority(t *testing.T) {
 			store := statev2.Store{Path: filepath.Join(dataRoot, "state-v2.json"), ProjectRoot: root}
 			paths := pathpolicy.Policy{}
 			plan := planner.Planner{ProjectRoot: root, ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: registry}
-			service := newAgentpluginsLifecycle(dataRoot, store, paths, registry, providers.Stager{},
+			service := newAgentpluginsLifecycle(t.TempDir(), dataRoot, store, paths, registry, providers.Stager{},
 				processadapter.OS{}, plan, dirswap.Manager{JournalDir: filepath.Join(dataRoot, "operations")},
 				processlock.Lock{Path: filepath.Join(dataRoot, "mutation.lock")}, nativeconfig.New())
 			activator, ok := service.Activator.(providers.Activator)

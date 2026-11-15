@@ -2725,6 +2725,133 @@ class ReadonlyInventoryContracts(unittest.TestCase):
                                          dict(req, start_monotonic_ns=1))
         child.assert_not_called()
 
+    @contextmanager
+    def controller_image(self, root):
+        from grok_project_protocol_service import Inputs, directory_identity
+        clean = root / 'runtime'
+        binary = clean / 'usr/bin'
+        binary.mkdir(parents=True)
+        roles = ('env', 'unshare', 'setpriv', 'python3.12', 'bwrap')
+        for name in roles:
+            (binary / name).write_bytes(b'inert original image role ' + name.encode())
+            (binary / name).chmod(0o555)
+        fixture_owner = ((os.getuid(), os.getgid()),)
+        original_pin, original_close = Inputs.pin, Inputs.close
+        retained = []
+        def runtime_directory(owner, path):
+            # Keep real descriptors/identities while the ordinary fixture
+            # stands in for the separately provisioned root-owned image.
+            self.assertIn(path, (clean, clean / 'usr', binary))
+            return directory_identity(os.fstat(owner.directory(path)))
+        def pin(owner, path, owners, maximum, **flags):
+            self.assertIn(path.name, roles)
+            self.assertEqual((path.parent, owners, maximum, flags),
+                             (binary, ((0, 0),), 64 << 20, {'executable':True}))
+            return original_pin(owner, path, fixture_owner, maximum, **flags)
+        def close(owner):
+            retained.extend(descriptor for descriptor, *_ in (*owner.files.values(), *owner.directories.values()))
+            original_close(owner)
+        with (mock.patch.object(Inputs, 'runtime_directory', runtime_directory),
+              mock.patch.object(Inputs, 'pin', pin), mock.patch.object(Inputs, 'close', close)):
+            yield clean
+        self.assertTrue(retained)
+        for descriptor in retained:
+            with self.assertRaises(OSError):
+                os.fstat(descriptor)
+
+    def test_clean_controller_keeps_original_pipe_owner_and_private_manager_clock(self):
+        import project_native_runtime as runtime
+        req, _ = self.request()
+        original, children, contexts = case.subprocess.Popen, [], []
+        env = dict(GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted',
+                   AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED='1', EXPECTED_COMMIT=req['source_commit'])
+        with tempfile.TemporaryDirectory() as temporary, self.controller_image(Path(temporary)) as clean:
+            root = Path(temporary)
+            req['input_root'] = str(root)
+            def inert(argv, **options):
+                self.assertEqual(options['stdin'], subprocess.PIPE)
+                self.assertEqual(options['cwd'], root)
+                body = b'systemd 255\n' if '--version' in argv else b'{"closed":true}\n'
+                program = ('import os,select\n'
+                           'assert not select.select([0],[],[],0.01)[0]\n'
+                           'os.write(1,' + repr(body) + ')\n')
+                child = original([sys.executable, '-I', '-B', '-c', program], **options)
+                children.append(child)
+                return child
+            def service(ctx, selected, selected_env, origin, *, runtime_root, capture):
+                contexts.append(ctx)
+                self.assertEqual((selected, runtime_root, origin), (root, clean, req['start_monotonic_ns']))
+                self.assertEqual(ctx.deadline, (origin + 30_000_000_000) / 1e9)
+                self.assertEqual(ctx.summary, {})
+                self.assertEqual(selected_env, dict(env, PATH='/usr/bin:/bin', LANG='C.UTF-8'))
+                manager = {'PATH':'/usr/bin:/bin', 'LANG':'C'}
+                record, stdout, stderr = ctx.command('grok-readonly-controller-systemd-version',
+                    ['/usr/bin/systemd-run', '--version'], root, manager, 2)
+                self.assertEqual((record, stdout, stderr), ({'exit':0, 'error':None}, b'systemd 255\n', b''))
+                return capture(['/usr/bin/sudo', '-n', '/usr/bin/systemd-run', '--pipe'], manager)
+            with (mock.patch.dict(os.environ, env), mock.patch.object(case.os, 'getuid', return_value=req['uid']),
+                  mock.patch.object(case.os, 'getgid', return_value=req['gid']),
+                  mock.patch.object(case.subprocess, 'Popen', side_effect=inert),
+                  mock.patch.object(runtime, 'grok_readonly_controller_service', side_effect=service)):
+                self.assertEqual(case.readonly_controller_capture(root / 'helper', root, req, clean), {'closed':True})
+            self.assertEqual(len(children), 2)
+            for child in children:
+                self.assertIsNotNone(child.poll())
+                self.assertTrue(child.stdin.closed and child.stdout.closed and child.stderr.closed)
+            with (mock.patch.object(case.time, 'monotonic_ns', return_value=req['start_monotonic_ns'] + 30_000_000_000),
+                  mock.patch.object(case.subprocess, 'Popen') as launch, self.assertRaisesRegex(ValueError, 'readonly-deadline')):
+                contexts[0].command('expired', ['/usr/bin/systemctl'], root, {}, 2)
+            launch.assert_not_called()
+            with mock.patch.object(runtime, 'grok_readonly_controller_service') as launch, self.assertRaises(ValueError):
+                case.readonly_controller_capture(root / 'foreign', root, req, clean)
+            launch.assert_not_called()
+
+    def test_controller_refuses_original_image_replacement_before_dispatch_and_after_receipt(self):
+        import project_native_runtime as runtime
+        for phase, role in (('before', 'env'), ('capture', 'python3.12'), ('after', 'bwrap'), ('after', 'runtime')):
+            with self.subTest(phase=phase, role=role), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                req, _ = self.request()
+                def replace(clean):
+                    if role == 'runtime':
+                        clean.rename(root / 'original-runtime')
+                        clean.mkdir()
+                    else:
+                        path = clean / 'usr/bin' / role
+                        body, mode = path.read_bytes(), path.stat().st_mode & 0o777
+                        path.rename(path.with_name('original-' + role))
+                        path.write_bytes(body)
+                        path.chmod(mode)
+                with self.controller_image(root) as clean:
+                    def service(ctx, selected, selected_env, origin, *, runtime_root, capture):
+                        if phase == 'before':
+                            replace(clean)
+                        value = capture(['/usr/bin/sudo', '-n', '/usr/bin/systemd-run', '--pipe'], {})
+                        if phase == 'after':
+                            replace(clean)
+                        return value
+                    def transport(*_args, **_kwargs):
+                        if phase == 'capture':
+                            replace(clean)
+                        return 0, b'{"closed":true}\n', b''
+                    with (mock.patch.object(case.os, 'getuid', return_value=req['uid']),
+                          mock.patch.object(case.os, 'getgid', return_value=req['gid']),
+                          mock.patch.object(runtime, 'grok_readonly_controller_service', side_effect=service),
+                          mock.patch.object(case, 'readonly_transport', side_effect=transport) as launch,
+                          self.assertRaisesRegex(ValueError, 'input ancestry changed|held input changed')):
+                        case.readonly_controller_capture(root / 'helper', root, req, clean)
+                    self.assertEqual(launch.call_count, 0 if phase == 'before' else 1)
+
+    def test_controller_receipt_cannot_adopt_substituted_host_input_even_when_inner_proof_is_valid(self):
+        receipt, request, before = self.receipt()
+        self.assertTrue(case.readonly_original_receipt(copy.deepcopy(receipt), request, before)['semantic_complete'])
+        for name in ('.', 'home/.grok/config.toml'):
+            changed = copy.deepcopy(before)
+            changed[name] = list(changed[name])
+            changed[name][1] += 1
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'readonly-controller-baseline-join'):
+                case.readonly_original_receipt(copy.deepcopy(receipt), request, changed)
+
     def test_readout_requires_original_typed_ledger_and_complete_raw_stream_members(self):
         receipt, request, before = self.receipt()
         receipt = copy.deepcopy(receipt)

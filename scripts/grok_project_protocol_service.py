@@ -89,6 +89,13 @@ class Inputs:
         self.join_directories()
         return self.directories[path][0]
 
+    def runtime_directory(self, path):
+        descriptor = self.directory(path)
+        info = os.fstat(descriptor)
+        require((info.st_uid, info.st_gid) == (0, 0) and not info.st_mode & 0o022,
+                "root-owned immutable clean runtime required")
+        return directory_identity(info)
+
     def join_directories(self):
         for path, (descriptor, identity) in self.directories.items():
             self.budget.check()
@@ -139,6 +146,19 @@ class Inputs:
     def verify(self):
         for path in self.files:
             self.read(path)
+
+
+def runtime_interpreters(inputs, runtime_root):
+    """Keep parent and clean-root child executables as separate original roles."""
+    require(isinstance(runtime_root, Path) and runtime_root.is_absolute()
+            and runtime_root.resolve() == runtime_root, "canonical clean runtime required")
+    runtime_identity = inputs.runtime_directory(runtime_root)
+    parent = Path("/usr/bin/python3").resolve(strict=True)
+    require(Path(sys.executable).resolve(strict=True) == parent, "selected parent interpreter differs")
+    parent_hash = inputs.pin(parent, ((0, 0),), 64 << 20, executable=True)
+    child = runtime_root / runtime.GROK_CHILD_PYTHON.relative_to("/")
+    child_hash = inputs.pin(child, ((0, 0),), 64 << 20, executable=True)
+    return parent_hash, child_hash, runtime_identity
 
 
 def child_environment(root, expected):
@@ -412,7 +432,7 @@ def publish(output, body, receipt, inputs, output_sink):
     return workflow_output(*output_sink, inputs, receipt["native_passed"])
 
 
-def run(case, installer, probe, output):
+def run(case, installer, probe, output, *, runtime_root):
     origin = time.monotonic_ns()
     budget = shared.Budget(900)
     budget.deadline = origin / 1e9 + 900
@@ -434,9 +454,8 @@ def run(case, installer, probe, output):
             ctx.env = child_environment(output, expected)
             inputs.directory(runtime.SOURCE)
             inputs.pin(runtime.SOURCE / "scripts" / runtime.GROK_SCRIPTS[case], ((os.getuid(), os.getgid()),), 2 << 20)
-            python = Path("/usr/bin/python3").resolve(strict=True)
-            python_hash = inputs.pin(python, ((0, 0),), 64 << 20, executable=True)
-            require(Path(sys.executable).resolve(strict=True) == python, "selected parent interpreter differs")
+            parent_python_hash, python_hash, runtime_identity = runtime_interpreters(inputs, runtime_root)
+            python = runtime.GROK_CHILD_PYTHON
             require(installer != probe and installer.name == "agentplugins" and probe.name == "probe"
                     and installer.parent == probe.parent, "exact compiled role pair required")
             expected_files = {"installer_sha256": inputs.pin(installer, ((os.getuid(), os.getgid()),), 512 << 20, executable=True),
@@ -463,7 +482,8 @@ def run(case, installer, probe, output):
                     "workflow output changed while reading")
             inputs.verify()
             stage = "service"
-            record, _, _ = runtime.grok_service(ctx, case, (python, installer, probe), ctx.env, output, origin)
+            record, _, _ = runtime.grok_service(ctx, case, (python, installer, probe), ctx.env, output, origin,
+                                                runtime_root=runtime_root)
             closure = summary.get("delegated_service", {})
             require(closure.get("closed") is True and closure.get("forced_stop") is False
                     and closure.get("forced_kill") is False and record.get("error") is None
@@ -483,7 +503,9 @@ def run(case, installer, probe, output):
             passed = admit_evidence(body, case, record, {**source, **expected_files}, ctx.env, budget,
                                     inventory_test=inventory_test if case == "grok-protocol" else None)
             receipt = {"schema_version": 1, "kind": "grok-delegated-service", "case": case, **source, **expected_files,
-                "python_sha256": python_hash, "original_start_monotonic_ns": origin, "native_passed": passed,
+                "python_sha256": python_hash, "parent_python_sha256": parent_python_hash,
+                "runtime_root": str(runtime_root), "runtime_root_identity": runtime_identity,
+                "original_start_monotonic_ns": origin, "native_passed": passed,
                 "evidence_bytes": len(body), "evidence_sha256": hashlib.sha256(body).hexdigest(),
                 "delegated_service": summary["delegated_service"], "commands": summary["commands"],
                 "streams_base64": {key: base64.b64encode(value).decode() for key, value in ctx.captures.items()}}
@@ -523,10 +545,10 @@ def run(case, installer, probe, output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case", choices=runtime.GROK_SCRIPTS, required=True)
-    for name in ("installer", "probe", "output"):
+    for name in ("installer", "probe", "output", "runtime-root"):
         parser.add_argument("--" + name, required=True, type=Path)
     args = parser.parse_args()
-    return run(args.case, args.installer, args.probe, args.output)
+    return run(args.case, args.installer, args.probe, args.output, runtime_root=args.runtime_root)
 
 
 if __name__ == "__main__":

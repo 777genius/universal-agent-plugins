@@ -4,6 +4,8 @@ on:
     paths:
       - '.github/workflows/grok-project-protocol.yml'
       - 'scripts/grok_project_protocol_*.py'
+      - 'scripts/provision_grok_native_runtime.sh'
+      - 'scripts/grok_bwrap_policy_setup.py'
       - 'scripts/test_grok_project_protocol.py'
       - 'repotests/testdata/agentplugins_native_probe/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
@@ -24,6 +26,8 @@ on:
     paths:
       - '.github/workflows/grok-project-protocol.yml'
       - 'scripts/grok_project_protocol_*.py'
+      - 'scripts/provision_grok_native_runtime.sh'
+      - 'scripts/grok_bwrap_policy_setup.py'
       - 'scripts/test_grok_project_protocol.py'
       - 'repotests/testdata/agentplugins_native_probe/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
@@ -69,13 +73,25 @@ jobs:
         with:
           go-version: '1.26.11'
           cache: false
-      - name: Provision the readonly inventory primitive
-        timeout-minutes: 3
+      - name: Provision the signature-verified Noble runtime and pinned Bubblewrap
+        id: grok_runtime_setup
+        run: bash scripts/provision_grok_native_runtime.sh
+      - name: Install the pinned per-bwrap policy and prove the clean-runtime child
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends bubblewrap
-          dpkg-query --show --showformat='${Package} ${Version}\n' bubblewrap
-          /usr/bin/bwrap --version
+          sudo -n /usr/bin/python3 -B scripts/grok_bwrap_policy_setup.py "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/grok-bwrap-policy.json"
+      - name: Preserve fixed clean-runtime provisioning provenance
+        if: ${{ always() && steps.grok_runtime_setup.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: grok-project-runtime-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/grok-runtime-packages.txt
+            ${{ runner.temp }}/grok-bubblewrap-build.json
+            ${{ runner.temp }}/grok-bubblewrap-help.txt
+            ${{ runner.temp }}/grok-bwrap-policy.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Build ordinary installer and existing credential-free probe
         run: |
           set -euo pipefail
@@ -100,7 +116,8 @@ jobs:
           /usr/bin/python3 -B scripts/grok_project_protocol_service.py --case grok-protocol \
             --installer "$RUNNER_TEMP/grok-protocol-tools/agentplugins" \
             --probe "$RUNNER_TEMP/grok-protocol-tools/probe" \
-            --output "$RUNNER_TEMP/grok-project-no-model-evidence"
+            --output "$RUNNER_TEMP/grok-project-no-model-evidence" \
+            --runtime-root "$RUNNER_TEMP/grok-runtime-root"
       - name: Preserve original bounded protocol evidence
         id: grok_native_upload
         if: ${{ always() && steps.grok_native.outcome == 'success' && steps.grok_native.outputs.publication == 'admitted' }}
@@ -116,9 +133,10 @@ jobs:
         timeout-minutes: 3
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends strace
-          dpkg-query --show --showformat='${Package} ${Version}\n' strace
+          sudo apt-get install --yes --no-install-recommends strace bubblewrap
+          dpkg-query --show --showformat='${Package} ${Version}\n' strace bubblewrap
           /usr/bin/strace --version
+          /usr/bin/bwrap --version
       - name: Measure bounded inert tracer mechanics without native qualification
         id: grok_tracer
         if: ${{ always() && !cancelled() && steps.grok_native_upload.outcome == 'success' && steps.grok_tracer_setup.outcome == 'success' }}

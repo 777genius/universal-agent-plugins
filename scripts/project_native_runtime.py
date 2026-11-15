@@ -85,11 +85,15 @@ CLINE_ENV = frozenset("HOME USERPROFILE XDG_CONFIG_HOME XDG_CACHE_HOME XDG_STATE
     "AGENTPLUGINS_PROJECT_NATIVE_OUTPUT AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT PLUGIN_KIT_AI_REPO_ROOT".split())
 CLINE_UNIT = re.compile(r"uap-cline-project-[0-9a-f]{32}\.service\Z")
 GROK_SCRIPTS = {"grok-protocol": "grok_project_protocol_e2e.py", "grok-noauth": "grok_noauth_call_e2e.py"}
+GROK_CHILD_PYTHON = Path("/usr/bin/python3.12")
 GROK_ENV = frozenset("HOME PATH LANG LC_ALL NO_COLOR TERM TMPDIR RUNNER_TEMP GIT_CONFIG_GLOBAL "
     "GIT_CONFIG_NOSYSTEM GIT_TERMINAL_PROMPT PYTHONDONTWRITEBYTECODE GITHUB_ACTIONS RUNNER_ENVIRONMENT "
     "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED EXPECTED_COMMIT GITHUB_RUN_ID GITHUB_RUN_ATTEMPT GITHUB_EVENT_NAME".split())
+GROK_READONLY_CONTROLLER = "grok-readonly-controller"
+GROK_READONLY_ENV = frozenset("PATH LANG GITHUB_ACTIONS RUNNER_ENVIRONMENT "
+    "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED EXPECTED_COMMIT".split())
 SERVICE_UNITS = {"cline": CLINE_UNIT, **{case: re.compile(r"uap-" + case + r"-[0-9a-f]{32}\.service\Z")
-                                        for case in GROK_SCRIPTS}}
+                                        for case in (*GROK_SCRIPTS, GROK_READONLY_CONTROLLER)}}
 
 
 def strict_json(body):
@@ -2086,7 +2090,27 @@ def cline_service_argv(tests, env, output, unit, uid, gid, origin_ns):
             "-test.run=^TestAgentpluginsClineNativeProjectCompleteCycle$", "-test.count=1", "-test.v", "-test.timeout=180s"]
 
 
-def grok_service_argv(case, inputs, env, output, unit, uid, gid, origin_ns):
+def grok_runtime_properties(case, inputs, output, runtime_root):
+    """Mount only the fixed source, compiled roles and owned output in Noble."""
+    if (case not in GROK_SCRIPTS or type(inputs) is not tuple or len(inputs) != 3
+            or inputs[0] != GROK_CHILD_PYTHON or not isinstance(runtime_root, Path)):
+        raise ValueError("fixed Grok clean-runtime roles required")
+    readonly = [SOURCE, *inputs[1:]]
+    if case == "grok-protocol":
+        readonly.append(inputs[1].with_name("grok-inventory-test"))
+    paths = [runtime_root, output, *readonly]
+    if any(not isinstance(path, Path) or not path.is_absolute() or path.resolve() != path
+           or re.fullmatch(r"/[A-Za-z0-9_./-]+", str(path)) is None for path in paths):
+        raise ValueError("canonical Grok runtime mount path required")
+    for index, left in enumerate(paths):
+        if any(left == right or left in right.parents or right in left.parents for right in paths[index + 1:]):
+            raise ValueError("overlapping Grok runtime roles refused")
+    return ["--property=RootDirectory=" + str(runtime_root), "--property=MountAPIVFS=yes",
+            "--property=BindReadOnlyPaths=" + " ".join(str(path) for path in readonly),
+            "--property=BindPaths=" + str(output) + " /sys/fs/cgroup"]
+
+
+def grok_service_argv(case, inputs, env, output, unit, uid, gid, origin_ns, *, runtime_root):
     if (case not in GROK_SCRIPTS or not SERVICE_UNITS[case].fullmatch(unit)
             or type(uid) is not int or uid <= 0 or type(gid) is not int or gid <= 0
             or type(origin_ns) is not int or origin_ns <= 0 or set(env) != GROK_ENV
@@ -2094,7 +2118,8 @@ def grok_service_argv(case, inputs, env, output, unit, uid, gid, origin_ns):
             or env["PATH"] != "/usr/bin:/bin" or env["GITHUB_ACTIONS"] != "true"
             or env["RUNNER_ENVIRONMENT"] != "github-hosted" or env["AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED"] != "1"
             or type(inputs) is not tuple or len(inputs) != 3
-            or any(not path.is_absolute() or path.resolve() != path for path in (*inputs, output))
+            or inputs[0] != GROK_CHILD_PYTHON
+            or any(not path.is_absolute() or path.resolve() != path for path in (*inputs[1:], output))
             or SOURCE == output or SOURCE in output.parents):
         raise ValueError("closed Grok delegated service arguments required")
     fixed = {"LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "NO_COLOR": "1", "TERM": "dumb",
@@ -2111,12 +2136,47 @@ def grok_service_argv(case, inputs, env, output, unit, uid, gid, origin_ns):
     if not 15 < remaining <= 900:
         raise ValueError("Grok original service deadline exhausted")
     python, installer, probe = inputs
+    properties = grok_runtime_properties(case, inputs, output, runtime_root)
     return ["/usr/bin/sudo", "-n", "/usr/bin/systemd-run", "--unit=" + unit, "--wait", "--pipe", "--collect", "--quiet",
             "--service-type=exec", "--expand-environment=no", "--uid=" + str(uid), "--gid=" + str(gid), "--property=Delegate=yes",
             "--property=NoNewPrivileges=yes", "--property=KillMode=control-group", "--property=RuntimeMaxSec=" + str(remaining) + "s",
-            "--property=TimeoutStopSec=30s", "--working-directory=" + str(output), "/usr/bin/env", "-i",
+            "--property=TimeoutStopSec=30s", *properties, "--working-directory=" + str(output), "/usr/bin/env", "-i",
             *(key + "=" + env[key] for key in sorted(env)), str(python), "-B", str(SOURCE / "scripts" / GROK_SCRIPTS[case]),
             "--installer", str(installer), "--probe", str(probe), "--output", str(output / "child")]
+
+
+def grok_readonly_controller_argv(input_root, env, unit, uid, gid, origin_ns, *, runtime_root):
+    """Place only the existing privileged controller in the fixed clean runtime."""
+    if (not SERVICE_UNITS[GROK_READONLY_CONTROLLER].fullmatch(unit)
+            or type(uid) is not int or uid <= 0 or type(gid) is not int or gid <= 0
+            or type(origin_ns) is not int or origin_ns <= 0 or set(env) != GROK_READONLY_ENV
+            or any(type(value) is not str or len(value) > 4096 or any(c in value for c in "\x00\r\n")
+                   for value in env.values())
+            or env["PATH"] != "/usr/bin:/bin" or env["LANG"] != "C.UTF-8"
+            or env["GITHUB_ACTIONS"] != "true" or env["RUNNER_ENVIRONMENT"] != "github-hosted"
+            or env["AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED"] != "1"
+            or re.fullmatch(r"[0-9a-f]{40}", env["EXPECTED_COMMIT"]) is None
+            or not isinstance(input_root, Path) or not isinstance(runtime_root, Path)
+            or re.fullmatch(r"/tmp/uap-grok-acp-input-[0-9a-f]{32}", str(input_root)) is None
+            or any(not path.is_absolute() or path.resolve() != path
+                   or re.fullmatch(r"/[A-Za-z0-9_./-]+", str(path)) is None
+                   for path in (input_root, runtime_root))
+            or runtime_root == input_root or runtime_root in input_root.parents or input_root in runtime_root.parents):
+        raise ValueError("fixed readonly controller arguments required")
+    elapsed = time.monotonic_ns() - origin_ns
+    if elapsed < 0 or elapsed >= 25_000_000_000:
+        raise ValueError("readonly controller original active deadline exhausted")
+    selected = {**env, "SUDO_UID": str(uid), "SUDO_GID": str(gid)}
+    return ["/usr/bin/sudo", "-n", "/usr/bin/systemd-run", "--unit=" + unit, "--wait", "--pipe", "--collect", "--quiet",
+            "--service-type=exec", "--expand-environment=no", "--uid=0", "--gid=0", "--property=Delegate=yes",
+            "--property=NoNewPrivileges=yes", "--property=KillMode=control-group",
+            "--property=RuntimeMaxSec=" + format((25_000_000_000 - elapsed) / 1e9, ".9g") + "s",
+            "--property=TimeoutStopSec=5s", "--property=RootDirectory=" + str(runtime_root),
+            "--property=MountAPIVFS=yes", "--property=BindReadOnlyPaths=" + str(input_root),
+            "--property=BindPaths=" + str(input_root / "readonly-witness") + " /sys/fs/cgroup",
+            "--working-directory=" + str(input_root), "/usr/bin/env", "-i",
+            *(key + "=" + selected[key] for key in sorted(selected)),
+            str(input_root / "helper"), "--input-root", str(input_root)]
 
 
 def cline_unit_state(body, unit):
@@ -2194,16 +2254,29 @@ def cline_service(ctx, tests, env, output):
     return _delegated_service(ctx, "cline", tests, env, output)
 
 
-def grok_service(ctx, case, inputs, env, output, origin_ns):
+def grok_service(ctx, case, inputs, env, output, origin_ns, *, runtime_root):
     if (case not in GROK_SCRIPTS or type(origin_ns) is not int or origin_ns <= 0
             or ctx.budget.deadline != origin_ns / 1e9 + 900):
         raise ValueError("Grok requires its original whole-journey deadline")
-    return _delegated_service(ctx, case, inputs, env, output, origin_ns)
+    grok_runtime_properties(case, inputs, output, runtime_root)
+    return _delegated_service(ctx, case, inputs, env, output, origin_ns, runtime_root=runtime_root)
 
 
-def _delegated_service(ctx, case, inputs, env, output, origin_ns=None):
+def grok_readonly_controller_service(ctx, input_root, env, origin_ns, *, runtime_root, capture):
+    if (type(origin_ns) is not int or origin_ns <= 0 or not callable(capture)
+            or ctx.budget.deadline != (origin_ns + 30_000_000_000) / 1e9):
+        raise ValueError("readonly controller requires its original thirty-second deadline")
+    ctx.budget.check()
+    return _delegated_service(ctx, GROK_READONLY_CONTROLLER, input_root, env, input_root, origin_ns,
+                              runtime_root=runtime_root, capture=capture)
+
+
+def _delegated_service(ctx, case, inputs, env, output, origin_ns=None, *, runtime_root=None, capture=None):
     if case not in SERVICE_UNITS:
         raise ValueError("unregistered delegated service")
+    controller = case == GROK_READONLY_CONTROLLER
+    if controller != callable(capture):
+        raise ValueError("fixed readonly controller capture required")
     cline_host()
     uid, gid = os.getuid(), os.getgid()
     held = {}
@@ -2230,7 +2303,7 @@ def _delegated_service(ctx, case, inputs, env, output, origin_ns=None):
             raise ValueError("exact owned unit query failed")
         return _service_unit_state(stdout, unit, case)
     def empty():
-        return _service_cgroup_empty(unit, uid, case)
+        return _service_cgroup_empty(unit, 0 if controller else uid, case)
     state = query(case + "-service-absent")
     if state["LoadState"] != "not-found" or not empty():
         raise ValueError("fresh Cline unit already exists")
@@ -2238,22 +2311,26 @@ def _delegated_service(ctx, case, inputs, env, output, origin_ns=None):
     unchanged()
     if record["exit"] != 0 or stderr or not re.match(rb"systemd 255(?: \([^\r\n]*\))?\n", stdout):
         raise ValueError("reviewed systemd 255 host required")
-    receipt = {"unit": unit, "uid": uid, "gid": gid, "forced_stop": False, "forced_kill": False,
+    receipt = {"unit": unit, "uid": 0 if controller else uid, "gid": 0 if controller else gid,
+               "forced_stop": False, "forced_kill": False,
                "closed": False, "system_executables": {str(path): digest for path, (_, digest) in held.items()}}
     ctx.summary["delegated_service"] = receipt
     origin = time.monotonic_ns() if case == "cline" else origin_ns
-    seconds = 180 if case == "cline" else 900
-    argv = (cline_service_argv(inputs, env, output, unit, uid, gid, origin) if case == "cline"
-            else grok_service_argv(case, inputs, env, output, unit, uid, gid, origin))
+    seconds = 30 if controller else 180 if case == "cline" else 900
+    argv = (grok_readonly_controller_argv(inputs, env, unit, uid, gid, origin, runtime_root=runtime_root) if controller
+            else cline_service_argv(inputs, env, output, unit, uid, gid, origin) if case == "cline"
+            else grok_service_argv(case, inputs, env, output, unit, uid, gid, origin, runtime_root=runtime_root))
     receipt["original_start_monotonic_ns"] = origin
     result, problem = None, None
     lifetime = shared.Budget(180 - (time.monotonic_ns() - origin) / 1e9) if case == "cline" else nullcontext(ctx.budget)
     with lifetime as budget:
         ctx.budget = budget
         try:
-            # The original deadline includes five seconds for capture reaping
-            # and ten for exact service cleanup. Cline remains 180/165 seconds.
-            result = ctx.command("runtime-test", argv, output, system_env, seconds - 15 - (time.monotonic_ns() - origin) / 1e9)
+            # The controller uses its existing PIPE transport and absolute 30s
+            # deadline; its native active context already expires at 25s.
+            # Existing public service captures retain their 15s reservation.
+            result = (capture(argv, system_env) if controller else
+                ctx.command("runtime-test", argv, output, system_env, seconds - 15 - (time.monotonic_ns() - origin) / 1e9))
         except Exception as error:
             problem = error
         finally:
@@ -2268,7 +2345,7 @@ def _delegated_service(ctx, case, inputs, env, output, origin_ns=None):
                     unchanged()
                     ctx.command(case + "-service-stop", ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "--no-ask-password",
                                 "--no-block", "stop", unit], output, system_env, 1)
-                    pause_end = min(origin / 1e9 + seconds - 8, time.monotonic() + 0.2)
+                    pause_end = min(origin / 1e9 + seconds - (0 if controller else 8), time.monotonic() + 0.2)
                     while time.monotonic() < pause_end and not empty():
                         time.sleep(0.02)
                     closed = empty()

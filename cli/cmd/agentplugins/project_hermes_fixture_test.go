@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -299,8 +300,10 @@ func configureHermesColdJourney(ctx context.Context, t *testing.T, app agentplug
 func (input *hermesColdInputs) unchanged(t *testing.T) {
 	t.Helper()
 	for root, original := range input.protected {
-		if !reflect.DeepEqual(original, securityFixtureTree(t, root)) {
-			t.Fatal("native cold lifecycle changed an unselected User/Project B or temporary authority", root)
+		current := securityFixtureTree(t, root)
+		if !reflect.DeepEqual(original, current) {
+			t.Fatalf("native cold lifecycle changed a protected authority: role=%s root=%s %s",
+				input.protectedRole(root), hermesColdDiagnosticValue(root, 256), hermesColdSnapshotDifference(original, current))
 		}
 	}
 	for path, original := range input.dataIdentities {
@@ -427,4 +430,59 @@ func hermesColdSource(t *testing.T, transport *projectJourneyTransport, endpoint
 	transport.git(t, transport.repo, "add", ".")
 	transport.git(t, transport.repo, "commit", "-m", "Hermes owned HTTP and retained-data fixture")
 	transport.git(t, transport.repo, "push", "--quiet", transport.remote, "main")
+}
+
+func (input *hermesColdInputs) protectedRole(root string) string {
+	switch root {
+	case input.osHome:
+		return "os_home"
+	case input.temporary:
+		return "temporary"
+	default:
+		return "other_protected"
+	}
+}
+
+// Compare only the already captured mode/hash maps. No file bytes or additional
+// filesystem observations enter this bounded failure diagnostic.
+func hermesColdSnapshotDifference(before, after map[string]string) string {
+	var changed []string
+	for name, value := range before {
+		if current, present := after[name]; !present || current != value {
+			changed = append(changed, name)
+		}
+	}
+	for name := range after {
+		if _, present := before[name]; !present {
+			changed = append(changed, name)
+		}
+	}
+	sort.Strings(changed)
+	rows, used := []string{}, 0
+	for _, name := range changed {
+		prior, had := before[name]
+		current, has := after[name]
+		kind := "changed"
+		if !had {
+			kind, prior = "added", "<absent>"
+		} else if !has {
+			kind, current = "removed", "<absent>"
+		}
+		row := fmt.Sprintf("%s path=%s before=%s after=%s", kind, hermesColdDiagnosticValue(name, 128),
+			hermesColdDiagnosticValue(prior, 96), hermesColdDiagnosticValue(current, 96))
+		if len(rows) == 8 || used+len(row) > 1800 {
+			break
+		}
+		rows = append(rows, row)
+		used += len(row)
+	}
+	return fmt.Sprintf("changed=%d shown=%d truncated=%t [%s]", len(changed), len(rows), len(rows) != len(changed), strings.Join(rows, "; "))
+}
+
+func hermesColdDiagnosticValue(value string, limit int) string {
+	preview := strconv.QuoteToASCII(value[:min(len(value), limit)])
+	if len(value) > limit {
+		return fmt.Sprintf("%s...(bytes=%d)", preview, len(value))
+	}
+	return preview
 }

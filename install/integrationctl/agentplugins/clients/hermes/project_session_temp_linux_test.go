@@ -37,6 +37,9 @@ func TestProjectSessionLinuxTempOverrideUsesOnlyMissingInspectSelectors(t *testi
 			original := slices.Clone(test.base)
 			overrides := sessionEnvironmentOverrides("/project", test.inspect, test.base)
 			wanted := map[string]string{"HERMES_HOME": projectSessionRoot("/project")}
+			if test.inspect {
+				wanted["PYTHONDONTWRITEBYTECODE"] = "1"
+			}
 			if test.defaulted {
 				wanted["TMPDIR"] = "/tmp"
 			}
@@ -47,7 +50,10 @@ func TestProjectSessionLinuxTempOverrideUsesOnlyMissingInspectSelectors(t *testi
 			first, second := plan.ChildEnvironment(test.base), plan.ChildEnvironment(test.base)
 			wantedChild := append(slices.Clone(test.base), "HERMES_HOME="+projectSessionRoot("/project"))
 			if test.defaulted {
-				wantedChild = []string{"HERMES_HOME=" + projectSessionRoot("/project"), "TMPDIR=/tmp"}
+				wantedChild = []string{"HERMES_HOME=" + projectSessionRoot("/project"), "PYTHONDONTWRITEBYTECODE=1", "TMPDIR=/tmp"}
+			}
+			if test.inspect && !test.defaulted {
+				wantedChild = append(wantedChild, "PYTHONDONTWRITEBYTECODE=1")
 			}
 			if !slices.Equal(first, second) || !slices.Equal(first, wantedChild) {
 				t.Fatal("child override order is not deterministic", first, second)
@@ -128,7 +134,7 @@ func TestProjectSessionLinuxTempHistoryRetainsEffectiveFourCommandEnvironment(t 
 	fixture.env.SessionEnvironment = sessionWithoutTempSelectors(fixture.env.SessionEnvironment)
 	original := slices.Clone(fixture.env.SessionEnvironment)
 	plan := fixture.plan(t)
-	if !maps.Equal(plan.Environment, map[string]string{"HERMES_HOME": fixture.root, "TMPDIR": "/tmp"}) {
+	if !maps.Equal(plan.Environment, map[string]string{"HERMES_HOME": fixture.root, "PYTHONDONTWRITEBYTECODE": "1", "TMPDIR": "/tmp"}) {
 		t.Fatal("missing selectors did not choose the exact inspection override", plan.Environment)
 	}
 	runner := &sessionInventoryRunner{plan: plan}

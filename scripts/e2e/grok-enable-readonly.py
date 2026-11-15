@@ -16,6 +16,31 @@ BINARY = "22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9"
 URL = "https://x.ai/cli/grok-1.0.70-linux-x86_64.gz"
 
 
+def producer_context():
+    """Read the delegated Python launcher, not the Go or namespaced child."""
+    result = dict(qualification=False, producer="delegated Python launcher before Go helper exec; not Go/bwrap child state",
+        pid=os.getpid(), uid=os.getuid(), gid=os.getgid())
+    for name in ("attr/current", "uid_map", "gid_map", "status"):
+        try:
+            with open("/proc/self/" + name, "rb") as source:
+                body = source.read(16385)
+            if len(body) > 16384:
+                raise ValueError("fixed proc metadata exceeds 16384 bytes")
+            text = body.decode("utf-8", "backslashreplace")
+            if name == "status":
+                fields = ("Uid:", "Gid:", "Groups:", "CapInh:", "CapPrm:", "CapEff:", "CapBnd:", "CapAmb:", "NoNewPrivs:", "Seccomp:")
+                text = "\n".join(line for line in text.splitlines() if line.startswith(fields))
+            result[name] = dict(available=True, value=text)
+        except (OSError, ValueError) as error:
+            result[name] = dict(available=False, error=str(error)[:256])
+    for name in ("user", "net", "mnt", "pid"):
+        try:
+            result["ns/" + name] = dict(available=True, value=os.readlink("/proc/self/ns/" + name)[:256])
+        except OSError as error:
+            result["ns/" + name] = dict(available=False, error=str(error)[:256])
+    return result
+
+
 def snapshot(root):
     result = {}
     for path in [root, *sorted(root.rglob("*"))]:
@@ -33,6 +58,10 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
+    try:
+        (args.output / "producer-context.json").write_text(json.dumps(producer_context(), indent=2) + "\n")
+    except OSError as error:
+        print("Nonqualifying producer context unavailable: " + str(error)[:256])
     evidence = dict(passed=False, commands=[], model_invoked=False, authentication_used=False)
     status = 1
     try:

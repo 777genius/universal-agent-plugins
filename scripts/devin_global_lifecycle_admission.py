@@ -511,6 +511,20 @@ def identity(path):
         "st_size", "st_mtime_ns", "st_ctime_ns")]
 require(len(sys.argv) == 2 and len(raw.encode("ascii")) <= 16384)
 require(json.dumps(request, sort_keys=True, separators=(",", ":")) == raw)
+with open("/proc/self/attr/apparmor/current", "rb", buffering=0) as stream:
+    label = stream.read(257)
+require(label == b"bwrap//&unpriv_bwrap (enforce)\n")
+with open("/proc/self/status", "rb", buffering=0) as stream:
+    status = stream.read(16385)
+require(len(status) <= 16384)
+fields = {}
+for line in status.decode("ascii").splitlines():
+    name, separator, value = line.partition(":")
+    if name in ("CapInh", "CapPrm", "CapEff", "CapAmb", "NoNewPrivs"):
+        require(separator and name not in fields)
+        fields[name] = value.strip()
+require(fields == {"CapInh": "0000000000000000", "CapPrm": "0000000000000000",
+                   "CapEff": "0000000000000000", "CapAmb": "0000000000000000", "NoNewPrivs": "1"})
 require(set(request) == {"uid", "gid", "cwd", "home", "config", "argv",
                         "environment", "files", "directories", "logs"})
 require(type(request["uid"]) is int and type(request["gid"]) is int
@@ -556,6 +570,42 @@ os.execve(request["argv"][0], request["argv"], dict(os.environ))
 """
 
 
+def readonly_policy(ctx):
+    """Keep the exact installed package policy in the existing pre/post system join."""
+    path = Path("/etc/apparmor.d/bwrap-userns-restrict")
+    before = path.lstat()
+    base.require(path.resolve(strict=True) == path and stat.S_ISREG(before.st_mode)
+                 and stat.S_IMODE(before.st_mode) == 0o644
+                 and (before.st_uid, before.st_gid, before.st_nlink, before.st_size) == (0, 0, 1, 1936),
+                 "readonly viability policy authority")
+    fd = base.shared.artifacts.open_member(path)
+    try:
+        metadata = installer_metadata(before)
+        base.require(installer_metadata(os.fstat(fd)) == metadata, "readonly viability policy replaced")
+        body = bytearray()
+        while len(body) <= 1936:
+            ctx.budget.check()
+            chunk = os.read(fd, 1937 - len(body))
+            if not chunk:
+                break
+            body.extend(chunk)
+        base.require(len(body) == 1936
+                     and sha(body) == "11d39094f044f0cda0febb3ad517b830301da6b2ce929664af09ee9e4dd264f9"
+                     and installer_metadata(os.fstat(fd)) == metadata
+                     and installer_metadata(path.lstat()) == metadata, "readonly viability pinned policy changed")
+    finally:
+        os.close(fd)
+    for relative in ("local/bwrap-userns-restrict", "local/unpriv_bwrap"):
+        try:
+            (path.parent / relative).lstat()
+        except FileNotFoundError:
+            pass
+        else:
+            base.require(False, "readonly viability policy override")
+    ctx.budget.check()
+    return metadata
+
+
 def readonly_system(ctx):
     """Pin only the fixed ordinary root-owned measurement tools and roots."""
     result = {}
@@ -590,6 +640,7 @@ def readonly_system(ctx):
     for path in (Path("/usr/bin/bwrap"), python):
         metadata = {}
         result[str(path)] = (installer_pin(path, ctx.budget, owner=(0, 0), metadata=metadata), metadata)
+    result["/etc/apparmor.d/bwrap-userns-restrict"] = readonly_policy(ctx)
     return result
 
 

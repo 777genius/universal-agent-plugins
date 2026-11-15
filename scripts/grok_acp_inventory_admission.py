@@ -2940,15 +2940,13 @@ def readonly_source(shared, args):
 
 
 
-def readonly_helper_capture(helper, root, req):
-    """Same fixed transport as helper_capture, with no renewed cleanup grace."""
+def readonly_transport(argv, env, req, *, timeout=None, cwd=None):
+    """The original held PIPE owner, including its absolute settlement limit."""
     deadline = readonly_deadline(req, final=True)
-    argv = ['/usr/bin/sudo', '-n', '--preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED,EXPECTED_COMMIT',
-            str(helper), '--input-root', str(root)]
-    env = {key:os.environ[key] for key in ('GITHUB_ACTIONS', 'RUNNER_ENVIRONMENT',
-           'AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED', 'EXPECTED_COMMIT') if key in os.environ}
-    env.update(PATH='/usr/bin:/bin', LANG='C.UTF-8')
-    process = subprocess.Popen(argv, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+    require(timeout is None or type(timeout) in (int, float) and math.isfinite(timeout) and timeout > 0,
+            'helper-capture-timeout')
+    capture_deadline = deadline if timeout is None else min(deadline, time.monotonic() + timeout)
+    process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, start_new_session=True, close_fds=True)
     streams, failure = {'stdout':bytearray(), 'stderr':bytearray()}, None
     try:
@@ -2958,7 +2956,8 @@ def readonly_helper_capture(helper, root, req):
                 selector.register(pipe, selectors.EVENT_READ, name)
             while selector.get_map() or process.poll() is None:
                 readonly_deadline(req, final=True)
-                for key, _ in selector.select(min(.05, max(.001, deadline - time.monotonic()))):
+                require(time.monotonic() < capture_deadline, 'helper-capture-deadline')
+                for key, _ in selector.select(min(.05, max(.001, capture_deadline - time.monotonic()))):
                     chunk = os.read(key.fd, 65536)
                     if not chunk:
                         selector.unregister(key.fileobj)
@@ -2967,12 +2966,8 @@ def readonly_helper_capture(helper, root, req):
                         maximum = (2 << 20) + 16384 if key.data == 'stdout' else 65536
                         require(len(streams[key.data]) <= maximum, 'helper-stream-bound')
             readonly_deadline(req, final=True)
+            require(time.monotonic() < capture_deadline, 'helper-capture-deadline')
             status = process.wait(timeout=max(.001, deadline - time.monotonic()))
-            if status == 2 and not streams['stdout']:
-                for code in READONLY_HELPER_CODES:
-                    if streams['stderr'] == ('grok-acp-controller-refused:' + code + '\n').encode():
-                        raise ReadonlyHelperRefusal(code)
-            require(status == 0 and not streams['stderr'], 'helper-refused')
     except Exception as error:
         failure = error
     finally:
@@ -2999,10 +2994,83 @@ def readonly_helper_capture(helper, root, req):
     if failure is not None:
         raise failure
     readonly_deadline(req, final=True)
-    return document(bytes(streams['stdout']), (2 << 20) + 16384)
+    return status, bytes(streams['stdout']), bytes(streams['stderr'])
 
 
-def readonly_run(output, progress):
+def readonly_helper_result(captured):
+    status, stdout, stderr = captured
+    if status == 2 and not stdout:
+        for code in READONLY_HELPER_CODES:
+            if stderr == ('grok-acp-controller-refused:' + code + '\n').encode():
+                raise ReadonlyHelperRefusal(code)
+    require(status == 0 and not stderr, 'helper-refused')
+    return document(stdout, (2 << 20) + 16384)
+
+
+def readonly_helper_environment():
+    env = {key:os.environ[key] for key in ('GITHUB_ACTIONS', 'RUNNER_ENVIRONMENT',
+           'AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED', 'EXPECTED_COMMIT') if key in os.environ}
+    return dict(env, PATH='/usr/bin:/bin', LANG='C.UTF-8')
+
+
+def readonly_helper_capture(helper, root, req):
+    argv = ['/usr/bin/sudo', '-n', '--preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED,EXPECTED_COMMIT',
+            str(helper), '--input-root', str(root)]
+    return readonly_helper_result(readonly_transport(argv, readonly_helper_environment(), req))
+
+
+class ReadonlyControllerContext:
+    """Private manager observations; they are not native receipt fields."""
+    def __init__(self, req):
+        self.request = req
+        self.summary, self.identities = {}, {}
+        self.budget = self
+        self.deadline = readonly_deadline(req, final=True)
+
+    def check(self):
+        return readonly_deadline(self.request, final=True) - time.monotonic()
+
+    def command(self, label, argv, cwd, env, timeout):
+        self.check()
+        status, stdout, stderr = readonly_transport(argv, env, self.request, timeout=timeout, cwd=cwd)
+        return {'exit':status, 'error':None}, stdout, stderr
+
+
+def readonly_controller_capture(helper, root, req, runtime_root):
+    import project_native_runtime as runtime
+    from grok_project_protocol_service import Inputs
+    require(helper == root / 'helper' and req['uid'] == os.getuid() and req['gid'] == os.getgid(),
+            'readonly-controller-original')
+    ctx = ReadonlyControllerContext(req)
+    inputs = Inputs(ctx.budget)
+    try:
+        for directory in (runtime_root, runtime_root / 'usr', runtime_root / 'usr/bin'):
+            inputs.runtime_directory(directory)
+        for name in ('env', 'unshare', 'setpriv', 'python3.12', 'bwrap'):
+            inputs.pin(runtime_root / 'usr/bin' / name, ((0, 0),), 64 << 20, executable=True)
+        def capture(argv, env):
+            inputs.verify()
+            value = readonly_helper_result(readonly_transport(argv, env, req, cwd=root))
+            inputs.verify()
+            return value
+        inputs.verify()
+        receipt = runtime.grok_readonly_controller_service(ctx, root, readonly_helper_environment(),
+            req['start_monotonic_ns'], runtime_root=runtime_root, capture=capture)
+        inputs.verify()
+    finally:
+        inputs.close()
+    readonly_deadline(req, final=True)
+    return receipt
+
+
+def readonly_original_receipt(receipt, request, before):
+    result = validate_readonly_receipt(receipt, request)
+    require(readonly_ledger_digest(before) == dict(sha256=result['readonly']['authority']['input_sha256'],
+            count=result['readonly']['authority']['input_count']), 'readonly-controller-baseline-join')
+    return result
+
+
+def readonly_run(output, progress, *, runtime_root):
     import project_native_research as shared
     from project_native_collectors.grok import ACQUISITION
     from devin_structured_inventory_admission import metadata_inventory
@@ -3058,9 +3126,9 @@ def readonly_run(output, progress):
             readonly_deadline(request)
             cleanup_proved = False
             progress['stage'] = 'helper'
-            receipt = readonly_helper_capture(helper, root, request)
+            receipt = readonly_controller_capture(helper, root, request, runtime_root)
             progress['stage'] = 'receipt'
-            result = validate_readonly_receipt(receipt, request)
+            result = readonly_original_receipt(receipt, request, before)
             cleanup_proved = True
             readonly_deadline(request, final=True)
             progress['stage'] = 'ledger'
@@ -3111,10 +3179,10 @@ def readonly_run(output, progress):
     return 0 if summary['measurement_complete'] and 'error' not in summary else 1
 
 
-def readonly_frontend(output):
+def readonly_frontend(output, *, runtime_root):
     progress = frontend_state()
     try:
-        status = readonly_run(output, progress)
+        status = readonly_run(output, progress, runtime_root=runtime_root)
     except Exception as error:
         if progress['failure_stage'] is None:
             frontend_error(progress, error)
@@ -3205,16 +3273,19 @@ if __name__ == '__main__':
     parser.add_argument('--lock-qualification', action='store_true')
     parser.add_argument('--plugin-cli-observation', action='store_true')
     parser.add_argument('--readonly-inventory', action='store_true')
+    parser.add_argument('--readonly-runtime-root', type=Path)
     parser.add_argument('--readonly-inner', nargs=3)
     args = parser.parse_args()
+    require(args.readonly_inventory or args.readonly_runtime_root is None, 'mode')
     if args.readonly_inner is not None:
         require(not args.readonly_inventory and args.output is None and args.collect is None
                 and not args.session_only and not args.lock_qualification and not args.plugin_cli_observation, 'mode')
         readonly_inner(Path(args.readonly_inner[0]), args.readonly_inner[1], args.readonly_inner[2])
     elif args.readonly_inventory:
         require(args.output is not None and args.collect is None and not args.session_only
-                and not args.lock_qualification and not args.plugin_cli_observation, 'mode')
-        raise SystemExit(readonly_frontend(args.output))
+                and not args.lock_qualification and not args.plugin_cli_observation
+                and args.readonly_runtime_root is not None, 'mode')
+        raise SystemExit(readonly_frontend(args.output, runtime_root=args.readonly_runtime_root))
     elif args.collect is not None and args.output is None and not args.session_only and not args.lock_qualification and not args.plugin_cli_observation:
         collect(args.collect)
     else:

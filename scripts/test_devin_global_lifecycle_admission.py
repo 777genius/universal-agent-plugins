@@ -3,6 +3,7 @@ import base64
 from contextlib import contextmanager
 import copy
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ import unittest
 from unittest import mock
 
 import devin_global_lifecycle_admission as case
+import devin_bwrap_policy_setup as policy_setup
 
 
 class GlobalLifecycleContracts(unittest.TestCase):
@@ -1858,7 +1860,164 @@ class OriginalConfigObservationContracts(unittest.TestCase):
 
 
 
+class BwrapPolicySetupContracts(unittest.TestCase):
+    @staticmethod
+    def profile():
+        return "# This profile allows almost everything and only exists to allow\n# bwrap to work on a system with user namespace restrictions\n# being enforced.\n# bwrap is allowed access to user namespaces and capabilities\n# within the user namespace, but its children do not have\n# capabilities, blocking bwrap from being able to be used to\n# arbitrarily by-pass the user namespace restrictions.\n#\n# Note: the bwrap child is stacked against the bwrap profile due to\n# bwraps use of no-new-privs\n\n# disabled by default as it can break some use cases on a system that\n# doesn't have or has disable user namespace restrictions for unconfined\n# use aa-enforce to enable it\n\nabi <abi/4.0>,\n\ninclude <tunables/global>\n\nprofile bwrap /usr/bin/bwrap flags=(attach_disconnected) {\n  allow capability,\n  # not allow all, to allow for pix stack\n  # sadly we have to allow  m every where to allow children to work under\n  # stacking.\n  allow file rwlkm /{**,},\n  allow network,\n  allow unix,\n  allow ptrace,\n  allow signal,\n  allow mqueue,\n  allow io_uring,\n  allow userns,\n  allow mount,\n  allow umount,\n  allow pivot_root,\n  allow dbus,\n  allow px /** -> bwrap//&unpriv_bwrap,\n\n  # the local include should not be used without understanding the userns\n  # restriction.\n  # Site-specific additions and overrides. See local/README for details.\n  include if exists <local/bwrap-userns-restrict>\n}\n\nprofile unpriv_bwrap flags=(attach_disconnected) {\n  # not allow all, to allow for pix stack\n  allow file rwlkm /{**,},\n  allow network,\n  allow unix,\n  allow ptrace,\n  allow signal,\n  allow mqueue,\n  allow io_uring,\n  allow userns,\n  allow mount,\n  allow umount,\n  allow pivot_root,\n  allow dbus,\n\n  allow pix /** -> &unpriv_bwrap,\n\n  audit deny capability,\n\n  # the local include should not be used without understanding the userns\n  # restriction.\n  # Site-specific additions and overrides. See local/README for details.\n  include if exists <local/unpriv_bwrap>\n}\n".encode("utf-8")
+
+    def archive(self, *, change=None):
+        import tarfile
+        result = io.BytesIO()
+        with tarfile.open(fileobj=result, mode="w:") as archive:
+            body = self.profile()
+            if change == "bytes":
+                body = bytes([body[0] ^ 1]) + body[1:]
+            row = tarfile.TarInfo(policy_setup.PROFILE_MEMBER)
+            row.mode, row.uid, row.gid, row.size = 0o644, 0, 0, len(body)
+            if change == "mode": row.mode = 0o664
+            if change == "short": row.size -= 1; body = body[:-1]
+            if change == "symlink":
+                row.type, row.linkname, row.size = tarfile.SYMTYPE, "foreign", 0
+            archive.addfile(row, io.BytesIO(body) if row.isfile() else None)
+            if change == "duplicate": archive.addfile(row, io.BytesIO(body))
+        return result.getvalue()
+
+    def test_only_exact_signed_package_profile_member_can_be_selected(self):
+        self.assertEqual(policy_setup.profile_from_tar(self.archive()), self.profile())
+        for change in ("bytes", "mode", "short", "symlink", "duplicate"):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                policy_setup.profile_from_tar(self.archive(change=change))
+
+    def test_existing_policy_or_optional_override_is_preserved_and_refused(self):
+        for existing in ("bwrap", policy_setup.PROFILE_NAME, *policy_setup.OVERRIDES, "local-alias"):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); root.chmod(0o700)
+                foreign = root / "foreign"; foreign.write_bytes(b"original policy"); foreign.chmod(0o600)
+                if existing == "local-alias":
+                    (root / "local").symlink_to(root, target_is_directory=True)
+                else:
+                    (root / "local").mkdir(mode=0o700)
+                    path = root / existing
+                    path.symlink_to(foreign)
+                before = foreign.stat()
+                with mock.patch.object(policy_setup, "POLICY_DIRECTORY", root):
+                    fd = policy_setup.open_policy_directory()
+                    try:
+                        with self.assertRaises(ValueError):
+                            policy_setup.check_policy_names(fd)
+                        self.assertEqual(foreign.read_bytes(), b"original policy")
+                        self.assertEqual(case.installer_metadata(foreign.stat()), case.installer_metadata(before))
+                    finally:
+                        os.close(fd)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); root.chmod(0o700)
+            with mock.patch.object(policy_setup, "POLICY_DIRECTORY", root):
+                fd = policy_setup.open_policy_directory()
+                try:
+                    policy_setup.write_profile(fd, self.profile())
+                    original = (root / policy_setup.PROFILE_NAME).stat()
+                    with self.assertRaises(FileExistsError):
+                        policy_setup.write_profile(fd, self.profile())
+                    self.assertEqual((root / policy_setup.PROFILE_NAME).read_bytes(), self.profile())
+                    self.assertEqual(case.installer_metadata((root / policy_setup.PROFILE_NAME).stat()),
+                                     case.installer_metadata(original))
+                finally:
+                    os.close(fd)
+
+    def test_setup_adds_only_enforced_packaged_profiles_without_replacing_policy(self):
+        before = {"unprivileged_userns (enforce)", "existing-other (enforce)"}
+        for existing in ("bwrap (enforce)", "unpriv_bwrap (complain)", "foreign//&bwrap (enforce)"):
+            with self.subTest(existing=existing), self.assertRaises(ValueError):
+                policy_setup.require_loaded(before | {existing})
+        for after in (before | {"bwrap (enforce)"},
+                      before | {"bwrap (enforce)", "unpriv_bwrap (complain)"},
+                      policy_setup.EXPECTED_LOADED,
+                      before | policy_setup.EXPECTED_LOADED | {"extra (enforce)"}):
+            with self.subTest(after=after), self.assertRaises(ValueError):
+                policy_setup.require_loaded(before, after)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            download, policies = root / "download", root / "policies"
+            download.mkdir(mode=0o700); policies.mkdir(mode=0o700)
+            deb = b"inert bounded archive"
+            metadata = "\n".join(key + ": " + value for key, value in {
+                "Package": policy_setup.PACKAGE, "Version": policy_setup.VERSION, "Architecture": "all",
+                "Filename": "pool/main/a/apparmor/" + policy_setup.DEB_NAME,
+                "Size": str(len(deb)), "SHA256": case.sha(deb)}.items()).encode()
+            observed = []
+            def command(directory, label, argv, deadline, records, limit=policy_setup.LIMIT):
+                self.assertEqual(directory, download)
+                observed.append((label, list(argv)))
+                records.append({"probe": label, "argv": argv, "error": None, "exit": 0})
+                if label == "policy-metadata": return metadata
+                if label == "policy-download":
+                    (download / policy_setup.DEB_NAME).write_bytes(deb)
+                    (download / policy_setup.DEB_NAME).chmod(0o600)
+                    return b""
+                if label == "policy-package-data": return self.archive()
+                self.assertEqual(label, "policy-add")
+                self.assertEqual(argv, ["/usr/sbin/apparmor_parser", "--config-file=/dev/null",
+                    "--add", "--skip-cache", "--jobs=1", "--Werror=rule-not-enforced",
+                    str(policies / policy_setup.PROFILE_NAME)])
+                self.assertEqual((policies / policy_setup.PROFILE_NAME).read_bytes(), self.profile())
+                return b""
+            with mock.patch.object(policy_setup, "POLICY_DIRECTORY", policies), \
+                 mock.patch.object(policy_setup, "DEB_BYTES", len(deb)), \
+                 mock.patch.object(policy_setup, "DEB_SHA256", case.sha(deb)), \
+                 mock.patch.object(policy_setup, "command", side_effect=command), \
+                 mock.patch.object(policy_setup, "loaded_profiles",
+                                   side_effect=[before, before | policy_setup.EXPECTED_LOADED]), \
+                 mock.patch.object(policy_setup, "kernel_read", return_value=b"1\n"):
+                result = policy_setup.setup(download, policy_setup.time.monotonic() + 10)
+            self.assertEqual([label for label, _ in observed],
+                             ["policy-metadata", "policy-download", "policy-package-data", "policy-add"])
+            self.assertFalse(result["native_executed"])
+            self.assertFalse(result["qualification"])
+            self.assertTrue(result["restrict_userns_unchanged"])
+            self.assertEqual(result["profile"]["sha256"], policy_setup.PROFILE_SHA256)
+
+
 class ReadonlyViabilityContracts(unittest.TestCase):
+    def test_parent_rejoins_exact_policy_and_closes_held_reads_on_refusal(self):
+        real_lstat, real_fstat = Path.lstat, os.fstat
+        real_open = case.base.shared.artifacts.open_member
+        def rooted(info):
+            values = case.installer_metadata(info)
+            values.update(st_uid=0, st_gid=0)
+            return SimpleNamespace(**values)
+        for change in ("original", "bytes", "mode", "alias", "hardlink", "override", "deadline"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                path = root / "bwrap-userns-restrict"
+                body = BwrapPolicySetupContracts.profile()
+                path.write_bytes(body); path.chmod(0o644)
+                if change == "bytes": path.write_bytes(bytes([body[0] ^ 1]) + body[1:])
+                elif change == "mode": path.chmod(0o664)
+                elif change == "alias":
+                    path.rename(root / "original"); path.symlink_to(root / "original")
+                elif change == "hardlink": os.link(path, root / "alias")
+                elif change == "override":
+                    (root / "local").mkdir()
+                    (root / "local/unpriv_bwrap").write_bytes(b"foreign override")
+                budget = SimpleNamespace(check=mock.Mock(return_value=10))
+                if change == "deadline": budget.check.side_effect = [10, 10, ValueError("budget")]
+                opened = []
+                def open_member(value):
+                    descriptor = real_open(value); opened.append(descriptor)
+                    return descriptor
+                with mock.patch.object(case, "Path", return_value=path), \
+                     mock.patch.object(Path, "lstat", autospec=True, side_effect=lambda value: rooted(real_lstat(value))), \
+                     mock.patch.object(os, "fstat", side_effect=lambda descriptor: rooted(real_fstat(descriptor))), \
+                     mock.patch.object(case.base.shared.artifacts, "open_member", side_effect=open_member):
+                    if change == "original":
+                        result = case.readonly_policy(SimpleNamespace(budget=budget))
+                        self.assertEqual(result["st_size"], len(body))
+                    else:
+                        with self.assertRaises(ValueError):
+                            case.readonly_policy(SimpleNamespace(budget=budget))
+                for descriptor in opened:
+                    with self.assertRaises(OSError): real_fstat(descriptor)
+
     def prelude(self, change):
         import errno
         from types import ModuleType
@@ -1918,7 +2077,24 @@ class ReadonlyViabilityContracts(unittest.TestCase):
             dispatches.append((path, argv, environment))
             raise Dispatched()
         fake_os.execve = execute
-        with mock.patch.dict("sys.modules", {"os": fake_os, "sys": fake_sys}):
+        label = b"bwrap//&unpriv_bwrap (enforce)\n"
+        if change == "policy-unconfined": label = b"unconfined\n"
+        elif change == "policy-complain": label = b"bwrap//&unpriv_bwrap (complain)\n"
+        elif change == "policy-missing-child": label = b"bwrap (enforce)\n"
+        elif change == "policy-extra-layer": label = b"bwrap//&unpriv_bwrap//&foreign (enforce)\n"
+        elif change == "policy-long": label = b"x" * 257
+        status = ("CapInh: 0000000000000000\nCapPrm: 0000000000000000\n"
+                  "CapEff: 0000000000000000\nCapAmb: 0000000000000000\nNoNewPrivs: 1\n").encode()
+        if change == "policy-nnp": status = status.replace(b"NoNewPrivs: 1", b"NoNewPrivs: 0")
+        elif change == "policy-cap": status = status.replace(b"CapEff: 0000000000000000", b"CapEff: 0000000000000001")
+        elif change == "policy-duplicate": status += b"NoNewPrivs: 1\n"
+        elif change == "policy-status-long": status += b"x" * 16385
+        def kernel_open(path, mode, buffering):
+            self.assertEqual((mode, buffering), ("rb", 0))
+            self.assertIn(path, ("/proc/self/attr/apparmor/current", "/proc/self/status"))
+            return io.BytesIO(label if path.endswith("/current") else status)
+        with mock.patch.dict("sys.modules", {"os": fake_os, "sys": fake_sys}), \
+             mock.patch("builtins.open", side_effect=kernel_open):
             if change == "erofs":
                 with self.assertRaises(Dispatched):
                     exec(compile(case.READONLY_PRELUDE, "<fixed-readonly-viability>", "exec"), {})
@@ -1940,6 +2116,13 @@ class ReadonlyViabilityContracts(unittest.TestCase):
                 _, _, _, dispatches, writes, closed = self.prelude(change)
                 self.assertEqual((dispatches, writes), ([], []))
                 self.assertEqual(closed, [77] if change == "writable" else [])
+
+    def test_prelude_requires_actual_restricted_child_policy_before_any_native_exec(self):
+        for change in ("policy-unconfined", "policy-complain", "policy-missing-child", "policy-extra-layer",
+                       "policy-long", "policy-nnp", "policy-cap", "policy-duplicate", "policy-status-long"):
+            with self.subTest(change=change):
+                _, _, _, dispatches, writes, closed = self.prelude(change)
+                self.assertEqual((dispatches, writes, closed), ([], [], []))
 
     def test_raw_wrapper_and_header_are_joined_before_strict_native_tail(self):
         for change in ("header-missing", "header-foreign", "header-duplicate", "tail-extra", "wrapper-argv"):

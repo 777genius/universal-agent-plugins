@@ -4,12 +4,16 @@ on:
     paths:
       - '.github/workflows/grok-noauth-call.yml'
       - 'scripts/grok_project_protocol_*.py'
+      - 'scripts/provision_grok_native_runtime.sh'
+      - 'scripts/grok_bwrap_policy_setup.py'
       - 'scripts/grok_noauth_call_e2e.py'
       - 'scripts/test_grok_noauth_call.py'
       - 'docs/plans/2026-11-12-grok-noauth-native-call.md'
       - 'scripts/test_grok_project_protocol.py'
       - 'repotests/testdata/agentplugins_native_probe/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'install/integrationctl/adapters/process/**'
+      - 'install/integrationctl/ports/**'
       - 'cli/**'
       - 'install/integrationctl/agentplugins/clients/shared/**'
       - 'install/integrationctl/agentplugins/domain/**'
@@ -41,12 +45,16 @@ on:
     paths:
       - '.github/workflows/grok-noauth-call.yml'
       - 'scripts/grok_project_protocol_*.py'
+      - 'scripts/provision_grok_native_runtime.sh'
+      - 'scripts/grok_bwrap_policy_setup.py'
       - 'scripts/grok_noauth_call_e2e.py'
       - 'scripts/test_grok_noauth_call.py'
       - 'docs/plans/2026-11-12-grok-noauth-native-call.md'
       - 'scripts/test_grok_project_protocol.py'
       - 'repotests/testdata/agentplugins_native_probe/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'install/integrationctl/adapters/process/**'
+      - 'install/integrationctl/ports/**'
       - 'cli/**'
       - 'install/integrationctl/agentplugins/clients/shared/**'
       - 'install/integrationctl/agentplugins/domain/**'
@@ -104,6 +112,25 @@ jobs:
         with:
           go-version: '1.26.11'
           cache: false
+      - name: Provision the signature-verified Noble runtime and pinned Bubblewrap
+        id: grok_runtime_setup
+        run: bash scripts/provision_grok_native_runtime.sh
+      - name: Install the pinned per-bwrap policy and prove the clean-runtime child
+        run: |
+          sudo -n /usr/bin/python3 -B scripts/grok_bwrap_policy_setup.py "$RUNNER_TEMP" \
+            > "$RUNNER_TEMP/grok-bwrap-policy.json"
+      - name: Preserve fixed clean-runtime provisioning provenance
+        if: ${{ always() && steps.grok_runtime_setup.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: grok-noauth-runtime-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/grok-runtime-packages.txt
+            ${{ runner.temp }}/grok-bubblewrap-build.json
+            ${{ runner.temp }}/grok-bubblewrap-help.txt
+            ${{ runner.temp }}/grok-bwrap-policy.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Build ordinary installer and existing credential-free probe
         run: |
           set -euo pipefail
@@ -127,7 +154,8 @@ jobs:
           /usr/bin/python3 -B scripts/grok_project_protocol_service.py --case grok-noauth \
             --installer "$RUNNER_TEMP/grok-native-call-tools/agentplugins" \
             --probe "$RUNNER_TEMP/grok-native-call-tools/probe" \
-            --output "$RUNNER_TEMP/grok-noauth-native-call-evidence"
+            --output "$RUNNER_TEMP/grok-noauth-native-call-evidence" \
+            --runtime-root "$RUNNER_TEMP/grok-runtime-root"
       - name: Preserve original bounded protocol evidence
         if: ${{ always() && steps.grok_native.outcome == 'success' && steps.grok_native.outputs.publication == 'admitted' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

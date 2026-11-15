@@ -1141,10 +1141,29 @@ class DelegatedPublicationTests(unittest.TestCase):
         self.assertEqual(set(env), self.service.runtime.GROK_ENV)
         self.assertTrue(all(key not in env for key in ("GITHUB_OUTPUT", "XAI_API_KEY", "PYTHONPATH", "LD_PRELOAD")))
 
+    def test_runtime_root_requires_immutable_owner_and_parent_python_remains_selected(self):
+        runtime_root = self.root / "runtime"
+        runtime_root.mkdir(mode=0o777)
+        runtime_root.chmod(0o777)
+        with self.assertRaisesRegex(ValueError, "root-owned immutable"):
+            self.inputs.runtime_directory(runtime_root)
+        alias = self.root / "runtime-alias"
+        alias.symlink_to(runtime_root, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "canonical"):
+            self.service.runtime_interpreters(self.inputs, alias)
+        owner = SimpleNamespace(runtime_directory=mock.Mock(return_value=(1, 2, 3, 0, 0)), pin=mock.Mock())
+        foreign = self.root / "foreign-python"
+        foreign.write_bytes(b"different inert parent interpreter")
+        with mock.patch.object(sys, "executable", str(foreign)):
+            with self.assertRaisesRegex(ValueError, "parent interpreter"):
+                self.service.runtime_interpreters(owner, runtime_root)
+        owner.pin.assert_not_called()
+
     def test_actual_parent_keeps_child_private_until_clean_completion_and_returns_original_negative(self):
         import io
         for scenario in ("clean-negative", "unclean", "transport", "changed-source", "changed-input", "sink-replaced",
-                         "sink-after-grant", "sink-same-size", "foreign-tail", "child-extra", "late-budget", "late-close"):
+                         "sink-after-grant", "sink-same-size", "foreign-tail", "child-extra", "late-budget", "late-close",
+                         "changed-child-interpreter", "changed-runtime-root"):
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory(dir=self.root) as temporary:
                 root = Path(temporary).resolve()
                 tools = root / "tools"
@@ -1162,12 +1181,19 @@ class DelegatedPublicationTests(unittest.TestCase):
                 script.parent.mkdir(parents=True)
                 script.write_bytes(b"inert owned script; never executed")
                 script.chmod(0o600)
+                clean_root = root / "runtime"
+                child_python = clean_root / "usr/bin/python3.12"
+                child_python.parent.mkdir(parents=True)
+                child_body = b"different inert Noble interpreter; never executed"
+                child_python.write_bytes(child_body)
+                child_python.chmod(0o700)
                 evidence = self.evidence("grok-noauth")
                 evidence.update(installer_sha256=hashlib.sha256(installer.read_bytes()).hexdigest(),
                                 probe_sha256=hashlib.sha256(probe.read_bytes()).hexdigest())
                 body = json.dumps(evidence).encode()
-                def service(ctx, case, selected, env, destination, origin):
+                def service(ctx, case, selected, env, destination, origin, *, runtime_root):
                     self.assertEqual((case, selected[1:], destination), ("grok-noauth", (installer, probe), output))
+                    self.assertEqual((selected[0], runtime_root), (self.service.runtime.GROK_CHILD_PYTHON, clean_root))
                     self.assertEqual(ctx.budget.deadline, origin / 1e9 + 900)
                     self.assertEqual(sink.read_bytes(), b"")
                     self.assertFalse((output / "upload").exists())
@@ -1179,6 +1205,13 @@ class DelegatedPublicationTests(unittest.TestCase):
                         (output / "child/foreign.txt").write_bytes(b"unknown child member")
                     if scenario == "changed-input":
                         installer.write_bytes(b"changed inert input")
+                    if scenario == "changed-child-interpreter":
+                        child_python.rename(child_python.with_name("original-python"))
+                        child_python.write_bytes(child_body)
+                        child_python.chmod(0o700)
+                    if scenario == "changed-runtime-root":
+                        clean_root.rename(root / "original-runtime")
+                        clean_root.mkdir()
                     if scenario == "sink-replaced":
                         sink.rename(root / "original-sink")
                         sink.write_bytes(b"foreign bytes must stay")
@@ -1197,6 +1230,11 @@ class DelegatedPublicationTests(unittest.TestCase):
                 original_exit = self.service.shared.Budget.__exit__
                 original_write = os.write
                 python = Path("/usr/bin/python3").resolve()
+                def runtime_directory(owner, path):
+                    # Retain real fixture directory authority; this ordinary-user
+                    # control does not qualify the root-owned Noble provision.
+                    self.assertEqual(path, clean_root)
+                    return self.service.directory_identity(os.fstat(owner.directory(path)))
                 def pin(owner, path, owners, maximum, **flags):
                     if path == python:
                         # This host's interpreter is not a hosted-runner proof.
@@ -1204,6 +1242,9 @@ class DelegatedPublicationTests(unittest.TestCase):
                         # is admitted at this outer-control-flow test boundary.
                         self.assertEqual((owners, maximum, flags), (((0, 0),), 64 << 20, {"executable": True}))
                         return "e" * 64
+                    if path == child_python:
+                        self.assertEqual((owners, maximum, flags), (((0, 0),), 64 << 20, {"executable": True}))
+                        return original_pin(owner, path, ((os.getuid(), os.getgid()),), maximum, **flags)
                     return original_pin(owner, path, owners, maximum, **flags)
                 def write(descriptor, content):
                     count = original_write(descriptor, content)
@@ -1230,6 +1271,7 @@ class DelegatedPublicationTests(unittest.TestCase):
                 with mock.patch.dict(os.environ, env), mock.patch.object(self.service.runtime, "cline_host"), \
                         mock.patch.object(self.service.shared.native, "require_hosted"), \
                         mock.patch.object(self.service.runtime, "SOURCE", source_root), \
+                        mock.patch.object(self.service.Inputs, "runtime_directory", runtime_directory), \
                         mock.patch.object(self.service.Inputs, "pin", pin), \
                         mock.patch.object(self.service.Inputs, "close", close), \
                         mock.patch.object(self.service.shared.Budget, "__exit__", exit_budget), \
@@ -1239,12 +1281,17 @@ class DelegatedPublicationTests(unittest.TestCase):
                         mock.patch.object(sys, "executable", "/usr/bin/python3"), \
                         mock.patch.object(sys, "stdout", new_callable=io.StringIO) as console, \
                         mock.patch.object(self.service, "admit_evidence", wraps=self.service.admit_evidence) as admitted:
-                    result = self.service.run("grok-noauth", installer, probe, output)
+                    result = self.service.run("grok-noauth", installer, probe, output, runtime_root=clean_root)
                 self.assertNotIn("secret", console.getvalue())
                 if scenario == "clean-negative":
                     self.assertEqual(result, 0)  # transport/admission, not native success
                     self.assertEqual((output / "upload/evidence.json").read_bytes(), body)
                     self.assertEqual(sink.read_bytes(), b"native_passed=false\npublication=admitted\n")
+                    receipt = json.loads((output / "upload/delegation.json").read_bytes())
+                    self.assertEqual(receipt["parent_python_sha256"], "e" * 64)
+                    self.assertEqual(receipt["python_sha256"], hashlib.sha256(child_body).hexdigest())
+                    self.assertNotEqual(receipt["python_sha256"], receipt["parent_python_sha256"])
+                    self.assertEqual(receipt["runtime_root"], str(clean_root))
                     self.assertEqual(admitted.call_count, 1)
                 else:
                     self.assertEqual(result, 1)
@@ -1254,7 +1301,8 @@ class DelegatedPublicationTests(unittest.TestCase):
                     self.assertFalse(upload)
                     if scenario not in ("sink-after-grant", "sink-same-size", "foreign-tail", "late-close"):
                         self.assertNotIn(b"publication=admitted", sink.read_bytes())
-                    if scenario in ("unclean", "transport", "changed-source", "changed-input", "child-extra"):
+                    if scenario in ("unclean", "transport", "changed-source", "changed-input", "child-extra",
+                                    "changed-child-interpreter", "changed-runtime-root"):
                         self.assertEqual(admitted.call_count, 0)
                     if scenario == "sink-replaced":
                         self.assertEqual(sink.read_bytes(), b"foreign bytes must stay")
@@ -1269,6 +1317,9 @@ class DelegatedPublicationTests(unittest.TestCase):
         condition = "if: ${{ always() && steps.grok_native.outcome == 'success' && steps.grok_native.outputs.publication == 'admitted' }}"
         for name in ("grok-project-protocol.yml", "grok-noauth-call.yml"):
             text = (workflow_root / name).read_text()
+            self.assertEqual(text.count("run: bash scripts/provision_grok_native_runtime.sh"), 1)
+            self.assertEqual(text.count('--runtime-root "$RUNNER_TEMP/grok-runtime-root"'), 1)
+            self.assertLess(text.index("id: grok_runtime_setup"), text.index("id: grok_native"))
             self.assertEqual(text.count(condition), 1)
             final = text.split("      - name: Require the original native result to pass\n")[1]
             self.assertIn("        if: ${{ always() }}\n", final)
