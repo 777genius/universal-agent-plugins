@@ -44,9 +44,8 @@ func TestCISupersession_RegularPRChecksOnly(t *testing.T) {
 			if _, ok := w.On["pull_request"]; !ok {
 				t.Fatal("missing PR trigger")
 			}
-			if !strings.HasPrefix(w.Concurrency.Group, prefix) ||
-				!strings.Contains(w.Concurrency.Group, "github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id") ||
-				w.Concurrency.Cancel != "${{ github.event_name == 'pull_request' }}" {
+			expected := prefix + "${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}"
+			if w.Concurrency.Group != expected || w.Concurrency.Cancel != "${{ github.event_name == 'pull_request' }}" {
 				t.Fatalf("%s lost PR-scoped cancellation or exact-source preservation: %+v", name, w.Concurrency)
 			}
 		})
@@ -70,7 +69,10 @@ func TestCISupersession_ClosedPRCleanupCannotCancelOtherIdentities(t *testing.T)
 		"set -euo pipefail", "gh api --paginate", "event=pull_request",
 		".event == \"pull_request\"", ".head_repository.id == $head",
 		".number == $pr and .head.repo.id == $head and .base.repo.id == $base",
-		"sort -un", "--method POST", "current", "completed",
+		"still_closed", ".state == \"closed\"", ".closed_at == $closed",
+		"closed-pr-head-associations.json", "length == 1", "fork_unique",
+		"(.pull_requests | length) == 0", ".head_branch == $branch",
+		"fromdateiso8601", "sort -un", "--method POST", "current", "completed",
 	} {
 		if !strings.Contains(script, required) {
 			t.Fatalf("closed-PR cleanup lost guard %q", required)
