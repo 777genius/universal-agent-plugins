@@ -72,13 +72,15 @@ type independentActivationRun struct {
 	cancel     context.CancelCauseFunc
 	results    chan independentActivationResult
 	dispatched int
+	collected  int
 	stopErr    error
 }
 
 // Only client effects run in goroutines. Request preparation, journal changes,
 // host callbacks, publication, and progress callbacks stay on this coordinator.
 // Serial targets run on the coordinator while the independent effects are in
-// flight; their results are published only after the serial remainder returns.
+// flight; finished independent results are published between serial targets and
+// the rest once the serial remainder returns.
 func (session *groupSession) activateIndependentGroupTargets(activator ports.IndependentClientActivator, count int) (GroupResult, error) {
 	session.externalCompleted, session.externalFailed = 0, 0
 	session.firstActivationErr = nil
@@ -109,6 +111,7 @@ func (run *independentActivationRun) activateSerialRemainder() error {
 		return nil
 	}
 	for index := run.count; index < len(session.planned); index++ {
+		run.drainReady()
 		if run.ctx.Err() != nil {
 			cause := context.Cause(run.ctx)
 			stage, message := groupActivationStopReason(session.ctx, cause)
@@ -204,16 +207,33 @@ func (run *independentActivationRun) execute(operation independentClientOperatio
 // Every launched operation returns before the group lock/reservation is
 // released. Publish in observed completion order while other effects continue.
 func (run *independentActivationRun) collect() {
-	for range run.dispatched {
-		got := <-run.results
-		target := run.session.planned[got.index]
-		outcome, delivery, nativeComplete, err := run.session.finishGroupActivation(target, got.outcome, got.delivery, got.nativeComplete, got.err)
-		if publishErr := run.session.publishGroupActivation(len(run.session.planned), target, outcome, delivery, nativeComplete, err); publishErr != nil {
-			if run.stopErr == nil {
-				run.stopErr = publishErr
-			}
-			run.cancel(publishErr)
+	for run.collected < run.dispatched {
+		run.publish(<-run.results)
+	}
+}
+
+// drainReady publishes independent results that already finished, without
+// waiting, so a long serial client does not delay their progress or durability.
+func (run *independentActivationRun) drainReady() {
+	for run.collected < run.dispatched {
+		select {
+		case got := <-run.results:
+			run.publish(got)
+		default:
+			return
 		}
+	}
+}
+
+func (run *independentActivationRun) publish(got independentActivationResult) {
+	run.collected++
+	target := run.session.planned[got.index]
+	outcome, delivery, nativeComplete, err := run.session.finishGroupActivation(target, got.outcome, got.delivery, got.nativeComplete, got.err)
+	if publishErr := run.session.publishGroupActivation(len(run.session.planned), target, outcome, delivery, nativeComplete, err); publishErr != nil {
+		if run.stopErr == nil {
+			run.stopErr = publishErr
+		}
+		run.cancel(publishErr)
 	}
 }
 

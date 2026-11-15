@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -352,5 +353,59 @@ func TestIndependentActivationRestoresPlannedOrder(t *testing.T) {
 		if session.planned[index].input.Client.ClientID != want || session.planned[index].resultIndexes[0] != index {
 			t.Fatalf("planned order not restored at %d: %v", index, session.planned[index].input.Client.ClientID)
 		}
+	}
+}
+
+// slowSerialActivator records the order of serial activations so a test can
+// prove finished independent results are published during the serial remainder.
+type slowSerialActivator struct {
+	serialAwareActivator
+	mu    *sync.Mutex
+	order *[]string
+}
+
+func (a *slowSerialActivator) Activate(ctx context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if request.Client.ClientID == domain.ClientCursor {
+		time.Sleep(300 * time.Millisecond)
+	}
+	a.mu.Lock()
+	*a.order = append(*a.order, "serial:"+string(request.Client.ClientID))
+	a.mu.Unlock()
+	return domain.ActivationOutcome{Activation: domain.ActivationActive, Authentication: request.Plan.Authentication, Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}, nil
+}
+
+func TestIndependentResultsArePublishedWhileSerialClientsStillRun(t *testing.T) {
+	service, _, _ := serviceFixture(t)
+	var mu sync.Mutex
+	var order []string
+	a := &slowSerialActivator{
+		serialAwareActivator: serialAwareActivator{
+			independentFixtureActivator: independentFixtureActivator{release: make(chan struct{}), started: make(chan domain.ClientID, 4), mode: "success"},
+			serialRan:                   make(chan domain.ClientID, 4),
+		},
+		mu: &mu, order: &order,
+	}
+	close(a.release)
+	service.Activator = a
+	claude, codex, cursor, gemini := mixedClients(t)
+	inputs := []AddInput{addInput(t, claude, "https://example.com/drain"), addInput(t, codex, "https://example.com/drain"), addInput(t, cursor, "https://example.com/drain"), addInput(t, gemini, "https://example.com/drain")}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	result, err := service.AddGroup(ctx, GroupInput{Targets: inputs, OperationGroupID: "drain", Confirmed: true, Progress: func(event GroupProgressEvent) {
+		if event.Phase == GroupProgressActivated {
+			mu.Lock()
+			order = append(order, "activated:"+string(event.ClientID))
+			mu.Unlock()
+		}
+	}})
+	if err != nil || result.Phase != GroupPhaseCompleted {
+		t.Fatalf("result=%+v err=%v", result.Phase, err)
+	}
+	position := map[string]int{}
+	for index, entry := range order {
+		position[entry] = index
+	}
+	if position["activated:codex"] > position["serial:gemini"] || position["activated:claude"] > position["serial:gemini"] {
+		t.Fatalf("finished independent results waited for the whole serial remainder: %v", order)
 	}
 }
