@@ -58,16 +58,16 @@ jobs:
           # association in this base repo, matching both repository IDs.
           # Ambiguous or missing association leaves the run untouched.
           head_unique=false
-            head_filter="$(jq -nr --arg value "${HEAD_OWNER}:${HEAD_REF}" '$value | @uri')"
-            gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=all&head=${head_filter}&per_page=100" \
-              > "${RUNNER_TEMP}/closed-pr-head-associations.json"
-            if jq -s -e --argjson pr "${PR_NUMBER}" --argjson head "${HEAD_REPOSITORY_ID}" \
-                --argjson base "${BASE_REPOSITORY_ID}" --arg ref "${HEAD_REF}" '
-                [ .[][] ] | length == 1 and .[0].number == $pr
-                and .[0].head.repo.id == $head and .[0].base.repo.id == $base
-                and .[0].head.ref == $ref' "${RUNNER_TEMP}/closed-pr-head-associations.json" >/dev/null; then
-              head_unique=true
-            fi
+          head_filter="$(jq -nr --arg value "${HEAD_OWNER}:${HEAD_REF}" '$value | @uri')"
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=all&head=${head_filter}&per_page=100" \
+            > "${RUNNER_TEMP}/closed-pr-head-associations.json"
+          if jq -s -e --argjson pr "${PR_NUMBER}" --argjson head "${HEAD_REPOSITORY_ID}" \
+              --argjson base "${BASE_REPOSITORY_ID}" --arg ref "${HEAD_REF}" '
+              [ .[][] ] | length == 1 and .[0].number == $pr
+              and .[0].head.repo.id == $head and .[0].base.repo.id == $base
+              and .[0].head.ref == $ref' "${RUNNER_TEMP}/closed-pr-head-associations.json" >/dev/null; then
+            head_unique=true
+          fi
 
           # Keep release/sign/deploy/scan evidence, even if triggered by a PR.
           # List and validate ALL pages before ANY cancellation.
