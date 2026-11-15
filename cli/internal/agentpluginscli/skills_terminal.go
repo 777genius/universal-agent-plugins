@@ -194,13 +194,9 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 			return err
 		}
 	}
-	result, err := prepared.Apply(cmd.Context())
-	if writeErr := renderSkillsResult(cmd, opts, result); writeErr != nil {
-		return writeErr
-	}
-	return err
+	return applySkillsWithRecovery(cmd, app, opts, prepared, confirm && opts.format != "json")
 }
-func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchResult) error {
+func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchResult, logPath string) error {
 	if opts.format != "json" {
 		writer := cmd.OutOrStdout()
 		if _, err := fmt.Fprintf(writer, "Skills installation %s\n", prompt.SafeText(result.Status)); err != nil {
@@ -221,6 +217,10 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 					"      reload if prompted, and confirm the Skill is visible.\n")
 			return err
 		}
+		reports := reportByAgent(skillsAgentItems(result.Items))
+		if err := renderAgentAttention(writer, reports, logPath, retryTargetHint(reports)); err != nil {
+			return err
+		}
 		if err := renderPartialSkillsReadiness(writer, result); err != nil {
 			return err
 		}
@@ -239,11 +239,12 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 		Status               string                       `json:"status"`
 		Items                []skillspicker.OperationItem `json:"items"`
 		RepairInstructions   []string                     `json:"repairInstructions"`
+		LogFile              string                       `json:"log_file,omitempty"`
 		Readiness            string                       `json:"readiness"`
 		NextActions          []AgentAction                `json:"next_actions,omitempty"`
 		Scope                string                       `json:"scope"`
 		ScopeSelectionReason string                       `json:"scope_selection_reason"`
-	}{SchemaVersion: outputSchemaVersion, Command: "skills add", Result: outputResultSuccess, Status: result.Status, Items: outcome.Items, RepairInstructions: outcome.Result.RepairInstructions}
+	}{SchemaVersion: outputSchemaVersion, Command: "skills add", Result: outputResultSuccess, Status: result.Status, Items: outcome.Items, RepairInstructions: outcome.Result.RepairInstructions, LogFile: logPath}
 	output.Readiness, output.NextActions = deriveSkillsReadiness(result.Status)
 	if output.Readiness == "failed" {
 		output.Result = outputResultFailure

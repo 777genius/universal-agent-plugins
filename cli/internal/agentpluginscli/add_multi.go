@@ -296,6 +296,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		combined.setTargetProof(selected[index].ClientID, addTargetProofOutcome(result))
 		countBatchTarget(&combined, entry)
 	}
+	app.recordGroupOutcome(cmd, opts, combined)
 	if err != nil {
 		if applied.Phase == usecase.GroupPhasePlanned && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded, combined.ActionRequired = "preflight_failed", len(inputs), 0, 0

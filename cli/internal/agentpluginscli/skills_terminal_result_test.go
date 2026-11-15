@@ -19,7 +19,7 @@ func TestSkillsHumanResultSeparatesFilesDiscoveryAndActivation(t *testing.T) {
 			{Alias: "review", ClientID: "claude", Status: "unchanged"},
 		},
 	}
-	if err := renderSkillsResult(cmd, &options{format: "human"}, result); err != nil {
+	if err := renderSkillsResult(cmd, &options{format: "human"}, result, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
@@ -50,7 +50,7 @@ func TestSkillsHumanPartialResultPrintsRecoveryWithoutSuccessClaim(t *testing.T)
 		Items:              []SkillsBatchItem{{Alias: "review", ClientID: "codex", Status: "failed"}},
 		RepairInstructions: []string{"Inspect agentplugins deps status and follow recovery steps."},
 	}
-	if err := renderSkillsResult(cmd, &options{format: "human"}, result); err != nil {
+	if err := renderSkillsResult(cmd, &options{format: "human"}, result, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{"Skills installation partial", "review → codex: failed", "Next: Inspect agentplugins deps status"} {
@@ -76,7 +76,7 @@ func TestSkillsHumanPartialWithAppliedItemsStillReportsUnverifiedNativeReadiness
 		},
 		RepairInstructions: []string{"Repair the failed target."},
 	}
-	if err := renderSkillsResult(cmd, &options{format: "human"}, result); err != nil {
+	if err := renderSkillsResult(cmd, &options{format: "human"}, result, ""); err != nil {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{

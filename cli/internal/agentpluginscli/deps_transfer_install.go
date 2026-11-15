@@ -119,8 +119,8 @@ func applyDependencyTransferInstall(cmd *cobra.Command, app App, opts *options, 
 		return finishDependencyTransferInstall(cmd, opts, transfer, request, nil, err)
 	}
 	adapter := &dependencyInstaller{app: app, opts: opts, detected: request.detected, cmd: cmd, consent: request.consent, beforeApply: request.checkInputs}
-	results, applyErr := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), ManifestDigest: request.lock.ManifestDigest, Bindings: actions}, true)
-	return finishDependencyTransferInstall(cmd, opts, transfer, request, results, applyErr)
+	outcomes, applyErr := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), ManifestDigest: request.lock.ManifestDigest, Bindings: actions}, true)
+	return finishDependencyTransferInstall(cmd, opts, transfer, request, environment.Results(outcomes), applyErr)
 }
 
 func finishDependencyTransferInstall(cmd *cobra.Command, opts *options, transfer *dependencyTransfer, request dependencySyncRequest, results []installer.Result, applyErr error) error {

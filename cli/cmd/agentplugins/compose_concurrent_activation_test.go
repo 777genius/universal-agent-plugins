@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
@@ -29,5 +30,21 @@ func TestCLICompositionRunsAttestedClientsConcurrently(t *testing.T) {
 	activator, ok := service.Activator.(providers.Activator)
 	if !ok || !activator.Concurrent {
 		t.Fatalf("the CLI must enable concurrent client activation: %#v", service.Activator)
+	}
+}
+
+// Technical install logs hold local paths and error chains. A project root is
+// part of the user's repository, so logs must stay in the per-user cache.
+func TestInstallLogDirIsNeverInsideTheProject(t *testing.T) {
+	cacheRoot, projectRoot := t.TempDir(), t.TempDir()
+	app, err := newScopedAgentpluginsCLIApp(t.TempDir(), cacheRoot, projectRoot, nil, nil, nil, nil)
+	if err != nil {
+		t.Skipf("scoped composition needs more fixtures: %v", err)
+	}
+	if app.InstallLogDir != filepath.Join(cacheRoot, "logs") {
+		t.Fatalf("install log dir = %q", app.InstallLogDir)
+	}
+	if rel, err := filepath.Rel(projectRoot, app.InstallLogDir); err == nil && !strings.HasPrefix(rel, "..") {
+		t.Fatalf("install logs must not live inside the project: %s", app.InstallLogDir)
 	}
 }

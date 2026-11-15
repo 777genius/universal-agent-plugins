@@ -205,7 +205,8 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 		return err
 	}
 	applied, applyErr := applyPreparedDependencies(cmd.Context(), app, &request, adapter, checked)
-	results := applied.Results
+	results := applied.Results()
+	app.finishInstall(opts, cmd.CommandPath(), outcomeAgentItems(applied.Outcomes))
 	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
 		return renderErr
 	}

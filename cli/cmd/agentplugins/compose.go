@@ -198,6 +198,7 @@ func assembleAgentpluginsApp(home, dataRoot, cacheRoot string, v2Store statev2.S
 		UserHome:             home,
 		ManagedRoot:          filepath.Join(dataRoot, "managed"),
 		DependenciesRoot:     dataRoot,
+		InstallLogDir:        filepath.Join(cacheRoot, "logs"),
 		EnvironmentStoreRoot: filepath.Join(cacheRoot, "store"),
 		EnvironmentLockPath:  filepath.Join(dataRoot, "environment.lock"),
 		StateStore:           v2Store,
