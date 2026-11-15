@@ -404,12 +404,12 @@ func TestReadonlyRuntimeMetadataDiagnosticKeepsEveryOriginalPredicate(t *testing
 	facts := original
 	facts.Mode |= 0022
 	_, err := readonlyRuntimeFacts(facts, original.UID, original.GID)
-	if !errors.Is(err, errReadonlyRuntimeMember) || errors.Is(err, errReadonlyRuntimeMetadata) {
+	if err == nil || !errors.Is(err, errReadonlyRuntimeUnsafe) || !strings.Contains(err.Error(), "unsafe_predicates=0x02") || errors.Is(err, errReadonlyRuntimeMetadata) {
 		t.Fatal("later original mode refusal changed", err)
 	}
-	projected := readonlyRuntimeMemberError("/usr/bin/original", err)
-	if !errors.Is(projected, err) || !strings.Contains(projected.Error(), `member="bin/original"`) {
-		t.Fatal("later original mode refusal lost its captured member", projected)
+	if projected := readonlyRuntimeMemberError("/usr/bin/original", err); !errors.Is(projected, err) ||
+		!errors.Is(projected, errReadonlyRuntimeUnsafe) || !strings.Contains(projected.Error(), `member="bin/original"`) {
+		t.Fatal("unsafe member diagnostic lost original identity", projected)
 	}
 }
 

@@ -1,0 +1,62 @@
+# Grok exact-owned enablement and recovery extraction
+
+Base: `1e09d0fbc36d1d3ec9d20a983fa593605c7b3606`.
+Reviewed source: `a610eadf5436dd3fb2b29fbb069615028b46ad00` (#878).
+The current owner explicitly requests independent client PRs and full native E2E;
+that supersedes the source plan's old one-PR requirement. No release is authorized.
+
+## First checkpoint
+
+Extract the existing Grok exact-ID membership edit, original User profile and
+config lock authority, durable native transition recovery/removal, and readonly
+ACP inventory through the existing bounded process/namespace seam. Keep the
+public unqualified fence: `SupportsPluginEnablement` remains false and confirmed
+native activation refuses before mutation. Original recovery records remain v2.
+No session creation, authentication, model request, workspace trust grant or
+unrelated client's feature behavior is included.
+
+The source's unchanged three unsafe-runtime predicates now have a typed bounded
+bitmap diagnostic: bit 0 unsupported filesystem kind, bit 1 group/other writable
+nonlink, bit 2 symlink link count differs from one. The existing bounded relative
+member preview and digest identify the original rejected member. Metadata
+admission, runtime mounts, ownership, locking and cleanup predicates are unchanged.
+
+`Grok Enablement Native Admission` builds and actually executes the existing
+`grokreadonlynative` test under an ordinary-user delegated systemd service, with
+pinned official Grok 1.0.70 and Bubblewrap. Its inert package contains no MCP,
+hooks, scripts or other executable components. A native config writer creates
+its permanent lock using an already disabled inert `/usr/bin/false` MCP entry;
+the entry is removed before capturing the readonly test's original inputs. The
+native test does exactly two sessionless initialize/list exchanges and requires
+the same disabled, untrusted full identity, unchanged original fixture bytes and
+physical entries. A failed test remains failed and retains its bounded output.
+This lane does not claim public enablement or recovery acceptance.
+
+## Measured feasibility and remaining gates
+
+Official archive SHA256:
+`11d27a30adfb75c4b9b180072ab27412a1916f054ff5497ab70fb9a77d304bcc`.
+Executable SHA256:
+`22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9`.
+Version: `grok 1.0.70 (f50904eaee6c)`.
+
+A bounded local original measured `inspect` discovering a Project plugin while
+`plugin list --json` was empty; CLI full-ID enable returned plugin-not-found.
+Sessionless ACP list returned the exact id/root/scope/version with false trust
+and enablement. Adding only its documented exact full ID to `[plugins].enabled`
+changed native readback to enabled while retaining false trust. Sessionless ACP
+action returned session-not-found without changing config. This demonstrates a
+config+metadata route, not qualified contained product execution.
+
+Local exact-source tagged execution refused before the runtime census because
+this execution host has no usable cgroup filesystem. No fallback was added. The
+latest hosted source result instead stopped at the generic unsafe-runtime member
+refusal, which retained neither member nor predicate. The new hosted diagnostic
+is required before correcting that concrete condition; do not relax a guard.
+
+After genuine readonly admission, qualify enabled readback and exact-owned
+add/enable/repeat/update/repair/cold restore/remove through the ordinary public
+CLI, preserving foreign membership, deliberate disablement and trust. Promote
+the public fence only with those concrete native results and passing safety,
+focused/core/lint checks. Research collectors, archive/tracer infrastructure,
+website/release work and other clients are outside this extraction.

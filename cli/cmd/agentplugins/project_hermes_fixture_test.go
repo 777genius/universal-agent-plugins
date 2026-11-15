@@ -416,12 +416,15 @@ func (input *hermesColdInputs) writeReport(t *testing.T, original, restored doma
 func hermesColdSource(t *testing.T, transport *projectJourneyTransport, endpoint string) {
 	t.Helper()
 	body, err := json.Marshal(map[string]any{"$schema": domain.MCPSchemaV1,
-		"mcpServers": map[string]any{"docs": map[string]any{"type": "streamable-http", "url": endpoint}}})
+		"mcpServers": map[string]any{
+			"docs": map[string]any{"type": "streamable-http", "url": endpoint},
+			"data": map[string]any{"type": "stdio", "command": "go", "args": []string{"version"}, "env": map[string]string{"DATA": "${PLUGIN_DATA}"}},
+		}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	projectJourneyWrite(t, filepath.Join(transport.repo, "mcp.json"), string(body))
 	transport.git(t, transport.repo, "add", ".")
-	transport.git(t, transport.repo, "commit", "-m", "Hermes owned HTTP fixture")
+	transport.git(t, transport.repo, "commit", "-m", "Hermes owned HTTP and retained-data fixture")
 	transport.git(t, transport.repo, "push", "--quiet", transport.remote, "main")
 }

@@ -82,11 +82,11 @@ func TestProjectRootHandoffRetainsOriginalParentAndPostWriteMarker(t *testing.T)
 			if err != nil || prepared.markerInfo.Size() != int64(len(prepared.markerBody)) || !sameNativeMarker(prepared.markerInfo, current) {
 				t.Fatalf("sealed marker info is not the original post-write stat: %v", err)
 			}
-			if err := prepared.cleanup(); err != nil {
-				t.Fatalf("unchanged pre-journal stage could not be cleaned: %v", err)
+			if err := prepared.cleanup(); err == nil {
+				t.Fatal("cleanup did not report retained staging")
 			}
-			if _, err := os.Lstat(prepared.staging); !os.IsNotExist(err) {
-				t.Fatalf("unchanged staging survived cleanup: %v", err)
+			if _, err := os.Lstat(prepared.staging); err != nil {
+				t.Fatalf("cleanup lost retained staging: %v", err)
 			}
 		})
 	}
@@ -221,8 +221,8 @@ func TestProjectRootHandoffCannotBeDiscardedByPackageMutation(t *testing.T) {
 			if open, err := publisher.Kernel.Directory.ListOpen(); err != nil || len(open) != 0 {
 				t.Fatalf("misplaced proof wrote a journal: %v %v", open, err)
 			}
-			if err := prepared.cleanup(); err != nil {
-				t.Fatalf("invalid request prevented exact owned cleanup: %v", err)
+			if err := prepared.cleanup(); err == nil {
+				t.Fatal("cleanup did not report retained staging")
 			}
 		})
 	}
@@ -329,7 +329,47 @@ func TestProjectRootHandoffKeepsOriginalMarkerHandleUntilSeal(t *testing.T) {
 	if err := original.Close(); !errors.Is(err, os.ErrClosed) {
 		t.Fatalf("seal did not close the original marker before publication: %v", err)
 	}
-	if err := prepared.cleanup(); err != nil {
+	if err := prepared.cleanup(); err == nil {
+		t.Fatal("cleanup did not report retained staging")
+	}
+}
+
+func TestProjectRootClosedWriterRetainsOriginalReader(t *testing.T) {
+	_, _, spec, _ := projectRootFixture(t)
+	prepared, err := prepareNativeRoot(t.Context(), spec)
+	if err != nil {
 		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := prepared.close(); err != nil {
+			t.Error(err)
+		}
+	})
+	writer, original := prepared.markerFile, prepared.markerInfo
+	reader, err := prepared.closedMarkerReader()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := reader.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	if prepared.markerFile != nil {
+		t.Fatal("writer remained live after post-close capture")
+	}
+	if err := writer.Close(); !errors.Is(err, os.ErrClosed) {
+		t.Fatalf("writer was not closed: %v", err)
+	}
+	after, err := reader.Stat()
+	if err != nil || !os.SameFile(original, after) || !sameNativeMarker(prepared.markerInfo, after) {
+		t.Fatalf("post-close metadata lost continuously held original: %v", err)
+	}
+	entries, err := prepared.originalPublicationEntries()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dirswap.CaptureOriginalPublication(prepared.staged.root, entries); err != nil {
+		t.Fatalf("post-close original metadata failed publication capture: %v", err)
 	}
 }

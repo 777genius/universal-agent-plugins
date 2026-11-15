@@ -1,0 +1,164 @@
+name: Hermes Project installation and inspection
+
+on:
+  push:
+    branches: [main]
+    paths: ['install/integrationctl/**', 'cli/**', 'scripts/hermes_install_acceptance.py', 'scripts/test_hermes_install_acceptance.py', 'scripts/e2e/hermes-project-install.py', 'repotests/testdata/hermes_install_runner/**', '.github/workflows/hermes-project-install.yml']
+  pull_request:
+    paths:
+      - 'install/integrationctl/agentplugins/clients/hermes/**'
+      - 'install/integrationctl/agentplugins/transaction/**'
+      - 'install/integrationctl/adapters/dirswap/**'
+      - 'install/integrationctl/adapters/directoryidentity/**'
+      - 'install/integrationctl/agentplugins/adapters/statev2/**'
+      - 'install/integrationctl/agentplugins/domain/state.go'
+      - 'install/integrationctl/agentplugins/ports/native_transition.go'
+      - 'install/integrationctl/agentplugins/clients/session.go'
+      - 'install/integrationctl/agentplugins/clients/clients.go'
+      - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
+      - 'install/integrationctl/agentplugins/installer/engine.go'
+      - 'install/integrationctl/agentplugins/installer/project*'
+      - 'install/integrationctl/agentplugins/providers/activator.go'
+      - 'install/integrationctl/agentplugins/providers/native_identity.go'
+      - 'cli/internal/agentpluginscli/client_session*'
+      - 'cli/cmd/agentplugins/compose*'
+      - 'cli/cmd/agentplugins/project_hermes*'
+      - 'scripts/e2e/hermes-project-install.py'
+      - 'scripts/hermes_install_acceptance.py'
+      - 'scripts/test_hermes_install_acceptance.py'
+      - 'repotests/testdata/hermes_install_runner/**'
+      - '.github/workflows/hermes-project-install.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hermes-project-install-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-install:
+    name: Hermes Project install and inspect (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            python: python3
+          - os: macos-15
+            python: python3
+          - os: windows-2025
+            python: python
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 180
+    env:
+      SOURCE_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Preserve pinned source bytes
+        shell: bash
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Compile exact source and native cold scenario
+        shell: bash
+        run: |
+          ${{ matrix.python }} - <<'PY'
+          import hashlib, os, pathlib, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+          suffix = '.exe' if os.name == 'nt' else ''
+          uap, cold = root / ('hermes-uap' + suffix), root / ('hermes-cold' + suffix)
+          owner = root / ('hermes-install-runner' + suffix)
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert head == os.environ['SOURCE_EXPECTED_HEAD']
+          assert not subprocess.check_output(['git', 'status', '--porcelain'], timeout=15)
+          tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True).strip()
+          subprocess.run(['go', 'build', '-o', str(uap), './cli/cmd/agentplugins'], check=True, timeout=300)
+          subprocess.run(['go', 'test', '-c', '-o', str(cold), './cli/cmd/agentplugins'], check=True, timeout=300)
+          subprocess.run(['go', 'build', '-o', str(owner), './repotests/testdata/hermes_install_runner'], check=True, timeout=300)
+          assert not subprocess.check_output(['git', 'status', '--porcelain'], timeout=15)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+              for key, value in {'UAP_BIN': str(uap), 'HERMES_COLD_BIN': str(cold), 'EXPECTED_HEAD': head, 'EXPECTED_TREE': tree, 'HERMES_INSTALL_RUNNER': str(owner),
+                                 'UAP_HERMES_COLD_UAP_SHA256': hashlib.sha256(uap.read_bytes()).hexdigest()}.items():
+                  stream.write(key + '=' + value + '\n')
+          PY
+      - name: Verify strict native and builder-only cleanup boundaries
+        shell: bash
+        run: |
+          go test -count=1 ./repotests/testdata/hermes_install_runner
+          ${{ matrix.python }} -m unittest discover -s scripts -p test_hermes_install_acceptance.py -v
+      - name: Build the unmodified pinned official standalone distribution
+        shell: bash
+        run: |
+          ${{ matrix.python }} - <<'PY'
+          import os, pathlib, subprocess, sys
+          sys.path.insert(0, str(pathlib.Path.cwd() / 'scripts'))
+          from hermes_install_acceptance import supervised, payload_contract
+          root = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+          source = root / 'hermes-agent'
+          pin = '2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19'
+          subprocess.run(['git', 'clone', '--filter=blob:none', '--no-checkout', 'https://github.com/NousResearch/hermes-agent.git', str(source)], check=True, timeout=180)
+          subprocess.run(['git', '-C', str(source), 'config', 'core.autocrlf', 'false'], check=True)
+          subprocess.run(['git', '-C', str(source), 'checkout', '--force', '--detach', pin], check=True, timeout=180)
+          assert subprocess.check_output(['git', '-C', str(source), 'rev-parse', 'HEAD'], text=True).strip() == pin
+          record, stdout, stderr = supervised([sys.executable, '-S', '-B', str(source / 'scripts/bundles/native_build.py'),
+                          '--source', str(source), '--work', str(root / 'hermes-project-work'),
+                          '--cache', str(root / 'hermes-project-cache'), '--out', str(root / 'hermes-project-payload'),
+                          '--commit', pin], pathlib.Path.cwd(), os.environ, timeout=9000, limit=16 << 20, completed_builder_cleanup=True)
+          sys.stdout.buffer.write(stdout); sys.stdout.buffer.flush()
+          sys.stderr.buffer.write(stderr); sys.stderr.buffer.flush()
+          binary = root / 'hermes-project-payload' / 'bin' / ('hermes.exe' if os.name == 'nt' else 'hermes')
+          assert binary.is_file()
+          print(payload_contract(binary.parent.parent, source, pin))
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as stream:
+              stream.write('HERMES_PROJECT_BUNDLE=' + str(binary) + '\n')
+          PY
+      - name: Real public binary User and Project installation lifecycle
+        shell: bash
+        run: ${{ matrix.python }} scripts/e2e/hermes-project-install.py
+      - name: Public Cobra cold restore and selected native inspection
+        shell: bash
+        run: |
+          ${{ matrix.python }} - <<'PY'
+          import json, os, pathlib, subprocess, tempfile, time, sys
+          sys.path.insert(0, str(pathlib.Path.cwd() / 'scripts'))
+          from hermes_install_acceptance import supervised
+          root = pathlib.Path(os.environ['RUNNER_TEMP']).resolve()
+          fixture = pathlib.Path(tempfile.mkdtemp(prefix='hermes-project-cold-', dir=root))
+          home = pathlib.Path(tempfile.mkdtemp(prefix='hermes-project-cold-home-', dir=root))
+          report = root / 'hermes-project-cold-report.json'
+          env = dict(os.environ, HOME=str(home), USERPROFILE=str(home), TMPDIR=str(fixture), TEMP=str(fixture), TMP=str(fixture),
+                     UAP_HERMES_PROJECT_BUNDLE_E2E='1', UAP_HERMES_PROJECT_BUNDLE_EXE=os.environ['HERMES_PROJECT_BUNDLE'],
+                     UAP_HERMES_COLD_REPORT=str(report), UAP_HERMES_COLD_DEADLINE_UNIX_MS=str(int(time.time() * 1000) + 360000))
+          record, stdout, stderr = supervised([env['HERMES_COLD_BIN'], '-test.run=^TestProjectHermesBundleColdRestoreAndRepair$',
+                                   '-test.v', '-test.count=1', '-test.timeout=6m'], pathlib.Path.cwd(), env, timeout=390)
+          sys.stdout.buffer.write(stdout); sys.stdout.buffer.flush()
+          sys.stderr.buffer.write(stderr); sys.stderr.buffer.flush()
+          assert report.is_file(), 'native test skipped or omitted its completion report'
+          data = json.loads(report.read_text())
+          assert data['kind'] == 'hermes-bundle-cold-restore' and data['source_head'] == env['EXPECTED_HEAD']
+          assert data['installer_sha256'] == env['UAP_HERMES_COLD_UAP_SHA256']
+          assert data['entrypoint'] == 'public-cobra-in-process' and data['installer_executed'] is False
+          assert len(data['commands']) == 3
+          assert all(data[key] is False for key in ('native_tools_call', 'vendor_authentication', 'model_invoked'))
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == env['SOURCE_EXPECTED_HEAD']
+          assert not subprocess.check_output(['git', 'status', '--porcelain'], timeout=15)
+          print(report.read_text())
+          PY
+      - name: Retain original installation and inspection evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: hermes-project-install-${{ runner.os }}-${{ runner.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/hermes-project-install-*/
+            ${{ runner.temp }}/hermes-project-cold-report.json
+            ${{ runner.temp }}/hermes-project-supervision-*/
+          if-no-files-found: warn
+          retention-days: 14

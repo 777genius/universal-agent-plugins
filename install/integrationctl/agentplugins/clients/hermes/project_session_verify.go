@@ -227,12 +227,16 @@ func (history *sessionInspectHistory) capture() error {
 	if err := verifySessionAuthority(history.ctx, history.env, history.plan); err != nil {
 		return err
 	}
+	effective, err := sessionPlanEnvironment(history.plan, history.env.SessionEnvironment)
+	if err != nil {
+		return err
+	}
 	bundle, err := qualifyHermesBundle(history.plan.Executable)
 	if err != nil {
 		return err
 	}
 	source, state, err := acquireSessionSource(history.ctx, history.plan.Directory, sessionRootObject(history.plan.Directory), history.plan.Servers,
-		sessionRuntimeSelection{true, bundle, history.env.SessionEnvironment})
+		sessionRuntimeSelection{true, bundle, effective})
 	if err != nil {
 		return err
 	}
@@ -263,6 +267,9 @@ func (history *sessionInspectHistory) Revalidate() error {
 func (history *sessionInspectHistory) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	if ctx != history.ctx {
 		return legacyports.CommandResult{}, fmt.Errorf("hermes inspect deadline differs from original capture")
+	}
+	if !slices.Equal(command.Env, history.plan.ChildEnvironment(history.env.SessionEnvironment)) {
+		return legacyports.CommandResult{}, fmt.Errorf("hermes inspect environment differs from original capture")
 	}
 	if err := history.Revalidate(); err != nil {
 		return legacyports.CommandResult{}, err

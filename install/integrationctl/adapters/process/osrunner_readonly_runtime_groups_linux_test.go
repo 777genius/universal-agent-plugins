@@ -183,7 +183,8 @@ func TestReadonlyRuntimeMemberGroupCannotAdmitUnsafeOwnerOrMode(t *testing.T) {
 				if !errors.Is(err, errReadonlyRuntimeMetadata) || !strings.Contains(err.Error(), "predicates=0x08") {
 					t.Fatal("member owner refusal lost its original predicate", err)
 				}
-			} else if !errors.Is(err, errReadonlyRuntimeMember) || !strings.Contains(err.Error(), `member="bin/original"`) {
+			} else if !errors.Is(err, errReadonlyRuntimeUnsafe) || !strings.Contains(err.Error(), "unsafe_predicates=") ||
+				!strings.Contains(err.Error(), `member="bin/original"`) {
 				t.Fatal("member refused for an unrelated metadata condition", err)
 			}
 		})
@@ -258,10 +259,10 @@ func TestReadonlyRuntimeUnsafeMemberDiagnosticRetainsOriginalRow(t *testing.T) {
 				t.Fatal(err)
 			}
 			err = census.entry(t.Context(), original, "/usr", "unsafe", 0)
-			if !errors.Is(err, errReadonlyRuntimeMember) || errors.Is(err, errReadonlyRuntimeMetadata) {
+			if !errors.Is(err, errReadonlyRuntimeUnsafe) || errors.Is(err, errReadonlyRuntimeMetadata) {
 				t.Fatal("original member refused for an unrelated predicate", err)
 			}
-			for _, want := range []string{fmt.Sprintf("predicates=0x%02x mode=%#o links=%d", test.predicates, before.Mode, before.Links),
+			for _, want := range []string{fmt.Sprintf("unsafe_predicates=0x%02x kind=%#o mode=%#o links=%d", test.predicates, before.Mode&unix.S_IFMT, before.Mode, before.Links),
 				`member="unsafe"`, "member_bytes=6 ", "member_truncated=false"} {
 				if !strings.Contains(err.Error(), want) {
 					t.Fatalf("original refusal lacks %q: %s", want, err)

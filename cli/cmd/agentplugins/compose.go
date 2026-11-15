@@ -141,11 +141,6 @@ func newScopedAgentpluginsCLIApp(home, cacheRoot, projectRoot string, directoryC
 	}
 	lifecycle.ProjectRoot = projectRoot
 	lifecycle.CheckNamespace = facade.CheckProjectNamespace
-	if projectRoot != "" {
-		lifecycle.Kernel.Namespace = dataRoot
-		lifecycle.Kernel.PhysicalAuthority = planner
-		lifecycle.Kernel.Directory.Namespace = dataRoot
-	}
 	app := assembleAgentpluginsApp(home, dataRoot, cacheRoot, v2Store, mutationLock, lifecycle, directoryClient, discoveryClient, securityClient, packageLoader, clientRegistry, planner)
 	configureNativeSession(&app, facade, nativeKernel)
 	app.ManagementFactory = managementAppFactory(home, dataRoot)
@@ -171,6 +166,11 @@ func newAgentpluginsLifecycle(home, dataRoot string, v2Store statev2.Store, path
 	legacyTransitions := opencode.NativeTransitions{ProjectRoot: v2Store.ProjectRoot, PackageVerifier: stager, State: transaction.Kernel{StateStore: v2Store}, Kernel: nativeKernel}
 	transitions := providers.NewNativeTransitions(clientRegistry, clients.NativeTransitionContext{ProjectRoot: v2Store.ProjectRoot, UserHome: home, OperationsDir: directoryManager.JournalDir, State: transaction.Kernel{StateStore: v2Store}, Kernel: nativeKernel, PackageVerifier: stager}, legacyTransitions)
 	directoryKernel := transaction.Kernel{NativeRecovery: transitions, StateStore: v2Store, Directory: directoryManager}
+	if v2Store.ProjectRoot != "" {
+		directoryKernel.Namespace = dataRoot
+		directoryKernel.PhysicalAuthority = planner
+		directoryKernel.Directory.Namespace = dataRoot
+	}
 	projectRoots := transaction.ProjectRootPublisher{Kernel: directoryKernel}
 	return usecase.Service{
 		ClientPreparation: providers.NewOpenCodeClientPreparation(clientRegistry),

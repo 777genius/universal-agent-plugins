@@ -24,10 +24,7 @@ const readonlyRuntimeEntryLimit = 262144
 
 const readonlyRuntimeDiagnosticLimit = 1536
 
-var (
-	errReadonlyRuntimeMetadata = errors.New("readonly runtime ownership or metadata differs")
-	errReadonlyRuntimeMember   = errors.New("readonly runtime contains an unsafe or special member")
-)
+var errReadonlyRuntimeMetadata = errors.New("readonly runtime ownership or metadata differs")
 
 type readonlyRuntimeRow struct {
 	facts readonlyObjectFacts
@@ -53,7 +50,21 @@ func readonlyRuntimeFacts(facts readonlyObjectFacts, uid, gid uint32) (readonlyO
 	if err := readonlyRuntimeMetadataRefusal(facts, uid, gid); err != nil {
 		return readonlyObjectFacts{}, err
 	}
-	// The bitmap retains the three original kind, write and link predicates.
+	if kind != unix.S_IFDIR && kind != unix.S_IFREG && kind != unix.S_IFLNK ||
+		kind != unix.S_IFLNK && facts.Mode&0022 != 0 || kind == unix.S_IFLNK && facts.Links != 1 {
+		return readonlyObjectFacts{}, readonlyRuntimeUnsafeRefusal(facts)
+	}
+	// Runtime set-id bits are metadata, not authority. The child separately
+	// requires NOSUID on every runtime mount and drops all capabilities.
+	return facts, nil
+}
+
+var errReadonlyRuntimeUnsafe = errors.New("readonly runtime contains an unsafe or special member")
+
+// Preserve the original three refusal predicates while exposing their bounded
+// classes. No pathname or file content is read to classify captured metadata.
+func readonlyRuntimeUnsafeRefusal(facts readonlyObjectFacts) error {
+	kind := facts.Mode & unix.S_IFMT
 	failed := [...]bool{kind != unix.S_IFDIR && kind != unix.S_IFREG && kind != unix.S_IFLNK,
 		kind != unix.S_IFLNK && facts.Mode&0022 != 0, kind == unix.S_IFLNK && facts.Links != 1}
 	var predicates uint8
@@ -62,13 +73,8 @@ func readonlyRuntimeFacts(facts readonlyObjectFacts, uid, gid uint32) (readonlyO
 			predicates |= 1 << bit
 		}
 	}
-	if predicates != 0 {
-		return readonlyObjectFacts{}, fmt.Errorf("%w: predicates=0x%02x mode=%#o links=%d",
-			errReadonlyRuntimeMember, predicates, facts.Mode, facts.Links)
-	}
-	// Runtime set-id bits are metadata, not authority. The child separately
-	// requires NOSUID on every runtime mount and drops all capabilities.
-	return facts, nil
+	return fmt.Errorf("%w: unsafe_predicates=0x%02x kind=%#o mode=%#o links=%d", errReadonlyRuntimeUnsafe,
+		predicates, kind, facts.Mode, facts.Links)
 }
 
 func (census *readonlyRuntimeCensus) memberFacts(path string, facts readonlyObjectFacts) (readonlyObjectFacts, error) {
@@ -101,8 +107,7 @@ func readonlyRuntimeMetadataRefusal(facts readonlyObjectFacts, uid, gid uint32) 
 }
 
 func readonlyRuntimeMemberError(path string, err error) error {
-	if (!errors.Is(err, errReadonlyRuntimeMetadata) && !errors.Is(err, errReadonlyRuntimeMember)) ||
-		!readonlyAbsolute(path) || !readonlyWithin(path, "/usr") {
+	if (!errors.Is(err, errReadonlyRuntimeMetadata) && !errors.Is(err, errReadonlyRuntimeUnsafe)) || !readonlyAbsolute(path) || !readonlyWithin(path, "/usr") {
 		return err
 	}
 	relative := "."

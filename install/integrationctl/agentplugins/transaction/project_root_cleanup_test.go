@@ -40,8 +40,49 @@ func TestProjectRootMovedPreparedStageRetainsOwnedMarker(t *testing.T) {
 	}
 }
 
+func TestProjectRootCleanupRetainsForeignMarkerAndReleasesHandles(t *testing.T) {
+	_, _, spec, _ := projectRootFixture(t)
+	prepared, err := prepareNativeRoot(t.Context(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(prepared.selected.path, prepared.markerName)
+	if err := prepared.closeMarkerHandle(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(marker, marker+"-original"); err != nil {
+		t.Fatal(err)
+	}
+	foreign := []byte("foreign replacement must survive cleanup")
+	if err := os.WriteFile(marker, foreign, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := prepared.cleanup(); err == nil {
+		t.Fatal("cleanup did not report retained staging")
+	}
+	body, err := os.ReadFile(marker)
+	if err != nil || string(body) != string(foreign) {
+		t.Fatalf("cleanup changed replacement: %q %v", body, err)
+	}
+	body, err = os.ReadFile(marker + "-original")
+	if err != nil || string(body) != string(prepared.markerBody) {
+		t.Fatalf("cleanup changed original: %q %v", body, err)
+	}
+	for _, held := range []*heldNativeRoot{prepared.baseRoot, prepared.staged, prepared.selected} {
+		if held.root != nil {
+			t.Fatal("retention kept an open directory")
+		}
+	}
+	if prepared.markerFile != nil {
+		t.Fatal("retention kept the writer open")
+	}
+	if err := prepared.close(); err != nil {
+		t.Fatal("retention close was not idempotent", err)
+	}
+}
+
 func TestProjectRootMovedBaseRetainsStageBeforeMarkerRemoval(t *testing.T) {
-	for _, boundary := range []string{"cleanup-entry", "marker-delete", "directory-delete"} {
+	for _, boundary := range []string{"marker-present", "marker-absent"} {
 		t.Run(boundary, func(t *testing.T) {
 			_, _, spec, _ := projectRootFixture(t)
 			prepared, err := prepareNativeRoot(t.Context(), spec)
@@ -58,8 +99,11 @@ func TestProjectRootMovedBaseRetainsStageBeforeMarkerRemoval(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if boundary == "directory-delete" {
-				if err := prepared.cleanupMarker(); err != nil {
+			if boundary == "marker-absent" {
+				if err := prepared.closeMarkerHandle(); err != nil {
+					t.Fatal(err)
+				}
+				if err := prepared.selected.root.Remove(prepared.markerName); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -79,7 +123,7 @@ func TestProjectRootMovedBaseRetainsStageBeforeMarkerRemoval(t *testing.T) {
 					}
 				}
 				entries, err := os.ReadDir(prepared.selected.path)
-				if boundary == "directory-delete" {
+				if boundary == "marker-absent" {
 					if err != nil || len(entries) != 0 {
 						t.Fatalf("denied replacement changed original empty stage: %v %v", entries, err)
 					}
@@ -96,18 +140,11 @@ func TestProjectRootMovedBaseRetainsStageBeforeMarkerRemoval(t *testing.T) {
 			if err := os.Mkdir(prepared.base, 0o700); err != nil {
 				t.Fatal(err)
 			}
-			switch boundary {
-			case "cleanup-entry":
-				err = prepared.cleanup()
-			case "marker-delete":
-				err = prepared.removeMarker(before)
-			case "directory-delete":
-				err = removeEmptyNativeChild(prepared.baseRoot, prepared.staged, prepared.selected)
-			}
+			err = prepared.cleanup()
 			if err == nil {
 				t.Fatal("cleanup accepted a moved base")
 			}
-			if boundary == "directory-delete" {
+			if boundary == "marker-absent" {
 				info, err := os.Lstat(filepath.Dir(filepath.Join(moved, relative)))
 				if err != nil || !sameNativeRoot(prepared.selected.info, info) {
 					t.Fatalf("refused cleanup removed the moved empty directory: %v", err)

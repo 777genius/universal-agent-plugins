@@ -1,0 +1,183 @@
+name: Grok Enablement Native Admission
+on:
+  pull_request:
+    paths:
+      - 'install/integrationctl/adapters/process/**'
+      - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'scripts/e2e/grok-enable-readonly.py'
+      - '.github/workflows/grok-enable-readonly.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'install/integrationctl/adapters/process/**'
+      - 'install/integrationctl/agentplugins/clients/grok/**'
+      - 'scripts/e2e/grok-enable-readonly.py'
+      - '.github/workflows/grok-enable-readonly.yml'
+permissions:
+  contents: read
+jobs:
+  readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    env:
+      EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Provision a signature-verified minimal Ubuntu runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends debootstrap ubuntu-keyring
+          sudo debootstrap --arch=amd64 --variant=minbase --components=main,universe \
+            --force-check-gpg --keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg \
+            --include=python3,git,bubblewrap,ca-certificates,libstdc++6 \
+            noble "$RUNNER_TEMP/grok-runtime-root" https://archive.ubuntu.com/ubuntu
+          sudo chroot "$RUNNER_TEMP/grok-runtime-root" /usr/bin/dpkg-query -W \
+            > "$RUNNER_TEMP/grok-runtime-packages.txt"
+          sudo chroot "$RUNNER_TEMP/grok-runtime-root" /usr/sbin/groupadd --gid="$(id -g)" uapfixture
+          sudo chroot "$RUNNER_TEMP/grok-runtime-root" /usr/sbin/useradd \
+            --uid="$(id -u)" --gid="$(id -g)" --no-create-home --home-dir=/work \
+            --shell=/usr/sbin/nologin uapfixture
+          sudo install -d -m 0755 "$RUNNER_TEMP/grok-runtime-root/opt/uap-input" \
+            "$RUNNER_TEMP/grok-runtime-root/work" "$RUNNER_TEMP/grok-runtime-input"
+          mkdir -m 700 "$RUNNER_TEMP/grok-readonly-evidence"
+      - name: Build the pinned upstream descriptor-mount dependency
+        run: |
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential meson ninja-build pkg-config libcap-dev libselinux1-dev curl xz-utils
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/bubblewrap-0.13.1.tar.xz" \
+            https://github.com/containers/bubblewrap/releases/download/v0.13.1/bubblewrap-0.13.1.tar.xz
+          printf '%s  %s\n' \
+            0e85c8702248b8dd64144f594147553650cdd0e4c951690345faace79c217c4d \
+            "$RUNNER_TEMP/bubblewrap-0.13.1.tar.xz" | sha256sum --check --strict
+          tar --extract --xz --no-same-owner --no-same-permissions \
+            --file "$RUNNER_TEMP/bubblewrap-0.13.1.tar.xz" --directory "$RUNNER_TEMP"
+          meson setup "$RUNNER_TEMP/bubblewrap-build" "$RUNNER_TEMP/bubblewrap-0.13.1" \
+            --buildtype=release -Dselinux=enabled -Dman=disabled -Dtests=false \
+            -Dbash_completion=disabled -Dzsh_completion=disabled
+          meson compile -C "$RUNNER_TEMP/bubblewrap-build"
+          sudo install -o root -g root -m 0555 "$RUNNER_TEMP/bubblewrap-build/bwrap" \
+            "$RUNNER_TEMP/grok-runtime-root/usr/bin/bwrap"
+          test "$(sudo chroot "$RUNNER_TEMP/grok-runtime-root" /usr/bin/bwrap --version)" = 'bubblewrap 0.13.1'
+          sudo chroot "$RUNNER_TEMP/grok-runtime-root" /usr/bin/bwrap --help \
+            > "$RUNNER_TEMP/grok-bubblewrap-help.txt"
+          grep --fixed-strings -- '--ro-bind-fd FD DEST' "$RUNNER_TEMP/grok-bubblewrap-help.txt"
+          python3 -I -B - <<'PYTHON' > "$RUNNER_TEMP/grok-bubblewrap-build.json"
+          import hashlib, json, os, pathlib, stat, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          source = root / 'bubblewrap-build/bwrap'
+          installed = root / 'grok-runtime-root/usr/bin/bwrap'
+          archive = root / 'bubblewrap-0.13.1.tar.xz'
+          if archive.stat().st_size != 129472 or hashlib.sha256(archive.read_bytes()).hexdigest() != '0e85c8702248b8dd64144f594147553650cdd0e4c951690345faace79c217c4d':
+              raise ValueError('pinned bubblewrap archive identity changed')
+          info = installed.lstat()
+          digest = hashlib.sha256(installed.read_bytes()).hexdigest()
+          if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_gid != 0 or stat.S_IMODE(info.st_mode) != 0o555 or info.st_nlink != 1:
+              raise ValueError('pinned bubblewrap is not an ordinary root-owned read-only executable')
+          if digest != hashlib.sha256(source.read_bytes()).hexdigest():
+              raise ValueError('installed bubblewrap differs from the selected build')
+          print(json.dumps(dict(upstream='https://github.com/containers/bubblewrap',
+              version='0.13.1', archive='bubblewrap-0.13.1.tar.xz',
+              archive_sha256='0e85c8702248b8dd64144f594147553650cdd0e4c951690345faace79c217c4d',
+              binary_sha256=digest, bytes=info.st_size, mode=oct(info.st_mode), uid=info.st_uid,
+              build_packages=subprocess.check_output(['dpkg-query', '-W', 'gcc', 'libc6-dev', 'meson', 'ninja-build', 'pkg-config', 'libcap-dev', 'libselinux1-dev'], text=True),
+              configure=['--buildtype=release', '-Dselinux=enabled', '-Dman=disabled', '-Dtests=false',
+                         '-Dbash_completion=disabled', '-Dzsh_completion=disabled'],
+              runtime_package_note='grok-runtime-packages.txt records the distro baseline; /usr/bin/bwrap is this pinned upstream build'),
+              sort_keys=True))
+          PYTHON
+      - name: Build exact tagged helpers without ambient Go flags
+        env:
+          GOENV: 'off'
+          GOFLAGS: ''
+          GOEXPERIMENT: ''
+          GOTOOLCHAIN: local
+          GOOS: linux
+          GOARCH: amd64
+          GOAMD64: v1
+          CGO_ENABLED: '0'
+          GOWORK: ${{ github.workspace }}/go.work
+        run: |
+          test "$(go env GOVERSION)" = go1.26.11
+          go version
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          git diff --exit-code HEAD --
+          go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-readonly-test" ./install/integrationctl/agentplugins/clients/grok
+          go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-runtime-metadata-test" ./install/integrationctl/adapters/process
+          "$RUNNER_TEMP/grok-runtime-metadata-test" \
+            -test.run='^TestReadonlyRuntimeMetadataDiagnostic(Controls|VisitBound)$' -test.count=1 -test.v -test.timeout=30s
+          sudo install -m 0555 "$RUNNER_TEMP/grok-readonly-test" "$RUNNER_TEMP/grok-runtime-input/grok-readonly-test"
+          sudo install -m 0555 "$RUNNER_TEMP/grok-runtime-metadata-test" "$RUNNER_TEMP/grok-runtime-input/grok-runtime-metadata-test"
+          sudo install -m 0444 scripts/e2e/grok-enable-readonly.py "$RUNNER_TEMP/grok-runtime-input/grok-enable-readonly.py"
+          python3 -I -B - <<'PYTHON' > "$RUNNER_TEMP/grok-runtime-build.json"
+          import hashlib, json, os, pathlib, stat, subprocess
+          temporary = pathlib.Path(os.environ['RUNNER_TEMP'])
+          sources = {'grok-readonly-test': temporary / 'grok-readonly-test',
+                     'grok-runtime-metadata-test': temporary / 'grok-runtime-metadata-test',
+                     'grok-enable-readonly.py': pathlib.Path('scripts/e2e/grok-enable-readonly.py')}
+          copied = {}
+          for name, source in sources.items():
+              target = temporary / 'grok-runtime-input' / name
+              before, after = hashlib.sha256(source.read_bytes()).hexdigest(), hashlib.sha256(target.read_bytes()).hexdigest()
+              info = target.lstat()
+              if before != after or not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o222:
+                  raise ValueError('copied fixed input differs or is writable')
+              copied[name] = dict(sha256=after, bytes=info.st_size, mode=oct(info.st_mode), uid=info.st_uid)
+          subprocess.run(['git', 'diff', '--exit-code', 'HEAD', '--'], check=True)
+          command = lambda *args: subprocess.check_output(args, text=True).strip()
+          if command('git', 'rev-parse', 'HEAD') != os.environ['EXPECTED_SOURCE_SHA']:
+              raise ValueError('copied helpers do not match the selected source head')
+          print(json.dumps(dict(source_head=command('git', 'rev-parse', 'HEAD'),
+              source_tree=command('git', 'rev-parse', 'HEAD^{tree}'), go_version=command('go', 'version'),
+              build_environment={key: os.environ[key] for key in ('GOENV','GOFLAGS','GOEXPERIMENT','GOTOOLCHAIN','GOOS','GOARCH','GOAMD64','CGO_ENABLED','GOWORK')},
+              build_flags={'grok-readonly-test': ['test', '-tags=grokreadonlynative', '-c'],
+                           'grok-runtime-metadata-test': ['test', '-tags=grokreadonlynative', '-c']},
+              copied_inputs=copied), sort_keys=True))
+          PYTHON
+      - name: Collect bounded clean-runtime metadata without qualification
+        continue-on-error: true
+        run: |
+          sudo -n /usr/bin/systemd-run --unit="uap-grok-metadata-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --wait --pipe --collect --quiet --service-type=exec --expand-environment=no \
+            --uid="$(id -u)" --gid="$(id -g)" --property=NoNewPrivileges=yes \
+            --property="RootDirectory=$RUNNER_TEMP/grok-runtime-root" --property=MountAPIVFS=yes \
+            --property="BindReadOnlyPaths=$RUNNER_TEMP/grok-runtime-input:/opt/uap-input" \
+            --property="BindPaths=$RUNNER_TEMP/grok-readonly-evidence:/work" \
+            --property=RuntimeMaxSec=45s --property=TimeoutStopSec=15s \
+            /usr/bin/env -i PATH=/usr/bin:/bin \
+            /opt/uap-input/grok-runtime-metadata-test -test.run='^TestReadonlyRuntimeMetadataDiagnostic$' \
+            -test.count=1 -test.v -test.timeout=40s -runtime-metadata-output=/work/runtime-metadata.json
+      - name: Run the mandatory native gate in the delegated clean runtime
+        run: |
+          sudo -n /usr/bin/systemd-run --unit="uap-grok-readonly-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --wait --pipe --collect --quiet --service-type=exec --expand-environment=no \
+            --uid="$(id -u)" --gid="$(id -g)" --property=Delegate=yes \
+            --property=NoNewPrivileges=yes --property=KillMode=control-group \
+            --property="RootDirectory=$RUNNER_TEMP/grok-runtime-root" --property=MountAPIVFS=yes \
+            --property="BindReadOnlyPaths=$RUNNER_TEMP/grok-runtime-input:/opt/uap-input" \
+            --property="BindPaths=$RUNNER_TEMP/grok-readonly-evidence:/work /sys/fs/cgroup" \
+            --property=RuntimeMaxSec=180s --property=TimeoutStopSec=15s \
+            /usr/bin/env -i PATH=/usr/bin:/bin \
+            /usr/bin/python3 -I -B /opt/uap-input/grok-enable-readonly.py \
+            --test /opt/uap-input/grok-readonly-test --output /work
+      - name: Retain the actual native verdict and bounded diagnostic
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: grok-readonly-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            ${{ runner.temp }}/grok-readonly-evidence/evidence.json
+            ${{ runner.temp }}/grok-readonly-evidence/runtime-metadata.json
+            ${{ runner.temp }}/grok-runtime-build.json
+            ${{ runner.temp }}/grok-runtime-packages.txt
+            ${{ runner.temp }}/grok-bubblewrap-build.json
+            ${{ runner.temp }}/grok-bubblewrap-help.txt
+          if-no-files-found: error
+          retention-days: 14

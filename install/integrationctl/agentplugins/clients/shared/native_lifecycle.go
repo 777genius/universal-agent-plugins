@@ -74,6 +74,10 @@ func CompleteNativeConfigActivation(ctx context.Context, request domain.Activati
 // lock cleanup degraded. The install is still done; the operator retries only
 // if a later lock reports busy.
 func CommittedNativeCleanup(outcome *domain.ActivationOutcome, err error) bool {
+	var observed *NativeEffectError
+	if errors.As(err, &observed) && observed.Effect == domain.NativeEffectUncertain {
+		return false
+	}
 	if !nativeconfig.IsCommittedCleanup(err) {
 		return false
 	}
@@ -83,6 +87,10 @@ func CommittedNativeCleanup(outcome *domain.ActivationOutcome, err error) bool {
 
 // CommittedNativeDeactivationCleanup is the matching degrade path for remove.
 func CommittedNativeDeactivationCleanup(outcome *domain.DeactivationOutcome, err error) bool {
+	var observed *NativeEffectError
+	if errors.As(err, &observed) && observed.Effect == domain.NativeEffectUncertain {
+		return false
+	}
 	if !nativeconfig.IsCommittedCleanup(err) {
 		return false
 	}

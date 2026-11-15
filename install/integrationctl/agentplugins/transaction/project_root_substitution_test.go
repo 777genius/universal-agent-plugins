@@ -126,20 +126,20 @@ func TestProjectRootSubstitutedChildCannotWriteOrReadMarker(t *testing.T) {
 	}
 }
 
-func TestProjectRootPreJournalCleanupRemovesOnlyFreshStaging(t *testing.T) {
+func TestProjectRootPreJournalCleanupRetainsFreshStaging(t *testing.T) {
 	_, _, spec, _ := projectRootFixture(t)
 	prepared, err := prepareNativeRoot(t.Context(), spec)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := prepared.cleanup(); err != nil {
-		t.Fatal(err)
+	if err := prepared.cleanup(); err == nil {
+		t.Fatal("cleanup did not report retained staging")
 	}
 	if err := prepared.close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Lstat(prepared.staging); !os.IsNotExist(err) {
-		t.Fatalf("unpublished staging survived exact cleanup: %v", err)
+	if _, err := os.Lstat(prepared.staging); err != nil {
+		t.Fatalf("cleanup lost retained staging: %v", err)
 	}
 	if _, err := os.Lstat(spec.Path); !os.IsNotExist(err) {
 		t.Fatalf("cleanup published native root: %v", err)
