@@ -3,7 +3,7 @@
 import argparse
 import base64
 from datetime import datetime
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 import hashlib
 import json
 import math
@@ -286,7 +286,10 @@ BOOTSTRAP_DIRS = frozenset(("home/cache/devin", "home/cache/devin/cli", "home/co
     "home/data/devin/cli", "home/data/devin/cli/logs", "home/data/devin/cli/plugins", "home/data/devin/mcp", "home/data/devin/mcp/oauth"))
 DEFINITIONS_CACHE = "home/cache/devin/cli/unleash_definitions.bf84fa7496e6f844.bin"
 DEFINITIONS_BYTES = 674340
+DEFINITIONS_LIMIT = 1 << 20
 BOOTSTRAP_FIXED = {
+    # Historical fc8 sample; its size remains the strict reader boundary. The
+    # interval observation below holds its own original bytes within one run.
     DEFINITIONS_CACHE: (DEFINITIONS_BYTES, "8626d6fd4ce3381b2eb32b6c60b7ad752d88c73d8a4fb848e3576bff113393f1"),
     "home/cache/devin/telemetry_state.json": (16, "7445ff8769cba2e1b004c754a770a85293e7548228e4fa3d363263c96c9b6290"),
     "home/data/devin/cli/plugins/lock.json": (57, "cbce3a5464482eb4cfb7b152ad15183bcb5db5c5557c625ee0cec1edb582aa88"),
@@ -316,13 +319,12 @@ def definition_cache_failure_context(summary, state):
             and "error" in command and command["error"] is None)
 
 
-def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, digest_only=False, package_digest=None):
-    """Only the prospective fixed bootstrap recipe calls this anchored reader."""
+@contextmanager
+def opened_bootstrap_file(ctx, relative, inventory):
+    """Hold the original root, ancestor chain and nofollow leaf for one read."""
     def stable(info):
         return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_uid, info.st_gid,
                 info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-    require(package_digest is None or (type(package_digest) is type(hashlib.sha256())
-            and package_digest.name == "sha256" and package_digest.digest_size == 32), "package SHA256 state required")
     require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap original root changed")
     with ExitStack() as stack:
         parent = os.open(ctx.root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
@@ -342,8 +344,6 @@ def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, dig
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         stack.callback(os.close, descriptor)
         before = os.fstat(descriptor)
-        maximum = (DEFINITIONS_BYTES if relative == DEFINITIONS_CACHE else 16384) if maximum is None else maximum
-        require(type(maximum) is int and 0 < maximum <= 512 << 20, "declared research file bound")
         def unchanged(count):
             require(count == before.st_size and stable(os.fstat(descriptor)) == stable(before)
                     and stable(os.stat(name, dir_fd=parent, follow_symlinks=False)) == stable(before), "bootstrap file changed")
@@ -351,6 +351,37 @@ def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, dig
                 require(KnownFileDiagnostics.identity(os.fstat(child)) == identity
                         and KnownFileDiagnostics.identity(os.stat(leaf, dir_fd=ancestor, follow_symlinks=False)) == identity, "bootstrap parent changed")
             require(root_identity(ctx.root) == ctx.original_output_identity, "bootstrap root changed during read")
+        yield descriptor, before, stable, unchanged
+
+
+def read_observed_definition(ctx, expected, inventory):
+    """Hash one opaque input; this does not establish its writer or semantics."""
+    ctx.budget.check()
+    with opened_bootstrap_file(ctx, DEFINITIONS_CACHE, inventory) as (descriptor, before, stable, unchanged):
+        require(stable(before) == tuple(expected) and before.st_mode == stat.S_IFREG | 0o600
+                and before.st_nlink == 1 and 0 <= before.st_size <= DEFINITIONS_LIMIT
+                and before.st_dev == ctx.original_output_identity[0]
+                and (before.st_uid, before.st_gid) == ctx.original_output_identity[3:],
+                "definition cache observed authority differs")
+        digest, count = hashlib.sha256(), 0
+        while count <= DEFINITIONS_LIMIT:
+            ctx.budget.check()
+            chunk = os.read(descriptor, min(65536, DEFINITIONS_LIMIT + 1 - count))
+            if not chunk: break
+            digest.update(chunk); count += len(chunk)
+        unchanged(count)
+        observed = {"bytes": count, "sha256": digest.hexdigest()}
+    ctx.budget.check()
+    return observed
+
+
+def read_bootstrap_file(ctx, relative, expected, inventory, *, maximum=None, digest_only=False, package_digest=None):
+    """The strict reader retains its original refusal and optional diagnostic."""
+    require(package_digest is None or (type(package_digest) is type(hashlib.sha256())
+            and package_digest.name == "sha256" and package_digest.digest_size == 32), "package SHA256 state required")
+    with opened_bootstrap_file(ctx, relative, inventory) as (descriptor, before, stable, unchanged):
+        maximum = (DEFINITIONS_BYTES if relative == DEFINITIONS_CACHE else 16384) if maximum is None else maximum
+        require(type(maximum) is int and 0 < maximum <= 512 << 20, "declared research file bound")
         if (relative == DEFINITIONS_CACHE and before.st_size != DEFINITIONS_BYTES
                 and stable(before) == tuple(expected) and before.st_mode == stat.S_IFREG | 0o600
                 and before.st_nlink == 1 and 0 <= before.st_size <= 1 << 20
@@ -406,6 +437,11 @@ class BootstrapEffects:
         self.ctx, self.baseline = ctx, baseline
         require(DEFINITIONS_CACHE not in baseline, "definition cache preexists original baseline")
         self.definitions_identity = None
+        self.definitions_observation = None
+        self._definition_after = None
+        summary = getattr(ctx, "summary", {})
+        self._definition_source = tuple(summary.get(key) for key in ("source_commit", "source_tree"))
+        self._definition_argv = tuple(getattr(ctx, "argv", ()))
         self.installation_sha, self.version_seen = None, False
         self.proofs = []
 
@@ -416,10 +452,12 @@ class BootstrapEffects:
         if self.definitions_identity is not None:
             require(all(current.get(key) == value for key, value in self.definitions_identity.items()),
                     "definition cache original identity changed")
+        elif DEFINITIONS_CACHE in current:
+            require(current is self._definition_after, "definition cache first appearance outside settled inventory")
         new = set(current) - set(baseline)
         logs = {key for key in new if BOOTSTRAP_LOG.fullmatch(key)}
         require(len(new) <= self.max_members and len(logs) <= self.max_logs, "bootstrap membership count")
-        total, records = 0, {}
+        total, records, definition = 0, {}, None
         for relative in sorted(new | {self.config_path}):
             ctx.budget.check()
             info = current[relative]
@@ -430,18 +468,21 @@ class BootstrapEffects:
             require(relative in BOOTSTRAP_FIXED or relative in (self.config_path, INSTALLATION_ID, MAINTENANCE) or relative in logs, "unknown native bootstrap path")
             mode = self.config_mode if relative == self.config_path else (0o600 if relative == DEFINITIONS_CACHE else 0o644)
             require(len(info) == 9 and info[2] == stat.S_IFREG | mode and info[3] == 1, "bootstrap ordinary file mode/link")
+            if relative == DEFINITIONS_CACHE:
+                observed = read_observed_definition(ctx, info, current)
+                original = (observed["bytes"], observed["sha256"])
+                require(self.definitions_observation in (None, original), "definition cache original bytes changed")
+                keys = [str(parent) for parent in Path(relative).parents if str(parent) != "."] + [relative]
+                definition = ({key: tuple(current[key]) for key in keys}, original)
+                records[relative] = observed
+                continue
             body = read_bootstrap_file(ctx, relative, info, current)
-            # One separately pinned native cache does not enlarge mutable-file allowance.
-            if relative != DEFINITIONS_CACHE:
-                total += len(body)
-                require(total <= 256 << 10, "bootstrap byte count")
+            # The bounded opaque cache does not enlarge any other file allowance.
+            total += len(body)
+            require(total <= 256 << 10, "bootstrap byte count")
             digest = hashlib.sha256(body).hexdigest()
             if relative in BOOTSTRAP_FIXED:
                 require((len(body), digest) == BOOTSTRAP_FIXED[relative], "bootstrap fixed bytes differ")
-                if relative == DEFINITIONS_CACHE and self.definitions_identity is None:
-                    parents = Path(relative).parents
-                    keys = [str(parent) for parent in parents if str(parent) != "."] + [relative]
-                    self.definitions_identity = {key: current[key] for key in keys}
             elif relative == INSTALLATION_ID:
                 require(re.fullmatch(rb"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", body), "unmeasured installation ID format")
                 require(self.installation_sha in (None, digest), "installation ID continuity changed")
@@ -454,7 +495,61 @@ class BootstrapEffects:
                 datetime.strptime(Path(relative).name[6:21], "%Y%m%d-%H%M%S")
             records[relative] = {"bytes": len(body), "sha256": digest}
         require(self.installation_sha is None or INSTALLATION_ID in current, "installation ID disappeared")
+        if definition is not None and self.definitions_identity is None:
+            ctx.budget.check()
+            self.definitions_identity, self.definitions_observation = definition
         self.proofs.append(records)
+
+    def observe_command(self, label, arguments, scope, before, after, state, completed_record):
+        """Permit first capture only in this completed command's interval."""
+        require(self._definition_after is None, "definition cache nested observation")
+        if self.definitions_identity is None and DEFINITIONS_CACHE in after:
+            self.definition_interval(label, arguments, scope, before, state, completed_record)
+            self._definition_after = after
+        try:
+            self.verify_command(before, after)
+        finally:
+            self._definition_after = None
+
+    def definition_interval(self, label, arguments, scope, before, state, completed_record):
+        ctx, summary = self.ctx, self.ctx.summary
+        require(DEFINITIONS_CACHE not in before and label in INVENTORY_PROBES
+                and all(key in before and (key == self.config_path or before[key] == value)
+                        for key, value in self.baseline.items()),
+                "definition cache first interval differs")
+        kind, selected = label.split("-", 1)
+        require(scope == ("a" if selected == "a-repeat" else selected)
+                and arguments == [kind, "list", "--json"] and type(state) is dict
+                and state.get("phase") == label, "definition cache command phase differs")
+        source = tuple(summary.get(key) for key in ("source_commit", "source_tree"))
+        binary = ctx.root / "client/bin/devin"
+        require(source == self._definition_source
+                and all(type(value) is str and re.fullmatch(r"[0-9a-f]{40}", value) for value in source)
+                and tuple(ctx.argv) == self._definition_argv == (str(binary),)
+                and ctx.identities.get(binary) == BINARY, "definition cache source differs")
+        recipe = summary.get("metadata_recipe")
+        require(recipe in ("private", "ordinary", "ordinary-global")
+                and summary.get("metadata_route") == self.metadata_route
+                and (self.config_path == METADATA_CONFIG) == (recipe == "private")
+                and summary.get("collection_complete") is False
+                and summary.get("metadata_capture_complete") is False
+                and summary.get("admission_qualified") is False
+                and summary.get("qualification") == dict.fromkeys(shared.QUALIFICATION_CASES, False)
+                and all(value is False for value in summary["qualification"].values())
+                and "error" not in summary and "in_flight_command" not in summary
+                and getattr(ctx, "process_cleanup_proved", False) is True,
+                "definition cache capture state differs")
+        commands = summary.get("commands")
+        require(type(commands) is list and 0 < len(commands) <= 60 and all(type(row) is dict for row in commands),
+                "definition cache command missing")
+        record = commands[-1]
+        prefix = ["--config", str(ctx.root / METADATA_CONFIG)] if recipe == "private" else []
+        require(completed_record is record and sum(row.get("probe") == label for row in commands) == 1
+                and record.get("probe") == label
+                and record.get("argv") == [*ctx.argv, *prefix, *arguments]
+                and record.get("cwd") == str(ctx.projects[scope])
+                and type(record.get("exit")) is int and record["exit"] == 0
+                and "error" in record and record["error"] is None, "definition cache command differs")
 
     def verify_config(self, body, _info):
         require(len(body) <= 256, "metadata config byte bound")
@@ -814,6 +909,7 @@ def collect(ctx, probes, readout_state=None, *, effects_type=BootstrapEffects, c
             command_outer_before = metadata_inventory(ctx.root, ctx.budget)
             effects.verify(command_outer_before)
         effects.verify_snapshot(baseline, before)
+        record = None
         try:
             record, out, err = ctx.probe(label, [*prefix, *arguments], project=scope)
             require(record["exit"] == 0, "native metadata command refused")
@@ -826,7 +922,7 @@ def collect(ctx, probes, readout_state=None, *, effects_type=BootstrapEffects, c
             effect = {"label": label, "changes": {}, "outer_changes": outer_delta}
             if effects.metadata_first:
                 ctx.summary["command_effects"].append(effect)
-                effects.verify_command(command_outer_before, outer_after)
+                effects.observe_command(label, arguments, scope, command_outer_before, outer_after, readout_state, record)
                 after = snapshot(ctx)
             effect["changes"] = {key: {"before": before.get(key), "after": after.get(key)}
                                  for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
@@ -834,7 +930,8 @@ def collect(ctx, probes, readout_state=None, *, effects_type=BootstrapEffects, c
             require({name: root_identity(path) for name, path in roots.items()} == identities, "fixture root replaced")
             if label in {name for name, _arguments in HELP}:
                 require(outer_after == outer_before and after == baseline, "help changed original or metadata input")
-            if not effects.metadata_first: effects.verify_command(command_outer_before, outer_after)
+            if not effects.metadata_first:
+                effects.observe_command(label, arguments, scope, command_outer_before, outer_after, readout_state, record)
             effects.verify_snapshot(baseline, after)
             zero_effects(probes, startup)
 

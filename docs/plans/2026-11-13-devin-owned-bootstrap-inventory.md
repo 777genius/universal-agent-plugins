@@ -150,3 +150,97 @@ Only collector, its inert tests and this plan change. Inert tests use authored
 reads and identity refusal, never as a native fixture or alternate production
 pin. Genuine final-source capture and independent original evidence review
 remain required; an original cleanup/diagnostic PASS is not product completion.
+
+## Opaque definition-cache interval observation (2026-11-15)
+
+This amendment replaces the historical cross-run byte-equality requirement for
+the one fixed definition-cache path in the initial metadata collector. The fc8
+path, size, SHA256 and original evidence above remain historical facts. The
+historical tuple remains in `BOOTSTRAP_FIXED`; the strict low-level reader keeps
+its historical size boundary and failure-only diagnostic. The official
+[3000.12.57 release repository](https://github.com/CognitionAI/devin-cli/blob/37d6de3de0a3c45f218f9cb982791e49f4c87607/DEVELOPMENT.md)
+identifies itself as release automation rather than CLI source. No pinned writer
+or format proof establishes
+whether this file is a bundled asset, a server response or benign content. Its
+filename suffix is not content authority, and a changed sample is not silently
+repinned.
+
+The collector may now retain this run's opaque bytes only across one observed
+absence-to-presence interval. Before every command, a first cache presence
+refuses without reading its bytes. First capture requires an initial MCP or
+Skills inventory with its exact original argv, selected cwd, source commit and
+tree, pinned runtime identity, phase and unique last command record. That record
+must be the object actually returned by the existing probe after its original
+post-command source checks; a recorded exit-zero row followed by a failed probe
+return is insufficient. Exit must be zero, error absent, the original process
+capture settled, no command in flight, and all collection and qualification
+flags still false. Ordinary and ordinary-Global User migration keep their
+existing separate original authority and exact one-time migration predicates.
+
+One fresh descriptor-relative, nofollow read starts at offset zero. Only this
+fixed regular single-link 0600 leaf may contain at most 1 MiB of opaque bytes;
+the reader retains the original task owner, group, filesystem, root and ancestor
+joins, complete leaf metadata, exact byte count and SHA256. It checks the same
+deadline before reads, after all descriptor closures and before committing the
+first original tuple after the remaining ordinary leaves. The one-byte overflow
+probe cannot admit an oversized body. The old diagnostic's already-consumed
+descriptor is never reused for this capture. All other leaf and 256 KiB aggregate
+bounds remain unchanged.
+
+After a successful capture the original size/SHA256 tuple and leaf/ancestor
+identities are immutable. Every subsequent verification requires the same full
+identity and complete byte hash; removal, replacement, mode, owner, group,
+device, size, mtime or ctime changes refuse. A public proof-map mutation cannot
+renew the private original tuple. Baseline0, native inputs, network policy,
+command budgets, DTO/repeat/endpoint guards, cleanup authority and the production
+Readback API remain unchanged. Only byte count and SHA256 are recorded; no cache
+body, seed, copy, rewrite, alternate path or recovery is introduced.
+
+This is an interval observation, not proof of an exclusive writer, trusted
+semantics or permission for a mutable cache. It does not establish readonly
+viability, containment, native MCP execution, automatic verification or product
+qualification. The existing original-input, side-effect and readonly controls
+remain decisive, and every qualification flag remains false. Genuine final-source
+evidence is still required.
+
+Focused inert contracts exercise an unknown-size/hash original body, its one
+offset-zero short-read capture, late deadline/IO/parent/leaf failures, all joined
+command refusals, immutable identity and full-hash continuity, and both ordinary
+User migration routes. The historical strict-reader refusal and its optional
+failure diagnostic remain covered separately. No native client was invoked for
+these implementation tests. The structured, ordinary and Global Python suites
+passed all 118 tests with zero skips in 1.776 seconds on the first frozen source.
+A final check before committing the first original tuple was then added: the
+existing deadline test's new late-ordinary-leaf variant failed without that
+check and passed with it (one affected method, 0.024 seconds). This final change
+retains the earlier check after the cache reader closes. No native or Go
+execution was performed for this amendment; source review and genuine evidence
+remain separate gates.
+
+## Offline recovery and Global frame continuation (2026-11-15)
+
+After the executor became unavailable, the accepted runtime was recovered from
+the complete recorded delta and matched its frozen 66311-byte Git blob
+`6da8e997d57eacfbe5ea2a854b1861576fe449f8` exactly. The missing structured test
+body was deliberately reauthored from the exact 843 preimage as new blob
+`8658c3cb053faf11da96a04bf9a4ba04d0159b65`; it is not a byte-identical recovery
+of the earlier test file. Its 33 unchanged old methods, four necessary
+adaptations and five observation contracts were independently reviewed at
+source level. This replacement is UNEXECUTED: the historical 118-test result
+and final deadline-case result above do not qualify these new test bytes.
+
+Source follow-through identified the existing Global frame reader as another
+consumer of the cache. The companion change passes only the already-established
+BootstrapEffects owner from Journey.frame into capture. It requires that same
+context, the complete original ancestor/leaf tuple set and private size/SHA256,
+then uses the fresh anchored cache reader and checks the measured tuple. The
+cache remains represented by its full SHA256 in every complete Global frame;
+other file readers, aggregate bounds and final metadata revalidation remain
+unchanged. There is no first-capture authority or rebaseline in this path.
+
+Two new Global contracts join the actual initial observer to Journey.frame and
+exercise missing/foreign authority, substitutions and changed digest refusal.
+Those companion code and test bytes are also source-reviewed but UNEXECUTED.
+The next normal final-source Python/native jobs must establish the result.
+No native, readonly, containment or product qualification is inferred from this
+source composition or from the older isolated tests.

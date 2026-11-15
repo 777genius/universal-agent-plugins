@@ -561,14 +561,35 @@ class ClosedDevinReadoutContracts(unittest.TestCase):
 class FixedDefinitionCacheContracts(unittest.TestCase):
     def fixture(self, root):
         ctx, effects, user = ProspectiveBootstrapContracts.fixture(self, root)
+        ctx.summary = dict(metadata_recipe="private", metadata_route=effects.metadata_route,
+                           source_commit="a" * 40, source_tree="b" * 40, collection_complete=False,
+                           metadata_capture_complete=False, admission_qualified=False,
+                           qualification=dict.fromkeys(case.shared.QUALIFICATION_CASES, False), commands=[])
+        ctx.argv = [str(ctx.root / "client/bin/devin")]
+        ctx.identities = {Path(ctx.argv[0]): case.BINARY}
+        ctx.projects = {key: ctx.root / ("project-" + key) for key in ("a", "b", "user")}
+        ctx.process_cleanup_proved = True
+        # These are inert returned-command/source facts, never a native run.
+        effects = case.BootstrapEffects(ctx, effects.baseline)
+        ctx.cache_before = copy.deepcopy(effects.baseline)
+        ctx.cache_phase = {"phase": "mcp-a"}
         ProspectiveBootstrapContracts.create_aux(self, ctx)
         cache = ctx.root / case.DEFINITIONS_CACHE
         body = (b"PRIVATE_CACHE_BYTES" * (case.DEFINITIONS_BYTES // 19 + 2))[:case.DEFINITIONS_BYTES]
         cache.write_bytes(body); cache.chmod(0o600)
-        # Authored inert bytes exercise the real reader; never a native cache fixture.
         fixed = dict(case.BOOTSTRAP_FIXED)
         fixed[case.DEFINITIONS_CACHE] = (len(body), hashlib.sha256(body).hexdigest())
+        ctx.summary["commands"] = [dict(probe="mcp-a", argv=[*ctx.argv, "--config", str(ctx.root / case.METADATA_CONFIG),
+                                                           "mcp", "list", "--json"],
+                                        cwd=str(ctx.projects["a"]), exit=0, error=None)]
         return ctx, effects, user, cache, body, fixed
+
+    @staticmethod
+    def observe(ctx, effects):
+        after = case.metadata_inventory(ctx.root, ctx.budget)
+        effects.observe_command("mcp-a", ["mcp", "list", "--json"], "a", ctx.cache_before, after, ctx.cache_phase,
+                                ctx.summary["commands"][-1])
+        return after
 
     def test_separate_fixed_allowance_reads_full_short_chunks_and_only_records_hash(self):
         self.assertEqual(case.BOOTSTRAP_FIXED[case.DEFINITIONS_CACHE],
@@ -579,12 +600,12 @@ class FixedDefinitionCacheContracts(unittest.TestCase):
             real_read, requests = case.os.read, []
             def short_read(fd, count):
                 if os.fstat(fd).st_ino == cache.stat().st_ino:
-                    self.assertLessEqual(count, case.DEFINITIONS_BYTES + 1)
+                    self.assertLessEqual(count, case.DEFINITIONS_LIMIT + 1)
                     requests.append(count)
                     return real_read(fd, min(count, 32768))
                 return real_read(fd, count)
-            with patch.object(case, "BOOTSTRAP_FIXED", fixed), patch.object(case.os, "read", side_effect=short_read):
-                effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+            with patch.object(case.os, "read", side_effect=short_read):
+                self.observe(ctx, effects)
                 first = copy.deepcopy(effects.definitions_identity)
                 effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
             self.assertGreater(len(requests), 2)
@@ -600,40 +621,41 @@ class FixedDefinitionCacheContracts(unittest.TestCase):
         for change in ("hash", "size", "mode", "link", "other-name", "other-file"):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
                 ctx, effects, _, cache, body, fixed = self.fixture(root)
-                if change == "size": cache.write_bytes(body + b"x")
+                if change == "hash":
+                    self.observe(ctx, effects)
+                    cache.write_bytes(b"changed" + body[7:])
+                elif change == "size": cache.write_bytes(b"x" * (case.DEFINITIONS_LIMIT + 1))
                 elif change == "mode": cache.chmod(0o644)
                 elif change == "link": os.link(cache, cache.with_name("hardlinked.bin"))
                 elif change == "other-name": cache.rename(cache.with_name("unleash_definitions.unreviewed.bin"))
                 elif change == "other-file":
                     (ctx.root / case.MAINTENANCE).write_bytes(b"x" * 16385)
                 if change == "hash":
-                    with self.assertRaisesRegex(ValueError, "fixed bytes"):
+                    with self.assertRaisesRegex(ValueError, "original identity"):
                         effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
                 else:
-                    with patch.object(case, "BOOTSTRAP_FIXED", fixed), self.assertRaises(ValueError):
-                        effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+                    with self.assertRaises(ValueError): self.observe(ctx, effects)
 
     def test_first_cache_and_parent_identities_never_refresh_or_read_replacements(self):
         for change in ("leaf", "parent", "removed", "mtime"):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
                 ctx, effects, _, cache, body, fixed = self.fixture(root)
                 os.utime(cache, ns=(1_000_000_000, 1_000_000_000))
-                with patch.object(case, "BOOTSTRAP_FIXED", fixed):
-                    effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
-                    original = copy.deepcopy(effects.definitions_identity)
-                    if change == "leaf":
-                        cache.rename(cache.with_name("original.bin")); cache.write_bytes(body); cache.chmod(0o600)
-                    elif change == "parent":
-                        cache.parent.rename(cache.parent.with_name("original-cli")); cache.parent.mkdir(mode=0o755)
-                        cache.write_bytes(body); cache.chmod(0o600)
-                        (cache.parent / "foreign").write_bytes(b"retained")
-                    elif change == "removed": cache.unlink()
-                    else: os.utime(cache, ns=(2_000_000_000, 2_000_000_000))
-                    with patch.object(case.os, "read", side_effect=AssertionError("replacement bytes must not be read")):
-                        with self.assertRaisesRegex(ValueError, "original identity"):
-                            effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
-                    self.assertEqual(effects.definitions_identity, original)
-                    if change == "parent": self.assertEqual((cache.parent / "foreign").read_bytes(), b"retained")
+                self.observe(ctx, effects)
+                original = copy.deepcopy(effects.definitions_identity)
+                if change == "leaf":
+                    cache.rename(cache.with_name("original.bin")); cache.write_bytes(body); cache.chmod(0o600)
+                elif change == "parent":
+                    cache.parent.rename(cache.parent.with_name("original-cli")); cache.parent.mkdir(mode=0o755)
+                    cache.write_bytes(body); cache.chmod(0o600)
+                    (cache.parent / "foreign").write_bytes(b"retained")
+                elif change == "removed": cache.unlink()
+                else: os.utime(cache, ns=(2_000_000_000, 2_000_000_000))
+                with patch.object(case.os, "read", side_effect=AssertionError("replacement bytes must not be read")):
+                    with self.assertRaisesRegex(ValueError, "original identity"):
+                        effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+                self.assertEqual(effects.definitions_identity, original)
+                if change == "parent": self.assertEqual((cache.parent / "foreign").read_bytes(), b"retained")
 
     def test_preexisting_cache_is_not_seeded_into_original_baseline(self):
         with tempfile.TemporaryDirectory() as root:
@@ -641,6 +663,206 @@ class FixedDefinitionCacheContracts(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "preexists original baseline"):
                 case.BootstrapEffects(ctx, case.metadata_inventory(ctx.root, ctx.budget))
 
+
+
+class ObservedDefinitionCacheContracts(unittest.TestCase):
+    def test_unknown_first_body_is_read_once_at_offset_zero_and_then_stays_original(self):
+        helper = FixedDefinitionCacheContracts()
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, user, cache, body, _ = helper.fixture(root)
+            body += b"UNQUALIFIED_OPAQUE_INPUT"
+            cache.write_bytes(body)
+            baseline, user_before = copy.deepcopy(effects.baseline), user.read_bytes()
+            inode = cache.stat().st_ino
+            opened, offsets = [], []
+            real_open, real_read, old_reader = os.open, os.read, case.read_bootstrap_file
+            def open_file(path, *args, **kwargs):
+                fd = real_open(path, *args, **kwargs)
+                if path == cache.name: opened.append(fd)
+                return fd
+            def read(fd, count):
+                if fd in opened and os.fstat(fd).st_ino == inode:
+                    offsets.append(os.lseek(fd, 0, os.SEEK_CUR))
+                    self.assertGreater(count, 0)
+                    self.assertLessEqual(count, 65536)
+                    return real_read(fd, min(count, 32768))
+                return real_read(fd, count)
+            def strict_reader(ctx, relative, *args, **kwargs):
+                self.assertNotEqual(relative, case.DEFINITIONS_CACHE)
+                return old_reader(ctx, relative, *args, **kwargs)
+            with patch.object(case.os, "open", side_effect=open_file), patch.object(case.os, "read", side_effect=read), \
+                    patch.object(case, "read_bootstrap_file", side_effect=strict_reader):
+                helper.observe(ctx, effects)
+            self.assertEqual(len(opened), 1)
+            self.assertEqual(offsets[0], 0)
+            self.assertEqual(offsets[-1], len(body))
+            self.assertGreater(len(offsets), 2)
+            with self.assertRaises(OSError): os.fstat(opened[0])
+            original = (len(body), hashlib.sha256(body).hexdigest())
+            self.assertEqual(effects.definitions_observation, original)
+            identities = copy.deepcopy(effects.definitions_identity)
+            effects.proofs[-1][case.DEFINITIONS_CACHE]["sha256"] = "f" * 64
+            effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+            self.assertEqual(effects.definitions_observation, original)
+            self.assertEqual(effects.definitions_identity, identities)
+            self.assertEqual(effects.proofs[-1][case.DEFINITIONS_CACHE], dict(bytes=original[0], sha256=original[1]))
+            self.assertEqual((effects.baseline, user.read_bytes(), cache.read_bytes()), (baseline, user_before, body))
+            self.assertIsNone(effects._definition_after)
+            self.assertNotIn("definition_cache_refusal", ctx.summary)
+            self.assertEqual(ctx.summary["qualification"], dict.fromkeys(case.shared.QUALIFICATION_CASES, False))
+            self.assertNotIn(b"UNQUALIFIED_OPAQUE_INPUT",
+                             case.shared.evidence({"commands": [], "proofs": effects.proofs}, {}, [])["research.json"])
+
+    def test_first_capture_refuses_precommand_unsettled_or_unjoined_intervals_before_read(self):
+        helper = FixedDefinitionCacheContracts()
+        changes = ("precommand", "before-present", "before-missing", "nonzero", "error", "cleanup", "in-flight",
+                   "phase", "help", "argv", "cwd", "source", "runtime", "later-command", "qualified", "complete",
+                   "not-returned", "copied-record")
+        for change in changes:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, _, _, _, _ = helper.fixture(root)
+                after = case.metadata_inventory(ctx.root, ctx.budget)
+                label, arguments = "mcp-a", ["mcp", "list", "--json"]
+                record = ctx.summary["commands"][-1]
+                completed = record
+                if change == "before-present": ctx.cache_before = dict(after)
+                elif change == "before-missing": ctx.cache_before = {}
+                elif change == "nonzero": record["exit"] = 1
+                elif change == "error": record["error"] = "inert partial capture"
+                elif change == "cleanup": ctx.process_cleanup_proved = False
+                elif change == "in-flight": ctx.summary["in_flight_command"] = label
+                elif change == "phase": ctx.cache_phase["phase"] = "skills-a"
+                elif change == "help": label, arguments = "mcp-help", ["mcp", "--help"]
+                elif change == "argv": record["argv"].append("--config=foreign")
+                elif change == "cwd": record["cwd"] = str(ctx.projects["b"])
+                elif change == "source": ctx.summary["source_tree"] = "c" * 40
+                elif change == "runtime": ctx.identities[Path(ctx.argv[0])] = "f" * 64
+                elif change == "later-command": ctx.summary["commands"].append(dict(record, probe="skills-a"))
+                elif change == "qualified": ctx.summary["qualification"][next(iter(case.shared.QUALIFICATION_CASES))] = True
+                elif change == "complete": ctx.summary["metadata_capture_complete"] = True
+                elif change == "not-returned": completed = None
+                elif change == "copied-record": completed = dict(record)
+                with patch.object(case.os, "read", side_effect=AssertionError("unjoined first bytes read")) as reader:
+                    with self.assertRaisesRegex(ValueError, "definition cache"):
+                        if change == "precommand": effects.verify(after)
+                        else: effects.observe_command(label, arguments, "a", ctx.cache_before, after, ctx.cache_phase, completed)
+                    reader.assert_not_called()
+                self.assertIsNone(effects.definitions_identity)
+                self.assertIsNone(effects.definitions_observation)
+                self.assertIsNone(effects._definition_after)
+
+    def test_first_observation_settles_leaf_parent_and_deadline_failures_without_recording(self):
+        helper = FixedDefinitionCacheContracts()
+        for change in ("leaf", "parent", "read-error", "deadline", "after-other-file"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, _, cache, body, _ = helper.fixture(root)
+                after = case.metadata_inventory(ctx.root, ctx.budget)
+                inode = cache.stat().st_ino
+                real_read, changed, expired, descriptors = os.read, [], [], set()
+                real_other = case.read_bootstrap_file
+                def check():
+                    if expired: raise case.shared.legacy.CollectorDeadline("inert original deadline")
+                ctx.budget.check = check
+                def read(fd, count):
+                    if os.fstat(fd).st_ino != inode: return real_read(fd, count)
+                    descriptors.add(fd)
+                    if change == "read-error": raise OSError("inert read error")
+                    chunk = real_read(fd, min(count, 32768))
+                    if change == "deadline":
+                        if not chunk: expired.append(True)
+                    elif change in ("leaf", "parent") and not changed:
+                        changed.append(True)
+                        if change == "leaf": cache.write_bytes(body + b"changed")
+                        else:
+                            cache.parent.rename(cache.parent.with_name("original-cli")); cache.parent.mkdir(mode=0o755)
+                            cache.write_bytes(body); cache.chmod(0o600)
+                    return chunk
+                def read_other(ctx, relative, *args, **kwargs):
+                    value = real_other(ctx, relative, *args, **kwargs)
+                    if change == "after-other-file" and relative == effects.config_path:
+                        expired.append(True)
+                    return value
+                with patch.object(case.os, "read", side_effect=read), patch.object(case, "read_bootstrap_file", side_effect=read_other):
+                    with self.assertRaises((ValueError, OSError, case.shared.legacy.CollectorDeadline)):
+                        effects.observe_command("mcp-a", ["mcp", "list", "--json"], "a", ctx.cache_before, after, ctx.cache_phase,
+                                                ctx.summary["commands"][-1])
+                self.assertTrue(descriptors)
+                for fd in descriptors:
+                    with self.assertRaises(OSError): os.fstat(fd)
+                self.assertEqual(effects.proofs, [])
+                self.assertIsNone(effects.definitions_identity)
+                self.assertIsNone(effects.definitions_observation)
+                self.assertIsNone(effects._definition_after)
+
+    def test_full_hash_remains_required_even_when_inert_metadata_is_unchanged(self):
+        helper = FixedDefinitionCacheContracts()
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, _, cache, body, _ = helper.fixture(root)
+            current = helper.observe(ctx, effects)
+            original_info, original_tuple = cache.stat(), effects.definitions_observation
+            count = len(effects.proofs)
+            cache.write_bytes(b"x" + body[1:])
+            real_fstat, real_stat = os.fstat, os.stat
+            def fstat(fd):
+                info = real_fstat(fd)
+                return original_info if info.st_ino == original_info.st_ino else info
+            def named(path, *args, **kwargs):
+                info = real_stat(path, *args, **kwargs)
+                return original_info if info.st_ino == original_info.st_ino else info
+            with patch.object(case.os, "fstat", side_effect=fstat), patch.object(case.os, "stat", side_effect=named):
+                with self.assertRaisesRegex(ValueError, "definition cache original bytes changed"):
+                    effects.verify(current)
+            self.assertEqual(effects.definitions_observation, original_tuple)
+            self.assertEqual(len(effects.proofs), count)
+
+    def test_ordinary_global_migration_and_observation_keep_original_user_authority(self):
+        import devin_ordinary_metadata_admission as ordinary
+        diagnostics = KnownFileDiagnosticContracts()
+        for recipe in ("ordinary", "ordinary-global"):
+            with self.subTest(recipe=recipe), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder).resolve()
+                user, _ = diagnostics.fixture(root)
+                user.chmod(0o644)
+                for relative in ("home/cache", "home/data", "private"):
+                    (root / relative).mkdir(parents=True, exist_ok=True)
+                held = diagnostics.hold(root)
+                try:
+                    summary = dict(metadata_recipe=recipe, metadata_route=ordinary.OrdinaryEffects.metadata_route,
+                                   source_commit="a" * 40, source_tree="b" * 40, collection_complete=False,
+                                   metadata_capture_complete=False, admission_qualified=False,
+                                   qualification=dict.fromkeys(case.shared.QUALIFICATION_CASES, False), commands=[])
+                    ctx = SimpleNamespace(root=root, original_output_identity=case.root_identity(root),
+                                          budget=SimpleNamespace(check=lambda: None), summary=summary,
+                                          argv=[str(root / "client/bin/devin")], known_file_diagnostics=held,
+                                          projects={"a": root / "project-a"}, process_cleanup_proved=True)
+                    ctx.identities = {Path(ctx.argv[0]): case.BINARY}
+                    baseline = case.metadata_inventory(root, ctx.budget)
+                    effects = ordinary.OrdinaryEffects(ctx, baseline)
+                    original = copy.deepcopy(effects.before)
+                    for _ in case.HELP: effects.verify_command(baseline, baseline)
+                    before = case.metadata_inventory(root, ctx.budget)
+                    ProspectiveBootstrapContracts().create_aux(ctx)
+                    cache = root / case.DEFINITIONS_CACHE
+                    body = b"UNKNOWN_OPAQUE_CACHE" * 17
+                    cache.write_bytes(body); cache.chmod(0o600)
+                    replacement = user.with_name("migration.tmp")
+                    replacement.write_bytes(b'{"read_config_from":{"cloud":false},"version":1}\n')
+                    replacement.chmod(0o600); os.replace(replacement, user)
+                    record = dict(probe="mcp-a", argv=[*ctx.argv, "mcp", "list", "--json"],
+                                  cwd=str(ctx.projects["a"]), exit=0, error=None)
+                    summary["commands"].append(record)
+                    after = case.metadata_inventory(root, ctx.budget)
+                    effects.observe_command("mcp-a", ["mcp", "list", "--json"], "a", before, after, dict(phase="mcp-a"), record)
+                    effects.verify(case.metadata_inventory(root, ctx.budget))
+                    self.assertEqual(effects.baseline, baseline)
+                    self.assertEqual(effects.before, original)
+                    self.assertEqual(effects.after, effects.fingerprint(user.read_bytes(), after[effects.config_path]))
+                    self.assertEqual(effects.definitions_observation, (len(body), hashlib.sha256(body).hexdigest()))
+                    self.assertFalse(effects.migrating)
+                    self.assertEqual(effects.step, len(case.HELP) + 1)
+                    self.assertEqual(summary["qualification"], dict.fromkeys(case.shared.QUALIFICATION_CASES, False))
+                finally:
+                    held.close()
 
 
 class RefusedDefinitionCacheContracts(unittest.TestCase):
@@ -669,7 +891,8 @@ class RefusedDefinitionCacheContracts(unittest.TestCase):
                 return real_read(fd, min(count, 32768))
             with patch.object(case.os, "open", side_effect=opened), patch.object(case.os, "read", side_effect=short_read):
                 with self.assertRaisesRegex(ValueError, "^bootstrap opened file differs$"):
-                    effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+                    inventory = case.metadata_inventory(ctx.root, ctx.budget)
+                    case.read_bootstrap_file(ctx, case.DEFINITIONS_CACHE, inventory[case.DEFINITIONS_CACHE], inventory)
             expected = dict(bytes=674560, sha256=hashlib.sha256(body).hexdigest())
             self.assertEqual(ctx.summary["definition_cache_refusal"], expected)
             self.assertEqual(opens, [cache.name])

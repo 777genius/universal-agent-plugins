@@ -3,6 +3,7 @@ package installer_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/antigravity"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -42,7 +43,7 @@ func newDevinGlobalHostFixture(t *testing.T, project bool) devinGlobalHostFixtur
 	}
 	pkg := filepath.Join(root, "package")
 	devinSDKRemotePackage(t, pkg)
-	registry, err := clients.NewRegistry(windsurf.New(), antigravity.New())
+	registry, err := clients.NewRegistry(windsurf.New(), cline.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +90,7 @@ func TestFacadeDevinGlobalOriginalRootAdmission(t *testing.T) {
 			case "unsupported-version":
 				f.request.ClientVersion = "3000.12.58"
 			case "non-opted":
-				f.request.ClientID = "antigravity"
+				f.request.ClientID = "cline"
 			case "group":
 				f.request.Targets = []installer.ClientTarget{{ClientID: "windsurf", ClientConfigRoot: f.legacy}}
 			}
@@ -101,6 +102,9 @@ func TestFacadeDevinGlobalOriginalRootAdmission(t *testing.T) {
 			}
 			if err == nil {
 				t.Fatal("unqualified native User authority was accepted")
+			}
+			if name == "non-opted" && (!errors.Is(err, installer.ErrInvalidRequest) || !strings.Contains(err.Error(), "ClientNativeConfigRoot requires an explicit absolute clean User root and an opted-in adapter")) {
+				t.Fatal("non-opted native User authority did not fail at admission", err)
 			}
 			state, stateErr := f.store.Load()
 			if stateErr != nil || len(state.Installations) != 0 || f.runner.calls != 0 ||

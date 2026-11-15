@@ -58,9 +58,9 @@ class HistoryControl:
         self.source, self.evidence = self.private / "public-source-a", self.private / "evidence"
         self.selected = self.project / ".hermes/uap-session"
         require(all(name not in env or type(env[name]) is str and env[name] == ""
-                    for name in ("HERMES_HOME_MODE", "HERMES_UID", "HERMES_GID")),
+                    for name in ("HERMES_HOME_MODE", "HERMES_UID", "HERMES_GID", "HERMES_SKIP_CHMOD")),
                 "private inspection permission policy conflicts with inherited selectors")
-        self.env = dict(env, AGENTPLUGINS_HOME=str(self.private / "public-uap-state"), HERMES_SKIP_CHMOD="1")
+        self.env = dict(env, AGENTPLUGINS_HOME=str(self.private / "public-uap-state"))
         self.nonce = env["HERMES_CALL_NONCE"]
         self.deadline = min(deadline - 50, time.monotonic() + 120)
         require(remaining(self.deadline) > 40, "insufficient original control/cold reserve")
@@ -196,6 +196,8 @@ class HistoryControl:
         self.api.public_profile(self.selected, image, self.private,
             {image[prefix + "config.yaml"]["sha256"]}, stdio=None, spawn=None, log_lock=None)
         self.hold(self.selected / "logs")
+        # Native cold bootstrap secures new directories before history capture.
+        self.env["HERMES_SKIP_CHMOD"] = "1"
 
     def history(self, image):
         return self.api.public_spawn_read(self.selected, self.private, projected(image), self.authorities(), self.deadline)

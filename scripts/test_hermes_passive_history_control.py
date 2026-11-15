@@ -432,10 +432,45 @@ class OriginalLedgerCapture(unittest.TestCase):
             native_environments, permissions = [], []
             try:
                 owner.selected.mkdir(parents=True, mode=0o700)
+                owner.pins = {"uap": {"path": "inert-uap"}}
+                owner.config = {"inert": {"url": "http://127.0.0.1:9/mcp"}}
+                owner.accepted = {"data": outer / "inert-data"}
+                (owner.selected / "config.yaml").write_bytes(b"mcp_servers: {}\n")
+                phases = []
+                def cold_command(label, argv, *, inspect=False):
+                    self.assertEqual(label, "bootstrap")
+                    self.assertEqual(argv, ["inert-uap", "run", "--inspect", "--confirm-client-start",
+                        "--target", "hermes", "--scope", "project", "--project-root", str(owner.project)])
+                    self.assertIs(inspect, True)
+                    logs = owner.selected / "logs"
+                    # Pinned make_user_dir defaults to mkdir(0777); the ordinary
+                    # secure policy must run before this first directory capture.
+                    previous = os.umask(0o022)
+                    try:
+                        logs.mkdir()
+                    finally:
+                        os.umask(previous)
+                    if not owner.env.get("HERMES_SKIP_CHMOD"):
+                        logs.chmod(0o700)
+                    if os.name != "nt":
+                        self.assertEqual(logs.stat().st_mode & 0o777, 0o700)
+                    self.assertNotIn("HERMES_SKIP_CHMOD", owner.env)
+                    phases.append("bootstrap")
+                    owner.current = CASE["inventory"](outer)
+                    return {"stdout": processes.encoded(json.dumps(owner.config).encode())}
+                def profile(*_args, **_options):
+                    self.assertNotIn("HERMES_SKIP_CHMOD", owner.env)
+                    phases.append("profile")
+                with mock.patch.object(owner, "run_command", side_effect=cold_command), \
+                     mock.patch.object(owner.api, "public_profile", side_effect=profile):
+                    owner.bootstrap()
+                self.assertEqual(phases, ["bootstrap", "profile"])
+                self.assertEqual(owner.env["HERMES_SKIP_CHMOD"], "1")
+                self.assertEqual(env, original)
                 path = owner.selected / control.LEDGER
                 path.write_bytes(b"[]")
                 owner.ledger = processes.LedgerHandle(ledger_api(), path, b"[]", deadline)
-                owner.snapshot = lambda: ({}, {})
+                owner.snapshot = lambda: (owner.current, {})
                 def capture(_api, _argv, _cwd, environment, *_args, **_options):
                     native_environments.append(dict(environment))
                     # The pinned native directory policy performs this same-mode
@@ -454,7 +489,7 @@ class OriginalLedgerCapture(unittest.TestCase):
                 self.assertEqual(path.read_bytes(), b"[]")
             finally:
                 owner.close_handles()
-            for name in ("HERMES_HOME_MODE", "HERMES_UID", "HERMES_GID"):
+            for name in ("HERMES_HOME_MODE", "HERMES_UID", "HERMES_GID", "HERMES_SKIP_CHMOD"):
                 for value in ("700", " ", None):
                     with self.subTest(name=name, value=value):
                         conflict = dict(env, **{name: value})

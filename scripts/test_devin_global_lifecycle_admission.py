@@ -2031,5 +2031,78 @@ class ReadonlyViabilityContracts(unittest.TestCase):
                         case.readonly_arguments(trial, options, before, old, directories)
 
 
+class ObservedDefinitionFrameContracts(unittest.TestCase):
+    def fixture(self, temporary):
+        from test_devin_structured_inventory_admission import FixedDefinitionCacheContracts
+        helper = FixedDefinitionCacheContracts()
+        ctx, effects, user, cache, body, _ = helper.fixture(temporary)
+        body += b"x" * 220
+        cache.write_bytes(body)
+        inventory = helper.observe(ctx, effects)
+        journey = object.__new__(case.Journey)
+        journey.ctx, journey.effects = ctx, effects
+        journey.cli_pin, journey.helper = (1, "0" * 64), None
+        journey.authorities = {"home": case.base.root_identity(ctx.root / "home")}
+        # The initial owner is real; unrelated installed-state guards retain
+        # their existing contracts. Exercise the actual frame/capture caller.
+        journey.guard_frame = mock.Mock(wraps=effects.verify)
+        return journey, effects, user, cache, body, inventory
+
+    def test_actual_frame_reuses_original_observation_without_historical_repin(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            journey, effects, user, cache, body, inventory = self.fixture(temporary)
+            original = copy.deepcopy((effects.definitions_identity, effects.definitions_observation, effects.baseline))
+            user_before = user.read_bytes()
+            strict = case.base.read_bootstrap_file
+            def ordinary(ctx, relative, *args, **kwargs):
+                self.assertNotEqual(relative, case.base.DEFINITIONS_CACHE)
+                return strict(ctx, relative, *args, **kwargs)
+            # Published evidence is mutable data, not the original cache authority.
+            effects.proofs[-1][case.base.DEFINITIONS_CACHE] = {"bytes": 0, "sha256": "0" * 64}
+            with mock.patch.object(case.base, "read_bootstrap_file", side_effect=ordinary):
+                current, frame = journey.frame(inventory)
+            self.assertEqual(current, inventory)
+            self.assertEqual(set(frame), set(inventory))
+            self.assertEqual(frame[case.base.DEFINITIONS_CACHE],
+                             {"identity": inventory[case.base.DEFINITIONS_CACHE], "sha256": case.sha(body)})
+            self.assertEqual((effects.definitions_identity, effects.definitions_observation, effects.baseline), original)
+            self.assertEqual(user.read_bytes(), user_before)
+            self.assertEqual(cache.read_bytes(), body)
+            self.assertNotEqual(len(body), case.base.DEFINITIONS_BYTES)
+            self.assertIs(journey.ctx.summary["admission_qualified"], False)
+            self.assertTrue(all(value is False for value in journey.ctx.summary["qualification"].values()))
+
+    def test_frame_refuses_missing_original_substitution_and_changed_content_without_adoption(self):
+        for change in ("missing-owner", "not-captured", "foreign-context", "missing-parent", "leaf", "parent", "hash"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                journey, effects, _user, cache, body, _ = self.fixture(temporary)
+                owner = effects
+                if change == "missing-owner": owner = None
+                elif change == "not-captured":
+                    effects.definitions_identity = effects.definitions_observation = None
+                elif change == "foreign-context": effects.ctx = copy.copy(journey.ctx)
+                elif change == "missing-parent": effects.definitions_identity.pop("home")
+                elif change == "leaf":
+                    cache.rename(cache.with_name("original.bin")); cache.write_bytes(body); cache.chmod(0o600)
+                elif change == "parent":
+                    cache.parent.rename(cache.parent.with_name("original-cli")); cache.parent.mkdir(mode=0o755)
+                    cache.write_bytes(body); cache.chmod(0o600)
+                inventory = case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget)
+                original = copy.deepcopy((effects.definitions_identity, effects.definitions_observation, effects.baseline, effects.proofs))
+                reader = case.base.read_observed_definition
+                def changed(*args):
+                    measured = reader(*args)
+                    measured["sha256"] = "0" * 64
+                    return measured
+                read = changed if change == "hash" else mock.Mock(side_effect=AssertionError("unowned cache read"))
+                with mock.patch.object(case.base, "read_observed_definition", side_effect=read):
+                    with self.assertRaisesRegex(ValueError, "Global original definitions"):
+                        case.capture(journey.ctx, journey.cli_pin, inventory=inventory, effects=owner)
+                if change != "hash": read.assert_not_called()
+                self.assertEqual((effects.definitions_identity, effects.definitions_observation, effects.baseline, effects.proofs), original)
+                self.assertIs(journey.ctx.summary["admission_qualified"], False)
+
+
+
 if __name__ == "__main__":
     unittest.main()

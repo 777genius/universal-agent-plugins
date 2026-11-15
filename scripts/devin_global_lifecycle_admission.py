@@ -426,7 +426,26 @@ def regular(ctx, relative, inventory, *, large=None, package_digest=None):
     return value
 
 
-def capture(ctx, installer_pin, helper=None, *, authorities=None, inventory=None):
+def observed_definition_sha(ctx, effects, inventory):
+    """Re-read the already observed cache; this path never admits its first birth."""
+    identity = getattr(effects, "definitions_identity", None)
+    observation = getattr(effects, "definitions_observation", None)
+    names = {str(parent) for parent in Path(base.DEFINITIONS_CACHE).parents if str(parent) != "."}
+    names.add(base.DEFINITIONS_CACHE)
+    base.require(isinstance(effects, base.BootstrapEffects) and effects.ctx is ctx
+                 and type(identity) is dict and set(identity) == names
+                 and all(type(row) is tuple and inventory.get(name) == row for name, row in identity.items())
+                 and type(observation) is tuple and len(observation) == 2
+                 and type(observation[0]) is int and 0 <= observation[0] <= base.DEFINITIONS_LIMIT
+                 and type(observation[1]) is str and re.fullmatch(r"[0-9a-f]{64}", observation[1]) is not None,
+                 "Global original definitions observation differs")
+    measured = base.read_observed_definition(ctx, identity[base.DEFINITIONS_CACHE], inventory)
+    base.require((measured["bytes"], measured["sha256"]) == observation,
+                 "Global original definitions content changed")
+    return measured["sha256"]
+
+
+def capture(ctx, installer_pin, helper=None, *, authorities=None, inventory=None, effects=None):
     """Admit the complete ordinary byte budget before reading any fixture file."""
     if inventory is None:
         inventory = base.metadata_inventory(ctx.root, ctx.budget)
@@ -439,13 +458,17 @@ def capture(ctx, installer_pin, helper=None, *, authorities=None, inventory=None
     sizes = [inventory[name][6] for name, role in roles.items() if role is None]
     base.require(all(type(size) is int and 0 <= size <= 1 << 20 for size in sizes)
                  and sum(sizes) <= 16 << 20, "Global ordinary aggregate")
+    definition_sha = observed_definition_sha(ctx, effects, inventory) if base.DEFINITIONS_CACHE in roles else None
     result = {}
     for name, info in inventory.items():
         row = {"identity": info}
         if len(info) == 9:
-            role = roles[name]
-            value = regular(ctx, name, inventory, large=role)
-            row["sha256"] = value if role else sha(value)
+            if name == base.DEFINITIONS_CACHE:
+                row["sha256"] = definition_sha
+            else:
+                role = roles[name]
+                value = regular(ctx, name, inventory, large=role)
+                row["sha256"] = value if role else sha(value)
         result[name] = row
     base.require(base.metadata_inventory(ctx.root, ctx.budget) == inventory, "Global capture metadata changed")
     return inventory, result
@@ -747,7 +770,8 @@ class Journey:
     def frame(self, inventory=None):
         if inventory is None: inventory = base.metadata_inventory(self.ctx.root, self.ctx.budget)
         self.guard_frame(inventory)
-        return capture(self.ctx, self.cli_pin, self.helper, authorities=self.authorities, inventory=inventory)
+        return capture(self.ctx, self.cli_pin, self.helper, authorities=self.authorities, inventory=inventory,
+                       effects=self.effects)
 
     def read(self, path, inventory):
         return regular(self.ctx, path.relative_to(self.ctx.root).as_posix(), inventory)

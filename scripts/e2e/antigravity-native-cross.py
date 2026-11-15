@@ -125,6 +125,108 @@ def tree_snapshot(root, excluded=()):
     return result
 
 
+def protected_snapshot(root):
+    """Keep physical identity, mode and file content for the read-only cycle."""
+    result = {}
+    for entry in [root, *sorted(root.rglob("*"))]:
+        if entry.is_symlink():
+            raise AssertionError("Unexpected alias in the protected native fixture")
+        info = entry.stat()
+        identity = (info.st_dev, info.st_ino, info.st_mode)
+        content = None if entry.is_dir() else (
+            info.st_size, info.st_mtime_ns, hashlib.sha256(entry.read_bytes()).hexdigest()
+        )
+        result[entry.relative_to(root).as_posix()] = (identity, content)
+    return result
+
+
+def prepared_content(snapshot):
+    """Explicit repair may replace owned files, while kind/mode/bytes stay exact."""
+    return {name: (identity[2], None if content is None else (content[0], content[2]))
+            for name, (identity, content) in snapshot.items()}
+
+
+def outside_owned(snapshot, root, owned):
+    prefix = owned.relative_to(root).as_posix()
+    return {name: row for name, row in snapshot.items()
+            if name != prefix and not name.startswith(prefix + "/")}
+
+
+def checked_user_result(body, *, observed=False, enabled=True):
+    """Read the existing single-target public lifecycle DTO."""
+    envelope = json.loads(body)
+    if type(envelope.get("schema_version")) is not int or envelope["schema_version"] != 1 or envelope.get("result") != "success":
+        raise AssertionError("Public User operation did not succeed")
+    data = envelope["data"]
+    if "targets" in data:
+        targets = data["targets"]
+        if len(targets) != 1 or targets[0].get("target") != "antigravity":
+            raise AssertionError("Unexpected public lifecycle target set")
+        data = targets[0]["output"]
+    result = data["result"]
+    plan, outcome = result["plan"], result["activation"]
+    if (plan.get("client_id") != "antigravity" or plan.get("scope") != "user"
+            or outcome.get("activation") != "prepared" or outcome.get("verification") != "installation_verified"
+            or outcome.get("activation_attested", False) is not False
+            or outcome.get("authentication_attested", False) is not False
+            or "native_objects" in outcome or "native_effect" in outcome):
+        raise AssertionError("Public metadata operation promoted lifecycle or changed scope")
+    if observed:
+        action = ("The selected User plugin is enabled in CLI inventory; open or reload Antigravity to verify IDE loading"
+                  if enabled else "The selected User plugin remains disabled; decide whether to enable it in Antigravity")
+        if outcome.get("user_actions") != [action]:
+            raise AssertionError(
+                f"Public {envelope.get('command')} did not reach selected native inventory: "
+                f"{outcome.get('user_actions')!r}"
+            )
+    return result
+
+
+def checked_user_readback(agy, uap, source, env, project, plugin, manifest, protected):
+    """Exercise the public installation path against real pinned native inventory."""
+    foreign = plugin.parent / "foreign-readback-control"
+    foreign.mkdir()
+    (foreign / "plugin.json").write_text(json.dumps({
+        "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+        "name": foreign.name, "version": "1.0.0", "description": "Foreign readback control",
+    }), encoding="utf-8")
+    (foreign / "sentinel").write_text("foreign must survive\n", encoding="utf-8")
+    # Explicit vendor commands prepare only this disposable fixture. UAP may
+    # observe its selected state but has no consent to enable either plugin.
+    run(agy, "plugin", "disable", foreign.name, env=env, cwd=project)
+    foreign_control = protected_snapshot(foreign)
+    config = plugin.parent.parent / "config.json"
+    for enabled in (False, True):
+        run(agy, "plugin", "enable" if enabled else "disable", plugin.name, env=env, cwd=project)
+        settings = json.loads(config.read_text(encoding="utf-8"))
+        if (settings != {"plugins": {foreign.name: {"enabled": False}, plugin.name: {"enabled": enabled}}}):
+            raise AssertionError("Vendor setup did not produce the exact selected/foreign overrides")
+        if protected_snapshot(foreign) != foreign_control:
+            raise AssertionError("Selected vendor setup changed the original foreign plugin")
+        originals = {path: protected_snapshot(path) for path in protected}
+        owned_content = prepared_content(protected_snapshot(plugin))
+        for verb in ("add", "update", "repair"):
+            args = [verb, source if verb == "add" else NAME,
+                    "--target", "antigravity", "--scope", "user", "--yes", "--format", "json"]
+            if verb == "add":
+                args.append("--no-save")
+            body = run(uap, *args, env=env, cwd=project)
+            checked_user_result(body, observed=True, enabled=enabled)
+            after = {path: protected_snapshot(path) for path in protected}
+            for path, before in originals.items():
+                current = after[path]
+                if verb == "repair" and path == plugin.parent.parent:
+                    before, current = outside_owned(before, path, plugin), outside_owned(current, path, plugin)
+                if current != before:
+                    raise AssertionError(f"User {verb} changed a protected native/source/project entry")
+            if prepared_content(protected_snapshot(plugin)) != owned_content:
+                raise AssertionError("User readback/repair changed owned package entries, modes or bytes")
+            checked_plugin(agy, env, project, plugin, manifest, enabled)
+            if any(protected_snapshot(path) != before for path, before in after.items()):
+                raise AssertionError("Native inventory changed protected fixture content or identity")
+            print(f"PASS: real User {verb} readback; enabled={enabled}; Prepared; protected entries unchanged", flush=True)
+
+
 def assert_native_mcp(plugin, fixture_root):
     config = json.loads((plugin / "mcp_config.json").read_text(encoding="utf-8"))
     servers = config.get("mcpServers", {})
@@ -3782,11 +3884,20 @@ def native_main(capture=None):
         # receipt and the separate vendor-only import/uninstall profile.
         user_native_env = profile(root / "uap-native-user-scope", executable_dir)
         native_user_root = Path(user_native_env["HOME"]) / ".gemini" / "config" / "plugins"
+        original_user_scopes = {path: protected_snapshot(path) for path in (
+            source, project, project_b, Path(user_env["HOME"]), Path(vendor_env["HOME"]),
+        )}
         user_result = run(
             uap, "add", source, "--target", "antigravity", "--scope", "user",
             "--no-save", "--yes", "--format", "json",
             env=user_native_env, cwd=project_b,
         )
+        checked_user_result(user_result)
+        user_config = native_user_root.parent / "config.json"
+        if os.path.lexists(user_config):
+            raise AssertionError("Initial User delivery bootstrapped native settings")
+        if any(protected_snapshot(path) != before for path, before in original_user_scopes.items()):
+            raise AssertionError("Initial User delivery changed source or an unselected scope")
         if not json.loads(user_result) or not native_user_root.is_dir():
             raise AssertionError("UAP User installation did not create native plugin root")
         user_plugins = [
@@ -3805,11 +3916,23 @@ def native_main(capture=None):
             raise AssertionError("UAP User scope omitted the selected Skill")
         assert_native_mcp(user_plugin, root)
         before_user_repair = tree_snapshot(user_plugin)
+        before_missing_config_repair = protected_snapshot(native_user_root.parent)
+        before_owned_repair = prepared_content(protected_snapshot(user_plugin))
         before_project_a, before_project_b = tree_snapshot(project), tree_snapshot(project_b)
         user_repaired = run(
             uap, "repair", NAME, "--target", "antigravity", "--scope", "user",
             "--yes", "--format", "json", env=user_native_env, cwd=project_b,
         )
+        checked_user_result(user_repaired)
+        if os.path.lexists(user_config):
+            raise AssertionError("Missing-config User repair created native settings")
+        before_missing_config_repeat = protected_snapshot(native_user_root.parent)
+        if (outside_owned(before_missing_config_repeat, native_user_root.parent, user_plugin)
+                != outside_owned(before_missing_config_repair, native_user_root.parent, user_plugin)
+                or prepared_content(protected_snapshot(user_plugin)) != before_owned_repair):
+            raise AssertionError("Missing-config User repair changed unselected native entries or owned content")
+        if any(protected_snapshot(path) != before for path, before in original_user_scopes.items()):
+            raise AssertionError("Missing-config User repair changed source or an unselected scope")
         if not json.loads(user_repaired) or tree_snapshot(user_plugin) != before_user_repair:
             raise AssertionError("Intact User repair changed the selected native package")
         assert_native_mcp(user_plugin, root)
@@ -3817,22 +3940,46 @@ def native_main(capture=None):
                 or tree_snapshot(project_b) != before_project_b
                 or tree_snapshot(source) != source_snapshot):
             raise AssertionError("Intact User repair changed source or an unselected project")
+        # Grouped repair keeps its existing file-only route without settings.
+        # A repeated add uses the existing unchanged-package observation path.
+        missing_config_repeat = run(
+            uap, "add", source, "--target", "antigravity", "--scope", "user",
+            "--no-save", "--yes", "--format", "json", env=user_native_env, cwd=project_b,
+        )
+        checked_user_result(missing_config_repeat)
+        if (os.path.lexists(user_config)
+                or protected_snapshot(native_user_root.parent) != before_missing_config_repeat):
+            raise AssertionError("Missing-config User repeat changed the original native profile")
+        if any(protected_snapshot(path) != before for path, before in original_user_scopes.items()):
+            raise AssertionError("Missing-config User repeat changed source or an unselected scope")
         run(agy, "plugin", "validate", "--strict", user_plugin, env=user_native_env, cwd=project_b)
         # Pinned agy discovers direct User bundles by physical directory name,
         # which differs from UAP's declared package name. No import is needed.
         # Inventory enablement is not IDE loading or live MCP execution.
         before_inventory = tree_snapshot(Path(user_native_env["HOME"]).parent)
         observed = checked_plugin(agy, user_native_env, project_b, user_plugin, user_manifest)
+        checked_user_result(missing_config_repeat, observed=True, enabled=observed["enabled"])
+        if os.path.lexists(user_config):
+            raise AssertionError("Missing-config native observation bootstrapped settings")
         if tree_snapshot(Path(user_native_env["HOME"]).parent) != before_inventory:
             raise AssertionError("Read-only native inventory changed the selected User profile")
         print(f"Native UAP User bundle discovered at exact owned path; "
               f"enabled={observed['enabled']}; IDE activation was not attested.", flush=True)
+        checked_user_readback(
+            agy, uap, source, user_native_env, project_b, user_plugin, user_manifest,
+            (native_user_root.parent, source, project, project_b,
+             Path(user_env["HOME"]), Path(vendor_env["HOME"])),
+        )
+        if any(protected_snapshot(path) != before for path, before in original_user_scopes.items()):
+            raise AssertionError("User readback cycle changed source or an unselected scope")
         user_removed = run(
             uap, "remove", NAME, "--target", "antigravity", "--scope", "user",
             "--yes", "--format", "json", env=user_native_env, cwd=project_b,
         )
         if not json.loads(user_removed) or user_plugin.exists():
             raise AssertionError("UAP User-scoped plugin survived exact-owned removal")
+        if any(protected_snapshot(path) != before for path, before in original_user_scopes.items()):
+            raise AssertionError("User removal changed source or an unselected scope")
         rows = json.loads(run(agy, "plugin", "list", "--json", env=user_native_env, cwd=project_b))
         if not isinstance(rows, list) or any(
                 row.get("path") == str(user_plugin) or row.get("name") == user_plugin.name

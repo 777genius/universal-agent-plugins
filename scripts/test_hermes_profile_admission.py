@@ -1450,6 +1450,67 @@ class BundledRuntimeContracts(unittest.TestCase):
         root.with_name("payload.prepared.json").write_text(json.dumps(prepared))
         return root, source, target, manifest, prepared
 
+    def test_parent_bundled_snapshot_budget_is_single_and_remains_finite(self):
+        import ast
+        import time
+        owner = next(node for node in ast.parse(Path(CASE["__file__"]).read_bytes()).body
+                     if isinstance(node, ast.FunctionDef) and node.name == "run")
+        proof_update = next(node for node in ast.walk(owner) if isinstance(node, ast.Expr)
+                            and isinstance(node.value, ast.Call)
+                            and any(keyword.arg == "payload_scan_timeout_seconds" for keyword in node.value.keywords))
+        snapshots = {node.targets[0].id: node for node in ast.walk(owner)
+                     if isinstance(node, ast.Assign) and len(node.targets) == 1
+                     and isinstance(node.targets[0], ast.Name) and node.targets[0].id in ("runtime_before", "runtime_after")
+                     and isinstance(node.value, ast.Dict)}
+        self.assertEqual(set(snapshots), {"runtime_before", "runtime_after"})
+        proof_code = compile(ast.Module(body=[proof_update], type_ignores=[]), "<original run budget>", "exec")
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            root, source, target, _, _ = self.fixture(parent)
+            identity = CASE["directory_identity"](root)
+            original = CASE["payload_snapshot"](root, identity, time.monotonic() + 5)
+            real_read = os.read
+            for label, statement in snapshots.items():
+                code = compile(ast.Module(body=[proof_update, statement], type_ignores=[]),
+                               "<original parent snapshot>", "exec")
+                for elapsed in (121, 240):
+                    with self.subTest(snapshot=label, elapsed=elapsed):
+                        clock, descriptors = [1000.0], []
+                        def read(descriptor, size):
+                            descriptors.append(descriptor)
+                            body = real_read(descriptor, size)
+                            clock[0] = 1000.0 + elapsed
+                            return body
+                        scope = dict(CASE, proof={}, source_capture=False, payload=root, payload_identity=identity,
+                                     official_source=source, target=target)
+                        with mock.patch.object(time, "monotonic", side_effect=lambda: clock[0]), \
+                             mock.patch.object(os, "read", side_effect=read):
+                            if elapsed == 121:
+                                exec(code, scope)
+                                self.assertEqual(scope[label]["inventory"], original)
+                                self.assertEqual(scope[label]["provenance"]["runtime_distribution"], "bundled")
+                            else:
+                                with self.assertRaisesRegex(RuntimeError, "payload scan deadline"):
+                                    exec(code, scope)
+                                self.assertNotIn(label, scope)
+                        self.assertGreater(len(descriptors), 0)
+                        for descriptor in set(descriptors):
+                            with self.assertRaises(OSError):
+                                os.fstat(descriptor)
+                        self.assertEqual(scope["proof"], {"native_family_timeout_seconds": 720,
+                                                         "payload_scan_timeout_seconds": 240})
+            source_scope = dict(CASE, proof={}, source_capture=True)
+            exec(proof_code, source_scope)
+            self.assertEqual(source_scope["proof"], {"native_family_timeout_seconds": 720,
+                                                   "payload_scan_timeout_seconds": 120})
+            evidence = parent / "evidence"; evidence.mkdir()
+            CASE["write_json"](evidence / "profile-admission.json", scope["proof"])
+            body = (evidence / "profile-admission.json").read_bytes()
+            with mock.patch.dict(CASE["stage_evidence"].__globals__, {"EVIDENCE_CLOSED": False}), \
+                 mock.patch("builtins.print"):
+                CASE["stage_evidence"](evidence)
+            self.assertEqual((evidence / "upload/profile-admission.json").read_bytes(), body)
+
     def test_manifest_and_prepared_inputs_bind_actual_native_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
             root, source, target, manifest, prepared = self.fixture(Path(temporary).resolve())

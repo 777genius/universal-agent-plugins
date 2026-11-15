@@ -5,6 +5,19 @@ on:
     branches: [main]
     paths:
       - 'install/integrationctl/agentplugins/clients/antigravity/**'
+      - 'install/integrationctl/agentplugins/usecase/apply_outcomes.go'
+      - 'install/integrationctl/agentplugins/usecase/lifecycle_observation.go'
+      - 'install/integrationctl/agentplugins/installer/types.go'
+      - 'install/integrationctl/agentplugins/installer/package_lookup.go'
+      - 'install/integrationctl/agentplugins/installer/prepare_package_plan.go'
+      - 'install/integrationctl/agentplugins/installer/antigravity_prepared_binding_test.go'
+      - 'cli/internal/agentpluginscli/add_application.go'
+      - 'cli/internal/agentpluginscli/deps_sync.go'
+      - 'cli/internal/agentpluginscli/antigravity_public_resume_test.go'
+      - 'cli/internal/agentpluginscli/cli_test.go'
+      - 'install/integrationctl/agentplugins/adapters/clientdetect/testdata/golden/detect_darwin.json'
+      - 'install/integrationctl/agentplugins/adapters/clientdetect/testdata/golden/detect_linux.json'
+      - 'install/integrationctl/agentplugins/adapters/clientdetect/testdata/golden/detect_windows.json'
       - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
       - 'scripts/e2e/antigravity-native.sh'
       - 'scripts/e2e/antigravity-native-cross.py'
@@ -19,6 +32,19 @@ on:
     branches: [main]
     paths:
       - 'install/integrationctl/agentplugins/clients/antigravity/**'
+      - 'install/integrationctl/agentplugins/usecase/apply_outcomes.go'
+      - 'install/integrationctl/agentplugins/usecase/lifecycle_observation.go'
+      - 'install/integrationctl/agentplugins/installer/types.go'
+      - 'install/integrationctl/agentplugins/installer/package_lookup.go'
+      - 'install/integrationctl/agentplugins/installer/prepare_package_plan.go'
+      - 'install/integrationctl/agentplugins/installer/antigravity_prepared_binding_test.go'
+      - 'cli/internal/agentpluginscli/add_application.go'
+      - 'cli/internal/agentpluginscli/deps_sync.go'
+      - 'cli/internal/agentpluginscli/antigravity_public_resume_test.go'
+      - 'cli/internal/agentpluginscli/cli_test.go'
+      - 'install/integrationctl/agentplugins/adapters/clientdetect/testdata/golden/detect_darwin.json'
+      - 'install/integrationctl/agentplugins/adapters/clientdetect/testdata/golden/detect_linux.json'
+      - 'install/integrationctl/agentplugins/adapters/clientdetect/testdata/golden/detect_windows.json'
       - 'install/integrationctl/agentplugins/domain/clients_catalog.go'
       - 'scripts/e2e/antigravity-native.sh'
       - 'scripts/e2e/antigravity-native-cross.py'
@@ -87,6 +113,14 @@ jobs:
         with:
           go-version: '1.26.11'
           cache: false
+      - name: Test Antigravity User readback contracts
+        if: ${{ inputs.release_tag == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./clients/antigravity
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./installer -run '^TestAntigravity'
+          go -C cli test -count=1 -timeout=3m -v ./internal/agentpluginscli -run '^TestAntigravity'
       - name: Download exact real Antigravity CLI (SHA-256 verified)
         shell: bash
         run: |
@@ -206,6 +240,14 @@ jobs:
         with:
           go-version: '1.26.11'
           cache: false
+      - name: Test Antigravity User readback contracts
+        if: ${{ inputs.release_tag == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./clients/antigravity
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./installer -run '^TestAntigravity'
+          go -C cli test -count=1 -timeout=3m -v ./internal/agentpluginscli -run '^TestAntigravity'
       - name: Download pinned real macOS agy and verify vendor SHA256
         shell: bash
         run: |
@@ -340,6 +382,17 @@ jobs:
         with:
           go-version: '1.26.11'
           cache: false
+      - name: Test Antigravity User readback contracts
+        if: ${{ inputs.release_tag == '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./clients/antigravity
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity adapter contracts failed' }
+          go -C install/integrationctl/agentplugins test -count=1 -timeout=3m -v ./installer -run '^TestAntigravity'
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity SDK contracts failed' }
+          go -C cli test -count=1 -timeout=3m -v ./internal/agentpluginscli -run '^TestAntigravity'
+          if ($LASTEXITCODE -ne 0) { throw 'Antigravity public CLI contracts failed' }
       - name: Verify pinned embedded schema bytes survive Windows checkout
         shell: pwsh
         run: |

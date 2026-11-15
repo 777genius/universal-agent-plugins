@@ -3700,3 +3700,58 @@ cleanup failure, replaced code and poisoned labels, and committed publication
 with both details. All 26 affected observer/readout controls passed without
 skips. No native guard, process ownership, cleanup decision or lifecycle claim
 changes; the genuine native cause and acceptance remain pending.
+
+### 2026-11-15: ordinary cold bootstrap before passive permission policy
+
+The source-843 Mac and Linux bundled originals both stopped in
+`HistoryControl.run_command("bootstrap")` while calling the supervised command.
+Their closed frames do not identify the inner product refusal. Independently,
+the pinned native initializer creates missing directories with the ordinary
+`mkdir(0777)` default, then applies its secure-directory policy. Selecting
+`HERMES_SKIP_CHMOD=1` before that first initialization can leave a cold directory
+at 0755 under umask 022, instead of the required 0700.
+
+The private fixture now retains its copied original environment through the
+existing initial inspect, exact inventory and public-profile validation, and
+original logs-directory capture. Only after these succeed does it author
+`HERMES_SKIP_CHMOD=1` for the subsequent producer and passive-history operations.
+Nonempty or non-string inherited SKIP_CHMOD, HOME_MODE, UID or GID selectors
+refuse before runtime access or directory capture. This uses the pinned normal
+bootstrap and supported operator policy; it does not precreate or chmod
+production directories, replace a baseline, or weaken identity/ctime/owner
+checks.
+
+The existing permission-policy test is expanded with a real cold directory and
+the actual controller bootstrap method, followed by its existing real
+LedgerHandle continuity check and all early selector refusals. This replacement
+test source was authored while the executor was unavailable and is unexecuted;
+the earlier local result is not transferred to these new test bytes. The runtime
+blob equals the prior independently reviewed phase-policy candidate exactly.
+No hosted inner-cause attribution or native acceptance is inferred.
+
+### 2026-11-15: finite budget for parent standalone snapshots
+
+The original Windows bundled job 132710090637 on source 843ffaea3ed7b5aa2beafb205d48b27586e42f69
+refused before observer startup at the 120-second payload hash deadline.
+Its completed build census retained 134,259 payload entries and 6,258,975,026
+regular bytes. In the same job, owned build cleanup had already completed the
+same full `payload_snapshot` API between the final census and cleanup completion,
+a 126.558-second interval that also includes the intervening alias-plan check.
+That interval is not a separately measured hash duration.
+
+The two parent bundled snapshots now each receive one absolute 240-second
+budget, recorded truthfully in the existing proof field. The complete 8 GiB,
+262,144-entry and depth-64 limits, four-worker bound, full byte hashes, original
+held/named identity checks and worker settlement are unchanged. Source research
+retains 120 seconds; the native observer retains its separate 720 seconds and
+the workflow retains its 180-minute hard limit. The two scans plus the native
+family allow at most 20 minutes of those phase budgets; this does not promise
+that every build, compilation and cleanup worst case fits simultaneously.
+There is no retry, deadline renewal, skipped input or cached digest.
+
+One focused inert clock control executes both original parent assignment
+statements against a real small payload: a read at 121 seconds remains admitted,
+a read at exactly 240 seconds refuses, and touched file descriptors are closed.
+It also checks source/native proof budgets and unchanged evidence publication.
+This newly authored control is unexecuted while the executor is unavailable;
+native timing and complete bundled lifecycle acceptance remain pending.

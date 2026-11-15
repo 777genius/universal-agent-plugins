@@ -378,8 +378,8 @@ jobs:
       shell: bash
       env:
         HERMES_NATIVE_UAP_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-      # The native family keeps its 720-second deadline; each immutable runtime
-      # scan has a separate 120-second deadline and an 8 GiB admission ceiling.
+      # The native family keeps its 720-second deadline; each parent bundled
+      # runtime scan has a separate 240-second deadline and an 8 GiB ceiling.
       run: ${{ matrix.python }} scripts/e2e/hermes-profile-admission.py
     - name: Retain original custom-root admission evidence
       if: ${{ always() }}

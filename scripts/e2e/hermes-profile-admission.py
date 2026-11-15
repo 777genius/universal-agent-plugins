@@ -340,6 +340,7 @@ def inventory(root, sentinels=(), *, launchers=None, public=False, launcher_mode
 # Official standalone payload authority is separate from the small mutable
 # profile ledger. These finite ceilings include every shipped byte and link.
 PAYLOAD_MEMBERS, PAYLOAD_DEPTH, PAYLOAD_BYTES = 262144, 64, 8 << 30
+BUNDLED_PAYLOAD_SCAN_SECONDS = 240
 
 
 def payload_links(root, records, deadline, source=None, *, resolve=None):
@@ -4325,7 +4326,8 @@ def run():
     helpers = runpy.run_path(str(HERE / "hermes-native.py"), run_name="hermes_profile_process_helpers")
     lifecycle_deadline = time.monotonic() + 720
     try:
-        proof.update(native_family_timeout_seconds=720, payload_scan_timeout_seconds=120)
+        proof.update(native_family_timeout_seconds=720,
+                     payload_scan_timeout_seconds=120 if source_capture else BUNDLED_PAYLOAD_SCAN_SECONDS)
         if source_capture:
             source_installation = source_inputs(runner, official_source)
             original_records = {}
@@ -4348,7 +4350,7 @@ def run():
             payload_held = os.fstat(payload_descriptor)
             check_inventory_directory(payload_before, payload_held, "payload root changed at open")
             verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
-            runtime_before = {"inventory": payload_snapshot(payload, payload_identity, time.monotonic() + 120),
+            runtime_before = {"inventory": payload_snapshot(payload, payload_identity, time.monotonic() + BUNDLED_PAYLOAD_SCAN_SECONDS),
                               "provenance": payload_contract(payload, official_source, target)}
             selected = runtime_before["provenance"]["selected"]
             runtime_root, python = payload / selected["code"], payload / selected["python"]
@@ -4542,7 +4544,7 @@ def run():
                         require_source_user_baseline(runtime_after["user"], source_prepared["user"])
                 else:
                     verify_inventory_directory(payload, payload_before, payload_descriptor, payload_held)
-                    runtime_after = {"inventory": payload_snapshot(payload, payload_identity, time.monotonic() + 120),
+                    runtime_after = {"inventory": payload_snapshot(payload, payload_identity, time.monotonic() + BUNDLED_PAYLOAD_SCAN_SECONDS),
                                      "provenance": payload_contract(payload, official_source, target)}
                     proof["runtime_after"] = runtime_after
                     require(runtime_after == runtime_before, "immutable bundled runtime changed")
