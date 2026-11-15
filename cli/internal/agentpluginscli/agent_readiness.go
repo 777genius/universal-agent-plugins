@@ -7,6 +7,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
+const skillsReadyMessage = "Skills installed and detected in the selected agents."
+
 // A readiness summary is an interpretation of existing evidence only. It
 // never persists state or attests that a client executed an MCP tool.
 func deriveAddReadiness(result usecase.AddResult, dryRun bool) (string, []AgentAction) {
@@ -44,11 +46,14 @@ func deriveAddReadiness(result usecase.AddResult, dryRun bool) (string, []AgentA
 	return "needs_action", []AgentAction{action}
 }
 
-func deriveSkillsReadiness(status string) (string, []AgentAction) {
+func deriveSkillsReadiness(status string, items ...SkillsBatchItem) (string, []AgentAction) {
 	switch status {
 	case "failed", "partial", "interrupted":
 		return "failed", nil
 	case "completed", "succeeded", "unchanged":
+		if skillsNativeReady(items) {
+			return "ready", nil
+		}
 		return "needs_action", []AgentAction{{
 			Code: "verify_native", Actor: "native_client",
 			Message: "Start a fresh selected client session and verify that the installed Skill is discovered.",
@@ -56,6 +61,26 @@ func deriveSkillsReadiness(status string) (string, []AgentAction) {
 	default:
 		return "unknown", nil
 	}
+}
+
+func skillsNativeReady(items []SkillsBatchItem) bool {
+	if len(items) == 0 {
+		return false
+	}
+	for _, item := range items {
+		label := skillsItemPresentation(item)
+		if (label != "installed" && label != "unchanged") || len(item.ManualActions) > 0 {
+			return false
+		}
+		client := item.Client
+		if !fullyInstalled(domain.ActivationOutcome{
+			Activation: domain.ActivationState(client.Activation), Authentication: domain.AuthenticationState(client.Authentication),
+			Verification: domain.VerificationState(client.Verification),
+		}) {
+			return false
+		}
+	}
+	return true
 }
 
 func deriveDependencyReadiness(facts []string) string {

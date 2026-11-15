@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { fixture, serveFixtures } from './fixtures';
-import type { Operation } from '../../src/shared/api/types';
+import type { Operation, Plan } from '../../src/shared/api/types';
 
 test('cross-folder selection, safe preview, explicit review and completed result', async ({ page }) => {
   const fixture = await serveFixtures(page);
@@ -23,7 +23,7 @@ test('cross-folder selection, safe preview, explicit review and completed result
   await expect(page.getByRole('dialog').locator('.plan-action')).toHaveCount(2);
   await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Installation applied' })).toBeVisible();
-  await expect(page.getByRole('status', { name: 'Skills readiness' })).toContainText('Activation: Not verified');
+  await expect(page.getByRole('status', { name: 'Skills readiness' })).toContainText('Installed 2 skills');
   expect(fixture.counts()).toMatchObject({ applyCount: 1, planCount: 1, scanCount: 0 });
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Installation applied' })).toBeVisible();
@@ -51,10 +51,96 @@ test('partial result limits file readiness to successful and unchanged targets',
   await expect(page.getByRole('heading', { name: 'Installation needs attention' })).toBeVisible();
   const readiness = page.getByRole('status', { name: 'Skills readiness' });
   await expect(readiness).toContainText('Files: 2 of 3 targets installed or already up to date; others need attention.');
-  await expect(readiness).toContainText('Agent discovery: Not verified');
-  await expect(readiness).toContainText('Activation: Not verified');
+  await expect(readiness).toContainText('2 of 3 targets applied');
+  await expect(readiness).not.toContainText('Not verified');
   await expect(page.getByRole('region', { name: 'Installation progress' })).toContainText('Write refused');
 });
+
+for (const setupRequired of [false, true]) {
+  test(`completed files show ${setupRequired ? 'remaining setup' : 'observed agent discovery'} on desktop and mobile`, async ({ page }, testInfo) => {
+    const state = await serveFixtures(page);
+    const operation = await fixture<Operation>('operation');
+    const summary = setupRequired
+      ? 'Skill files installed. Some agents still need setup; check each result below.'
+      : 'Skills installed and detected in the selected agents.';
+    const message = setupRequired
+      ? 'Files installed. Agent setup still needs verification; run agentplugins doctor for the next step.'
+      : 'The Skill is installed and detected by the agent.';
+    await page.route('**/api/v1/operations/*', (route) => route.fulfill({ json: {
+      ...operation, total: 1, completed: 1, items: [{ ...operation.items[0], message }],
+      diagnostics: setupRequired ? [{ code: 'NATIVE_SETUP_REQUIRED', severity: 'warning', message: 'Run agentplugins doctor to verify the installed Skills and see any remaining setup steps.' }] : [],
+      result: { message: summary, repairInstructions: [] },
+    } }));
+    await page.goto('/#capability=test-capability');
+    await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).check();
+    await page.getByRole('checkbox', { name: `Target ${state.targets.targets[0].label}` }).check();
+    await page.locator('.bottom-bar').getByRole('button', { name: 'Review installation' }).click();
+    await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
+    await expect(page.getByRole('heading', { name: setupRequired ? 'Installation needs attention' : 'Installation applied' })).toBeVisible();
+    const progress = page.getByRole('region', { name: 'Installation progress' });
+    await expect(page.getByRole('status', { name: 'Skills readiness' })).toContainText(summary);
+    await expect(progress.getByText(summary, { exact: true })).toHaveCount(1);
+    await expect(progress).toContainText(message);
+    if (setupRequired) {
+      await expect(progress).toContainText('1 / 1 · setup required');
+      await expect(page.getByRole('heading', { name: 'Installation applied' })).toHaveCount(0);
+    } else {
+      await expect(progress).not.toContainText('setup required');
+      await expect(progress).not.toContainText('agentplugins doctor');
+    }
+    const name = setupRequired ? 'setup' : 'ready';
+    await page.screenshot({ path: testInfo.outputPath(`picker-${name}-desktop.png`), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole('tab', { name: /^Selection/ }).click();
+    await expect(progress).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`picker-${name}-mobile.png`), fullPage: true });
+  });
+}
+
+test('partial result with no applied target keeps the failure summary and recovery visible', async ({ page }) => {
+  const state = await serveFixtures(page);
+  const operation = await fixture<Operation>('operation');
+  const summary = 'No selected agent was updated. Follow the recovery instructions before trying again.';
+  await page.route('**/api/v1/operations/*', (route) => route.fulfill({ json: {
+    ...operation, state: 'partial', total: 1, completed: 1,
+    items: [{ ...operation.items[0], status: 'failed', message: 'The target configuration could not be verified.' }],
+    result: { message: summary, repairInstructions: ['Inspect agentplugins deps status before retrying.'] },
+  } }));
+  await page.goto('/#capability=test-capability');
+  await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).check();
+  await page.getByRole('checkbox', { name: `Target ${state.targets.targets[0].label}` }).check();
+  await page.locator('.bottom-bar').getByRole('button', { name: 'Review installation' }).click();
+  await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Installation needs attention' })).toBeVisible();
+  const progress = page.getByRole('region', { name: 'Installation progress' });
+  await expect(progress.getByText(summary, { exact: true })).toBeVisible();
+  await expect(progress).toContainText('Inspect agentplugins deps status before retrying.');
+  await expect(page.getByRole('status', { name: 'Skills readiness' })).toHaveCount(0);
+});
+
+for (const [action, label] of [['repair', 'Repair'], ['refresh_projection', 'Refresh setup']] as const) {
+  test(`${action} is visible in review and applies only after confirmation`, async ({ page }) => {
+    const state = await serveFixtures(page);
+    const plan = await fixture<Plan>('plan');
+    await page.route('**/api/v1/plans', (route) => route.fulfill({ json: {
+      ...plan, expiresAt: new Date(Date.now() + 600_000).toISOString(),
+      actions: [{ ...plan.actions[0], action }],
+    } }));
+    await page.goto('/#capability=test-capability');
+    await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).check();
+    await page.getByRole('checkbox', { name: `Target ${state.targets.targets[0].label}` }).check();
+    await page.locator('.bottom-bar').getByRole('button', { name: 'Review installation' }).click();
+    const review = page.getByRole('dialog');
+    await expect(review.locator('.action-badge')).toHaveText(label);
+    await expect(review).toContainText(plan.actions[0].destinationPath);
+    expect(state.counts().applyCount).toBe(0);
+    await expect(review.getByRole('button', { name: 'Confirm installation', exact: true })).toBeEnabled();
+    await review.getByRole('button', { name: 'Confirm installation', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Installation applied' })).toBeVisible();
+    expect(state.counts().applyCount).toBe(1);
+  });
+}
 
 test('lost apply response recovers the fast terminal operation without another apply', async ({ page }) => {
   const fixture = await serveFixtures(page, { loseApply: true });

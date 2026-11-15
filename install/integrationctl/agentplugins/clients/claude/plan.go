@@ -53,6 +53,7 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 			return err
 		}
 	}
+	shared.QualifyRawSkillInstallationAuthentication(in.Envelope, plan)
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "start a new Claude Code session or run /reload-plugins")
 	return nil
 }

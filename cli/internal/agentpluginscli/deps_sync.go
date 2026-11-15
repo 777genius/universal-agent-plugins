@@ -169,7 +169,7 @@ func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context
 		if !ok || (action.Action != environment.ActionRemove && (client.Status != domain.DetectionDetected || client.DetectionError != nil)) {
 			return fmt.Errorf("target %s is not detected; nothing was changed: %w", action.ClientID, installer.ErrTargetFactsUnavailable)
 		}
-		if action.Action == environment.ActionInstall || action.Action == environment.ActionUpdate || action.Action == "repair" {
+		if action.Action == environment.ActionInstall || action.Action == environment.ActionUpdate || dependencyRepairOperation(action.Action) {
 			targets = append(targets, id)
 		}
 	}
@@ -441,7 +441,7 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 
 func (adapter *dependencyInstaller) recordedDependencyRelease(action environment.PreparedBinding) (*domain.RecordedDirectoryRelease, error) {
 	var recorded *domain.RecordedDirectoryRelease
-	if action.Package.Source.Registry != nil && (action.Action == "repair" || action.Action == environment.ActionInstall && action.InstallationID != "") {
+	if action.Package.Source.Registry != nil && (dependencyRepairOperation(action.Action) || action.Action == environment.ActionInstall && action.InstallationID != "") {
 		state, err := adapter.app.StateStore.Load()
 		if err != nil {
 			return nil, err
@@ -479,7 +479,7 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 	if action.Action == environment.ActionInstall {
 		operation = domain.DirectoryNewTarget
 	}
-	if action.Action == "repair" && action.Package.ExecutableFiles == nil {
+	if dependencyRepairOperation(action.Action) && action.Package.ExecutableFiles == nil {
 		pin, err := hydrateRecordedDependencyInventory(ctx, adapter.app, *action.Package)
 		if err != nil {
 			return nil, err
@@ -516,4 +516,8 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 		return adapter.app.Installer.PreviewInstallAfterUpdate(ctx, request, adapter.previewUpdate)
 	}
 	return adapter.app.Installer.Prepare(ctx, request)
+}
+
+func dependencyRepairOperation(action environment.DesiredAction) bool {
+	return action == environment.DesiredAction(installer.OpRepair) || action == environment.DesiredAction(installer.OpRefreshProjection)
 }

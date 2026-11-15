@@ -9,7 +9,8 @@ import (
 )
 
 // This source-only suite uses genuine Codex skills/list after production UAP
-// project operations. It does not attest activation, establish native trust,
+// project operations and requires UAP's own automatic discovery to report
+// active skills. It does not attest activation, establish native trust,
 // initialize MCP, start a thread or issue a model request.
 func TestAgentpluginsCodexNativeProjectComponentsLifecycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CODEX_PROJECT_NATIVE_E2E") != "1" {
@@ -21,7 +22,7 @@ func TestAgentpluginsCodexNativeProjectComponentsLifecycle(t *testing.T) {
 	}
 	f := newCodexProjectNativeFixture(t)
 	stages := map[string]nativeStage{}
-	for _, name := range []string{"project_install", "project_unchanged_add", "project_unchanged_update", "project_update", "project_missing_skill_repair", "project_remove", "project_foreign_preservation"} {
+	for _, name := range []string{"project_install", "project_unchanged_add", "project_unchanged_update", "project_update", "project_missing_skill_repair", "project_remove", "project_raw_skills_install", "project_raw_skills_repeat", "project_raw_skills_remove", "project_foreign_preservation"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
 	}
 	stages["native_mcp_initialization"] = nativeStage{Status: "not_evaluated", Reason: "skills-only fixture; no trust mutation or MCP initialization"}
@@ -38,19 +39,30 @@ func TestAgentpluginsCodexNativeProjectComponentsLifecycle(t *testing.T) {
 	codexNativeProjectUpdate(t, f, stages)
 	codexNativeProjectRepair(t, f, stages)
 	codexNativeProjectRemove(t, f, stages)
+	codexNativeProjectRawSkills(t, f, stages)
 	f.requireForeign(t)
 	stages["project_foreign_preservation"] = nativeStage{Status: "passed", Reason: "user config/cache and both projects' foreign configuration and skills retain exact bytes"}
 }
 
 func codexNativeProjectPrepared(t *testing.T, result map[string]any) {
 	t.Helper()
+	codexNativeProjectActivation(t, result, domain.ActivationPrepared)
+}
+
+func codexNativeProjectSkillsReady(t *testing.T, result map[string]any) {
+	t.Helper()
+	codexNativeProjectActivation(t, result, domain.ActivationActive)
+}
+
+func codexNativeProjectActivation(t *testing.T, result map[string]any, expected domain.ActivationState) {
+	t.Helper()
 	outcome, err := commandsTargetOutcome(result)
 	if err != nil {
 		t.Fatal(err)
 	}
 	activation, _ := outcome["activation"].(map[string]any)
-	if activation["activation"] != string(domain.ActivationPrepared) || activation["verification"] != string(domain.VerificationInstalled) || activation["activation_attested"] == true {
-		t.Fatalf("project file outcome manufactured activation proof: %v", activation)
+	if activation["activation"] != string(expected) || activation["verification"] != string(domain.VerificationInstalled) || activation["activation_attested"] == true {
+		t.Fatalf("project outcome lacks the required native observation (%s): %v", expected, activation)
 	}
 }
 
@@ -68,12 +80,12 @@ func codexNativeProjectInstall(t *testing.T, f *codexProjectNativeFixture, stage
 	t.Helper()
 	nativeAttempt(stages, "project_install", "project-add-installer.json")
 	added := f.run(t, "project-add", "add", f.base.Package, "--no-save")
-	codexNativeProjectPrepared(t, added)
+	codexNativeProjectSkillsReady(t, added)
 	if err := commandsPlanSelection(added, "echo", "wizard"); err != nil {
 		t.Fatal(err)
 	}
 	codexNativeProjectSkills(t, f, "skills-after-project-add", "echo")
-	stages["project_install"] = nativeStage{Status: "passed", Reason: "UAP project add remains prepared; genuine Codex discovers exact project-A repository skill paths and rendered bytes, with no fixture skills in project B"}
+	stages["project_install"] = nativeStage{Status: "passed", Reason: "UAP project add automatically verifies genuine Codex discovery and reports active; independent discovery finds exact project-A skill paths and bytes, with no fixture skills in project B"}
 }
 
 func codexNativeProjectUnchanged(t *testing.T, f *codexProjectNativeFixture, stages map[string]nativeStage) {
@@ -95,7 +107,7 @@ func codexNativeProjectUnchanged(t *testing.T, f *codexProjectNativeFixture, sta
 			before[path] = nativeSHA(t, path)
 		}
 		result := codexProjectAssertionEnvelope(f.run(t, step.label, step.args...))
-		codexNativeProjectPrepared(t, result)
+		codexNativeProjectSkillsReady(t, result)
 		commandsRequireMutated(t, step.label, result, false)
 		outcome, err := commandsTargetOutcome(result)
 		if err != nil {
@@ -141,7 +153,7 @@ func codexNativeProjectUpdate(t *testing.T, f *codexProjectNativeFixture, stages
 	nativeAttempt(stages, "project_update", "project-update-installer.json")
 	commandsSwapInvocation(t, f.base.Package)
 	updated := f.run(t, "project-update", "update", commandsPluginName)
-	codexNativeProjectPrepared(t, updated)
+	codexNativeProjectSkillsReady(t, updated)
 	commandsRequireMutated(t, "project update", updated, true)
 	if err := commandsPlanSelection(updated, "wizard", "echo"); err != nil {
 		t.Fatal(err)
@@ -162,7 +174,7 @@ func codexNativeProjectRepair(t *testing.T, f *codexProjectNativeFixture, stages
 		t.Fatalf("native discovery did not observe the missing owned command skill: %v", found)
 	}
 	repaired := f.run(t, "project-repair", "repair", commandsPluginName)
-	codexNativeProjectPrepared(t, repaired)
+	codexNativeProjectSkillsReady(t, repaired)
 	codexNativeProjectSkills(t, f, "skills-after-project-repair", "wizard")
 	stages["project_missing_skill_repair"] = nativeStage{Status: "passed", Reason: "fresh Codex observes the missing owned directory before repair and exact restored command skill after UAP repair"}
 }

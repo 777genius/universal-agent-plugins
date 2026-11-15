@@ -1,6 +1,7 @@
 package pluginkitairepo_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -41,6 +42,16 @@ func (f *claudeProjectNativeFixture) keep(t *testing.T, path, body string) {
 
 func (f *claudeProjectNativeFixture) requireForeign(t *testing.T) {
 	t.Helper()
+	body, err := os.ReadFile(filepath.Join(f.project, ".claude", "settings.json"))
+	var settings struct {
+		EnabledPlugins map[string]bool `json:"enabledPlugins"`
+	}
+	if err != nil || json.Unmarshal(body, &settings) != nil {
+		t.Fatal("project settings became unreadable", err)
+	}
+	if enabled, exists := settings.EnabledPlugins["foreign-project-fixture@skills-dir"]; !exists || enabled {
+		t.Fatal("native project registration changed the foreign disabled plugin")
+	}
 	for path, want := range f.foreign {
 		if nativeSHA(t, path) != want {
 			t.Fatalf("foreign user/project configuration changed: %s", path)
@@ -53,6 +64,8 @@ func (f *claudeProjectNativeFixture) run(t *testing.T, label string, args ...str
 	if len(args) > 0 && args[0] == "add" {
 		args = append(args, "--no-save")
 	}
+	// Project registration owns one settings object; its foreign keys remain checked.
+	delete(f.foreign, filepath.Join(f.project, ".claude", "settings.json"))
 	args = append(args, "--scope", "project", "--project-root", f.project)
 	result, err := commandsRunInstaller(t, f.base.Root, f.project, f.base.env(filepath.Dir(f.client)), f.installer, label, args...)
 	if err != nil && !f.diagnosticAttempted {

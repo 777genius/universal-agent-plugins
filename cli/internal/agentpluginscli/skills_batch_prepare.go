@@ -142,6 +142,9 @@ func prepareSkillsBindings(ctx context.Context, app App, requirements environmen
 	if len(warnings) > 0 {
 		adapter.previewWarnings = warnings[0]
 	}
+	if err := prepareSkillsResumes(ctx, adapter, view, prepared.Bindings, paths); err != nil {
+		return nil, nil, nil, err
+	}
 	// Match saved dependency preflight: selected project clients need an
 	// exact, profile-bound native version before the installer plans delivery.
 	if err := adapter.preflightProjectVersions(ctx, prepared.Bindings); err != nil {

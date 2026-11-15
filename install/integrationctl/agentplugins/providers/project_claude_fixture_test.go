@@ -28,6 +28,18 @@ type claudeProjectFixture struct {
 	runner              *claudeProjectRunner
 }
 
+// This renderer materializes the prior on-disk format so these tests continue
+// exercising legacy receipt/list/removal compatibility through today's adapter.
+type legacyClaudeProjectRenderer struct{ *claude.Adapter }
+
+func (legacyClaudeProjectRenderer) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	return nil, claude.ProjectClaude(in.StagingPath, in.Envelope, in.Plan, in.PluginDataPath)
+}
+
+func (legacyClaudeProjectRenderer) InstalledSkillsDirectory(domain.DeliveryPlan) string {
+	return claude.ClaudeRuntimeDirectory + "/skills"
+}
+
 func newClaudeProjectFixture(t *testing.T) *claudeProjectFixture {
 	t.Helper()
 	base := projectGeminiTemp(t)
@@ -36,7 +48,7 @@ func newClaudeProjectFixture(t *testing.T) *claudeProjectFixture {
 		projectGeminiWrite(t, filepath.Join(root, "settings.json"), `{"enabledPlugins":{"foreign@skills-dir":false}}`)
 		projectGeminiWrite(t, filepath.Join(root, "skills", "foreign", "SKILL.md"), "foreign skill\n")
 	}
-	registry, err := clients.NewRegistry(claude.New())
+	registry, err := clients.NewRegistry(legacyClaudeProjectRenderer{claude.New()})
 	if err != nil {
 		t.Fatal(err)
 	}

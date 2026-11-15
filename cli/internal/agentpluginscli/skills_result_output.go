@@ -11,7 +11,12 @@ import (
 
 // The returned transaction result, not the live animation, owns final truth.
 func renderHumanSkillsResult(writer io.Writer, result SkillsBatchResult) error {
-	if _, err := fmt.Fprintf(writer, "Skills installation %s\n", prompt.SafeText(result.Status)); err != nil {
+	readiness, _ := deriveSkillsReadiness(result.Status, result.Items...)
+	status := result.Status
+	if status == "succeeded" && readiness == "needs_action" {
+		status = "needs attention"
+	}
+	if _, err := fmt.Fprintf(writer, "Skills installation %s\n", prompt.SafeText(status)); err != nil {
 		return err
 	}
 	if result.Status == "succeeded" {
@@ -19,20 +24,21 @@ func renderHumanSkillsResult(writer io.Writer, result SkillsBatchResult) error {
 			return err
 		}
 	}
+	if err := renderPartialSkillsReadiness(writer, result); err != nil {
+		return err
+	}
 	manual, err := renderHumanSkillsClientResults(writer, result.Items)
 	if err != nil {
 		return err
 	}
 	manual = append(manual, result.RepairInstructions...)
-	// Keep the published Skills flow's evidence boundary: native/file readiness
-	// is not an agent discovery check or a model-side Skill activation proof.
-	if len(result.Items) > 0 {
-		if _, err := fmt.Fprint(writer, "Agent discovery: not verified by this Skills flow.\nActivation: not verified.\n"); err != nil {
+	if readiness == "ready" {
+		if _, err := fmt.Fprintln(writer, skillsReadyMessage); err != nil {
 			return err
 		}
 	}
-	if result.Status == "succeeded" && len(manual) == 0 {
-		manual = append(manual, "Open each agent, complete any trust/sign-in steps, reload if prompted, and confirm the Skill is visible.")
+	if readiness == "needs_action" && len(manual) == 0 {
+		manual = append(manual, "Run agentplugins doctor to verify the installed Skills and see any remaining setup steps.")
 	}
 	if len(manual) > 0 {
 		if _, err := fmt.Fprintln(writer, "Next steps:"); err != nil {

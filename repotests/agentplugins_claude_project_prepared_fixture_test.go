@@ -80,9 +80,9 @@ func requireClaudePreparedResult(t *testing.T, result map[string]any) {
 	}
 }
 
-// The public persisted binding provides file authority; a suppression sentinel
-// deliberately supplies no package id or path. It cannot be used as ownership.
-func (f *claudeProjectNativeFixture) preparedPath(t *testing.T, label string) string {
+// The persisted binding provides exact file authority. A separate fresh native
+// observation verifies the enabled scoped registration and selected Skills.
+func (f *claudeProjectNativeFixture) projectManagedPath(t *testing.T, label string) string {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join(f.project, ".uap", "state-v2.json"))
 	if err != nil {
@@ -107,8 +107,8 @@ func (f *claudeProjectNativeFixture) preparedPath(t *testing.T, label string) st
 			}
 		}
 	}
-	if selected == nil || selected.Activation != domain.ActivationPrepared || selected.Verification != domain.VerificationInstalled || filepath.Dir(selected.TargetLocator) != filepath.Join(f.project, ".claude", "skills") {
-		t.Fatalf("unrecognized prepared binding=%+v", selected)
+	if selected == nil || selected.Activation != domain.ActivationActive || selected.Verification != domain.VerificationInstalled || filepath.Dir(selected.TargetLocator) != filepath.Join(f.project, ".claude", "skills") {
+		t.Fatalf("unrecognized active project binding=%+v", selected)
 	}
 	nativeRequireContained(t, f.project, selected.TargetLocator)
 	owned := 0
@@ -120,13 +120,13 @@ func (f *claudeProjectNativeFixture) preparedPath(t *testing.T, label string) st
 	if owned != 1 {
 		t.Fatal("project binding lacks unique owned directory receipt")
 	}
-	nativeJSON(t, filepath.Join(f.base.Root, label+".json"), map[string]any{"binding_id": selected.ClientBindingID, "scope": selected.Scope, "target_path": selected.TargetLocator, "activation": selected.Activation, "verification": selected.Verification, "evidence_kind": "owned_files_not_native_discovery"})
+	nativeJSON(t, filepath.Join(f.base.Root, label+".json"), map[string]any{"binding_id": selected.ClientBindingID, "scope": selected.Scope, "target_path": selected.TargetLocator, "activation": selected.Activation, "verification": selected.Verification, "evidence_kind": "owned_files_and_persisted_native_activation"})
 	return selected.TargetLocator
 }
 
-func (f *claudeProjectNativeFixture) requirePreparedSkills(t *testing.T, managed, command string) {
+func (f *claudeProjectNativeFixture) requireProjectSkills(t *testing.T, managed, command string) {
 	t.Helper()
-	root := filepath.Join(managed, ".agentplugins-runtime", "skills")
+	root := filepath.Join(managed, ".agentplugins-plugin", ".agentplugins-runtime", "skills")
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		t.Fatal(err)

@@ -79,12 +79,39 @@ func (p skillsPickerPrepared) Apply(ctx context.Context) (skillspicker.Outcome, 
 
 func skillBatchOutcome(result SkillsBatchResult) skillspicker.Outcome {
 	outcome := skillspicker.Outcome{State: skillspicker.OperationState(result.Status), Items: []skillspicker.OperationItem{}, Diagnostics: []skillspicker.Diagnostic{}, Result: skillspicker.OperationResult{Message: fmt.Sprintf("Skills installation %s", result.Status), RepairInstructions: append([]string{}, result.RepairInstructions...)}}
+	readiness, _ := deriveSkillsReadiness(result.Status, result.Items...)
+	if readiness == "ready" {
+		outcome.Result.Message = skillsReadyMessage
+	} else if readiness == "needs_action" {
+		outcome.Result.Message = "Skill files installed. Some agents still need setup; check each result below."
+		outcome.Diagnostics = append(outcome.Diagnostics, skillspicker.Diagnostic{Code: "NATIVE_SETUP_REQUIRED", Severity: skillspicker.Warning,
+			Message: "Run agentplugins doctor to verify the installed Skills and see any remaining setup steps."})
+	}
 	for _, item := range result.Items {
 		alias, path := item.Alias, item.TargetPath
-		message := skillOperationMessage(skillOperationItemStatus(item.Status), item.Reason)
+		message := skillBatchItemMessage(item)
 		outcome.Items = append(outcome.Items, skillspicker.OperationItem{CandidateId: item.CandidateID, TargetId: item.ClientID, Alias: &alias, DestinationPath: &path, Message: &message, Status: skillOperationItemStatus(item.Status)})
 	}
 	return outcome
+}
+
+func skillBatchItemMessage(item SkillsBatchItem) string {
+	if skillsNativeReady([]SkillsBatchItem{item}) {
+		if item.Status == "unchanged" {
+			return "The Skill is up to date and detected by the agent."
+		}
+		return "The Skill is installed and detected by the agent."
+	}
+	switch skillsItemPresentation(item) {
+	case "setup required", "installed":
+		return "Files installed. Agent setup still needs verification; run agentplugins doctor for the next step."
+	case "sign-in required":
+		return "Files installed. Complete authentication in the selected agent."
+	case "unchanged":
+		return "The pinned Skill is unchanged; agent setup could not be verified."
+	default:
+		return skillOperationMessage(skillOperationItemStatus(item.Status), item.Reason)
+	}
 }
 
 func skillOperationItemStatus(status string) skillspicker.OperationItemStatus {

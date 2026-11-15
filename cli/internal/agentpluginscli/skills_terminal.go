@@ -244,7 +244,7 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 		Scope                string                       `json:"scope"`
 		ScopeSelectionReason string                       `json:"scope_selection_reason"`
 	}{SchemaVersion: outputSchemaVersion, Command: "skills add", Result: outputResultSuccess, Status: result.Status, Items: outcome.Items, RepairInstructions: outcome.Result.RepairInstructions}
-	output.Readiness, output.NextActions = deriveSkillsReadiness(result.Status)
+	output.Readiness, output.NextActions = deriveSkillsReadiness(result.Status, result.Items...)
 	if output.Readiness == "failed" {
 		output.Result = outputResultFailure
 	}
@@ -267,8 +267,6 @@ func renderPartialSkillsReadiness(writer io.Writer, result SkillsBatchResult) er
 		return nil
 	}
 	_, err := fmt.Fprintf(writer,
-		"Files: %d of %d target results installed or already up to date; other targets need attention.\n"+
-			"Agent discovery: not verified by this Skills flow.\n"+
-			"Activation: not verified.\n", applied, len(result.Items))
+		"Files: %d of %d target results installed or already up to date; other targets need attention.\n", applied, len(result.Items))
 	return err
 }

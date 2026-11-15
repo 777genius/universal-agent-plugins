@@ -1,6 +1,7 @@
 package pluginkitairepo_test
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -55,13 +56,17 @@ type claudeDiagnosticResult struct {
 type claudeDiagnosticCapture func(string, string, []string, []string) claudeDiagnosticResult
 
 func captureClaudeDiagnostic(client, cwd string, env, args []string) claudeDiagnosticResult {
+	return captureClaudeDiagnosticInput(client, cwd, env, args, nil)
+}
+
+func captureClaudeDiagnosticInput(client, cwd string, env, args []string, input []byte) claudeDiagnosticResult {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	stdout := &claudeDiagnosticStream{limit: claudeDiagnosticLimit, cancel: cancel}
 	stderr := &claudeDiagnosticStream{limit: claudeDiagnosticLimit, cancel: cancel}
 	command := exec.CommandContext(ctx, client, args...)
 	command.Dir, command.Env = cwd, append([]string(nil), env...)
-	command.Stdin = nil
+	command.Stdin = bytes.NewReader(input)
 	command.Stdout, command.Stderr = stdout, stderr
 	command.WaitDelay = 250 * time.Millisecond
 	started := time.Now()

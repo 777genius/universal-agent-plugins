@@ -134,8 +134,23 @@ func (p *PreparedSkillsBatch) ApplyWithProgress(ctx context.Context, progress fu
 	adapter.onResult = func(action environment.PreparedBinding, result installer.Result) {
 		emitSkillsProgress(progress, SkillsProgress{Alias: action.Alias, ClientID: action.ClientID, Action: string(action.Action), Phase: "finished", Result: result})
 	}
-	applied, applyErr := applyPreparedDependencies(ctx, p.app, &p.request, adapter, p.check)
+	var unchanged map[string]installer.ClientResult
+	checked := func(ctx context.Context) error {
+		if err := p.check(ctx); err != nil {
+			return err
+		}
+		var err error
+		unchanged, err = p.observeUnchangedSkills(ctx)
+		return err
+	}
+	applied, applyErr := applyPreparedDependencies(ctx, p.app, &p.request, adapter, checked)
 	result.Items = skillsBatchItems(p.actions, applied.Results, applyErr, started)
+	for i := range result.Items {
+		item := &result.Items[i]
+		if item.Action == string(environment.ActionUnchanged) {
+			item.Client = unchanged[skillsBindingKey(item.Alias, item.ClientID, item.Action)]
+		}
+	}
 	if applyErr != nil {
 		if len(applied.Results) > 0 || applied.Published {
 			result.Status = "partial"

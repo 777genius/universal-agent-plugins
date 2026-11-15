@@ -295,7 +295,7 @@ func normalizePlan(p *Plan) {
 			p.Actions[i].ReasonCodes = []string{}
 		}
 		switch p.Actions[i].Action {
-		case "install", "update", "unchanged":
+		case "install", "update", "unchanged", "repair", "refresh_projection":
 		default:
 			p.Confirmable = false
 		}

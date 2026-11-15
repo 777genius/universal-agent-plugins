@@ -24,7 +24,7 @@ func activateCodexProject(ctx context.Context, env clients.Env, request domain.A
 		UnavailableAction: "prepare the supported Codex project skills and MCP components",
 		RepairAction:      "repair the exact managed Codex project components",
 		RetryAction:       "retry Codex project component installation",
-		CompletedAction:   codexProjectDiscoveryAction,
+		CompletedAction:   codexProjectSetupAction(request.Plan),
 		Verify: func() error {
 			return verifyCodexProjectObjects(root, request.Delivery.NativeObjects, false, env.NativeConfig)
 		},
@@ -43,7 +43,7 @@ func activateCodexProject(ctx context.Context, env clients.Env, request domain.A
 	for _, condition := range conditions {
 		outcome.UserActions = shared.AppendUnique(outcome.UserActions, condition)
 	}
-	return outcome, nil
+	return completeCodexProjectDiscovery(ctx, env, request, root, conditions, outcome)
 }
 
 func mutateCodexProject(ctx context.Context, env clients.Env, root, active string, previous, desired []domain.NativeObjectOwnership) error {

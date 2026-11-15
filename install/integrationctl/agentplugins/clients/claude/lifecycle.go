@@ -79,6 +79,16 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	if err != nil {
 		return outcome, fmt.Errorf("verify Claude Code plugin before removal: %w", err)
 	}
+	if request.TargetContext.Scope == domain.ScopeProject {
+		current, err := hasClaudeProjectMarketplace(request.ManagedArtifactPath, request.DeclaredName, request.PhysicalArtifactID)
+		if err != nil {
+			return outcome, err
+		}
+		if current {
+			return deactivateClaudeProjectMarketplace(ctx, env, request, listed.Stdout)
+		}
+		outcome.NativeEffect = domain.NativeEffectUnchanged
+	}
 	return finishClaudeDeactivation(outcome, listed.Stdout, request)
 }
 

@@ -134,13 +134,13 @@ var clientDefinitions = []ClientDefinition{
 		LifecycleKind:       LifecycleCLIRegistry,
 		TracksNativeEffects: true,
 	}), LifecycleNativeConfig),
-	withProjectScope(withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
+	withProjectManagedStdio(withProjectComponents(withProjectScope(withActivation(clientDefinition(ClientClaude, "Claude Code", "claude", "managed", "projected", false, PackageProjection, SupportProjected, SupportProjected, SupportProjected, SupportUnsupported, SupportUnsupported, ClientTraits{
 		QualifiedLocalInstallerFacade: true,
 		InstallIntents:                []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:                 LifecycleCLIRegistry,
 		UsesManagedStdioLauncher:      true,
 		ProtectsModifiedUserRawSkill:  true,
-	}), ActivationAutomatic), LifecycleCLIRegistry),
+	}), ActivationAutomatic), LifecycleCLIRegistry), SupportProjected, SupportProjected)),
 	withProjectScope(clientDefinition(ClientGemini, "Gemini CLI", "gemini", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents:         []InstallIntent{InstallIntentAutomatic},
 		LifecycleKind:          LifecycleNativeConfig,

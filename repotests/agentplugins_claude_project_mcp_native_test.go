@@ -439,7 +439,7 @@ func claudeProjectManagedMCPCall(t *testing.T) {
 	}
 	managed := filepath.Join(f.project, ".claude", "skills", physical)
 	nativeRequireContained(t, f.project, managed)
-	manifestBody, err := os.ReadFile(filepath.Join(managed, ".claude-plugin", "plugin.json"))
+	manifestBody, err := os.ReadFile(filepath.Join(managed, ".agentplugins-plugin", ".claude-plugin", "plugin.json"))
 	if err != nil {
 		t.Fatal("UAP-managed Claude plugin manifest missing", err)
 	}
@@ -447,7 +447,7 @@ func claudeProjectManagedMCPCall(t *testing.T) {
 	if json.Unmarshal(manifestBody, &manifest) != nil || manifest["mcpServers"] != "./.mcp.json" {
 		t.Fatal("installed Claude plugin does not reference its owned MCP definition")
 	}
-	mcpBody, err := os.ReadFile(filepath.Join(managed, ".mcp.json"))
+	mcpBody, err := os.ReadFile(filepath.Join(managed, ".agentplugins-plugin", ".mcp.json"))
 	if err != nil {
 		t.Fatal("UAP-managed Claude MCP definition missing", err)
 	}

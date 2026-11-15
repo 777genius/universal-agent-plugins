@@ -42,7 +42,46 @@ func TestSkillsHumanResultReportsManualTrustWithoutClaimingActive(t *testing.T) 
 	if !strings.Contains(text, "— setup required") || strings.Count(text, "Trust the project") != 1 || strings.Contains(text, "— installed") {
 		t.Fatalf("manual readiness was lost: %s", text)
 	}
-	if !strings.Contains(text, "Agent discovery: not verified") || !strings.Contains(text, "Activation: not verified") {
-		t.Fatal("published readiness boundary was dropped:", text)
+	if !strings.Contains(text, "Skills installation needs attention") || strings.Contains(text, "Skills are ready to use") {
+		t.Fatal("unverified installation claimed readiness:", text)
+	}
+}
+
+func TestSkillsHumanResultUsesObservedNativeReadiness(t *testing.T) {
+	var output bytes.Buffer
+	result := SkillsBatchResult{Status: "succeeded", Items: []SkillsBatchItem{
+		{Alias: "docx", ClientID: "claude", Action: "install", Status: "completed", Client: completedSkillClient()},
+		{Alias: "frontend-design", ClientID: "codex", Action: "install", Status: "completed", Client: completedSkillClient()},
+	}}
+	if err := renderHumanSkillsResult(&output, result); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	for _, want := range []string{"Skills installation succeeded", "docx — installed", "frontend-design — installed", "Skills installed and detected in the selected agents."} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing %q: %s", want, text)
+		}
+	}
+	for _, unwanted := range []string{"setup required", "not verified", "Next steps:", "sign-in"} {
+		if strings.Contains(text, unwanted) {
+			t.Fatalf("verified native result retained obsolete guidance %q: %s", unwanted, text)
+		}
+	}
+}
+
+func TestSkillsReadinessRequiresEvidenceForEverySelectedBinding(t *testing.T) {
+	ready := SkillsBatchItem{Status: "completed", Client: completedSkillClient()}
+	if state, next := deriveSkillsReadiness("succeeded", ready); state != "ready" || len(next) != 0 {
+		t.Fatalf("observed installation is not ready: %s %+v", state, next)
+	}
+	for _, item := range []SkillsBatchItem{
+		{Status: "unchanged"},
+		{Status: "not_attempted"},
+		{Status: "completed", Client: installer.ClientResult{Activation: "prepared", Verification: "installation_verified", Authentication: "not_required"}},
+		{Status: "completed", Client: completedSkillClient(), ManualActions: []string{"Complete native setup"}},
+	} {
+		if state, _ := deriveSkillsReadiness("succeeded", ready, item); state == "ready" {
+			t.Fatalf("one ready binding concealed missing evidence: %+v", item)
+		}
 	}
 }

@@ -34,6 +34,15 @@ noninteractive refusal honest and distinguish credentials required by an MCP
 server from credential-free installation of Skills. Do not retain a blanket
 "unverified" footer when the adapter has actually verified the installation.
 
+Codex and Claude explicitly qualify authentication for native installation of a
+single normalized raw Git/HTTPS Skill: the validated immutable source and plan
+must contain only that admitted Skill, with no MCP, app, command or extension
+components and no catalog policy. For that narrow delivery, `not_checked` becomes
+`not_required`; native discovery must still succeed separately. This means no
+login is needed to install and discover the Skill. It does not authenticate a
+model or any service a Skill may use later. Explicit catalog requirements,
+general plugins and every other client's authentication policy remain unchanged.
+
 Initial source verification also found a corrupted tail in
 `skills_progress_test.go` that prevented the CLI test package from compiling.
 Restore its prior intended assertions before treating earlier test reports as

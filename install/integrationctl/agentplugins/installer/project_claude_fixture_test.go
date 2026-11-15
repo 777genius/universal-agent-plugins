@@ -37,7 +37,7 @@ func claudeSDKWrite(t *testing.T, path, body string) {
 	}
 }
 
-func newClaudeSDKFixture(t *testing.T, base, project, user, pkg string) *claudeSDKFixture {
+func newClaudeSDKFixture(t *testing.T, base, project, user, pkg string, adapters ...clients.Adapter) *claudeSDKFixture {
 	t.Helper()
 	f := &claudeSDKFixture{project: project, user: user, packageRoot: pkg, state: filepath.Join(base, "user-uap"), executable: filepath.Join(base, "inert-claude")}
 	scope := domain.ScopeUser
@@ -49,7 +49,10 @@ func newClaudeSDKFixture(t *testing.T, base, project, user, pkg string) *claudeS
 	if err := os.Chmod(f.executable, 0700); err != nil {
 		t.Fatal(err)
 	}
-	registry, err := clients.NewRegistry(claude.New())
+	if len(adapters) == 0 {
+		adapters = []clients.Adapter{claude.New()}
+	}
+	registry, err := clients.NewRegistry(adapters...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +60,7 @@ func newClaudeSDKFixture(t *testing.T, base, project, user, pkg string) *claudeS
 	f.engine, err = installer.New(installer.Config{ProjectRoot: project, StateRoot: f.state, Registry: registry, Runner: f.runner, HelperExecutable: f.executable, EnableNativeObserver: true, TrustedLocalPackages: true,
 		OnCommittedBinding: func(_ context.Context, facts installer.BindingFacts) error {
 			if f.failAfterCommit {
-				body, err := os.ReadFile(filepath.Join(facts.TargetPath, claude.ClaudeRuntimeDirectory, "skills", "docs", "SKILL.md"))
+				body, err := os.ReadFile(claudeSDKSkillPath(facts.TargetPath, scope))
 				if err == nil && strings.Contains(string(body), "Moving source bytes.") {
 					f.runner.fail = true
 				}
@@ -122,7 +125,7 @@ type claudeSDKRunner struct {
 
 func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	r.t.Helper()
-	if !reflect.DeepEqual(command.Argv, []string{r.executable, "plugin", "list", "--json"}) {
+	if len(command.Argv) < 3 || command.Argv[0] != r.executable {
 		r.t.Fatalf("unexpected SDK native command=%+v", command)
 	}
 	root, scope := r.user, "user"
@@ -143,9 +146,12 @@ func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (l
 		r.t.Fatalf("SDK replaced original user config=%q", command.Env)
 	}
 	if r.fail {
-		return legacyports.CommandResult{}, fmt.Errorf("inert unavailable native listing")
+		return legacyports.CommandResult{NoChildStarted: true}, fmt.Errorf("inert unavailable native listing")
 	}
 	r.calls++
+	if !reflect.DeepEqual(command.Argv[1:], []string{"plugin", "list", "--json"}) {
+		return r.marketplaceCommand(command.Argv[1:])
+	}
 	listing := claudeSDKListing(r.t, r.user, "user")
 	if scope == "project" {
 		projectRows := claudeSDKListing(r.t, root, "project")
@@ -166,6 +172,7 @@ func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (l
 		}
 	}
 
+	listing = append(listing, r.marketplaceListing()...)
 	body, err := json.Marshal(listing)
 	return legacyports.CommandResult{Stdout: body}, err
 }
