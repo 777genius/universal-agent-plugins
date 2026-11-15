@@ -48,10 +48,16 @@ def verify_codex_runtime_case(prepared):
         raise RuntimeError("native Codex runtime configuration changed during lifecycle")
     anchor = case.resolve(strict=True)
     counts = {"sqlite": 0, "logs": 0}
+
+    def refuse_walk_error(error):
+        raise RuntimeError("Codex runtime metadata directory is unreadable") from error
+
     for label, root in (("sqlite", sqlite), ("logs", logs)):
         if root.is_symlink() or not root.is_dir() or not root.resolve(strict=True).is_relative_to(anchor):
             raise RuntimeError("Codex runtime metadata store escaped disposable case")
-        for base, dirs, files in os.walk(root, followlinks=False):
+        for base, dirs, files in os.walk(root, followlinks=False, onerror=refuse_walk_error):
+            if label == "sqlite" and dirs:
+                raise RuntimeError("Codex SQLite home contains an unexpected subdirectory")
             for name in dirs:
                 directory = Path(base) / name
                 if directory.is_symlink() or not directory.is_dir() or not directory.resolve(strict=True).is_relative_to(anchor):
