@@ -52,6 +52,8 @@ func renderClaudeProjectTrust(body []byte, project string) ([]byte, error) {
 	if !exactAbsolute(project) || filepath.Dir(project) == project {
 		return nil, fmt.Errorf("claude Code project trust requires an exact absolute project")
 	}
+	// Native Claude uses slash-separated profile keys on Windows.
+	project = filepath.ToSlash(project)
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.UseNumber()
 	value, err := shared.DecodeUniqueJSONValue(decoder)

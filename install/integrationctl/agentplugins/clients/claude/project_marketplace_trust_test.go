@@ -64,7 +64,7 @@ func TestCurrentClaudeMarketplaceTrustFreshVerificationAndConfirmedResume(t *tes
 			t.Fatal(err)
 		}
 		projects := doc["projects"].(map[string]any)
-		if projects[request.Plan.TargetContext.ProjectRoot].(map[string]any)["hasTrustDialogAccepted"] != true || projects["/unrelated"].(map[string]any)["hasTrustDialogAccepted"] != false {
+		if projects[filepath.ToSlash(request.Plan.TargetContext.ProjectRoot)].(map[string]any)["hasTrustDialogAccepted"] != true || projects["/unrelated"].(map[string]any)["hasTrustDialogAccepted"] != false {
 			t.Fatalf("trust was not exact: %s", body)
 		}
 		if _, ok := doc["allowedTools"].([]any); !ok {
