@@ -208,8 +208,19 @@ async def _start_native(binary, project, environment):
             elif process.returncode is None:
                 process.kill()  # The unreleased bootstrap has no native descendants.
         finally:
-            await asyncio.wait_for(process.wait(), 5)
+            try:
+                await asyncio.wait_for(process.wait(), 5)
+            finally:
+                await _close_native_transport(process)
         raise
+
+
+async def _close_native_transport(process):
+    # CPython Process has no public close API. Its owned subprocess transport
+    # closes all three pipe transports; one loop turn runs their close callbacks.
+    # Use this private adapter only after the bounded process cleanup/reap.
+    process._transport.close()
+    await asyncio.sleep(0)
 
 
 async def _finish_native(process, job, completed, readers):
@@ -226,10 +237,13 @@ async def _finish_native(process, job, completed, readers):
                     pass
             await asyncio.wait_for(process.wait(), 5)
     finally:
-        for reader in readers:
-            if not reader.done():
-                reader.cancel()
-        await asyncio.gather(*readers, return_exceptions=True)
+        try:
+            for reader in readers:
+                if not reader.done():
+                    reader.cancel()
+            await asyncio.gather(*readers, return_exceptions=True)
+        finally:
+            await _close_native_transport(process)
 
 
 async def _exchange(binary, project, profile, environment):

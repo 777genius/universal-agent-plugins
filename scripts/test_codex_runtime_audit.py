@@ -3,6 +3,7 @@
 import asyncio
 import copy
 from contextlib import closing
+import errno
 import json
 import os
 from pathlib import Path
@@ -415,9 +416,35 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
             environment.update(HOME=str(root), USERPROFILE=str(root), CODEX_HOME=str(profile))
             child_pid = None
             started = time.monotonic()
+            processes, pipes = [], []
+            start_native = audit._start_native
+
+            async def capture_owned_pipes(*args):
+                process, job = await start_native(*args)
+                processes.append(process)  # Prevent GC from supplying cleanup.
+                for descriptor in (1, 2):
+                    pipe = process._transport.get_pipe_transport(descriptor).get_extra_info("pipe")
+                    pipes.append((descriptor, pipe, pipe.fileno()))
+                return process, job
+
+            async def exercise_fault():
+                with patch.object(audit, "_start_native", side_effect=capture_owned_pipes):
+                    with self.assertRaises(TimeoutError):
+                        await audit._exchange(Path(sys.executable), root, profile, environment)
+                self.assertEqual([descriptor for descriptor, _, _ in pipes], [1, 2])
+                # Check at the observer boundary, before asyncio.run closes the
+                # loop or garbage collection can close a retained pipe object.
+                for descriptor, pipe, owned_fd in pipes:
+                    with self.subTest(descriptor=descriptor):
+                        with self.assertRaises(ValueError):
+                            pipe.fileno()
+                        if os.name != "nt":
+                            with self.assertRaises(OSError) as closed:
+                                os.fstat(owned_fd)
+                            self.assertEqual(closed.exception.errno, errno.EBADF)
+
             try:
-                with self.assertRaises(TimeoutError):
-                    asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment))
+                asyncio.run(exercise_fault())
                 import json
                 pids = json.loads((root / "owned-pids.json").read_text())
                 child_pid = pids["child"]
