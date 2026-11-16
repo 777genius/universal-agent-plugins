@@ -36,7 +36,7 @@ func TestWriteRecordsRunAndEntriesPrivately(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	t.Cleanup(func() { _ = file.Close() })
 	var lines []map[string]any
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -65,7 +65,7 @@ func TestWriteKeepsOnlyRecentFilesAndNeverTouchesForeignOnes(t *testing.T) {
 	}
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	var first string
-	for i := 0; i < maxFiles+5; i++ {
+	for i := range maxFiles + 5 {
 		path, err := Write(dir, Run{Command: "add"}, base.Add(time.Duration(i)*time.Minute))
 		if err != nil {
 			t.Fatal(err)
