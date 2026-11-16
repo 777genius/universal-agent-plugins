@@ -9,8 +9,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-// cursorMCPApprovalPendingAction records a read-only observation in which
-// Cursor listed every selected server as awaiting approval and no policy or
+// cursorMCPApprovalPendingAction records a read-only observation in which the
+// first selected server that is not ready awaits approval, and no policy or
 // profile refusal applied. It is the only state prepared-setup completion
 // admits, so a repeated add finishes an interrupted approval exactly once.
 const cursorMCPApprovalPendingAction = "Cursor MCP servers await approval; repeat this add to approve them"
