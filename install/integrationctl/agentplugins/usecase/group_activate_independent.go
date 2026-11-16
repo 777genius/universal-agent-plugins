@@ -248,9 +248,11 @@ func (run *independentActivationRun) finish() (GroupResult, error) {
 	}
 	if session.externalFailed > 0 || run.stopErr != nil || session.ctx.Err() != nil {
 		session.classifyActivationFailure()
-		cause := session.firstActivationErr
+		cause := run.stopErr
 		if cause == nil {
-			cause = run.stopErr
+			cause = session.firstActivationErr
+		} else if session.firstActivationErr != nil && !errors.Is(cause, session.firstActivationErr) {
+			cause = errors.Join(session.firstActivationErr, cause)
 		}
 		if ctxErr := session.ctx.Err(); ctxErr != nil && !errors.Is(cause, ctxErr) {
 			cause = errors.Join(cause, ctxErr)

@@ -329,6 +329,69 @@ func TestIndependentUnclosedProbeStopsTheRemainingSerialClients(t *testing.T) {
 	}
 }
 
+type orderedFailureActivator struct {
+	independentFixtureActivator
+	ordinary error
+	cleanup  error
+}
+
+func (a *orderedFailureActivator) PrepareIndependentActivation(_ context.Context, request domain.ActivationRequest) (func(context.Context) (domain.ActivationOutcome, error), error) {
+	return func(ctx context.Context) (domain.ActivationOutcome, error) {
+		defer a.joined.Add(1)
+		if request.Client.ClientID == domain.ClientCodex {
+			return domain.ActivationOutcome{}, a.ordinary
+		}
+		select {
+		case <-a.release:
+			return domain.ActivationOutcome{}, &domain.UnclosedClientProbe{Operation: "Claude listing", Err: a.cleanup}
+		case <-ctx.Done():
+			return domain.ActivationOutcome{}, ctx.Err()
+		}
+	}, nil
+}
+
+func TestIndependentLaterUnclosedProbePreservesBothFailures(t *testing.T) {
+	service, _, _ := serviceFixture(t)
+	ordinary := errors.New("Codex native command refused")
+	cleanup := errors.New("Claude containment close failed")
+	a := &orderedFailureActivator{
+		independentFixtureActivator: independentFixtureActivator{release: make(chan struct{})},
+		ordinary:                    ordinary, cleanup: cleanup,
+	}
+	service.Activator = a
+	claude, codex, _, _ := mixedClients(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	var published []domain.ClientID
+	result, err := service.AddGroup(ctx, GroupInput{
+		Targets:          []AddInput{addInput(t, claude, "https://example.com/ordered-failures"), addInput(t, codex, "https://example.com/ordered-failures")},
+		OperationGroupID: "ordered-failures", Confirmed: true,
+		Progress: func(event GroupProgressEvent) {
+			if event.Phase == GroupProgressActivated {
+				published = append(published, event.ClientID)
+				if event.ClientID == domain.ClientCodex {
+					// The ordinary failure must be published before Claude can fail.
+					close(a.release)
+				}
+			}
+		},
+	})
+	if len(published) != 2 || published[0] != domain.ClientCodex || published[1] != domain.ClientClaude || a.joined.Load() != 2 {
+		t.Fatalf("effects were not published and joined in order: published=%v joined=%d err=%v", published, a.joined.Load(), err)
+	}
+	if !errors.Is(err, ordinary) || !errors.Is(err, cleanup) || !domain.IsUnclosedClientProbe(err) {
+		t.Fatalf("later unsafe cleanup lost from aggregate: %v", err)
+	}
+	if ctx.Err() != nil || len(result.Targets) != 2 {
+		t.Fatalf("unexpected outer cancellation or lost targets: %v %+v", ctx.Err(), result)
+	}
+	for _, target := range result.Targets {
+		if target.GroupPhase != GroupTargetExternalFailed {
+			t.Fatalf("failed native effect reported completion: %+v", target)
+		}
+	}
+}
+
 // Independent clients are run first internally, but the planned order must be
 // restored so identifiers derived from a target's position stay stable.
 func TestIndependentActivationRestoresPlannedOrder(t *testing.T) {

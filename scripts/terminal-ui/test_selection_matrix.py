@@ -8,7 +8,7 @@ import subprocess
 import os
 from harness import Fixture
 from harness import Screen
-from selection_matrix import CASES, SETS, choices, plan_ids, selected_frame, prepare_codex_registry, installed
+from selection_matrix import CASES, SETS, Keyboard, choices, plan_ids, selected_frame, prepare_codex_registry, installed
 from types import SimpleNamespace
 
 
@@ -105,6 +105,24 @@ class InstallationTests(unittest.TestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'posix', 'pipe capture is Unix only')
+    def test_drain_consumes_all_pending_output(self):
+        master, writer = os.pipe()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, writer)
+        session = Keyboard.__new__(Keyboard)
+        session.master = master
+        session.read_chunk = 3
+        session.timeout = 2
+        session.raw = bytearray()
+        session.screen = Screen()
+        output = b'first\r\nlast\x1b[?25h'
+        os.write(writer, output)
+        session.drain()
+        self.assertEqual(bytes(session.raw), output)
+        self.assertIn('last', session.screen.snapshot())
+        self.assertFalse(session.pump(0))
+
     def test_matrix_covers_each_nonempty_set_both_decisions(self):
         self.assertEqual(set(SETS.values()), {('codex',), ('cursor',), ('codex', 'cursor')})
         for name in SETS:

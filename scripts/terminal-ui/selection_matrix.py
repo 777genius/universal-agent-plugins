@@ -60,12 +60,13 @@ class Keyboard(Session):
         self.events[-1]['unchanged'] = state == self.fixture.before
 
     def pump(self, timeout=0.1):
-        super().pump(timeout)
+        received = super().pump(timeout)
         # This lane exercises reverse-index away from the top margin. Normalize
         # only the evidence renderer; PTY input/output bytes stay untouched.
         screen = Screen(self.screen.rows, self.screen.cols)
         screen.feed(bytes(self.raw).replace(b'\x1bM', b'\x1b[1A'))
         self.screen = screen
+        return received
 
     def send(self, keys):
         self.events.append({'event': 'raw-key', 'hex': keys.hex(),

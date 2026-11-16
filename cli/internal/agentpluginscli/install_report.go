@@ -115,6 +115,11 @@ func failedAgents(reports []agentReport) []agentReport {
 func retryableAgents(reports []agentReport) []agentReport {
 	var retryable []agentReport
 	for _, report := range reports {
+		for _, problem := range report.Problems {
+			if problem.Failure.Kind == failureNativeCleanup {
+				return nil // The whole run must wait for native process cleanup.
+			}
+		}
 		if report.Retryable() {
 			retryable = append(retryable, report)
 		}
@@ -294,6 +299,9 @@ func groupFailure(target addTargetResult, kind failureKind) *installFailure {
 		if batchFailureNeedsDoctor(target) {
 			failure.Kind = failureRecovery
 		}
+		if target.Error.Stage == "native_process_cleanup" {
+			failure.Kind = failureNativeCleanup
+		}
 	}
 	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
 	return &failure
@@ -357,17 +365,38 @@ func declinedInstallResult(opts *options, renderErr error) error {
 
 // recordGroupOutcome stores a plugin group's per-agent result for the retry
 // step and the technical log. The group's own table stays the visible summary.
-func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined addMultiResult) {
+func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *addMultiResult, cause error) error {
+	items := groupAgentItems(combined.Plugin, combined.Targets)
+	if domain.IsUnclosedClientProbe(cause) {
+		for index := range items {
+			item := &items[index]
+			if item.failure == nil {
+				continue
+			}
+			detail := item.failure.Detail
+			item.failure = describeSyncFailure(cause)
+			if detail != "" {
+				item.failure.Detail = detail + "\n" + item.failure.Detail
+			}
+			target := &combined.Targets[index]
+			target.Error = &usecase.GroupTargetFailure{Stage: "native_process_cleanup", Message: item.failure.Summary + " " + item.failure.Next}
+			target.Output.Result.Failure = target.Error
+			target.RetryCommand = ""
+			target.NextAction, target.Output.NextAction = item.failure.Next, item.failure.Next
+		}
+		cause = installFailureWithCause{summary: describeSyncFailure(cause).Summary, cause: cause}
+	}
 	// A group refused before any client was touched has nothing to retry: the
 	// same preflight would refuse again, and the person is told why already.
 	switch combined.Status {
 	case string(usecase.GroupPhasePlanned), string(usecase.GroupPhasePreparationFailed):
-		return
+		return cause
 	}
-	outcome := app.finishInstall(opts, "add", groupAgentItems(combined.Plugin, combined.Targets))
+	outcome := app.finishInstall(opts, "add", items)
 	if outcome.LogFile != "" && opts.format == "human" {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))
 	}
+	return cause
 }
 
 // runSingleTargetAdd dispatches an existing binding or explicit completion to
@@ -406,7 +435,8 @@ func (app App) recordSingleAdd(cmd *cobra.Command, opts *options, client domain.
 // retryAllowed gates every interactive retry: only with a failure, a person
 // present, human output and the retry budget left.
 func retryAllowed(cmd *cobra.Command, app App, opts *options, err error) bool {
-	return err != nil && app.Terminal && opts.format == "human" && !opts.yes && !opts.dryRun &&
+	return err != nil && !domain.IsUnclosedClientProbe(err) &&
+		app.Terminal && opts.format == "human" && !opts.yes && !opts.dryRun &&
 		opts.retryAttempt < maxSkillsRetries && cmd.Context().Err() == nil && opts.installResult != nil
 }
 

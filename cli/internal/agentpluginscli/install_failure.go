@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
@@ -17,6 +18,7 @@ type failureKind string
 const (
 	failureUnknown           failureKind = "FAILED"
 	failureRecovery          failureKind = "RECOVERY_REQUIRED"
+	failureNativeCleanup     failureKind = "NATIVE_PROCESS_UNCLOSED"
 	failureSecurityBlocked   failureKind = "SECURITY_REVIEW_BLOCKED"
 	failureForeignTarget     failureKind = "FOREIGN_DESTINATION"
 	failureManagedChanged    failureKind = "MANAGED_SKILL_CHANGED"
@@ -33,6 +35,8 @@ func failureKindOf(err error) failureKind {
 	switch {
 	case err == nil:
 		return failureUnknown
+	case domain.IsUnclosedClientProbe(err):
+		return failureNativeCleanup
 	case errors.Is(err, installer.ErrRecoveryRequired):
 		return failureRecovery
 	case errors.Is(err, installer.ErrAssessmentRejected):
@@ -68,6 +72,15 @@ type installFailure struct {
 	Detail    string
 }
 
+// Keep the typed cause available without exposing native diagnostics in the UI.
+type installFailureWithCause struct {
+	summary string
+	cause   error
+}
+
+func (e installFailureWithCause) Error() string { return e.summary }
+func (e installFailureWithCause) Unwrap() error { return e.cause }
+
 // describeBindingFailure explains why one binding did not succeed. A binding
 // that was never reached says only that, and stays retryable.
 func describeBindingFailure(outcome environment.BindingOutcome) *installFailure {
@@ -84,7 +97,7 @@ func describeBindingFailure(outcome environment.BindingOutcome) *installFailure 
 		}
 	}
 	cause := failure.Kind
-	if outcome.Status == environment.BindingNotAttempted {
+	if outcome.Status == environment.BindingNotAttempted && failure.Kind != failureNativeCleanup {
 		failure.Kind = failureSkipped
 	}
 	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
@@ -117,6 +130,8 @@ func failureKindOfOutcome(outcome installer.Outcome) failureKind {
 
 func applyFailureWording(kind failureKind) (summary, next string, retryable bool) {
 	switch kind {
+	case failureNativeCleanup:
+		return "Could not confirm that an agent process has finished.", "Confirm the earlier agent process has stopped before retrying.", false
 	case failureRecovery:
 		return "An earlier installation was interrupted and needs recovery first.", "Run `agentplugins doctor`, follow its steps, then try again.", false
 	case failureSecurityBlocked:

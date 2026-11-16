@@ -653,14 +653,48 @@ func TestGroupRefusedBeforeAnyChangeIsNotRetried(t *testing.T) {
 	for _, status := range []string{"planned", "preparation_failed"} {
 		opts := &options{format: "human"}
 		combined := addMultiResult{Status: status, Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalNotAttempted)}}}
-		app.recordGroupOutcome(cmd, opts, combined)
+		app.recordGroupOutcome(cmd, opts, &combined, nil)
 		if opts.installResult != nil || errOut.Len() != 0 {
 			t.Fatalf("%s: a refused group must not record a retry: %+v %q", status, opts.installResult, errOut.String())
 		}
 	}
 	opts := &options{format: "human"}
-	app.recordGroupOutcome(cmd, opts, addMultiResult{Status: "managed_committed_activation_failed", Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalFailed), Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed}}}}})
+	app.recordGroupOutcome(cmd, opts, &addMultiResult{Status: "managed_committed_activation_failed", Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalFailed), Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed}}}}}, nil)
 	if opts.installResult == nil || len(opts.installResult.failedAgents()) != 1 {
 		t.Fatal("a failed activation after apply must stay retryable")
+	}
+}
+
+func TestInstallRetriesRefuseUnclosedNativeProbe(t *testing.T) {
+	for _, mode := range []string{"add", "converge"} {
+		for _, wrapping := range []string{"bare", "wrapped", "joined"} {
+			t.Run(mode+"/"+wrapping, func(t *testing.T) {
+				closeErr := errors.New("native process cleanup is unconfirmed")
+				probe := &domain.UnclosedClientProbe{Operation: "native inventory", Err: closeErr}
+				var cause error = probe
+				if wrapping == "wrapped" {
+					cause = fmt.Errorf("installation failed: %w", cause)
+				} else if wrapping == "joined" {
+					cause = errors.Join(errors.New("another agent failed"), cause)
+				}
+				var offered []string
+				app, opts := retryAppAndOptions(t, &offered)
+				cmd, out, errOut := retryTestCommand(t)
+				before, reruns := opts.installResult, 0
+				var actual error
+				if mode == "add" {
+					actual = retryFailedAgents(cmd, app, opts, cause, func(string, []string) error { reruns++; return nil })
+				} else {
+					actual = retryConverge(cmd, app, opts, cause, func() error { reruns++; return nil })
+				}
+				var retained *domain.UnclosedClientProbe
+				if !errors.Is(actual, cause) || !errors.Is(cause, actual) || !errors.As(actual, &retained) || retained != probe || !errors.Is(actual, closeErr) {
+					t.Fatalf("retry lost or changed the process-cleanup refusal: %v", actual)
+				}
+				if len(offered) != 0 || reruns != 0 || opts.retryAttempt != 0 || opts.installResult != before || out.Len() != 0 || errOut.Len() != 0 {
+					t.Fatalf("unclosed process allowed a new attempt: offered=%v reruns=%d attempt=%d", offered, reruns, opts.retryAttempt)
+				}
+			})
+		}
 	}
 }

@@ -279,7 +279,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		combined.setTargetProof(selected[index].ClientID, addTargetProofOutcome(result))
 		countBatchTarget(&combined, entry)
 	}
-	app.recordGroupOutcome(cmd, opts, combined)
+	err = app.recordGroupOutcome(cmd, opts, &combined, err)
 	if err != nil {
 		if applied.Phase == usecase.GroupPhasePlanned && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded, combined.ActionRequired = "preflight_failed", len(inputs), 0, 0
@@ -291,9 +291,11 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			combined.Status, combined.Failed, combined.Succeeded, combined.ActionRequired = "preparation_failed", len(inputs), 0, 0
 			for index := range combined.Targets {
 				combined.Targets[index].Status = string(usecase.GroupTargetExternalNotAttempted)
-				combined.Targets[index].NextAction = "resolve the preparation error and retry the same command"
-				combined.Targets[index].Output.NextAction = combined.Targets[index].NextAction
-				combined.Targets[index].Error = &usecase.GroupTargetFailure{Stage: "preparation", Message: err.Error()}
+				if !domain.IsUnclosedClientProbe(err) {
+					combined.Targets[index].NextAction = "resolve the preparation error and retry the same command"
+					combined.Targets[index].Output.NextAction = combined.Targets[index].NextAction
+					combined.Targets[index].Error = &usecase.GroupTargetFailure{Stage: "preparation", Message: err.Error()}
+				}
 				combined.setTargetProof(domain.ClientID(combined.Targets[index].Target), "not_completed")
 			}
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
@@ -305,7 +307,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			appendDeferredChatGPT(&combined, cmd, loaded)
 		}
 		_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		if domain.IsUnclosedClientProbe(err) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
 		if applied.Phase == usecase.GroupPhaseManagedActivationFailed || applied.Phase == usecase.GroupPhaseExternalPartialFailure {
