@@ -5,6 +5,7 @@ package sourceacquisition
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -70,6 +71,13 @@ func (acquirer Acquirer) AcquireLocal(ctx context.Context, sourceRoot string) (d
 	absolute, err := filepath.Abs(sourceRoot)
 	if err != nil {
 		return domain.PackageSnapshot{}, fmt.Errorf("resolve local package source failed")
+	}
+	// Name a mistyped source in the user's own words; later snapshot failures
+	// stay redacted because they can involve private staging paths.
+	if info, err := os.Lstat(absolute); os.IsNotExist(err) {
+		return domain.PackageSnapshot{}, fmt.Errorf("local package source %q was not found", sourceRoot)
+	} else if err == nil && !info.IsDir() {
+		return domain.PackageSnapshot{}, fmt.Errorf("local package source %q must be a directory, not a file or symbolic link", sourceRoot)
 	}
 	source := domain.SourceIdentity{RequestedSource: sourceRoot, CanonicalSource: filepath.Clean(absolute), SourceBindingHint: "direct-local"}
 	snapshot, err := acquirer.digester().Snapshot(ctx, absolute, source)

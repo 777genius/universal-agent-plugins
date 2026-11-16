@@ -35,6 +35,9 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 	if !observable {
 		return outcome, nil
 	}
+	if len(servers) == 0 && !openCodeObservedSkillAuthority(request, layout, skills, outcome) {
+		return outcome, nil
+	}
 	observed, pendingConfirmation, err := openCodeCatalogsObserved(ctx, env, request, layout, skills, servers)
 	if err != nil {
 		outcome.NativeEffect = domain.NativeEffectUncertain
@@ -44,7 +47,7 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 		outcome.UserActions = shared.AppendUnique(outcome.UserActions, openCodeMCPConfirmationAction)
 		return outcome, nil
 	}
-	if !observed || (layout.Scope == domain.ScopeProject && openCodeProjectSkillAliases(layout, skills)) {
+	if !observed || !openCodeObservationStillOwned(env, request, layout, skills, servers, outcome) {
 		return outcome, nil
 	}
 	outcome.Activation = domain.ActivationActive
@@ -54,14 +57,22 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 	if len(servers) > 0 && outcome.Authentication == domain.AuthenticationNotChecked && request.Plan.Authentication == domain.AuthenticationNotChecked && slices.Contains(request.Plan.Warnings, "authentication_not_catalog_verified") {
 		outcome.Authentication = domain.AuthenticationNotRequired
 	}
-	outcome.Authentication = openCodeObservedSkillAuthentication(env, request, layout, skills, servers, incoming, outcome)
+	outcome.Authentication = openCodeObservedSkillAuthentication(request, servers, incoming, outcome)
 	outcome.UserActions = removeOpenCodeDiscoveryActions(outcome.UserActions)
 	return outcome, nil
 }
 
-// Native catalog text alone does not establish ownership of resource files.
-// Qualify only the selected Skill receipt set, rechecked after the native read.
-func openCodeObservedSkillAuthentication(env clients.Env, request domain.ActivationRequest, layout openCodeNativeLayout, skills []domain.ComponentDecision, servers []string, incoming, outcome domain.ActivationOutcome) domain.AuthenticationState {
+func openCodeObservationStillOwned(env clients.Env, request domain.ActivationRequest, layout openCodeNativeLayout, skills []domain.ComponentDecision, servers []string, outcome domain.ActivationOutcome) bool {
+	if layout.Scope == domain.ScopeProject && openCodeProjectSkillAliases(layout, skills) {
+		return false
+	}
+	return verifyOpenCodeNativeLayout(layout, request.Delivery.ActivePath, request.Delivery.NativeObjects, env.NativeConfig, false) == nil &&
+		(len(servers) > 0 || openCodeObservedSkillAuthority(request, layout, skills, outcome))
+}
+
+// Ownership is established before Active, independently of saved authentication.
+// This qualifier only supplies the authentication fact for eligible catalogs.
+func openCodeObservedSkillAuthentication(request domain.ActivationRequest, servers []string, incoming, outcome domain.ActivationOutcome) domain.AuthenticationState {
 	if request.ActivationComplete || incoming.ActivationAttested || incoming.AuthenticationAttested ||
 		len(servers) != 0 || outcome.Activation != domain.ActivationActive ||
 		outcome.Verification != domain.VerificationInstalled || outcome.Policy != domain.PolicyAllowed || request.Plan.Policy != domain.PolicyAllowed {
@@ -72,16 +83,15 @@ func openCodeObservedSkillAuthentication(env clients.Env, request domain.Activat
 		shared.ObservedPreparedSkillInstallationAuthentication(request.Plan) != domain.AuthenticationNotRequired {
 		return outcome.Authentication
 	}
-	if outcome.NativeEffect != domain.NativeEffectUnchanged && outcome.NativeEffect != domain.NativeEffectCommitted {
-		return outcome.Authentication
-	}
-	if request.Plan.ActivePath != request.Delivery.ActivePath || !filepath.IsAbs(request.Delivery.ActivePath) ||
-		!slices.Equal(outcome.NativeObjects, request.Delivery.NativeObjects) ||
-		!openCodeObservedSkillReceipts(layout, skills, OpenCodeObjects(request.Delivery.NativeObjects)) ||
-		verifyOpenCodeNativeLayout(layout, request.Delivery.ActivePath, request.Delivery.NativeObjects, env.NativeConfig, false) != nil {
-		return outcome.Authentication
-	}
 	return domain.AuthenticationNotRequired
+}
+
+// A prior NotRequired or Complete state cannot replace current native authority.
+func openCodeObservedSkillAuthority(request domain.ActivationRequest, layout openCodeNativeLayout, skills []domain.ComponentDecision, outcome domain.ActivationOutcome) bool {
+	return (outcome.NativeEffect == domain.NativeEffectUnchanged || outcome.NativeEffect == domain.NativeEffectCommitted) &&
+		request.Plan.ActivePath == request.Delivery.ActivePath && filepath.IsAbs(request.Delivery.ActivePath) &&
+		slices.Equal(outcome.NativeObjects, request.Delivery.NativeObjects) &&
+		openCodeObservedSkillReceipts(layout, skills, OpenCodeObjects(request.Delivery.NativeObjects))
 }
 
 func openCodeObservedSkillReceipts(layout openCodeNativeLayout, skills []domain.ComponentDecision, objects []domain.NativeObjectOwnership) bool {

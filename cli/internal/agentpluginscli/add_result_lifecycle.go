@@ -135,7 +135,7 @@ func decorateLifecycleAction(result usecase.AddResult, action string) string {
 	}
 	if result.Activation.Authentication == domain.AuthenticationNotChecked {
 		if action != "" {
-			if strings.Contains(strings.ToLower(action), "verify this plugin's authentication requirements") {
+			if mentionsAuthenticationReview(action) {
 				return action
 			}
 			return action + "; verify this plugin's authentication requirements before using it"
@@ -146,6 +146,15 @@ func decorateLifecycleAction(result usecase.AddResult, action string) string {
 		return action
 	}
 	return "start a new client session and verify the plugin is available"
+}
+
+// mentionsAuthenticationReview recognizes both the planner's "the plugin's"
+// and this package's "this plugin's" wording of the same review, so the
+// next action never repeats it.
+func mentionsAuthenticationReview(action string) bool {
+	lower := strings.ToLower(action)
+	return strings.Contains(lower, "verify this plugin's authentication requirements") ||
+		strings.Contains(lower, "verify the plugin's authentication requirements")
 }
 
 func fullyInstalled(outcome domain.ActivationOutcome) bool {

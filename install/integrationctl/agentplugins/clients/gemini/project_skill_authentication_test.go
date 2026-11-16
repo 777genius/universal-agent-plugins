@@ -203,6 +203,12 @@ func TestGeminiObservedSkillAuthenticationRequiresFreshOwnedEvidence(t *testing.
 			if outcome.Authentication != domain.AuthenticationNotChecked {
 				t.Fatalf("unqualified Skill changed authentication: %+v %v", outcome, err)
 			}
+			switch name {
+			case "missing-receipt", "duplicate-receipt", "wrong-receipt-name":
+				if outcome.Activation != domain.ActivationPrepared {
+					t.Fatalf("incomplete owned Skill evidence became active: %+v %v", outcome, err)
+				}
+			}
 			if name == "unclosed-probe" {
 				if !domain.IsUnclosedClientProbe(err) || !errors.Is(err, context.DeadlineExceeded) || outcome.NativeEffect != domain.NativeEffectUncertain {
 					t.Fatalf("unclosed native observation lost typed cause/effect: %+v %v", outcome, err)
@@ -214,6 +220,35 @@ func TestGeminiObservedSkillAuthenticationRequiresFreshOwnedEvidence(t *testing.
 			if readErr != nil || string(after) != string(before) {
 				t.Fatalf("unqualified observation changed existing trust: %v", readErr)
 			}
+		})
+	}
+}
+
+func TestGeminiObservedSkillRepeatRequiresOwnedReceipts(t *testing.T) {
+	for _, name := range []string{"unchanged", "missing-receipt", "duplicate-receipt"} {
+		t.Run(name, func(t *testing.T) {
+			f := newGeminiSkillAuthFixture(t)
+			earned, err := f.complete(t)
+			if err != nil || earned.Activation != domain.ActivationActive || earned.Authentication != domain.AuthenticationNotRequired ||
+				earned.Verification != domain.VerificationInstalled || earned.Policy != domain.PolicyAllowed || len(f.probe.commands) != 1 {
+				t.Fatalf("initial owned observation did not earn installation authentication: %+v %v", earned, err)
+			}
+			f.outcome = earned
+			f.request.VerifyOnly = true
+			f.probe.commands = nil
+			expected := domain.ActivationActive
+			if name != "unchanged" {
+				f.refuse(t, name)
+				expected = domain.ActivationPrepared
+			}
+			preserved := holdGeminiObservationFiles(t, f)
+			repeated, err := f.complete(t)
+			if err != nil || repeated.Activation != expected || repeated.Authentication != earned.Authentication ||
+				repeated.Verification != domain.VerificationInstalled || repeated.Policy != domain.PolicyAllowed ||
+				repeated.NativeEffect != domain.NativeEffectUnchanged || len(f.probe.commands) != 1 {
+				t.Fatalf("fresh repeat confused retained authentication with owned Skill evidence: %+v %v", repeated, err)
+			}
+			preserved()
 		})
 	}
 }

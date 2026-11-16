@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('terminal_harness', Path(__file__).with_name('harness.py'))
 h = importlib.util.module_from_spec(spec)
@@ -162,6 +163,43 @@ class SessionTests(unittest.TestCase):
         s.finish()
         self.assertTrue(all(s.restoration.values()))
         self.assertTrue((self.evidence / 'ready.frame.txt').exists())
+
+    def test_restoration_waits_for_final_marker_after_probe_exit(self):
+        s = self.session("print('SELECT_READY',flush=True)")
+        s.wait('SELECT_READY', 'ready')
+        s.process.wait()
+        s.drain()
+        owned_process, pump = h.OwnedProcess, s.pump
+        delayed = bytearray()
+        observed = {'exited': False, 'delayed': False, 'released': False}
+
+        class ProbeProcess(owned_process):
+            def poll(self):
+                status = super().poll()
+                if status == 0:
+                    observed['exited'] = True
+                return status
+
+        def delay_final_marker(timeout=0.1):
+            # Model PTY output becoming visible after its owner has reaped the
+            # successful shell. Nonblocking drain cannot supply that evidence.
+            if delayed and observed['exited'] and timeout > 0:
+                s.raw.extend(delayed)
+                delayed.clear()
+                observed['released'] = True
+                return True
+            received = pump(timeout)
+            marker = s.raw.find(b'RESTORE_OK_')
+            if marker >= 0 and not observed['delayed']:
+                delayed.extend(s.raw[marker:])
+                del s.raw[marker:]
+                observed['delayed'] = True
+            return received
+
+        with patch.object(h, 'OwnedProcess', ProbeProcess), patch.object(s, 'pump', delay_final_marker):
+            s.restore_probe()
+        self.assertTrue(all(observed.values()), observed)
+        self.assertTrue(all(s.restoration.values()), s.restoration)
 
     def test_timeout_is_bounded_and_cleanup_kills_child(self):
         s = self.session("import sys; sys.stdin.readline()")

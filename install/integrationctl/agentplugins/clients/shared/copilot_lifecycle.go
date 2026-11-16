@@ -11,7 +11,8 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-const copilotCLIName = "GitHub Copilot CLI"
+// CopilotCLIName labels Copilot CLI command failures for every adapter.
+const CopilotCLIName = "GitHub Copilot CLI"
 
 // CompleteCopilotActivation runs verify-or-install against the Copilot CLI.
 // Callers handle the no-CLI manual path themselves because Copilot and VS Code
@@ -23,11 +24,21 @@ func CompleteCopilotActivation(ctx context.Context, env clients.Env, request dom
 // CompleteCopilotActivationWithListingRecognition uses the same install and
 // verification commands with an optional adapter-owned exact listing recognizer.
 func CompleteCopilotActivationWithListingRecognition(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome, recognize func(legacyports.CommandResult, domain.ActivationRequest) bool) (domain.ActivationOutcome, error) {
+	return CompleteCopilotActivationWith(ctx, env, request, outcome, recognize, func(ctx context.Context) error {
+		return activateCopilotPlugin(ctx, env, request, recognize)
+	})
+}
+
+// CompleteCopilotActivationWith maps a verification or an adapter-owned
+// activation (mutation followed by its own listing verification) to the
+// shared Copilot outcome, so adapters with different native command sequences
+// keep one result contract.
+func CompleteCopilotActivationWith(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome, recognize func(legacyports.CommandResult, domain.ActivationRequest) bool, activate func(context.Context) error) (domain.ActivationOutcome, error) {
 	var err error
 	if request.VerifyOnly {
 		err = VerifyCopilotPluginWithListingRecognition(ctx, env, request, recognize)
 	} else {
-		err = activateCopilotPlugin(ctx, env, request, recognize)
+		err = activate(ctx)
 	}
 	if err == nil {
 		outcome.Activation = domain.ActivationActive
@@ -198,5 +209,5 @@ func runCopilot(ctx context.Context, env clients.Env, executable string, args ..
 }
 
 func runCopilotResult(ctx context.Context, env clients.Env, executable string, args ...string) (legacyports.CommandResult, error) {
-	return RunClientCommand(ctx, env.Runner, copilotCLIName, executable, args...)
+	return RunClientCommand(ctx, env.Runner, CopilotCLIName, executable, args...)
 }

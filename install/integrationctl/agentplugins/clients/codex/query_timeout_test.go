@@ -21,6 +21,7 @@ type codexQueryDeadlineRunner struct {
 	listing         []byte
 	failure         error
 	cleanupComplete bool
+	unknownCleanup  bool
 	cancel          context.CancelFunc
 	wait            bool
 	calls           int
@@ -50,7 +51,7 @@ func (runner *codexQueryDeadlineRunner) Run(ctx context.Context, command legacyp
 		<-ctx.Done()
 		return legacyports.CommandResult{CleanupComplete: true}, ctx.Err()
 	}
-	return legacyports.CommandResult{Stdout: runner.listing, CleanupComplete: runner.failure == nil || runner.cleanupComplete}, runner.failure
+	return legacyports.CommandResult{Stdout: runner.listing, CleanupComplete: !runner.unknownCleanup && (runner.failure == nil || runner.cleanupComplete)}, runner.failure
 }
 
 func codexQueryDeadlineFixture(t *testing.T) (domain.ActivationRequest, []byte) {
@@ -153,6 +154,21 @@ func TestCodexPluginQueryPreservesClosureFailure(t *testing.T) {
 			}
 			if !domain.IsUnclosedClientProbe(err) {
 				t.Fatalf("query lost unsafe process marker: %v", err)
+			}
+		})
+	}
+}
+
+func TestCodexPluginQueryLateCancellationRetainsUnknownCleanup(t *testing.T) {
+	for _, kind := range []string{"verification", "cache version", "removal"} {
+		t.Run(kind, func(t *testing.T) {
+			request, listing := codexQueryDeadlineFixture(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			runner := &codexQueryDeadlineRunner{t: t, listing: listing, cancel: cancel, unknownCleanup: true}
+			outcome, err := invokeCodexQuery(ctx, kind, clients.Env{Runner: runner}, request)
+			if runner.calls != 1 || !errors.Is(err, context.Canceled) || !domain.IsUnclosedClientProbe(err) || outcome.Activation == domain.ActivationActive {
+				t.Fatalf("late cancellation lost uncertain cleanup: calls=%d outcome=%+v err=%v", runner.calls, outcome, err)
 			}
 		})
 	}

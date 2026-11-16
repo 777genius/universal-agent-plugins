@@ -145,10 +145,11 @@ func TestActivatorUpdateRecoversMissingMarketplaceAndPlugin(t *testing.T) {
 		t.Fatalf("outcome = %+v", outcome)
 	}
 	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
+	// Copilot loads directory marketplaces live; `plugin update` proves
+	// nothing about enablement, so the Copilot lane always installs.
 	want := [][]string{
 		{"/test/bin/copilot", "plugin", "marketplace", "update", marketplace},
 		{"/test/bin/copilot", "plugin", "marketplace", "add", request.Delivery.ActivePath},
-		{"/test/bin/copilot", "plugin", "update", "demo@" + marketplace},
 		{"/test/bin/copilot", "plugin", "install", "demo@" + marketplace},
 		{"/test/bin/copilot", "plugin", "list"},
 	}
