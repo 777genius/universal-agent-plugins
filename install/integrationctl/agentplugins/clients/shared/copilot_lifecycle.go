@@ -49,7 +49,9 @@ func CompleteCopilotActivationWith(ctx context.Context, env clients.Env, request
 		return ManualCopilotVerification(outcome, request), nil
 	}
 	if domain.IsUnclosedClientProbe(err) {
+		// An unclosed native process must not be presented as a safe retry.
 		outcome.NativeEffect = domain.NativeEffectUncertain
+		return outcome, err
 	}
 	next := fmt.Sprintf("verify with `%s plugin list`", request.BackendExecutable)
 	if !request.VerifyOnly {

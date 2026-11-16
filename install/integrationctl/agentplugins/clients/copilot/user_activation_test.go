@@ -114,7 +114,7 @@ func TestCopilotUserUnclosedCommandStopsNativeFollowups(t *testing.T) {
 				steps = append(steps, copilotUserLiveStep{argv: failed, err: failure})
 				runner := &copilotUserLiveRunner{t: t, steps: steps}
 				outcome, err := New().Activate(context.Background(), clients.Env{Runner: runner}, request)
-				if !domain.IsUnclosedClientProbe(err) || !errors.Is(err, cause) || outcome.NativeEffect != domain.NativeEffectUncertain || outcome.Activation != domain.ActivationFailed || runner.calls != len(steps) {
+				if !domain.IsUnclosedClientProbe(err) || !errors.Is(err, cause) || outcome.NativeEffect != domain.NativeEffectUncertain || outcome.Activation == domain.ActivationActive || len(outcome.UserActions) != 0 || len(outcome.LocalActions) != 0 || runner.calls != len(steps) {
 					t.Fatalf("unclosed native command not held: outcome=%+v err=%v calls=%d expected=%d", outcome, err, runner.calls, len(steps))
 				}
 			})
