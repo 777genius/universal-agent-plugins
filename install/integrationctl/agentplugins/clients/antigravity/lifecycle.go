@@ -112,8 +112,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	outcome.Verification = domain.VerificationInstalled
 	outcome.NativeEffect = domain.NativeEffectUnchanged
 	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
-	outcome.UserActions = append(outcome.UserActions,
-		"Open or reload Antigravity and verify native plugin discovery/enablement; files alone do not establish runtime activation")
+	outcome.UserActions = append(outcome.UserActions, preparedPluginAction(request.Plan))
 	if request.Plan.Scope == domain.ScopeUser {
 		return userInventoryOutcome(ctx, env, request, outcome)
 	}

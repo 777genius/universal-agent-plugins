@@ -31,7 +31,9 @@ Published [native CLI 0.1.108](https://github.com/777genius/universal-agent-plug
 
 For Hermes, SSE and hooks are unsupported. Portable commands follow Skills
 projection; explicit-only commands are withheld when the host cannot enforce
-explicit invocation. UAP does not grant project trust. See the
+explicit invocation. An explicit, confirmed Project `add` with Skills asks the
+user's Hermes CLI to trust the whole Git repository root; update, repair and
+dependency sync never do, and removal does not revoke it. See the
 [Hermes native guide](HERMES_NATIVE_SKILLS.md) and
 [release completion plan](plans/2026-11-10-hermes-antigravity-public-release.md).
 

@@ -125,6 +125,9 @@ type AddInput struct {
 	DirectoryResolution   *domain.DirectoryOrigin
 	DistributionSuspended bool
 	ReleaseRevoked        bool
+	// ProjectTrustConsent is set only by an explicit user add and is passed to
+	// every activation of that operation, including finishing prepared setup.
+	ProjectTrustConsent bool
 	// PersistAuthoritativeObservations allows a read-only client verifier to
 	// record negative evidence even during a plan-first CLI pass. It does not
 	// authorize package, client, or user-requested lifecycle mutations.

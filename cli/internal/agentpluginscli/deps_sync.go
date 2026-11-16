@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -198,12 +199,22 @@ type dependencyInstaller struct {
 	cmd                        *cobra.Command
 	beforeApply                func() error
 	consent                    map[string]bool
+	trustAliases               []string
 	previewUpdate              *installer.PreparedOperation
 	operationIDs               map[string]string
 	onResult                   func(environment.PreparedBinding, installer.Result)
 	onPrepare                  func(environment.PreparedBinding)
 	onApply                    func(environment.PreparedBinding)
 	currentAction              environment.PreparedBinding
+}
+
+// explicitAddAliases limits native project trust consent to the dependency
+// closure an explicit saved add installs. Sync, install and update never pass it.
+func explicitAddAliases(cmd *cobra.Command, aliases []string) []string {
+	if cmd == nil || cmd.Name() != "add" {
+		return nil
+	}
+	return slices.Clone(aliases)
 }
 
 func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environment.PreparedBinding) (*installer.PreparedOperation, error) {
@@ -247,7 +258,8 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
 		ClientNativeConfigRoot: dependencyNativeConfigRoot(adapter.app, client),
 		ClientExecutable:       backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
-		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete}
+		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete,
+		ProjectTrustConsent: action.Action == environment.ActionInstall && slices.Contains(adapter.trustAliases, action.Alias)}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
 	}

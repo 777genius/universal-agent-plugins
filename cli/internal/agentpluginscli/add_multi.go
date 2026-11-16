@@ -157,7 +157,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		input := usecase.AddInput{
 			InstallIntent: opts.installIntents[client.ClientID],
 			Envelope:      clientPackage.envelope, Client: client, Scope: app.scope(),
-			DryRun: true, Interactive: app.Terminal, Hints: clientPackage.hints,
+			DryRun: true, Interactive: app.Terminal, Hints: clientPackage.hints, ProjectTrustConsent: true,
 			BackendExecutable:  backendExecutable(client, detected, app.scope()),
 			ActivationComplete: activationComplete, AuthComplete: authComplete,
 			PersistAuthoritativeObservations: false,
