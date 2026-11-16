@@ -15,7 +15,6 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -143,7 +142,7 @@ func prune(dir string) {
 	var names []string
 	for _, entry := range entries {
 		name := entry.Name()
-		if entry.Type().IsRegular() && strings.HasPrefix(name, filePrefix) && strings.HasSuffix(name, fileSuffix) {
+		if entry.Type().IsRegular() && ownedLogName.MatchString(name) {
 			names = append(names, name)
 		}
 	}
@@ -155,12 +154,13 @@ func prune(dir string) {
 }
 
 var (
+	ownedLogName   = regexp.MustCompile(`^install-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}\.jsonl$`)
 	urlCredentials = regexp.MustCompile(`(?i)(\b[a-z][a-z0-9+.-]*://)[^/\s:@]+(?::[^/\s@]*)?@`)
 	// Any identifier that names a secret, in env, flag, YAML or JSON form:
 	// MY_SERVICE_TOKEN=x, client_secret: x, "api_key": "x".
 	secretAssign = regexp.MustCompile(`(?i)(["']?[a-z0-9_.-]*(?:token|secret|passw(?:or)?d|api[_-]?key|private[_-]?key|credential)[a-z0-9_.-]*["']?\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s"',;]+)`)
 	secretFlag   = regexp.MustCompile(`(?i)(--?[a-z0-9-]*(?:token|secret|passw(?:or)?d|api-?key)\s+)([^\s-][^\s]*)`)
-	authHeader   = regexp.MustCompile(`(?i)(authorization\s*[=:]\s*)(?:(?:bearer|basic|token)\s+)?[^\s"',;]+`)
+	authHeader   = regexp.MustCompile(`(?i)(["']?authorization["']?\s*[=:]\s*)("[^"]*"|'[^']*'|(?:(?:bearer|basic|token)\s+)?[^\s"',;]+)`)
 	bearerValue  = regexp.MustCompile(`(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}`)
 	// Credentials recognizable by their issuer prefix even without a key name.
 	knownTokens = regexp.MustCompile(`\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})\b`)
