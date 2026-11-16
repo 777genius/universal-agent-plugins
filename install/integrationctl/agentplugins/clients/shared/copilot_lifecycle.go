@@ -48,6 +48,9 @@ func CompleteCopilotActivationWith(ctx context.Context, env clients.Env, request
 	if errors.Is(err, ErrCopilotListContractUnknown) {
 		return ManualCopilotVerification(outcome, request), nil
 	}
+	if domain.IsUnclosedClientProbe(err) {
+		outcome.NativeEffect = domain.NativeEffectUncertain
+	}
 	next := fmt.Sprintf("verify with `%s plugin list`", request.BackendExecutable)
 	if !request.VerifyOnly {
 		next = fmt.Sprintf("rerun add for the prepared package at %s, then verify with `%s plugin list`", request.Delivery.ActivePath, request.BackendExecutable)
