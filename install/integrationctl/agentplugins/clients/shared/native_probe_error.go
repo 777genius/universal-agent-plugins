@@ -14,9 +14,10 @@ func NativeProbeFailure(result legacyports.CommandResult, err error) error {
 }
 
 // CommandClosureFailure classifies a failed client command by the runner's
-// closure evidence. The ordinary OS runner reports a failed group kill or reap
-// as a plain error with CleanupComplete false, never as a typed closure error,
-// so the result must be consulted before any follow-up command may start.
+// closure evidence. Apart from attach failures, the ordinary OS runner reports
+// a failed group kill, reap or containment close as a plain error with
+// CleanupComplete false, so the result must be consulted before any follow-up
+// command may start.
 func CommandClosureFailure(operation string, result legacyports.CommandResult, err error) error {
 	err = CompletionProbeFailure(err)
 	if err == nil || result.NoChildStarted || result.CleanupComplete || domain.IsUnclosedClientProbe(err) {
