@@ -50,12 +50,13 @@ func (r *profileRunner) Run(ctx context.Context, c legacyports.Command) (legacyp
 		if text == "" {
 			text = "not configured or installed"
 		}
-		return legacyports.CommandResult{ExitCode: 1, Stdout: []byte(text)}, errors.New("command failed")
+		return legacyports.CommandResult{ExitCode: 1, Stdout: []byte(text), CleanupComplete: true}, errors.New("command failed")
 	}
 	cmd := exec.CommandContext(ctx, c.Argv[0], append([]string{"-test.run=^TestProfileProcess$", "--"}, c.Argv[1:]...)...)
 	cmd.Env = c.Env
 	body, err := cmd.Output()
-	return legacyports.CommandResult{Stdout: body}, err
+	// Output reaps the child, so this fake always proves closure like the OS runner.
+	return legacyports.CommandResult{Stdout: body, CleanupComplete: true}, err
 }
 func (r *profileRunner) RunWithTreeExitGrace(ctx context.Context, c legacyports.Command, grace time.Duration) (legacyports.CommandResult, error) {
 	r.tree = grace > 0

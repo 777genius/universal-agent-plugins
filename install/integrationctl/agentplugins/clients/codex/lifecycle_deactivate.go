@@ -82,7 +82,7 @@ func deactivateConfirmedCodex(ctx context.Context, env clients.Env, request doma
 func verifyCodexNativeRemoval(ctx context.Context, env clients.Env, request domain.DeactivationRequest, marketplace string) error {
 	listed, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "list", "--json")
 	if err != nil {
-		return shared.NativeProbeFailure(listed, err)
+		return err
 	}
 	if CodexRegistryFinding(listed.Stdout, request.DeclaredName, marketplace, true) != clients.RegistryClear {
 		return fmt.Errorf("codex did not confirm exact managed plugin absence")
