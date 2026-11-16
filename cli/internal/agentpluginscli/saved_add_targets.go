@@ -19,16 +19,26 @@ func compatibleSavedAddTargets(ctx context.Context, app App, source string, dete
 		return nil, nil, err
 	}
 	defer cleanup()
-	deferred := map[domain.ClientID]bool{}
-	if preview.Planner != nil && preview.Lifecycle.ClientPreparation != nil {
-		preview.Planner = savedAddDeferredPlanner{DeliveryPlanner: preview.Planner, deferred: deferred}
-	}
-	compatible, skipped, loaded, err := preview.compatibleDetectedTargets(ctx, source, detected)
+	compatible, skipped, loaded, err := compatibleTargetsDeferringHostQualification(ctx, preview, source, detected)
 	if loaded != nil && loaded.cleanup != nil {
 		defer func() { _ = loaded.cleanup() }()
 	}
+	return compatible, skipped, err
+}
+
+// compatibleTargetsDeferringHostQualification offers detected clients whose
+// planning failed only because read-only discovery does not qualify a native
+// host. The selected operation qualifies that host before review and effects,
+// so presenting the choice runs no native executable. Without the real
+// preparation port, the shared classifier keeps its ordinary skip.
+func compatibleTargetsDeferringHostQualification(ctx context.Context, app App, source string, detected []domain.DetectedClient, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.DetectedClient, []targetSkip, *loadedPackage, error) {
+	deferred := map[domain.ClientID]bool{}
+	if app.Planner != nil && app.Lifecycle.ClientPreparation != nil {
+		app.Planner = hostDeferredPlanner{DeliveryPlanner: app.Planner, deferred: deferred}
+	}
+	compatible, skipped, loaded, err := app.compatibleDetectedTargets(ctx, source, detected, intents...)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, loaded, err
 	}
 	for _, client := range detected {
 		if deferred[client.ClientID] {
@@ -41,7 +51,7 @@ func compatibleSavedAddTargets(ctx context.Context, app App, source string, dete
 			kept = append(kept, skip)
 		}
 	}
-	return compatible, kept, nil
+	return compatible, kept, loaded, nil
 }
 
 // Missing prepared host authority is deferred only through its typed contract,
@@ -50,12 +60,12 @@ func compatibleSavedAddTargets(ctx context.Context, app App, source string, dete
 // already-qualified host refusals remain excluded by the shared classifier.
 // Offline unchanged actions can also use this choice without needing a host;
 // fresh offline planning still goes through its existing authoritative gate.
-type savedAddDeferredPlanner struct {
+type hostDeferredPlanner struct {
 	ports.DeliveryPlanner
 	deferred map[domain.ClientID]bool
 }
 
-func (planner savedAddDeferredPlanner) Plan(ctx context.Context, request domain.PlanRequest) (domain.DeliveryPlan, error) {
+func (planner hostDeferredPlanner) Plan(ctx context.Context, request domain.PlanRequest) (domain.DeliveryPlan, error) {
 	plan, err := planner.DeliveryPlanner.Plan(ctx, request)
 	if request.Client.OpenCodeHost == nil && errors.Is(err, clients.ErrOpenCodeAdapterUnavailable) {
 		planner.deferred[request.Client.ClientID] = true
