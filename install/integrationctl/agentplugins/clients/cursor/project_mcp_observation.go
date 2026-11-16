@@ -17,7 +17,10 @@ import (
 
 // Cursor's supported MCP commands do not require a model or account login.
 // A Skill still requires independent native discovery; MCP cannot qualify it.
-type cursorProjectMCPObservation struct{ Initialized, Complete bool }
+// ApprovalPending is reported only by a read-only pass with no refusal.
+type cursorProjectMCPObservation struct{ Initialized, Complete, ApprovalPending bool }
+
+const cursorNeedsApprovalStatus = "not loaded (needs approval)"
 
 func observeCursorProjectMCP(ctx context.Context, env clients.Env, request domain.ActivationRequest) (cursorProjectMCPObservation, error) {
 	if env.Runner == nil || env.LookupExecutable == nil {
@@ -48,8 +51,13 @@ func observeCursorProjectMCP(ctx context.Context, env clients.Env, request domai
 		return cursorProjectMCPObservation{}, err
 	}
 	for _, name := range names {
-		if ready, err := observeCursorServer(ctx, env, request, name, result.Stdout); err != nil || !ready {
+		ready, err := observeCursorServer(ctx, env, request, name, result.Stdout)
+		if err != nil {
 			return cursorProjectMCPObservation{}, err
+		}
+		if !ready {
+			status, _ := cursorMCPStatus(result.Stdout, name)
+			return cursorProjectMCPObservation{ApprovalPending: request.VerifyOnly && status == cursorNeedsApprovalStatus}, nil
 		}
 	}
 
@@ -191,7 +199,7 @@ func observeCursorServer(ctx context.Context, env clients.Env, request domain.Ac
 	if status == "disabled" {
 		return false, fmt.Errorf("preserved explicit Cursor MCP disablement for %q", name)
 	}
-	if status == "not loaded (needs approval)" && !request.VerifyOnly {
+	if status == cursorNeedsApprovalStatus && !request.VerifyOnly {
 		if err := approveCursorMCP(ctx, env, request, name); err != nil {
 			return false, err
 		}
