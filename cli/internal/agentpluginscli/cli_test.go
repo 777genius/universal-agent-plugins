@@ -431,10 +431,13 @@ func TestMultiTargetRemoveHumanOutputExplainsHowToPurgeRetainedData(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"PLUGIN_DATA: preserved", "Next: run `agentplugins remove ", " --purge-data` to delete retained plugin data"} {
+	for _, want := range []string{"Remove demo: removed", "cursor: removed", "PLUGIN_DATA: preserved", "Next: run `agentplugins remove ", " --purge-data` to delete retained plugin data"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("human grouped remove output %q omitted %q", stdout, want)
 		}
+	}
+	if strings.Contains(stdout, "data_retained") || strings.Contains(stdout, "external_completed") {
+		t.Fatalf("human grouped remove output leaked machine statuses: %q", stdout)
 	}
 	if strings.Contains(stdout, removalIncompleteNotice) {
 		t.Fatalf("fully completed grouped remove output claims an unfinished removal: %q", stdout)
@@ -455,7 +458,7 @@ func TestMultiTargetRemoveStopsBeforeMutationWhenManualStepIsRequired(t *testing
 	if err == nil || !strings.Contains(err.Error(), "rerun with --external-uninstalled") || !strings.Contains(err.Error(), "no target was changed") {
 		t.Fatalf("grouped remove error = %v", err)
 	}
-	for _, want := range []string{"Remove demo: manual_step_required", "cursor: not_applied", "vscode: blocked", "Next: uninstall the plugin in Visual Studio Code", removalIncompleteNotice} {
+	for _, want := range []string{"Remove demo: manual step required", "cursor: not applied", "vscode: blocked", "Next: uninstall the plugin in Visual Studio Code", removalIncompleteNotice} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("grouped remove output %q omitted %q", stdout, want)
 		}
@@ -1744,7 +1747,7 @@ func TestRepeatedAddResumesManualLifecycleWithoutAnotherReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Count(stdout, "Next:") != 1 || !strings.Contains(stdout, "verify") || !strings.Contains(stdout, filepath.Join("plugins", "local")) {
+	if strings.Count(stdout, "Next:") != 1 || !strings.Contains(stdout, "verify") || !strings.Contains(stdout, filepath.Join("plugins", "local")) || !strings.Contains(stdout, "No changes made.") {
 		t.Fatalf("resume output = %q", stdout)
 	}
 	state, err := fixture.store.Load()

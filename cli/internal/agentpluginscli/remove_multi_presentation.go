@@ -2,8 +2,11 @@ package agentpluginscli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMultiResult) error {
@@ -14,11 +17,11 @@ func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMul
 		}
 		return writeJSONResult(cmd.OutOrStdout(), "remove", overall, result)
 	}
-	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Remove %s: %s\n", result.Plugin, result.Status); err != nil {
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Remove %s: %s\n", result.Plugin, removeStatusText(result.Status)); err != nil {
 		return err
 	}
 	for _, target := range result.Targets {
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", target.Target, target.Status); err != nil {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", target.Target, removeStatusText(target.Status)); err != nil {
 			return err
 		}
 		if target.Status == "blocked" && target.Output.NextAction != "" {
@@ -43,4 +46,18 @@ func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMul
 		}
 	}
 	return nil
+}
+
+// removeStatusText keeps JSON statuses stable while human output reads as text.
+// Retained data has its own PLUGIN_DATA line, so the removal itself is "removed".
+func removeStatusText(status string) string {
+	switch status {
+	case "data_retained", string(usecase.GroupPhaseCompleted), string(usecase.GroupTargetExternalCompleted):
+		return "removed"
+	case string(usecase.GroupTargetExternalPartial):
+		return "removed from the client; managed cleanup is incomplete"
+	case string(usecase.GroupTargetExternalFailed):
+		return "failed"
+	}
+	return strings.ReplaceAll(status, "_", " ")
 }
