@@ -29,19 +29,6 @@ func loadStoredDependencySnapshot(ctx context.Context, app App, snapshot domain.
 	return loaded, nil
 }
 
-func dependencySourceHint(locked environment.LockedPackage) string {
-	if locked.Source.Web != nil {
-		return "uap-dependency-web-skill"
-	}
-	if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
-		return "uap-dependency-skill"
-	}
-	if locked.Source.Registry != nil {
-		return "uap-dependency-registry"
-	}
-	return "uap-dependency-git"
-}
-
 func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Package, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
 	pkg.Metadata.Source = identityFromLocked(locked)
 	input := domain.LoadInput{SnapshotRoot: pkg.Root, TreeDigest: pkg.Metadata.TreeDigest,
