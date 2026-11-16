@@ -75,6 +75,11 @@ func deactivateConfirmedCodex(ctx context.Context, env clients.Env, request doma
 		outcome.ArtifactRemovalAllowed = false
 		return outcome, err
 	}
+	if request.PurgeData {
+		if err := purgeCodexNativeData(profileRoot, marketplace, request.DeclaredName); err != nil {
+			return outcome, err
+		}
+	}
 	outcome.ExternalRemovalComplete = true
 	return outcome, nil
 }

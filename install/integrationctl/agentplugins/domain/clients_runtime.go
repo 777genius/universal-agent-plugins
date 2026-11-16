@@ -187,22 +187,25 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
-	NativeAttempt         NativeAttemptIdentity   `json:"-"`
-	TargetContext         TargetContext           `json:"-"`
-	NativeRegistryRoot    string                  `json:"-"`
-	LocalEntryObservation *LocalEntryObservation  `json:"-"`
-	RemoveOwnedEntry      bool                    `json:"-"`
-	SelectedDelivery      SelectedDelivery        `json:"-"`
-	Client                DetectedClient          `json:"client"`
-	DeclaredName          string                  `json:"declared_name"`
-	CurrentActivation     ActivationState         `json:"current_activation"`
-	Interactive           bool                    `json:"interactive"`
-	ExternalUninstalled   bool                    `json:"external_uninstalled"`
-	Confirmed             bool                    `json:"confirmed"`
-	PhysicalArtifactID    string                  `json:"physical_artifact_id"`
-	BackendExecutable     string                  `json:"-"`
-	ManagedArtifactPath   string                  `json:"-"`
-	NativeObjects         []NativeObjectOwnership `json:"-"`
+	NativeAttempt         NativeAttemptIdentity  `json:"-"`
+	TargetContext         TargetContext          `json:"-"`
+	NativeRegistryRoot    string                 `json:"-"`
+	LocalEntryObservation *LocalEntryObservation `json:"-"`
+	RemoveOwnedEntry      bool                   `json:"-"`
+	// PurgeData asks a client that keeps plugin data outside the installer's
+	// owned PLUGIN_DATA to delete it with the native removal.
+	PurgeData           bool                    `json:"-"`
+	SelectedDelivery    SelectedDelivery        `json:"-"`
+	Client              DetectedClient          `json:"client"`
+	DeclaredName        string                  `json:"declared_name"`
+	CurrentActivation   ActivationState         `json:"current_activation"`
+	Interactive         bool                    `json:"interactive"`
+	ExternalUninstalled bool                    `json:"external_uninstalled"`
+	Confirmed           bool                    `json:"confirmed"`
+	PhysicalArtifactID  string                  `json:"physical_artifact_id"`
+	BackendExecutable   string                  `json:"-"`
+	ManagedArtifactPath string                  `json:"-"`
+	NativeObjects       []NativeObjectOwnership `json:"-"`
 }
 
 type DeactivationOutcome struct {
