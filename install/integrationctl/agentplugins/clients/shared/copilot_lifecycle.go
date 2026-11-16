@@ -11,7 +11,8 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-const copilotCLIName = "GitHub Copilot CLI"
+// CopilotCLIName labels Copilot CLI command failures for every adapter.
+const CopilotCLIName = "GitHub Copilot CLI"
 
 // CompleteCopilotActivation runs verify-or-install against the Copilot CLI.
 // Callers handle the no-CLI manual path themselves because Copilot and VS Code
@@ -208,5 +209,5 @@ func runCopilot(ctx context.Context, env clients.Env, executable string, args ..
 }
 
 func runCopilotResult(ctx context.Context, env clients.Env, executable string, args ...string) (legacyports.CommandResult, error) {
-	return RunClientCommand(ctx, env.Runner, copilotCLIName, executable, args...)
+	return RunClientCommand(ctx, env.Runner, CopilotCLIName, executable, args...)
 }

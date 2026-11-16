@@ -9,8 +9,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-const copilotCLIName = "GitHub Copilot CLI"
-
 // activateCopilotUserPlugin registers the managed directory marketplace and
 // installs its plugin through the Copilot CLI, then verifies the listing.
 //
@@ -24,7 +22,7 @@ const copilotCLIName = "GitHub Copilot CLI"
 func activateCopilotUserPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest) error {
 	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	run := func(args ...string) error {
-		_, err := shared.RunClientCommand(ctx, env.Runner, copilotCLIName, request.BackendExecutable, args...)
+		_, err := shared.RunClientCommand(ctx, env.Runner, shared.CopilotCLIName, request.BackendExecutable, args...)
 		return err
 	}
 	register := []string{"plugin", "marketplace", "add", request.Delivery.ActivePath}
