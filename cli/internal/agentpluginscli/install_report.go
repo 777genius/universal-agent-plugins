@@ -498,3 +498,16 @@ func runSavedLifecycleRetryable(cmd *cobra.Command, app App, opts *options, sele
 	err := run()
 	return handled, err
 }
+
+// runUpdateAllRetryable runs `update --all` and, in an interactive terminal,
+// offers to run it again when some saved agents failed. Each run plans from
+// current state, so a retry only touches what is still outdated or missing.
+func runUpdateAllRetryable(cmd *cobra.Command, app App, opts *options) error {
+	var run func() error
+	run = func() error {
+		opts.installResult = nil
+		err := runUpdateAll(cmd.Context(), cmd, app, opts)
+		return retryConverge(cmd, app, opts, err, run)
+	}
+	return run()
+}
