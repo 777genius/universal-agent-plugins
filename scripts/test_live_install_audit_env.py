@@ -5718,6 +5718,68 @@ module.exports = {
                         workflow.index('dpkg-deb --extract "$artifact"'))
         self.assertIn('vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20"', workflow)
 
+    @unittest.skipUnless(sys.platform == "linux", "Debian staged launcher contract")
+    def test_cursor_deb_binds_staged_launcher_without_package_install(self):
+        import shutil
+
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        start = '            if [[ "$TARGET" == vscode ]]; then\n'
+        choice = textwrap.dedent(start + workflow.split(start, 1)[1].split(
+            '          elif [[ "$TARGET" == kiro ]]; then\n', 1)[0])
+        start = '          hash -r\n'
+        joined = textwrap.dedent(start + workflow.split(start, 1)[1].split(
+            '          # No ambient CI credentials', 1)[0])
+        script = "set -euo pipefail\n" + choice + joined
+        bash = shutil.which("bash")
+        self.assertIsNotNone(bash)
+        for variant in ("selected", "missing", "non-executable", "symlink", "shadow"):
+            with self.subTest(variant=variant), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                home, runtime, tools = root / "home", root / "run", root / "tools"
+                selected = home / ".local/bin/cursor"
+                selected.parent.mkdir(parents=True)
+                tools.mkdir()
+                (runtime / "vendor-proof").mkdir(parents=True)
+                # Exact c8003e... package layout: no usr/bin member. Its
+                # postinst creates that link, but must never be executed here.
+                packaged_bin = runtime / "vendor-root/usr/bin"
+                packaged_bin.mkdir(parents=True)
+                launcher = runtime / "vendor-root/usr/share/cursor/bin/cursor"
+                launcher.parent.mkdir(parents=True)
+                launcher.write_text("#!/bin/sh\nexit 97\n")
+                launcher.chmod(0o755)
+                for command in ("ln", "readlink", "tee"):
+                    original = shutil.which(command)
+                    self.assertIsNotNone(original)
+                    (tools / command).symlink_to(original)
+                (tools / "python3").symlink_to(sys.executable)
+                if variant == "missing":
+                    launcher.unlink()
+                elif variant == "non-executable":
+                    launcher.chmod(0o644)
+                elif variant in ("symlink", "shadow"):
+                    foreign = tools / "cursor"
+                    foreign.write_text("#!/bin/sh\nexit 98\n")
+                    foreign.chmod(0o755)
+                    if variant == "symlink":
+                        launcher.unlink()
+                        launcher.symlink_to(foreign)
+                env = dict(os.environ, HOME=str(home), RUNNER_TEMP=str(runtime),
+                           TARGET="cursor", KIND="plugin", BIN="cursor",
+                           PATH=os.pathsep.join(map(str, (tools, packaged_bin, selected.parent))))
+                env.pop("executable", None)
+                result = subprocess.run([bash, "--noprofile", "--norc", "-c", script],
+                                        env=env, capture_output=True, text=True,
+                                        timeout=5, check=False)
+                self.assertEqual(result.returncode == 0, variant == "selected", result.stderr)
+                self.assertEqual(list(packaged_bin.iterdir()), [])
+                if variant == "selected":
+                    self.assertEqual(selected.resolve(strict=True), launcher)
+                    self.assertEqual((runtime / "vendor-proof/executable.txt").read_text(),
+                                     str(selected) + "\n")
+                    self.assertEqual(launcher.read_text(), "#!/bin/sh\nexit 97\n")
+
     def test_devin_user_plugin_without_selected_windsurf_channel_is_nonpass(self):
         # BUG-055: a real devin CLI does not select a legacy Windsurf user
         # profile, so fail-closed root selection is not a broken package.
@@ -8136,6 +8198,30 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             actual = audit.call(["agentplugins"], {}, ".", timeout=7)
             self.assertEqual(actual["_json"], {"result": "success"})
             self.assertTrue(run.call_args.kwargs["capture_output"])
+
+    def test_scoped_file_capture_preserves_partial_timeout_without_success_authority(self):
+        audit = load_audit()
+        output = b"o" * 2100 + b'{"result":"success"}\n'
+        errors = b"e" * 2100 + b"partial\xff stderr\n"
+        child = ("import os,time;"
+                 f"os.write(1,{output!r});os.write(2,{errors!r});"
+                 "time.sleep(30)")
+        with TemporaryDirectory() as scratch:
+            actual = audit.call(
+                [sys.executable, "-I", "-B", "-c", child],
+                {**os.environ, "TEMP": scratch}, scratch, timeout=1,
+                capture_files=True)
+            self.assertEqual(actual["stdout_tail"],
+                             output[-1800:].decode("utf-8", errors="replace"))
+            self.assertEqual(actual["stderr_tail"],
+                             errors[-1800:].decode("utf-8", errors="replace"))
+            self.assertIsNone(actual["exit_code"])
+            self.assertTrue(actual["timeout"])
+            self.assertIsNone(actual.get("_json"))
+            self.assertNotIn("stdout_full", actual)
+            self.assertNotIn("stderr_full", actual)
+            self.assertFalse(audit.is_cli_refusal(actual))
+            self.assertEqual(list(Path(scratch).iterdir()), [])
 
     def test_published_windows_firebase_timeout_is_bounded_and_scoped(self):
         audit = load_audit()

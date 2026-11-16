@@ -2058,6 +2058,73 @@ class BwrapPolicySetupContracts(unittest.TestCase):
 
 
 class ReadonlyViabilityContracts(unittest.TestCase):
+    def test_parent_pins_only_the_fixed_ca_bundle_and_rejects_substitution(self):
+        real_lstat, real_fstat, real_read = Path.lstat, os.fstat, os.read
+        real_open = case.base.shared.artifacts.open_member
+        variants = ("original", "empty", "oversized", "mode", "owner", "group", "alias", "hardlink",
+                    "parent-mode", "parent-owner", "parent-alias", "read-replace", "read-change",
+                    "read-parent-mode", "deadline")
+        for change in variants:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                parent = root / "etc/ssl/certs"
+                parent.mkdir(parents=True)
+                path = parent / "ca-certificates.crt"
+                body = b"inert original trust bundle\n"
+                path.write_bytes(body); path.chmod(0o644)
+                if change == "empty": path.write_bytes(b"")
+                elif change == "oversized": path.write_bytes(b"x" * ((1 << 20) + 1))
+                elif change == "mode": path.chmod(0o664)
+                elif change == "alias":
+                    path.rename(parent / "original"); path.symlink_to(parent / "original")
+                elif change == "hardlink": os.link(path, parent / "alias")
+                elif change == "parent-mode": parent.chmod(0o777)
+                elif change == "parent-alias":
+                    parent.rename(root / "original-certs"); parent.symlink_to(root / "original-certs")
+                mapped = {value: root / value.lstrip("/") for value in
+                          ("/etc", "/etc/ssl", "/etc/ssl/certs", "/etc/ssl/certs/ca-certificates.crt")}
+                opened, reads = [], []
+                def rooted(info, value=None):
+                    values = case.installer_metadata(info)
+                    values.update(st_uid=0, st_gid=0)
+                    if change == "owner" and value == path: values["st_uid"] = 1000
+                    if change == "group" and value == path: values["st_gid"] = 1000
+                    if change == "parent-owner" and value == parent: values["st_gid"] = 1000
+                    return SimpleNamespace(**values)
+                def open_member(value):
+                    self.assertEqual(value, path)
+                    descriptor = real_open(value); opened.append(descriptor)
+                    return descriptor
+                def read(descriptor, count):
+                    self.assertIn(descriptor, opened)
+                    self.assertLessEqual(count, 65536)
+                    result = real_read(descriptor, count)
+                    if not reads:
+                        if change == "read-replace":
+                            path.rename(parent / "original"); path.write_bytes(body); path.chmod(0o644)
+                        elif change == "read-change": path.write_bytes(b"changed" + body[7:])
+                        elif change == "read-parent-mode": parent.chmod(0o777)
+                    reads.append(result)
+                    return result
+                def check():
+                    if change == "deadline" and reads: raise ValueError("inert deadline")
+                    return 10
+                with mock.patch.object(case, "Path", side_effect=lambda value: mapped.get(str(value), Path(value))), \
+                     mock.patch.object(Path, "lstat", autospec=True, side_effect=lambda value: rooted(real_lstat(value), value)), \
+                     mock.patch.object(os, "fstat", side_effect=lambda descriptor: rooted(real_fstat(descriptor))), \
+                     mock.patch.object(os, "read", side_effect=read), \
+                     mock.patch.object(case.base.shared.artifacts, "open_member", side_effect=open_member):
+                    if change == "original":
+                        result = case.readonly_ca_bundle(SimpleNamespace(budget=SimpleNamespace(check=check)))
+                        self.assertEqual(result["sha256"], case.sha(body))
+                        self.assertEqual(result["file"], rooted(real_lstat(path), path).__dict__)
+                        self.assertEqual(set(result["parents"]), {str(mapped[name]) for name in ("/etc", "/etc/ssl", "/etc/ssl/certs")})
+                    else:
+                        with self.assertRaises((ValueError, OSError)):
+                            case.readonly_ca_bundle(SimpleNamespace(budget=SimpleNamespace(check=check)))
+                for descriptor in opened:
+                    with self.assertRaises(OSError): real_fstat(descriptor)
+
     def test_parent_rejoins_exact_policy_and_closes_held_reads_on_refusal(self):
         real_lstat, real_fstat = Path.lstat, os.fstat
         real_open = case.base.shared.artifacts.open_member
@@ -2273,7 +2340,8 @@ class ReadonlyViabilityContracts(unittest.TestCase):
              mock.patch.object(case.os, "getgid", return_value=1000):
             argv, header = case.readonly_arguments(ctx, arguments, before, old, directories)
             mounts = [(argv[index + 1], argv[index + 2]) for index, value in enumerate(argv) if value == "--ro-bind"]
-            self.assertEqual(mounts, [(path, path) for path in ("/usr", "/bin", "/lib", "/lib64", str(root))])
+            self.assertEqual(mounts, [(path, path) for path in (
+                "/usr", "/bin", "/lib", "/lib64", str(root), "/etc/ssl/certs/ca-certificates.crt")])
             self.assertNotIn("--bind", argv)
             self.assertNotIn("--ro-bind-try", argv)
             self.assertEqual(argv[-5:-1], ["-I", "-B", "-c", case.READONLY_PRELUDE])

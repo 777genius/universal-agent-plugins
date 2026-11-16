@@ -364,6 +364,84 @@ sys.stdin.read()
             self.assertEqual(case.inventory_rows({'rpc': state}, root, 'user'),
                              {row['root']: row['id'] for row in rows})
 
+    def authored_exchange(self, root, tail, *, expire_after_listing=False):
+        req, state = self.request(root), case.rpc_state()
+        first = dict(jsonrpc='2.0', id=1, result=dict(protocolVersion=1, _meta=dict(agentVersion='1.0.70')))
+        request = dict(jsonrpc='2.0', id=2, method='_x.ai/plugins/list',
+                       params=dict(sessionId='uap-admission-' + req['nonce'] + '-' + req['scope']))
+        body = b''.join(json.dumps(frame).encode() + b'\n' for frame in (first, *tail))
+        script = ('import json,os,sys\n'
+                  "assert json.loads(sys.stdin.readline()) == {'jsonrpc':'2.0','id':1,'method':'initialize',"
+                  "'params':{'protocolVersion':1,'clientCapabilities':{},'clientInfo':{'name':'uap-inventory-admission','version':'1'}}}\n"
+                  'os.write(1,' + repr(json.dumps(first).encode() + b'\n') + ')\n'
+                  'assert json.loads(sys.stdin.readline()) == ' + repr(request) + '\n'
+                  'os.write(1,' + repr(body.split(b'\n', 1)[1]) + ')\n'
+                  + ('sys.stdin.read()\n' if expire_after_listing else ''))
+        actual_popen, actual_time, children = subprocess.Popen, time.monotonic, []
+        deadline = actual_time() + 3
+        def launch(*args, **kwargs):
+            child = actual_popen(*args, **kwargs)
+            children.append(child)
+            return child
+        def now():
+            return deadline if expire_after_listing and state['plugins'] is not None else actual_time()
+        try:
+            with mock.patch.object(case.subprocess, 'Popen', side_effect=launch), mock.patch.object(case.time, 'monotonic', now):
+                record = case.command([sys.executable, '-I', '-c', script], 'acp', root,
+                                      {'PATH': os.defpath}, deadline, case.LIMIT, state, req,
+                                      expected_servers=case.startup_servers(root))
+        finally:
+            self.assertEqual(len(children), 1)
+            self.assertIsNotNone(children[0].returncode)
+            self.assertTrue(children[0].stdin.closed)
+            self.assertTrue(children[0].stdout.closed)
+        captured = base64.b64decode(record['merged_base64'], validate=True)
+        self.assertEqual(captured, body)
+        self.assertEqual(record['merged_bytes'], len(body))
+        self.assertEqual(record['merged_sha256'], case.digest(body))
+        return record, state
+
+    def test_authored_completion_accepts_original_list_first_order_and_notification_first(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = [plugin_row(root, 'user', name) for name in ('uap-acp-collision', 'uap-acp-foreign-user')]
+            listing = dict(jsonrpc='2.0', id=2, result=dict(result=dict(plugins=rows)))
+            notice = dict(jsonrpc='2.0', method='_x.ai/mcp/servers_updated',
+                          params=dict(mcpServers=list(case.startup_servers(root))))
+            # The 9fe original has initialize, list, then this exact authored
+            # notification. Both facts must arrive before PIPE termination.
+            for tail in ((listing, notice), (notice, listing)):
+                with self.subTest(order=tuple(frame.get('id', 'notification') for frame in tail)):
+                    record, state = self.authored_exchange(root, tail)
+                    self.assertIsNone(record['error'])
+                    self.assertEqual(state['plugins'], listing)
+                    self.assertEqual(state['notifications'], [notice])
+                    self.assertEqual(case.inventory_rows({'rpc': state}, root, 'user'),
+                                     {row['root']: row['id'] for row in rows})
+
+    def test_authored_completion_refuses_missing_foreign_second_or_extra_frames_with_original_budget(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            listing = dict(jsonrpc='2.0', id=2, result=dict(result=dict(plugins=[])))
+            notice = dict(jsonrpc='2.0', method='_x.ai/mcp/servers_updated',
+                          params=dict(mcpServers=list(case.startup_servers(root))))
+            foreign = copy.deepcopy(notice)
+            foreign['params']['mcpServers'][0]['args'][-1] = '/foreign/unexpected-startup'
+            unknown = dict(notice, method='_x.ai/mcp/unknown')
+            empty = dict(notice, params=dict(mcpServers=[]))
+            tails = ((listing,), (notice,), (notice, notice, listing), (listing, notice, notice),
+                     (listing, foreign), (foreign, listing), (listing, empty), (listing, unknown),
+                     (listing, listing, notice), (listing, notice, listing),
+                     (listing, notice, {'unexpected': True}))
+            for index, tail in enumerate(tails):
+                with self.subTest(variant=index):
+                    record, _ = self.authored_exchange(root, tail)
+                    self.assertEqual(record['error'], 'protocol-refused')
+            # The original absolute command deadline also bounds waiting for
+            # the missing notification, including final stream settlement.
+            with self.assertRaisesRegex(ValueError, 'drain-deadline'):
+                self.authored_exchange(root, (listing,), expire_after_listing=True)
+
     def test_help_requires_exact_native_pin_and_advertised_syntax(self):
         rows = help_rows()
         case.help_admitted(rows)
@@ -2698,11 +2776,13 @@ class ReadonlyInventoryContracts(unittest.TestCase):
             req['input_root'] = str(root)
             frames = [
                 dict(jsonrpc='2.0', id=1, result=dict(protocolVersion=1, _meta=dict(agentVersion='1.0.70'))),
-                dict(jsonrpc='2.0', id=2, result=dict(result=dict(plugins=[])))]
+                dict(jsonrpc='2.0', id=2, result=dict(result=dict(plugins=[]))),
+                dict(jsonrpc='2.0', method='_x.ai/mcp/servers_updated',
+                     params=dict(mcpServers=list(case.readonly_servers(req))))]
             script = ("import json,os,sys\nsys.stdin.readline()\n"
                       "os.write(2,b'warning on stderr\\n')\n"
                       "os.write(1," + repr(json.dumps(frames[0]).encode() + b'\n') + ")\n"
-                      "sys.stdin.readline()\nos.write(1," + repr(json.dumps(frames[1]).encode() + b'\n') + ")\n"
+                      "sys.stdin.readline()\nos.write(1," + repr(b''.join(json.dumps(frame).encode() + b'\n' for frame in frames[1:])) + ")\n"
                       "sys.stdin.read()\n")
             argv = [sys.executable, '-I', '-B', '-c', script]
             state = case.rpc_state()
@@ -2714,6 +2794,7 @@ class ReadonlyInventoryContracts(unittest.TestCase):
             self.assertEqual(raw['stdout'], b''.join(json.dumps(frame).encode() + b'\n' for frame in frames))
             self.assertEqual(row['wrapper_argv'], argv)
             self.assertEqual(state['plugins'], frames[1])
+            self.assertEqual(state['notifications'], [frames[2]])
 
     def test_actual_inert_child_rejects_post_completion_frame_without_losing_raw_bytes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -2773,6 +2854,23 @@ class ReadonlyInventoryContracts(unittest.TestCase):
         receipt.update(cleanup_complete=True, sealed_cleanup_complete=True, system_executables=systems, result=result)
         request = {key:value for key, value in req.items() if key not in ('input_root', 'parent_network_namespace', 'readonly')}
         return receipt, request, before
+
+    def test_readonly_receipt_completion_accepts_both_orders_but_not_missing_or_extra_notification(self):
+        original, request, _ = self.receipt()
+        native = original['result']['commands'][1]
+        frames = base64.b64decode(native['stdout_base64'], validate=True).splitlines(keepends=True)
+        for order in ((0, 1, 2), (0, 2, 1), (0, 2), (0, 1), (0, 1, 1, 2), (0, 2, 1, 1), (0, 2, 1, 2)):
+            changed = copy.deepcopy(original)
+            raw = b''.join(frames[index] for index in order)
+            changed['result']['commands'][1].update(stdout_base64=base64.b64encode(raw).decode(),
+                                                    stdout_bytes=len(raw), stdout_sha256=case.digest(raw))
+            with self.subTest(order=order):
+                if order in ((0, 1, 2), (0, 2, 1)):
+                    self.assertTrue(case.validate_readonly_receipt(changed, request)['semantic_complete'])
+                    self.assertEqual(changed['result']['rpc'], original['result']['rpc'])
+                else:
+                    with self.assertRaises(ValueError):
+                        case.validate_readonly_receipt(changed, request)
 
     def test_complete_receipt_replays_raw_stdout_and_requires_control_namespace_and_hash_joins(self):
         receipt, request, _ = self.receipt()

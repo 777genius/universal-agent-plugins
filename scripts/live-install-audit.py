@@ -170,9 +170,23 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
                 raise OSError("private output capture root unavailable")
             with (tempfile.TemporaryFile(mode="w+b", dir=scratch) as stdout_file,
                   tempfile.TemporaryFile(mode="w+b", dir=scratch) as stderr_file):
-                p = subprocess.run(argv, cwd=cwd, env=env, stdout=stdout_file,
-                                   stderr=stderr_file, stdin=subprocess.DEVNULL,
-                                   timeout=timeout, check=False)
+                try:
+                    p = subprocess.run(argv, cwd=cwd, env=env, stdout=stdout_file,
+                                       stderr=stderr_file, stdin=subprocess.DEVNULL,
+                                       timeout=timeout, check=False)
+                except subprocess.TimeoutExpired as error:
+                    # Retain only partial diagnostic tails while the private
+                    # files are open; a timeout cannot grant success authority.
+                    try:
+                        tails = []
+                        for stream in (stdout_file, stderr_file):
+                            stream.seek(0, os.SEEK_END)
+                            stream.seek(max(0, stream.tell() - 1800))
+                            tails.append(stream.read(1800).decode("utf-8", errors="replace"))
+                    except OSError:
+                        raise error
+                    return {"exit_code": None, "stdout_tail": tails[0],
+                            "stderr_tail": tails[1], "timeout": True, "_json": None}
                 stdout_file.seek(0)
                 stderr_file.seek(0)
                 limit = 1 << 20

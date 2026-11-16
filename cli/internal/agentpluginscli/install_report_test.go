@@ -4,12 +4,62 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
+
+func TestInstallYesDoesNotPromptToRetryDeclaredFailure(t *testing.T) {
+	client := fixtureClient(t, domain.ClientCodex)
+	client.ExecutablePath = filepath.Join(t.TempDir(), "codex")
+	runner := &cliRunOnlyRunner{}
+	commits := 0
+	fixture, _ := newDependencyHarness(t, "", []domain.DetectedClient{client}, installer.Config{
+		UserHome: t.TempDir(), Runner: runner,
+		OnCommittedBinding: func(context.Context, installer.BindingFacts) error {
+			commits++
+			return installer.ErrTargetFactsUnavailable
+		},
+	})
+	// Seed the normal immutable store and lock without acquiring or executing a source.
+	pin := seedDependencyCheckPackage(t, fixture, "demo", "")
+	writeDependencyCheckAgreement(t, fixture, []environment.LockedPackage{pin}, "demo")
+	fixture.app.SourceAcquirer = dependencyCheckForbiddenEffects{}
+	fixture.app.DirectoryClient = dependencyCheckForbiddenEffects{}
+	manifest, lock := fixture.app.dependencyPaths()
+	beforeManifest, beforeLock := dependencyRead(t, manifest), dependencyRead(t, lock)
+	prompts := 0
+	fixture.app.Prompter = fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+		prompts++
+		return prompt.ConfirmationResult{Accepted: false}, nil
+	}}
+	var stdout, stderr bytes.Buffer
+	fixture.app.Terminal = true
+	fixture.app.Output, fixture.app.ErrorOutput = &stdout, &stderr
+	command := NewRoot(fixture.app)
+	command.SetArgs([]string{"install", "--scope", "user", "--yes", "--format", "human"})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	err := command.ExecuteContext(ctx)
+	if !errors.Is(err, installer.ErrTargetFactsUnavailable) || commits != 1 {
+		t.Fatalf("declared install did not reach its original failed handoff: commits=%d err=%v\n%s\n%s", commits, err, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "Needs attention") || !describeSyncFailure(err).Retryable {
+		t.Fatalf("the actual failed binding must remain retryable and reported: %v\n%s", err, stdout.String())
+	}
+	if prompts != 0 || runner.calls != 0 || strings.Contains(stderr.String(), "Retrying") {
+		t.Fatalf("install --yes must return the failure without prompting or starting another effect: prompts=%d native=%d stderr=%q", prompts, runner.calls, stderr.String())
+	}
+	if dependencyRead(t, manifest) != beforeManifest || dependencyRead(t, lock) != beforeLock {
+		t.Fatal("failed install changed its reviewed manifest or package pin")
+	}
+}
 
 func failedItem(alias, client string, err error) agentItem {
 	outcome := environment.BindingOutcome{Status: environment.BindingFailed, Err: err}

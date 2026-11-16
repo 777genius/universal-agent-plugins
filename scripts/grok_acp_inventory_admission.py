@@ -424,7 +424,7 @@ def rpc_frame(value, state, req, send, *, expected_servers=()):
                 and value['params'] == {'mcpServers': list(expected_servers)}
                 and not state['notifications'], 'notification-refused')
         state['notifications'].append(value)
-        return False
+        return bool(expected_servers) and state['plugins'] is not None
     closed(value, 'jsonrpc id result')
     require(type(value['id']) is int, 'rpc-id')
     if state['initialize'] is None:
@@ -442,7 +442,9 @@ def rpc_frame(value, state, req, send, *, expected_servers=()):
     listing = closed(value['result']['result'], 'plugins')
     require(type(listing['plugins']) is list and len(listing['plugins']) <= 128, 'plugins-bound')
     state['plugins'] = value
-    return True
+    # An authored server requires both facts, in either arrival order. The
+    # caller still rejects every frame after this complete exchange.
+    return not expected_servers or bool(state['notifications'])
 
 
 def help_admitted(commands):

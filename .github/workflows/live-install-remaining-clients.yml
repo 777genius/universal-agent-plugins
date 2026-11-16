@@ -227,6 +227,14 @@ jobs:
               test "$(readlink -f "$executable")" = "$executable"
               ln -s "$executable" "$HOME/.local/bin/code"
             fi
+            if [[ "$TARGET" == cursor ]]; then
+              # The pinned .deb creates /usr/bin/cursor only during postinst.
+              # Select its extracted launcher without running package scripts.
+              executable="$RUNNER_TEMP/vendor-root/usr/share/cursor/bin/cursor"
+              test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+              test "$(readlink -f "$executable")" = "$executable"
+              ln -s "$executable" "$HOME/.local/bin/cursor"
+            fi
           elif [[ "$TARGET" == kiro ]]; then
             # This archive is verified above against the independently pinned
             # Homebrew Cask release, not a mutable vendor installer script.

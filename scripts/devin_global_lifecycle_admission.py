@@ -497,6 +497,7 @@ def capture_package(ctx, active, inventory, helper_pin):
 # original-profile writes return EROFS. It is not the production readonly port.
 READONLY_HEADER = b"uap-devin-readonly-viability-v1:"
 READONLY_CONTROL = ".uap-readonly-viability-control"
+READONLY_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt"
 READONLY_PRELUDE = r"""
 import errno, hashlib, json, os, sys
 raw = sys.argv[1]
@@ -606,6 +607,43 @@ def readonly_policy(ctx):
     return metadata
 
 
+def readonly_ca_bundle(ctx):
+    """Measure the fixed Ubuntu trust bundle without admitting any other /etc file."""
+    parents = {}
+    for value in ("/etc", "/etc/ssl", "/etc/ssl/certs"):
+        ctx.budget.check()
+        parent = Path(value)
+        info = parent.lstat()
+        base.require(stat.S_ISDIR(info.st_mode) and (info.st_uid, info.st_gid) == (0, 0)
+                     and not stat.S_IMODE(info.st_mode) & 0o6022, "readonly viability CA parent authority")
+        parents[str(parent)] = installer_metadata(info)
+    path = Path(READONLY_CA_BUNDLE)
+    before = path.lstat()
+    base.require(path.resolve(strict=True) == path and stat.S_ISREG(before.st_mode)
+                 and stat.S_IMODE(before.st_mode) == 0o644
+                 and (before.st_uid, before.st_gid, before.st_nlink) == (0, 0, 1)
+                 and 0 < before.st_size <= 1 << 20, "readonly viability CA bundle authority")
+    fd = base.shared.artifacts.open_member(path)
+    try:
+        metadata = installer_metadata(before)
+        base.require(installer_metadata(os.fstat(fd)) == metadata, "readonly viability CA bundle replaced")
+        body = bytearray()
+        while len(body) <= before.st_size:
+            ctx.budget.check()
+            chunk = os.read(fd, min(65536, before.st_size + 1 - len(body)))
+            if not chunk:
+                break
+            body.extend(chunk)
+        base.require(len(body) == before.st_size
+                     and installer_metadata(os.fstat(fd)) == metadata
+                     and installer_metadata(path.lstat()) == metadata
+                     and all(installer_metadata(Path(name).lstat()) == original for name, original in parents.items()),
+                     "readonly viability CA bundle changed")
+        return {"file": metadata, "sha256": sha(body), "parents": parents}
+    finally:
+        os.close(fd)
+
+
 def readonly_system(ctx):
     """Pin only the fixed ordinary root-owned measurement tools and roots."""
     result = {}
@@ -641,6 +679,7 @@ def readonly_system(ctx):
         metadata = {}
         result[str(path)] = (installer_pin(path, ctx.budget, owner=(0, 0), metadata=metadata), metadata)
     result["/etc/apparmor.d/bwrap-userns-restrict"] = readonly_policy(ctx)
+    result[READONLY_CA_BUNDLE] = readonly_ca_bundle(ctx)
     return result
 
 
@@ -711,7 +750,7 @@ def readonly_arguments(ctx, arguments, before, old, directories):
     argv = ["/usr/bin/bwrap", "--unshare-user", "--uid", str(request["uid"]), "--gid", str(request["gid"]),
             "--unshare-pid", "--unshare-net", "--unshare-ipc", "--unshare-uts", "--disable-userns",
             "--die-with-parent", "--new-session", "--cap-drop", "ALL", "--tmpfs", "/"]
-    for path in ("/usr", "/bin", "/lib", "/lib64", str(ctx.root)):
+    for path in ("/usr", "/bin", "/lib", "/lib64", str(ctx.root), READONLY_CA_BUNDLE):
         argv.extend(("--ro-bind", path, path))
     argv.extend(("--proc", "/proc", "--remount-ro", "/proc", "--dev", "/dev"))
     for name in ("null", "zero", "full", "random", "urandom", "tty", "pts"):
