@@ -145,7 +145,7 @@ class NativeMatrixTests(unittest.TestCase):
 
     def test_browser_skills_requires_the_exact_current_source_dual_client_lane(self):
         _, required = matrix.select_native_tests("codex", project_components=True)
-        matrix.validate_browser_skills("codex", "linux-amd64", True, False, required)
+        matrix.browser_native_tests("codex", "linux-amd64", True, False, required)
         for client, target, project, released, selected in [
             ("claude", "linux-amd64", True, False, required),
             ("opencode", "linux-amd64", True, False, required),
@@ -157,7 +157,7 @@ class NativeMatrixTests(unittest.TestCase):
         ]:
             with self.subTest(client=client, target=target, project=project, released=released, selected=selected):
                 with self.assertRaises(ValueError):
-                    matrix.validate_browser_skills(client, target, project, released, selected)
+                    matrix.browser_native_tests(client, target, project, released, selected)
 
     def test_browser_tools_reject_non_disposable_execution_before_lookup(self):
         for env in [{}, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "self-hosted",
@@ -166,6 +166,22 @@ class NativeMatrixTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     matrix.browser_runtime_environment(Path("/unused"))
                 lookup.assert_not_called()
+
+    def test_browser_requires_both_native_lifecycles_without_widening_other_lanes(self):
+        _, ordinary = matrix.select_native_tests("codex", project_components=True)
+        self.assertNotIn(matrix.BROWSER_PROJECT_TEST, ordinary)
+        pattern, required = matrix.browser_native_tests("codex", "linux-amd64", True, False, ordinary)
+        self.assertEqual(required, ordinary | {matrix.BROWSER_PROJECT_TEST})
+        self.assertNotIn(matrix.BROWSER_PROJECT_TEST, ordinary)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
+        self.assertNotIn(matrix.BROWSER_PROJECT_TEST, released.CLIENT_TESTS["codex"])
+        with self.assertRaises(ValueError):
+            matrix.browser_native_tests("codex", "darwin-arm64", True, False, ordinary)
+        with self.assertRaises(ValueError):
+            matrix.browser_native_tests("codex", "linux-amd64", True, True, ordinary)
 
     def test_source_project_proof_selects_exact_required_codex_tests(self):
         pattern, required = matrix.select_native_tests("codex", project_components=True)

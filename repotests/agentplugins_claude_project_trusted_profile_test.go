@@ -18,8 +18,9 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
-// Native first-start metadata belongs to fixture setup. There is exactly one
-// baseline, before public UAP; every later command keeps the whole-byte guard.
+// Native first-start metadata belongs to fixture setup. Its baseline precedes
+// public UAP. Trusted MCP sessions separately pin their post-session profile;
+// only scoped removal permits the exact owned usage-entry transition.
 func claudeTrustedInitializeProfile(t *testing.T, f *claudeProjectNativeFixture, authored []byte) {
 	t.Helper()
 	// Listing alone leaves userID uninitialized. The native SDK creates it
@@ -136,8 +137,15 @@ func validateClaudeTrustedProfile(body []byte, projects ...string) error {
 	return nil
 }
 
-func claudeTrustedRemoveWithProfileDiagnostic(t *testing.T, f *claudeProjectNativeFixture, c commandsNativeClient, before []byte, physical string) {
+func claudeTrustedRemoveWithProfileDiagnostic(t *testing.T, f *claudeProjectNativeFixture, before []byte, managed, label string) {
 	t.Helper()
+	if label != "trusted-foreign-mcp-remove" && label != "managed-mcp-remove" {
+		t.Fatal("owned usage removal is limited to the two selected native cases")
+	}
+	nativeRequireContained(t, f.project, managed)
+	if filepath.Dir(managed) != filepath.Join(f.project, ".claude", "skills") {
+		t.Fatal("trusted removal does not identify the installed project package")
+	}
 	nativeWrite(t, filepath.Join(f.base.Root, "trusted-mcp-profile-before-remove.json"), before, 0600)
 	wasFailed := t.Failed()
 	defer func() {
@@ -145,15 +153,13 @@ func claudeTrustedRemoveWithProfileDiagnostic(t *testing.T, f *claudeProjectNati
 			claudeTrustedRemovalProfileDiagnostic(t, f, before)
 		}
 	}()
-	removal, err := claudeTrustedRemovalFixture(f, before, physical)
+	removal, err := claudeTrustedRemovalFixture(f, before, filepath.Base(managed))
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Bind only this fixed removal to the scoped copy; f.run keeps its original
-	// pre-remove snapshot, captured command, error, and foreign-file checks.
-	c.run = removal.run
-	c.succeed(t, "trusted-foreign-mcp-remove", "remove", commandsPluginName)
-	removal.requireForeign(t)
+	// The copied controller retains the original profile bytes and hash map.
+	// Its unchanged run method checks them before any post-remove native read.
+	claudeTrustedRemoveOwnedPlugin(t, removal, before, managed, label)
 }
 
 func claudeTrustedRemovalProfileDiagnostic(t *testing.T, f *claudeProjectNativeFixture, before []byte) {
@@ -356,7 +362,7 @@ func claudeOwnedUsageForeignFields(before, after []byte, pluginID string) error 
 	if !exists || right[pluginID] != nil {
 		return fmt.Errorf("owned usage removal did not delete only the selected entry")
 	}
-	if _, err := claudeProfileDiagnosticObject(owned); err != nil {
+	if err := validateClaudeOwnedUsageEntry(owned); err != nil {
 		return err
 	}
 	l, err := claudeProfileMemberSpans(before)

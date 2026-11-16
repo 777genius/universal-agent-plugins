@@ -20,6 +20,15 @@ func (e *Engine) VerifyPreparedBinding(ctx context.Context, prepared *PreparedOp
 	})
 }
 
+// VerifyPreparedMaterialization proves complete owned installation for final
+// recovery settlement. A freshly verified prepared setup may be coherent while
+// native activation remains unobserved. This must not qualify runtime readiness.
+func (e *Engine) VerifyPreparedMaterialization(ctx context.Context, prepared *PreparedOperation) (bool, error) {
+	return e.observePreparedBinding(ctx, prepared, func(observation preparedBindingObservation) (bool, error) {
+		return observation.service.InspectOwnedMaterialization(ctx, observation.input, observation.plan, observation.installation, observation.binding)
+	})
+}
+
 // VerifyPreparedProjection admits only a current receipt-bound projection. It
 // does not qualify native activation, authentication or model availability.
 func (e *Engine) VerifyPreparedProjection(ctx context.Context, prepared *PreparedOperation) (bool, error) {

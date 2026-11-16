@@ -107,6 +107,25 @@ class InstallationTests(unittest.TestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'posix', 'pipe capture is Unix only')
+    def test_drain_consumes_all_pending_output(self):
+        master, writer = os.pipe()
+        self.addCleanup(os.close, master)
+        self.addCleanup(os.close, writer)
+        session = Keyboard.__new__(Keyboard)
+        session.master = master
+        session.read_chunk = 3
+        session.timeout = 2
+        session.raw = bytearray()
+        session.screen = Screen()
+        output = b'first\r\nlast\x1b[?25h'
+        os.write(writer, output)
+        session.drain()
+        self.assertEqual(bytes(session.raw), output)
+        self.assertIn('last', session.screen.snapshot())
+        self.assertFalse(session.pump(0))
+
+
     def test_inherited_drain_reads_every_ready_chunk_until_empty(self):
         for chunks in ((b'line_probe\r\n', b'RESTORE_OK_probe\r\n'), ()):
             with self.subTest(chunks=chunks):

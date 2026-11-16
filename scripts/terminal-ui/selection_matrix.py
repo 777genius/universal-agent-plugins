@@ -284,11 +284,9 @@ def run_case(name, binary, evidence, timeout):
                     elif name == 'native-ownership':
                         offset = len(session.raw)
                         session.send(b'\r')
-                        session.wait(r'Retry failed agents\? Enter retries the selected ones, Esc skips',
-                                     'native-ownership-retry', after=offset)
-                        fixture.unchanged()
-                        session.send(b'\x1b')
                         session.finish(1)
+                        check(not re.search(r'Retry [^\r\n]*\?', clean(session.raw[offset:])),
+                              'native ownership preflight offered an immediate retry')
                         check('observe native identity for codex' in clean(session.raw),
                               'native ownership failure diagnostic missing')
                         fixture.unchanged()

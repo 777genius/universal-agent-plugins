@@ -34,8 +34,14 @@ def main():
     env["UAP_BROWSER_PRIVATE_URL"] = str(private / "url")
     evidence = root / "browser-terminal"
     evidence.mkdir(mode=0o700)
-    session = Session([str(installer), "skills", "add",
-                       env["AGENTPLUGINS_NATIVE_BROWSER_SKILL_SOURCE"], "--ui", "--scope", "user"],
+    scenario = env.get("AGENTPLUGINS_NATIVE_BROWSER_SCENARIO", "user-benchmark")
+    check(scenario in ("user-benchmark", "project-anthropic"), "unknown browser/native scenario")
+    arguments = [str(installer), "skills", "add",
+                 env["AGENTPLUGINS_NATIVE_BROWSER_SKILL_SOURCE"], "--ui", "--scope",
+                 "project" if scenario == "project-anthropic" else "user"]
+    if scenario == "project-anthropic":
+        arguments += ["--project-root", str(project)]
+    session = Session(arguments,
                       SimpleNamespace(project=project, env=env), evidence, timeout=30, rows=35, cols=120)
 
     def interrupt(_number, _frame):

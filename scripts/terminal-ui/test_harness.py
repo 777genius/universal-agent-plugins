@@ -134,6 +134,11 @@ class ScreenTests(unittest.TestCase):
         screen.feed(b'first\r\nold\x1b[1A\r\x1b[2Kupdated')
         self.assertEqual(screen.snapshot(), 'updated\nold\n')
 
+    def test_soft_wrap_scrolls_at_bottom(self):
+        screen = h.Screen(3, 5)
+        screen.feed(b'1234567890ABCDEf')
+        self.assertEqual(screen.snapshot(), '67890\nABCDE\nf\n')
+
 
 @unittest.skipUnless(os.name == 'posix', 'Unix PTY only')
 class SessionTests(unittest.TestCase):

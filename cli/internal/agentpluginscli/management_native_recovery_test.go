@@ -42,6 +42,21 @@ func TestManagementRecoveryRequiresCompleteNativeProjectionAndReviewedRepair(t *
 	if coherent, _, err := backend.managementRecoveryCoherent(t.Context(), backend.app); err != nil || !coherent {
 		t.Fatalf("fresh intact native environment was not coherent: %v, %v", coherent, err)
 	}
+	// Materialization may settle without starting MCP. A new recovery review
+	// still requires explicit acceptance before fresh native startup verification.
+	stateBeforePreview, err := backend.app.StateStore.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview := managementPrepare(t, backend, management.ChangeRequest{Action: management.Recover})
+	if len(preview.Review().Actions) != 1 || preview.Review().Actions[0].Action != "repair" {
+		t.Fatal("materialization proof bypassed reviewed native setup", preview.Review())
+	}
+	preview.Close() // Declining the review must not promote stored readiness.
+	stateAfterPreview, err := backend.app.StateStore.Load()
+	if err != nil || !reflect.DeepEqual(stateBeforePreview, stateAfterPreview) {
+		t.Fatal("declined native setup review changed saved facts", err)
+	}
 	for _, surface := range []string{"one_of_two_skills", "native_config_entry"} {
 		t.Run(surface, func(t *testing.T) {
 			if surface == "one_of_two_skills" {

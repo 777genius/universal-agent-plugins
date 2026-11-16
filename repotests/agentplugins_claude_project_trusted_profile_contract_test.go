@@ -170,7 +170,7 @@ func TestClaudeOwnedUsageRemovalPreservesExactForeignData(t *testing.T) {
 
 func TestClaudeOwnedUsageRemovalRejectsForeignChanges(t *testing.T) {
 	const id = "uap-commands-fixture@agentplugins-6919c38313b8"
-	const owned = `"` + id + `":{"usageCount":0}`
+	const owned = `"` + id + `":{"usageCount":0,"lastUsedAt":1794794500941,"lastUsedNumStartups":0}`
 	const sibling = `"foreign@market": { "usageCount" : 7 }`
 	const tail = `,"foreign":{ "large":9007199254740993 },"projects":{"/A":{"hasTrustDialogAccepted":true}}}`
 	const before = `{"pluginUsage":{` + owned + `,` + sibling + `}` + tail
@@ -188,7 +188,7 @@ func TestClaudeOwnedUsageRemovalRejectsForeignChanges(t *testing.T) {
 		{"outer-bytes-reformatted", before, " " + after},
 		{"whole-usage-removed", before, `{` + strings.TrimPrefix(tail, ",")},
 		{"owned-modified", before, strings.Replace(before, `"usageCount":0`, `"usageCount":1`, 1)},
-		{"owned-scalar", strings.Replace(before, `{"usageCount":0}`, `0`, 1), after},
+		{"owned-scalar", strings.Replace(before, `{"usageCount":0,"lastUsedAt":1794794500941,"lastUsedNumStartups":0}`, `0`, 1), after},
 		{"unowned-before", strings.Replace(before, id, "another@market", 1), after},
 		{"duplicate-owned", strings.Replace(before, owned, owned+","+owned, 1), after},
 		{"duplicate-profile", before, strings.Replace(after, `"pluginUsage":`, `"pluginUsage":{},"pluginUsage":`, 1)},
@@ -279,7 +279,7 @@ func claudeOwnedUsageContractFixture(t *testing.T) (*claudeProjectNativeFixture,
 	}
 	const physical = "uap-commands-fixture-owned"
 	id := commandsPluginName + "@" + claude.ProjectMarketplaceName(physical, f.project)
-	before := []byte(fmt.Sprintf(`{"foreign":{"bytes":"retained"},"pluginUsage":{%q:{"usageCount":0}}}`, id))
+	before := []byte(fmt.Sprintf(`{"foreign":{"bytes":"retained"},"pluginUsage":{%q:{"usageCount":0,"lastUsedAt":1794794500941,"lastUsedNumStartups":0}}}`, id))
 	after := []byte(`{"foreign":{"bytes":"retained"},"pluginUsage":{}}`)
 	f.keep(t, filepath.Join(f.base.ConfigDir, ".claude.json"), string(before))
 	f.keep(t, filepath.Join(f.project, ".claude", "settings.json"), `{"enabledPlugins":{"foreign-project-fixture@skills-dir":false}}`)

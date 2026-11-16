@@ -13,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
@@ -113,6 +114,11 @@ func failedAgents(reports []agentReport) []agentReport {
 func retryableAgents(reports []agentReport) []agentReport {
 	var retryable []agentReport
 	for _, report := range reports {
+		for _, problem := range report.Problems {
+			if problem.Failure.Kind == failureProcessCleanup {
+				return nil // The whole run must wait for process cleanup.
+			}
+		}
 		if report.Retryable() {
 			retryable = append(retryable, report)
 		}
@@ -292,48 +298,12 @@ func groupFailure(target addTargetResult, kind failureKind) *installFailure {
 		if batchFailureNeedsDoctor(target) {
 			failure.Kind = failureRecovery
 		}
+		if target.Error.Stage == "cleanup" {
+			failure.Kind = failureProcessCleanup
+		}
 	}
 	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
 	return &failure
-}
-
-// retryFailedAgents offers to run the same command again for only the agents
-// that failed and a retry can help. It never runs without a person present. The
-// retried command resolves its source exactly as typing it again would and
-// repeats its normal review and confirmation.
-//
-// A retry can fix only part of a run, so the result stays an error while any
-// agent from an earlier attempt is still unresolved (not retryable, or
-// deselected): success of the last attempt alone must not turn into exit 0.
-func retryFailedAgents(cmd *cobra.Command, app App, opts *options, err error, rerun func(target string, unresolved []string) error) error {
-	if err == nil || domain.IsUnclosedClientProbe(err) || !app.Terminal || opts.format != "human" || opts.yes || opts.dryRun ||
-		opts.retryAttempt >= maxSkillsRetries || cmd.Context().Err() != nil || opts.installResult == nil {
-		return err
-	}
-	targets, askErr := askRetryTargets(cmd, app, opts, opts.installResult.Agents)
-	if askErr != nil || len(targets) == 0 {
-		return err
-	}
-	public := make([]string, len(targets))
-	selected := make(map[domain.ClientID]bool, len(targets))
-	for index, target := range targets {
-		public[index] = publicCLITargetName(domain.ClientID(target))
-		selected[domain.ClientID(target)] = true
-	}
-	pending := append([]string(nil), opts.unresolved...)
-	for _, report := range failedAgents(opts.installResult.Agents) {
-		if !selected[report.ClientID] {
-			pending = append(pending, report.Label)
-		}
-	}
-	if _, writeErr := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(targets)); writeErr != nil {
-		return writeErr
-	}
-	rerr := rerun(strings.Join(public, ","), pending)
-	if rerr == nil && len(pending) > 0 {
-		return fmt.Errorf("%s still need attention; see the technical log", strings.Join(pending, ", "))
-	}
-	return rerr
 }
 
 // recordGroupOutcome stores a plugin group's per-agent result for the retry
@@ -360,19 +330,42 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 				item.failure.Detail = detail + "\n" + item.failure.Detail
 			}
 			target := &combined.Targets[index]
-			target.Error = &usecase.GroupTargetFailure{Stage: "cleanup", Message: item.failure.Summary}
+			target.Error = &usecase.GroupTargetFailure{Stage: "cleanup", Message: item.failure.Summary + " " + item.failure.Next}
 			target.Output.Result.Failure = target.Error
 			target.RetryCommand = ""
 			target.NextAction = item.failure.Next
 			target.Output.NextAction = item.failure.Next
 		}
+		cause = installFailureWithCause{summary: describeSyncFailure(cause).Summary, cause: cause}
+	}
+	// A group refused before any client was touched has nothing to retry: the
+	// same preflight would refuse again, and the person is told why already.
+	switch combined.Status {
+	case string(usecase.GroupPhasePlanned), string(usecase.GroupPhasePreparationFailed):
+		return cause
 	}
 	outcome := app.finishInstall(opts, "add", items)
 	if outcome.LogFile != "" && opts.format == "human" {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))
 	}
-	if unclosed {
-		return installFailureWithCause{summary: describeSyncFailure(cause).Summary, cause: cause}
-	}
 	return cause
+}
+
+// repairOwnedDependencies repairs one owned installation and, in an interactive
+// terminal, offers to run the repair again when some agents failed. Each run
+// plans from current state, so a retry never replays stale actions.
+func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
+	var handled bool
+	var run func() error
+	run = func() error {
+		opts.installResult = nil
+		attemptHandled, err := repairOwnedDependenciesOnce(cmd, app, opts, selector, targets)
+		if handled && !attemptHandled && err == nil {
+			return installer.ErrPlanChanged
+		}
+		handled = handled || attemptHandled
+		return retryConverge(cmd, app, opts, err, run)
+	}
+	err := run()
+	return handled, err
 }

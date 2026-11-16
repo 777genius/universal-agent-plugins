@@ -143,6 +143,261 @@ class RemotionRepeatNativePhaseTest(unittest.TestCase):
         self.assertFalse(evidence["repeat_native_unchanged"])
 
 
+
+class CodexTemporaryGitStateTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="codex-git-audit-inert-")
+        self.addCleanup(self.temporary.cleanup)
+        self.profile = Path(self.temporary.name).resolve() / ".codex"
+        self.profile.mkdir()
+        self.root = self.profile / ".tmp"
+        self.root.mkdir()
+        self.snapshot = run_path(str(Path(__file__).with_name("live-install-audit.py")))["snapshot"]
+
+    def repository(self, name="git-Abc123", directories=True):
+        path = self.root / name
+        path.mkdir()
+        (path / "HEAD").write_bytes(audit.TEMPORARY_GIT_HEAD)
+        if directories:
+            (path / "objects").mkdir()
+            (path / "refs").mkdir()
+        return path
+
+    def test_only_new_exact_empty_native_repositories_qualify(self):
+        self.repository()
+        previous = audit._temporary_git_state(self.profile)
+        before = self.snapshot([self.profile])
+        self.repository("git-Def456", directories=False)
+        after = self.snapshot([self.profile])
+        self.assertNotEqual(before, after, "raw native mutation must stay visible")
+        self.assertTrue(audit._repeat_temporary_git_only(self.profile, before, after, previous))
+        self.assertFalse(audit._repeat_temporary_git_only(self.profile, after, after,
+                                                       audit._temporary_git_state(self.profile)))
+        for path, value in (("config.toml", "foreign configuration"),
+                            ("skills/foreign/SKILL.md", "foreign Skill")):
+            file = self.profile / path
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text(value)
+            self.assertFalse(audit._repeat_temporary_git_only(
+                self.profile, before, self.snapshot([self.profile]), previous))
+            file.unlink()
+
+    def test_unqualified_names_report_bounded_escaped_listing_evidence(self):
+        # Invalid/control names are listing inputs, never platform-specific files.
+        names = ("foreign", "git-abc", "git-1234567", "git-Abc12_",
+                 "git-\x00\n\r\t\x1b", "git-\ud800", "git-" + "\U0001f642" * 80)
+        for name in names:
+            with self.subTest(name=ascii(name)), patch.object(
+                    audit, "_bounded_member_names", return_value=[name]):
+                with self.assertRaises(ValueError) as caught:
+                    audit._temporary_git_state(self.profile)
+                message = str(caught.exception)
+                self.assertTrue(message.startswith("Codex temporary Git directory name is not qualified; "))
+                self.assertIn("checkpoint='direct-scan'", message)
+                self.assertIn("basename=" + ascii(name[:64]), message)
+                self.assertIn(f"basename_chars={len(name)}", message)
+                self.assertIn(f"basename_truncated={len(name) > 64}", message)
+                self.assertTrue(message.isascii())
+                self.assertTrue(all(32 <= ord(character) < 127 for character in message))
+                self.assertLess(len(message), 1200)
+                self.assertNotIn(str(self.profile), message)
+        # Both independently bounded fields remain below the wrapper's 1800 cap.
+        diagnostic = audit._temporary_git_name_diagnostic("\U0001f642" * 1000, "\U0001f642" * 1000)
+        self.assertLess(len(diagnostic), 1200)
+        self.assertIn("basename_chars=1000", diagnostic)
+        self.assertIn("basename_truncated=True", diagnostic)
+
+    def test_existing_repository_removal_or_replacement_does_not_qualify(self):
+        original = self.repository()
+        previous = audit._temporary_git_state(self.profile)
+        before = self.snapshot([self.profile])
+        self.repository("git-Def456")
+        retired = self.profile / "retired"
+        original.rename(retired)
+        self.assertFalse(audit._repeat_temporary_git_only(
+            self.profile, before, self.snapshot([self.profile]), previous))
+        self.repository()
+        self.assertFalse(audit._repeat_temporary_git_only(
+            self.profile, before, self.snapshot([self.profile]), previous))
+
+    def test_pinned_sync_lock_stays_outside_the_allowed_repeat_delta(self):
+        lock = self.root / "plugins.sync.lock"
+        lock.touch()
+        self.repository()
+        previous = audit._temporary_git_state(self.profile)
+        before = self.snapshot([self.profile])
+        self.repository("git-Def456")
+        self.assertTrue(audit._repeat_temporary_git_only(
+            self.profile, before, self.snapshot([self.profile]), previous))
+        self.assertNotIn(f"{self.profile.name}/{lock.relative_to(self.profile)}", previous[0])
+
+        lock.rename(self.profile.parent / "retained-lock")
+        self.assertFalse(audit._repeat_temporary_git_only(
+            self.profile, before, self.snapshot([self.profile]), previous))
+        lock.touch()
+        after = self.snapshot([self.profile])
+        lock_key = f"{self.profile.name}/{lock.relative_to(self.profile)}"
+        self.assertEqual(before[lock_key], after[lock_key], "replacement retains the same raw bytes")
+        self.assertFalse(audit._repeat_temporary_git_only(
+            self.profile, before, after, previous))
+
+    def test_sync_lock_must_be_empty_regular_and_exclusively_linked(self):
+        lock = self.root / "plugins.sync.lock"
+        lock.write_bytes(b"unexpected native state")
+        with self.assertRaises(ValueError):
+            audit._temporary_git_state(self.profile)
+        lock.unlink()
+        lock.mkdir()
+        with self.assertRaises(ValueError):
+            audit._temporary_git_state(self.profile)
+        lock.rmdir()
+        foreign = self.profile / "foreign-lock"
+        foreign.touch()
+        os.link(foreign, lock)
+        with self.assertRaisesRegex(ValueError, "exclusively linked"):
+            audit._temporary_git_state(self.profile)
+        lock.unlink()
+        # Exercise unsafe metadata even when Windows cannot create a symlink.
+        lock.touch()
+        original_lstat = Path.lstat
+        info = lock.lstat()
+        marked = SimpleNamespace(**{name: getattr(info, name) for name in dir(info) if name.startswith("st_")})
+        marked.st_mode = stat.S_IFLNK | stat.S_IMODE(info.st_mode)
+        marked.st_file_attributes = getattr(info, "st_file_attributes", 0) | 0x400
+
+        def redirected(path):
+            return marked if path == lock else original_lstat(path)
+
+        with patch.object(Path, "lstat", redirected), patch.dict(
+                audit._FILES, {"open_member": lambda path: self.fail("redirected lock must not be opened")}):
+            with self.assertRaisesRegex(ValueError, "regular"):
+                audit._temporary_git_state(self.profile)
+        lock.unlink()
+        try:
+            lock.symlink_to(foreign)
+        except OSError as error:
+            if os.name != "nt" or getattr(error, "winerror", None) != 1314:
+                raise
+            return  # The deterministic metadata rejection above still ran.
+        with self.assertRaises(ValueError):
+            audit._temporary_git_state(self.profile)
+
+    def test_new_sync_lock_is_not_a_qualified_repeat_addition(self):
+        self.repository()
+        previous = audit._temporary_git_state(self.profile)
+        before = self.snapshot([self.profile])
+        self.repository("git-Def456")
+        (self.root / "plugins.sync.lock").touch()
+        self.assertFalse(audit._repeat_temporary_git_only(
+            self.profile, before, self.snapshot([self.profile]), previous))
+
+    def test_sync_lock_added_after_raw_repeat_snapshot_is_refused(self):
+        self.repository()
+        previous = audit._temporary_git_state(self.profile)
+        before = self.snapshot([self.profile])
+        self.repository("git-Def456")
+        after = self.snapshot([self.profile])
+        lock = self.root / "plugins.sync.lock"
+        lock.touch()
+        lock_key = f"{self.profile.name}/{lock.relative_to(self.profile)}"
+        self.assertNotIn(lock_key, before)
+        self.assertNotIn(lock_key, after)
+        self.assertFalse(audit._repeat_temporary_git_only(self.profile, before, after, previous))
+
+    def test_unrecognized_names_members_and_head_bytes_fail(self):
+        for name in ("foreign", "git-abc", "git-1234567"):
+            path = self.repository(name)
+            with self.assertRaisesRegex(ValueError, "directory name"):
+                audit._temporary_git_state(self.profile)
+            shutil.rmtree(path)
+        path = self.repository()
+        for name in ("config", "objects/object", "refs/heads/main"):
+            member = path / name
+            member.parent.mkdir(parents=True, exist_ok=True)
+            member.write_bytes(b"foreign repository data")
+            with self.assertRaises(ValueError):
+                audit._temporary_git_state(self.profile)
+            if name.startswith("refs/"):
+                shutil.rmtree(path / "refs" / "heads")
+            else:
+                member.unlink()
+        for body in (b"ref: refs/heads/other\n", b"ref: refs/heads/main\r\n", b"", b"x" * 4096):
+            (path / "HEAD").write_bytes(body)
+            with self.assertRaises(ValueError):
+                audit._temporary_git_state(self.profile)
+
+    def test_symlinks_and_hardlinked_heads_fail(self):
+        path = self.repository()
+        foreign = self.profile / "foreign"
+        foreign.write_bytes(audit.TEMPORARY_GIT_HEAD)
+        (path / "HEAD").unlink()
+        os.link(foreign, path / "HEAD")
+        with self.assertRaisesRegex(ValueError, "exclusively linked"):
+            audit._temporary_git_state(self.profile)
+        (path / "HEAD").unlink()
+        try:
+            (path / "HEAD").symlink_to(foreign)
+        except OSError as error:
+            if os.name == "nt":
+                self.skipTest(f"Windows symlink privilege unavailable: {error}")
+            raise
+        with self.assertRaises(ValueError):
+            audit._temporary_git_state(self.profile)
+
+    def test_unreadable_or_replaced_namespace_is_refused(self):
+        path = self.repository()
+        original_scandir = os.scandir
+        def unreadable(member):
+            if Path(member) == path / "refs":
+                raise PermissionError("injected native scratch enumeration error")
+            return original_scandir(member)
+        with patch.object(os, "scandir", unreadable):
+            with self.assertRaises(PermissionError):
+                audit._temporary_git_state(self.profile)
+        read = audit._regular_bytes
+        def replaced(member, limit):
+            body = read(member, limit)
+            if member == path / "HEAD":
+                path.rename(self.profile / "retained-original")
+                self.repository()
+            return body
+        with patch.object(audit, "_regular_bytes", replaced):
+            with self.assertRaisesRegex(ValueError, "changed during inspection"):
+                audit._temporary_git_state(self.profile)
+
+    def test_member_added_after_last_enumeration_is_refused(self):
+        self.repository()
+        previous = audit._temporary_git_state(self.profile)
+        before = self.snapshot([self.profile])
+        added = self.repository("git-Def456")
+        after = self.snapshot([self.profile])
+        original = audit._bounded_member_names
+        calls = 0
+
+        def late_member(path, limit):
+            nonlocal calls
+            names = original(path, limit)
+            if path == added:
+                calls += 1
+                if calls == 2:
+                    (path / "config").write_bytes(b"[inert]\nforeign=true\n")
+            return names
+
+        with patch.object(audit, "_bounded_member_names", side_effect=late_member):
+            with self.assertRaisesRegex(ValueError, "changed during inspection"):
+                audit._repeat_temporary_git_only(self.profile, before, after, previous)
+        self.assertEqual(calls, 2)
+        self.assertTrue((added / "config").is_file())
+        self.assertNotEqual(self.snapshot([self.profile]), after)
+
+    def test_repository_count_is_bounded(self):
+        self.repository()
+        self.repository("git-Def456")
+        with patch.object(audit, "TEMPORARY_GIT_LIMIT", 1):
+            with self.assertRaisesRegex(ValueError, "member count"):
+                audit._temporary_git_state(self.profile)
+
+
 class CodexRuntimeStateTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -439,6 +694,48 @@ class CodexSkillProfileGuardTest(unittest.TestCase):
                             and row["runtime_integrity_verified"] and row["runtime_semantics_unchanged"]
                             and set(row["runtime_files_fully_read"]) == {"state_5.sqlite"}
                             for row in observations))
+
+    def test_temporary_git_name_refusal_keeps_actual_checkpoint_and_baseline(self):
+        rejected = self.profile / ".tmp" / "unqualified"
+        rejected.mkdir(parents=True)
+        baseline = copy.deepcopy(self.observer.baseline)
+        observations = copy.deepcopy(self.observer.observations)
+        for phase, present in (("before-install", False), ("installed", True),
+                               ("repeat-installed", True), ("removed", False)):
+            with self.subTest(phase=phase):
+                if present:
+                    self.selected.parent.mkdir(exist_ok=True)
+                    self.selected.write_text("inert selected Skill\n", encoding="utf-8")
+                elif self.selected.exists():
+                    self.selected.unlink()
+                calls = self.exchange.call_count
+                with self.assertRaises(ValueError) as caught:
+                    self.observer.checkpoint(phase, present)
+                self.assertIn("checkpoint=" + ascii(phase), str(caught.exception))
+                self.assertIn("basename='unqualified'", str(caught.exception))
+                self.assertEqual(self.exchange.call_count, calls + 1)
+                self.assertEqual(self.observer.baseline, baseline)
+                self.assertEqual(self.observer.observations, observations)
+                self.assertEqual(self.observer.config.read_bytes(), self.original)
+                self.assertEqual(self.foreign.read_text(encoding="utf-8"), "independently owned fixture\n")
+
+    def test_temporary_git_repeat_refusals_keep_context_without_another_exchange(self):
+        rejected = self.profile / ".tmp" / "unqualified"
+        rejected.mkdir(parents=True)
+        baseline = copy.deepcopy(self.observer.baseline)
+        observations = copy.deepcopy(self.observer.observations)
+        calls = self.exchange.call_count
+        for phase, operation in (("before-repeat", self.observer.temporary_git_state),
+                                 ("repeat-comparison", lambda: self.observer.repeat_runtime_only({}, {}, ({}, {})))):
+            with self.subTest(phase=phase), self.assertRaises(ValueError) as caught:
+                operation()
+            self.assertIn("checkpoint=" + ascii(phase), str(caught.exception))
+            self.assertIn("basename='unqualified'", str(caught.exception))
+            self.assertEqual(self.exchange.call_count, calls)
+            self.assertEqual(self.observer.baseline, baseline)
+            self.assertEqual(self.observer.observations, observations)
+            self.assertEqual(self.observer.config.read_bytes(), self.original)
+            self.assertEqual(self.foreign.read_text(encoding="utf-8"), "independently owned fixture\n")
 
     def test_all_unexpected_profile_bytes_fail_before_or_after_discovery(self):
         trust = ("\n[projects." + json.dumps(str(self.project)) + ']\ntrust_level = "trusted"\n').encode()

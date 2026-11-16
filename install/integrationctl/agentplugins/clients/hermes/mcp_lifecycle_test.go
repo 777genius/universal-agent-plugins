@@ -113,6 +113,9 @@ func TestHermesNativeProjectMCPRefusesBeforeGlobalWrite(t *testing.T) {
 	if err := New().QualifyPlan(clients.PlanInput{Client: domain.DetectedClient{ExecutablePath: source}}, &plan); err != nil || plan.Status != domain.PlanUnsupported || plan.Components[0].Support != domain.SupportUnsupported {
 		t.Fatalf("project MCP was admitted: %+v %v", plan, err)
 	}
+	if reason := plan.Components[0].Reason; !strings.Contains(reason, "--scope user") {
+		t.Fatalf("project MCP refusal names no next step: %q", reason)
+	}
 	body, err := os.ReadFile(path)
 	if err != nil || string(body) != "model: demo\n" {
 		t.Fatalf("user config changed: %s %v", body, err)

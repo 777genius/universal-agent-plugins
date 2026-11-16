@@ -11,7 +11,13 @@ materializing **Skills and a scoped subset of MCP servers** into the native loca
 | Scope | Native Skills destination | MCP handling |
 | --- | --- | --- |
 | `--scope user` | `$HERMES_HOME/skills/<name>/SKILL.md` | Exact-member `mcp_servers` edits in `config.yaml` (stdio and Streamable HTTP) |
-| `--scope project` | `<project>/.hermes/skills/<name>/SKILL.md` | Explicitly refused: Hermes' current `mcp_servers` authority is user `config.yaml` |
+| `--scope project` | `<project>/.hermes/skills/<name>/SKILL.md` | Only through an explicitly confirmed UAP Hermes project session with a standalone Hermes distribution that has a verified manifest. A Hermes installed from source is refused with a message to use `--scope user` or install Skills only. UAP never trusts a repository automatically |
+
+Project MCP for a Hermes installed from source is not supported yet. Hermes has
+no project-level `config.yaml`, and UAP never writes a project server into the
+user config, because it would run in every repository. A dedicated Hermes profile
+for the project looks like the most suitable option, but the approach is not
+decided and nothing is implemented. See issue #942.
 
 The smoke selects an explicit isolated, nondefault `HERMES_HOME`. UAP captures
 this override and `HERMES_DATA_DIR_SUFFIX` from the environment. Without an

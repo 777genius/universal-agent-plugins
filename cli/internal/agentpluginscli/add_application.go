@@ -95,6 +95,7 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 	input.Confirmed = true
 	input.InstallationID = planned.InstallationID
 	result, err := service.Add(ctx, input)
+	app.recordSingleAdd(cmd, opts, input.Client.ClientID, loaded.envelope.Manifest.Name, err)
 	if renderErr := renderAddResultErrorWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, result, false, err); renderErr != nil && err == nil {
 		err = renderErr
 	}
@@ -114,10 +115,10 @@ func shouldResumeInteractiveLifecycle(app App, opts *options, planned usecase.Ad
 // renderDeclinedPlannedAdd reports an unconfirmed plan without mutating anything.
 func renderDeclinedPlannedAdd(cmd *cobra.Command, opts *options, loaded loadedPackage, planned usecase.AddResult) error {
 	if opts.format == "json" {
-		return renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false)
+		return declinedInstallResult(opts, renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false))
 	}
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
-	return nil
+	_, err := fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
+	return declinedInstallResult(opts, err)
 }
 
 func confirmPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, planned usecase.AddResult, freshInstall, needsInstallConfirmation, automaticSetup bool) (bool, error) {

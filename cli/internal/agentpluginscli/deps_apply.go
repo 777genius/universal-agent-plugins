@@ -403,7 +403,7 @@ func confirmDependencySync(cmd *cobra.Command, app App, opts *options, yes bool)
 		}
 		if !confirmed {
 			_, err := fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
-			return false, err
+			return false, declinedInstallResult(opts, err)
 		}
 		yes = confirmed
 	}

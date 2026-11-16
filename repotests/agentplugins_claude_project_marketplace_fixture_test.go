@@ -25,6 +25,9 @@ func claudeProjectMarketplaceCache(f *claudeProjectNativeFixture, managed string
 
 func requireClaudeProjectActive(t *testing.T, result map[string]any) {
 	t.Helper()
+	if err := validateClaudeSkillsInstallationReady(result); err != nil {
+		t.Fatal(err)
+	}
 	outcome, err := commandsTargetOutcome(claudePreparedEnvelope(result))
 	if err != nil {
 		t.Fatal(err)

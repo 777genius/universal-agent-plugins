@@ -66,7 +66,9 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 			status = outputResultFailure
 		}
 		data := map[string]any{"schema_version": outputSchemaVersion, "command": cmd.CommandPath(), "result": status, "outcome": outcome, "actions": dependencyActionOutput(actions, opts.dependencyComponents), "results": out, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts)}
-		if opts.installResult != nil {
+		if opts.installResult != nil && len(opts.installResult.failedAgents()) > 0 {
+			// Per-binding detail is added only when something failed, so a
+			// successful result keeps its established shape.
 			data["bindings"] = opts.installResult.bindingsJSON()
 			if opts.installResult.LogFile != "" {
 				data["log_file"] = opts.installResult.LogFile

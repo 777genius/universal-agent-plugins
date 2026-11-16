@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -23,6 +24,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 func retryTestCommand(t *testing.T) (*cobra.Command, *bytes.Buffer, *bytes.Buffer) {
@@ -67,6 +69,7 @@ func TestSkillsFailureIsIsolatedExplainedLoggedAndRetriedPerAgent(t *testing.T) 
 	plan.request.detected[domain.ClientCodex] = broken
 
 	var offered []string
+	confirms := 0
 	app := withInstallLogDir(j.cli.app)
 	app.Prompter = fakePrompter{
 		selectFn: func(r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
@@ -75,7 +78,10 @@ func TestSkillsFailureIsIsolatedExplainedLoggedAndRetriedPerAgent(t *testing.T) 
 			}
 			return prompt.TargetSelectionResult{IDs: r.DefaultIDs}, nil
 		},
-		confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
+		confirmFn: func() (prompt.ConfirmationResult, error) {
+			confirms++
+			return prompt.ConfirmationResult{Accepted: true}, nil
+		},
 	}
 	cmd, out, errOut := retryTestCommand(t)
 	app.Terminal, app.ErrorOutput = true, errOut
@@ -83,8 +89,9 @@ func TestSkillsFailureIsIsolatedExplainedLoggedAndRetriedPerAgent(t *testing.T) 
 		t.Fatalf("the retry should have completed the installation: %v\n%s", err, out.String())
 	}
 
-	if strings.Join(offered, ",") != "codex" {
-		t.Fatalf("only the failed agent may be offered for retry, got %v", offered)
+	// One failed agent is offered as a plain yes/no, never as a one-item list.
+	if confirms != 1 || len(offered) != 0 {
+		t.Fatalf("the single failed agent must be offered with one confirmation: confirms=%d offered=%v", confirms, offered)
 	}
 	text := out.String()
 	for _, want := range []string{"Needs attention", "Codex", "could not be verified", "Skills installation succeeded"} {
@@ -163,7 +170,10 @@ func TestSkillsFailureWithoutAPersonDoesNotPromptButStillExplains(t *testing.T) 
 
 func retryAppAndOptions(t *testing.T, offered *[]string) (App, *options) {
 	t.Helper()
-	app := App{Terminal: true, Prompter: fakePrompter{selectFn: func(r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+	app := App{Terminal: true, Prompter: fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+		*offered = append(*offered, "codex")
+		return prompt.ConfirmationResult{Accepted: true}, nil
+	}, selectFn: func(r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
 		for _, choice := range r.Choices {
 			*offered = append(*offered, string(choice.ID))
 		}
@@ -232,8 +242,8 @@ func TestAddRetryNeverPromptsWithoutAPersonOrAfterTheLimit(t *testing.T) {
 func TestAddRetryCancelKeepsTheOriginalError(t *testing.T) {
 	var offered []string
 	app, opts := retryAppAndOptions(t, &offered)
-	app.Prompter = fakePrompter{selectFn: func(prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
-		return prompt.TargetSelectionResult{}, prompt.ErrPromptCanceled
+	app.Prompter = fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+		return prompt.ConfirmationResult{}, prompt.ErrPromptCanceled
 	}}
 	cmd, _, _ := retryTestCommand(t)
 	boom := errors.New("failed")
@@ -403,10 +413,17 @@ func TestSkillsUnclosedProbeNeverPromptsOrRetries(t *testing.T) {
 func TestPrepareSkillsRetryPreservesPromptErrors(t *testing.T) {
 	readFailure := errors.Join(errors.New("retry terminal read failed"), prompt.ErrPromptInputClosed)
 	for name, test := range map[string]struct {
-		app  App
-		want error
+		app    App
+		want   error
+		single bool
 	}{
 		"terminal unavailable": {app: App{}, want: prompt.ErrPromptUnavailable},
+		"confirmation read failed": {
+			app: App{Prompter: fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+				return prompt.ConfirmationResult{}, readFailure
+			}}},
+			want: prompt.ErrPromptInputClosed, single: true,
+		},
 		"selection read failed": {
 			app: App{Prompter: fakePrompter{selectFn: func(prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
 				return prompt.TargetSelectionResult{}, readFailure
@@ -416,7 +433,10 @@ func TestPrepareSkillsRetryPreservesPromptErrors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			cmd, _, _ := retryTestCommand(t)
-			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable)})
+			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable), failedItem("pdf", "gemini", installer.ErrTargetFactsUnavailable)})
+			if test.single {
+				reports = reports[:1]
+			}
 			// No original plan is needed: an input failure must stop before preparation.
 			next, err := prepareSkillsRetry(cmd, test.app, &options{format: "human"}, nil, nil, reports)
 			if next != nil || !errors.Is(err, test.want) {
@@ -433,7 +453,7 @@ func TestPrepareSkillsRetryEscapeDeclinesWithoutError(t *testing.T) {
 				return prompt.TargetSelectionResult{}, canceled
 			}}}
 			cmd, _, _ := retryTestCommand(t)
-			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable)})
+			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable), failedItem("pdf", "gemini", installer.ErrTargetFactsUnavailable)})
 			next, err := prepareSkillsRetry(cmd, app, &options{format: "human"}, nil, nil, reports)
 			if next != nil || err != nil {
 				t.Fatalf("Escape must decline without replacing the original installation failure: next=%v err=%v", next, err)
@@ -453,7 +473,7 @@ func TestPrepareSkillsRetryRejectsInvalidSelection(t *testing.T) {
 				return prompt.TargetSelectionResult{IDs: ids}, nil
 			}}}
 			cmd, _, _ := retryTestCommand(t)
-			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable)})
+			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable), failedItem("pdf", "gemini", installer.ErrTargetFactsUnavailable)})
 			next, err := prepareSkillsRetry(cmd, app, &options{format: "human"}, nil, nil, reports)
 			if next != nil || err == nil {
 				t.Fatalf("invalid selection was treated as a declined retry: next=%v err=%v", next, err)
@@ -524,5 +544,131 @@ func TestSkillsRetryClosesPreparedPreviewWhenOutputFails(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A group refused before any client was touched offers no retry and no log:
+// nothing was attempted and the same preflight would refuse again.
+func TestGroupRefusedBeforeAnyChangeIsNotRetried(t *testing.T) {
+	cmd, _, errOut := retryTestCommand(t)
+	app := App{Terminal: true, InstallLogDir: filepath.Join(t.TempDir(), "logs")}
+	prompts := 0
+	app.Prompter = fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+		prompts++
+		return prompt.ConfirmationResult{Accepted: true}, nil
+	}}
+	cause := errors.New("group refused")
+	for _, status := range []string{"planned", "preparation_failed"} {
+		opts := &options{format: "human"}
+		combined := addMultiResult{Status: status, Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalNotAttempted)}}}
+		got := app.recordGroupOutcome(cmd, opts, &combined, cause)
+		if !errors.Is(got, cause) || !errors.Is(cause, got) || opts.installResult != nil || errOut.Len() != 0 {
+			t.Fatalf("%s: a refused group must retain its error without recording a retry: %v %+v %q", status, got, opts.installResult, errOut.String())
+		}
+		if result := retryFailedAgents(cmd, app, opts, got, func(string, []string) error {
+			t.Fatal("a group refused before changes must not rerun")
+			return nil
+		}); !errors.Is(result, cause) || prompts != 0 {
+			t.Fatalf("%s: refusal prompted or lost its cause: %v prompts=%d", status, result, prompts)
+		}
+		if _, err := os.Stat(app.InstallLogDir); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("%s: refused group created a log directory: %v", status, err)
+		}
+	}
+	opts := &options{format: "human"}
+	combined := addMultiResult{Status: "managed_committed_activation_failed", Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalFailed), Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed}}}}}
+	got := app.recordGroupOutcome(cmd, opts, &combined, cause)
+	if opts.installResult == nil || len(retryableAgents(opts.installResult.Agents)) != 1 || opts.installResult.LogFile == "" {
+		t.Fatal("a failed activation after apply must stay logged and retryable")
+	}
+	reruns := 0
+	if result := retryFailedAgents(cmd, app, opts, got, func(string, []string) error { reruns++; return nil }); result != nil || reruns != 1 || prompts != 1 {
+		t.Fatalf("post-apply retry changed: err=%v reruns=%d prompts=%d", result, reruns, prompts)
+	}
+}
+
+func TestRefusedGroupKeepsUnclosedCauseWithoutLoggingOrRetry(t *testing.T) {
+	private := errors.New("close failed at /private/preflight token=private-value")
+	for _, status := range []string{"planned", "preparation_failed"} {
+		for name, cause := range unclosedInstallErrors(private) {
+			t.Run(status+"/"+name, func(t *testing.T) {
+				var offered []string
+				app, _ := retryAppAndOptions(t, &offered)
+				app.InstallLogDir = filepath.Join(t.TempDir(), "logs")
+				opts := &options{format: "human"}
+				cmd, out, errOut := retryTestCommand(t)
+				failed := &usecase.GroupTargetFailure{Stage: "preflight", Message: private.Error()}
+				combined := addMultiResult{Status: status, Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalNotAttempted), Error: failed, RetryCommand: "agentplugins add demo --target codex"}}}
+				combined.Targets[0].Output.Result.Failure = failed
+				got := app.recordGroupOutcome(cmd, opts, &combined, cause)
+				var original, retained *domain.UnclosedClientProbe
+				if !errors.As(cause, &original) || !errors.As(got, &retained) || retained != original || !errors.Is(got, private) {
+					t.Fatalf("refusal lost the exact cleanup marker or cause: %v", got)
+				}
+				if opts.installResult != nil || out.Len() != 0 || errOut.Len() != 0 {
+					t.Fatal("a refused group must not record an install outcome or log path")
+				}
+				if _, err := os.Stat(app.InstallLogDir); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("refused group created a log directory: %v", err)
+				}
+				if result := retryFailedAgents(cmd, app, opts, got, func(string, []string) error {
+					t.Fatal("a refused group with unconfirmed cleanup must not rerun")
+					return nil
+				}); !errors.Is(result, private) || len(offered) != 0 {
+					t.Fatalf("refusal prompted or lost its cause: %v offered=%v", result, offered)
+				}
+				target := combined.Targets[0]
+				if target.RetryCommand != "" || target.Error == nil || target.Error.Stage != "cleanup" {
+					t.Fatalf("refused target lost cleanup guidance: %+v", target)
+				}
+				wire, err := json.Marshal(combined)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := renderAddMultiApplySummary(out, combined, domain.PackageEnvelope{}); err != nil {
+					t.Fatal(err)
+				}
+				for _, public := range []string{got.Error(), string(wire), out.String()} {
+					if strings.Contains(public, "/private/preflight") || strings.Contains(public, "private-value") {
+						t.Fatalf("provider detail reached public output: %s", public)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestInstallRetriesRefuseUnclosedNativeProbe(t *testing.T) {
+	for _, mode := range []string{"add", "converge"} {
+		for _, wrapping := range []string{"bare", "wrapped", "joined"} {
+			t.Run(mode+"/"+wrapping, func(t *testing.T) {
+				closeErr := errors.New("native process cleanup is unconfirmed")
+				probe := &domain.UnclosedClientProbe{Operation: "native inventory", Err: closeErr}
+				var cause error = probe
+				switch wrapping {
+				case "wrapped":
+					cause = fmt.Errorf("installation failed: %w", cause)
+				case "joined":
+					cause = errors.Join(errors.New("another agent failed"), cause)
+				}
+				var offered []string
+				app, opts := retryAppAndOptions(t, &offered)
+				cmd, out, errOut := retryTestCommand(t)
+				before, reruns := opts.installResult, 0
+				var actual error
+				if mode == "add" {
+					actual = retryFailedAgents(cmd, app, opts, cause, func(string, []string) error { reruns++; return nil })
+				} else {
+					actual = retryConverge(cmd, app, opts, cause, func() error { reruns++; return nil })
+				}
+				var retained *domain.UnclosedClientProbe
+				if !errors.Is(actual, cause) || !errors.Is(cause, actual) || !errors.As(actual, &retained) || retained != probe || !errors.Is(actual, closeErr) {
+					t.Fatalf("retry lost or changed the process-cleanup refusal: %v", actual)
+				}
+				if len(offered) != 0 || reruns != 0 || opts.retryAttempt != 0 || opts.installResult != before || out.Len() != 0 || errOut.Len() != 0 {
+					t.Fatalf("unclosed process allowed a new attempt: offered=%v reruns=%d attempt=%d", offered, reruns, opts.retryAttempt)
+				}
+			})
+		}
 	}
 }

@@ -383,9 +383,9 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	return loaded, nil
 }
 
-// repairOwnedDependencies retains the ordinary repair command and confirmation
+// repairOwnedDependenciesOnce retains the ordinary repair command and confirmation
 // policy, but uses the recorded per-binding pin through the public SDK.
-func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
+func repairOwnedDependenciesOnce(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
 	state, err := app.StateStore.Load()
 	if err != nil {
 		return false, err

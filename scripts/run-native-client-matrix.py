@@ -125,6 +125,7 @@ PROJECT_TESTS = {
 # stdio MCP initialize + tools/list path without using vendor credentials.
 # V1 stays on its exact historical selectors and client pin.
 OPENCODE_V2_PROJECT_TESTS = PROJECT_TESTS["opencode"] | {"TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake"}
+BROWSER_PROJECT_TEST = "TestAgentpluginsCodexClaudeNativeBrowserProjectSkillsLifecycle"
 
 
 def select_native_tests(client, project_components=False, released=False, opencode_generation="v1"):
@@ -410,10 +411,16 @@ def prepared_tools(args, directory):
 
 
 def validate_browser_skills(client, target, project_components, released, required_tests):
-    """The browser replaces only the existing dual-user test's first install."""
+    """Admit real user and untrusted-project browser installs in the same lane."""
     dual = "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle"
     if client != "codex" or target != "linux-amd64" or not project_components or released or dual not in required_tests:
         raise ValueError("browser Skills proof requires current-source Linux Codex project qualification with the dual-client lifecycle")
+
+
+def browser_native_tests(client, target, project_components, released, required_tests):
+    validate_browser_skills(client, target, project_components, released, required_tests)
+    required = required_tests | {BROWSER_PROJECT_TEST}
+    return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
 
 
 def browser_runtime_environment(source):
@@ -456,7 +463,7 @@ def main():
     parser.add_argument("--target-scope", choices=('historical-nine', 'linux-amd64'), default='historical-nine')
     parser.add_argument("--project-components", action="store_true", help="also require current-source project lifecycle evidence with explicit discovery limits; never released/draft proof")
     parser.add_argument("--opencode-generation", choices=("v1", "v2"), default="v1", help="select pinned OpenCode native generation; V2 requires current-source project proof")
-    parser.add_argument("--browser-skills", action="store_true", help="drive the required dual-user Skill install through the real browser and public CLI; current-source Linux Codex only")
+    parser.add_argument("--browser-skills", action="store_true", help="drive the required dual-user and dual-project Skill installs through the real browser and public CLI; current-source Linux Codex only")
     args = parser.parse_args()
     draft.validate(args)
     if args.opencode_generation == "v2" and (args.client != "opencode" or not args.project_components or args.release_tag or args.release_state != "public" or args.prepared_input or args.prepare_only):
@@ -474,7 +481,7 @@ def main():
         parser.error(str(error))
     if args.browser_skills:
         try:
-            validate_browser_skills(args.client, args.target, args.project_components,
+            pattern, required_tests = browser_native_tests(args.client, args.target, args.project_components,
                 bool(args.release_tag) or args.release_state == "draft" or bool(args.prepared_input) or args.prepare_only,
                 required_tests)
         except ValueError as error:
@@ -551,6 +558,7 @@ def main():
             browser_env = browser_runtime_environment(source)
             env.update(browser_env)
             identity["browser_skills"] = {"required_test": "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle",
+                "required_tests": ["TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle", BROWSER_PROJECT_TEST],
                 "install_surface": "Chromium -> public CLI --ui -> real pinned Codex and Claude",
                 "node_sha256": hashlib.sha256(Path(browser_env["AGENTPLUGINS_NATIVE_BROWSER_NODE"]).read_bytes()).hexdigest(),
                 "python_sha256": hashlib.sha256(Path(browser_env["AGENTPLUGINS_NATIVE_BROWSER_PYTHON"]).read_bytes()).hexdigest()}
