@@ -1,6 +1,7 @@
 // Package hermes integrates native Hermes Skills and scoped MCP preparation.
-// Project MCP uses an explicit managed session; project Skills retain native
-// project trust and their original receipt authority.
+// Project MCP uses an explicit managed session; project Skills keep their
+// original receipt authority and rely on native project trust, which only a
+// confirmed installation asks the user's own Hermes CLI to grant.
 package hermes
 
 import (
@@ -237,7 +238,10 @@ func (*Adapter) RefinePlan(ctx context.Context, _ clients.PlanInput, plan *domai
 	shared.PromoteNativeReady(plan, root, shared.OnlyNativeComponents(plan.Components))
 	plan.Activation = domain.ActivationPrepared
 	if plan.Scope == domain.ScopeProject {
-		plan.UserActions = shared.AppendUnique(plan.UserActions, "Review Hermes project trust before Skills can be discovered; UAP does not automatically trust repositories")
+		if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
+			plan.UserActions = shared.AppendUnique(plan.UserActions, "Confirming asks your Hermes CLI to trust this whole Git repository root: Skills in its .hermes/skills and .agents/skills, including ones added later, load until `hermes skills untrust`, and trust stays after UAP removal")
+			plan.UserActions = shared.AppendUnique(plan.UserActions, "Hermes still quarantines Skills its skills_guard flags as dangerous; if UAP cannot verify the grant it says so and prints the exact `hermes skills trust` command; start a new Hermes session afterwards")
+		}
 		if shared.HasSupportedMCP(plan.Components) {
 			plan.UserActions = shared.AppendUnique(plan.UserActions, "Use an explicitly confirmed UAP Hermes project session with the qualified bundled client; ordinary startup does not select this MCP home")
 		}
