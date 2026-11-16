@@ -39,10 +39,11 @@ never revokes it. Start a new Hermes session after installation.
 
 Where the scope is disclosed: the plan's next actions state all of the above.
 The interactive review card shows them before its confirmation, and human
-output prints them as planned actions before applying. An explicit `--target`,
-`--yes`, a non-terminal or a JSON run counts as confirmation under the existing
-CLI policy, the same as for Gemini CLI, Codex, Claude Code and Copilot trust, so
-no review card is shown before trust is granted; the result reports the outcome.
+output prints them as planned actions before applying. An explicit `--target`
+or `--yes` counts as confirmation under the existing CLI policy, the same as for
+Gemini CLI, Codex, Claude Code and Copilot trust; non-terminal and JSON runs
+require `--target`. Such runs show no review card before trust is granted, and
+JSON output carries the disclosure only in the plan and the result.
 
 Only an explicit `add` grants trust, including a repeated `add` that finishes
 an older Skills-only installation. Update, repair and `deps sync` never run the
