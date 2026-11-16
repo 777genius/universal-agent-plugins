@@ -232,9 +232,15 @@ prepared until that client's supported activation boundary is satisfied.
 `--activation-complete` does not override a project adapter's unsupported,
 shadowed or unobserved discovery result.
 
-UAP does not grant workspace trust or authenticate a client to make installation
-look active. Inspect the client's effective project configuration and follow
-the reported next action. [OpenCode's project guide](OPENCODE_PROJECT_SCOPE.md)
+UAP never authenticates a client to make installation look active. A confirmed
+installation changes native trust only where the client adapter owns that
+step: Claude Code, Codex, Gemini CLI and GitHub Copilot CLI record exact-project
+trust in their own configuration, Cursor approves only the selected project MCP
+servers, and Hermes asks its own CLI to trust the Git repository root on an
+explicit `add` only (see the [Hermes guide](HERMES_NATIVE_SKILLS.md)). Other
+clients keep their native trust prompts. Planning, dry runs and verification
+never change trust, and removal never revokes it. Inspect the client's
+effective project configuration and follow the reported next action. [OpenCode's project guide](OPENCODE_PROJECT_SCOPE.md)
 illustrates the difference between installed configuration and observed native
 runtime. The [current project support table](PROJECT_CLIENT_SUPPORT.md) links
 client guidance and evidence. The [reviewed client plans](plans/project-install-e2e/client-plans.md)
