@@ -241,6 +241,10 @@ func (input *hermesColdInputs) isolate(t *testing.T) {
 	for _, key := range []string{"HERMES_HOME", "HERMES_REAL_HOME", "HERMES_DATA_DIR_SUFFIX"} {
 		t.Setenv(key, "")
 	}
+	// The user's own Hermes (which runs the confirmed trust command with this
+	// environment) caches Python bytecode under XDG_CACHE_HOME. That cache is
+	// Hermes' own and not an installer change, so keep it out of the fixture.
+	t.Setenv("PYTHONDONTWRITEBYTECODE", "1")
 	input.protected = map[string]map[string]string{
 		input.osHome:    securityFixtureTree(t, input.osHome),
 		input.temporary: securityFixtureTree(t, input.temporary),
