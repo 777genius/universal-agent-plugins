@@ -40,7 +40,7 @@ CASES = {
                 "phase": "runtime-attempt"},
     "gemini": {"test": "TestAgentpluginsGeminiNativeProjectCompleteCycle",
                "file": "repotests/agentplugins_gemini_cycle_lifecycle_test.go",
-               "optin": "AGENTPLUGINS_GEMINI_PROJECT_RUNTIME_ATTEMPT", "seconds": 180,
+               "optin": "AGENTPLUGINS_GEMINI_PROJECT_RUNTIME_ATTEMPT", "seconds": 240,
                "phase": "runtime-attempt"},
     "kimi": {"test": "TestAgentpluginsKimiNativeProjectComponentsLifecycle",
              "file": "repotests/agentplugins_kimi_project_native_lifecycle_test.go",

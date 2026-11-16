@@ -21,6 +21,7 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 	if outcome.Verification != domain.VerificationInstalled || len(request.Plan.Components) == 0 {
 		return outcome, nil
 	}
+	incoming := outcome // Preserve attestation facts before the status helper clears them.
 	outcome = openCodeNativeStatus(request, outcome)
 	if env.Runner == nil || request.Client.ExecutablePath == "" || !openCodeV1DiscoverySupported(request) {
 		return outcome, nil
@@ -53,8 +54,56 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 	if len(servers) > 0 && outcome.Authentication == domain.AuthenticationNotChecked && request.Plan.Authentication == domain.AuthenticationNotChecked && slices.Contains(request.Plan.Warnings, "authentication_not_catalog_verified") {
 		outcome.Authentication = domain.AuthenticationNotRequired
 	}
+	outcome.Authentication = openCodeObservedSkillAuthentication(env, request, layout, skills, servers, incoming, outcome)
 	outcome.UserActions = removeOpenCodeDiscoveryActions(outcome.UserActions)
 	return outcome, nil
+}
+
+// Native catalog text alone does not establish ownership of resource files.
+// Qualify only the selected Skill receipt set, rechecked after the native read.
+func openCodeObservedSkillAuthentication(env clients.Env, request domain.ActivationRequest, layout openCodeNativeLayout, skills []domain.ComponentDecision, servers []string, incoming, outcome domain.ActivationOutcome) domain.AuthenticationState {
+	if request.ActivationComplete || incoming.ActivationAttested || incoming.AuthenticationAttested ||
+		len(servers) != 0 || outcome.Activation != domain.ActivationActive ||
+		outcome.Verification != domain.VerificationInstalled || outcome.Policy != domain.PolicyAllowed || request.Plan.Policy != domain.PolicyAllowed {
+		return outcome.Authentication
+	}
+	if outcome.Authentication != domain.AuthenticationNotChecked || request.Plan.Authentication != domain.AuthenticationNotChecked ||
+		request.Plan.InstallIntent != domain.InstallIntentAutomatic ||
+		shared.ObservedPreparedSkillInstallationAuthentication(request.Plan) != domain.AuthenticationNotRequired {
+		return outcome.Authentication
+	}
+	if outcome.NativeEffect != domain.NativeEffectUnchanged && outcome.NativeEffect != domain.NativeEffectCommitted {
+		return outcome.Authentication
+	}
+	if request.Plan.ActivePath != request.Delivery.ActivePath || !filepath.IsAbs(request.Delivery.ActivePath) ||
+		!slices.Equal(outcome.NativeObjects, request.Delivery.NativeObjects) ||
+		!openCodeObservedSkillReceipts(layout, skills, OpenCodeObjects(request.Delivery.NativeObjects)) ||
+		verifyOpenCodeNativeLayout(layout, request.Delivery.ActivePath, request.Delivery.NativeObjects, env.NativeConfig, false) != nil {
+		return outcome.Authentication
+	}
+	return domain.AuthenticationNotRequired
+}
+
+func openCodeObservedSkillReceipts(layout openCodeNativeLayout, skills []domain.ComponentDecision, objects []domain.NativeObjectOwnership) bool {
+	if len(skills) == 0 || len(objects) != len(skills) {
+		return false
+	}
+	expected := make(map[string]bool, len(skills))
+	for _, skill := range skills {
+		if expected[skill.Name] {
+			return false
+		}
+		expected[skill.Name] = true
+	}
+	for _, object := range objects {
+		if !expected[object.LogicalName] || object.Kind != openCodeSkillKind || object.UserModified ||
+			object.ProtectionClass != "managed" || object.ObjectID != "opencode-skill:"+object.LogicalName ||
+			object.Path != filepath.Join(layout.Skills, object.LogicalName) || object.ManagedDigest == "" {
+			return false
+		}
+		delete(expected, object.LogicalName)
+	}
+	return len(expected) == 0
 }
 
 // Only a successful fresh observation supersedes these actions.

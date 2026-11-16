@@ -250,7 +250,9 @@ class NativeMatrixTests(unittest.TestCase):
         })
         self.assertIn("TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle", v2_pattern)
         self.assertIn("TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake", v2_pattern)
-        self.assertEqual(v1_required, matrix.REQUIRED_TESTS["opencode"] | matrix.PROJECT_TESTS["opencode"])
+        self.assertEqual(v1_required, matrix.REQUIRED_TESTS["opencode"] | matrix.PROJECT_TESTS["opencode"] | {matrix.OPENCODE_V1_SKILL_TEST})
+        self.assertNotIn(matrix.OPENCODE_V1_SKILL_TEST, v2_required)
+        self.assertIsNone(re.search(v2_pattern, matrix.OPENCODE_V1_SKILL_TEST))
         self.assertNotIn("TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake", v1_pattern)
         declared = set()
         for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
@@ -275,9 +277,16 @@ class NativeMatrixTests(unittest.TestCase):
         declared = set()
         for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
             declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
-        self.assertEqual(required, matrix.REQUIRED_TESTS["opencode"] | {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"})
+        self.assertEqual(required, matrix.REQUIRED_TESTS["opencode"] | matrix.PROJECT_TESTS["opencode"] | {matrix.OPENCODE_V1_SKILL_TEST})
         self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
         self.assertNotIn("TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle", released.CLIENT_TESTS["opencode"])
+        self.assertNotIn(matrix.OPENCODE_V1_SKILL_TEST, released.CLIENT_TESTS["opencode"])
+        for is_release in (False, True):
+            old_pattern, old_required = matrix.select_native_tests("opencode", released=is_release)
+            self.assertNotIn(matrix.OPENCODE_V1_SKILL_TEST, old_required)
+            self.assertIsNone(re.search(old_pattern, matrix.OPENCODE_V1_SKILL_TEST))
+        for suffix in ("Extra", "/child"):
+            self.assertIsNone(re.search(pattern, matrix.OPENCODE_V1_SKILL_TEST + suffix))
 
     def test_source_project_proof_rejects_released_and_unsupported_clients(self):
         for client in matrix.PROJECT_TESTS:

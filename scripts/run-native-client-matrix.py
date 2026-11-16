@@ -123,9 +123,10 @@ PROJECT_TESTS = {
 
 # V2 retains the reviewed A/B lifecycle, then independently proves a real
 # stdio MCP initialize + tools/list path without using vendor credentials.
-# V1 stays on its exact historical selectors and client pin.
+# V1 retains its pin and separately requires current-source pure Skill Ready.
 OPENCODE_V2_PROJECT_TESTS = PROJECT_TESTS["opencode"] | {"TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake"}
 BROWSER_PROJECT_TEST = "TestAgentpluginsCodexClaudeNativeBrowserProjectSkillsLifecycle"
+OPENCODE_V1_SKILL_TEST = "TestAgentpluginsOpenCodeNativeProjectSkillReadyLifecycle"
 
 
 def select_native_tests(client, project_components=False, released=False, opencode_generation="v1"):
@@ -142,6 +143,8 @@ def select_native_tests(client, project_components=False, released=False, openco
     if released or client not in PROJECT_TESTS:
         raise ValueError("project proof requires a qualified current-source client, not a released/draft installer")
     required = REQUIRED_TESTS[client] | PROJECT_TESTS[client]
+    if client == "opencode":
+        required = required | {OPENCODE_V1_SKILL_TEST}
     return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
 
 

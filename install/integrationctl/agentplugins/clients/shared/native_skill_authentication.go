@@ -13,6 +13,19 @@ import (
 // future tool/model use or replace explicit catalog authentication decisions.
 // The raw-Skill planner qualifier remains a separate, narrower policy.
 func ObservedSkillInstallationAuthentication(plan domain.DeliveryPlan) domain.AuthenticationState {
+	return observedSkillInstallationAuthentication(plan, false)
+}
+
+// ObservedPreparedSkillInstallationAuthentication is an explicit adapter opt-in
+// for static prepared Skill support after the same fresh native installation
+// proof. The caller must verify policy, exact nonempty ownership receipts and
+// their complete Skill contents after native observation. It does not change
+// support metadata or qualify future model/tool authentication.
+func ObservedPreparedSkillInstallationAuthentication(plan domain.DeliveryPlan) domain.AuthenticationState {
+	return observedSkillInstallationAuthentication(plan, true)
+}
+
+func observedSkillInstallationAuthentication(plan domain.DeliveryPlan, allowPrepared bool) domain.AuthenticationState {
 	if plan.Authentication != domain.AuthenticationNotChecked || plan.Status == domain.PlanUnsupported ||
 		!slices.Contains(plan.Warnings, "authentication_not_catalog_verified") ||
 		slices.Contains(plan.Warnings, "authentication_requirement_unknown") || len(plan.Components) == 0 {
@@ -20,7 +33,8 @@ func ObservedSkillInstallationAuthentication(plan domain.DeliveryPlan) domain.Au
 	}
 	for _, component := range plan.Components {
 		if component.Kind != domain.ComponentSkill || component.Name == "" ||
-			(component.Support != domain.SupportNative && component.Support != domain.SupportProjected) {
+			(component.Support != domain.SupportNative && component.Support != domain.SupportProjected &&
+				(!allowPrepared || component.Support != domain.SupportPrepared)) {
 			return plan.Authentication
 		}
 		switch component.Source {

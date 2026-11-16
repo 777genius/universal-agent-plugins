@@ -26,6 +26,16 @@ func NewNativePrepared(executable, root string, environment []string, evidence V
 	}
 	return h
 }
+
+// NativeSnapshot preserves this immutable evidence through prepared-client
+// wrappers. The returned copy cannot retarget the original prepared host.
+func (h *NativePrepared) NativeSnapshot() *NativePrepared {
+	if h == nil {
+		return nil
+	}
+	return NewNativePrepared(h.executable, h.root, h.environment, h.evidence, h.profile, h.selections)
+}
+
 func (h *NativePrepared) Profile() Profile { return h.profile.Clone() }
 
 // ConfigDialect exposes only the immutable prepared config selection.

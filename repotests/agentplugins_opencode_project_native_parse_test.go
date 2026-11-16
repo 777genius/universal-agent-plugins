@@ -95,6 +95,13 @@ type openCodeProjectSkill struct{ Name, Location, Content string }
 // Public progress is a closed source-derived contract. Native and Git stderr
 // never use this allowance; repeated removal has its separate exact refusal.
 func openCodeProjectProgress(label string, body []byte, result map[string]any) bool {
+	return openCodeProjectProgressForActivation(label, body, result, "prepared")
+}
+
+func openCodeProjectProgressForActivation(label string, body []byte, result map[string]any, activation string) bool {
+	if activation != "prepared" && activation != "active" {
+		return false
+	}
 	resolve := "Resolving and validating one Agent Plugin package for every selected target...\n"
 	var expected string
 	switch label {
@@ -109,7 +116,7 @@ func openCodeProjectProgress(label string, body []byte, result map[string]any) b
 		if _, single := data["result"].(map[string]any); !single {
 			return false
 		}
-		if _, err := openCodeProjectAssertionEnvelope(result); err != nil {
+		if _, err := openCodeProjectAssertionEnvelopeForActivation(result, activation); err != nil {
 			return false
 		}
 		expected = resolve

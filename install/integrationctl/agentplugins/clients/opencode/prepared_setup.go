@@ -20,8 +20,14 @@ const openCodeMCPConfirmationAction = "confirm installation to start OpenCode an
 // This is a command ABI gate, not an activation receipt. Native configuration,
 // permission, exact Skills and selected MCP observations must still agree.
 func openCodeV1DiscoverySupported(request domain.ActivationRequest) bool {
-	host, ok := request.Plan.OpenCodeHost.(*opencodehost.NativePrepared)
-	if !ok || host == nil {
+	authority, ok := request.Plan.OpenCodeHost.(interface {
+		NativeSnapshot() *opencodehost.NativePrepared
+	})
+	if !ok {
+		return false
+	}
+	host := authority.NativeSnapshot()
+	if host == nil {
 		return false
 	}
 	profile := host.Profile()
