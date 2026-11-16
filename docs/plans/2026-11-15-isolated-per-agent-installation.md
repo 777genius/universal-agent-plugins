@@ -78,8 +78,14 @@ only at call sites; expect a mechanical rebase on whichever lands second.
 - Concurrent client activation for the plugin group path: independent clients run together with the serial
   remainder; the CLI opts in with `providers.Activator.Concurrent`.
 
+## Follow-up delivered after the first PR
+
+- Retry for a single-target `add` (plain yes/no) and for `install` (converges every outstanding binding).
+- A retried `add` installs exactly the package of its first attempt (tree digest pinned) or asks for a new review.
+- The SDK `Config.IndependentActivations` keeps working with the new `providers.Activator.Concurrent` gate.
+
 ## Not done, on purpose
 
 - Binding-level parallel apply for Skills and saved installs (shared `state-v2.json`, `mutation.lock`).
-- A retry step for a single-target `add` (its own flow) and for `install`/`repair` (they converge when run again).
+- A retry step for `repair`, `update` and `remove`; they converge when run again.
 - Native verification latency and source scan latency belong to #932.
