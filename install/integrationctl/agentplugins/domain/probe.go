@@ -52,7 +52,14 @@ func (err *UnclosedClientProbe) Error() string {
 	return fmt.Sprintf("%s process cleanup unconfirmed: %v", err.Operation, err.Err)
 }
 func (err *UnclosedClientProbe) Unwrap() error { return err.Err }
+
+// unclosedProcess is implemented by runner errors that report a started
+// process whose closure was not proved, even if no probe wrapped them.
+type unclosedProcess interface{ UnclosedProcess() }
+
+// IsUnclosedClientProbe is the single predicate for unconfirmed process cleanup.
 func IsUnclosedClientProbe(err error) bool {
 	var unsafe *UnclosedClientProbe
-	return errors.As(err, &unsafe)
+	var raw unclosedProcess
+	return errors.As(err, &unsafe) || errors.As(err, &raw)
 }

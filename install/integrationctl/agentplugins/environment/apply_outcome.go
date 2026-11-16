@@ -7,7 +7,6 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 // BindingStatus is the terminal state of one planned binding in ApplySync.
@@ -127,9 +126,8 @@ func stopsSync(ctx context.Context, err error, result *installer.Result) bool {
 		return true
 	}
 	var marked stopError
-	var closure *legacyports.ProcessClosureError
 	switch {
-	case errors.As(err, &marked), domain.IsUnclosedClientProbe(err), errors.As(err, &closure),
+	case errors.As(err, &marked), domain.IsUnclosedClientProbe(err),
 		errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded),
 		errors.Is(err, installer.ErrCancelled), errors.Is(err, installer.ErrRecoveryRequired),
 		errors.Is(err, installer.ErrPlanChanged), errors.Is(err, ErrSourceChange),

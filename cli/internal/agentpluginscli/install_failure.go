@@ -8,7 +8,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 // failureKind is the one classification of installer failures. Review-time and
@@ -36,7 +35,7 @@ func failureKindOf(err error) failureKind {
 	switch {
 	case err == nil:
 		return failureUnknown
-	case unclosedInstallProbe(err):
+	case domain.IsUnclosedClientProbe(err):
 		return failureProcessCleanup
 	case errors.Is(err, installer.ErrRecoveryRequired):
 		return failureRecovery
@@ -163,16 +162,8 @@ func (err installFailureWithCause) Unwrap() error { return err.cause }
 // retainUnclosedInstallCause keeps cleanup uncertainty through the group's
 // public aggregate. Ordinary group failures keep their existing presentation.
 func retainUnclosedInstallCause(summary, cause error) error {
-	if !unclosedInstallProbe(cause) {
+	if !domain.IsUnclosedClientProbe(cause) {
 		return summary
 	}
 	return installFailureWithCause{summary: summary.Error(), cause: cause}
-}
-
-// unclosedInstallProbe reports that a started client process was not proved
-// closed. Probes that already crossed the client boundary arrive as the domain
-// marker; a raw runner closure error from any other command path means the same.
-func unclosedInstallProbe(err error) bool {
-	var closure *legacyports.ProcessClosureError
-	return domain.IsUnclosedClientProbe(err) || errors.As(err, &closure)
 }
