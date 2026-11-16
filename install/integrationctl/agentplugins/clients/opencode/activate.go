@@ -75,7 +75,7 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request d
 	if err != nil {
 		return outcome, err
 	}
-	return openCodeProjectStatus(request, outcome), nil
+	return observeOpenCodeNativeComponents(ctx, env, request, outcome)
 }
 
 // Deactivate removes managed OpenCode native objects.

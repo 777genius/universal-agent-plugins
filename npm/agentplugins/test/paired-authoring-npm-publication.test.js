@@ -436,6 +436,10 @@ for (const product of c.PRODUCTS) test(`exact ${product} published pack runs col
   }
   const files = p.packageFiles(blobs, manifests[product], f.record, product);
   const pkg = JSON.parse(files["package.json"]);
+  if (product === "agentplugins") {
+    assert.ok(files["lib/bootstrap-progress.js"], "exact public launcher closure must include its progress module");
+    assert.ok(pkg.files.includes("lib/bootstrap-progress.js"), "packed npm manifest must include the progress module");
+  }
   assert.equal(pkg.private, false); assert.equal(pkg.gitHead, undefined);
   assert.equal(pkg.repository.url, "git+https://github.com/777genius/universal-agent-plugins.git");
   if (product === "plugin-kit-ai") {

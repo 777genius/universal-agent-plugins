@@ -29,6 +29,13 @@ type DuplexCommandRunner interface {
 	RunDuplexWithPlannedShutdown(context.Context, legacyports.Command, func(io.Writer, io.Reader) error) error
 }
 
+// CompletionCommandRunner observes a finite native protocol under ordinary
+// command supervision. Success requires stdin EOF, clean natural process exit
+// and completed owned cleanup; the caller supplies a deadline and output bound.
+type CompletionCommandRunner interface {
+	RunDuplexToCompletion(context.Context, legacyports.Command, func(io.Writer, io.Reader) error) error
+}
+
 // DuplexCapabilityRunner reports whether duplex execution is actually available
 // on this platform before an observation is attempted.
 type DuplexCapabilityRunner interface {

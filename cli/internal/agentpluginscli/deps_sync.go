@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -97,7 +98,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 	for _, action := range actions {
 		if action.Action == environment.ActionUnchanged {
 			if err := adapter.verifyUnchangedProjection(ctx, action); err != nil {
-				return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+				return nil, &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
 			}
 			continue
 		}
@@ -107,7 +108,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		}
 		prepared, err := adapter.Prepare(ctx, action)
 		if err != nil {
-			return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+			return nil, &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
 		}
 		plan := prepared.Plan()
 		if adapter.previewExternalUninstalled != nil && action.Action == environment.ActionRemove && plan.RequiresExternalUninstalled {
@@ -116,7 +117,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		if adapter.previewPaths != nil {
 			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
-		adapter.recordDependencyComponents(action, plan)
+		adapter.recordDependencyReview(action, plan)
 
 		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
 			updates[action.Alias] = prepared
@@ -169,14 +170,26 @@ func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context
 		if !ok || (action.Action != environment.ActionRemove && (client.Status != domain.DetectionDetected || client.DetectionError != nil)) {
 			return fmt.Errorf("target %s is not detected; nothing was changed: %w", action.ClientID, installer.ErrTargetFactsUnavailable)
 		}
-		if action.Action == environment.ActionInstall || action.Action == environment.ActionUpdate || action.Action == "repair" {
+		if action.Action == environment.ActionInstall || action.Action == environment.ActionUpdate || dependencyRepairOperation(action.Action) {
 			targets = append(targets, id)
 		}
 	}
 	return ensureSelectedProjectVersions(ctx, adapter.app, adapter.opts, targets, adapter.detected)
 }
 
-func (adapter *dependencyInstaller) recordDependencyComponents(action dependencyAction, plan installer.Plan) {
+func (adapter *dependencyInstaller) recordDependencyReview(action dependencyAction, plan installer.Plan) {
+	if adapter.previewWarnings != nil {
+		for _, warning := range plan.Delivery.Warnings {
+			switch warning {
+			case catalogSchemaOnlyWarning, catalogNotTestedWarning, catalogRuntimeNotTestedWarning:
+				continue
+			}
+			message := reviewWarningText(warning)
+			if !slices.Contains(*adapter.previewWarnings, message) {
+				*adapter.previewWarnings = append(*adapter.previewWarnings, message)
+			}
+		}
+	}
 	opts := adapter.opts
 	if opts.dependencyComponents == nil {
 		opts.dependencyComponents = map[string][]domain.ComponentDecision{}
@@ -201,10 +214,15 @@ type dependencyInstaller struct {
 	previewUpdate              *installer.PreparedOperation
 	operationIDs               map[string]string
 	onResult                   func(environment.PreparedBinding, installer.Result)
+	onPrepare                  func(environment.PreparedBinding)
+	onApply                    func(environment.PreparedBinding)
 	currentAction              environment.PreparedBinding
 }
 
 func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environment.PreparedBinding) (*installer.PreparedOperation, error) {
+	if adapter.onPrepare != nil {
+		adapter.onPrepare(action)
+	}
 	if adapter.beforeApply != nil {
 		if err := adapter.beforeApply(); err != nil {
 			return nil, environment.Stop(err)
@@ -269,6 +287,9 @@ func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *install
 		if err := adapter.beforeApply(); err != nil {
 			return installer.Result{}, environment.Stop(err)
 		}
+	}
+	if adapter.onApply != nil {
+		adapter.onApply(adapter.currentAction)
 	}
 	result, err := adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
 	if adapter.onResult != nil {
@@ -434,7 +455,7 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 
 func (adapter *dependencyInstaller) recordedDependencyRelease(action environment.PreparedBinding) (*domain.RecordedDirectoryRelease, error) {
 	var recorded *domain.RecordedDirectoryRelease
-	if action.Package.Source.Registry != nil && (action.Action == "repair" || action.Action == environment.ActionInstall && action.InstallationID != "") {
+	if action.Package.Source.Registry != nil && (dependencyRepairOperation(action.Action) || action.Action == environment.ActionInstall && action.InstallationID != "") {
 		state, err := adapter.app.StateStore.Load()
 		if err != nil {
 			return nil, err
@@ -472,7 +493,7 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 	if action.Action == environment.ActionInstall {
 		operation = domain.DirectoryNewTarget
 	}
-	if action.Action == "repair" && action.Package.ExecutableFiles == nil {
+	if dependencyRepairOperation(action.Action) && action.Package.ExecutableFiles == nil {
 		pin, err := hydrateRecordedDependencyInventory(ctx, adapter.app, *action.Package)
 		if err != nil {
 			return nil, err
@@ -509,4 +530,8 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 		return adapter.app.Installer.PreviewInstallAfterUpdate(ctx, request, adapter.previewUpdate)
 	}
 	return adapter.app.Installer.Prepare(ctx, request)
+}
+
+func dependencyRepairOperation(action environment.DesiredAction) bool {
+	return action == environment.DesiredAction(installer.OpRepair) || action == environment.DesiredAction(installer.OpRefreshProjection)
 }

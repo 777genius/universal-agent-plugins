@@ -34,11 +34,13 @@ type TerminalConfig struct {
 type MultiSelectRequest struct {
 	SelectRequest
 	MinSelected int
+	Filterable  bool
 }
 
 var (
 	ErrInvalidRequest   = errors.New("invalid terminal request")
 	ErrInvalidSelection = errors.New("invalid terminal selection")
+	ErrReviewTooLarge   = errors.New("confirmation review exceeds the terminal display budget")
 )
 
 // Terminal owns readers only during a call, never the borrowed descriptors.
@@ -96,11 +98,22 @@ func (t *Terminal) SelectMany(ctx context.Context, req MultiSelectRequest) (Sele
 	return result, nil
 }
 
-func (t *Terminal) Confirm(ctx context.Context, req ConfirmRequest) (result Confirmation, err error) {
+func (t *Terminal) Confirm(ctx context.Context, req ConfirmRequest) (Confirmation, error) {
+	return t.ConfirmWithDetails(ctx, req, nil)
+}
+
+type confirmationReview struct {
+	ConfirmRequest
+	Details []string
+}
+
+// ConfirmWithDetails adds an inspectable full-path view without changing the
+// existing ConfirmRequest struct or Confirm method contract.
+func (t *Terminal) ConfirmWithDetails(ctx context.Context, req ConfirmRequest, details []string) (result Confirmation, err error) {
 	if err := terminalContext(ctx); err != nil {
 		return Confirmation{}, err
 	}
-	req, err = normalizeConfirm(req)
+	review, err := normalizeConfirmationReview(confirmationReview{ConfirmRequest: req, Details: details})
 	if err != nil {
 		return Confirmation{}, err
 	}
@@ -120,9 +133,9 @@ func (t *Terminal) Confirm(ctx context.Context, req ConfirmRequest) (result Conf
 		return Confirmation{}, err
 	}
 	if t.mode == ModeRich {
-		return t.renderer.confirm(ctx, req, queued)
+		return t.renderer.confirm(ctx, review, queued)
 	}
-	return t.confirmPlain(ctx, req, queued)
+	return t.confirmPlain(ctx, review, queued)
 }
 
 func terminalContext(ctx context.Context) error {

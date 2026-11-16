@@ -3,8 +3,10 @@ package planner
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
@@ -167,7 +169,15 @@ func goldenRoot(t *testing.T) string {
 
 func goldenFor(t *testing.T, root string) goldentest.Golden {
 	t.Helper()
-	return goldentest.Golden{Replace: []goldentest.Replacement{{From: root, To: "<root>"}}}
+	definitions := domain.ClientDefinitions()
+	replacements := make([]goldentest.Replacement, 0, len(definitions)+1)
+	for _, definition := range definitions {
+		clientRoot := filepath.Join(root, "clients", string(definition.ID))
+		normalized := "<root>/clients/" + string(definition.ID)
+		replacements = append(replacements, goldentest.Replacement{From: strconv.Quote(clientRoot), To: strconv.Quote(normalized)})
+	}
+	replacements = append(replacements, goldentest.Replacement{From: root, To: "<root>"})
+	return goldentest.Golden{Replace: replacements}
 }
 
 func errorText(err error) string {
@@ -175,4 +185,27 @@ func errorText(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func TestPlanGoldenNormalizesRawAndQuotedClientPaths(t *testing.T) {
+	t.Setenv(goldentest.UpdateEnv, "")
+	root := goldenRoot(t)
+	golden := goldenFor(t, root)
+	golden.Dir = t.TempDir()
+	expected := map[string]string{
+		"raw":    "<root>/clients/opencode",
+		"quoted": "Review \"<root>/clients/opencode\" before native startup.",
+	}
+	body, err := json.MarshalIndent(expected, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(golden.Dir, "quoted_client_path.json"), append(body, '\n'), 0600); err != nil {
+		t.Fatal(err)
+	}
+	clientRoot := filepath.Join(root, "clients", "opencode")
+	golden.Assert(t, "quoted_client_path", map[string]string{
+		"raw":    clientRoot,
+		"quoted": "Review " + strconv.Quote(clientRoot) + " before native startup.",
+	})
 }

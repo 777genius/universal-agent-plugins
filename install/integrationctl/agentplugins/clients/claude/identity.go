@@ -54,7 +54,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 		return clients.RegistryIndeterminate, fmt.Errorf("the Claude Code plugin registry command failed with exit code %d", result.ExitCode)
 	}
 	if plan.Scope == domain.ScopeProject {
-		return claudeProjectRegistryFinding(result.Stdout, client, plan, managed), nil
+		return inspectClaudeProjectRegistry(ctx, result.Stdout, client, plan, managed)
 	}
 	switch PluginStatusFromListForScope(result.Stdout, plan.DeclaredName, plan.ActivePath, claudeListingScope(plan.Scope)) {
 	case StatusInstalled:
@@ -124,6 +124,18 @@ func classifyClaudePreparedEntry(root string, entry os.DirEntry, plan domain.Del
 
 func classifyClaudePreparedDirectory(path string, plan domain.DeliveryPlan, name string, owned bool) (clients.RegistryFinding, bool, error) {
 	manifestName, readErr := shared.ReadJSONManifestName(filepath.Join(path, ".claude-plugin", "plugin.json"))
+	if os.IsNotExist(readErr) && plan.Scope == domain.ScopeProject {
+		bundledName, bundleErr := shared.ReadJSONManifestName(filepath.Join(path, claudeProjectBundleDirectory, ".claude-plugin", "plugin.json"))
+		if bundleErr == nil {
+			valid, err := hasClaudeProjectMarketplace(path, bundledName, filepath.Base(path))
+			if err != nil || !valid {
+				return clients.RegistryIndeterminate, false, err
+			}
+			manifestName, readErr = bundledName, nil
+		} else if !os.IsNotExist(bundleErr) {
+			return clients.RegistryIndeterminate, false, bundleErr
+		}
+	}
 	if os.IsNotExist(readErr) {
 		// Plain skills legitimately share this directory and do not claim a
 		// plugin identity.

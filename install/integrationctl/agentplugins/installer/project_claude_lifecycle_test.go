@@ -20,6 +20,13 @@ func claudeSDKBytes(t *testing.T, path string) string {
 	return string(body)
 }
 
+func claudeSDKSkillPath(root string, scope domain.InstallScope) string {
+	if scope == domain.ScopeProject {
+		root = filepath.Join(root, ".agentplugins-plugin")
+	}
+	return filepath.Join(root, claude.ClaudeRuntimeDirectory, "skills", "docs", "SKILL.md")
+}
+
 func TestProjectClaudePublicInstallerLifecycleSeparatesUserAndProjects(t *testing.T) {
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -45,6 +52,8 @@ func TestProjectClaudePublicInstallerLifecycleSeparatesUserAndProjects(t *testin
 		claudeSDKWrite(t, filepath.Join(f.dataRoot, "keep.txt"), "retained scoped data\n")
 		binding := f.binding(t)
 		wantActivation := domain.ActivationActive
+		// The fixture retains the same-name user plugin. Claude MCP selectors
+		// omit scope/marketplace, so native readiness remains ambiguous here.
 		if project != "" {
 			wantActivation = domain.ActivationPrepared
 		}
@@ -62,8 +71,8 @@ func claudeSDKUpdateRepairRemove(t *testing.T, fixtures []*claudeSDKFixture, ori
 	userBinding, bBinding := fixtures[0].binding(t), fixtures[2].binding(t)
 	beforeUser, beforeB := claudeSDKBytes(t, filepath.Join(fixtures[0].state, "state-v2.json")), claudeSDKBytes(t, filepath.Join(fixtures[2].state, "state-v2.json"))
 	binding := f.binding(t)
-	path := filepath.Join(binding.TargetLocator, claude.ClaudeRuntimeDirectory, "skills", "docs", "SKILL.md")
-	if result := f.apply(t, installer.OpUpdate, "unchanged"); result.Outcome != installer.OutcomeUnchanged {
+	path := claudeSDKSkillPath(binding.TargetLocator, domain.InstallScope(binding.Scope))
+	if result := f.apply(t, installer.OpUpdate, "unchanged"); result.Mutated || result.Client.Activation != string(domain.ActivationPrepared) || len(result.ManualActions) == 0 {
 		t.Fatalf("unchanged SDK update=%+v", result)
 	}
 	claudeSDKWrite(t, path, "external drift\n")
@@ -88,7 +97,7 @@ func claudeSDKUpdateRepairRemove(t *testing.T, fixtures []*claudeSDKFixture, ori
 		t.Fatal("project SDK lifecycle changed user/project B ownership")
 	}
 	for _, other := range []domain.ClientBinding{userBinding, bBinding} {
-		if claudeSDKBytes(t, filepath.Join(other.TargetLocator, claude.ClaudeRuntimeDirectory, "skills", "docs", "SKILL.md")) != original {
+		if claudeSDKBytes(t, claudeSDKSkillPath(other.TargetLocator, domain.InstallScope(other.Scope))) != original {
 			t.Fatal("project SDK lifecycle changed another native package")
 		}
 	}
@@ -125,7 +134,7 @@ func claudeSDKInterruptedUpdateAndRestart(t *testing.T, f *claudeSDKFixture) {
 	*f = *fresh
 	f.apply(t, installer.OpRepair, "repair-after-process-restart")
 	if binding := f.binding(t); binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
-		t.Fatalf("fresh public SDK did not preserve blocked project discovery=%+v", binding)
+		t.Fatalf("fresh public SDK did not preserve the registered but ambiguous MCP namespace=%+v", binding)
 	}
 }
 
@@ -141,7 +150,7 @@ func claudeSDKRepairPinned(t *testing.T, f *claudeSDKFixture, original string) {
 	f.request.PackageRoot, f.request.SourceRoot = f.packageRoot, ""
 }
 
-func TestProjectClaudePreparedInitialAddReplayStatusAndChangedBytes(t *testing.T) {
+func TestProjectClaudeNativeInitialAddReplayStatusAndChangedBytes(t *testing.T) {
 	base, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +166,7 @@ func TestProjectClaudePreparedInitialAddReplayStatusAndChangedBytes(t *testing.T
 	f := newClaudeSDKFixture(t, base, project, user, pkg)
 	f.request.RequiredComponents = []string{"skills"}
 	f.apply(t, installer.OpInstall, "initial-untrusted-no-receipt")
-	if binding := f.binding(t); binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
+	if binding := f.binding(t); binding.Activation != domain.ActivationActive || binding.Verification != domain.VerificationInstalled {
 		t.Fatalf("initial untrusted binding=%+v", binding)
 	}
 	calls := f.runner.calls
@@ -165,23 +174,29 @@ func TestProjectClaudePreparedInitialAddReplayStatusAndChangedBytes(t *testing.T
 	if err != nil || view.Recovery.Required || f.runner.calls != calls {
 		t.Fatalf("host-free status=%+v,%v calls=%d/%d", view, err, f.runner.calls, calls)
 	}
-	replay := f.apply(t, installer.OpInstall, "repeat-blocked-add")
+	replay := f.apply(t, installer.OpInstall, "repeat-native-add")
 	if replay.Outcome != installer.OutcomeUnchanged || replay.Mutated || f.runner.calls <= calls {
-		t.Fatalf("stable prepared replay=%+v calls=%d/%d", replay, f.runner.calls, calls)
+		t.Fatalf("stable native replay=%+v calls=%d/%d", replay, f.runner.calls, calls)
 	}
 	binding := f.binding(t)
-	installed := filepath.Join(binding.TargetLocator, claude.ClaudeRuntimeDirectory, "skills", "docs", "SKILL.md")
+	installed := claudeSDKSkillPath(binding.TargetLocator, domain.InstallScope(binding.Scope))
 	before := claudeSDKBytes(t, installed)
 	claudeSDKWrite(t, sourceSkill, "---\nname: docs\ndescription: Updated project marker\n---\nVersion two.\n")
-	updated := f.apply(t, installer.OpUpdate, "changed-bytes-still-blocked")
+	updated := f.apply(t, installer.OpUpdate, "changed-bytes-native-refresh")
 	if updated.Outcome == installer.OutcomeUnchanged || !updated.Mutated || claudeSDKBytes(t, installed) == before {
 		t.Fatalf("changed owned bytes called unchanged=%+v", updated)
 	}
-	if binding := f.binding(t); binding.Activation != domain.ActivationPrepared {
-		t.Fatalf("changed bytes promoted discovery=%+v", binding)
+	if binding := f.binding(t); binding.Activation != domain.ActivationActive {
+		t.Fatalf("changed bytes failed native discovery=%+v", binding)
 	}
-	f.apply(t, installer.OpRemove, "remove-inactive-owned-project")
+	f.apply(t, installer.OpRemove, "remove-active-owned-project")
 	if _, err := os.Stat(binding.TargetLocator); !os.IsNotExist(err) {
 		t.Fatalf("inactive owned artifact survived=%v", err)
 	}
+	f.apply(t, installer.OpInstall, "re-add-retained-installation-id")
+	returned := f.binding(t)
+	if returned.PhysicalArtifact != binding.PhysicalArtifact || returned.TargetLocator != binding.TargetLocator || returned.Activation != domain.ActivationActive || returned.Verification != domain.VerificationInstalled {
+		t.Fatalf("same-identity reinstall was not natively complete: before=%+v after=%+v", binding, returned)
+	}
+	f.apply(t, installer.OpRemove, "remove-re-added-project")
 }

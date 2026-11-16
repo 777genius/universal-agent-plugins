@@ -62,6 +62,15 @@ PINS = {
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-pc-windows-msvc.zip", "sha256:2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911", "lintai.exe"),
     },
 }
+# Current-source Codex needs the selected-server MCP API qualified in 0.162.0.
+# Keep literal PINS above unchanged for released/draft evidence and its verifier.
+CODEX_SOURCE_PINS = {
+    "linux-amd64": ("github", "openai/codex", "rust-v0.162.0", "codex-x86_64-unknown-linux-musl.tar.gz", "sha256:8daf67f6261161aa5939d8d42a516032d760406216779d7ce6040f242140ff73", "codex-x86_64-unknown-linux-musl"),
+    "linux-arm64": ("github", "openai/codex", "rust-v0.162.0", "codex-aarch64-unknown-linux-musl.tar.gz", "sha256:15162a9b59edf8e512b27414ec0b7db22e6424a1262b0eee8666643e0d295c2f", "codex-aarch64-unknown-linux-musl"),
+    "darwin-arm64": ("github", "openai/codex", "rust-v0.162.0", "codex-aarch64-apple-darwin.tar.gz", "sha256:98e9413a1bd167ae573723939ff178e6d44f1bb21d5cda960dbeb2fa65f49104", "codex-aarch64-apple-darwin"),
+    "windows-amd64": ("github", "openai/codex", "rust-v0.162.0", "codex-x86_64-pc-windows-msvc.exe.zip", "sha256:46558d62bd36d0a87c8db11d440c05d2167e1b14e1d8525c6391ea78b50d8cfa", "codex-x86_64-pc-windows-msvc.exe"),
+}
+
 # Current-source V2 qualification uses official GitHub release assets. Retain
 # the independently pinned V1 PINS above as a separate regression lane.
 OPENCODE_V2_PINS = {
@@ -73,9 +82,22 @@ OPENCODE_V2_PINS = {
 
 
 def selected_pin(args, name):
+    if name == "codex" and not (getattr(args, "release_tag", None)
+            or getattr(args, "release_state", "public") != "public"
+            or getattr(args, "prepared_input", None) or getattr(args, "prepare_only", False)):
+        return CODEX_SOURCE_PINS[args.target]
     if name == "opencode" and getattr(args, "opencode_generation", "v1") == "v2":
         return OPENCODE_V2_PINS[args.target]
     return PINS[args.target][name]
+
+
+def expected_client_version(args):
+    version = selected_pin(args, args.client)[2]
+    if args.client == "codex":
+        return version.removeprefix("rust-v")
+    if args.client == "claude":
+        return version + " (Claude Code)"
+    return version.removeprefix("v")
 
 
 # Exact, anchored selections: every selected test is required and every
@@ -103,6 +125,7 @@ PROJECT_TESTS = {
 # stdio MCP initialize + tools/list path without using vendor credentials.
 # V1 stays on its exact historical selectors and client pin.
 OPENCODE_V2_PROJECT_TESTS = PROJECT_TESTS["opencode"] | {"TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake"}
+BROWSER_PROJECT_TEST = "TestAgentpluginsCodexClaudeNativeBrowserProjectSkillsLifecycle"
 
 
 def select_native_tests(client, project_components=False, released=False, opencode_generation="v1"):
@@ -387,6 +410,42 @@ def prepared_tools(args, directory):
     return result
 
 
+def validate_browser_skills(client, target, project_components, released, required_tests):
+    """Admit real user and untrusted-project browser installs in the same lane."""
+    dual = "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle"
+    if client != "codex" or target != "linux-amd64" or not project_components or released or dual not in required_tests:
+        raise ValueError("browser Skills proof requires current-source Linux Codex project qualification with the dual-client lifecycle")
+
+
+def browser_native_tests(client, target, project_components, released, required_tests):
+    validate_browser_skills(client, target, project_components, released, required_tests)
+    required = required_tests | {BROWSER_PROJECT_TEST}
+    return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
+
+
+def browser_runtime_environment(source):
+    # Reuse the same disposable-hosted boundary and already pinned native tools.
+    # Forward resolved tooling paths, never the provisioner's tokens or HOME.
+    require_hosted("linux-amd64")
+    node = shutil.which("node")
+    if not node:
+        raise RuntimeError("browser Skills proof requires the workflow Node runtime")
+    node, python = Path(node).resolve(strict=True), Path(sys.executable).resolve(strict=True)
+    cache = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH", ""))
+    expected = Path(os.environ["RUNNER_TEMP"]).resolve() / "uap-native-browser"
+    if not cache.is_absolute() or cache.resolve(strict=True) != expected or not cache.is_dir():
+        raise RuntimeError("browser Skills proof requires its exact disposable Chromium cache")
+    for path in (node, python, source / "ui/skills-picker/node_modules/@playwright/test/cli.js",
+                 source / "scripts/terminal-ui/native_browser.py"):
+        if not path.is_file():
+            raise RuntimeError("browser Skills proof is missing an exact tooling file: " + str(path))
+    return {"AGENTPLUGINS_NATIVE_BROWSER_LIVE": "1",
+            "AGENTPLUGINS_NATIVE_BROWSER_SOURCE": str(source),
+            "AGENTPLUGINS_NATIVE_BROWSER_NODE": str(node),
+            "AGENTPLUGINS_NATIVE_BROWSER_PYTHON": str(python),
+            "PLAYWRIGHT_BROWSERS_PATH": str(cache.resolve())}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--client", choices=PATTERNS, required=True)
@@ -404,6 +463,7 @@ def main():
     parser.add_argument("--target-scope", choices=('historical-nine', 'linux-amd64'), default='historical-nine')
     parser.add_argument("--project-components", action="store_true", help="also require current-source project lifecycle evidence with explicit discovery limits; never released/draft proof")
     parser.add_argument("--opencode-generation", choices=("v1", "v2"), default="v1", help="select pinned OpenCode native generation; V2 requires current-source project proof")
+    parser.add_argument("--browser-skills", action="store_true", help="drive the required dual-user and dual-project Skill installs through the real browser and public CLI; current-source Linux Codex only")
     args = parser.parse_args()
     draft.validate(args)
     if args.opencode_generation == "v2" and (args.client != "opencode" or not args.project_components or args.release_tag or args.release_state != "public" or args.prepared_input or args.prepare_only):
@@ -419,6 +479,13 @@ def main():
             bool(args.release_tag) or args.release_state == "draft" or bool(args.prepared_input) or args.prepare_only, args.opencode_generation)
     except ValueError as error:
         parser.error(str(error))
+    if args.browser_skills:
+        try:
+            pattern, required_tests = browser_native_tests(args.client, args.target, args.project_components,
+                bool(args.release_tag) or args.release_state == "draft" or bool(args.prepared_input) or args.prepare_only,
+                required_tests)
+        except ValueError as error:
+            parser.error(str(error))
     require_hosted(args.target)
     source = Path(__file__).resolve().parents[1]
     if args.prepare_only:
@@ -487,6 +554,14 @@ def main():
         home = scratch / "home"
         home.mkdir()
         env = {**profile_environment(home, args.target), "TEMP": str(evidence_root), "TMP": str(evidence_root), "TMPDIR": str(evidence_root), "PATH": str(binary_dir), "LANG": "en_US.UTF-8", **disposable_runtime_environment(args.target), "AGENTPLUGINS_INSTALLER_BIN": str(installer), "AGENTPLUGINS_INSTALLER_COMMIT": identity["commit"], "AGENTPLUGINS_INSTALLER_TREE": identity["tree"], "AGENTPLUGINS_NATIVE_PROBE_BIN": str(probe), "AGENTPLUGINS_LINTAI_BIN": str(scanner), "AGENTPLUGINS_LINTAI_SHA256": scanner_evidence["binary_sha256"], "AGENTPLUGINS_LINTAI_ARCHIVE_SHA256": PINS[args.target]["lintai"][4].split(":", 1)[1]}
+        if args.browser_skills:
+            browser_env = browser_runtime_environment(source)
+            env.update(browser_env)
+            identity["browser_skills"] = {"required_test": "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle",
+                "required_tests": ["TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle", BROWSER_PROJECT_TEST],
+                "install_surface": "Chromium -> public CLI --ui -> real pinned Codex and Claude",
+                "node_sha256": hashlib.sha256(Path(browser_env["AGENTPLUGINS_NATIVE_BROWSER_NODE"]).read_bytes()).hexdigest(),
+                "python_sha256": hashlib.sha256(Path(browser_env["AGENTPLUGINS_NATIVE_BROWSER_PYTHON"]).read_bytes()).hexdigest()}
         if os.name == "nt":
             env["SystemRoot"] = os.environ["SystemRoot"]
             env["COMSPEC"] = str(Path(env["SystemRoot"]) / "System32/cmd.exe")
@@ -567,7 +642,7 @@ def main():
             env[prefix + "_PROJECT_NATIVE_E2E"] = "1"
         env[prefix + "_BIN"] = str(client)
         env[prefix + "_SHA256"] = client_evidence["binary_sha256"]
-        env[prefix + "_VERSION"] = "2.2.5" if args.client == "opencode" and args.opencode_generation == "v2" else {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.34"}[args.client]
+        env[prefix + "_VERSION"] = expected_client_version(args)
         if dual_peer is not None:
             env["AGENTPLUGINS_DUAL_CODEX_CLAUDE_NATIVE_E2E"] = "1"
             env["AGENTPLUGINS_CLAUDE_BIN"] = str(dual_peer[0])

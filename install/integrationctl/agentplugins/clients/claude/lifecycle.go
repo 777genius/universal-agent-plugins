@@ -47,11 +47,16 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		return domain.ActivationOutcome{}, err
 	}
 	outcome := shared.StartedActivation(request)
+	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
 		return shared.FailedActivation(outcome, "install Claude Code CLI and retry exact @skills-dir verification", fmt.Errorf("trusted Claude Code CLI is required"))
 	}
 	if request.Plan.Scope == domain.ScopeProject {
-		return activateClaudeProject(ctx, env, request)
+		outcome, err := activateClaudeProject(ctx, env, request)
+		if err != nil || outcome.Activation != domain.ActivationActive {
+			return outcome, err
+		}
+		return finishClaudeMCPActivation(ctx, env, request, outcome)
 	}
 	if err := verifyClaudePlugin(ctx, env, request); err != nil {
 		if domain.IsUnclosedClientProbe(err) {
@@ -61,7 +66,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 	}
 	outcome.Activation = domain.ActivationActive
 	outcome.Verification = domain.VerificationInstalled
-	return outcome, nil
+	return finishClaudeMCPActivation(ctx, env, request, outcome)
 }
 
 // Deactivate verifies the exact managed identity before the kernel removes the
@@ -78,6 +83,16 @@ func (*Adapter) Deactivate(ctx context.Context, env clients.Env, request domain.
 	listed, err := listClaudeDeactivation(ctx, env, request)
 	if err != nil {
 		return outcome, fmt.Errorf("verify Claude Code plugin before removal: %w", err)
+	}
+	if request.TargetContext.Scope == domain.ScopeProject {
+		current, err := hasClaudeProjectMarketplace(request.ManagedArtifactPath, request.DeclaredName, request.PhysicalArtifactID)
+		if err != nil {
+			return outcome, err
+		}
+		if current {
+			return deactivateClaudeProjectMarketplace(ctx, env, request, listed.Stdout)
+		}
+		outcome.NativeEffect = domain.NativeEffectUnchanged
 	}
 	return finishClaudeDeactivation(outcome, listed.Stdout, request)
 }

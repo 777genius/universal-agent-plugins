@@ -1,6 +1,8 @@
 package pluginkitairepo_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,6 +16,9 @@ type claudeProjectNativeFixture struct {
 	client, installer, project, otherProject string
 	foreign                                  map[string]string
 	diagnosticAttempted                      bool
+	untrustedProfile                         bool
+	untrustedProfileBaseline                 []byte
+	ownedUsageRemoval                        *claudeOwnedUsageRemoval
 }
 
 func newClaudeProjectNativeFixture(t *testing.T) *claudeProjectNativeFixture {
@@ -29,7 +34,7 @@ func newClaudeProjectNativeFixture(t *testing.T) *claudeProjectNativeFixture {
 		f.keep(t, filepath.Join(root, "settings.json"), `{"enabledPlugins":{"foreign-project-fixture@skills-dir":false}}`)
 		f.keep(t, filepath.Join(root, "skills", "foreign-project-fixture", "SKILL.md"), "---\nname: foreign-project-fixture\ndescription: Preserve foreign project fixture\n---\nInert foreign bytes.\n")
 	}
-	f.keep(t, filepath.Join(f.base.ConfigDir, "plugins", "cache", "foreign", "keep.txt"), "foreign user plugin cache\n")
+	claudeProjectSeedForeignCache(t, f)
 	return f
 }
 
@@ -41,11 +46,33 @@ func (f *claudeProjectNativeFixture) keep(t *testing.T, path, body string) {
 
 func (f *claudeProjectNativeFixture) requireForeign(t *testing.T) {
 	t.Helper()
+	if err := f.checkUntrustedProfile(); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(f.project, ".claude", "settings.json"))
+	var settings struct {
+		EnabledPlugins map[string]bool `json:"enabledPlugins"`
+	}
+	if err != nil || json.Unmarshal(body, &settings) != nil {
+		t.Fatal("project settings became unreadable", err)
+	}
+	if enabled, exists := settings.EnabledPlugins["foreign-project-fixture@skills-dir"]; !exists || enabled {
+		t.Fatal("native project registration changed the foreign disabled plugin")
+	}
 	for path, want := range f.foreign {
-		if nativeSHA(t, path) != want {
-			t.Fatalf("foreign user/project configuration changed: %s", path)
+		if got := nativeSHA(t, path); got != want && !f.allowsOwnedUsageRemoval(path, want, got) {
+			t.Fatal(claudeForeignSnapshotChange(f.base.Root, path, want, got))
 		}
 	}
+}
+
+// Diagnostic only: the existing whole-file equality remains the failure gate.
+func claudeForeignSnapshotChange(root, path, before, after string) string {
+	relative, err := filepath.Rel(root, path)
+	if err != nil {
+		relative = path
+	}
+	return fmt.Sprintf("foreign user/project configuration changed: path=%.256q before_sha256=%.64s after_sha256=%.64s", filepath.ToSlash(relative), before, after)
 }
 
 func (f *claudeProjectNativeFixture) run(t *testing.T, label string, args ...string) (map[string]any, error) {
@@ -53,11 +80,27 @@ func (f *claudeProjectNativeFixture) run(t *testing.T, label string, args ...str
 	if len(args) > 0 && args[0] == "add" {
 		args = append(args, "--no-save")
 	}
+	// Project registration owns one settings object; its foreign keys remain checked.
+	delete(f.foreign, filepath.Join(f.project, ".claude", "settings.json"))
 	args = append(args, "--scope", "project", "--project-root", f.project)
-	result, err := commandsRunInstaller(t, f.base.Root, f.project, f.base.env(filepath.Dir(f.client)), f.installer, label, args...)
+	if label == "trusted-foreign-mcp-remove" {
+		claudeTrustedRecordRemoveBaseline(t, f)
+	}
+	environment := f.base.env(filepath.Dir(f.client))
+	result, err := commandsRunInstaller(t, f.base.Root, f.project, environment, f.installer, label, args...)
+	if label == "trusted-foreign-mcp-remove" {
+		claudeTrustedRecordProfile(t, f, "trusted-foreign-mcp-remove-after-profile.json")
+	}
 	if err != nil && !f.diagnosticAttempted {
 		f.diagnosticAttempted = true
-		records, logs := claudeFailureListingRecords(f.client, f.project, f.otherProject, f.base.env(filepath.Dir(f.client)), captureClaudeDiagnostic)
+		f.requireForeign(t)
+		records, logs := claudeFailureListingRecords(f.client, f.project, f.otherProject, environment, captureClaudeDiagnostic)
+		if record, streams := claudeFailureMCPRecord(label, f.client, f.project, f.base.ConfigDir, environment, captureClaudeDiagnostic); record != nil {
+			records = append(records, record)
+			for name, body := range streams {
+				logs[name] = body
+			}
+		}
 		for name, body := range logs {
 			nativeWrite(t, filepath.Join(f.base.Root, name), body, 0600)
 		}

@@ -25,7 +25,9 @@ func newProjectGroupReportFixture(t *testing.T) projectGroupReportFixture {
 		plan: Plan{InstallationID: id}, detected: map[domain.ClientID]domain.DetectedClient{}}
 	got := usecase.GroupResult{InstallationID: id, Phase: usecase.GroupPhaseCompleted}
 	installation := domain.Installation{InstallationID: id, Clients: map[string]domain.ClientBinding{}}
-	for _, clientID := range []domain.ClientID{domain.ClientCline, domain.ClientClaude} {
+	// Cover both tracked native effects and a prepared-only client that has
+	// no native effect contract. Claude project installs now track their effects.
+	for _, clientID := range []domain.ClientID{domain.ClientCline, domain.ClientAntigravity} {
 		client := domain.DetectedClient{ClientID: clientID, ConfigRoot: filepath.Join(filepath.Dir(project), string(clientID))}
 		active := filepath.Join(project, "managed", string(clientID))
 		target := domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: project, UserConfigRoot: client.ConfigRoot}
@@ -38,7 +40,7 @@ func newProjectGroupReportFixture(t *testing.T) projectGroupReportFixture {
 		prepared.plan.Targets = append(prepared.plan.Targets, PlanTarget{ClientID: string(clientID), ConfigRoot: client.ConfigRoot, TargetPath: active, BindingID: bindingID})
 		prepared.deliveries = append(prepared.deliveries, preparedDeliveryPlan{plan: plan})
 		effect := domain.NativeEffectUnchanged
-		if clientID == domain.ClientClaude {
+		if clientID == domain.ClientAntigravity {
 			effect = ""
 		}
 		outcome := domain.ActivationOutcome{Activation: domain.ActivationPrepared, Authentication: domain.AuthenticationNotChecked,

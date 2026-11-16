@@ -52,7 +52,7 @@ func TestManagementRegistryReservedIdentityIsNotInstalledAuthority(t *testing.T)
 		t.Fatal("a different release borrowed installed eligibility", recorded, err)
 	}
 	managementApply(t, managementPrepare(t, backend, management.ChangeRequest{Action: management.Remove,
-		Aliases: []string{"docs"}, TargetIds: []string{"profile-codex", "profile-claude"}, ExternalUninstalled: true}))
+		Aliases: []string{"docs"}, TargetIds: []string{"profile-codex", "profile-claude"}}))
 	first.Package = retained.request.prepared[0].Package
 	recorded, err = adapter.recordedDependencyRelease(first)
 	if err != nil || recorded != nil {

@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 // SchemaVersion identifies the JSON Lines record layout.
@@ -57,7 +59,7 @@ type Entry struct {
 func (run Run) Failed() bool {
 	for _, entry := range run.Entries {
 		switch entry.Status {
-		case "failed", "not_attempted", "incomplete", "conflict", "recovery_required", "cancelled": //nolint:misspell // Preserve the installer outcome wire value.
+		case "failed", "not_attempted", "incomplete", "conflict", "recovery_required", string(installer.OutcomeCancelled):
 			return true
 		}
 	}

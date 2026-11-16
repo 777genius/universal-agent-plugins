@@ -59,17 +59,29 @@
     }
   },
   "codex": {
-    "Commands": [],
-    "Error": "",
+    "Commands": [
+      [
+        "\u003croot\u003e/bin/codex",
+        "plugin",
+        "remove",
+        "demo@agentplugins-8f97b00da374",
+        "--json"
+      ],
+      [
+        "\u003croot\u003e/bin/codex",
+        "plugin",
+        "list",
+        "--json"
+      ]
+    ],
+    "Error": "codex did not confirm exact managed plugin absence",
     "Outcome": {
-      "Activation": "manual_activation_required",
+      "Activation": "not_required",
       "ArtifactRemovalAllowed": false,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
-      "UserActions": [
-        "uninstall the plugin in Codex, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
-      ]
+      "UserActions": null
     }
   },
   "copilot": {

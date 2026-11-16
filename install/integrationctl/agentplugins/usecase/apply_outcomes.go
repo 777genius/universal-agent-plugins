@@ -28,6 +28,10 @@ func (session *applySession) dryRunPath() (AddResult, error) {
 			}
 		}
 		session.result.NoChange = !session.replace && !session.registrationMigration && lifecycleConverged(current)
+		if session.input.OnlinePreview && session.freshExistingVerification() && packageRevisionMatches(current.PackageRevision, session.input.Envelope) && !session.registrationMigration && !session.plan.RequiresNativeProjectionRefresh() {
+			_, result, err := session.persistReadOnlyObservation(current)
+			return result, err
+		}
 	}
 	return session.result, nil
 }
@@ -73,7 +77,7 @@ func (session *applySession) finishExistingLifecycle(current domain.ClientBindin
 			return true, session.result, fmt.Errorf("prepare installed MCP runtime: %w", err)
 		}
 	}
-	if !lifecycleConverged(current) || session.service.canResumePreparedObservation(session.input, session.plan) {
+	if (!lifecycleConverged(current) || session.service.canResumePreparedObservation(session.input, session.plan)) && !session.freshExistingVerification() {
 		result, err := session.service.resume(session.ctx, session.input, session.result, session.installationID, session.clientBindingID, current)
 		return true, result, err
 	}
@@ -128,13 +132,17 @@ func (session *applySession) persistReadOnlyObservation(current domain.ClientBin
 		}
 		return true, session.result, verifyErr
 	}
+	if complete, result, err := session.completeExistingPreparedSetup(current, verified); complete {
+		return true, result, err
+	}
 	if verified.Activation != "" && !sameLifecycleOutcome(verified, lifecycleOutcome(current)) {
 		result, err := session.service.persistObservedLifecycle(session.input, session.result, session.installationID, session.clientBindingID, verified)
 		return true, result, err
 	}
-	// Preserve optional local guidance from a successful read-only verification.
-	// Lifecycle state remains unchanged, and local actions stay out of public JSON.
+	// Preserve fresh guidance even when the lifecycle values did not change.
+	// Local actions stay out of public JSON.
 	if verified.Activation != "" {
+		session.result.Activation.UserActions = append([]string(nil), verified.UserActions...)
 		session.result.Activation.LocalActions = append([]string(nil), verified.LocalActions...)
 	}
 	session.result.NoChange = true

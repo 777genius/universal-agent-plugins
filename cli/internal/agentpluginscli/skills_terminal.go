@@ -37,12 +37,9 @@ func runSkillsTerminal(cmd *cobra.Command, app App, opts *options, s *skillsCata
 		request.TargetIDs = append(request.TargetIDs, string(target))
 	}
 	s.rememberTerminalCandidates(candidates)
-	if interactive {
-		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Preparing installation review…"); err != nil {
-			return err
-		}
-	}
+	stop := startCommandActivity(cmd, app, opts, "Preparing installation review")
 	prepared, err := app.PrepareSkills(cmd.Context(), request)
+	stop()
 	if err != nil {
 		return reportSkillsPreparationRefusal(cmd, opts, s, err)
 	}
@@ -83,12 +80,9 @@ func selectSkillsTerminal(cmd *cobra.Command, opts *options, s *skillsCatalogSes
 	if candidate != nil {
 		return []skillsource.Candidate{*candidate}, nil
 	}
-	if interactive {
-		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Scanning Skills catalog…"); err != nil {
-			return nil, err
-		}
-	}
+	stop := startCommandActivity(cmd, s.app, opts, "Scanning Skills catalog")
 	catalog, err := s.scan(cmd.Context(), s.source.RequestedPath)
+	stop()
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +92,7 @@ func selectSkillsTerminal(cmd *cobra.Command, opts *options, s *skillsCatalogSes
 	if !interactive {
 		return nil, skillsMissingSelection(cmd, opts, "SELECTION_REQUIRED", "Use --skill or --path with --target in a non-interactive session", catalog.Candidates)
 	}
-	return promptSkillsCatalog(cmd, s, catalog)
+	return promptSkillsCatalog(cmd, s, catalog, opts)
 }
 func selectNamedSkills(cmd *cobra.Command, opts *options, s *skillsCatalogSession, catalog skillspicker.Catalog, names []string) ([]skillsource.Candidate, error) {
 	if !catalog.Complete {
@@ -149,7 +143,9 @@ func skillsTerminalTargets(cmd *cobra.Command, app App, opts *options, interacti
 	if err != nil {
 		return nil, err
 	}
+	stop := startCommandActivity(cmd, app, opts, "Detecting available agents")
 	choices, err := app.skillsTargets(cmd.Context())
+	stop()
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +168,18 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 	if opts.format == "json" && opts.dryRun {
 		return renderSkillsDryRun(cmd, review)
 	}
-	if opts.format != "json" {
+	if confirm {
+		var err error
+		app, err = withPrompter(cmd, app, opts)
+		if err != nil {
+			return err
+		}
+	}
+	richReview := false
+	if rich, ok := app.Prompter.(interface{ RichReview() bool }); ok {
+		richReview = confirm && !opts.plain && opts.format == "human" && rich.RichReview()
+	}
+	if opts.format != "json" && !richReview {
 		if err := renderHumanSkillsReview(cmd, review); err != nil {
 			return err
 		}
@@ -181,55 +188,59 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 		return nil
 	}
 	if confirm {
-		app, err := withPrompter(cmd, app, opts)
+		accepted, err := confirmSkillsReview(cmd, app, review, richReview)
 		if err != nil {
 			return err
 		}
-		answer, err := app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Install these Skills?", Default: true})
-		if err != nil {
-			return err
-		}
-		if !answer.Accepted {
+		if !accepted {
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Installation canceled. No changes applied.")
 			return err
 		}
 	}
 	return applySkillsWithRecovery(cmd, app, opts, prepared, confirm && opts.format != "json")
 }
+func confirmSkillsReview(cmd *cobra.Command, app App, review skillspicker.Plan, rich bool) (bool, error) {
+	request := prompt.ConfirmationRequest{Title: "Install these Skills?", Default: true}
+	if rich {
+		request = skillsReviewConfirmation(review)
+	}
+	answer, err := app.Prompter.Confirm(cmd.Context(), request)
+	if errors.Is(err, prompt.ErrReviewTooLarge) {
+		if err := renderHumanSkillsReview(cmd, review); err != nil {
+			return false, err
+		}
+		answer, err = app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Install the reviewed Skills?", Default: true})
+	}
+	return answer.Accepted, err
+}
+
+func applySkillsTerminalAttempt(cmd *cobra.Command, app App, opts *options, prepared *PreparedSkillsBatch) (SkillsBatchResult, error) {
+	if board := startSkillsProgressBoard(app, opts, prepared.Actions()); board != nil {
+		result, err := prepared.ApplyWithProgress(cmd.Context(), board.observe)
+		board.finish(result)
+		return result, err
+	}
+	stop := startCommandActivity(cmd, app, opts, "Installing selected Skills")
+	result, err := prepared.Apply(cmd.Context())
+	stop()
+	return result, err
+}
+
 func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchResult, logPath string) error {
 	if opts.format != "json" {
 		writer := cmd.OutOrStdout()
-		if _, err := fmt.Fprintf(writer, "Skills installation %s\n", prompt.SafeText(result.Status)); err != nil {
-			return err
-		}
-		for _, item := range result.Items {
-			if _, err := fmt.Fprintf(writer, "  %s → %s: %s\n",
-				prompt.SafeText(item.Alias), prompt.SafeText(item.ClientID), prompt.SafeText(item.Status)); err != nil {
-				return err
+		display := result
+		display.Items = append([]SkillsBatchItem(nil), result.Items...)
+		for i := range display.Items {
+			if display.Items[i].failure != nil {
+				display.Items[i].Reason = ""
 			}
 		}
-		if result.Status == "succeeded" {
-			_, err := fmt.Fprint(writer,
-				"Files: installed or already up to date.\n"+
-					"Agent discovery: not verified by this Skills flow.\n"+
-					"Activation: not verified.\n"+
-					"Next: open each agent, complete any trust/sign-in steps,\n"+
-					"      reload if prompted, and confirm the Skill is visible.\n")
+		if err := renderHumanSkillsResult(writer, display); err != nil {
 			return err
 		}
 		reports := reportByAgent(skillsAgentItems(result.Items))
-		if err := renderAgentAttention(writer, reports, logPath, retryTargetHint(reports)); err != nil {
-			return err
-		}
-		if err := renderPartialSkillsReadiness(writer, result); err != nil {
-			return err
-		}
-		for _, instruction := range result.RepairInstructions {
-			if _, err := fmt.Fprintln(writer, "Next:", prompt.SafeText(instruction)); err != nil {
-				return err
-			}
-		}
-		return nil
+		return renderAgentAttention(writer, reports, logPath, retryTargetHint(reports))
 	}
 	outcome := skillBatchOutcome(result)
 	output := struct {
@@ -245,7 +256,7 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 		Scope                string                       `json:"scope"`
 		ScopeSelectionReason string                       `json:"scope_selection_reason"`
 	}{SchemaVersion: outputSchemaVersion, Command: "skills add", Result: outputResultSuccess, Status: result.Status, Items: outcome.Items, RepairInstructions: outcome.Result.RepairInstructions, LogFile: logPath}
-	output.Readiness, output.NextActions = deriveSkillsReadiness(result.Status)
+	output.Readiness, output.NextActions = deriveSkillsReadiness(result.Status, result.Items...)
 	if output.Readiness == "failed" {
 		output.Result = outputResultFailure
 	}
@@ -268,8 +279,6 @@ func renderPartialSkillsReadiness(writer io.Writer, result SkillsBatchResult) er
 		return nil
 	}
 	_, err := fmt.Fprintf(writer,
-		"Files: %d of %d target results installed or already up to date; other targets need attention.\n"+
-			"Agent discovery: not verified by this Skills flow.\n"+
-			"Activation: not verified.\n", applied, len(result.Items))
+		"Files: %d of %d target results installed or already up to date; other targets need attention.\n", applied, len(result.Items))
 	return err
 }

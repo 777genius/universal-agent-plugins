@@ -13,11 +13,13 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+from runpy import run_path
 from datetime import datetime, timezone
 from urllib.parse import urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
+CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -279,6 +281,38 @@ def snapshot(root):
                     digest = "unreadable"
                 found[f"{target_root.name}/{relative}"] = digest
     return found
+
+
+def snapshot_change_evidence(before, after):
+    """Describe existing snapshot differences without reading or exporting file bytes."""
+    changed = sorted(path for path in before.keys() | after.keys()
+                     if before.get(path) != after.get(path))
+    entries = [{"path": path[:2048], "path_truncated": len(path) > 2048,
+                "before": before.get(path), "after": after.get(path)}
+               for path in changed[:100]]
+    return {"total": len(changed), "omitted": max(0, len(changed) - len(entries)),
+            "entries": entries}
+
+
+def repeat_native_phase_evidence(before, after_add, after_list, after_native):
+    """Compare every closed phase to the same original snapshot; no new baseline."""
+    return [{"phase": phase, **snapshot_change_evidence(before, after)}
+            for phase, after in (("after-public-repeat-add", after_add),
+                                 ("after-public-repeat-list", after_list),
+                                 ("after-native-checkpoint", after_native))]
+
+
+
+def failed_case_diagnostics(row):
+    """Expose existing failed-case evidence in logs; never change qualification."""
+    keys = ("codex_public_add_ready", "codex_public_repeat_ready",
+            "repeat_native_unchanged", "repeat_native_runtime_only", "repeat_native_changes",
+            "repeat_native_phases", "repeat_verified",
+            "removal_verified", "sentinels_preserved")
+    evidence = {key: row[key] for key in keys if row.get(key) is not None}
+    if "error" in row:
+        evidence["error"] = str(row["error"])[:8192]
+    return evidence
 
 
 def scoped_snapshot(roots, *, snapshotter=None):
@@ -1837,6 +1871,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     env = isolated_client_env(home, case_root, data)
+    codex_skill_case = target == "codex" and kind == "skill"
+    codex_runtime = None
+    codex_add_ready = False
+    codex_repeat_ready = False
     def assert_case_unchanged():
         # Native clients and acquired packages execute as subprocesses.
         # Re-anchor before and after each call; otherwise an ancestor symlink
@@ -1853,6 +1891,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                          *(project / rel for rel in project_skill_roots)):
                 if not path_inside_case(path, case_root):
                     raise ValueError("audit case native/project ancestor was redirected")
+            if codex_runtime is not None:
+                codex_runtime.guard()
         except (OSError, RuntimeError) as error:
             raise ValueError("audit case root became unavailable") from error
 
@@ -1866,6 +1906,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         # Grok inspect reports projectRoot from Git discovery. Never weaken its
         # strict native project identity contract to accept a missing root.
         initialize_project_skill_git_root(project, env, case_root)
+    if codex_skill_case and AGENT_BINARIES.get("codex"):
+        codex_runtime = CODEX_RUNTIME_AUDIT["CodexRuntimeAudit"](
+            AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign)
+        assert_case_unchanged()
     before = snapshot(native_roots)
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)
@@ -1936,6 +1980,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         (kind == "plugin" or
          (bool(skill_path) and lock_pinned and skill_bytes_match))
     )
+    if codex_runtime is not None and installed:
+        codex_runtime.checkpoint("installed", True)
+        codex_add_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](added_json, matching, identity)
     # BUG-016: a single successful add/remove cannot attest idempotence.
     # Repeat the same source and target only after the first registered add;
     # keep native, managed and foreign state inside the same disposable case.
@@ -1943,11 +1990,16 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_list = None
     repeat_identity_ids = []
     repeat_native_unchanged = None
+    repeat_native_runtime_only = False
+    repeat_native_changes = None
+    repeat_native_phases = None
     repeat_lock_unchanged = None
     repeat_project_unchanged = None
     repeat_verified = False
     if installed:
         before_repeat_native = snapshot(native_roots)
+        before_repeat_runtime = (codex_runtime.temporary_git_state()
+                                 if codex_runtime is not None else None)
         before_repeat_project = (snapshot([project / root for root in project_skill_roots])
                                  if grok_prepared else None)
         lock_root = project if kind == "skill" else data
@@ -1961,9 +2013,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         before_repeat_lock = lock_state()
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
                                   **capture_option)
-        repeat_add.pop("_json", None)
+        after_repeat_add = snapshot(native_roots) if codex_runtime is not None else None
+        repeat_add_json = repeat_add.pop("_json", None)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
+        after_repeat_list = snapshot(native_roots) if codex_runtime is not None else None
         repeat_list_json = repeat_list.pop("_json", None)
         repeat_matches = (grok_prepared_skill_installations(
             repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
@@ -1971,7 +2025,21 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 repeat_list_json, identity, target, kind, item, signed_release_pins))
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
-        repeat_native_unchanged = snapshot(native_roots) == before_repeat_native
+        if codex_runtime is not None:
+            codex_runtime.checkpoint("repeat-installed", True)
+            codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
+                repeat_add_json, repeat_matches, identity)
+        after_repeat_native = snapshot(native_roots)
+        if codex_runtime is not None:
+            repeat_native_phases = repeat_native_phase_evidence(
+                before_repeat_native, after_repeat_add, after_repeat_list, after_repeat_native)
+        repeat_native_unchanged = after_repeat_native == before_repeat_native
+        if not repeat_native_unchanged:
+            repeat_native_changes = snapshot_change_evidence(
+                before_repeat_native, after_repeat_native)
+            if codex_runtime is not None:
+                repeat_native_runtime_only = codex_runtime.repeat_runtime_only(
+                    before_repeat_native, after_repeat_native, before_repeat_runtime)
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
@@ -1979,8 +2047,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
             and len(repeat_matches) == 1
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
-            and repeat_native_unchanged and repeat_lock_unchanged
+            and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
             and (not grok_prepared or repeat_project_unchanged)
+            and (not codex_skill_case or codex_repeat_ready)
         )
     # BUG-039: independent native ID+version proof before UAP removes it.
     qoder_native_before_remove = None
@@ -2044,6 +2113,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     post_list = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
+    if codex_runtime is not None and cleanup and cleanup["exit_code"] == 0:
+        codex_runtime.checkpoint("removed", False)
+        assert_case_unchanged()
     copilot_native_after_remove = None
     if target == "copilot" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
         copilot_native_after_remove = copilot_native_plugin_state(
@@ -2129,6 +2201,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     )
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
     install_refused = is_cli_refusal(output)
+    # Still remove an installed-but-unready Skill, but never call its lifecycle
+    # PASS. The public ready states and fresh native inventory are both needed.
+    installed = installed and (not codex_skill_case or codex_add_ready)
     if installed and removal_verified and sentinels_preserved and not repeat_verified:
         status = "repeat-add-unqualified"
     elif target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved and repeat_verified:
@@ -2208,6 +2283,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
+            "repeat_native_runtime_only": repeat_native_runtime_only,
+            "repeat_native_changes": repeat_native_changes,
+            "repeat_native_phases": repeat_native_phases,
             "repeat_lock_unchanged": repeat_lock_unchanged,
             "repeat_project_unchanged": repeat_project_unchanged,
             "repeat_verified": repeat_verified,
@@ -2230,6 +2308,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "qoder_native_after_remove": qoder_native_after_remove,
             "copilot_native_after_repeat": copilot_native_before_remove,
             "copilot_native_after_remove": copilot_native_after_remove,
+            "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
+            "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
+            "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
             "copilot_disabled_setting_retained": copilot_disabled_setting_retained,
             "post_list_schema_valid": post_list_schema_valid,
             "post_remove_identity_registered": post_remove_identity_registered,
@@ -2440,6 +2521,8 @@ def main():
             save()
             line = {"target": args.target, "kind": args.kind, "index": i,
                     "status": result["status"]}
+            if result["status"] != "passed":
+                line.update(failed_case_diagnostics(result))
             if result["status"] == "incomplete-native-proof" and args.kind == "plugin":
                 line["observed_signed_release"] = result.get("signed_release_observation", [])
                 line["expected_signed_release"] = doc["signed_release_pins"].get(item)

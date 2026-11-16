@@ -185,12 +185,19 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 	failedProjection := failedView.Installations[0].Bindings[0].ProjectionDigest
 	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
 	resumedView, err := f.app.Installer.Inspect(context.Background())
-	if err != nil || resumedView.Installations[0].Bindings[0].Activation != string(domain.ActivationActive) || resumedView.Installations[0].Bindings[0].Verification != "installation_verified" || resumedView.Installations[0].Bindings[0].ProjectionDigest != failedProjection {
+	if err != nil || resumedView.Installations[0].Bindings[0].Activation != string(domain.ActivationPrepared) || resumedView.Installations[0].Bindings[0].Verification != "installation_verified" || resumedView.Installations[0].Bindings[0].ProjectionDigest != failedProjection {
 		t.Fatalf("same-pin retry did not resume lifecycle: %+v %v", resumedView, err)
+	}
+	// Retry restores the exact remote MCP projection, while native remote
+	// initialization/authentication remains intentionally unobserved.
+	resumed := resumedView.Installations[0].Bindings[0]
+	servers, inspectErr := savedProjectedMCP(resumed.TargetPath)
+	if inspectErr != nil || len(servers) != 1 || !maps.Equal(servers["demo"], map[string]any{"type": "http", "url": "https://example.test/mcp"}) || resumed.Authentication != string(domain.AuthenticationNotChecked) || resumed.LifecycleConverged {
+		t.Fatalf("same-pin remote retry lost its exact prepared boundary: %+v servers=%#v error=%v", resumed, servers, inspectErr)
 	}
 	status = run(f, "deps", "status", "--format", "json")
 	facts = readDependencyStatusTestFacts(t, status)
-	if !facts["auth_unverified"] || facts["partial"] {
+	if !facts["activation_prepared"] || !facts["auth_unverified"] || facts["partial"] {
 		t.Fatal("unchecked authentication must remain visible: " + status)
 	}
 	beforeDownloads, beforeLookups := source.downloads, source.lookups
@@ -441,17 +448,15 @@ func TestDependencyEnvironmentCLIEndToEnd(t *testing.T) {
 		t.Fatal(e)
 	}
 	run(f, "deps", "lock", "--format", "json")
-	if _, _, err := f.execute(false, "deps", "sync", "--locked", "--yes", "--format", "json"); err == nil {
-		t.Fatal("removal without external uninstall attestation reported success")
+	// The exact owned native registration can now be removed and verified by
+	// Codex itself; no external-uninstall attestation is needed.
+	if len(runners[0].codexIDs) != 1 {
+		t.Fatalf("expected one owned native plugin before removal: %v", runners[0].codexIDs)
 	}
-	beforeRemoval, err := f.store.Load()
-	if err != nil || len(beforeRemoval.EnvironmentReceipts) != 1 {
-		t.Fatalf("incomplete removal dropped owner: %+v %v", beforeRemoval, err)
+	run(f, "deps", "sync", "--locked", "--yes", "--format", "json")
+	if len(runners[0].codexIDs) != 0 {
+		t.Fatalf("automatic removal retained native plugin: %v", runners[0].codexIDs)
 	}
-	if _, err := os.Stat(managed); err != nil {
-		t.Fatal("incomplete removal deleted projection")
-	}
-	run(f, "deps", "sync", "--locked", "--yes", "--external-uninstalled", "--format", "json")
 	state, e = f.store.Load()
 	if e != nil || len(state.EnvironmentReceipts) != 0 {
 		t.Fatalf("terminal removal retained owner: %+v %v", state, e)
@@ -625,6 +630,7 @@ func (m *dependencyInterruptedMutator) Apply(ctx context.Context, prepared *inst
 type dependencyClaudeListing struct {
 	root             string
 	codexIDs         map[string]bool
+	codexRoots       map[string]string
 	failNextCodexAdd bool
 	calls            int
 }
@@ -634,6 +640,16 @@ func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Com
 	for _, value := range command.Env {
 		if strings.HasPrefix(value, "CODEX_HOME=") {
 			args := command.Argv[1:]
+			if len(args) == 5 && args[0] == "plugin" && args[1] == "marketplace" && args[2] == "add" && args[4] == "--json" {
+				return r.fixtureCodexMarketplace(args[3])
+			}
+			if len(args) == 5 && args[0] == "plugin" && args[1] == "marketplace" && args[2] == "update" && args[4] == "--json" && r.codexRoots[args[3]] == "" {
+				return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("fixture marketplace is not registered")}, nil
+			}
+			if len(args) == 4 && args[0] == "plugin" && args[1] == "remove" && args[3] == "--json" {
+				delete(r.codexIDs, args[2])
+				return legacyports.CommandResult{Stdout: []byte(`{"ok":true}`)}, nil
+			}
 			if len(args) >= 3 && args[0] == "plugin" && args[1] == "add" {
 				if r.failNextCodexAdd {
 					r.failNextCodexAdd = false
@@ -653,13 +669,20 @@ func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Com
 				sort.Strings(ids)
 				for _, id := range ids {
 					name, market, _ := strings.Cut(id, "@")
-					installed = append(installed, map[string]any{"pluginId": id, "name": name, "marketplaceName": market, "installed": true, "enabled": true})
+					entry, err := r.fixtureCodexPluginEntry(id, name, market)
+					if err != nil {
+						return legacyports.CommandResult{}, err
+					}
+					installed = append(installed, entry)
 				}
 				body, err := json.Marshal(map[string]any{"installed": installed})
 				return legacyports.CommandResult{Stdout: body}, err
 			}
 			return legacyports.CommandResult{Stdout: []byte(`{"ok":true}`)}, nil
 		}
+	}
+	if len(command.Argv) == 4 && command.Argv[1] == "mcp" && command.Argv[2] == "get" {
+		return r.fixtureClaudeMCP(command)
 	}
 	if strings.Join(command.Argv[1:], " ") != "plugin list --json" {
 		return legacyports.CommandResult{}, fmt.Errorf("unexpected fixture command: %v", command.Argv[1:])

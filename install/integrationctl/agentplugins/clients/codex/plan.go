@@ -22,6 +22,7 @@ func (*Adapter) CheckPlanPrecondition(input clients.PlanInput, plan *domain.Deli
 }
 
 func (*Adapter) RefinePlan(_ context.Context, input clients.PlanInput, plan *domain.DeliveryPlan) error {
+	shared.QualifyRawSkillInstallationAuthentication(input.Envelope, plan)
 	if plan.Scope == domain.ScopeProject {
 		return refineCodexProjectPlan(input, plan)
 	}

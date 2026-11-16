@@ -44,7 +44,7 @@ func TestGroupedPreparedObservationReportsActualMutation(t *testing.T) {
 		{name: "complete projection with committed effect", activation: domain.ActivationActive, effect: domain.NativeEffectCommitted, wantMutation: true},
 		{name: "new policy decision", policy: domain.PolicyBlocked, wantMutation: true, wantStateChange: true},
 		{name: "explicit authentication completion", authComplete: true, wantMutation: true, wantStateChange: true},
-		{name: "attested outcome is not read only", activationAttested: true, wantMutation: true},
+		{name: "attestation alone performs no mutation", activationAttested: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			service, store, _ := serviceFixture(t)
@@ -57,8 +57,10 @@ func TestGroupedPreparedObservationReportsActualMutation(t *testing.T) {
 			service.CheckNamespace = func() error { return service.Paths.RequireContainedChild(project, store.Path) }
 			planner := plannertest.NewPlanner(clientplanner.Planner{ProjectRoot: project, ManagedRoot: filepath.Join(project, ".uap", "managed")})
 			service.Planner, service.Targets = planner, planner
-			client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".claude")}
-			client.ExecutablePath = filepath.Join(project, "inert-claude")
+			// Antigravity has a prepared-only lifecycle. Claude project installs
+			// now require separately acknowledged native effects and ownership.
+			client := domain.DetectedClient{ClientID: domain.ClientAntigravity, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".gemini", "config")}
+			client.ExecutablePath = filepath.Join(project, "inert-agy")
 			if err := os.WriteFile(client.ExecutablePath, []byte("never execute this fixture"), 0700); err != nil {
 				t.Fatal(err)
 			}
@@ -87,7 +89,7 @@ func TestGroupedPreparedObservationReportsActualMutation(t *testing.T) {
 				t.Fatal(err)
 			}
 			binding := onlyBinding(before.Installations[0])
-			treeBefore, err := os.ReadFile(filepath.Join(binding.TargetLocator, ".claude-plugin", "plugin.json"))
+			treeBefore, err := os.ReadFile(filepath.Join(binding.TargetLocator, "plugin.json"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -112,11 +114,19 @@ func TestGroupedPreparedObservationReportsActualMutation(t *testing.T) {
 				t.Fatalf("fresh observation missing: requests=%d/%d", len(activator.requests), count)
 			}
 			request := activator.requests[len(activator.requests)-1]
-			if request.VerifyOnly != (tc.activation == domain.ActivationActive) || !request.PackageUnchanged {
-				t.Fatalf("incomplete registration facts changed=%+v", request)
+			if !request.VerifyOnly || !request.PackageUnchanged {
+				t.Fatalf("complete prepared projection was reapplied=%+v", request)
 			}
 			if got := updated.Targets[0].Activation; got.Activation != binding.Activation || got.Verification != binding.Verification {
 				t.Fatalf("prepared observation promoted=%+v", got)
+			}
+			if tc.activation == "" && tc.effect == "" && tc.policy == "" && !tc.authComplete {
+				// Attestation cannot prove an incomplete Prepared operation was
+				// read-only, even though this complete fixture needs no mutation.
+				unchanged := service.verifiedPreparedObservationUnchanged(input, updated.Targets[0].Plan, binding, request.Delivery, updated.Targets[0].Activation, false)
+				if unchanged == tc.activationAttested {
+					t.Fatal("prepared-observation proof accepted attestation or rejected fresh unchanged facts")
+				}
 			}
 			after, err := store.Load()
 			if err != nil || reflect.DeepEqual(before, after) == tc.wantStateChange {
@@ -126,7 +136,7 @@ func TestGroupedPreparedObservationReportsActualMutation(t *testing.T) {
 			if err != nil || (string(afterBytes) == string(stateBytes)) == tc.wantStateChange {
 				t.Fatalf("state bytes changed: %v", err)
 			}
-			treeAfter, err := os.ReadFile(filepath.Join(binding.TargetLocator, ".claude-plugin", "plugin.json"))
+			treeAfter, err := os.ReadFile(filepath.Join(binding.TargetLocator, "plugin.json"))
 			if err != nil || string(treeBefore) != string(treeAfter) {
 				t.Fatalf("managed bytes changed: %v", err)
 			}

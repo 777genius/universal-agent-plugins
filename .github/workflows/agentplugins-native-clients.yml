@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, 'feat/project-*', feat/source-transports-e2e]
     paths:
+      - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'repotests/agentplugins_*native*'
       - 'repotests/agentplugins_*runtime*'
       - 'repotests/testdata/agentplugins_native_probe/**'
@@ -13,6 +14,11 @@ on:
       - 'cli/**'
       - 'sdks/typescript/**'
       - 'scripts/run-native-client-matrix.py'
+      - 'scripts/terminal-ui/native_browser.py'
+      - 'scripts/terminal-ui/harness.py'
+      - 'scripts/terminal-ui/pty_owner.py'
+      - 'ui/skills-picker/**'
+      - 'contracts/skills-picker/**'
       - 'scripts/native_client*.py'
       - 'scripts/test_native_client*.py'
       - 'scripts/verify-agentplugins-draft.py'
@@ -87,6 +93,25 @@ jobs:
         with:
           go-version: '1.26.11'
           cache: false
+      - name: Set up Node for browser Skills qualification
+        if: ${{ matrix.client == 'codex' && matrix.platform.target == 'linux-amd64' }}
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Bundle the real picker before building the public CLI
+        if: ${{ matrix.client == 'codex' && matrix.platform.target == 'linux-amd64' }}
+        working-directory: ui/skills-picker
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/uap-native-browser
+        run: |
+          npm ci
+          npm run bundle:go
+          npx playwright install --with-deps chromium
+      - name: Prepare the native Codex Linux sandbox
+        if: ${{ matrix.client == 'codex' && matrix.platform.target == 'linux-amd64' }}
+        shell: bash
+        run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Verify native matrix safety and evidence gates
         shell: bash
         run: |
@@ -97,11 +122,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/uap-native-browser
         shell: bash
         run: |
           project_args=()
           if [[ '${{ matrix.client }}' == 'codex' || '${{ matrix.client }}' == 'claude' || '${{ matrix.client }}' == 'opencode' ]]; then
             project_args+=(--project-components)
+          fi
+          if [[ '${{ matrix.client }}' == 'codex' && '${{ matrix.platform.target }}' == 'linux-amd64' ]]; then
+            project_args+=(--browser-skills)
           fi
           python scripts/run-native-client-matrix.py \
             --client '${{ matrix.client }}' \
@@ -193,6 +222,14 @@ jobs:
         with:
           name: native-client-${{ matrix.client }}-${{ matrix.platform.target }}
           path: ${{ runner.temp }}/native-client-proof/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve the actual browser to native Skills screenshots
+        if: ${{ always() && matrix.client == 'codex' && matrix.platform.target == 'linux-amd64' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: native-browser-skills-evidence
+          path: ${{ runner.temp }}/uap-native-hosted-*/evidence/uap-native-evidence-*/browser-output/**/native-picker-*.png
           if-no-files-found: error
           retention-days: 14
 

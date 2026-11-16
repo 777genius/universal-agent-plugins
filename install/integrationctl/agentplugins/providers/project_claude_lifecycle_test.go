@@ -11,11 +11,42 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
 
-// Production loader/planner/rendering/staging and provider lifecycle, with an
-// inert exact-list runner. This is not a native Claude execution observation.
-func TestProjectClaudeComposedProjectionListingAndScopeIsolation(t *testing.T) {
+func TestProjectClaudeSelectedMCPNamesSurviveLegacyAndMarketplaceLayouts(t *testing.T) {
+	f := newClaudeProjectFixture(t)
+	for _, current := range []bool{false, true} {
+		if current {
+			registry, err := clients.NewRegistry(claude.New())
+			if err != nil {
+				t.Fatal(err)
+			}
+			f.registry, f.stager.Registry = registry, registry
+			f.stage(t, "marketplace-layout")
+		}
+		names, err := f.stager.ManagedMCPNamesForScope(t.Context(), domain.ClientClaude, domain.ScopeProject, f.request.Plan.ActivePath, f.request.Delivery.ArtifactDigest)
+		if err != nil || !reflect.DeepEqual(names, []string{"docs"}) {
+			t.Fatalf("current=%v selected MCP=%v error=%v", current, names, err)
+		}
+	}
+	marker := filepath.Join(f.request.Plan.ActivePath, ".claude-plugin", "marketplace.json")
+	projectGeminiWrite(t, marker, `{"name":"foreign","plugins":[]}`)
+	if _, err := f.stager.ManagedMCPNamesForScope(t.Context(), domain.ClientClaude, domain.ScopeProject, f.request.Plan.ActivePath, f.request.Delivery.ArtifactDigest); err == nil {
+		t.Fatal("modified artifact established MCP selection")
+	}
+	digest, err := (packagesnapshot.Builder{}).Digest(t.Context(), f.request.Plan.ActivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.stager.ManagedMCPNamesForScope(t.Context(), domain.ClientClaude, domain.ScopeProject, f.request.Plan.ActivePath, digest); err == nil {
+		t.Fatal("unrecognized verified format silently fell back to another selection layout")
+	}
+}
+
+// Production loader/planner/staging and current provider lifecycle with the
+// legacy projection and an inert runner; this is compatibility fixture evidence.
+func TestProjectClaudeLegacyProjectionListingAndScopeIsolation(t *testing.T) {
 	f := newClaudeProjectFixture(t)
 	user, other := projectGeminiInventory(t, f.user), projectGeminiInventory(t, f.other)
 	actor := f.activator()
@@ -50,7 +81,7 @@ func TestProjectClaudeComposedProjectionListingAndScopeIsolation(t *testing.T) {
 	}
 }
 
-func TestProjectClaudeWrongDisabledOrUnknownNativeListingRefuses(t *testing.T) {
+func TestProjectClaudeLegacyWrongOrUnknownNativeListingRefuses(t *testing.T) {
 	for _, condition := range []string{"user-scope", "wrong-project", "malformed"} {
 		t.Run(condition, func(t *testing.T) {
 			f := newClaudeProjectFixture(t)
@@ -112,7 +143,7 @@ func TestProjectClaudeChangedContextRefusesBeforeNativeListing(t *testing.T) {
 	}
 }
 
-func TestProjectClaudeBlockedDiscoveryIsPreparedAndInactiveRemovalIsOwned(t *testing.T) {
+func TestProjectClaudeLegacyBlockedDiscoveryIsPreparedAndInactiveRemovalIsOwned(t *testing.T) {
 	for _, condition := range []string{"disabled", "suppressed", "suppressed-user"} {
 		t.Run(condition, func(t *testing.T) {
 			f := newClaudeProjectFixture(t)

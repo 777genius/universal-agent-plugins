@@ -26,6 +26,7 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 		Long:  "Install/repair the declared environment from uap.toml and uap.lock: install everything declared on a first run, leave already-matching items alone, and converge missing or drifted state to the exact locked pins. With no source, a uap.toml in the current directory selects project scope (no parent search); explicit --scope wins. An existing uap.lock is validated strictly; only a missing lock is resolved and created. Use update to change pins. The preview shows the selected scope and manifest/lock paths. With a source argument, install behaves as agentplugins add for that one package.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.yes = yes
 			if len(args) == 0 {
 				if err := selectInstallScope(cmd, opts); err != nil {
 					return err
@@ -39,7 +40,6 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 				if opts.dependencyPolicyFile != "" {
 					return fmt.Errorf("--policy applies only to declared installs from uap.toml; a positional source must not bypass dependency policy")
 				}
-				opts.yes = yes
 				return executeAddCommand(cmd, app, opts, args[0], activationComplete, authComplete)
 			}
 			if err := validateEnvironmentOptions("install", opts); err != nil {

@@ -176,7 +176,7 @@ func validatePlannedObservation(plan domain.DeliveryPlan, observation *domain.Lo
 }
 
 func (service Service) activateReadOnlyWithObservation(ctx context.Context, binding domain.ClientBinding, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
-	if request.Plan.SelectedDelivery.IsZero() {
+	if request.Plan.SelectedDelivery.IsZero() && !service.preparedSetupVerifierAvailable(AddInput{Client: request.Client, BackendExecutable: request.BackendExecutable}, request.Plan) {
 		return service.Activator.Activate(ctx, request)
 	}
 	var err error

@@ -47,11 +47,21 @@ func refineCodexProjectPlan(input clients.PlanInput, plan *domain.DeliveryPlan) 
 		return nil
 	}
 	shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, true)
-	plan.UserActions = shared.AppendUnique(plan.UserActions, codexProjectDiscoveryAction)
+	if len(shared.SupportedMCPNames(*plan)) > 0 {
+		plan.Warnings = shared.AppendUnique(plan.Warnings, fmt.Sprintf("After confirmation, Codex may mark the exact project folder %q as trusted in the selected user profile. This persistent trust remains after removing the installed components.", plan.NativeRegistryRoot))
+	}
+	plan.UserActions = shared.AppendUnique(plan.UserActions, codexProjectSetupAction(*plan))
 	return nil
 }
 
 const codexProjectDiscoveryAction = "Codex project components are configured; native discovery, project trust, effective managed/session policy and MCP initialization remain unobserved; start Codex in the selected project and inspect skills and `codex mcp list --json`"
+
+func codexProjectSetupAction(plan domain.DeliveryPlan) string {
+	if codexProjectSkillsOnly(plan) {
+		return "Codex project skills are configured; start Codex in the selected project to verify skill discovery"
+	}
+	return codexProjectDiscoveryAction
+}
 
 type codexProjectSettings struct {
 	MCPServers map[string]struct {

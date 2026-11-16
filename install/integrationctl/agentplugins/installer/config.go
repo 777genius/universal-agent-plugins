@@ -36,6 +36,9 @@ type Config struct {
 	// its existing filesystem-only compatibility path when disabled.
 	EnableNativeObserver bool
 	Runner               ports.CommandRunner
+	// LookupExecutable resolves a native management CLI only for an explicitly
+	// selected client operation. Nil keeps auxiliary management unavailable.
+	LookupExecutable func(string) (string, error)
 	// ServerName selects the declared MCP server whose args the host may replace.
 	ServerName string
 	// ProjectArgs replaces args of ServerName. It is host-owned and must be

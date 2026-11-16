@@ -16,11 +16,36 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 	ids := append([]string(nil), req.Defaults...)
 	choices := make([]huh.Option[string], len(req.Options))
 	for i, option := range req.Options {
-		choices[i] = huh.NewOption(option.Label, option.ID)
+		label := option.Label
+		if req.Filterable {
+			// Huh toggles by display key, so clipped labels need unique keys.
+			label = fmt.Sprintf("%d. %s", i+1, label)
+		}
+		choices[i] = huh.NewOption(label, option.ID)
 	}
 	validate := func(ids []string) error { _, err := terminalSelection(req, ids); return err }
-	field := huh.NewMultiSelect[string]().Title(req.Title).Options(choices...).Value(&ids).Filterable(false).Validate(validate)
-	layout := &selectionLayout{field: field, ids: &ids, validate: validate, title: req.Title, count: len(choices)}
+	attempted := !req.Filterable
+	validateField := func(ids []string) error {
+		if !attempted {
+			return nil
+		}
+		return validate(ids)
+	}
+	field := huh.NewMultiSelect[string]().Title(req.Title).Options(choices...).Value(&ids).Filterable(req.Filterable).Validate(validateField)
+	layout := &selectionLayout{field: field, ids: &ids, validate: validate, title: req.Title, count: len(choices), filterable: req.Filterable}
+	if req.Filterable {
+		// Clip the rendered option, not its key: Huh uses full option keys for
+		// filtering and selection identity, so truncating keys can select twins.
+		field.WithTheme(huh.ThemeFunc(func(dark bool) *huh.Styles {
+			theme := semanticHuhTheme(dark)
+			for _, style := range []*huh.FieldStyles{&theme.Focused, &theme.Blurred} {
+				columns := max(1, layout.width-style.Base.GetHorizontalFrameSize()-lipgloss.Width(style.MultiSelectSelector.String())-lipgloss.Width(style.SelectedPrefix.String()))
+				style.SelectedOption = style.SelectedOption.MaxWidth(columns).MaxHeight(1)
+				style.UnselectedOption = style.UnselectedOption.MaxWidth(columns).MaxHeight(1)
+			}
+			return theme
+		}))
+	}
 	form := huh.NewForm(huh.NewGroup(field).WithShowHelp(false).WithShowErrors(false)).WithLayout(layout)
 	layout.form = form
 	_ = layout.resize(80, 24) // Private injected qualification has no terminal geometry.
@@ -28,7 +53,14 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 	if err := p.initialSize(resize); err != nil {
 		return Selection{}, err
 	}
-	err := p.run(ctx, form, formInput{canSubmit: func() bool { return validate(ids) == nil }, resize: resize})
+	// Enter while filtering only accepts the query; release the input handoff
+	// gate so the user can continue selecting instead of treating it as submit.
+	err := p.run(ctx, form, formInput{canSubmit: func() bool { return !field.GetFiltering() && validate(ids) == nil }, resize: resize, onKey: func(key tea.KeyPressMsg) {
+		resetEmptyFilterCursor(field)
+		if key.String() == "enter" && !field.GetFiltering() {
+			attempted = true
+		}
+	}})
 	if _, canceled := err.(formCanceled); canceled { //nolint:errorlint // Only sole user cancellation is clean; wrapped cleanup errors must fail.
 		return Selection{Cancelled: true}, nil //nolint:misspell // Preserve the existing public cancellation API.
 	}
@@ -36,6 +68,18 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 		return Selection{}, err
 	}
 	return terminalSelection(req, ids)
+}
+
+// Huh v2.0.3 leaves a negative cursor after Down on an empty filter. Clamp it
+// before the next key restores matches; Up preserves the query and selections.
+func resetEmptyFilterCursor(field *huh.MultiSelect[string]) {
+	if !field.GetFiltering() {
+		return
+	}
+	if _, hovered := field.Hovered(); hovered {
+		return
+	}
+	_, _ = field.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 }
 
 func (p terminalRenderer) initialSize(resize func(int, int) error) error {
@@ -71,9 +115,20 @@ type selectionLayout struct {
 	validate                  func([]string) error
 	title                     string
 	count, width, errorHeight int
+	filterable                bool
 }
 
 const selectionControls = "↑/↓ move · space toggle · enter submit\nesc/ctrl+c/ctrl+d cancel"
+
+func (l *selectionLayout) controls() string {
+	if l.filterable {
+		if l.field.GetFiltering() {
+			return "Type to search · enter apply filter\nesc/ctrl+c/ctrl+d cancel"
+		}
+		return "↑/↓ move · space toggle · / search · enter submit\nesc/ctrl+c/ctrl+d cancel"
+	}
+	return selectionControls
+}
 
 func (l *selectionLayout) resize(w, h int) error {
 	titleHeight := lenLines(ansi.Wrap(l.title, max(1, w-4), ""))
@@ -82,12 +137,16 @@ func (l *selectionLayout) resize(w, h int) error {
 	if err := l.validate(nil); err != nil {
 		l.errorHeight = lenLines(ansi.Wrap(err.Error(), max(1, w), ""))
 	}
-	reserved := 1 + l.errorHeight + lenLines(ansi.Wrap(selectionControls, max(1, w), ""))
+	reserved := 1 + l.errorHeight + lenLines(ansi.Wrap(l.controls(), max(1, w), ""))
 	if w < 16 || h < titleHeight+reserved+1 {
 		return fmt.Errorf("terminal too small for selection controls")
 	}
 	l.form.WithHeight(h)
-	resizeSelectionField(l.field, w, min(l.count+titleHeight, h-reserved), *l.ids, l.validate)
+	rows := l.count
+	if l.filterable {
+		rows = min(rows, 8)
+	}
+	resizeSelectionField(l.field, w, min(rows+titleHeight, h-reserved), *l.ids, l.validate)
 	return nil
 }
 
@@ -97,6 +156,6 @@ func (l *selectionLayout) View(_ *huh.Form) string {
 		text = ansi.Wrap(err.Error(), max(1, l.width), "")
 	}
 	errorRow := lipgloss.NewStyle().Height(l.errorHeight).Render(text)
-	return lipgloss.JoinVertical(lipgloss.Left, l.field.View(), errorRow, ansi.Wrap(selectionControls, max(1, l.width), ""))
+	return lipgloss.JoinVertical(lipgloss.Left, l.field.View(), errorRow, ansi.Wrap(l.controls(), max(1, l.width), ""))
 }
 func (*selectionLayout) GroupWidth(_ *huh.Form, _ *huh.Group, w int) int { return w }

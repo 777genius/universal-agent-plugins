@@ -9,6 +9,9 @@ import (
 )
 
 func (session *groupSession) activateGroupTargets() (GroupResult, error) {
+	if err := session.recheckGroupPreparedSetups(); err != nil {
+		return session.result, err
+	}
 	if activator, count, restore, ok := session.independentGroupActivator(); ok {
 		defer restore()
 		return session.activateIndependentGroupTargets(activator, count)
@@ -131,9 +134,9 @@ func (session *groupSession) groupActivationRequest(target plannedGroupTarget) (
 	return domain.ActivationRequest{
 		PackageUnchanged: target.noChange,
 		Client:           target.input.Client, Plan: target.plan, Delivery: delivery,
-		DeclaredName: target.input.Envelope.Manifest.Name, Replacing: session.replace, Interactive: target.input.Interactive,
+		DeclaredName: target.input.Envelope.Manifest.Name, Replacing: session.replace || target.completePreparedSetup, Interactive: target.input.Interactive,
 		BackendExecutable: target.input.BackendExecutable, PreviousNativeObjects: previous,
-		VerifyOnly: target.noChange && nativeComplete, ActivationComplete: target.input.ActivationComplete,
+		VerifyOnly: target.noChange && nativeComplete && !target.completePreparedSetup, ActivationComplete: target.input.ActivationComplete,
 	}, domain.ActivationOutcome{}, delivery, nativeComplete, nil
 }
 

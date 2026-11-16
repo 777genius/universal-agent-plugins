@@ -437,6 +437,9 @@ color:#86622e;
 font-size:12px;
 overflow-wrap:anywhere}
 .notice p{margin:6px 0}
+.notice.neutral{border-color:var(--line);
+background:#f7f8fa;
+color:inherit}
 .notice.error{border-color:#f0d1d1;
 background:#fff6f6;
 color:#a34848}

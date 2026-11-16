@@ -9,7 +9,7 @@ import (
 )
 
 func TestManagementManifestOnlyFailureHasFreshRecovery(t *testing.T) {
-	repo, sha := savedJourneyRepository(t)
+	repo, sha := managementReadyRepository(t)
 	j := newSavedJourney(t, repo)
 	backend := managementJourneyBackend(t, j)
 	prepared := managementPrepare(t, backend, managementInstallRequest("github:acme/demo@"+sha))

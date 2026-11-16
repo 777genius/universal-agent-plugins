@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -48,6 +49,10 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 		root = layout.Root
 	}
 	shared.PromoteNativeReady(plan, root, shared.OnlyNativeComponents(plan.Components))
+	shared.QualifyRawSkillInstallationAuthentication(in.Envelope, plan)
+	if len(shared.SupportedMCPNames(*plan)) > 0 {
+		plan.Warnings = shared.AppendUnique(plan.Warnings, fmt.Sprintf("After confirmation, OpenCode native MCP verification may start or connect every currently enabled MCP server from the workspace, selected profile, and extensions for %q. Existing server and permission settings remain in effect.", root))
+	}
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "agentplugins will install the package's skills and MCP servers; restart OpenCode when complete")
 	return nil
 }

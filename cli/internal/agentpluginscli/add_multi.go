@@ -85,24 +85,11 @@ func runAddMany(ctx context.Context, cmd *cobra.Command, app App, opts *options,
 	return runAddManyWithClients(ctx, cmd, app, opts, source, targets, activationComplete, authComplete, nil)
 }
 
-func runAddManyWithClients(ctx context.Context, cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient) error {
-	_, detected, err := preflightAddTargets(ctx, app, opts, source, targets, clients)
-	if err != nil {
-		return err
-	}
-	writeProgress(app, opts.format, "Resolving and validating one Agent Plugin package for every selected target...")
-	loaded, err := app.loadPackageFor(ctx, source, withDetectedClients(app.addResolutionRequest(source, targets), detected))
-	if err != nil {
-		return err
-	}
-	if loaded.cleanup != nil {
-		defer loaded.cleanup()
-	}
-	return runAddManyLoaded(ctx, cmd, app, opts, loaded, targets, activationComplete, authComplete, detectedClientValues(detected), false)
-}
-
 func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, targets []domain.ClientID, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
-	if err := checkLoadedPackage(opts, loaded); err != nil {
+	if err := rejectImperativePackageRequirements(loaded); err != nil {
+		return err
+	}
+	if err := pinRetryPackage(opts, loaded); err != nil {
 		return err
 	}
 
@@ -138,15 +125,11 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		executionTargets = withoutPersonalMappingTargets(targets)
 	}
 	if len(executionTargets) == 1 && !deferredChatGPT {
-		selectedOptions := *opts
-		selectedOptions.target = string(executionTargets[0])
-		if activationComplete || authComplete {
-			return runAddLoadedFor(ctx, cmd, app, opts, &selectedOptions, loaded, activationComplete, authComplete, clients, needsInstallConfirmation)
-		}
-		if state, err := app.StateStore.Load(); err == nil {
-			if installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name); ok && installationHasTarget(installation, executionTargets[0], string(app.scope())) {
-				return runAddLoadedFor(ctx, cmd, app, opts, &selectedOptions, loaded, false, false, clients, needsInstallConfirmation)
-			}
+		handled, err := runSingleTargetAdd(app, opts, loaded, executionTargets[0], activationComplete || authComplete, func(selectedOptions *options) error {
+			return runAddLoaded(ctx, cmd, app, selectedOptions, loaded, activationComplete, authComplete, clients, needsInstallConfirmation)
+		})
+		if handled {
+			return err
 		}
 	}
 	combined := addMultiResult{
@@ -219,7 +202,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		}
 		if !accepted {
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Installation not applied.")
-			return err
+			return declinedInstallResult(opts, err)
 		}
 	}
 	if err := ctx.Err(); err != nil {

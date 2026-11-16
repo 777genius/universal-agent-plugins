@@ -59,6 +59,14 @@ type ReadOnlyVerifier interface {
 	VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool
 }
 
+// PreparedMaterializationVerifier explicitly opts one adapter into pure
+// classification of a fresh VerifyOnly observation. The core owns freshness,
+// complete projection and retained state checks; this method performs no I/O
+// and must not equate pending setup with verified materialization.
+type PreparedMaterializationVerifier interface {
+	PreparedMaterializationVerified(domain.ActivationRequest, domain.ActivationOutcome) bool
+}
+
 // ActivationReadiness observes required native configuration outside plugin
 // ownership. Missing configuration can require a confirmed activation even
 // when the immutable package and owned component projection are unchanged.

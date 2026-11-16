@@ -34,7 +34,7 @@ type dependencyClientSpec struct {
 // Expectations are independent of the capability implementation. Native client
 // responses are fixtures; this proves UAP lifecycle contracts, not live clients.
 var dependencyClientSpecs = []dependencyClientSpec{
-	{domain.ClientCodex, true, "active", true}, {domain.ClientClaude, true, "active", false},
+	{domain.ClientCodex, true, "active", false}, {domain.ClientClaude, true, "active", false},
 	{domain.ClientCursor, true, "manual_activation_required", false},
 	{domain.ClientCopilot, true, "active", false},
 	{domain.ClientKiro, true, "active", false}, {domain.ClientGrok, true, "active", false},
@@ -370,6 +370,8 @@ func (r *dependencyFixtureRunner) Run(ctx context.Context, command legacyports.C
 	switch r.id {
 	case domain.ClientCodex, domain.ClientClaude:
 		return r.claude.Run(ctx, command)
+	case domain.ClientOpenCode:
+		return fixtureOpenCodeNative(command)
 	case domain.ClientCopilot:
 		if len(args) >= 2 && args[0] == "plugin" && args[1] == "uninstall" {
 			r.copilot.spec = ""

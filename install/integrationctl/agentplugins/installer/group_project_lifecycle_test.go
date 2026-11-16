@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -35,6 +36,7 @@ func TestProjectPreparedGroupPublicLifecycleAndHandoff(t *testing.T) {
 	f := newProjectFilesFixture(t, "cline", "disabled-with-runner")
 	codexUser := filepath.Join(f.base, "user", ".codex")
 	deathWrite(t, filepath.Join(codexUser, "keep.txt"), "original Codex profile")
+	seedCodexProjectTrust(t, codexUser, f.project)
 	adapter := &observedGroupCline{Adapter: cline.New()}
 	registry, err := clients.NewRegistry(adapter, codex.New())
 	if err != nil {
@@ -47,6 +49,30 @@ func TestProjectPreparedGroupPublicLifecycleAndHandoff(t *testing.T) {
 	installed := f.apply(t, OpInstall)
 	if installed.Outcome != OutcomeCompleted || !installed.Mutated || len(installed.Targets) != 2 || len(installed.ManualActions) == 0 {
 		t.Fatalf("install %+v", installed)
+	}
+	// This fixture deliberately declares remote HTTP, outside the local stdio
+	// initialization proof. Keep that boundary explicit rather than accepting
+	// Prepared as a blanket substitute for missing native verification.
+	var source struct {
+		MCPServers map[string]struct {
+			Type string `json:"type"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(deathRead(t, filepath.Join(f.pkg, "mcp.json"))), &source); err != nil || source.MCPServers["docs"].Type != "streamable-http" {
+		t.Fatalf("expected remote HTTP fixture: %+v %v", source, err)
+	}
+	codexFound := false
+	for _, target := range installed.Targets {
+		if target.ClientID != "codex" {
+			continue
+		}
+		codexFound = true
+		if target.Activation != string(domain.ActivationPrepared) || target.Verification != string(domain.VerificationInstalled) || target.Authentication != string(domain.AuthenticationNotChecked) {
+			t.Fatalf("remote HTTP boundary changed: %+v", target)
+		}
+	}
+	if !codexFound {
+		t.Fatal("missing explicit Codex HTTP target")
 	}
 	nativePaths := []string{f.skill, f.config, filepath.Join(f.project, ".agents", "skills", "docs", "SKILL.md"), filepath.Join(f.project, ".codex", "config.toml")}
 	native := func() map[string]string {

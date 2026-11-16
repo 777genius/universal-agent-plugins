@@ -69,7 +69,7 @@ function validateRelease(product, packageRoot, target, read = json, inputBytes) 
     "engines", "publishConfig", "files", "bin", "scripts", "private", ...(product === "agentplugins" ? ["os", "cpu"] : [])], "public package");
   const closure = ["LICENSE", "README.md", "package.json", `bin/${product}.js`, "bin/package.json", "lib/package.json",
     "lib/platform.js", "lib/verifier.js", "lib/public-authoring.js", "scripts/package.json", "scripts/dual-authoring-candidate.js",
-    product === "agentplugins" ? "lib/bootstrap.js" : "lib/install.js", "public-release.json", "release-manifest.json"];
+    ...(product === "agentplugins" ? ["lib/bootstrap.js", "lib/bootstrap-progress.js"] : ["lib/install.js"]), "public-release.json", "release-manifest.json"];
   if (v2) closure.push("native-inputs.json");
   if (v2 || pkg.private === false) closure.push("lib/public-authoring-contract.js", "lib/public-authoring-input.js");
   if (v2 && (pkg.private !== false || (product === "agentplugins" &&
@@ -309,11 +309,13 @@ async function acquireBinary(product, options, platform, target, packageRoot, re
       if (named.dev !== pin.dev || named.ino !== pin.ino) throw new Error("public cache directory replaced");
     }
   };
+  options.onStatus?.("Waiting for native CLI cache lock");
   const unlock = await v.acquireLock(binaryPath, { ...options.lockOptions, io, signal: options.signal, lockRoot });
   let primary, result, temporary, temporaryStat, downloadStat;
   const errors = [];
   try {
     await unchangedDirectories();
+    options.onStatus?.("Checking native CLI cache");
     const hit = await v.strictCachedBinary(binaryPath, release.asset.binary, settings);
     if (!hit) {
       let binary = localBinary;
@@ -322,14 +324,16 @@ async function acquireBinary(product, options, platform, target, packageRoot, re
         temporaryStat = await io.lstat(temporary);
         await v.privateDirectory(owned, temporary, io);
         const file = path.join(temporary, "asset");
+        options.onStatus?.("Connecting to GitHub for first CLI download");
         await v.downloadFile(`https://github.com/${c.REPOSITORY}/releases/download/${release.tag}/${release.asset.file}`,
-          file, release.asset, { request: options.request, signal: options.signal, onOpen: stat => { downloadStat = stat; } });
+          file, release.asset, { request: options.request, signal: options.signal, onProgress: options.onProgress, onOpen: stat => { downloadStat = stat; } });
         v.cancelled(options.signal);
         const bytes = c.readFile(file);
         binary = checkedBinary(product, bytes, release.asset);
       }
       if (release.descriptor.schema !== SCHEMA) recheck();
       await unchangedDirectories();
+      options.onStatus?.("Verifying and preparing native CLI");
       await v.commitVerifiedBinary(binary, binaryPath, release.asset.binary, settings);
     }
     v.cancelled(options.signal);

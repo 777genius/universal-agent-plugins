@@ -57,8 +57,8 @@ func (p HuhPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest) 
 	if err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
-	result, err := t.Confirm(ctx, confirmationRequest(r))
-	return confirmationResult(result, err)
+	result, err := t.ConfirmWithDetails(ctx, confirmationRequest(r), append([]string(nil), r.Details...))
+	return confirmationDetailsResult(result, err, r.Details)
 }
 
 // A factory-created adapter keeps the same UI mode across sequential prompts.

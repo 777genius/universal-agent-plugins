@@ -2,6 +2,7 @@ package claude
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -15,11 +16,22 @@ func activateClaudeProject(ctx context.Context, env clients.Env, request domain.
 	if err != nil {
 		return shared.FailedActivation(outcome, "retry exact Claude Code project verification", err)
 	}
-	listed, err := runPreparedClaudeList(ctx, env, probe.Command)
+	current, err := hasClaudeProjectMarketplace(probe.ActivePath, request.DeclaredName, request.Plan.PhysicalArtifactID)
 	if err != nil {
+		return shared.FailedActivation(outcome, "repair the owned Claude Code project package", err)
+	}
+	if current {
+		return activateClaudeProjectMarketplace(ctx, env, request, probe.Command)
+	}
+	outcome.NativeEffect = domain.NativeEffectUnchanged
+	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
+	observation, err := observeClaudeProjectActivation(ctx, env, request, probe, &outcome.NativeEffect)
+	if err != nil {
+		if domain.IsUnclosedClientProbe(err) {
+			outcome.NativeEffect = domain.NativeEffectUncertain
+		}
 		return shared.FailedActivation(outcome, "retry exact Claude Code project listing", err)
 	}
-	observation := observeClaudeProjectList(listed.Stdout, request.DeclaredName, probe.ActivePath, request.Plan.TargetContext.ProjectRoot, request.Client.ConfigRoot)
 	switch observation.state {
 	case projectListEnabled:
 		outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled
@@ -44,6 +56,21 @@ func activateClaudeProject(ctx context.Context, env clients.Env, request domain.
 }
 
 func claudeProjectRegistryFinding(body []byte, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) clients.RegistryFinding {
+	if plan.PhysicalArtifactID != "" {
+		switch observeClaudeMarketplacePlugin(body, plan.DeclaredName, plan.PhysicalArtifactID, plan.ActivePath, plan.TargetContext.ProjectRoot, client.ConfigRoot, "") {
+		case projectListEnabled, projectListDisabled:
+			if managed == nil {
+				return clients.RegistryCollision
+			}
+			return clients.RegistryExpected
+		case projectListForeign:
+			return clients.RegistryCollision
+		case projectListUnknown:
+			return clients.RegistryIndeterminate
+		case projectListAbsent:
+			body = claudeLegacyCandidateListing(body, plan.DeclaredName)
+		}
+	}
 	observation := observeClaudeProjectList(body, plan.DeclaredName, plan.ActivePath, plan.TargetContext.ProjectRoot, client.ConfigRoot)
 	switch observation.state {
 	case projectListEnabled:
@@ -66,6 +93,19 @@ func claudeProjectRegistryFinding(body []byte, client domain.DetectedClient, pla
 	default:
 		return clients.RegistryIndeterminate
 	}
+}
+
+func claudeLegacyCandidateListing(body []byte, name string) []byte {
+	entries, _ := decodeProjectList(body)
+	selected := []any{}
+	for _, value := range entries {
+		entry := value.(map[string]any) // The marketplace observer validated each row.
+		if entry["id"] == name+"@skills-dir" || entry["id"] == "(suppressed)@skills-dir" {
+			selected = append(selected, entry)
+		}
+	}
+	filtered, _ := json.Marshal(selected)
+	return filtered
 }
 
 func finishClaudeProjectDeactivation(outcome domain.DeactivationOutcome, body []byte, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
