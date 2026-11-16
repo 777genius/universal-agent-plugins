@@ -174,8 +174,7 @@ func TestHermesProjectTrustGrantsExactGitRootAndVerifiesReadBack(t *testing.T) {
 			t.Fatalf("trust used a profile flag, config set or a relative path: %v", call)
 		}
 	}
-	env := f.grant.environment()
-	if slices.Contains(env, "FORCE_COLOR=1") || !slices.Contains(env, "NO_COLOR=1") || !slices.Contains(env, "HOME="+f.home) {
+	if env := f.grant.environment(); !slices.Equal(env, f.grant.environ) {
 		t.Fatalf("trust environment differs from the user's Hermes environment: %v", env)
 	}
 	action := report.userAction()
@@ -211,8 +210,14 @@ func TestHermesProjectTrustPreconditionsFallBackWithoutWriting(t *testing.T) {
 		{"backend managed dotenv", "non-file configuration backend", func(t *testing.T, f *hermesTrustFixture) {
 			f.write(t, filepath.Join(f.managed, ".env"), "HERMES_CONFIG_BACKEND=postgres\n")
 		}},
-		{"managed config pins trust", "pins skills.trusted_project_dirs", func(t *testing.T, f *hermesTrustFixture) {
+		{"managed config pins trust", "administrator-pinned keys", func(t *testing.T, f *hermesTrustFixture) {
 			f.write(t, filepath.Join(f.managed, "config.yaml"), "skills:\n  trusted_project_dirs: []\n")
+		}},
+		{"managed config pins another key", "administrator-pinned keys", func(t *testing.T, f *hermesTrustFixture) {
+			f.write(t, filepath.Join(f.managed, "config.yaml"), "model:\n  default: admin\n")
+		}},
+		{"backend profile op dotenv", "non-file configuration backend", func(t *testing.T, f *hermesTrustFixture) {
+			f.write(t, filepath.Join(f.profile, ".op.env"), "HERMES_CONFIG_BACKEND=remote\n")
 		}},
 		{"relative managed dir", "HERMES_MANAGED_DIR", func(_ *testing.T, f *hermesTrustFixture) {
 			f.grant.environ = append(f.grant.environ, "HERMES_MANAGED_DIR=relative")
@@ -285,7 +290,7 @@ func TestHermesProjectTrustAllowsUnmanagedPackageInstalls(t *testing.T) {
 		f := newHermesTrustFixture(t)
 		f.grant.environ = append(f.grant.environ, "HERMES_MANAGED="+value, "HERMES_CONFIG_BACKEND=file")
 		f.write(t, filepath.Join(f.profile, ".env"), "HERMES_CONFIG_BACKEND_NOTE=x\nHERMES_CONFIG_BACKEND='file'\n")
-		f.write(t, filepath.Join(f.managed, "config.yaml"), "skills:\n  project_discovery: true\n")
+		f.write(t, filepath.Join(f.managed, "config.yaml"), " \n")
 		if report, err := f.grant.run(context.Background()); err != nil || !report.granted {
 			t.Fatalf("HERMES_MANAGED=%q refused: %+v %v", value, report, err)
 		}

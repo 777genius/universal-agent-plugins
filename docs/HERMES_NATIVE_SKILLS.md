@@ -48,8 +48,10 @@ only after all of these hold:
 - `hermes config path` names `config.yaml` in the Hermes home UAP selected;
 - `HERMES_MANAGED` (other than `false`, `0`, `no`, `off`, `brew`, `homebrew`),
   a `.managed` or `.container-mode` marker, a non-file
-  `HERMES_CONFIG_BACKEND` (environment, home `.env` or managed `.env`) or a
-  managed `config.yaml` that pins `skills.trusted_project_dirs` are all absent;
+  `HERMES_CONFIG_BACKEND` (environment, home `.env` or `.op.env`, managed
+  `.env`) and a non-empty managed `config.yaml` are all absent. Any managed
+  configuration makes each Hermes save delete every administrator-pinned key
+  from the user's file;
 - the existing trust list can be read; UAP holds its own configuration lock so
   two UAP operations never save the same profile concurrently.
 

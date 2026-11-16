@@ -254,22 +254,10 @@ func (grant hermesTrustGrant) command(ctx context.Context, argv []string) (*lega
 	return &result, nil
 }
 
-// The user's environment selects the same Hermes home a bare `hermes` uses.
-// Only presentation is pinned so the exact confirmation line stays parseable.
+// The user's unchanged environment selects the same Hermes home, .env layers
+// and backend a bare `hermes` uses. Pinned Hermes output ignores color and TERM.
 func (grant hermesTrustGrant) environment() []string {
-	result := make([]string, 0, len(grant.environ)+2)
-	for _, entry := range grant.environ {
-		key, _, _ := strings.Cut(entry, "=")
-		if runtime.GOOS == "windows" {
-			key = strings.ToUpper(key)
-		}
-		switch key {
-		case "NO_COLOR", "FORCE_COLOR", "CLICOLOR_FORCE", "TERM":
-			continue
-		}
-		result = append(result, entry)
-	}
-	return append(result, "NO_COLOR=1", "TERM=dumb")
+	return slices.Clone(grant.environ)
 }
 
 func hermesEnvironmentValues(environ []string) map[string]string {
@@ -285,7 +273,8 @@ func hermesEnvironmentValues(environ []string) map[string]string {
 }
 
 // Managed, container and alternate-backend installs either ignore or discard a
-// CLI trust write, or pin the list so that a save deletes the user's entries.
+// CLI trust write. Any managed config.yaml makes every Hermes save delete each
+// administrator-pinned key from the user's file, so its presence refuses too.
 func hermesTrustPolicyRefusal(profile, project string, values map[string]string) string {
 	if value, ok := values["HERMES_MANAGED"]; ok && !hermesUnmanagedValues[strings.ToLower(strings.TrimSpace(value))] {
 		return "Hermes is managed by HERMES_MANAGED"
@@ -305,7 +294,7 @@ func hermesTrustPolicyRefusal(profile, project string, values map[string]string)
 	if hermesNonFileBackend(values["HERMES_CONFIG_BACKEND"]) {
 		return "Hermes uses a non-file configuration backend"
 	}
-	for _, path := range []string{filepath.Join(profile, ".env"), filepath.Join(managed, ".env")} {
+	for _, path := range []string{filepath.Join(profile, ".env"), filepath.Join(profile, ".op.env"), filepath.Join(managed, ".env")} {
 		body, err := readHermesTrustFile(path)
 		if err != nil {
 			return "a Hermes environment file could not be inspected"
@@ -318,8 +307,8 @@ func hermesTrustPolicyRefusal(profile, project string, values map[string]string)
 	if err != nil {
 		return "the managed Hermes configuration could not be inspected"
 	}
-	if bytes.Contains(body, []byte("trusted_project_dirs")) {
-		return "a managed Hermes configuration pins skills.trusted_project_dirs"
+	if len(bytes.TrimSpace(body)) != 0 {
+		return "a managed Hermes configuration would remove administrator-pinned keys from the user configuration on save"
 	}
 	return ""
 }
