@@ -61,7 +61,9 @@ type hermesTrustReport struct {
 	missing   []string
 }
 
-func hermesTrustRequested(req domain.ActivationRequest) bool {
+// hermesTrustApplies selects confirmed Project activations whose Skills
+// depend on Hermes project trust. Read-only verification never qualifies.
+func hermesTrustApplies(req domain.ActivationRequest) bool {
 	return !req.VerifyOnly && req.Plan.Scope == domain.ScopeProject &&
 		req.Plan.InstallIntent == domain.InstallIntentAutomatic &&
 		shared.ComponentKindPresent(req.Plan.Components, domain.ComponentSkill)
@@ -69,51 +71,64 @@ func hermesTrustRequested(req domain.ActivationRequest) bool {
 
 // completeHermesProjectTrust runs only after a confirmed activation installed
 // the exact project Skills. Its failure never undoes those files: the result
-// either reports verified trust or the exact command for the user to run.
+// either reports verified trust or the manual command for the user to run.
+// Only an explicit add carries consent; update, repair and dependency sync
+// must not override a user's `hermes skills untrust`.
 func completeHermesProjectTrust(ctx context.Context, env clients.Env, req domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
-	grant := hermesTrustGrant{
-		runner: env.Runner, lookup: env.LookupExecutable, kernel: env.NativeConfig,
-		executable: req.Client.ExecutablePath, profile: req.Client.ConfigRoot,
-		project: req.Plan.TargetContext.ProjectRoot, environ: os.Environ(),
+	project := req.Plan.TargetContext.ProjectRoot
+	report := hermesTrustReport{root: project, reason: "UAP grants it only during an explicit add, so update, repair and dependency sync never override `hermes skills untrust`"}
+	var err error
+	switch {
+	case !req.ProjectTrustConsent:
+	case req.Plan.TargetContext.UserConfigRoot != "" && req.Plan.TargetContext.UserConfigRoot != req.Client.ConfigRoot:
+		report.reason = "the project's recorded Hermes profile differs from the detected Hermes profile"
+	default:
+		report, err = hermesTrustGrant{
+			runner: env.Runner, lookup: env.LookupExecutable, kernel: env.NativeConfig,
+			executable: req.Client.ExecutablePath, profile: req.Client.ConfigRoot,
+			project: project, environ: os.Environ(),
+		}.run(ctx)
 	}
-	if user := req.Plan.TargetContext.UserConfigRoot; user != "" && user != req.Client.ConfigRoot {
-		grant.profile = ""
-	}
-	report, err := grant.run(ctx)
 	actions := outcome.UserActions[:0]
 	for _, action := range outcome.UserActions {
 		if action != hermesCompletedAction {
 			actions = append(actions, action)
 		}
 	}
-	actions = append(actions, report.userAction())
+	user, local := report.actions()
+	actions = append(actions, user)
 	outcome.UserActions = actions
+	outcome.LocalActions = append(outcome.LocalActions, local...)
 	if err != nil && domain.IsUnclosedClientProbe(err) {
 		outcome.NativeEffect = domain.NativeEffectUncertain
 	}
 	return outcome, err
 }
 
-func (report hermesTrustReport) userAction() string {
+// actions keeps public JSON path-free. Host paths and the exact command go to
+// LocalActions, which only human output renders.
+func (report hermesTrustReport) actions() (string, []string) {
 	if report.granted {
-		return "Hermes now trusts the Git repository root " + report.root + " for project Skills in .hermes/skills and .agents/skills, including Skills added later, until `hermes skills untrust`; Skills that Hermes skills_guard flags as dangerous stay quarantined and do not load. Start a new Hermes session to load them; installed files alone do not prove discovery"
+		return "Hermes now trusts this project's Git repository root for Skills in .hermes/skills and .agents/skills, including Skills added later, until `hermes skills untrust`; Skills that Hermes skills_guard flags as dangerous stay quarantined and do not load. Start a new Hermes session to load them; installed files alone do not prove discovery",
+			[]string{"Hermes trusted Git repository root: " + report.root}
 	}
 	prefix := "UAP did not change Hermes project trust: "
 	if report.attempted {
 		prefix = "UAP could not confirm Hermes project trust: "
 	}
-	reason := report.reason
+	local := []string{"Exact Hermes trust command for this project: " + hermesTrustCommand(report.root)}
 	if len(report.missing) > 0 {
-		reason += "; previously trusted entries missing afterwards: " + strings.Join(report.missing, ", ")
+		local = append(local, "Previously trusted Hermes entries missing afterwards: "+strings.Join(report.missing, ", "))
 	}
-	return prefix + reason + ". To trust the whole Git repository root yourself (.hermes/skills and .agents/skills, including future content), run `" +
-		hermesTrustCommand(report.root) + "` and start a new Hermes session"
+	return prefix + report.reason + ". To trust the whole Git repository (.hermes/skills and .agents/skills, including future content), run `hermes skills trust` inside it, then start a new Hermes session", local
 }
 
+// POSIX shells take single quotes. On Windows, double quotes work in both
+// PowerShell and cmd.exe for paths without $, backtick or %.
 func hermesTrustCommand(root string) string {
 	quoted := "'" + strings.ReplaceAll(root, "'", `'\''`) + "'"
 	if runtime.GOOS == "windows" {
-		quoted = "'" + strings.ReplaceAll(root, "'", "''") + "'"
+		quoted = `"` + root + `"`
 	}
 	return "hermes skills trust " + quoted
 }
@@ -129,8 +144,11 @@ func (grant hermesTrustGrant) run(ctx context.Context) (hermesTrustReport, error
 	if grant.runner == nil || grant.lookup == nil {
 		return refuse("the native Hermes command runner is unavailable")
 	}
-	if !cleanRoot(grant.project) || !cleanRoot(grant.profile) {
-		return refuse("the selected project or Hermes home is not an exact absolute directory")
+	if !cleanRoot(grant.project) {
+		return refuse("the selected project is not an exact absolute directory")
+	}
+	if !cleanRoot(grant.profile) {
+		return refuse("the detected Hermes home is not an exact absolute directory")
 	}
 	if !cleanRoot(grant.executable) || runtime.GOOS == "windows" && !strings.EqualFold(filepath.Ext(grant.executable), ".exe") {
 		return refuse("the Hermes CLI executable was not detected exactly")
@@ -147,7 +165,7 @@ func (grant hermesTrustGrant) run(ctx context.Context) (hermesTrustReport, error
 	report.root = root
 	file, err := grant.kernel.BeginExactFile(filepath.Join(grant.profile, "config.yaml"))
 	if err != nil {
-		return refuse("the Hermes configuration could not be locked for an exclusive update")
+		return refuse("UAP could not take its exclusive lock on the Hermes config.yaml, which must be a regular file, not a symlink, that no other UAP operation is changing")
 	}
 	report, err = grant.trustLocked(ctx, report)
 	if closeErr := file.Close(); closeErr != nil && report.granted {
@@ -173,15 +191,23 @@ func (grant hermesTrustGrant) trustLocked(ctx context.Context, report hermesTrus
 	}
 	report.attempted = true
 	result, err := grant.hermes(ctx, "skills", "trust", report.root)
-	if err != nil || result == nil {
+	if err != nil {
 		report.reason = "the Hermes trust command did not complete"
 		return report, err
 	}
-	if !hermesTrustConfirmed(*result, report.root) {
-		report.reason = "Hermes did not confirm the trust grant"
-		return report, nil
+	failure := ""
+	if result == nil {
+		failure = "the Hermes trust command did not complete"
+	} else if !hermesTrustConfirmed(*result, report.root) {
+		failure = "Hermes did not confirm the trust grant"
 	}
-	return grant.verifyTrust(ctx, report, before)
+	// Read back even after a refused or unconfirmed grant so entries a managed
+	// save deleted are reported to the user.
+	report, err = grant.verifyTrust(ctx, report, before)
+	if failure != "" {
+		report.granted, report.reason = false, failure
+	}
+	return report, err
 }
 
 // The pinned CLI exits 0 for refused or unsaved grants and reports the real
@@ -388,17 +414,30 @@ func (grant hermesTrustGrant) gitRoot(ctx context.Context, values map[string]str
 		!physicalDirectory(root) || !sameDirectory(root, marker) {
 		return "", unconfirmed, nil
 	}
+	home := hermesHome(values)
+	if home == "" {
+		return "", "the home directory cannot be determined, so Hermes trust could cover it", nil
+	}
+	if sameDirectory(root, home) || containsDirectory(root, home) {
+		return "", "Hermes trust would cover the entire home directory", nil
+	}
+	return root, "", nil
+}
+
+// hermesHome is the existing directory Hermes treats as Path.home(), or empty
+// when the environment does not name one exactly.
+func hermesHome(values map[string]string) string {
 	home := values["HOME"]
 	if runtime.GOOS == "windows" {
 		home = values["USERPROFILE"]
 	}
-	if home == "" {
-		home, _ = os.UserHomeDir()
+	if !cleanRoot(home) {
+		return ""
 	}
-	if home != "" && (sameDirectory(root, home) || containsDirectory(root, home)) {
-		return "", "Hermes trust would cover the entire home directory", nil
+	if info, err := os.Stat(home); err != nil || !info.IsDir() {
+		return ""
 	}
-	return root, "", nil
+	return home
 }
 
 // containsDirectory reports whether root is a physical ancestor of path.

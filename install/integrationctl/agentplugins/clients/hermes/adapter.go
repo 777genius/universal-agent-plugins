@@ -239,8 +239,8 @@ func (*Adapter) RefinePlan(ctx context.Context, _ clients.PlanInput, plan *domai
 	plan.Activation = domain.ActivationPrepared
 	if plan.Scope == domain.ScopeProject {
 		if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
-			plan.UserActions = shared.AppendUnique(plan.UserActions, "Confirming asks your Hermes CLI to trust this whole Git repository root: Skills in its .hermes/skills and .agents/skills, including ones added later, load until `hermes skills untrust`, and trust stays after UAP removal")
-			plan.UserActions = shared.AppendUnique(plan.UserActions, "Hermes still quarantines Skills its skills_guard flags as dangerous; if UAP cannot verify the grant it says so and prints the exact `hermes skills trust` command; start a new Hermes session afterwards")
+			plan.UserActions = shared.AppendUnique(plan.UserActions, "A confirmed explicit add asks your Hermes CLI to trust this whole Git repository root: Skills in its .hermes/skills and .agents/skills, including ones added later, load until `hermes skills untrust`, and trust stays after UAP removal")
+			plan.UserActions = shared.AppendUnique(plan.UserActions, "Hermes still quarantines Skills its skills_guard flags as dangerous; update, repair and dependency sync never grant trust, and if UAP cannot verify a grant it says so with the manual `hermes skills trust` step; start a new Hermes session afterwards")
 		}
 		if shared.HasSupportedMCP(plan.Components) {
 			plan.UserActions = shared.AppendUnique(plan.UserActions, "Use an explicitly confirmed UAP Hermes project session with the qualified bundled client; ordinary startup does not select this MCP home")

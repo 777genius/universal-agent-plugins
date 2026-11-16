@@ -9,11 +9,12 @@ import (
 
 var _ clients.PreparedSetupCompleter = (*Adapter)(nil)
 
-// CanCompletePreparedSetup admits only an exact Skills-only Project install,
-// whose confirmed repair can ask the detected Hermes CLI for project trust.
-// Project MCP sessions and User installs have no trust step to finish.
+// CanCompletePreparedSetup admits only an explicit add of an exact Skills-only
+// Project install, whose confirmed repair can ask the detected Hermes CLI for
+// project trust. Update and dependency sync carry no consent, and Project MCP
+// sessions and User installs have no trust step to finish.
 func (*Adapter) CanCompletePreparedSetup(request domain.ActivationRequest, outcome domain.ActivationOutcome) bool {
-	if outcome.Activation != domain.ActivationPrepared || outcome.Verification != domain.VerificationInstalled || outcome.Policy != domain.PolicyAllowed ||
+	if !request.ProjectTrustConsent || outcome.Activation != domain.ActivationPrepared || outcome.Verification != domain.VerificationInstalled || outcome.Policy != domain.PolicyAllowed ||
 		request.Plan.Scope != domain.ScopeProject || request.Plan.TargetContext.Scope != domain.ScopeProject || request.Plan.InstallIntent != domain.InstallIntentAutomatic {
 		return false
 	}

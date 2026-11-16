@@ -180,7 +180,7 @@ func finishHermesActivation(ctx context.Context, env clients.Env, req domain.Act
 		return outcome, err
 	}
 	outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
-	if hermesTrustRequested(req) {
+	if hermesTrustApplies(req) {
 		return completeHermesProjectTrust(ctx, env, req, outcome)
 	}
 	return outcome, nil

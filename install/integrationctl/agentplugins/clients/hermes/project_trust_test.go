@@ -177,11 +177,14 @@ func TestHermesProjectTrustGrantsExactGitRootAndVerifiesReadBack(t *testing.T) {
 	if env := f.grant.environment(); !slices.Equal(env, f.grant.environ) {
 		t.Fatalf("trust environment differs from the user's Hermes environment: %v", env)
 	}
-	action := report.userAction()
-	for _, fragment := range []string{f.project, ".agents/skills", "hermes skills untrust", "quarantined", "new Hermes session"} {
+	action, local := report.actions()
+	for _, fragment := range []string{"Git repository root", ".agents/skills", "hermes skills untrust", "quarantined", "new Hermes session"} {
 		if !strings.Contains(action, fragment) {
 			t.Fatalf("granted result omits %q: %s", fragment, action)
 		}
+	}
+	if strings.Contains(action, f.project) || !slices.Equal(local, []string{"Hermes trusted Git repository root: " + f.project}) {
+		t.Fatalf("host path leaked into public actions or left local guidance: %q %q", action, local)
 	}
 	again, err := f.grant.run(context.Background())
 	if err != nil || !again.granted || !slices.Equal(f.cli.entries(), []string{"/srv/prior", f.project}) {
@@ -249,6 +252,12 @@ func TestHermesProjectTrustPreconditionsFallBackWithoutWriting(t *testing.T) {
 			}
 			f.grant.project, f.cli.gitRoot = base, filepath.ToSlash(base)
 		}},
+		{"home unset", "home directory cannot be determined", func(_ *testing.T, f *hermesTrustFixture) {
+			f.grant.environ = []string{"PATH=/usr/bin", "HERMES_MANAGED_DIR=" + f.managed}
+		}},
+		{"home missing", "home directory cannot be determined", func(_ *testing.T, f *hermesTrustFixture) {
+			f.grant.environ = []string{"HOME=" + filepath.Join(f.home, "absent"), "USERPROFILE=" + filepath.Join(f.home, "absent"), "HERMES_MANAGED_DIR=" + f.managed}
+		}},
 		{"relative git root", "Git repository root could not be confirmed", func(_ *testing.T, f *hermesTrustFixture) { f.cli.gitRoot = "repo" }},
 		{"git root differs from nearest marker", "Git repository root could not be confirmed", func(t *testing.T, f *hermesTrustFixture) {
 			other := filepath.Join(filepath.Dir(f.project), "other")
@@ -277,9 +286,10 @@ func TestHermesProjectTrustPreconditionsFallBackWithoutWriting(t *testing.T) {
 			if f.cli.trustCalls() != 0 || !slices.Equal(before, f.cli.entries()) {
 				t.Fatalf("refused grant changed native trust: %v", f.cli.calls)
 			}
-			action := report.userAction()
-			if !strings.HasPrefix(action, "UAP did not change Hermes project trust: ") || !strings.Contains(action, "`hermes skills trust '") {
-				t.Fatalf("fallback lacks the exact manual command: %s", action)
+			action, local := report.actions()
+			if !strings.HasPrefix(action, "UAP did not change Hermes project trust: ") || !strings.Contains(action, "run `hermes skills trust` inside it") ||
+				strings.Contains(action, f.project) || len(local) != 1 || !strings.HasPrefix(local[0], "Exact Hermes trust command for this project: hermes skills trust ") {
+				t.Fatalf("fallback lacks the path-free or exact manual command: %q %q", action, local)
 			}
 		})
 	}
@@ -310,6 +320,9 @@ func TestHermesProjectTrustPostCheckNeverTrustsExitCode(t *testing.T) {
 		{"confirmation names another root", func(cli *fakeHermesCLI) { cli.trustStdout = "Trusted: /elsewhere" }, false},
 		{"root absent afterwards", func(cli *fakeHermesCLI) { cli.noSave = true }, false},
 		{"prior entries lost", func(cli *fakeHermesCLI) { cli.dropPrior = true }, true},
+		{"managed save note deleted prior entries", func(cli *fakeHermesCLI) {
+			cli.dropPrior, cli.trustStderr = true, "Note: 1 managed setting(s) were not saved (managed by your administrator): skills\n"
+		}, true},
 		{"project discovery disabled", func(cli *fakeHermesCLI) { cli.discovery = false }, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -319,12 +332,13 @@ func TestHermesProjectTrustPostCheckNeverTrustsExitCode(t *testing.T) {
 			if err != nil || report.granted || !report.attempted || report.reason == "" {
 				t.Fatalf("post-check accepted an unverified grant: %+v %v", report, err)
 			}
-			action := report.userAction()
-			if !strings.HasPrefix(action, "UAP could not confirm Hermes project trust: ") || !strings.Contains(action, hermesTrustCommand(f.project)) {
-				t.Fatalf("post-check failure lacks the exact manual command: %s", action)
+			action, local := report.actions()
+			if !strings.HasPrefix(action, "UAP could not confirm Hermes project trust: ") || strings.Contains(action, f.project) ||
+				local[0] != "Exact Hermes trust command for this project: "+hermesTrustCommand(f.project) {
+				t.Fatalf("post-check failure lacks the exact manual command: %q %q", action, local)
 			}
-			if tc.missing != strings.Contains(action, "/srv/prior") {
-				t.Fatalf("lost prior entries were not reported exactly: %s", action)
+			if tc.missing != strings.Contains(strings.Join(local, "\n"), "/srv/prior") || strings.Contains(action, "/srv/prior") {
+				t.Fatalf("lost prior entries were not reported exactly and privately: %q %q", action, local)
 			}
 		})
 	}
@@ -388,6 +402,7 @@ func hermesTrustActivation(t *testing.T, root string, cli *fakeHermesCLI, profil
 	request := domain.ActivationRequest{
 		Client: domain.DetectedClient{ClientID: domain.ClientHermes, ConfigRoot: profile, ExecutablePath: cli.hermes},
 		Plan:   plan, Delivery: domain.StagedDelivery{ClientID: domain.ClientHermes, ActivePath: plan.ActivePath, NativeObjects: fixture.objects},
+		ProjectTrustConsent: true,
 	}
 	env := clients.Env{Runner: cli, NativeConfig: nativeconfig.New(), LookupExecutable: func(string) (string, error) { return cli.git, nil }}
 	return request, env
@@ -406,8 +421,9 @@ func TestHermesConfirmedProjectActivationGrantsTrustOnlyOutsideVerification(t *t
 	if err != nil || outcome.Activation != domain.ActivationPrepared || outcome.ActivationAttested || f.cli.trustCalls() != 1 {
 		t.Fatalf("confirmed activation did not ask Hermes once: %+v %v %v", outcome, err, f.cli.calls)
 	}
-	if slices.Contains(outcome.UserActions, hermesCompletedAction) || !strings.HasPrefix(outcome.UserActions[len(outcome.UserActions)-1], "Hermes now trusts the Git repository root "+f.project) {
-		t.Fatalf("granted outcome is not reported: %v", outcome.UserActions)
+	if slices.Contains(outcome.UserActions, hermesCompletedAction) || !strings.HasPrefix(outcome.UserActions[len(outcome.UserActions)-1], "Hermes now trusts this project's Git repository root") ||
+		!slices.Contains(outcome.LocalActions, "Hermes trusted Git repository root: "+f.project) {
+		t.Fatalf("granted outcome is not reported: %v %v", outcome.UserActions, outcome.LocalActions)
 	}
 	calls := len(f.cli.calls)
 	request.VerifyOnly = true
@@ -415,11 +431,24 @@ func TestHermesConfirmedProjectActivationGrantsTrustOnlyOutsideVerification(t *t
 	if err != nil || len(f.cli.calls) != calls || !slices.Contains(verified.UserActions, hermesCompletedAction) {
 		t.Fatalf("read-only verification ran native trust: %+v %v %v", verified, err, f.cli.calls)
 	}
+	// Update, repair and dependency sync carry no add consent: they never run
+	// the CLI, so a user's `hermes skills untrust` stays in effect.
 	request.VerifyOnly, request.Replacing, request.PreviousNativeObjects = false, true, request.Delivery.NativeObjects
+	request.ProjectTrustConsent = false
+	automatic, err := New().Activate(context.Background(), env, request)
+	if err != nil || len(f.cli.calls) != calls || !strings.HasPrefix(automatic.UserActions[len(automatic.UserActions)-1], "UAP did not change Hermes project trust: UAP grants it only during an explicit add") {
+		t.Fatalf("an automatic lifecycle ran or claimed trust: %v %v %v", automatic.UserActions, err, f.cli.calls)
+	}
+	request.ProjectTrustConsent = true
 	env.LookupExecutable = nil
 	fallback, err := New().Activate(context.Background(), env, request)
 	if err != nil || len(f.cli.calls) != calls || !strings.HasPrefix(fallback.UserActions[len(fallback.UserActions)-1], "UAP did not change Hermes project trust: ") {
 		t.Fatalf("a composition without explicit native lookup ran or claimed trust: %v %v %v", fallback.UserActions, err, f.cli.calls)
+	}
+	request.Plan.TargetContext.UserConfigRoot = filepath.Join(filepath.Dir(f.profile), "other")
+	mismatch, err := New().Activate(context.Background(), env, request)
+	if err != nil || len(f.cli.calls) != calls || !strings.Contains(mismatch.UserActions[len(mismatch.UserActions)-1], "recorded Hermes profile differs") {
+		t.Fatalf("a different recorded profile was not reported accurately: %v %v", mismatch.UserActions, err)
 	}
 }
 
@@ -431,6 +460,7 @@ func TestHermesPreparedSetupAdmitsOnlyExactSkillProject(t *testing.T) {
 		Plan: domain.DeliveryPlan{Scope: domain.ScopeProject, InstallIntent: domain.InstallIntentAutomatic, NativeRegistryRoot: filepath.Join(project, ".hermes"),
 			TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: project, UserConfigRoot: profile},
 			Components:    []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "audit", Support: domain.SupportNative}}},
+		ProjectTrustConsent: true,
 	}
 	outcome := domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Policy: domain.PolicyAllowed}
 	adapter := New()
@@ -438,7 +468,8 @@ func TestHermesPreparedSetupAdmitsOnlyExactSkillProject(t *testing.T) {
 		t.Fatal("exact Skills-only Project install refused")
 	}
 	for name, mutate := range map[string]func(*domain.ActivationRequest, *domain.ActivationOutcome){
-		"user scope": func(r *domain.ActivationRequest, _ *domain.ActivationOutcome) { r.Plan.Scope = domain.ScopeUser },
+		"no add consent": func(r *domain.ActivationRequest, _ *domain.ActivationOutcome) { r.ProjectTrustConsent = false },
+		"user scope":     func(r *domain.ActivationRequest, _ *domain.ActivationOutcome) { r.Plan.Scope = domain.ScopeUser },
 		"prepare intent": func(r *domain.ActivationRequest, _ *domain.ActivationOutcome) {
 			r.Plan.InstallIntent = domain.InstallIntentPrepare
 		},
