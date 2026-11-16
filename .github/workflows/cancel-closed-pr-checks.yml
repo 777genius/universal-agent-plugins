@@ -82,7 +82,7 @@ jobs:
               .workflow_runs[]? | select(.event == "pull_request")
               | select(.head_repository.id == $head)
               | select(.path | type == "string" and startswith(".github/workflows/"))
-              | select((.path | test("release|publish|sign|deploy|checkpoint|skillspector"; "i")) | not)
+              | select((.path | test("release|publish|sign|deploy|checkpoint|skillspector|scan|audit|security|codeql|govulncheck|dependency-review|sbom"; "i")) | not)
               | select((.created_at | fromdateiso8601) <= ($closed | fromdateiso8601))
               | select(
                   any(.pull_requests[]?;

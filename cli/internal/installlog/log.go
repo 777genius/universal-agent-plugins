@@ -17,6 +17,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 // SchemaVersion identifies the JSON Lines record layout.
@@ -57,7 +59,7 @@ type Entry struct {
 func (run Run) Failed() bool {
 	for _, entry := range run.Entries {
 		switch entry.Status {
-		case "failed", "not_attempted", "incomplete", "conflict", "recovery_required", "cancelled":
+		case "failed", "not_attempted", "incomplete", "conflict", "recovery_required", string(installer.OutcomeCancelled):
 			return true
 		}
 	}
@@ -160,7 +162,7 @@ var (
 	secretFlag   = regexp.MustCompile(`(?i)(--?[a-z0-9-]*(?:token|secret|passw(?:or)?d|api-?key)\s+)([^\s-][^\s]*)`)
 	authHeader   = regexp.MustCompile(`(?i)(authorization\s*[=:]\s*)(?:(?:bearer|basic|token)\s+)?[^\s"',;]+`)
 	bearerValue  = regexp.MustCompile(`(?i)\b(bearer|basic)\s+[A-Za-z0-9._~+/=-]{8,}`)
-	// Credentials recognisable by their issuer prefix even without a key name.
+	// Credentials recognizable by their issuer prefix even without a key name.
 	knownTokens = regexp.MustCompile(`\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,}|npm_[A-Za-z0-9]{20,}|xox[abprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16})\b`)
 )
 

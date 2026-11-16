@@ -80,7 +80,7 @@ func TestSkillsProgressPreservesReadinessAndUnchanged(t *testing.T) {
 		{"sign in", SkillsBatchItem{Status: "completed", Client: installer.ClientResult{Authentication: string(domain.AuthenticationPending)}}, "sign-in required"},
 		{"rollback", SkillsBatchItem{Status: "incomplete", Client: installer.ClientResult{GroupPhase: string(usecase.GroupTargetManagedRolledBack)}}, "rolled back"},
 		{"unchanged", SkillsBatchItem{Status: "unchanged"}, "unchanged"},
-		{"cancel", SkillsBatchItem{Status: "cancelled"}, "canceled"}, //nolint:misspell // Preserve the published status value.
+		{"cancel", SkillsBatchItem{Status: string(installer.OutcomeCancelled)}, "canceled"},
 		{"removed", SkillsBatchItem{Status: "completed", Action: "remove"}, "removed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
