@@ -11,6 +11,7 @@ on:
       - 'scripts/test_project_native_runtime.py'
       - 'scripts/provision_grok_native_runtime.sh'
       - 'scripts/grok_bwrap_policy_setup.py'
+      - 'scripts/grok_runtime_setup_diagnostic.py'
       - 'scripts/test_grok_acp_inventory_admission.py'
       - 'install/integrationctl/research/grokacpinventory/**'
       - 'scripts/devin_structured_inventory_admission.py'
@@ -35,6 +36,7 @@ on:
       - 'scripts/test_project_native_runtime.py'
       - 'scripts/provision_grok_native_runtime.sh'
       - 'scripts/grok_bwrap_policy_setup.py'
+      - 'scripts/grok_runtime_setup_diagnostic.py'
       - 'scripts/test_grok_acp_inventory_admission.py'
       - 'install/integrationctl/research/grokacpinventory/**'
       - 'scripts/devin_structured_inventory_admission.py'
@@ -269,6 +271,20 @@ jobs:
           bash scripts/provision_grok_native_runtime.sh
           sudo -n /usr/bin/python3 -B scripts/grok_bwrap_policy_setup.py "$RUNNER_TEMP" \
             > "$RUNNER_TEMP/grok-bwrap-policy.json"
+      - name: Retain bounded failed runtime setup log
+        id: grok_runtime_diagnostic
+        if: ${{ always() && (steps.grok_readonly_setup.outcome == 'failure' || steps.grok_readonly_setup.outcome == 'cancelled') }}
+        timeout-minutes: 1
+        continue-on-error: true
+        run: timeout --signal=TERM --kill-after=2s 10s /usr/bin/python3 -I -B scripts/grok_runtime_setup_diagnostic.py
+      - name: Preserve bounded runtime setup failure
+        if: ${{ always() && steps.grok_runtime_diagnostic.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: grok-runtime-setup-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/grok-runtime-setup-diagnostic.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Preserve fixed readonly-runtime provisioning provenance
         if: ${{ always() && steps.grok_readonly_setup.outcome == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

@@ -2964,6 +2964,62 @@ def admission_contracts():
                     self.assertFalse((rows[0][1] / "uap-state/logs").exists())
                     for row in rows[1:]: self.assertEqual(len(list((row[1] / "uap-state/logs").iterdir())), 1)
 
+        def test_public_alias_failed_add_keeps_original_link_target_and_state(self):
+            class CompletedWorlds(Exception): pass
+            for fault in ("pass", "wrong-detail", "state", "alias-target", "alias-link"):
+                with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as fixtures:
+                    parent = Path(temporary).resolve(); source = parent / "source"; source.mkdir()
+                    rows = [fixtures.enter_context(self.missing_config_fixture()) for _ in range(4)]
+                    (source / "plugin.json").write_bytes((rows[0][1] / "source/plugin.json").read_bytes())
+                    for _, root, _, _, _ in rows:
+                        (root / "source/plugin.json").unlink(); (root / "source").rmdir()
+                    available, calls = iter(rows), []
+                    @contextlib.contextmanager
+                    def fixture(*unused):
+                        try: _, root, env, authority, _ = next(available)
+                        except StopIteration: raise CompletedWorlds from None
+                        yield root, env, authority
+                    def command(runtime, root, authority, action, *, refused=False):
+                        calls.append((root, action, refused))
+                        if action == "uap-repeat" and refused:
+                            # The reply joins the retained pre-mutation binding;
+                            # the authored alias is not a new original profile.
+                            proof = next(row[4] for row in rows if row[1] == root)
+                            path = self.failed_add_log(root / "uap-state")
+                            if root in (rows[2][1], rows[3][1]):
+                                header, binding = map(json.loads, path.read_bytes().splitlines())
+                                if root != rows[3][1] or fault != "wrong-detail":
+                                    binding["detail"] = "antigravity selected User inventory is unavailable"
+                                    path.write_bytes(missing_config_json(header) + missing_config_json(binding))
+                            if root == rows[3][1]:
+                                config = Path(proof["binding"]["target_locator"]).parent.parent / "config.json"
+                                original = config.with_name("authored-original.json")
+                                self.assertTrue(config.is_symlink())
+                                self.assertEqual(os.readlink(config), original.name)
+                                original_bytes = original.read_bytes()
+                                if fault == "state": (root / "uap-state/unrelated-output").write_bytes(b"unknown effect")
+                                elif fault == "alias-target": original.write_bytes(b"changed original target")
+                                elif fault == "alias-link":
+                                    config.unlink(); config.symlink_to("different-target.json")
+                                if fault != "alias-target": self.assertEqual(original.read_bytes(), original_bytes)
+                            return self.failed_add_document(proof)
+                        return b"{}\n"
+                    with patch(__name__ + ".public_fixture", side_effect=fixture), patch(__name__ + ".public_uap", side_effect=command), \
+                            patch(__name__ + ".public_user_result"), patch(__name__ + ".public_missing_config_discovery", return_value=True):
+                        expected = CompletedWorlds if fault == "pass" else AssertionError
+                        with self.assertRaises(expected) as caught:
+                            public_user_refusals(rows[0][0], source, rows[0][0][0].parent, parent)
+                    reason = {"wrong-detail": "not the exact authored operation",
+                              "state": "Refused public repeat changed original membership/bytes",
+                              "alias-target": "Refused alias changed the task-owned target",
+                              "alias-link": "Authored negative config alias differs"}
+                    if fault != "pass": self.assertIn(reason[fault], str(caught.exception))
+                    self.assertEqual([(action, refused) for _, action, refused in calls],
+                                     [("uap-add", False), ("uap-repeat", False)] +
+                                     [("uap-add", False), ("uap-repeat", True)] * 3)
+                    self.assertFalse((rows[0][1] / "uap-state/logs").exists())
+                    for row in rows[1:]: self.assertEqual(len(list((row[1] / "uap-state/logs").iterdir())), 1)
+
         def test_config_is_closed_and_bounded(self):
             for body in (b'{"x":1,"x":2}', b'{} {}', b'{"x":NaN}', b'{"x":1e999}', b'[' * 10 + b'0' + b']' * 10, b'x' * 16385):
                 with self.assertRaises((AssertionError, ValueError)): closed_config(body)
@@ -3888,7 +3944,7 @@ class PublicFailedAddLog:
     version = "0.1.0-development"
 
     def __init__(self, root, state, authority, proof, runtime, cleanup, *, condition="malformed-config"):
-        if condition == "foreign-collision":
+        if condition in ("foreign-collision", "config-alias"):
             self.detail = "antigravity selected User inventory is unavailable"
         elif condition != "malformed-config":
             raise AssertionError("Failed-add condition is not an authored refusal")
@@ -4082,7 +4138,7 @@ def public_user_refusals(runtime, source, executable_dir, parent):
                 shim.rename(shim.with_name("retained-native")); action = "uap-missing-backend"
                 if shutil.which("agy", path=env["PATH"]): raise AssertionError("Missing fixture would select ambient native CLI")
             diagnostic = (PublicFailedAddLog(root, Path(env["AGENTPLUGINS_HOME"]), authority, proof, runtime, cleanup, condition=condition)
-                          if condition in ("malformed-config", "foreign-collision") else None)
+                          if condition in ("malformed-config", "foreign-collision", "config-alias") else None)
             state_before, bundle_before = public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4]), public_snapshot(selected.parent)
             members = {entry.name for entry in config.parent.iterdir()}
             parent_identity = object_identity(config.parent.lstat(), True)

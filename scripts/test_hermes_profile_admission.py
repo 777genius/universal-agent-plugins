@@ -7530,6 +7530,52 @@ class PublicUserTrustContracts(unittest.TestCase):
         shutil.copy2(guard.config, path)
         return path
 
+    @staticmethod
+    def native_config_lock(config):
+        # Filesystem port for nativeconfig.BeginExactFile/Close. The focused
+        # producer control substitutes the real Go kernel for this inert open.
+        path = config.with_name(config.name + ".agentplugins.lock")
+        descriptor = os.open(path, os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        os.close(descriptor)
+
+    def test_public_trust_retains_prepared_native_config_lock(self):
+        with self.fixture() as (guard, sources, document, tick):
+            def effect(_argv):
+                self.native_config_lock(guard.config)
+                self.backup(guard, tick)
+                self.rewrite(guard, dict(document, _config_version=52,
+                    skills={"trusted_project_dirs": [str(guard.projects["a"])]}))
+                self.backup(guard, tick)
+            command, calls, _ = self.command(guard, sources, effect)
+            command("public-add-a", "a", ["add", str(sources["a"]), "--no-save"])
+            lock = guard.config.with_name(guard.config.name + ".agentplugins.lock")
+            key = str(lock.relative_to(guard.user))
+            self.assertEqual(lock.read_bytes(), b"")
+            self.assertEqual(guard.helpers["snapshot"](guard.user)[key], guard.original[key])
+            self.assertEqual(guard.phases, ["a"])
+            self.assertEqual(len(calls), 1)
+
+    def test_public_trust_lock_identity_and_unknown_members_stay_protected(self):
+        for change in ("replace", "content", "mode", "hardlink", "missing", "unknown"):
+            with self.subTest(change=change), self.fixture() as (guard, _, document, tick):
+                self.backup(guard, tick)
+                self.rewrite(guard, dict(document, _config_version=52,
+                    skills={"trusted_project_dirs": [str(guard.projects["a"])]}))
+                lock = guard.config.with_name(guard.config.name + ".agentplugins.lock")
+                try:
+                    if change == "replace":
+                        replacement = lock.with_name("replacement")
+                        replacement.write_bytes(b""); replacement.chmod(0o600)
+                        os.replace(replacement, lock)
+                    elif change == "content": lock.write_bytes(b"unexpected")
+                    elif change == "mode": lock.chmod(0o400)
+                    elif change == "hardlink": os.link(lock, lock.with_name("lock-alias"))
+                    elif change == "missing": lock.unlink()
+                    else: lock.with_name("unknown.agentplugins.lock").write_bytes(b"")
+                    with self.assertRaises(RuntimeError): guard.authorize("a")
+                finally:
+                    if lock.exists(): lock.chmod(0o600)
+
     def command(self, guard, sources, effect):
         import ast
         import inspect

@@ -536,10 +536,72 @@ class ProjectHomePreservationAcceptance(unittest.TestCase):
                     path = {'backup-dir-replaced': guard.backups,
                             'profile-replaced': guard.profile, 'home-replaced': guard.home}[variant]
                     original = guard.evidence / 'moved-original'
-                    path.rename(original)
+                    before = module.snapshot(guard.home)
+                    try:
+                        path.rename(original)
+                    except PermissionError as error:
+                        if (sys.platform != 'win32' or type(getattr(error, 'winerror', None)) is not int
+                                or error.winerror != 5 or variant not in ('profile-replaced', 'home-replaced')):
+                            raise
+                        # Windows can protect the parent while its original
+                        # descendants remain held. Prove that exact no-effect
+                        # outcome without closing or replacing any authority.
+                        self.assertFalse(original.exists() or original.is_symlink())
+                        self.assertEqual(module.snapshot(guard.home), before)
+                        for directory, descriptor, expected in guard.directories:
+                            self.assertEqual(module.directory_identity(os.fstat(descriptor)), expected)
+                            self.assertEqual(module.directory_identity(module.directory_info(directory)), expected)
+                        self.assertEqual(guard.checked(before), guard.original)
+                        continue
                     shutil.copytree(original, path)
                 with self.assertRaises((RuntimeError, OSError)):
                     guard.checked(module.snapshot(guard.home))
+
+    def test_windows_parent_rename_denial_requires_unchanged_original_authority(self):
+        original_rename = Path.rename
+        scenarios = ('protected', 'wrong-os', 'wrong-error', 'wrong-kind', 'backup-directory',
+                     'new-member', 'same-bytes-replacement', 'destination')
+        for scenario in scenarios:
+            with self.subTest(scenario=scenario):
+                case = type(self)('test_original_directory_and_unselected_members_remain_authoritative')
+                original_fixture = case.fixture
+                current, denied = {}, []
+
+                @contextmanager
+                def fixture():
+                    with original_fixture() as value:
+                        current['guard'] = value[1]
+                        yield value
+
+                def rename(path, destination):
+                    guard = current.get('guard')
+                    selected = ((guard.backups,) if scenario == 'backup-directory'
+                                else (guard.profile, guard.home)) if guard is not None else ()
+                    if Path(destination).name != 'moved-original' or path not in selected:
+                        return original_rename(path, destination)
+                    denied.append(path.name)
+                    if scenario == 'new-member':
+                        (guard.home / 'unpermitted').write_bytes(b'changed despite denial')
+                    elif scenario == 'same-bytes-replacement':
+                        sentinel = guard.profile / 'auth-sentinel'
+                        replacement = guard.evidence / 'replacement'
+                        shutil.copy2(sentinel, replacement)
+                        os.replace(replacement, sentinel)
+                    elif scenario == 'destination':
+                        Path(destination).mkdir()
+                    error = (OSError if scenario == 'wrong-kind' else PermissionError)('inert parent rename denial')
+                    error.winerror = 32 if scenario == 'wrong-error' else 5
+                    raise error
+
+                with patch.object(case, 'fixture', fixture), patch.object(Path, 'rename', rename), \
+                        patch.object(sys, 'platform', 'linux' if scenario == 'wrong-os' else 'win32'):
+                    result = unittest.TestResult()
+                    case.run(result)
+                self.assertTrue(denied, 'the actual original replacement branch must be reached')
+                self.assertEqual(result.testsRun, 1)
+                self.assertEqual(len(result.skipped), 0)
+                self.assertEqual(result.wasSuccessful(), scenario == 'protected',
+                                 str(result.failures + result.errors))
 
 
 if __name__ == '__main__':

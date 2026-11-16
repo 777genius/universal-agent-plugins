@@ -2009,5 +2009,200 @@ class InertProcessTraceContracts(unittest.TestCase):
         self.assertEqual(receipt["runs"][-1]["exit"], 0)
 
 
+
+@unittest.skipUnless(sys.platform == "linux", "Linux setup-log descriptor contract")
+class RuntimeSetupDiagnosticTests(unittest.TestCase):
+    def setUp(self):
+        import grok_runtime_setup_diagnostic
+        self.diagnostic = grok_runtime_setup_diagnostic
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+
+    def fixture(self, name, body=b"existing wget diagnostic\n"):
+        root = self.root / name
+        root.mkdir(mode=0o700)
+        source = root / "grok-runtime-root/debootstrap/debootstrap.log"
+        source.parent.mkdir(parents=True, mode=0o700)
+        source.write_bytes(body)
+        source.chmod(0o600)
+        return root, source
+
+    def run_reader(self, root):
+        import io
+        with mock.patch.dict(os.environ, {"RUNNER_TEMP": str(root)}), \
+                mock.patch.object(sys, "argv", ["grok_runtime_setup_diagnostic.py"]), \
+                mock.patch.object(sys, "stdout", new_callable=io.StringIO) as stdout, \
+                mock.patch.object(sys, "stderr", new_callable=io.StringIO) as stderr:
+            result = self.diagnostic.main()
+        self.assertEqual((stdout.getvalue(), stderr.getvalue()), ("", ""))
+        return result
+
+    def test_existing_setup_log_capture_is_bounded_and_does_not_change_source(self):
+        for name, body in (("small", b"existing wget diagnostic\x00\xff\n"),
+                           ("large", bytes(range(256)) * 600 + b"last transfer\n"),
+                           ("empty", b"")):
+            with self.subTest(name=name):
+                root, source = self.fixture(name, body)
+                before = self.diagnostic.identity(source.stat())
+                original_pread = os.pread
+                with mock.patch.object(self.diagnostic.os, "pread", wraps=original_pread) as reads:
+                    self.assertEqual(self.run_reader(root), 0)
+                self.assertEqual(reads.call_count, 1)
+                self.assertLessEqual(reads.call_args.args[1], 65536)
+                output = root / self.diagnostic.OUTPUT_NAME
+                raw = output.read_bytes()
+                self.assertLessEqual(len(raw), 98304)
+                record = json.loads(raw)
+                expected = body[-65536:]
+                self.assertTrue(record["available"])
+                self.assertTrue(record["diagnostic_only"])
+                self.assertIs(record["qualification"], False)
+                self.assertIsNone(record["reason"])
+                self.assertEqual(record["original_bytes"], len(body))
+                self.assertEqual(record["offset"], max(0, len(body) - 65536))
+                self.assertEqual(record["truncated"], len(body) > 65536)
+                self.assertEqual(record["captured_bytes"], len(expected))
+                self.assertEqual(record["captured_sha256"], hashlib.sha256(expected).hexdigest())
+                self.assertEqual(base64.b64decode(record["content_base64"], validate=True), expected)
+                self.assertEqual(source.read_bytes(), body)
+                self.assertEqual(self.diagnostic.identity(source.stat()), before)
+                self.assertEqual(set(p.name for p in source.parent.iterdir()), {"debootstrap.log"})
+                self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+
+    def test_missing_aliased_changed_or_linked_source_is_unavailable(self):
+        faults = ("missing", "symlink", "directory-alias", "hardlink", "fifo",
+                  "writable", "changed", "leaf-replaced", "parent-replaced")
+        for fault in faults:
+            with self.subTest(fault=fault):
+                root, source = self.fixture(fault)
+                foreign = self.root / (fault + "-foreign")
+                foreign.write_bytes(b"foreign source must not be published\n")
+                before_foreign = foreign.read_bytes()
+                if fault == "missing":
+                    source.unlink()
+                elif fault == "symlink":
+                    source.unlink()
+                    source.symlink_to(foreign)
+                elif fault == "directory-alias":
+                    original = source.parent.with_name("retained")
+                    source.parent.rename(original)
+                    source.parent.symlink_to(original, target_is_directory=True)
+                elif fault == "hardlink":
+                    os.link(source, root / "second-link")
+                elif fault == "fifo":
+                    source.unlink()
+                    os.mkfifo(source, mode=0o600)
+                elif fault == "writable":
+                    source.chmod(0o666)
+                original_open, original_pread = os.open, os.pread
+                opened = []
+
+                def track_open(*args, **kwargs):
+                    fd = original_open(*args, **kwargs)
+                    opened.append(fd)
+                    return fd
+
+                def read_and_change(fd, count, offset):
+                    body = original_pread(fd, count, offset)
+                    if fault == "changed":
+                        source.write_bytes(b"changed same held file\n")
+                    elif fault == "leaf-replaced":
+                        source.rename(source.with_name("retained.log"))
+                        source.write_bytes(body)
+                        source.chmod(0o600)
+                    elif fault == "parent-replaced":
+                        source.parent.rename(source.parent.with_name("retained"))
+                        source.parent.mkdir(mode=0o700)
+                        source.write_bytes(body)
+                        source.chmod(0o600)
+                    return body
+
+                with mock.patch.object(self.diagnostic.os, "open", side_effect=track_open), \
+                        mock.patch.object(self.diagnostic.os, "pread", side_effect=read_and_change):
+                    self.assertEqual(self.run_reader(root), 0)
+                for fd in opened:
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+                record = json.loads((root / self.diagnostic.OUTPUT_NAME).read_bytes())
+                self.assertIs(record["available"], False)
+                self.assertIs(record["qualification"], False)
+                self.assertNotIn("content_base64", record)
+                self.assertNotIn("captured_sha256", record)
+                if fault == "missing":
+                    self.assertEqual(record["reason"], "original_file_missing")
+                elif fault in ("changed", "leaf-replaced", "parent-replaced"):
+                    self.assertEqual(record["reason"], "source_changed")
+                self.assertEqual(foreign.read_bytes(), before_foreign)
+
+    def test_existing_diagnostic_output_is_never_overwritten(self):
+        for linked in (False, True):
+            with self.subTest(linked=linked):
+                root, source = self.fixture("output-" + str(linked))
+                before = source.read_bytes()
+                output = root / self.diagnostic.OUTPUT_NAME
+                foreign = self.root / ("output-foreign-" + str(linked))
+                foreign.write_bytes(b"original output authority\n")
+                if linked:
+                    output.symlink_to(foreign)
+                else:
+                    output.write_bytes(foreign.read_bytes())
+                self.assertEqual(self.run_reader(root), 1)
+                self.assertEqual(output.read_bytes(), b"original output authority\n")
+                self.assertEqual(foreign.read_bytes(), b"original output authority\n")
+                self.assertEqual(source.read_bytes(), before)
+
+    def test_all_four_workflows_retain_cancelled_setup_without_native_admission(self):
+        import subprocess
+        workflow_root = Path(__file__).resolve().parents[1] / ".github/workflows"
+        files = (("client-automation-native.yml", "grok_readonly_setup"),
+                 ("grok-project-protocol.yml", "grok_runtime_setup"),
+                 ("grok-noauth-call.yml", "grok_runtime_setup"),
+                 ("grok-enable-readonly.yml", "grok_runtime_setup"))
+        commands = []
+        for filename, setup in files:
+            text = (workflow_root / filename).read_text()
+            block = text.split("      - name: Retain bounded failed runtime setup log\n")[1].split("\n      - ")[0]
+            expression = block.split("        if: ")[1].splitlines()[0]
+            expected = ("${{ always() && (steps." + setup + ".outcome == 'failure' || steps." +
+                        setup + ".outcome == 'cancelled') }}")
+            self.assertEqual(expression, expected)
+            for outcome in ("success", "failure", "cancelled", "skipped", ""):
+                actual = expression[3:-2].strip().replace("always()", "True")
+                actual = actual.replace("steps." + setup + ".outcome", repr(outcome))
+                actual = actual.replace("&&", "and").replace("||", "or")
+                self.assertEqual(eval(actual, {"__builtins__": {}}, {}), outcome in ("failure", "cancelled"))
+            self.assertIn("        timeout-minutes: 1\n", block)
+            self.assertIn("        continue-on-error: true\n", block)
+            commands.append(block.split("        run: ")[1].strip())
+            self.assertEqual(text.count("      - 'scripts/grok_runtime_setup_diagnostic.py'"), 2)
+            self.assertLess(text.index("id: " + setup), text.index("id: grok_runtime_diagnostic"))
+            if filename == "grok-enable-readonly.yml":
+                final = text.split("      - name: Retain the actual native verdict and bounded diagnostic\n")[1]
+                self.assertIn("        if: always()\n", final)
+                self.assertIn("            ${{ runner.temp }}/grok-runtime-setup-diagnostic.json\n", final)
+                self.assertIn("    timeout-minutes: 18\n", text)
+            else:
+                upload = text.split("      - name: Preserve bounded runtime setup failure\n")[1].split("\n      - ")[0]
+                self.assertIn("if: ${{ always() && steps.grok_runtime_diagnostic.outcome == 'success' }}", upload)
+                self.assertIn("          path: ${{ runner.temp }}/grok-runtime-setup-diagnostic.json", upload)
+            if filename == "client-automation-native.yml":
+                setup_block = text.split("      - name: Provision the signature-verified readonly controller runtime\n")[1].split("\n      - ")[0]
+                self.assertIn("        timeout-minutes: 8\n", setup_block)
+            else:
+                self.assertIn("    timeout-minutes: " + ("18" if filename == "grok-enable-readonly.yml" else "20") + "\n", text)
+        self.assertEqual(len(set(commands)), 1)
+        self.assertEqual(commands[0], "timeout --signal=TERM --kill-after=2s 10s /usr/bin/python3 -I -B scripts/grok_runtime_setup_diagnostic.py")
+        root, source = self.fixture("cancelled-command")
+        before = source.read_bytes()
+        result = subprocess.run(["/bin/bash", "--noprofile", "--norc", "-e", "-c", commands[0]],
+            cwd=Path(__file__).resolve().parents[1], env={**os.environ, "RUNNER_TEMP": str(root)},
+            capture_output=True, timeout=15, check=False)
+        self.assertEqual((result.returncode, result.stdout, result.stderr), (0, b"", b""))
+        self.assertEqual(source.read_bytes(), before)
+        record = json.loads((root / self.diagnostic.OUTPUT_NAME).read_bytes())
+        self.assertTrue(record["available"])
+        self.assertIs(record["qualification"], False)
+
 if __name__ == "__main__":
     unittest.main()

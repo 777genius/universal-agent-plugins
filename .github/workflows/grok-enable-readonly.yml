@@ -10,6 +10,7 @@ on:
       - 'install/integrationctl/agentplugins/ports/**'
       - 'scripts/e2e/grok-enable-readonly.py'
       - 'scripts/grok_bwrap_policy_setup.py'
+      - 'scripts/grok_runtime_setup_diagnostic.py'
       - 'scripts/test_grok_bwrap_policy_*.py'
       - 'scripts/test_grok_enable_readonly.py'
       - '.github/workflows/grok-enable-readonly.yml'
@@ -24,6 +25,7 @@ on:
       - 'install/integrationctl/agentplugins/ports/**'
       - 'scripts/e2e/grok-enable-readonly.py'
       - 'scripts/grok_bwrap_policy_setup.py'
+      - 'scripts/grok_runtime_setup_diagnostic.py'
       - 'scripts/test_grok_bwrap_policy_*.py'
       - 'scripts/test_grok_enable_readonly.py'
       - '.github/workflows/grok-enable-readonly.yml'
@@ -49,6 +51,7 @@ jobs:
           go-version: '1.26.11'
           cache: false
       - name: Provision a signature-verified minimal Ubuntu runtime
+        id: grok_runtime_setup
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends debootstrap ubuntu-keyring
@@ -65,6 +68,12 @@ jobs:
           sudo install -d -m 0755 "$RUNNER_TEMP/grok-runtime-root/opt/uap-input" \
             "$RUNNER_TEMP/grok-runtime-root/work" "$RUNNER_TEMP/grok-runtime-input"
           mkdir -m 700 "$RUNNER_TEMP/grok-readonly-evidence"
+      - name: Retain bounded failed runtime setup log
+        id: grok_runtime_diagnostic
+        if: ${{ always() && (steps.grok_runtime_setup.outcome == 'failure' || steps.grok_runtime_setup.outcome == 'cancelled') }}
+        timeout-minutes: 1
+        continue-on-error: true
+        run: timeout --signal=TERM --kill-after=2s 10s /usr/bin/python3 -I -B scripts/grok_runtime_setup_diagnostic.py
       - name: Build the pinned upstream descriptor-mount dependency
         run: |
           sudo apt-get install --yes --no-install-recommends \
@@ -261,6 +270,7 @@ jobs:
             ${{ runner.temp }}/grok-readonly-evidence/runtime-metadata.json
             ${{ runner.temp }}/grok-readonly-evidence/producer-context.json
             ${{ runner.temp }}/grok-kernel-window.json
+            ${{ runner.temp }}/grok-runtime-setup-diagnostic.json
             ${{ runner.temp }}/grok-runtime-build.json
             ${{ runner.temp }}/grok-runtime-packages.txt
             ${{ runner.temp }}/grok-bubblewrap-build.json

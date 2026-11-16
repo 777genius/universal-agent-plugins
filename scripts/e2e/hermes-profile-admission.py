@@ -1102,6 +1102,7 @@ def prepare_user_fixture(original, authored, *, source_capture=False):
 def user_fixture_content(nonce):
     sentinels = ["USER_" + kind + "_" + nonce for kind in ("MODEL", "PROVIDER", "AUTH", "HISTORY", "FOREIGN")]
     authored = {"config.yaml": "model: " + sentinels[0] + "\nproviders:\n  custom:\n    base_url: http://127.0.0.1:9/" + sentinels[1] + "\nmcp_servers:\n  foreign:\n    command: echo\n    args: [retained]\n",
+                "config.yaml.agentplugins.lock": "",
                 "auth.json": json.dumps({"version": 1, "providers": {}, "admission_marker": sentinels[2]}),
                 ".env": "# inert admission; no credentials\n",
                 "sessions/retained-history.txt": sentinels[3],
@@ -4257,7 +4258,7 @@ def observer_boundary_origin(error, phase):
         # These relative lines pin the two unchanged command callsites, not
         # another callback/require somewhere inside the same outer function.
         require(producer.tb_frame.f_globals is bounded.__globals__
-                and command.tb_lineno == OBSERVER_PUBLIC_COMMAND.co_firstlineno + 23
+                and command.tb_lineno == OBSERVER_PUBLIC_COMMAND.co_firstlineno + 30
                 and state.get("label") == "public-repair-a" and state.get("scope") == "a"
                 and state.get("args") == ["repair", "hermes-public-a"] and state.get("native") is False
                 and state.get("test") is None and values.get("expected_failure") is False
@@ -4270,7 +4271,7 @@ def observer_boundary_origin(error, phase):
     scope = state.get("scope")
     require(producer.tb_frame.f_code is public_spawn_entry.__code__ and producer.tb_frame.f_globals is globals()
             and producer.tb_lineno == public_spawn_entry.__code__.co_firstlineno + 9
-            and command.tb_lineno == OBSERVER_PUBLIC_COMMAND.co_firstlineno + 96
+            and command.tb_lineno == OBSERVER_PUBLIC_COMMAND.co_firstlineno + 105
             and sys.platform == values.get("system") == "win32"
             and OBSERVER_BOUNDARY_STDIO.get(state.get("label")) == scope and scope in ("a", "b")
             and state.get("native") is True and state.get("test") == "stdio"
@@ -4401,7 +4402,7 @@ def observer_failure_document(body, nonce, source):
                 and type(value["command"]) is str and value["command"].startswith("public-"),
                 "public boundary observer binding")
         require((detail["kind"] == "bounded-command" and code is OBSERVER_PUBLIC_COMMAND
-                 and caller["line"] == code.co_firstlineno + 23 and value["command"] == "public-repair-a"
+                 and caller["line"] == code.co_firstlineno + 30 and value["command"] == "public-repair-a"
                  and detail["predicate"] != "unexpected-zero")
                 or (detail["kind"] == "spawn-identity" and code is public_spawn_entry.__code__
                     and caller["line"] == code.co_firstlineno + 9 and sys.platform == "win32"
