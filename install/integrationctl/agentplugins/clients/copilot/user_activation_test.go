@@ -215,3 +215,36 @@ func TestSharedCopilotRemovalUnclosedProcessDoesNotContinue(t *testing.T) {
 		})
 	}
 }
+// A closed install failure may begin rollback, but a rollback command whose
+// child remains unclosed must be reported as uncertain, not as a safe retry.
+func TestCopilotUserUnclosedRollbackPreservesUncertainOutcome(t *testing.T) {
+	request := copilotUserActivationRequest(t, false)
+	exe, marketplace := request.BackendExecutable, copilotUserLiveExpectedMarketplace(request.Plan.PhysicalArtifactID)
+	cause := errors.New("rollback process closure unproved")
+	steps := []copilotUserLiveStep{
+		{argv: []string{exe, "plugin", "marketplace", "add", request.Delivery.ActivePath}},
+		failedStep(exe, "plugin", "install", request.DeclaredName+"@"+marketplace),
+		{argv: []string{exe, "plugin", "marketplace", "remove", marketplace}, err: &legacyports.ProcessClosureError{Cause: cause}},
+	}
+	runner := &copilotUserLiveRunner{t: t, steps: steps}
+	outcome, err := New().Activate(context.Background(), clients.Env{Runner: runner}, request)
+	if !domain.IsUnclosedClientProbe(err) || !errors.Is(err, cause) || outcome.NativeEffect != domain.NativeEffectUncertain || outcome.Activation == domain.ActivationActive || len(outcome.UserActions) != 0 || len(outcome.LocalActions) != 0 || runner.calls != len(steps) {
+		t.Fatalf("unclosed rollback misclassified: outcome=%+v err=%v calls=%d expected=%d", outcome, err, runner.calls, len(steps))
+	}
+}
+
+func TestSharedCopilotUnclosedRollbackPreservesUncertainOutcome(t *testing.T) {
+	request := copilotUserActivationRequest(t, false)
+	exe, marketplace := request.BackendExecutable, copilotUserLiveExpectedMarketplace(request.Plan.PhysicalArtifactID)
+	cause := errors.New("shared rollback process closure unproved")
+	steps := []copilotUserLiveStep{
+		{argv: []string{exe, "plugin", "marketplace", "add", request.Delivery.ActivePath}},
+		failedStep(exe, "plugin", "install", request.DeclaredName+"@"+marketplace),
+		{argv: []string{exe, "plugin", "marketplace", "remove", marketplace}, err: &legacyports.ProcessClosureError{Cause: cause}},
+	}
+	runner := &copilotUserLiveRunner{t: t, steps: steps}
+	outcome, err := shared.CompleteCopilotActivationWithListingRecognition(context.Background(), clients.Env{Runner: runner}, request, shared.StartedActivation(request), recognizeCopilotUserActivation)
+	if !domain.IsUnclosedClientProbe(err) || !errors.Is(err, cause) || outcome.NativeEffect != domain.NativeEffectUncertain || outcome.Activation == domain.ActivationActive || len(outcome.UserActions) != 0 || len(outcome.LocalActions) != 0 || runner.calls != len(steps) {
+		t.Fatalf("shared unclosed rollback misclassified: outcome=%+v err=%v calls=%d expected=%d", outcome, err, runner.calls, len(steps))
+	}
+}
