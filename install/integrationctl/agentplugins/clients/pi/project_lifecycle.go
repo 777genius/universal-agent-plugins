@@ -11,7 +11,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-const piProjectComponentAction = "Review project trust in Pi and reload or restart the session to load project Skills and MCP; authentication, active connections and model calls are not implied by file installation."
+const piProjectComponentAction = "Open or restart Pi in this project, or reload resources, to load its extensions, Skills and MCP; a confirmed installation lets UAP's Pi trust hook trust this exact project while its .pi holds only UAP-managed resources. Authentication, active connections and model calls are not implied by file installation."
 const piUserComponentAction = "Reload resources or restart Pi to discover user Skills and MCP; installed files do not prove an authenticated connection or model tool call."
 
 // piSelectedAuthority checks the selected real client separately from the
@@ -147,7 +147,11 @@ func (adapter *ProjectAdapter) Activate(ctx context.Context, env clients.Env, re
 	objects := piScopedNative(request.Delivery.NativeObjects, request.Plan.Scope)
 	previous := piScopedNative(request.PreviousNativeObjects, request.Plan.Scope)
 	if len(objects) == 0 && len(previous) == 0 {
-		return adapter.Adapter.Activate(ctx, env, request)
+		out, err := adapter.Adapter.Activate(ctx, env, request)
+		if err != nil {
+			return out, err
+		}
+		return completePiProjectTrust(env, request, out), nil
 	}
 	if request.ActivationComplete {
 		return domain.ActivationOutcome{}, fmt.Errorf("pi runtime activation cannot be attested by the installer")
@@ -187,6 +191,7 @@ func (adapter *ProjectAdapter) Activate(ctx context.Context, env clients.Env, re
 	if err == nil && out.Verification == domain.VerificationInstalled {
 		// File ownership is not a live Pi session, including user scope.
 		out.Activation, out.ActivationAttested = domain.ActivationPrepared, false
+		out = completePiProjectTrust(env, request, out)
 	}
 	return out, err
 }
@@ -202,6 +207,10 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	userOwned := piScopedNative(request.NativeObjects, domain.ScopeUser)
 	projectOwned := piScopedNative(request.NativeObjects, domain.ScopeProject)
 	if len(userOwned) == 0 && len(projectOwned) == 0 {
+		if err := revokeConfirmedPiProjectTrust(env, request); err != nil {
+			out.NativeEffect = domain.NativeEffectUnchanged
+			return out, err
+		}
 		return adapter.Adapter.Deactivate(ctx, env, request)
 	}
 	layout, objects, err := piNativeRemovalLayout(request, len(userOwned)+len(projectOwned))
@@ -214,6 +223,10 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	if !request.Confirmed {
 		out.UserActions = []string{"agentplugins will remove only its owned Pi Skills/MCP members and managed package"}
 		return out, nil
+	}
+	if err := revokeConfirmedPiProjectTrust(env, request); err != nil {
+		out.NativeEffect = domain.NativeEffectUnchanged
+		return out, err
 	}
 	if len(objects) > 0 {
 		if err := (shared.ProjectComponentMutation{
@@ -250,6 +263,19 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	legacy.UserActions = append(out.UserActions, legacy.UserActions...)
 	legacy.UserActions = append(legacy.UserActions, "Restart Pi to clear previously loaded Skills and MCP connections.")
 	return legacy, nil
+}
+
+// revokeConfirmedPiProjectTrust withdraws this installation's project trust
+// record before any confirmed project removal effect. A failure leaves every
+// owned project file in place so the removal can be retried.
+func revokeConfirmedPiProjectTrust(env clients.Env, request domain.DeactivationRequest) error {
+	if !request.Confirmed || request.TargetContext.Scope != domain.ScopeProject {
+		return nil
+	}
+	if err := revokePiProjectTrust(env, request); err != nil {
+		return fmt.Errorf("withdraw Pi project trust before removal: %w", err)
+	}
+	return nil
 }
 
 func piNativeRemovalLayout(request domain.DeactivationRequest, totalNative int) (shared.ProjectComponents, []domain.NativeObjectOwnership, error) {
