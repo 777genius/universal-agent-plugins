@@ -13,7 +13,9 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 )
 
-const OpenCodeProbeTimeout = 10 * time.Second
+// OpenCodeProbeTimeout allows a cold or loaded native start; a version
+// check above 10 seconds was observed on a busy machine.
+const OpenCodeProbeTimeout = 30 * time.Second
 
 // IsolatedOpenCodeProbeTimeout allows cold native startup without permitting
 // callers to extend the isolated probe's finite budget.
