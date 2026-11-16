@@ -207,11 +207,10 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	userOwned := piScopedNative(request.NativeObjects, domain.ScopeUser)
 	projectOwned := piScopedNative(request.NativeObjects, domain.ScopeProject)
 	if len(userOwned) == 0 && len(projectOwned) == 0 {
-		if err := revokeConfirmedPiProjectTrust(env, request); err != nil {
-			out.NativeEffect = domain.NativeEffectUnchanged
-			return out, err
-		}
-		return adapter.Adapter.Deactivate(ctx, env, request)
+		trust := revokeConfirmedPiProjectTrust(env, request)
+		legacy, err := adapter.Adapter.Deactivate(ctx, env, request)
+		legacy.UserActions = appendPiTrustAction(legacy.UserActions, trust)
+		return legacy, err
 	}
 	layout, objects, err := piNativeRemovalLayout(request, len(userOwned)+len(projectOwned))
 	if err != nil {
@@ -224,10 +223,7 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 		out.UserActions = []string{"agentplugins will remove only its owned Pi Skills/MCP members and managed package"}
 		return out, nil
 	}
-	if err := revokeConfirmedPiProjectTrust(env, request); err != nil {
-		out.NativeEffect = domain.NativeEffectUnchanged
-		return out, err
-	}
+	out.UserActions = appendPiTrustAction(out.UserActions, revokeConfirmedPiProjectTrust(env, request))
 	if len(objects) > 0 {
 		if err := (shared.ProjectComponentMutation{
 			Layout:   layout,
@@ -266,16 +262,26 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 }
 
 // revokeConfirmedPiProjectTrust withdraws this installation's project trust
-// record before any confirmed project removal effect. A failure leaves every
-// owned project file in place so the removal can be retried.
-func revokeConfirmedPiProjectTrust(env clients.Env, request domain.DeactivationRequest) error {
+// record before any confirmed project removal effect. It is best effort and
+// never blocks removal: an unsuitable hook directory or unreadable record
+// only yields an action. A record left behind no longer applies once the
+// package directory is gone, because the hook ignores such owners.
+func revokeConfirmedPiProjectTrust(env clients.Env, request domain.DeactivationRequest) string {
 	if !request.Confirmed || request.TargetContext.Scope != domain.ScopeProject {
-		return nil
+		return ""
 	}
 	if err := revokePiProjectTrust(env, request); err != nil {
-		return fmt.Errorf("withdraw Pi project trust before removal: %w", err)
+		dir, _, _ := piTrustHookPaths(request.Client.ConfigRoot)
+		return fmt.Sprintf("Pi project trust for this installation was not withdrawn (%v); it stops applying once the package is removed. Delete %s to remove UAP's Pi trust hook entirely.", err, dir)
 	}
-	return nil
+	return ""
+}
+
+func appendPiTrustAction(actions []string, action string) []string {
+	if action == "" {
+		return actions
+	}
+	return shared.AppendUnique(actions, action)
 }
 
 func piNativeRemovalLayout(request domain.DeactivationRequest, totalNative int) (shared.ProjectComponents, []domain.NativeObjectOwnership, error) {
