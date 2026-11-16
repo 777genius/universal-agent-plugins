@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -343,12 +344,22 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined ad
 	}
 }
 
-// runSingleTargetAdd runs the one-agent add path with its own copy of the
-// options and hands the per-agent result back, so the retry step sees it.
-func runSingleTargetAdd(opts, selected *options, run func() error) error {
-	err := run()
+// runAddLoadedFor runs the one-agent add path with its own copy of the options
+// and hands the per-agent result back to the caller's options, so the retry
+// step sees it.
+func runAddLoadedFor(ctx context.Context, cmd *cobra.Command, app App, opts, selected *options, loaded loadedPackage, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
+	err := runAddLoaded(ctx, cmd, app, selected, loaded, activationComplete, authComplete, clients, needsInstallConfirmation)
 	opts.installResult = selected.installResult
 	return err
+}
+
+// checkLoadedPackage is the pre-apply gate for a resolved package: it must be
+// installable and, on a retry, identical to the package of the first attempt.
+func checkLoadedPackage(opts *options, loaded loadedPackage) error {
+	if err := rejectImperativePackageRequirements(loaded); err != nil {
+		return err
+	}
+	return pinRetryPackage(opts, loaded)
 }
 
 // recordSingleAdd stores the result of a one-agent add for the retry step and

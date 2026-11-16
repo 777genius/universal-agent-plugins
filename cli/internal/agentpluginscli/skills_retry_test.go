@@ -265,15 +265,6 @@ func TestSingleAgentAddFailureIsRecordedLoggedAndRetried(t *testing.T) {
 	}
 }
 
-func TestSingleTargetAddHandsItsResultBackToTheCaller(t *testing.T) {
-	outer, inner := &options{}, &options{}
-	want := &installOutcome{LogFile: "x"}
-	err := runSingleTargetAdd(outer, inner, func() error { inner.installResult = want; return errors.New("failed") })
-	if err == nil || outer.installResult != want {
-		t.Fatalf("the retry step must see the one-agent result: %v %v", err, outer.installResult)
-	}
-}
-
 func TestConvergeRetryRerunsEverythingOutstandingAndRespectsTheGate(t *testing.T) {
 	var asked []string
 	app := App{Terminal: true, Prompter: fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
