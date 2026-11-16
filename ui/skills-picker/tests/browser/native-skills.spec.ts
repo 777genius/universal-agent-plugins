@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { spawn } from 'node:child_process';
-import { readFile, writeFile, rm } from 'node:fs/promises';
+import { readFile, writeFile, rm, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import type { Operation } from '../../src/shared/api/types';
+import type { Operation, Plan } from '../../src/shared/api/types';
 
 // This single hosted-native scenario uses the public CLI and real clients.
 // The regular live-bridge test remains a separate deterministic SDK fixture.
 test.use({ trace: 'off' }); // Never archive the private capability URL or headers.
-test('public browser installs one raw Skill into real Codex and Claude profiles', async ({ page }, testInfo) => {
+test('public browser installs selected raw Skills into real Codex and Claude', async ({ page }, testInfo) => {
   test.skip(process.env.AGENTPLUGINS_NATIVE_BROWSER_LIVE !== '1', 'Run in the opted-in Linux Codex native lane');
   test.setTimeout(300_000);
   page.setDefaultTimeout(20_000);
@@ -18,6 +18,12 @@ test('public browser installs one raw Skill into real Codex and Claude profiles'
     return value;
   };
   const root = required('AGENTPLUGINS_NATIVE_BROWSER_ROOT');
+  const scenario = process.env.AGENTPLUGINS_NATIVE_BROWSER_SCENARIO ?? 'user-benchmark';
+  expect(['user-benchmark', 'project-anthropic']).toContain(scenario);
+  const projectScenario = scenario === 'project-anthropic';
+  const selectedSkills = projectScenario ? [
+    { name: 'docx', path: 'skills/docx' }, { name: 'frontend-design', path: 'skills/frontend-design' },
+  ] : [{ name: 'benchmark-note', path: 'tests/fixtures/uap_apm/skills/benchmark-note' }];
   const privateRoot = join(root, 'browser-private');
   const ready = join(privateRoot, 'ready.json');
   const done = join(privateRoot, 'done');
@@ -58,20 +64,25 @@ test('public browser installs one raw Skill into real Codex and Claude profiles'
     });
     try { await page.goto(url, { timeout: 30_000 }); }
     catch { throw new Error('Could not open the private public-CLI picker URL'); }
-    const skillPath = 'tests/fixtures/uap_apm/skills/benchmark-note';
-    await page.getByRole('checkbox', { name: 'Select ' + skillPath, exact: true }).check({ timeout: 60_000 });
+    for (const skill of selectedSkills) {
+      await page.getByRole('checkbox', { name: 'Select ' + skill.path, exact: true }).check({ timeout: 60_000 });
+    }
     expect(new URL(page.url()).hash).toBe('');
     await page.getByRole('checkbox', { name: 'Target OpenAI Codex', exact: true }).check();
     await page.getByRole('checkbox', { name: /^Target Claude/ }).check();
-    await expect(page.getByRole('region', { name: 'Selection basket' })).toContainText('benchmark-note');
+    for (const skill of selectedSkills) {
+      await expect(page.getByRole('region', { name: 'Selection basket' })).toContainText(skill.name);
+    }
     await page.screenshot({ path: testInfo.outputPath('native-picker-selection.png'), fullPage: true });
 
     // Delay only delivery of the actual prepared response. Real Git, scanner,
     // planners and native probes still execute; no API body is fabricated.
     const held = new Promise<void>((resolve) => { releasePrepare = resolve; });
     let prepared = false;
+    let preparedPlan: Plan | undefined;
     await page.route('**/api/v1/plans', async (route) => {
       const response = await route.fetch();
+      preparedPlan = await response.json() as Plan;
       prepared = true;
       await held;
       await route.fulfill({ response });
@@ -84,21 +95,52 @@ test('public browser installs one raw Skill into real Codex and Claude profiles'
     releasePrepare();
     const review = page.getByRole('dialog', { name: 'Review installation' });
     await expect(review).toBeVisible();
-    await expect(review.locator('.plan-action')).toHaveCount(2);
+    await expect(review.locator('.plan-action')).toHaveCount(selectedSkills.length * 2);
     await expect(review).toContainText('codex');
     await expect(review).toContainText('claude');
+    expect(preparedPlan!.actions.map((action) => [action.alias, action.targetId, action.action]).sort()).toEqual(
+      selectedSkills.flatMap((skill) => ['claude', 'codex'].map((target) => [skill.name, target, 'install'])).sort(),
+    );
+    if (projectScenario) {
+      const project = required('AGENTPLUGINS_NATIVE_BROWSER_PROJECT');
+      await expect(review).toContainText('Installation may trust the selected project "' + project + '" in Claude Code.');
+      await expect(review).toContainText('This preference remains after removal.');
+      const baseline = JSON.parse(await readFile(join(root, 'native-project-baseline.json'), 'utf8')) as {
+        other_project: string; foreign_trust: unknown; codex_config: string;
+      };
+      const profile = JSON.parse(await readFile(join(required('CLAUDE_CONFIG_DIR'), '.claude.json'), 'utf8')) as {
+        projects: Record<string, { hasTrustDialogAccepted?: boolean }>;
+      };
+      expect(profile.projects[project]?.hasTrustDialogAccepted).not.toBe(true);
+      expect(profile.projects[baseline.other_project]).toEqual(baseline.foreign_trust);
+      expect(JSON.parse(await readFile(join(project, '.claude', 'settings.json'), 'utf8'))).toEqual({
+        enabledPlugins: { 'foreign-project-fixture@skills-dir': false },
+      });
+      expect(await readFile(join(required('CODEX_HOME'), 'config.toml'), 'utf8')).toBe(baseline.codex_config);
+      await expect(lstat(join(project, '.uap', 'state-v2.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(preparedPlan!.actions).toHaveLength(4);
+      for (const action of preparedPlan!.actions) {
+        expect(action.destinationPath.startsWith(project + '/')).toBe(true);
+        await expect(lstat(action.destinationPath)).rejects.toMatchObject({ code: 'ENOENT' });
+      }
+      for (const skill of selectedSkills) {
+        await expect(lstat(join(project, '.agents', 'skills', skill.name))).rejects.toMatchObject({ code: 'ENOENT' });
+      }
+      expect(applyRequests).toBe(0);
+    }
     await page.screenshot({ path: testInfo.outputPath('native-picker-review.png'), fullPage: true });
     await review.getByRole('button', { name: 'Confirm installation', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Installation applied' })).toBeVisible({ timeout: 120_000 });
     await expect(review).toHaveCount(0);
     const progress = page.getByRole('region', { name: 'Installation progress' });
-    await expect(progress.locator('.operation-item')).toHaveCount(2);
+    await expect(progress.locator('.operation-item')).toHaveCount(selectedSkills.length * 2);
     await expect(progress).toContainText('codex · files ready');
     await expect(progress).toContainText('claude · files ready');
     await expect.poll(() => operation?.state).toBe('succeeded');
-    expect(operation!.items.map((item) => [item.targetId, item.status]).sort()).toEqual([
-      ['claude', 'succeeded'], ['codex', 'succeeded'],
-    ]);
+    expect(operation!.items.map((item) => [item.alias, item.targetId, item.status]).sort()).toEqual(
+      selectedSkills.flatMap((skill) => ['claude', 'codex'].map((target) => [skill.name, target, 'succeeded'])).sort(),
+    );
+    expect(operation!.diagnostics.some((item) => item.code === 'NATIVE_SETUP_REQUIRED')).toBe(false);
     expect(applyRequests).toBe(1);
     expect(external).toEqual([]);
     expect(errors).toEqual([]);
@@ -111,7 +153,8 @@ test('public browser installs one raw Skill into real Codex and Claude profiles'
       schema_version: 1,
       source: required('AGENTPLUGINS_NATIVE_BROWSER_SKILL_SOURCE'),
       surface: 'Chromium through the public CLI --ui',
-      selected_skills: ['benchmark-note'], selected_targets: ['codex', 'claude'],
+      scope: projectScenario ? 'project' : 'user',
+      selected_skills: selectedSkills.map((skill) => skill.name), selected_targets: ['codex', 'claude'],
       apply_requests: applyRequests, operation,
       native_inventory: 'The same required Go dual-client lifecycle verifies fresh native inventories after this browser exits.',
     }, null, 2) + '\n', { mode: 0o600 });

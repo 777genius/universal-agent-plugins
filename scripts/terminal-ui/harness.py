@@ -679,11 +679,9 @@ def run_case(name, binary, root, args):
                 fixture.unchanged()
                 offset = len(session.raw)
                 session.send(b'\r')
-                session.wait(r'Retry failed agents\? Enter retries the selected ones, Esc skips',
-                             'group-retry', after=offset)
-                fixture.unchanged()
-                session.send(b'\x1b')
                 session.finish(1)
+                check(not re.search(r'Retry [^\r\n]*\?', clean(session.raw[offset:])),
+                      'failed preflight offered an immediate retry')
                 fixture.unchanged()
                 raw = bytes(session.raw)
                 check(b'\x1b[2A' in raw, 'failed group did not use the live board')

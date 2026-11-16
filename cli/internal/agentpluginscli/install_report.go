@@ -327,13 +327,17 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 			target.NextAction = item.failure.Next
 			target.Output.NextAction = item.failure.Next
 		}
+		cause = installFailureWithCause{summary: describeSyncFailure(cause).Summary, cause: cause}
+	}
+	// A group refused before any client was touched has nothing to retry: the
+	// same preflight would refuse again, and the person is told why already.
+	switch combined.Status {
+	case string(usecase.GroupPhasePlanned), string(usecase.GroupPhasePreparationFailed):
+		return cause
 	}
 	outcome := app.finishInstall(opts, "add", items)
 	if outcome.LogFile != "" && opts.format == "human" {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))
-	}
-	if unclosed {
-		return installFailureWithCause{summary: describeSyncFailure(cause).Summary, cause: cause}
 	}
 	return cause
 }
