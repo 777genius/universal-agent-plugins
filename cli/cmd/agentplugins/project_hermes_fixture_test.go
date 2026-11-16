@@ -213,6 +213,9 @@ func (input *hermesColdInputs) verifyInstaller(t *testing.T) {
 
 func (input *hermesColdInputs) isolate(t *testing.T) {
 	t.Helper()
+	// The bundled launcher caches Python bytecode under XDG_CACHE_HOME.
+	// Disable that incidental write before capturing the retained OS home.
+	t.Setenv("PYTHONDONTWRITEBYTECODE", "1")
 	input.osHome = os.Getenv("HOME")
 	input.temporary = (&projectJourneyTransport{tempRoot: input.root}).temporary(t)
 	for _, key := range []string{"TMPDIR", "TEMP", "TMP"} {
