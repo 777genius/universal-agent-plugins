@@ -653,13 +653,17 @@ func TestGroupRefusedBeforeAnyChangeIsNotRetried(t *testing.T) {
 	for _, status := range []string{"planned", "preparation_failed"} {
 		opts := &options{format: "human"}
 		combined := addMultiResult{Status: status, Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalNotAttempted)}}}
-		app.recordGroupOutcome(cmd, opts, &combined, nil)
+		if err := app.recordGroupOutcome(cmd, opts, &combined, nil); err != nil {
+			t.Fatal(err)
+		}
 		if opts.installResult != nil || errOut.Len() != 0 {
 			t.Fatalf("%s: a refused group must not record a retry: %+v %q", status, opts.installResult, errOut.String())
 		}
 	}
 	opts := &options{format: "human"}
-	app.recordGroupOutcome(cmd, opts, &addMultiResult{Status: "managed_committed_activation_failed", Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalFailed), Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed}}}}}, nil)
+	if err := app.recordGroupOutcome(cmd, opts, &addMultiResult{Status: "managed_committed_activation_failed", Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalFailed), Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed}}}}}, nil); err != nil {
+		t.Fatal(err)
+	}
 	if opts.installResult == nil || len(opts.installResult.failedAgents()) != 1 {
 		t.Fatal("a failed activation after apply must stay retryable")
 	}
