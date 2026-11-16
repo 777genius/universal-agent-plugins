@@ -2885,6 +2885,85 @@ def admission_contracts():
                         projected = diagnostic.project(changed)
                         self.assertFalse(public_state_scratch_equal(before, projected, root_key="."))
 
+        def test_public_failed_add_uses_complete_named_windows_metadata(self):
+            from types import SimpleNamespace
+            original_scandir = os.scandir
+            for fault in ("pass", "hardlink", "oversize"):
+                with self.subTest(fault=fault), self.missing_config_fixture() as (runtime, root, env, authority, proof), contextlib.ExitStack() as cleanup:
+                    diagnostic = PublicFailedAddLog(root, Path(env["AGENTPLUGINS_HOME"]), authority, proof, runtime, cleanup)
+                    before = public_state_snapshot(diagnostic.state, diagnostic.state, runtime[4]); diagnostic.begin(before)
+                    path = self.failed_add_log(diagnostic.state)
+                    if fault == "hardlink": os.link(path, root / "retained-log-alias")
+                    elif fault == "oversize": path.write_bytes(b"x" * 4097)
+                    diagnostic.settle(self.failed_add_document(proof))
+                    enumerated = []
+                    @contextlib.contextmanager
+                    def windows_entries(directory):
+                        self.assertEqual(directory, diagnostic.path)
+                        with original_scandir(directory) as entries:
+                            wrapped = []
+                            for entry in entries:
+                                info = entry.stat(follow_symlinks=False)
+                                # CPython's Windows DirEntry.stat returns zero
+                                # for these three fields; named stat is complete.
+                                cached = SimpleNamespace(st_mode=info.st_mode, st_size=info.st_size,
+                                                         st_ino=0, st_dev=0, st_nlink=0,
+                                                         st_file_attributes=getattr(info, "st_file_attributes", 0))
+                                wrapped.append(SimpleNamespace(name=entry.name, stat=lambda *, follow_symlinks, value=cached: value))
+                                enumerated.append(entry.name)
+                            yield iter(wrapped)
+                    with patch.object(os, "scandir", windows_entries):
+                        if fault == "pass": diagnostic.before_snapshot()
+                        else:
+                            with self.assertRaisesRegex(AssertionError, "output type/link/bound differs"):
+                                diagnostic.before_snapshot()
+                    self.assertEqual(enumerated, [path.name])
+                    if fault == "pass": self.failed_add_preserved(diagnostic, before, runtime)
+
+        def test_public_collision_failed_add_keeps_exact_detail_and_other_state(self):
+            # Run the actual first three worlds; only native transport is inert.
+            class CompletedWorlds(Exception): pass
+            for fault in ("pass", "wrong-detail", "unrelated"):
+                with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as fixtures:
+                    parent = Path(temporary).resolve(); source = parent / "source"; source.mkdir()
+                    rows = [fixtures.enter_context(self.missing_config_fixture()) for _ in range(3)]
+                    (source / "plugin.json").write_bytes((rows[0][1] / "source/plugin.json").read_bytes())
+                    for _, root, _, _, _ in rows:
+                        (root / "source/plugin.json").unlink(); (root / "source").rmdir()
+                    available, calls = iter(rows), []
+                    @contextlib.contextmanager
+                    def fixture(*unused):
+                        try: _, root, env, authority, _ = next(available)
+                        except StopIteration: raise CompletedWorlds from None
+                        yield root, env, authority
+                    def command(runtime, root, authority, action, *, refused=False):
+                        calls.append((root, action, refused))
+                        if action == "uap-repeat" and refused:
+                            proof = public_binding_proof({"HOME": str(root / "home"), "AGENTPLUGINS_HOME": str(root / "uap-state")}, NAME, runtime[4])
+                            path = self.failed_add_log(root / "uap-state")
+                            if root == rows[2][1]:
+                                collision = Path(proof["binding"]["target_locator"]).parent / "unowned-same-manifest/plugin.json"
+                                self.assertEqual(collision.read_bytes(), (source / "plugin.json").read_bytes())
+                                if fault != "wrong-detail":
+                                    header, binding = map(json.loads, path.read_bytes().splitlines())
+                                    binding["detail"] = "antigravity selected User inventory is unavailable"
+                                    path.write_bytes(missing_config_json(header) + missing_config_json(binding))
+                                if fault == "unrelated": (root / "uap-state/unrelated-original-domain").write_bytes(b"unknown effect")
+                            return self.failed_add_document(proof)
+                        return b"{}\n"
+                    with patch(__name__ + ".public_fixture", side_effect=fixture), patch(__name__ + ".public_uap", side_effect=command), \
+                            patch(__name__ + ".public_user_result"), patch(__name__ + ".public_missing_config_discovery", return_value=True):
+                        expected = CompletedWorlds if fault == "pass" else AssertionError
+                        with self.assertRaises(expected) as caught:
+                            public_user_refusals(rows[0][0], source, rows[0][0][0].parent, parent)
+                    if fault == "wrong-detail": self.assertIn("not the exact authored operation", str(caught.exception))
+                    elif fault == "unrelated": self.assertIn("Refused public repeat changed original membership/bytes", str(caught.exception))
+                    self.assertEqual([(action, refused) for _, action, refused in calls],
+                                     [("uap-add", False), ("uap-repeat", False), ("uap-add", False), ("uap-repeat", True),
+                                      ("uap-add", False), ("uap-repeat", True)])
+                    self.assertFalse((rows[0][1] / "uap-state/logs").exists())
+                    for row in rows[1:]: self.assertEqual(len(list((row[1] / "uap-state/logs").iterdir())), 1)
+
         def test_config_is_closed_and_bounded(self):
             for body in (b'{"x":1,"x":2}', b'{} {}', b'{"x":NaN}', b'{"x":1e999}', b'[' * 10 + b'0' + b']' * 10, b'x' * 16385):
                 with self.assertRaises((AssertionError, ValueError)): closed_config(body)
@@ -3808,7 +3887,11 @@ class PublicFailedAddLog:
     detail = "antigravity existing qualified config is required for native observation"
     version = "0.1.0-development"
 
-    def __init__(self, root, state, authority, proof, runtime, cleanup):
+    def __init__(self, root, state, authority, proof, runtime, cleanup, *, condition="malformed-config"):
+        if condition == "foreign-collision":
+            self.detail = "antigravity selected User inventory is unavailable"
+        elif condition != "malformed-config":
+            raise AssertionError("Failed-add condition is not an authored refusal")
         self.root, self.state, self.authority = root, state, authority
         self.proof, self.runtime = proof, runtime
         self.path = state / "logs"
@@ -3920,7 +4003,8 @@ class PublicFailedAddLog:
             first = next(entries, None)
             if first is None or next(entries, None) is not None:
                 raise AssertionError("Failed-add requires exactly one declared log")
-            name, info = first.name, first.stat(follow_symlinks=False)
+            name = first.name
+        info = (self.path / name).lstat()
         if (re.fullmatch(r"install-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}\.jsonl", name) is None
                 or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
                 or getattr(info, "st_file_attributes", 0) & 0x400 or not 0 < info.st_size <= 4096):
@@ -3997,8 +4081,8 @@ def public_user_refusals(runtime, source, executable_dir, parent):
                 shim = root / "bin" / ("agy.exe" if os.name == "nt" else "agy")
                 shim.rename(shim.with_name("retained-native")); action = "uap-missing-backend"
                 if shutil.which("agy", path=env["PATH"]): raise AssertionError("Missing fixture would select ambient native CLI")
-            diagnostic = (PublicFailedAddLog(root, Path(env["AGENTPLUGINS_HOME"]), authority, proof, runtime, cleanup)
-                          if condition == "malformed-config" else None)
+            diagnostic = (PublicFailedAddLog(root, Path(env["AGENTPLUGINS_HOME"]), authority, proof, runtime, cleanup, condition=condition)
+                          if condition in ("malformed-config", "foreign-collision") else None)
             state_before, bundle_before = public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4]), public_snapshot(selected.parent)
             members = {entry.name for entry in config.parent.iterdir()}
             parent_identity = object_identity(config.parent.lstat(), True)

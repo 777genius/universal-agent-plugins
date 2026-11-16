@@ -1520,6 +1520,151 @@ def protected_unchanged(before, after, paths):
         require(before.get(name) == after.get(name), "protected original User changed: " + name)
 
 
+class PublicUserTrust:
+    """Retain the original User; admit only the two explicit Project grants."""
+
+    def __init__(self, outer, user, profile, projects, env, deadline, cleanup):
+        self.helpers = runpy.run_path(str(HERE / "hermes-project-install.py"), run_name="hermes_trust_preservation")
+        self.outer, self.user, self.profile, self.projects = outer, user, profile, projects
+        self.env, self.deadline = env, deadline
+        self.config, self.backups = profile / "config.yaml", profile / "backups/config"
+        self.key = self.config.relative_to(outer).as_posix()
+        require(user.is_relative_to(outer) and profile.is_relative_to(user) and set(projects) == {"a", "b"}
+                and all(path == outer / ("public-" + scope) for scope, path in projects.items()),
+                "public trust fixture authority differs")
+        paths, path = [], self.backups
+        while path.is_relative_to(user):
+            paths.append(path)
+            if path == user:
+                break
+            path = path.parent
+        require(len(paths) <= 8 and paths[-1] == user, "public trust original ancestry differs")
+        self.directories = [self.helpers["hold_directory"](path, cleanup) for path in paths]
+        self.before_body, self.before_info, self.before_config = self.helpers["captured_config"](self.config)
+        authored = user_fixture_content(env["HERMES_CALL_NONCE"])[1]["config.yaml"].encode("utf-8")
+        require(self.before_body == authored, "public trust original authored config differs")
+        self.original = self.helpers["snapshot"](user)
+        self.relative = str(self.config.relative_to(user))
+        require(self.original[self.relative] == self.before_config, "public trust original capture differs")
+        good = [name for name in self.original if (user / name).parent == self.backups]
+        require(len(good) == 1 and re.fullmatch(r"config\.yaml\.good\.[0-9]{8}-[0-9]{6}", Path(good[0]).name)
+                and ordinary_bytes(user / good[0]) == self.before_body,
+                "public trust original good backup differs")
+        self.started, self.phases, self.frames, self.admitted = time.time(), [], [], {}
+        self.code = Path(env["HERMES_PROFILE_RUNTIME_ROOT"])
+        self.payload, self.python = self.code.parent, Path(env["HERMES_PROFILE_PYTHON"])
+        self.manifest = ordinary_bytes(self.payload / "manifest.json")
+        require(hashlib.sha256(self.manifest).hexdigest() == env["HERMES_PROFILE_MANIFEST_SHA256"],
+                "public trust parser manifest differs")
+        runtime = public_json(self.manifest)["runtime"]
+        self.packages = self.payload / runtime["sitePackages"]
+        require(self.payload / runtime["repoDir"] == self.code
+                and self.payload / runtime["storePython"] == self.python
+                and all(path.is_absolute() and path.resolve().is_relative_to(self.payload)
+                        for path in (self.code, self.python, self.packages)), "public trust parser selection differs")
+        self.parser = ordinary_bytes(self.code / "hermes_yaml.py", maximum=16 << 10)
+        require(hashlib.sha1(b"blob " + str(len(self.parser)).encode() + b"\0" + self.parser).hexdigest()
+                == self.helpers["YAML_POLICY_GIT_BLOB"], "public trust pinned YAML policy differs")
+        # This is an explicit one-file fixture preparation, before any public
+        # command. The original body and complete User baseline remain held.
+        with self.config.open("ab") as stream:
+            require(same_opened_capture(self.before_info, os.fstat(stream.fileno())),
+                    "public trust config changed before schema preparation")
+            stream.write(b"_config_version: 52\n")
+        frame = self.helpers["captured_config"](self.config)
+        require(frame[0] == self.before_body + b"_config_version: 52\n"
+                and self.helpers["config_file_policy"](frame[1]) == self.helpers["config_file_policy"](self.before_info)
+                and (frame[1].st_dev, frame[1].st_ino) == (self.before_info.st_dev, self.before_info.st_ino),
+                "public trust schema preparation changed original authority")
+        self.parse(frame[0], [])
+        self.frames.append(frame)
+        self.checked()
+
+    def directories_unchanged(self):
+        for path, descriptor, expected in self.directories:
+            require(self.helpers["directory_identity"](self.helpers["directory_info"](path)) == expected
+                    == self.helpers["directory_identity"](os.fstat(descriptor)),
+                    "public trust original User directory changed")
+
+    def parse(self, body, projects):
+        self.directories_unchanged()
+        packet = json.dumps(dict(before=self.before_body.decode("utf-8"), after=body.decode("utf-8"), projects=projects)).encode()
+        require(len(packet) <= 1 << 20 and ordinary_bytes(self.payload / "manifest.json") == self.manifest
+                and ordinary_bytes(self.code / "hermes_yaml.py", maximum=16 << 10) == self.parser,
+                "public trust captured parser authority differs")
+        timeout = min(5, self.deadline - time.monotonic())
+        require(timeout > 0, "public trust parser deadline expired")
+        result = subprocess.run([str(self.python), "-I", "-S", "-B", "-c", self.helpers["CONFIG_PARSER"],
+                                 str(self.code), str(self.packages)], input=packet, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, cwd=self.payload, env=self.env, timeout=timeout, check=False)
+        require(result.returncode == 0 and result.stdout == b"config-preservation-ok\n" and not result.stderr,
+                "public User config changed beyond exact trust and schema 52")
+        require(ordinary_bytes(self.payload / "manifest.json") == self.manifest
+                and ordinary_bytes(self.code / "hermes_yaml.py", maximum=16 << 10) == self.parser,
+                "public trust parser changed during validation")
+        self.directories_unchanged()
+
+    def authorize(self, scope):
+        require(scope in self.projects and self.phases == ([] if scope == "a" else ["a"]),
+                "public trust command sequence differs")
+        frame = self.helpers["captured_config"](self.config)
+        require(self.helpers["config_file_policy"](frame[1]) == self.helpers["config_file_policy"](self.before_info),
+                "public trust changed config type, mode or ownership")
+        phases = [*self.phases, scope]
+        self.parse(frame[0], [str(self.projects[key].resolve()) for key in phases])
+        require(self.helpers["captured_config"](self.config)[2] == frame[2], "public trust config changed during validation")
+        self.frames.append(frame)
+        self.phases = phases
+        self.checked()
+
+    def checked(self):
+        self.directories_unchanged()
+        after = self.helpers["snapshot"](self.user)
+        require(after.get(self.relative) == self.frames[-1][2], "validated public User config changed again")
+        new = set(after) - set(self.original)
+        require(len(new) <= 3 and set(self.admitted) <= new,
+                "public trust unexpected backup retention or removal")
+        for name, row in self.admitted.items():
+            require(after[name] == row, "public trust previously admitted backup changed")
+        elapsed = time.time() - self.started
+        require(0 <= elapsed <= 720, "public trust backup time interval differs")
+        stamps = {time.strftime("%Y%m%d-%H%M%S", time.localtime(second))
+                  for second in range(int(self.started), int(self.started + elapsed) + 1)}
+        candidates, states = {}, []
+        for name in sorted(new):
+            path = self.user / name
+            require(path.parent == self.backups
+                    and re.fullmatch(r"config\.yaml\.good\.[0-9]{8}-[0-9]{6}", path.name)
+                    and path.name[len("config.yaml.good."):] in stamps, "unknown public User or backup member")
+            body, info, row = self.helpers["captured_config"](path)
+            require(row == after[name], "public trust backup capture differs")
+            matching = [index for index, frame in enumerate(self.frames)
+                        if body == frame[0]
+                        and self.helpers["config_file_policy"](info) == self.helpers["config_file_policy"](frame[1])
+                        and info.st_mtime_ns == frame[1].st_mtime_ns]
+            require(len(matching) == 1 and matching[0] not in states, "public trust backup is not an exact captured config")
+            states.append(matching[0])
+            candidates[name] = row
+        require(states == sorted(states), "public trust backup states are out of writer order")
+        projected = {name: row for name, row in after.items() if name not in candidates}
+        projected[self.relative] = self.before_config
+        require(projected == self.original, "public trust changed original User state")
+        self.directories_unchanged()
+        require(self.helpers["snapshot"](self.user) == after, "public User changed during trust capture")
+        self.admitted = candidates
+        return { (self.user / name).relative_to(self.outer).as_posix() for name in candidates }
+
+    def project(self, image, original):
+        backups = self.checked()
+        body, info, row = self.helpers["captured_config"](self.config)
+        require(row == self.frames[-1][2] and image.get(self.key) == dict(type="file", mode=stat.S_IMODE(info.st_mode),
+                device=info.st_dev, inode=info.st_ino, bytes=len(body), sha256=hashlib.sha256(body).hexdigest()),
+                "public trust config differs from public inventory")
+        projected = {name: value for name, value in image.items() if name not in backups}
+        projected[self.key] = original[self.key]
+        return projected
+
+
 def profile_tree(snapshot, prefix):
     return {name: record for name, record in snapshot.items() if name == prefix or name.startswith(prefix + "/")}
 
@@ -3429,11 +3574,15 @@ def observe_public(probes):
     stdio_completed = {scope: 0 for scope in projects}
     spawn_states = {scope: None for scope in projects}
     native_log_locks = {scope: None for scope in projects}
+    user_trust = None
 
-    def snapshot():
+    def snapshot(*, trust=None):
         image, bindings = public_snapshot(outer, projects, pins)
         verify_root_identities(projects, authorities)
-        protected_unchanged(protected, image, protected)
+        if trust is not None:
+            require(user_trust is not None, "public trust original authority is absent")
+            user_trust.authorize(trust)
+        protected_unchanged(protected, user_trust.project(image, protected) if user_trust is not None else image, protected)
         for scope, proof in bindings.items():
             if proof is not None:
                 identity = (proof["root_identity"], proof["parent_identity"], proof["root_receipt"])
@@ -3507,6 +3656,13 @@ def observe_public(probes):
         spawn_status = None
         with ExitStack() as handles:
             finish = snapshot
+            granting = label in {"public-add-a", "public-add-b"}
+            if granting:
+                require(label == "public-add-" + scope and not native and not inspect and not expected_failure
+                        and test is None and args == ["add", str(sources[scope]), "--no-save"]
+                        and previous[scope] is None and user_trust is not None,
+                        "public trust command role differs")
+                finish = lambda: snapshot(trust=scope)
             if inspect:
                 require(not native and (scope, label) in {("a", "public-run-a"), ("b", "public-run-b"),
                                                        ("a", "public-repaired-run-a")}
@@ -3531,6 +3687,8 @@ def observe_public(probes):
             if previous[scope]: permitted.append((previous[scope]["data"] / "hermes-events.jsonl").relative_to(outer).as_posix())
         else:
             permitted += [(project / ".uap").relative_to(outer).as_posix(), (project / ".hermes/skills" / name).relative_to(outer).as_posix(), "public-uap-state"]
+            if granting:
+                permitted += [user_trust.key, *user_trust.checked()]
         control_lock = (project / ".uap/mutation.lock").relative_to(outer).as_posix() if inspect else None
         require(all(path == control_lock or any(path == prefix or path.startswith(prefix + "/") for prefix in permitted)
                     for path in delta), "public action changed an unselected or unmeasured path")
@@ -3624,7 +3782,14 @@ def observe_public(probes):
         current = after
         return output
 
+    cleanup = ExitStack()
     try:
+        user_trust = PublicUserTrust(outer, user, original, projects, env, deadline, cleanup)
+        prepared, proofs = snapshot()
+        delta = changes(current, prepared)
+        require(set(delta) == {user_trust.key}, "public schema preparation changed another object")
+        records.append({"label": "authored", "paths": [user_trust.key], "delta": delta})
+        current = prepared
         for scope in projects:
             command("public-add-" + scope, scope, ["add", str(sources[scope]), "--no-save"])
         before_repeat = proofs["a"]["state_sha256"]
@@ -3683,12 +3848,16 @@ def observe_public(probes):
         for scope in projects:
             spawn_preserved(scope, after)
             windows_log_preserved(scope, after)
+        require(user_trust.phases == ["a", "b"], "public explicit trust lifecycle incomplete")
         complete = True
     finally:
-        write_json(evidence / "public-command-deltas.json", {"complete": complete, "commands": records, "root_authorities": born,
-                   "production_project_mcp": False, "admission_qualified": False,
-                   "history_original_sha256": history_original,
-                   "http_methods": {name: list(probe.methods()) for name, probe in probes.items()}})
+        try:
+            write_json(evidence / "public-command-deltas.json", {"complete": complete, "commands": records, "root_authorities": born,
+                       "production_project_mcp": False, "admission_qualified": False,
+                       "history_original_sha256": history_original,
+                       "http_methods": {name: list(probe.methods()) for name, probe in probes.items()}})
+        finally:
+            cleanup.close()
 
 
 COMMANDS = ({prefix + x for prefix in ("git-", "guard-", "config-path-", "config-mcp-", "list-", "test-", "remove-mcp-", "removed-list-", "removed-test-") for x in ("a", "b")}
@@ -4481,6 +4650,7 @@ def run():
             env = BASE["closed_environment"](user, evidence, nonce, "http://127.0.0.1:9/unused", installation={
                 "HERMES_BIN": runtime_before["provenance"]["native_command"][0], "RUNNER_TEMP": str(runner),
                 "HERMES_PROFILE_RUNTIME_ROOT": str(runtime_root), "HERMES_PROFILE_PYTHON": str(python)})
+            env["HERMES_PROFILE_MANIFEST_SHA256"] = runtime_before["provenance"]["manifest_sha256"]
         proof["runtime_before"] = runtime_before
         if not source_capture:
             require(os.environ.get("EXPECTED_HEAD") == before["commit"], "compiled public source differs")

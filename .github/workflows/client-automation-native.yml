@@ -394,15 +394,18 @@ jobs:
           diagnostics = []
           admitted = capture.admit_publication(output, packet, os.environ['EXPECTED_COMMIT'], expected_tree, destination,
               diagnostics=diagnostics, diagnostic_deadline=diagnostic_deadline, mode=capture.SESSION_MODE)
-          print('GROK_SESSION_READOUT=' + __import__('json').dumps(diagnostics[0], separators=(',', ':')))
+          readout = diagnostics[0]
+          print('GROK_SESSION_READOUT=' + __import__('json').dumps(readout, separators=(',', ':')))
           with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
-              stream.write('admitted=' + str(admitted) + '\n' + 'observation_exit=' + str(record['exit']) + '\n')
+              stream.write('admitted=' + str(admitted) + '\n' + 'observation_exit=' + str(record['exit']) + '\n'
+                  + 'measurement_complete=' + ('true' if readout.get('measurement_complete') is True else 'false') + '\n')
           PYTHON
-      - name: Keep first session measurement unqualified
+      - name: Require complete unqualified session measurement
         if: ${{ steps.session_capture.conclusion == 'success' }}
         env:
           OBSERVATION_EXIT: ${{ steps.session_capture.outputs.observation_exit }}
-        run: python3 -c "import os; raise SystemExit(0 if os.environ['OBSERVATION_EXIT'] == '0' else 1)"
+          MEASUREMENT_COMPLETE: ${{ steps.session_capture.outputs.measurement_complete }}
+        run: python3 -c "import os; raise SystemExit(0 if os.environ['OBSERVATION_EXIT'] == '1' and os.environ['MEASUREMENT_COMPLETE'] == 'true' else 1)"
       - name: Preserve closed original session measurement without qualification
         if: ${{ always() && steps.session_capture.conclusion == 'success' && steps.session_capture.outputs.admitted != '' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

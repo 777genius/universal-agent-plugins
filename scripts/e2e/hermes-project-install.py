@@ -41,8 +41,20 @@ try:
     if len(packet) > 1 << 20:
         raise ValueError()
     packet = json.loads(packet)
-    if type(packet) is not dict or set(packet) != {"before", "after", "project"} or any(type(value) is not str for value in packet.values()):
+    if type(packet) is not dict:
         raise ValueError()
+    public = set(packet) == {"before", "after", "projects"}
+    if public:
+        projects = packet["projects"]
+        if (type(projects) is not list or len(projects) > 2
+                or any(type(value) is not str or not value for value in projects)
+                or len(set(projects)) != len(projects)
+                or any(type(packet[key]) is not str for key in ("before", "after"))):
+            raise ValueError()
+    elif set(packet) != {"before", "after", "project"} or any(type(value) is not str for value in packet.values()):
+        raise ValueError()
+    else:
+        projects = [packet["project"]]
     before, after = (safe_load(packet[key]) for key in ("before", "after"))
     count = 0
     def canonical(value, depth=0):
@@ -60,19 +72,28 @@ try:
             return value
         raise ValueError()
     before, after = canonical(before), canonical(after)
-    if type(before) is not dict or type(after) is not dict or before.get("theme") != "retained-user":
-        raise ValueError()
-    if type(before.get("_config_version")) is not int or before["_config_version"] != 52:
+    if type(before) is not dict or type(after) is not dict:
         raise ValueError()
     expected = copy.deepcopy(before)
-    skills = expected.setdefault("skills", {})
-    if type(skills) is not dict or skills.get("trusted_project_dirs", []) != []:
+    if public:
+        # The public observer retains its original authored User document. It
+        # stamps only the pinned schema before the first command, then admits
+        # the two exact explicit trust grants, without renewing that baseline.
+        if set(before) != {"model", "providers", "mcp_servers"}:
+            raise ValueError()
+        expected["_config_version"] = 52
+    elif (before.get("theme") != "retained-user" or type(before.get("_config_version")) is not int
+          or before["_config_version"] != 52):
         raise ValueError()
-    skills["trusted_project_dirs"] = [packet["project"]]
+    if projects:
+        skills = expected.setdefault("skills", {})
+        if type(skills) is not dict or skills.get("trusted_project_dirs", []) != []:
+            raise ValueError()
+        skills["trusted_project_dirs"] = projects
     encode = lambda value: json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
     if encode(after) != encode(expected):
         raise ValueError()
-    print("config-preservation-ok")
+    sys.stdout.buffer.write(b"config-preservation-ok\n")
 except Exception:
     sys.stderr.write("config-preservation-refused\n")
     sys.exit(1)
@@ -272,6 +293,7 @@ def run_lifecycle(cleanup):
     uap = Path(env["UAP_BIN"]).resolve()
     require(bundle.name == ("hermes.exe" if os.name == "nt" else "hermes"), "official launcher required")
     env.update(HOME=str(home), USERPROFILE=str(home), HERMES_HOME=str(home / "selected"),
+               PYTHONDONTWRITEBYTECODE="1",
                PATH=str(bundle.parent) + os.pathsep + env["PATH"], AGENTPLUGINS_HOME=str(root / "uap"))
     for key, relative in (("APPDATA", "AppData/Roaming"), ("LOCALAPPDATA", "AppData/Local"),
                           ("XDG_CONFIG_HOME", "config"), ("XDG_CACHE_HOME", "cache"),

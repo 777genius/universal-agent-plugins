@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   remaining-client-install:
-    name: ${{ matrix.target == 'kiro' && matrix.kind == 'plugin' && 'Prepared installation 30' || matrix.target == 'vscode' && matrix.kind == 'plugin' && 'Manual preparation observation 30' || 'Full 30' }} ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
+    name: ${{ (matrix.target == 'kiro' || matrix.target == 'windsurf') && matrix.kind == 'plugin' && 'Prepared installation 30' || matrix.target == 'vscode' && matrix.kind == 'plugin' && 'Manual preparation observation 30' || 'Full 30' }} ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
     # Darwin refuses Kiro's automatic MCP duplex containment. This lane can
     # measure the real native CLI and owned Prepared lifecycle, while keeping
     # native activation incomplete until a contained host route is qualified.
@@ -512,6 +512,8 @@ jobs:
             acceptance=(--acceptance cursor-prepared-installation)
           elif [[ "$AUDIT_TARGET" == grok && "$AUDIT_KIND" == skill ]]; then
             acceptance=(--acceptance grok-prepared-skills-installation)
+          elif [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then
+            acceptance=(--acceptance windsurf-prepared-installation)
           elif [[ "$AUDIT_TARGET" == vscode && "$AUDIT_KIND" == plugin ]]; then
             # User preparation and preserved refusal only; no uninstall attestation.
             acceptance=(--acceptance vscode-user-manual-preparation)

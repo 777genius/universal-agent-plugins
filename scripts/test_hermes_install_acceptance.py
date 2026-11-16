@@ -299,6 +299,133 @@ class ProjectHomePreservationAcceptance(unittest.TestCase):
                 self.assertFalse(accepted, 'first add must not rebaseline an altered original auth sentinel')
                 self.assertFalse(any(argv[1:2] == ['update'] and 'project' in argv for argv in events))
 
+    def test_actual_fixture_environment_suppresses_late_import_cache_effects(self):
+        module = self.load_project()
+        captured = []
+
+        class EnvironmentCaptured(Exception):
+            pass
+
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
+            root = Path(directory).resolve()
+            payload, launcher, provenance = self.payload(root)
+            uap = root / 'uap-inert'
+            uap.write_bytes(b'inert CLI; never executed\n')
+            stack.enter_context(patch.dict(os.environ, {
+                'RUNNER_TEMP': str(root), 'HERMES_PROJECT_BUNDLE': str(launcher),
+                'UAP_BIN': str(uap), 'PYTHONDONTWRITEBYTECODE': '', 'PYTHONPYCACHEPREFIX': ''}))
+            stack.enter_context(patch.object(module, 'payload_contract', return_value=provenance))
+
+            def capture_environment(argv, cwd, env, timeout):
+                self.assertEqual(list(map(str, argv))[:3], ['git', 'init', '-q'])
+                captured.append(dict(env))
+                raise EnvironmentCaptured()
+
+            # Reach the actual environment constructor before any authored
+            # transport result. No native CLI or Git process is substituted.
+            stack.enter_context(patch.object(module, 'supervised', side_effect=capture_environment))
+            with self.assertRaises(EnvironmentCaptured):
+                module.main()
+            self.assertEqual(len(captured), 1)
+            env = captured[0]
+            home, profile = Path(env['HOME']), Path(env['HERMES_HOME'])
+            self.assertEqual(env['USERPROFILE'], str(home))
+            self.assertEqual(profile, home / 'selected')
+            profile.mkdir(mode=0o700)
+            self.write_config(profile / 'config.yaml', self.initial_config())
+            (profile / 'auth-sentinel').write_bytes(b'original inert auth sentinel\n')
+            code = payload / 'hermes-agent'
+            for name in ('alpha', 'beta', 'gamma'):
+                (code / ('hermes_late_' + name + '.py')).write_text('VALUE = 1\n', encoding='utf-8')
+            (code / 'hermes_late_entry.py').write_text(
+                'def main():\n'
+                '    import sys, hermes_late_alpha, hermes_late_beta, hermes_late_gamma\n'
+                '    sys.stdout.buffer.write(b"late-import-complete\\n")\n'
+                '    return 0\n', encoding='utf-8')
+            # The pinned POSIX launcher uses -P and this cache-prefix rule,
+            # leaving PYTHONDONTWRITEBYTECODE to the caller. Its complete
+            # generator and Go forwarding chain are separate source proofs.
+            child_env = dict(env)
+            child_env.pop('PYTHONHOME', None)
+            child_env.update(PYTHONPATH=str(code), HERMES_SITE=str(payload / 'packages'),
+                             PYTHONPYCACHEPREFIX=str(Path(env['XDG_CACHE_HOME']) / 'hermes-pycache'))
+            self.parser_patch(stack, module, payload)
+            guard = module.ProjectHomePreservation(home, profile, home.parent.parent, payload,
+                provenance, env, time.monotonic() + 20, stack)
+            original = copy.deepcopy(guard.original)
+            project = home.parent / 'project-a'
+            self.trust(guard, project)
+            argv = [sys.executable, '-P', '-c',
+                    'import sys; from hermes_late_entry import main; sys.exit(main())']
+
+            def late_import(selected):
+                result = self.parser_run(argv, cwd=payload, env=selected,
+                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                         timeout=5, check=False)
+                self.assertEqual((result.returncode, result.stdout, result.stderr),
+                                 (0, b'late-import-complete\n', b''))
+
+            late_import(child_env)
+            guard.authorize_trust(project)
+            self.assertEqual(guard.checked(module.snapshot(home)), original)
+            self.assertEqual(list(home.rglob('*.pyc')), [])
+            self.assertEqual(env['PYTHONDONTWRITEBYTECODE'], '1')
+            unsafe = dict(child_env)
+            unsafe.pop('PYTHONDONTWRITEBYTECODE')
+            late_import(unsafe)
+            self.assertGreaterEqual(len(list(home.rglob('hermes_late_*.pyc'))), 4)
+            with self.assertRaisesRegex(RuntimeError, 'unexpected backup retention or removal'):
+                guard.checked(module.snapshot(home))
+            self.assertEqual(guard.original, original)
+            descriptors = [descriptor for _, descriptor, _ in guard.directories]
+        for descriptor in descriptors:
+            with self.assertRaises(OSError):
+                os.fstat(descriptor)
+
+    def test_config_parser_emits_canonical_bytes_with_windows_text_stdout(self):
+        original_run = self.parser_run
+        captured = []
+        fault = [None]
+
+        def translated_stdout(argv, **options):
+            self.assertEqual(argv[:5], [sys.executable, '-I', '-S', '-B', '-c'])
+            # Execute the actual fixed parser with Windows' text newline rule.
+            # This control supplies that rule; the hosted log did not retain
+            # the failing child's stdout and does not establish its raw bytes.
+            prefix = ('import io, sys\n'
+                      'assert isinstance(sys.stdout, io.TextIOWrapper)\n'
+                      'sys.stdout.reconfigure(newline="\\r\\n")\n')
+            result = original_run([*argv[:5], prefix + argv[5], *argv[6:]], **options)
+            captured.append((result.returncode, result.stdout, result.stderr))
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.stderr, b'')
+            self.assertEqual(result.stdout, b'config-preservation-ok\n')
+            status, stdout, stderr = result.returncode, result.stdout, result.stderr
+            if fault[0] == 'crlf':
+                stdout = stdout.replace(b'\n', b'\r\n')
+            elif fault[0] == 'extra-stdout':
+                stdout += b'unexpected'
+            elif fault[0] == 'stderr':
+                stderr = b'unexpected\n'
+            elif fault[0] == 'exit':
+                status = 1
+            return subprocess.CompletedProcess(result.args, status, stdout, stderr)
+
+        with patch.object(self, 'parser_run', side_effect=translated_stdout):
+            with self.fixture() as (module, guard, project, tick):
+                self.trust(guard, project)
+                guard.authorize_trust(project)
+                self.assertIsNotNone(guard.final)
+                self.assertEqual(guard.checked(module.snapshot(guard.home)), guard.original)
+            for variant in ('crlf', 'extra-stdout', 'stderr', 'exit'):
+                fault[0] = variant
+                with self.subTest(variant=variant), self.fixture() as (module, guard, project, tick):
+                    self.trust(guard, project)
+                    with self.assertRaisesRegex(RuntimeError, 'beyond trust and schema 52'):
+                        guard.authorize_trust(project)
+                    self.assertIsNone(guard.final)
+        self.assertEqual(captured, [(0, b'config-preservation-ok\n', b'')] * 5)
+
     def test_captured_config_parser_preserves_all_unrelated_typed_values(self):
         variants = ('nested', 'bool-to-int', 'version', 'extra-trust', 'unknown-key', 'nested-type')
         for variant in variants:

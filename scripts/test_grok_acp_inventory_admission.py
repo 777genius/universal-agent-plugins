@@ -3633,5 +3633,171 @@ class ReadonlyInventoryContracts(unittest.TestCase):
 
 
 
+class SessionMeasurementCompletionContracts(unittest.TestCase):
+    def fixture(self, root):
+        import devin_structured_inventory_admission as metadata
+        from client_automation_native_probe import snapshot
+        packet = dict(source_commit='a' * 40, source_tree='b' * 40, nonce='c' * 32)
+        (root / 'home/.grok').mkdir(parents=True)
+        case.session_fixture_config(root, packet['nonce'])
+        (root / 'foreign').write_bytes(b'original foreign bytes')
+        original = snapshot(root / 'home/.grok')['config.toml']
+        budget = SimpleNamespace(check=lambda: None)
+        before = metadata.metadata_inventory(root, budget)
+        (root / 'session-created').write_bytes(b'measured effect, not admitted')
+        ledger = case.session_metadata_ledger(root, before, budget)
+        settled = dict(cleanup_complete=True, sealed_cleanup_complete=True)
+        ledger['selected_config_capture'] = case.capture_session_config(
+            root, ledger, original, packet['nonce'], budget, settled)
+        self.assertIsNotNone(ledger['selected_config_capture'])
+        prefix, _, first, second = SessionOnlyContracts().repeated_catalog_fixture()
+        sid = first['params']['sessionId']
+        frames = [prefix['initialize'], *prefix['notifications'], first, second,
+                  dict(jsonrpc='2.0', id=2, result=dict(sessionId=sid)),
+                  dict(jsonrpc='2.0', id=3, result=dict(result=dict(plugins=[])))]
+        rpc = dict(initialize=None, session=None, plugins=None, notifications=[])
+        request = dict(nonce=packet['nonce'], scope='a', mode=case.SESSION_MODE,
+                       input_root='/tmp/uap-grok-acp-input-' + packet['nonce'])
+        for frame in frames:
+            completed = case.session_rpc_frame(frame, rpc, request, lambda _frame: None)
+        self.assertTrue(completed)
+        native = '/tmp/uap-grok-acp-sealed-inert/grok'
+        arguments = (['--version'], ['--help'], ['agent', '--help'],
+                     ['agent', 'stdio', '--help'], ['agent', '--no-leader', 'stdio'])
+        wire = b''.join(json.dumps(frame, separators=(',', ':')).encode() + b'\n' for frame in frames)
+        commands = help_rows() + [dict(label='acp', exit=-15, error=None,
+                                       merged_base64=base64.b64encode(wire).decode(),
+                                       merged_bytes=len(wire), merged_sha256=case.digest(wire))]
+        members = {'acquisition.json': b'{}', 'a.rpc.json': json.dumps(rpc).encode(),
+                   'a.ledger.json': json.dumps(ledger).encode()}
+        for row, args in zip(commands, arguments):
+            row['argv'] = [native, *args]
+            row['merged_file'] = 'a-' + row['label'] + '.merged.log'
+            members[row['merged_file']] = base64.b64decode(row.pop('merged_base64'))
+        result = dict(packet, schema_version=1, scope='a', mode=case.SESSION_MODE,
+                      semantic_complete=True, reason='complete', commands=commands,
+                      provider=dict(requests=2, models_get=1, root_get=1, forbidden=0, settled=True))
+        receipt = dict(packet, schema_version=1, scope='a', result=result, **settled)
+        summary = dict(packet, schema_version=1, mode=case.SESSION_MODE, collection_complete=False,
+                       measurement_complete=True, cleanup_complete=True, qualification=dict(case.FALSE),
+                       scopes=[receipt])
+        return packet, members, summary
+
+    def read(self, packet, members, summary):
+        members = dict(members, **{'admission.json': json.dumps(summary).encode()})
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, 'w') as archive:
+            for name, body in members.items():
+                archive.writestr(name, body)
+        return case.publication_readout(output.getvalue(), packet, time.monotonic() + 2,
+                                        mode=case.SESSION_MODE)
+
+    def gate(self, observation_exit, complete):
+        workflow = (Path(__file__).parents[1] / '.github/workflows/client-automation-native.yml').read_text()
+        session = workflow.split('  grok-acp-session:\n', 1)[1].split('  grok-config-lock:\n', 1)[0]
+        program = re.search(r'run: python3 -c "([^"\n]+)"', session)[1]
+        with mock.patch.dict(os.environ, OBSERVATION_EXIT=observation_exit, MEASUREMENT_COMPLETE=complete), \
+                self.assertRaises(SystemExit) as stopped:
+            exec(compile(program, '<actual-session-workflow-gate>', 'exec'), {})
+        return stopped.exception.code
+
+    def test_complete_held_session_passes_only_measurement_gate_with_private_exit_one(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            packet, members, summary = self.fixture(Path(temporary))
+            original = copy.deepcopy(summary)
+            facts = self.read(packet, members, summary)
+            self.assertIs(facts.get('measurement_complete'), True)
+            self.assertEqual(facts['reason'], 'measurement-only')
+            self.assertTrue(facts['session_reply'] and facts['inventory_reply'])
+            self.assertEqual(facts['provider_forbidden'], 0)
+            self.assertEqual((facts['added_entries'], facts['removed_entries'], facts['changed_entries']), (1, 0, 0))
+            self.assertIs(facts['collection_complete'], False)
+            self.assertIs(facts['cleanup_complete'], True)
+            self.assertIs(case.document(members['a.ledger.json'])['accepted'], False)
+            self.assertEqual(case.observation_exit(summary), 1)
+            self.assertEqual(summary, original)
+            self.assertTrue(all(value is False for value in summary['qualification'].values()))
+            self.assertEqual(self.gate('1', 'true'), 0)
+            for code, complete in (('0', 'true'), ('2', 'true'), ('', 'true'),
+                                   ('1', 'false'), ('1', ''), ('1', 'True')):
+                with self.subTest(exit=code, complete=complete):
+                    self.assertEqual(self.gate(code, complete), 1)
+            workflow = (Path(__file__).parents[1] / '.github/workflows/client-automation-native.yml').read_text()
+            session = workflow.split('  grok-acp-session:\n', 1)[1].split('  grok-config-lock:\n', 1)[0]
+            self.assertIn("readout.get('measurement_complete') is True", session)
+            self.assertIn('MEASUREMENT_COMPLETE: ${{ steps.session_capture.outputs.measurement_complete }}', session)
+            self.assertNotIn('native_api_admitted', session)
+
+    def test_partial_refused_or_detached_session_evidence_never_completes_measurement(self):
+        variants = ('measurement-missing', 'measurement-false', 'measurement-untyped', 'summary-error',
+                    'semantic-refused', 'summary-cleanup', 'sealed-cleanup', 'forbidden-provider',
+                    'unsettled-provider', 'protected-false', 'protected-forged-change', 'protected-forged-remove',
+                    'empty-originals', 'config-capture-missing', 'config-capture-null', 'config-content-changed',
+                    'ledger-admitted', 'qualification', 'collection', 'source', 'nonce', 'session-id',
+                    'missing-session-reply', 'missing-inventory-reply', 'command-error', 'command-unsettled',
+                    'help-exit', 'help-version', 'foreign-argv', 'extra-command', 'stream-hash')
+        with tempfile.TemporaryDirectory() as temporary:
+            packet, members, summary = self.fixture(Path(temporary))
+            for variant in variants:
+                changed, bodies = copy.deepcopy(summary), dict(members)
+                receipt = changed['scopes'][0]
+                result = receipt['result']
+                ledger = case.document(bodies['a.ledger.json'])
+                if variant == 'measurement-missing': changed.pop('measurement_complete')
+                elif variant == 'measurement-false': changed['measurement_complete'] = False
+                elif variant == 'measurement-untyped': changed['measurement_complete'] = 1
+                elif variant == 'summary-error': changed['error'] = 'admission-refused'
+                elif variant == 'semantic-refused': result.update(semantic_complete=False, reason='protocol-refused')
+                elif variant == 'summary-cleanup': changed['cleanup_complete'] = False
+                elif variant == 'sealed-cleanup': receipt['sealed_cleanup_complete'] = False
+                elif variant == 'forbidden-provider': result['provider'].update(forbidden=1, requests=3)
+                elif variant == 'unsettled-provider': result['provider']['settled'] = False
+                elif variant == 'protected-false': ledger['protected_originals_unchanged'] = False
+                elif variant == 'protected-forged-change': ledger['after']['foreign'][6] += 1
+                elif variant == 'protected-forged-remove': del ledger['after']['foreign']
+                elif variant == 'empty-originals': ledger.update(before={}, after={}, selected_config_capture=None)
+                elif variant == 'config-capture-missing': ledger.pop('selected_config_capture')
+                elif variant == 'config-capture-null': ledger['selected_config_capture'] = None
+                elif variant == 'config-content-changed':
+                    capture = ledger['selected_config_capture']['after']
+                    body = base64.b64decode(capture['body_base64'])
+                    body = b'X' + body[1:]
+                    capture.update(body_base64=base64.b64encode(body).decode(), sha256=case.digest(body))
+                elif variant == 'ledger-admitted': ledger['accepted'] = True
+                elif variant == 'qualification': changed['qualification']['native_mcp_call'] = True
+                elif variant == 'collection': changed['collection_complete'] = True
+                elif variant == 'source': result['source_commit'] = 'd' * 40
+                elif variant == 'nonce': receipt['nonce'] = 'd' * 32
+                elif variant == 'session-id':
+                    rpc = case.document(bodies['a.rpc.json']);rpc['session']['result']['sessionId'] = 'foreign'
+                    bodies['a.rpc.json'] = json.dumps(rpc).encode()
+                elif variant in ('missing-session-reply', 'missing-inventory-reply'):
+                    wire = bodies['a-acp.merged.log'].splitlines(keepends=True)
+                    wire.pop(-2 if variant == 'missing-session-reply' else -1)
+                    body = b''.join(wire);bodies['a-acp.merged.log'] = body
+                    result['commands'][-1].update(merged_bytes=len(body), merged_sha256=case.digest(body))
+                elif variant == 'command-error': result['commands'][-1]['error'] = 'deadline'
+                elif variant == 'command-unsettled': result['commands'][-1]['exit'] = None
+                elif variant == 'help-exit': result['commands'][0]['exit'] = 1
+                elif variant == 'help-version':
+                    body = b'grok 1.0.69 (f50904eaee6c)\n';bodies['a-version.merged.log'] = body
+                    result['commands'][0].update(merged_bytes=len(body), merged_sha256=case.digest(body))
+                elif variant == 'foreign-argv': result['commands'][-1]['argv'].append('--prompt')
+                elif variant == 'extra-command': result['commands'].append(copy.deepcopy(result['commands'][-1]))
+                elif variant == 'stream-hash': result['commands'][-1]['merged_sha256'] = 'd' * 64
+                bodies['a.ledger.json'] = json.dumps(ledger).encode()
+                with self.subTest(variant=variant):
+                    facts = self.read(packet, bodies, changed)
+                    self.assertIsNot(facts.get('measurement_complete'), True)
+                    self.assertEqual(self.gate('1', 'true' if facts.get('measurement_complete') is True else 'false'), 1)
+            partial = copy.deepcopy(summary)
+            partial['scopes'][0]['result'].update(semantic_complete=False, reason='protocol-refused')
+            partial['measurement_complete'] = False
+            partial['error'] = 'admission-refused'
+            facts = self.read(packet, members, partial)
+            self.assertEqual(facts['reason'], 'measurement-only')
+            self.assertIs(facts.get('measurement_complete'), False)
+
+
 if __name__ == '__main__':
     unittest.main()

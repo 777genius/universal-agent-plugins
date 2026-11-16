@@ -7441,5 +7441,206 @@ class WorkflowScopeContracts(unittest.TestCase):
                         native.index("    - name: Observe the official source runtime"))
 
 
+class PublicUserTrustContracts(unittest.TestCase):
+    """Actual observer/guard and filesystem; only native transport is inert."""
+
+    parser_run = staticmethod(CASE["subprocess"].run)
+
+    @contextmanager
+    def fixture(self):
+        import copy
+        import hashlib
+        import shutil
+        import sys
+        import time
+        from contextlib import ExitStack
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+            root = Path(temporary).resolve(); outer = root / "outer"; outer.mkdir()
+            user = outer / "user"; profile = user / ".hermes"
+            (profile / "backups/config").mkdir(parents=True)
+            (profile / "sessions").mkdir(); (profile / "skills/foreign").mkdir(parents=True)
+            nonce = "d" * 64
+            _, authored = CASE["user_fixture_content"](nonce)
+            for name, body in authored.items():
+                path = profile / name; path.write_bytes(body.encode()); path.chmod(0o600)
+            config = profile / "config.yaml"
+            shutil.copy2(config, profile / "backups/config/config.yaml.good.20200101-000000")
+            projects = {key: outer / ("public-" + key) for key in ("a", "b")}
+            sources = {key: outer / ("public-source-" + key) for key in projects}
+            for path in (*projects.values(), *sources.values()):
+                path.mkdir(); (path / "foreign.txt").write_bytes(b"retained foreign\n")
+            document = dict(model="USER_MODEL_" + nonce,
+                providers={"custom": {"base_url": "http://127.0.0.1:9/USER_PROVIDER_" + nonce}},
+                mcp_servers={"foreign": {"command": "echo", "args": ["retained"]}})
+            # Only the authored preimage and schema append need this inert YAML
+            # bridge. Every postimage is JSON (a YAML subset); real pinned YAML
+            # parsing is separately exercised by the retained source control.
+            policy = ("import json\noriginal=" + repr(authored["config.yaml"]) + "\nvalue=" + repr(document) + "\n"
+                      "def safe_load(body):\n"
+                      "    if body == original: return json.loads(json.dumps(value))\n"
+                      "    if body == original + '_config_version: 52\\n': return dict(value, _config_version=52)\n"
+                      "    return json.loads(body)\n").encode()
+            payload = root / "payload"
+            for part in ("hermes-agent", "packages", "tools"): (payload / part).mkdir(parents=True)
+            (payload / "hermes-agent/hermes_yaml.py").write_bytes(policy)
+            (payload / "tools/python").write_bytes(b"inert interpreter declaration; never executed")
+            manifest = json.dumps({"runtime": {"repoDir": "hermes-agent", "sitePackages": "packages", "storePython": "tools/python"}}).encode()
+            (payload / "manifest.json").write_bytes(manifest)
+            helpers = runpy.run_path(str(Path(CASE["__file__"]).parent / "hermes-project-install.py"), run_name="test_trust_parser")
+            helpers["YAML_POLICY_GIT_BLOB"] = hashlib.sha1(b"blob " + str(len(policy)).encode() + b"\0" + policy).hexdigest()
+            def helper(path, run_name):
+                self.assertEqual(Path(path).name, "hermes-project-install.py")
+                self.assertEqual(run_name, "hermes_trust_preservation")
+                return helpers
+            stack.enter_context(mock.patch.dict(CASE["PublicUserTrust"].__init__.__globals__, runpy=SimpleNamespace(run_path=helper)))
+            def parser(argv, **options):
+                self.assertEqual(argv, [str(payload / "tools/python"), "-I", "-S", "-B", "-c", helpers["CONFIG_PARSER"],
+                                        str(payload / "hermes-agent"), str(payload / "packages")])
+                self.assertEqual(options["cwd"], payload)
+                self.assertLessEqual(options["timeout"], 5)
+                return self.parser_run([sys.executable, *argv[1:]], **options)
+            stack.enter_context(mock.patch.object(CASE["subprocess"], "run", side_effect=parser))
+            env = dict(os.environ, HERMES_CALL_NONCE=nonce, HERMES_HOME=str(profile),
+                HERMES_PROFILE_RUNTIME_ROOT=str(payload / "hermes-agent"), HERMES_PROFILE_PYTHON=str(payload / "tools/python"),
+                HERMES_PROFILE_MANIFEST_SHA256=hashlib.sha256(manifest).hexdigest())
+            tick = [time.time()]
+            stack.enter_context(mock.patch.object(time, "time", side_effect=lambda: tick[0]))
+            guard = CASE["PublicUserTrust"](outer, user, profile, projects, env, time.monotonic() + 60, stack)
+            original = copy.deepcopy(guard.original)
+            yield guard, sources, document, tick
+            self.assertEqual(guard.original, original)
+            descriptors = [descriptor for _, descriptor, _ in guard.directories]
+        for descriptor in descriptors:
+            with self.assertRaises(OSError): os.fstat(descriptor)
+
+    @staticmethod
+    def rewrite(guard, document):
+        path = guard.config.with_name("config.inert-new")
+        path.write_bytes(json.dumps(document).encode() + b"\n"); path.chmod(0o600)
+        os.replace(path, guard.config)
+
+    @staticmethod
+    def backup(guard, tick):
+        import shutil
+        import time
+        tick[0] += 1
+        previous = sorted(guard.backups.glob("config.yaml.good.*"), reverse=True)
+        path = guard.backups / ("config.yaml.good." + time.strftime("%Y%m%d-%H%M%S", time.localtime(tick[0])))
+        if (previous and previous[0].read_bytes() == guard.config.read_bytes()) or path.exists(): return None
+        shutil.copy2(guard.config, path)
+        return path
+
+    def command(self, guard, sources, effect):
+        import ast
+        import inspect
+        import time
+        # Run the actual command through its real snapshot and delta guard.
+        # Package/protocol ports are inert; User captures and parser are real.
+        owner = ast.parse(inspect.getsource(CASE["observe_public"])).body[0]
+        command = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == "command")
+        snapshot = next(node for node in owner.body if isinstance(node, ast.FunctionDef) and node.name == "snapshot")
+        stop = next(i for i, node in enumerate(command.body) if isinstance(node, ast.Expr)
+                    and isinstance(node.value, ast.Call) and any(isinstance(arg, ast.Constant)
+                    and arg.value == "public action changed an unselected or unmeasured path" for arg in node.value.args))
+        command.body = command.body[:stop + 1] + [ast.Return(value=ast.Name(id="delta", ctx=ast.Load()))]
+        command.body[0] = ast.Global(names=command.body[0].names)
+        image = CASE["inventory"](guard.outer)
+        protected = {name: row for name, row in image.items() if name.startswith("user/") or name.endswith("foreign.txt")}
+        proofs = {key: None for key in guard.projects}; calls = []
+        def bounded(argv, *_args, **_kwargs):
+            calls.append(argv); effect(argv); return b'{"result":"success"}'
+        namespace = dict(CASE, outer=guard.outer, projects=guard.projects, sources=sources, user_trust=guard,
+            protected=protected, born={}, current=image, proofs=proofs, env=guard.env, evidence=guard.outer.parent,
+            pins={"uap": {"path": "inert-uap"}}, native_image="inert-hermes", deadline=time.monotonic() + 60,
+            authorities={key: CASE["directory_identity"](path) for key, path in guard.projects.items()},
+            probes={key: SimpleNamespace(methods=lambda: []) for key in guard.projects},
+            public_snapshot=lambda *_args: (CASE["inventory"](guard.outer), proofs),
+            public_runtime_pins=lambda *_args, **_kwargs: None, bounded=bounded,
+            public_continuity=lambda *_args, **_kwargs: None, captured_events=lambda *_args: [],
+            spawn_preserved=lambda *_args: None, windows_log_preserved=lambda *_args: None)
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[snapshot, command], type_ignores=[])), CASE["__file__"], "exec"), namespace)
+        return namespace["command"], calls, namespace
+
+    def test_actual_public_add_preserves_user_and_accepts_only_ordered_trust_grants(self):
+        with self.fixture() as (guard, sources, document, tick):
+            def effect(argv):
+                scope = "a" if argv[2] == str(sources["a"]) else "b"
+                self.backup(guard, tick)
+                value = dict(document, _config_version=52, skills={"trusted_project_dirs":
+                    [str(guard.projects[key]) for key in (["a"] if scope == "a" else ["a", "b"])]})
+                self.rewrite(guard, value); self.backup(guard, tick)
+            command, calls, namespace = self.command(guard, sources, effect)
+            for scope in ("a", "b"):
+                delta = command("public-add-" + scope, scope, ["add", str(sources[scope]), "--no-save"])
+                self.assertIn(guard.key, delta)
+                self.assertEqual(calls[-1], ["inert-uap", "add", str(sources[scope]), "--no-save", "--target", "hermes",
+                    "--scope", "project", "--project-root", str(guard.projects[scope]), "--yes", "--format", "json"])
+                namespace["current"] = CASE["inventory"](guard.outer)
+            self.assertEqual(guard.phases, ["a", "b"])
+            self.assertEqual(len(guard.admitted), 3)
+            self.assertEqual(guard.before_body, CASE["user_fixture_content"]("d" * 64)[1]["config.yaml"].encode())
+
+    def test_public_trust_rejects_unrelated_typed_values_and_wrong_roles(self):
+        import copy
+        for effect in ("model", "provider", "foreign-mcp", "extra", "missing", "bool-version", "reversed", "sibling-only"):
+            with self.subTest(effect=effect), self.fixture() as (guard, _, document, tick):
+                value = copy.deepcopy(document); value.update(_config_version=52, skills={"trusted_project_dirs": [str(guard.projects["a"])]})
+                if effect == "model": value["model"] = 1
+                elif effect == "provider": value["providers"]["custom"]["base_url"] += "changed"
+                elif effect == "foreign-mcp": value["mcp_servers"]["foreign"]["args"] = [True]
+                elif effect == "extra": value["unknown"] = "extra"
+                elif effect == "missing": del value["providers"]
+                elif effect == "bool-version": value["_config_version"] = True
+                elif effect == "reversed": value["skills"]["trusted_project_dirs"] = [str(guard.projects["b"]), str(guard.projects["a"])]
+                else: value["skills"]["trusted_project_dirs"] = [str(guard.projects["b"])]
+                self.rewrite(guard, value)
+                with self.assertRaisesRegex(RuntimeError, "beyond exact trust"): guard.authorize("a")
+        with self.fixture() as (guard, sources, _, _):
+            command, calls, _ = self.command(guard, sources, lambda _: self.fail("refused command started"))
+            for label, scope, args in (("public-add-a", "a", ["add", str(sources["b"]), "--no-save"]),
+                                       ("public-add-b", "a", ["add", str(sources["a"]), "--no-save"])):
+                with self.assertRaisesRegex(RuntimeError, "command role"): command(label, scope, args)
+            self.assertEqual(calls, [])
+
+    def test_public_trust_keeps_all_original_user_files_and_backup_custody(self):
+        import shutil
+        for effect in ("auth", "history", "foreign-skill", "replace-auth", "unknown", "old-backup", "wrong-backup", "hardlink", "directory"):
+            with self.subTest(effect=effect), self.fixture() as (guard, _, document, tick):
+                self.backup(guard, tick)
+                self.rewrite(guard, dict(document, _config_version=52, skills={"trusted_project_dirs": [str(guard.projects["a"])]}))
+                if effect in {"auth", "history", "foreign-skill", "replace-auth"}:
+                    path = guard.profile / {"auth": "auth.json", "history": "sessions/retained-history.txt",
+                        "foreign-skill": "skills/foreign/SKILL.md", "replace-auth": "auth.json"}[effect]
+                    if effect == "replace-auth":
+                        other = path.with_name("replacement"); shutil.copy2(path, other); os.replace(other, path)
+                    else: path.write_bytes(b"unpermitted mutation")
+                elif effect == "unknown": (guard.user / "unknown").write_bytes(b"unknown")
+                elif effect == "old-backup": (guard.backups / "config.yaml.good.20200101-000000").unlink()
+                elif effect == "wrong-backup": next(path for path in guard.backups.iterdir() if "20200101" not in path.name).write_bytes(b"wrong")
+                elif effect == "hardlink": os.link(guard.config, guard.user / "alias")
+                else:
+                    old = guard.profile / "backups/retained-config"; guard.backups.rename(old); guard.backups.mkdir()
+                with self.assertRaises(RuntimeError): guard.authorize("a")
+
+    def test_shared_parser_keeps_original_project_contract_and_strict_marker(self):
+        import subprocess
+        with self.fixture() as (guard, _, document, _):
+            # The one-root Project branch still requires its original theme,
+            # schema and empty prior trust, using the exact shared child code.
+            before = dict(theme="retained-user", _config_version=52, mcp_servers={})
+            after = dict(before, skills={"trusted_project_dirs": [str(guard.projects["a"])]})
+            packet = json.dumps(dict(before=json.dumps(before), after=json.dumps(after), project=str(guard.projects["a"]))).encode()
+            argv = [str(guard.python), "-I", "-S", "-B", "-c", guard.helpers["CONFIG_PARSER"], str(guard.code), str(guard.packages)]
+            result = CASE["subprocess"].run(argv, input=packet, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                cwd=guard.payload, env=guard.env, timeout=5, check=False)
+            self.assertEqual((result.returncode, result.stdout, result.stderr), (0, b"config-preservation-ok\n", b""))
+            for bad in (dict(before, theme="changed"), dict(before, _config_version=True),
+                        dict(before, skills={"trusted_project_dirs": ["pretrusted"]})):
+                value = json.dumps(dict(before=json.dumps(bad), after=json.dumps(after), project=str(guard.projects["a"]))).encode()
+                result = CASE["subprocess"].run(argv, input=value, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    cwd=guard.payload, env=guard.env, timeout=5, check=False)
+                self.assertEqual(result.returncode, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

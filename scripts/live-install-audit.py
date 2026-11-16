@@ -2591,6 +2591,106 @@ def windsurf_source_negative(row, fixtures):
             '"data":{"installations":[]}}\n'))
 
 
+WINDSURF_COMPONENT_REFUSALS = {
+    23: ("github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d", "itential-builder"),
+    24: ("github:GoogleCloudPlatform/google-cloud-storage-plugin@b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b", "google-cloud-storage"),
+    27: ("github:cometchat/cometchat-skills@8652f1ea41d12e5058123db1e4e6babef9c918f1", "cometchat-skills"),
+    28: ("github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e", "uizze-ui-slop"),
+}
+
+
+def windsurf_component_negative(row, fixtures):
+    """Four pinned public component refusals, never an alias-only waiver."""
+    index = row.get("index")
+    selected = WINDSURF_COMPONENT_REFUSALS.get(index) if type(index) is int else None
+    if selected is None:
+        return False
+    source, identity = selected
+    install, listed, commands = row.get("install"), row.get("list"), row.get("windsurf_public_commands")
+    if (type(install) is not dict or type(listed) is not dict or type(commands) is not list
+            or len(commands) != 2 or any(type(command) is not list for command in commands)
+            or not commands[0] or not commands[1] or type(commands[0][0]) is not str
+            or not Path(commands[0][0]).is_absolute() or commands[0][0] != commands[1][0]):
+        return False
+    return bool(
+        (row.get("target"), row.get("canonical_client_id"), row.get("kind"),
+         row.get("source"), row.get("identity"), row.get("status"))
+        == ("windsurf", "windsurf", "plugin", source, identity, "install-failed")
+        and fixtures["plugin_aliases"][index] == source
+        and fixtures["plugin_declared_names"].get(source) == identity
+        and row.get("windsurf_native_image_unchanged") is True
+        and type(row.get("native_file_delta")) is int and row["native_file_delta"] == 0
+        and all(row.get(key) == [] for key in (
+            "native_identity_files", "native_component_candidates", "native_residuals",
+            "post_removal_leftovers", "matched_installation_ids", "repeat_installation_ids"))
+        and row.get("sentinels_preserved") is True
+        and all(row.get(key) is False for key in (
+            "listed_identity", "failed_install_registered", "failed_install_residue",
+            "post_remove_identity_registered", "lock_written", "lock_contains_identity",
+            "lock_exact_source_pinned", "repeat_verified", "removal_verified"))
+        and all(key in row and row[key] is None for key in (
+            "repeat_add", "repeat_list", "cleanup", "post_remove_list",
+            "native_uninstall", "windsurf_expected_release_pin"))
+        and commands[0][1:] == ["add", source, "--target", "windsurf", "--scope", "user", "--format", "json"]
+        and commands[1][1:] == ["list", "--target", "windsurf", "--scope", "user", "--format", "json"]
+        and type(install.get("exit_code")) is int and install["exit_code"] == 1
+        and install.get("timeout") is False and install.get("stdout_tail") == ""
+        and install.get("stderr_tail") == (
+            f"agentplugins: preflight {identity}/windsurf: "
+            "devin Global supports only selected Skills and MCP components\n")
+        and type(listed.get("exit_code")) is int and listed["exit_code"] == 0
+        and listed.get("timeout") is False and listed.get("stderr_tail") == ""
+        and listed.get("stdout_tail") == (
+            '{"schema_version":1,"command":"list","result":"success",'
+            '"data":{"installations":[]}}\n'))
+
+
+def windsurf_prepared_readout(row, fixtures, cli):
+    """Join installed/Prepared Global receipts to the six actual public calls."""
+    source, identity = row.get("source"), row.get("identity")
+    scope = ["--target", "windsurf", "--scope", "user", "--format", "json"]
+    expected = [[cli, "add", source, *scope], [cli, "list", *scope],
+                [cli, "add", source, *scope], [cli, "list", *scope],
+                [cli, "remove", identity, *scope], [cli, "list", *scope]]
+    if row.get("windsurf_public_commands") != expected:
+        return False
+    # Add/remove tails can be truncated. Their complete captures already feed
+    # prepared_components_only/repeat_verified/removal_verified in do_case.
+    # Reparse only the complete bounded list readouts retained by this lane.
+    phases = ("list", "repeat_list", "post_remove_list")
+    try:
+        documents = []
+        for phase in phases:
+            body = row[phase]["stdout_tail"]
+            if type(body) is not str or not 0 < len(body) <= 1024 * 1024:
+                return False
+            document = copilot_json_document(body)
+            if (type(document) is not dict or type(document.get("schema_version")) is not int
+                    or document["schema_version"] != 1 or document.get("result") != "success"):
+                return False
+            documents.append(document)
+        if vscode_list_entries(documents[2]) != []:
+            return False
+        for document in (documents[0], documents[1]):
+            entries = vscode_list_entries(document)
+            matches = matching_installations(document, identity, "windsurf", "plugin", source,
+                                             fixtures["signed_release_pins"])
+            if entries is None or len(entries) != 1 or matches != entries:
+                return False
+            clients = entries[0].get("clients")
+            expected_client = {"client_id": "windsurf", "scope": "user",
+                               "materialization": "materialized", "activation": "prepared",
+                               "authentication": "not_checked", "policy": "allowed",
+                               "verification": "installation_verified"}
+            if (type(clients) is not list or len(clients) != 1 or type(clients[0]) is not dict
+                    or any(clients[0].get(key) != value for key, value in expected_client.items())
+                    or [entries[0].get("installation_id")] != row.get("matched_installation_ids")):
+                return False
+    except (KeyError, TypeError, ValueError, RecursionError):
+        return False
+    return True
+
+
 def kiro_prepared_installation_negative(row, fixtures):
     """One measured unsupported fixture; never native qualification."""
     release = MARKETING_KIT_SIGNED_CLOSURE["777genius/marketing-kit"]
@@ -2675,9 +2775,10 @@ def kiro_prepared_installation_summary(report, fixtures):
 
 
 def prepared_installation_summary(report, fixtures, acceptance):
-    """Two complete installation lanes; neither grants native qualification."""
+    """Complete installation lanes, separately from native qualification."""
     routes = {"cursor-prepared-installation": ("cursor", "plugin"),
-              "grok-prepared-skills-installation": ("grok", "skill")}
+              "grok-prepared-skills-installation": ("grok", "skill"),
+              "windsurf-prepared-installation": ("windsurf", "plugin")}
     result = {"installation_passed": 0, "installation_prepared_lifecycle_passed": 0,
               "installation_verified_negative_coverage": 0,
               "installation_acceptance_passed": False}
@@ -2699,16 +2800,32 @@ def prepared_installation_summary(report, fixtures, acceptance):
             or report.get("full_coverage") is not True
             or type(rows) is not list or len(rows) != 30 or len(sources) != 30):
         return result
+    if target == "windsurf" and (
+            report.get("architecture") != "x86_64" or report.get("canonical_client_id") != target
+            or version["value"] != "devin 3000.12.57 (96542e930752)"
+            or type(report.get("cli")) is not str or not Path(report["cli"]).is_absolute()):
+        return result
     for index, (row, item) in enumerate(zip(rows, sources)):
         source = item if kind == "plugin" else item["source"]
         identity = (fixtures["plugin_declared_names"].get(item, item)
                     if kind == "plugin" else item["name"])
         if (type(row) is not dict or type(row.get("index")) is not int or row["index"] != index
                 or (row.get("target"), row.get("kind")) != route
-                or row.get("source") != source or row.get("identity") != identity
-                or row.get("status") != "prepared-lifecycle-passed"
+                or row.get("source") != source or row.get("identity") != identity):
+            return result
+        if target == "windsurf":
+            commands = row.get("windsurf_public_commands")
+            if (type(commands) is not list or not commands or type(commands[0]) is not list
+                    or not commands[0] or commands[0][0] != report["cli"]):
+                return result
+            if windsurf_source_negative(row, fixtures) or windsurf_component_negative(row, fixtures):
+                result["installation_verified_negative_coverage"] += 1
+                continue
+        prepared_key = "prepared_components_only" if target == "windsurf" else "prepared_binding"
+        if (row.get("status") != "prepared-lifecycle-passed"
+                or row.get(prepared_key) is not True
                 or any(row.get(key) is not True for key in (
-                    "prepared_binding", "listed_identity", "repeat_verified",
+                    "listed_identity", "repeat_verified",
                     "repeat_native_unchanged", "repeat_lock_unchanged",
                     "removal_verified", "post_list_schema_valid", "sentinels_preserved"))
                 or any(row.get(key) is not False for key in (
@@ -2725,6 +2842,10 @@ def prepared_installation_summary(report, fixtures, acceptance):
         ids = row.get("matched_installation_ids")
         if (type(ids) is not list or len(ids) != 1 or type(ids[0]) is not str or not ids[0]
                 or row.get("repeat_installation_ids") != ids):
+            return result
+        if target == "windsurf" and (
+                row.get("post_removal_leftovers") != []
+                or not windsurf_prepared_readout(row, fixtures, report["cli"])):
             return result
         if kind == "skill":
             if (any(row.get(key) is not True for key in (
@@ -2753,7 +2874,9 @@ def prepared_installation_summary(report, fixtures, acceptance):
                 return result
         result["installation_passed"] += 1
         result["installation_prepared_lifecycle_passed"] += 1
-    result["installation_acceptance_passed"] = result["installation_passed"] == 30
+    expected = (25, 5) if target == "windsurf" else (30, 0)
+    result["installation_acceptance_passed"] = (
+        result["installation_passed"], result["installation_verified_negative_coverage"]) == expected
     return result
 
 
@@ -3052,7 +3175,7 @@ def main():
     p.add_argument("--report-dir", required=True)
     p.add_argument("--acceptance", choices=("native", "kiro-prepared-installation",
                    "cursor-prepared-installation", "grok-prepared-skills-installation",
-                   "vscode-user-manual-preparation"),
+                    "windsurf-prepared-installation", "vscode-user-manual-preparation"),
                    default="native")
     args = p.parse_args()
     if (args.acceptance == "kiro-prepared-installation"
@@ -3060,10 +3183,13 @@ def main():
             != ("kiro", "plugin", "darwin", 30)):
         p.error("Prepared installation acceptance requires the complete Kiro plugin Darwin lane")
     prepared_routes = {"cursor-prepared-installation": ("cursor", "plugin", "linux", 30),
-                       "grok-prepared-skills-installation": ("grok", "skill", "linux", 30)}
+                       "grok-prepared-skills-installation": ("grok", "skill", "linux", 30),
+                       "windsurf-prepared-installation": ("windsurf", "plugin", "linux", 30)}
     if (args.acceptance in prepared_routes
             and (args.target, args.kind, sys.platform, args.limit) != prepared_routes[args.acceptance]):
         p.error("Prepared installation acceptance requires its complete Linux target and kind lane")
+    if args.acceptance == "windsurf-prepared-installation" and platform.machine() != "x86_64":
+        p.error("Windsurf installation acceptance requires the pinned Linux x86_64 lane")
     if (args.acceptance == "vscode-user-manual-preparation"
             and (args.target, args.kind, sys.platform, platform.machine(), args.limit)
             != ("vscode", "plugin", "linux", "x86_64", 30)):
@@ -3201,6 +3327,7 @@ def main():
         report.update(prepared_installation_summary(report, doc, args.acceptance))
         save()
         print(f'{args.target} Prepared installation: {report["installation_passed"]}/30 installed; '
+              f'verified refusals={report["installation_verified_negative_coverage"]}; '
               'native activation remains unqualified')
         return 0 if report["installation_acceptance_passed"] else 1
     if args.acceptance == "vscode-user-manual-preparation":

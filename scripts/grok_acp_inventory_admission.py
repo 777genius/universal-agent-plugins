@@ -831,6 +831,41 @@ def capture_session_config(root, ledger, original, nonce, budget, receipt):
         return None  # Failed diagnostics retain no partial body or changed acceptance.
 
 
+def session_measurement_complete(summary, receipt, ledger, rpc, members, nonce):
+    """Complete held measurement only; never admit the session or its effects."""
+    try:
+        result = receipt['result']
+        require(summary.get('measurement_complete') is True and summary.get('error') is None
+                and result['semantic_complete'] is True and result['reason'] == 'complete'
+                and all(rpc[key] is not None for key in ('initialize', 'session', 'plugins')),
+                'session-measurement-incomplete')
+        require(result['provider']['forbidden'] == 0 and result['provider']['settled'] is True
+                and ledger.get('protected_originals_unchanged') is True
+                and all(ledger['after'].get(name) == identity for name, identity in ledger['before'].items()),
+                'session-measurement-originals')
+        capture = ledger['selected_config_capture']
+        validate_session_config_capture(ledger, capture, nonce)
+        require(all(capture['before'][key] == capture['after'][key] for key in ('identity', 'bytes', 'sha256')),
+                'session-measurement-config')
+        commands = result['commands']
+        require(len(commands) == 5 and all(type(row['exit']) is int and row['error'] is None for row in commands)
+                and sum(row['merged_bytes'] for row in commands) <= LIMIT, 'session-measurement-commands')
+        native = commands[0]['argv'][0]
+        require(type(native) is str and re.fullmatch(r'/tmp/uap-grok-acp-sealed-[^/]+/grok', native)
+                and str(Path(native)) == native, 'session-measurement-native')
+        arguments = (['--version'], ['--help'], ['agent', '--help'],
+                     ['agent', 'stdio', '--help'], ['agent', '--no-leader', 'stdio'])
+        require(all(row['argv'] == [native, *args] for row, args in zip(commands, arguments)),
+                'session-measurement-argv')
+        # ACP is terminated after its last required reply; preserve its settled
+        # return code. Only the four held help/version commands require exit 0.
+        help_admitted([dict(row, merged_base64=base64.b64encode(members[row['merged_file']]).decode())
+                       for row in commands[:4]])
+        return True
+    except (KeyError, IndexError, TypeError, ValueError):
+        return False
+
+
 def session_readout(members, packet, deadline):
     refused = dict(schema_version=1, mode=SESSION_MODE, reason='readout-refused')
     try:
@@ -848,7 +883,8 @@ def session_readout(members, packet, deadline):
         rows = summary['scopes']
         require(type(rows) is list and len(rows) == 1, 'session-scopes')
         facts = dict(schema_version=1, mode=SESSION_MODE, reason='measurement-only',
-                     collection_complete=False, cleanup_complete=True, session_reply=False, inventory_reply=False,
+                     collection_complete=False, measurement_complete=False, cleanup_complete=True,
+                     session_reply=False, inventory_reply=False,
                      provider_requests=0, provider_forbidden=0, added_entries=0, removed_entries=0, changed_entries=0)
         if rows:
             receipt = rows[0]
@@ -906,6 +942,7 @@ def session_readout(members, packet, deadline):
                          provider_requests=provider['requests'], provider_forbidden=provider['forbidden'],
                          added_entries=len(after.keys()-before.keys()), removed_entries=len(before.keys()-after.keys()),
                          changed_entries=sum(before[k] != after[k] for k in before.keys() & after.keys()))
+            facts['measurement_complete'] = session_measurement_complete(summary, receipt, ledger, rpc, members, packet['nonce'])
         require(time.monotonic() < deadline, 'readout-deadline')
         return facts
     except Exception:

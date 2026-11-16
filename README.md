@@ -30,7 +30,7 @@
 [Build a plugin](#build-plugins)
 
 <p align="center">
-<a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="https://github.com/user-attachments/assets/33833cd2-f525-49b2-9181-5a4d643d2f5b" /></a>
+<a href="https://universal-agent-plugins.com/#demo" title="Watch the Universal Agent Plugins demo"><img width="680" height="392" alt="Universal Agent Plugins video preview — watch the demo" src="assets/readme/demo-preview.webp" /></a>
 </p>
 
 Install and manage plugins and Skills across your AI agents with one CLI.
@@ -79,15 +79,15 @@ one repository, use [project installation](#install-for-one-project).
 
 **Choose your agents**
 
-<img width="423" height="234" alt="Choose which AI agents receive the plugin" src="https://github.com/user-attachments/assets/3f8786ea-bb3a-4869-aabe-99b245364b3d" />
+<img width="423" height="234" alt="Choose which AI agents receive the plugin" src="assets/readme/choose-agents.webp" />
 
 **Review the installation plan — Playwright example**
 
-<img width="1079" height="584" alt="Review the Playwright installation plan for Codex, Claude Code and Gemini CLI" src="https://github.com/user-attachments/assets/898d66b9-3942-4725-9a26-ec2fe01ad7c0" />
+<img width="1079" height="584" alt="Review the Playwright installation plan for Codex, Claude Code and Gemini CLI" src="assets/readme/review-install-plan.webp" />
 
 **Follow installation progress — Playwright example**
 
-<img width="669" height="125" alt="Track Playwright installation progress across three AI agents" src="https://github.com/user-attachments/assets/3bd5d39f-5b35-4475-8b0c-94b85e992d29" />
+<img width="669" height="125" alt="Track Playwright installation progress across three AI agents" src="assets/readme/install-progress.webp" />
 
 ### Install the CLI
 

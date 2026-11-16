@@ -153,6 +153,7 @@ func TestProjectHermesBundleColdRestoreAndRepair(t *testing.T) {
 	hermesColdSource(t, transport, endpoint.URL+"/mcp")
 	original := newHermesColdJourney(t, input, transport)
 	original.run(t, original.a, "add", transport.endpoint, "--alias", "docs", "--target", "hermes", "--yes")
+	input.acceptProjectTrust(t, original)
 	installed, _, servers := hermesColdOwned(t, original, endpoint.URL+"/mcp")
 	input.rememberData(t, installed)
 	input.unchanged(t)
