@@ -81,12 +81,21 @@ def _bounded_member_names(path, limit):
     return sorted(names)
 
 
-def _temporary_git_state(profile):
+def _temporary_git_name_diagnostic(name, phase):
+    """Quote bounded listing evidence without reading the rejected child."""
+    return ("Codex temporary Git directory name is not qualified; "
+            f"checkpoint={ascii(phase[:32])}; basename={ascii(name[:64])}; "
+            f"basename_chars={len(name)}; basename_truncated={len(name) > 64}")
+
+
+def _temporary_git_state(profile, *, phase="direct-scan"):
     """Verify the pinned client's empty automatic-Git staging repositories.
 
     Codex 0.153.4 core-plugins/src/git_policy.rs writes this skeleton under
     CODEX_HOME/.tmp. Optional objects/refs must be empty; this structural
     check does not identify the historical writer of a matching residue.
+    startup_sync.rs may also create plugins.sync.lock in this shared root.
+    Retain an observed empty lock, never accept it as a repeat delta.
     """
     root = profile / ".tmp"
     try:
@@ -106,8 +115,13 @@ def _temporary_git_state(profile):
     names = _bounded_member_names(root, TEMPORARY_GIT_LIMIT)
     layouts = {}
     for name in names:
+        if name == "plugins.sync.lock":
+            lock = root / name
+            identities[lock] = _FILES["identity"](lock.lstat())
+            _regular_bytes(lock, 0)
+            continue
         if re.fullmatch(r"git-[A-Za-z0-9]{6}", name) is None:
-            raise ValueError("Codex temporary Git directory name is not qualified")
+            raise ValueError(_temporary_git_name_diagnostic(name, phase))
         repository = root / name
         directory(repository)
         members = _bounded_member_names(repository, 3)
@@ -138,7 +152,7 @@ def _temporary_git_state(profile):
 
 def _confirm_temporary_git_identities(identities, witnesses):
     for path, previous in identities.items():
-        if path.name == "HEAD":
+        if path.name in ("HEAD", "plugins.sync.lock"):
             current = _FILES["identity"](path.lstat())
         else:
             info = _real_directory(path)
@@ -153,7 +167,10 @@ def _confirm_temporary_git_identities(identities, witnesses):
 def _repeat_temporary_git_only(profile, before, after, previous):
     """Accept only newly observed empty native Git HEADs; retain raw differences."""
     old_files, old_identities = previous
-    files, identities = _temporary_git_state(profile)
+    files, identities = _temporary_git_state(profile, phase="repeat-comparison")
+    lock = profile / ".tmp" / "plugins.sync.lock"
+    if (lock in old_identities) != (lock in identities):
+        return False
     if any(identities.get(path) != value for path, value in old_identities.items()):
         return False
     if any(before.get(path) != digest or after.get(path) != digest
@@ -519,7 +536,7 @@ class CodexRuntimeAudit:
             raise ValueError("Codex selected Skill bytes changed during native discovery")
         verify_skill_inventory(listing, self.project, self.identity, self.selected, self.foreign, present)
         state, files = runtime_state(self.runtime, self.temporary, self.baseline)
-        git_files, _ = _temporary_git_state(self.profile)
+        git_files, _ = _temporary_git_state(self.profile, phase=phase)
         self.guard()
         if self.baseline is None:
             self.baseline = state
@@ -532,7 +549,7 @@ class CodexRuntimeAudit:
 
     def temporary_git_state(self):
         self.guard()
-        state = _temporary_git_state(self.profile)
+        state = _temporary_git_state(self.profile, phase="before-repeat")
         self.guard()
         return state
 
