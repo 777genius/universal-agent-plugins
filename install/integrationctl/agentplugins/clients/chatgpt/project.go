@@ -79,10 +79,5 @@ func projectChatGPT(root string, envelope domain.PackageEnvelope, plan domain.De
 	if err := shared.ProjectOpenAIMCP(root, envelope, serverNames, hints, plan.ActivePath, dataPath); err != nil {
 		return err
 	}
-	for _, portableManifest := range []string{"plugin.json", "mcp.json"} {
-		if err := os.Remove(filepath.Join(root, portableManifest)); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove portable %s from official ChatGPT projection: %w", portableManifest, err)
-		}
-	}
-	return nil
+	return shared.RemovePortableManifests(root)
 }

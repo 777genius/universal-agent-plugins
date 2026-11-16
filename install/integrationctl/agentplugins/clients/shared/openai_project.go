@@ -1,6 +1,10 @@
 package shared
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -30,4 +34,17 @@ func ProjectOpenAIMCP(root string, envelope domain.PackageEnvelope, serverNames 
 		DataPath:   dataPath,
 		Hints:      hints,
 	})
+}
+
+// RemovePortableManifests keeps Codex and ChatGPT on the OpenAI projection.
+// Both prefer a root Agent Plugins manifest when one is present and then
+// ignore .codex-plugin and .mcp.json, including the managed PLUGIN_DATA that
+// the installer owns, retains and purges.
+func RemovePortableManifests(root string) error {
+	for _, portableManifest := range []string{"plugin.json", "mcp.json"} {
+		if err := os.Remove(filepath.Join(root, portableManifest)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove portable %s from the OpenAI projection: %w", portableManifest, err)
+		}
+	}
+	return nil
 }

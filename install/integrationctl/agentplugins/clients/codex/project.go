@@ -71,5 +71,8 @@ func projectOpenAI(root string, envelope domain.PackageEnvelope, plan domain.Del
 	if err := shared.WriteJSON(manifestPath, manifest); err != nil {
 		return fmt.Errorf("write OpenAI compatibility manifest: %w", err)
 	}
-	return shared.ProjectOpenAIMCP(root, envelope, serverNames, hints, plan.ActivePath, dataPath)
+	if err := shared.ProjectOpenAIMCP(root, envelope, serverNames, hints, plan.ActivePath, dataPath); err != nil {
+		return err
+	}
+	return shared.RemovePortableManifests(root)
 }
