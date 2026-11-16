@@ -12,11 +12,6 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-// Copilot 1.0.103 includes this separate builtin inventory with its user plugin
-// listing. Only this observed section is accepted; the shared user-plugin parser
-// still validates the complete identity, version, enablement and install path.
-const builtinListingSection = "Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
-
 func userProfileEnv(env clients.Env, roots ...string) (clients.Env, error) {
 	root := ""
 	for _, selected := range roots {
@@ -87,14 +82,10 @@ func normalizeListing(command legacyports.Command, result legacyports.CommandRes
 	if err != nil || result.ExitCode != 0 || len(command.Argv) != 3 || command.Argv[1] != "plugin" || command.Argv[2] != "list" {
 		return result
 	}
-	document := strings.ReplaceAll(string(result.Stdout), "\r\n", "\n")
-	if strings.Count(document, "Built-in plugins:") != 1 {
-		return result
-	}
-	if strings.HasPrefix(document, builtinListingSection) {
-		result.Stdout = []byte(strings.TrimPrefix(document, builtinListingSection))
-	} else if strings.HasSuffix(document, "\n"+builtinListingSection) {
-		result.Stdout = []byte(strings.TrimSuffix(document, builtinListingSection))
+	// The shared user-plugin parser still validates the complete identity,
+	// version, enablement and install path of what remains.
+	if listing, ok := splitBuiltinListing(strings.ReplaceAll(string(result.Stdout), "\r\n", "\n")); ok {
+		result.Stdout = []byte(listing.rest)
 	}
 	return result
 }

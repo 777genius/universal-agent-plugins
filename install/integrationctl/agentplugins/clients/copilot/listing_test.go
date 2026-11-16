@@ -17,7 +17,7 @@ import (
 )
 
 // Captured from the pinned Copilot 1.0.103 binary in an isolated empty profile.
-const emptyBuiltinListing = "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\nBuilt-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
+const emptyBuiltinListing = copilotEmptyListingBody + copilot103BuiltinSection
 
 type listingRunner struct{ stdout string }
 
@@ -26,9 +26,11 @@ func (r listingRunner) Run(context.Context, legacyports.Command) (legacyports.Co
 }
 
 func TestNativeRegistryEmptyBuiltinListing(t *testing.T) {
-	finding, err := New().InspectNativeRegistry(context.Background(), clients.Env{Runner: listingRunner{emptyBuiltinListing}}, domain.DetectedClient{}, domain.DeliveryPlan{NativeRegistryExecutable: "copilot", DeclaredName: "demo"}, nil)
-	if err != nil || finding != clients.RegistryClear {
-		t.Fatalf("actual empty listing: finding=%v err=%v", finding, err)
+	for _, body := range []string{emptyBuiltinListing, copilotEmptyListingBody + copilot112BuiltinSection} {
+		finding, err := New().InspectNativeRegistry(context.Background(), clients.Env{Runner: listingRunner{body}}, domain.DetectedClient{}, domain.DeliveryPlan{NativeRegistryExecutable: "copilot", DeclaredName: "demo"}, nil)
+		if err != nil || finding != clients.RegistryClear {
+			t.Fatalf("actual empty listing %q: finding=%v err=%v", body, finding, err)
+		}
 	}
 }
 
@@ -37,7 +39,7 @@ func TestNativeRegistryLiveBuiltinListing(t *testing.T) {
 	live := "Live Plugins (loaded from a local marketplace directory, never copied):\n  • uap-commands-fixture@agentplugins-012345abcdef (v1.0.0) (enabled)\n      from " + path + "\n"
 	// Captured after actual marketplace add and install using Copilot 1.0.103.
 	marketplace := shared.ManagedMarketplaceName("fixture-physical-artifact")
-	body := strings.ReplaceAll(builtinListingSection+live, "agentplugins-012345abcdef", marketplace)
+	body := strings.ReplaceAll(copilot103BuiltinSection+live, "agentplugins-012345abcdef", marketplace)
 	plan := domain.DeliveryPlan{NativeRegistryExecutable: "copilot", DeclaredName: "uap-commands-fixture", PhysicalArtifactID: "fixture-physical-artifact", DeclaredVersion: "1.0.0", ActivePath: path}
 	for _, test := range []struct {
 		name, body string
@@ -51,8 +53,9 @@ func TestNativeRegistryLiveBuiltinListing(t *testing.T) {
 		{"wrong path", strings.Replace(body, path, path+"-foreign", 1), true, clients.RegistryIndeterminate},
 		{"foreign marketplace", strings.Replace(body, marketplace, "foreign", 1), true, clients.RegistryClear},
 		{"duplicate identity", body + strings.TrimPrefix(strings.ReplaceAll(live, "agentplugins-012345abcdef", marketplace), shared.CopilotLiveHeader+"\n"), true, clients.RegistryIndeterminate},
-		{"duplicate builtin section", builtinListingSection + body, true, clients.RegistryIndeterminate},
-		{"unknown builtin", strings.Replace(body, "browser-use", "unknown", 1), true, clients.RegistryIndeterminate},
+		{"1.0.112 builtins", strings.Replace(body, copilot103BuiltinSection, copilot112BuiltinSection, 1), true, clients.RegistryExpected},
+		{"other builtin release", strings.Replace(body, "browser-use (v0.0.4)", "other (v9.9.9)", 1), true, clients.RegistryExpected},
+		{"duplicate builtin section", copilot103BuiltinSection + body, true, clients.RegistryIndeterminate},
 		{"malformed builtin", strings.Replace(body, "[disabled]", "[unknown]", 1), true, clients.RegistryIndeterminate},
 		{"arbitrary prefix", "unexpected\n" + body, true, clients.RegistryIndeterminate},
 		{"arbitrary suffix", body + "unexpected\n", true, clients.RegistryIndeterminate},
@@ -71,7 +74,7 @@ func TestNativeRegistryLiveBuiltinListing(t *testing.T) {
 			if err != nil && test.name != "foreign marketplace" {
 				t.Fatal(err)
 			}
-			if installed := outcome.Verification == domain.VerificationInstalled; installed != (test.name == "owned" || test.name == "unowned") {
+			if installed := outcome.Verification == domain.VerificationInstalled; installed != (test.want == clients.RegistryExpected || test.want == clients.RegistryCollision) {
 				t.Fatalf("verification=%v activation=%v", outcome.Verification, outcome.Activation)
 			}
 		})
@@ -114,7 +117,7 @@ func TestListingRunnerPreservesCapabilitiesAndFailures(t *testing.T) {
 	runner.result.ExitCode = 0
 	result, err = env.Runner.(ports.TreeCommandRunner).RunWithTreeExitGrace(context.Background(), runner.command, time.Second)
 	expected := runner.result
-	expected.Stdout = []byte(strings.TrimSuffix(emptyBuiltinListing, builtinListingSection))
+	expected.Stdout = []byte(copilotEmptyListingBody)
 	if err != nil || !reflect.DeepEqual(result, expected) {
 		t.Fatalf("lost successful execution evidence: result=%+v err=%v", result, err)
 	}
