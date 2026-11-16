@@ -73,7 +73,6 @@ func TestCopilotUserReplacementInstallFailureKeepsMarketplace(t *testing.T) {
 	}
 }
 
-
 // A client command whose process closure was not proved must never be
 // followed by a marketplace fallback, another install, or rollback cleanup.
 // Both typed process-closure errors and a raw runner cleanup failure are
@@ -201,11 +200,11 @@ func TestSharedCopilotRemovalUnclosedProcessDoesNotContinue(t *testing.T) {
 			steps = append(steps, failure)
 			runner := &copilotUserLiveRunner{t: t, steps: steps}
 			remove := domain.DeactivationRequest{
-				CurrentActivation: domain.ActivationActive,
-				Confirmed: true,
+				CurrentActivation:  domain.ActivationActive,
+				Confirmed:          true,
 				PhysicalArtifactID: request.Plan.PhysicalArtifactID,
-				DeclaredName: request.DeclaredName,
-				BackendExecutable: exe,
+				DeclaredName:       request.DeclaredName,
+				BackendExecutable:  exe,
 			}
 			outcome, err := shared.CompleteCopilotDeactivation(context.Background(), clients.Env{Runner: runner}, remove, "manual removal")
 			if !domain.IsUnclosedClientProbe(err) || !errors.Is(err, cause) || outcome.NativeEffect != domain.NativeEffectUncertain || outcome.ExternalRemovalComplete || outcome.ArtifactRemovalAllowed || runner.calls != len(steps) {
