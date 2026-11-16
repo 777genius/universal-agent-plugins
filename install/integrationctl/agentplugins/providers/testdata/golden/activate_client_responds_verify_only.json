@@ -71,7 +71,7 @@
         "inspect exact Claude Code MCP health output"
       ],
       "LocalEntryObservation": null,
-      "NativeEffect": "",
+      "NativeEffect": "unchanged",
       "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
