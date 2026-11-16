@@ -15,6 +15,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
 // agentReport is everything a person needs to know about one agent after an
@@ -357,6 +358,12 @@ func declinedInstallResult(opts *options, renderErr error) error {
 // recordGroupOutcome stores a plugin group's per-agent result for the retry
 // step and the technical log. The group's own table stays the visible summary.
 func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined addMultiResult) {
+	// A group refused before any client was touched has nothing to retry: the
+	// same preflight would refuse again, and the person is told why already.
+	switch combined.Status {
+	case string(usecase.GroupPhasePlanned), string(usecase.GroupPhasePreparationFailed):
+		return
+	}
 	outcome := app.finishInstall(opts, "add", groupAgentItems(combined.Plugin, combined.Targets))
 	if outcome.LogFile != "" && opts.format == "human" {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))

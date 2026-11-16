@@ -644,3 +644,23 @@ func TestFirstInstallDeclinedReviewStillSucceeds(t *testing.T) {
 		})
 	}
 }
+
+// A group refused before any client was touched offers no retry and no log:
+// nothing was attempted and the same preflight would refuse again.
+func TestGroupRefusedBeforeAnyChangeIsNotRetried(t *testing.T) {
+	cmd, _, errOut := retryTestCommand(t)
+	app := App{Terminal: true, InstallLogDir: filepath.Join(t.TempDir(), "logs")}
+	for _, status := range []string{"planned", "preparation_failed"} {
+		opts := &options{format: "human"}
+		combined := addMultiResult{Status: status, Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalNotAttempted)}}}
+		app.recordGroupOutcome(cmd, opts, combined)
+		if opts.installResult != nil || errOut.Len() != 0 {
+			t.Fatalf("%s: a refused group must not record a retry: %+v %q", status, opts.installResult, errOut.String())
+		}
+	}
+	opts := &options{format: "human"}
+	app.recordGroupOutcome(cmd, opts, addMultiResult{Status: "managed_committed_activation_failed", Plugin: "demo", Targets: []addTargetResult{{Target: "codex", Status: string(usecase.GroupTargetExternalFailed), Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed}}}}})
+	if opts.installResult == nil || len(opts.installResult.failedAgents()) != 1 {
+		t.Fatal("a failed activation after apply must stay retryable")
+	}
+}
