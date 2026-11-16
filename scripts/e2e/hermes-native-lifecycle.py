@@ -196,15 +196,18 @@ class Lifecycle:
         b_snapshot = self.root / "project-b-skill.md"
         shutil.copyfile(self.project_skill(self.project_b), b_snapshot)
         self.advance(self.project_source, "project")
-        self.run_uap("project-a-update", "update", "hermes-uap-native-project", "--scope",
-                     "project", "--project-root", self.project_a)
+        output = self.run_uap("project-a-update", "update", "hermes-uap-native-project", "--scope",
+                              "project", "--project-root", self.project_a)
+        self.require_trust_report(output, granted=True)
         self.same_bytes(self.skill("project", self.project_source), self.project_skill(self.project_a),
                         "Project update did not install the current source revision")
+        self.observe("project-a-update", self.project_a, "UAP_NATIVE_USER_V2", 1, True)
         self.same_bytes(b_snapshot, self.project_skill(self.project_b), "Project A update changed B")
         self.remove_skill(self.project_skill(self.project_a))
         self.observe("project-a-missing", self.project_a, "UAP_NATIVE_USER_V2", 0, True)
-        self.run_uap("project-a-repair", "repair", "hermes-uap-native-project", "--scope",
-                     "project", "--project-root", self.project_a)
+        output = self.run_uap("project-a-repair", "repair", "hermes-uap-native-project", "--scope",
+                              "project", "--project-root", self.project_a)
+        self.require_trust_report(output, granted=True)
         self.observe("project-a-repair", self.project_a, "UAP_NATIVE_USER_V2", 1, True)
         self.same_bytes(self.skill("project", self.project_source), self.project_skill(self.project_a),
                         "Project repair did not restore the recorded current revision")
