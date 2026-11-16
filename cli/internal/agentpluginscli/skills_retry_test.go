@@ -234,6 +234,68 @@ func TestAddRetryCancelKeepsTheOriginalError(t *testing.T) {
 	}
 }
 
+func TestPrepareSkillsRetryPreservesPromptErrors(t *testing.T) {
+	readFailure := errors.Join(errors.New("retry terminal read failed"), prompt.ErrPromptInputClosed)
+	for name, test := range map[string]struct {
+		app  App
+		want error
+	}{
+		"terminal unavailable": {app: App{}, want: prompt.ErrPromptUnavailable},
+		"selection read failed": {
+			app: App{Prompter: fakePrompter{selectFn: func(prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+				return prompt.TargetSelectionResult{}, readFailure
+			}}},
+			want: prompt.ErrPromptInputClosed,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cmd, _, _ := retryTestCommand(t)
+			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable)})
+			// No original plan is needed: an input failure must stop before preparation.
+			next, err := prepareSkillsRetry(cmd, test.app, &options{format: "human"}, nil, nil, reports)
+			if next != nil || !errors.Is(err, test.want) {
+				t.Fatalf("retry input failure was lost: next=%v err=%v want=%v", next, err, test.want)
+			}
+		})
+	}
+}
+
+func TestPrepareSkillsRetryEscapeDeclinesWithoutError(t *testing.T) {
+	for _, canceled := range []error{prompt.ErrPromptCanceled, errors.Join(errors.New("wrapped cancellation"), prompt.ErrPromptCanceled)} {
+		t.Run(canceled.Error(), func(t *testing.T) {
+			app := App{Prompter: fakePrompter{selectFn: func(prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+				return prompt.TargetSelectionResult{}, canceled
+			}}}
+			cmd, _, _ := retryTestCommand(t)
+			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable)})
+			next, err := prepareSkillsRetry(cmd, app, &options{format: "human"}, nil, nil, reports)
+			if next != nil || err != nil {
+				t.Fatalf("Escape must decline without replacing the original installation failure: next=%v err=%v", next, err)
+			}
+		})
+	}
+}
+
+func TestPrepareSkillsRetryRejectsInvalidSelection(t *testing.T) {
+	for name, ids := range map[string][]domain.ClientID{
+		"unoffered target": {domain.ClientClaude},
+		"duplicate target": {domain.ClientCodex, domain.ClientCodex},
+		"empty selection":  nil,
+	} {
+		t.Run(name, func(t *testing.T) {
+			app := App{Prompter: fakePrompter{selectFn: func(prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+				return prompt.TargetSelectionResult{IDs: ids}, nil
+			}}}
+			cmd, _, _ := retryTestCommand(t)
+			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable)})
+			next, err := prepareSkillsRetry(cmd, app, &options{format: "human"}, nil, nil, reports)
+			if next != nil || err == nil {
+				t.Fatalf("invalid selection was treated as a declined retry: next=%v err=%v", next, err)
+			}
+		})
+	}
+}
+
 func TestSkillsHumanFailureBoundaryPreservesTypedCauses(t *testing.T) {
 	for _, sentinel := range []error{installer.ErrRecoveryRequired, context.Canceled} {
 		t.Run(sentinel.Error(), func(t *testing.T) {
