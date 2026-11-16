@@ -26,7 +26,7 @@ func TestREADMEHasOneRealDemoThumbnail(t *testing.T) {
 	poster := matches[0]
 	if strings.Count(poster, "<img") != 1 ||
 		!strings.Contains(poster, `alt="Universal Agent Plugins video preview`) ||
-		!strings.Contains(poster, `src="https://github.com/user-attachments/assets/`) ||
+		!strings.Contains(poster, `src="assets/readme/demo-preview.webp"`) ||
 		strings.Contains(readme, "assets/readme-demo.svg") {
 		t.Fatal("README demo poster is missing, inaccessible or duplicated by a decorative placeholder")
 	}
@@ -80,5 +80,28 @@ func TestREADMELocalReferencesExist(t *testing.T) {
 	}
 	if len(seen) < 20 {
 		t.Fatalf("README reference test selected only %d local paths, check parser", len(seen))
+	}
+}
+
+// README images are served as WebP; vector icons stay SVG. A raster PNG, JPEG
+// or GIF, or a remote user-attachments upload, would bring back the heavier,
+// externally hosted files this contract replaced.
+func TestREADMEImagesAreWebPOrSVG(t *testing.T) {
+	body, err := os.ReadFile(filepath.Join(RepoRoot(t), "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	media := regexp.MustCompile(`<img\b[^>]*\bsrc="([^"]+)"|<source\b[^>]*\bsrcset="([^"]+)"`)
+	found := 0
+	for _, match := range media.FindAllStringSubmatch(string(body), -1) {
+		reference := match[1] + match[2]
+		found++
+		path := strings.SplitN(strings.SplitN(reference, "#", 2)[0], "?", 2)[0]
+		if strings.Contains(reference, "user-attachments") || !(strings.HasSuffix(path, ".webp") || strings.HasSuffix(path, ".svg")) {
+			t.Errorf("README image %q must be a local WebP or SVG file", reference)
+		}
+	}
+	if found == 0 {
+		t.Fatal("README images were not found")
 	}
 }
