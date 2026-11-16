@@ -43,7 +43,9 @@ func activateCopilotUserPlugin(ctx context.Context, env clients.Env, request dom
 		if !request.Replacing && !domain.IsUnclosedClientProbe(err) {
 			// A fresh registration is rolled back; a replacement keeps the
 			// previously working marketplace for repair.
-			_ = run("plugin", "marketplace", "remove", marketplace)
+			if rollbackErr := run("plugin", "marketplace", "remove", marketplace); rollbackErr != nil {
+				return fmt.Errorf("install managed Copilot plugin: %w; rollback marketplace: %w", err, rollbackErr)
+			}
 		}
 		return err
 	}
