@@ -81,6 +81,9 @@ func CompleteCopilotDeactivation(ctx context.Context, env clients.Env, request d
 		return outcome, nil
 	}
 	if err := DeactivateCopilotPlugin(ctx, env, request); err != nil {
+		// The native registration is not proved absent: retain its backing
+		// artifact even when the child exited and reported an ordinary error.
+		outcome.ArtifactRemovalAllowed = false
 		if domain.IsUnclosedClientProbe(err) {
 			outcome.NativeEffect = domain.NativeEffectUncertain
 		}
