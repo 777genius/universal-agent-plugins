@@ -115,6 +115,9 @@ def main():
     # Git root. Read the decision back through Hermes itself, then re-baseline the
     # selected profile: only that one list may have changed, nothing else.
     trusted = json.loads(run("project-trust-readback", [bundle, "config", "get", "skills.trusted_project_dirs", "--json"], cwd=root))
+    trusted = [] if trusted is None else [trusted] if isinstance(trusted, str) else trusted
+    require(isinstance(trusted, list) and all(isinstance(item, str) for item in trusted),
+            "native Hermes trust list is not a list of paths")
     expected = os.path.normcase(os.path.realpath(a))
     require([os.path.normcase(os.path.realpath(item)) for item in trusted] == [expected],
             "Hermes did not record exactly the installed project root as trusted: " + json.dumps(trusted))
