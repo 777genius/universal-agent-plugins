@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
@@ -256,6 +258,9 @@ func newHermesColdJourney(t *testing.T, input *hermesColdInputs, transport *proj
 		projectJourneyWrite(t, filepath.Join(path, "skills", "foreign", "SKILL.md"), "retained foreign Hermes skill\n")
 	}
 	projectJourneyWrite(t, filepath.Join(user, "config.yaml"), "theme: retained-selected-user\n")
+	// The user's own Hermes and UAP's detection read the same environment, so a
+	// real user's Hermes selects the detected profile; keep that true here.
+	t.Setenv("HERMES_HOME", user)
 	projectJourneyWrite(t, filepath.Join(journey.a, ".hermes", "foreign.txt"), "project-a-foreign\n")
 	journey.app = configureHermesColdJourney(input.ctx, t, journey.app, user, input.bundle)
 	input.protected[user] = securityFixtureTree(t, user)
@@ -295,6 +300,37 @@ func configureHermesColdJourney(ctx context.Context, t *testing.T, app agentplug
 		return configureHermesColdJourney(ctx, t, selected, user, executable), nil
 	}
 	return app
+}
+
+// acceptProjectTrust checks what a confirmed explicit add may change in the
+// selected Hermes profile: exactly one recorded trust entry for the project's
+// Git root. Real Hermes also initializes its profile on first use, so the
+// profile baseline is renewed afterwards; the retained setting must survive and
+// the native default profile and every other authority keep their baselines.
+func (input *hermesColdInputs) acceptProjectTrust(t *testing.T, journey projectJourney) {
+	t.Helper()
+	user := filepath.Join(journey.home, ".hermes")
+	body, err := os.ReadFile(filepath.Join(user, "config.yaml"))
+	if err != nil {
+		t.Fatal("selected Hermes profile configuration is unreadable", err)
+	}
+	var config struct {
+		Theme  string `yaml:"theme"`
+		Skills struct {
+			Trusted []string `yaml:"trusted_project_dirs"`
+		} `yaml:"skills"`
+	}
+	if err := yaml.Unmarshal(body, &config); err != nil || config.Theme != "retained-selected-user" {
+		t.Fatal("confirmed project trust lost a retained selected-profile setting", err)
+	}
+	project, err := os.Stat(journey.a)
+	if err != nil || len(config.Skills.Trusted) != 1 {
+		t.Fatalf("Hermes did not record exactly one trusted project root: %v / %v", config.Skills.Trusted, err)
+	}
+	if recorded, statErr := os.Stat(config.Skills.Trusted[0]); statErr != nil || !os.SameFile(project, recorded) {
+		t.Fatalf("Hermes trusted a different root than the installed project: %v", config.Skills.Trusted)
+	}
+	input.protected[user] = securityFixtureTree(t, user)
 }
 
 func (input *hermesColdInputs) unchanged(t *testing.T) {
