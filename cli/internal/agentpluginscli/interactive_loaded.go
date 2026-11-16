@@ -2,7 +2,9 @@ package agentpluginscli
 
 import (
 	"context"
+	"errors"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 )
@@ -111,7 +113,10 @@ func (session *loadedTargetSession) classify(client domain.DetectedClient) (doma
 
 func unsupportedLoadedReason(err error, plan domain.DeliveryPlan) string {
 	reason := "package is unsupported for this client; ask the package publisher for supported components"
-	if err != nil {
+	switch {
+	case errors.Is(err, clients.ErrOpenCodeAdapterUnavailable):
+		reason = "the client executable was not found, so its version cannot be checked; install it or add it to PATH, then retry"
+	case err != nil:
 		reason = "package planning failed; ask the package publisher to check compatibility for this client"
 	}
 	for _, warning := range plan.Warnings {

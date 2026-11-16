@@ -116,6 +116,8 @@ func renderHumanAddOutcome(writer io.Writer, result usecase.AddResult) error {
 	}
 	if result.Mutated {
 		renderHumanAddPending(writer, result)
+	} else if result.NoChange {
+		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "Already installed. No changes made."))
 	}
 	if action := nextLocalLifecycleAction(result); action != "" && !fullyInstalled(result.Activation) {
 		_, _ = fmt.Fprintf(writer, "%s: %s\n", terminaltheme.For(writer).Text(terminaltheme.Label, "Next"), action)

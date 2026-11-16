@@ -282,13 +282,13 @@ func TestOpenCodeTargetTimeoutCannotBeExtended(t *testing.T) {
 	for _, deadline := range []time.Duration{0, 150 * time.Millisecond} {
 		ctx := context.Background()
 		cancel := func() {}
-		limit := 12 * time.Second
+		limit := OpenCodeProbeTimeout + 2*time.Second
 		if deadline != 0 {
 			ctx, cancel = context.WithTimeout(ctx, deadline)
 			limit = 2 * time.Second
 		}
 		start := time.Now()
-		evidence, err := ProbeOpenCodeTarget(ctx, ProbeTarget{Executable: binary, Environment: []string{"PATH="}, Timeout: 30 * time.Second})
+		evidence, err := ProbeOpenCodeTarget(ctx, ProbeTarget{Executable: binary, Environment: []string{"PATH="}, Timeout: 2 * OpenCodeProbeTimeout})
 		cancel()
 		if !errors.Is(err, context.DeadlineExceeded) || evidence.ProbeStatus != "timed_out" || time.Since(start) > limit {
 			t.Fatalf("probe exceeded %s: %+v %v", limit, evidence, err)

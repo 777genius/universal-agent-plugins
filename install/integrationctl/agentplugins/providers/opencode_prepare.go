@@ -2,7 +2,6 @@ package providers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -176,8 +175,13 @@ func (p *OpenCodeClientPreparation) RevalidateClient(ctx context.Context, client
 		return clientdetect.ErrProbeTargetChanged
 	}
 	evidence, err := p.probe(ctx, clientdetect.ProbeTarget{Executable: executable, Environment: environment})
-	if err != nil || evidence.VersionEvidence != host.Evidence() || clientdetect.OpenCodeRootIdentity(client.ConfigRoot) != host.Root() {
-		return errors.Join(clientdetect.ErrProbeTargetChanged, err)
+	if err != nil {
+		// Still a refusal, but a canceled, timed-out or failed probe proves no
+		// change; the probe reports an observed change with its own sentinel.
+		return fmt.Errorf("OpenCode version check failed: %w", err)
+	}
+	if evidence.VersionEvidence != host.Evidence() || clientdetect.OpenCodeRootIdentity(client.ConfigRoot) != host.Root() {
+		return clientdetect.ErrProbeTargetChanged
 	}
 	return nil
 }

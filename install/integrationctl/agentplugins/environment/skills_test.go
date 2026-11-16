@@ -42,3 +42,22 @@ func TestSkillSourceIntentAndRelocatedPin(t *testing.T) {
 		}
 	}
 }
+
+// Regression: a raw Skill added from the default branch was pinned without
+// ref names, and every later check reported the same commit and digests as an
+// available update because the fresh resolution recorded those names.
+func TestSamePinIgnoresResolvedRefNames(t *testing.T) {
+	installed := LockedPackage{Alias: "pdf", SourceKey: "github-skill:acme/tools:pdf:skills/pdf", TreeDigest: "sha256:tree",
+		Source: LockedSource{Git: &LockedGitSource{Kind: SkillKind, Skill: "pdf", Repository: "acme/tools", Path: "skills/pdf", Commit: "c1"}}}
+	resolved := installed
+	git := *installed.Source.Git
+	git.ResolvedRef, git.DefaultBranch = "refs/heads/main", "refs/heads/main"
+	resolved.Source.Git = &git
+	if !SamePin(installed, resolved) {
+		t.Fatal("ref names changed an identical pin")
+	}
+	git.Commit = "c2"
+	if SamePin(installed, resolved) {
+		t.Fatal("a different commit kept the same pin")
+	}
+}

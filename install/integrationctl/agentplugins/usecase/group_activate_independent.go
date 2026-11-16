@@ -120,7 +120,7 @@ func (run *independentActivationRun) activateSerialRemainder() error {
 			session.markRemainingNotAttempted(index, stage, message)
 			return cause
 		}
-		if err := session.activateOneGroupTarget(index, session.planned[index]); err != nil {
+		if err := run.activateSerialTarget(index); err != nil {
 			cause := errors.Unwrap(err)
 			if cause == nil {
 				cause = err
@@ -130,6 +130,15 @@ func (run *independentActivationRun) activateSerialRemainder() error {
 		}
 	}
 	return nil
+}
+
+// The serial effect participates in the same cancellation boundary as its
+// independent siblings. Only the coordinator accesses the session context.
+func (run *independentActivationRun) activateSerialTarget(index int) error {
+	parent := run.session.ctx
+	run.session.ctx = run.ctx
+	defer func() { run.session.ctx = parent }()
+	return run.session.activateOneGroupTarget(index, run.session.planned[index])
 }
 
 func (run *independentActivationRun) dispatch() {
