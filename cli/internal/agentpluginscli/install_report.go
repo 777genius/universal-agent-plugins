@@ -13,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
@@ -348,4 +349,23 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))
 	}
 	return cause
+}
+
+// repairOwnedDependencies repairs one owned installation and, in an interactive
+// terminal, offers to run the repair again when some agents failed. Each run
+// plans from current state, so a retry never replays stale actions.
+func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
+	var handled bool
+	var run func() error
+	run = func() error {
+		opts.installResult = nil
+		attemptHandled, err := repairOwnedDependenciesOnce(cmd, app, opts, selector, targets)
+		if handled && !attemptHandled && err == nil {
+			return installer.ErrPlanChanged
+		}
+		handled = handled || attemptHandled
+		return retryConverge(cmd, app, opts, err, run)
+	}
+	err := run()
+	return handled, err
 }

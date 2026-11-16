@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -120,5 +121,33 @@ func TestBindingsJSONNamesEveryPackageAndAgent(t *testing.T) {
 	got := outcome.bindingsJSON()
 	if len(got) != 2 || got[0].Code != "" || got[1].Code != string(failureTargetUnavailable) || got[1].Alias != "pdf" || got[1].ClientID != "codex" || got[1].Status != "failed" {
 		t.Fatalf("%+v", got)
+	}
+}
+
+// A successful result keeps its established JSON shape; per-binding detail and
+// the log path appear only when something failed.
+func TestDependencyResultsJSONAddsBindingsOnlyOnFailure(t *testing.T) {
+	render := func(outcome *installOutcome) map[string]any {
+		cmd, out, _ := retryTestCommand(t)
+		opts := &options{format: "json", scope: "user", installResult: outcome}
+		if err := renderDependencyResults(cmd, opts, nil, nil, nil); err != nil {
+			t.Fatal(err)
+		}
+		var data map[string]any
+		if err := json.Unmarshal(out.Bytes(), &data); err != nil {
+			t.Fatalf("%v: %s", err, out.String())
+		}
+		return data
+	}
+	ok := &installOutcome{Items: []agentItem{{Alias: "demo", ClientID: "claude", Status: "completed"}}}
+	ok.Agents = reportByAgent(ok.Items)
+	if _, present := render(ok)["bindings"]; present {
+		t.Fatal("a successful result must keep its established shape")
+	}
+	failed := &installOutcome{LogFile: "/logs/x.jsonl", Items: []agentItem{failedItem("demo", "codex", errors.New("boom"))}}
+	failed.Agents = reportByAgent(failed.Items)
+	data := render(failed)
+	if data["bindings"] == nil || data["log_file"] != "/logs/x.jsonl" {
+		t.Fatalf("a failure must carry per-binding detail and the log path: %v", data)
 	}
 }
