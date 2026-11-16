@@ -283,7 +283,7 @@ def run_case(name, binary, evidence, timeout):
                     elif name == 'native-ownership':
                         offset = len(session.raw)
                         session.send(b'\r')
-                        session.wait(r'Retry failed agents\? Enter retries the selected ones, Esc skips',
+                        session.wait(r'Retry OpenAI Codex\?',
                                      'native-ownership-retry', after=offset)
                         fixture.unchanged()
                         session.send(b'\x1b')

@@ -129,6 +129,9 @@ type options struct {
 	retryAttempt  int
 	// unresolved names agents from earlier attempts that still need attention.
 	unresolved []string
+	// firstTreeDigest is the package digest of the first attempt; a retry must
+	// install exactly that package or ask for a new review.
+	firstTreeDigest string
 }
 
 func (app App) input() io.Reader {
