@@ -309,15 +309,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		}
 		if applied.Phase == usecase.GroupPhasePreparationFailed && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded, combined.ActionRequired = "preparation_failed", len(inputs), 0, 0
-			for index := range combined.Targets {
-				combined.Targets[index].Status = string(usecase.GroupTargetExternalNotAttempted)
-				if !cleanupUnconfirmed {
-					combined.Targets[index].NextAction = "resolve the preparation error and retry the same command"
-					combined.Targets[index].Output.NextAction = combined.Targets[index].NextAction
-					combined.Targets[index].Error = &usecase.GroupTargetFailure{Stage: "preparation", Message: err.Error()}
-				}
-				combined.setTargetProof(domain.ClientID(combined.Targets[index].Target), "not_completed")
-			}
+			combined.markPreparationNotAttempted(err, cleanupUnconfirmed)
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 			return fmt.Errorf("group preparation failed before client changes (selected targets: %v): %w; no selected client was changed", targets, err)
 		}
