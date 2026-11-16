@@ -36,6 +36,7 @@ type hermesColdInputs struct {
 	ctx                                  context.Context
 	protected                            map[string]map[string]string
 	dataIdentities                       map[string]os.FileInfo
+	trustProfiles                        map[string]*hermesColdProfile
 	commands                             []map[string]any
 }
 
@@ -255,10 +256,15 @@ func newHermesColdJourney(t *testing.T, input *hermesColdInputs, transport *proj
 	for _, path := range []string{user, filepath.Join(journey.a, ".hermes"), filepath.Join(journey.b, ".hermes")} {
 		projectJourneyWrite(t, filepath.Join(path, "skills", "foreign", "SKILL.md"), "retained foreign Hermes skill\n")
 	}
-	projectJourneyWrite(t, filepath.Join(user, "config.yaml"), "theme: retained-selected-user\n")
+	// The pinned Hermes config schema is 52. Seed it before taking the original
+	// snapshot; native migration must not introduce settings during trust.
+	projectJourneyWrite(t, filepath.Join(user, "config.yaml"), "theme: retained-selected-user\nmcp_servers: {}\n_config_version: 52\n")
+	// The user's own Hermes and UAP's detection read the same environment, so a
+	// real user's Hermes selects the detected profile; keep that true here.
+	t.Setenv("HERMES_HOME", user)
 	projectJourneyWrite(t, filepath.Join(journey.a, ".hermes", "foreign.txt"), "project-a-foreign\n")
 	journey.app = configureHermesColdJourney(input.ctx, t, journey.app, user, input.bundle)
-	input.protected[user] = securityFixtureTree(t, user)
+	input.rememberProfile(t, user)
 	input.protected[journey.b] = securityFixtureTree(t, journey.b)
 	for _, path := range []string{filepath.Join(journey.a, ".git"), filepath.Join(journey.a, ".hermes", "foreign.txt"),
 		filepath.Join(journey.a, ".hermes", "skills", "foreign", "SKILL.md")} {
@@ -295,6 +301,13 @@ func configureHermesColdJourney(ctx context.Context, t *testing.T, app agentplug
 		return configureHermesColdJourney(ctx, t, selected, user, executable), nil
 	}
 	return app
+}
+
+func (input *hermesColdInputs) acceptProjectTrust(t *testing.T, journey projectJourney) {
+	t.Helper()
+	if err := input.adoptProjectTrust(filepath.Join(journey.home, ".hermes"), journey.a); err != nil {
+		t.Fatal("confirmed project trust changed a retained selected-profile authority", err)
+	}
 }
 
 func (input *hermesColdInputs) unchanged(t *testing.T) {
