@@ -79,15 +79,21 @@ class Lifecycle:
                 "native Hermes trust list is not a list of paths")
         return {Path(item).resolve() for item in value}
 
-    def require_trust_report(self, output, granted):
-        text = output.read_text(encoding="utf-8")
+    def require_trust_report(self, output, granted, reason=""):
+        data = json.loads(output.read_text(encoding="utf-8"))["data"]
+        if "targets" in data:
+            data = data["targets"][0]["output"]
+        actions = "\n".join((data["result"].get("activation") or {}).get("user_actions") or [])
+        # Public JSON stays path-free; the exact command is human output only.
+        require(str(self.root) not in actions and str(self.root.resolve()) not in actions,
+                "public Hermes trust guidance contains a host path")
         if granted:
-            require("Hermes now trusts the Git repository root" in text,
-                    "confirmed Project install did not report verified Hermes trust")
+            require("Hermes now trusts this project's Git repository root" in actions,
+                    "explicit Project add did not report verified Hermes trust")
         else:
-            require("UAP did not change Hermes project trust" in text
-                    and "hermes skills trust " in text,
-                    "Project install did not report the exact manual Hermes trust command")
+            require("UAP did not change Hermes project trust: " + reason in actions
+                    and "run `hermes skills trust` inside it" in actions,
+                    "Project lifecycle did not report why trust was unchanged and how to grant it")
 
     def probe_mcp(self, stage):
         self.capture([*self.hermes, "mcp", "test", "uap-native-test-server"],
@@ -193,38 +199,43 @@ class Lifecycle:
         self.require_trust_report(output, granted=True)
         for label, project in (("a", self.project_a), ("b", self.project_b)):
             self.observe("project-" + label + "-add", project, "UAP_NATIVE_USER_V2", 1, True)
+        # The user revokes A. Update and repair must not grant it again.
+        self.capture([*self.hermes, "skills", "untrust", self.project_a], "project-a-untrust.txt")
+        require(self.project_a.resolve() not in self.trusted_roots("project-a-untrust"),
+                "native Hermes did not revoke project A trust")
+        automatic = "UAP grants it only during an explicit add"
         b_snapshot = self.root / "project-b-skill.md"
         shutil.copyfile(self.project_skill(self.project_b), b_snapshot)
         self.advance(self.project_source, "project")
         output = self.run_uap("project-a-update", "update", "hermes-uap-native-project", "--scope",
                               "project", "--project-root", self.project_a)
-        self.require_trust_report(output, granted=True)
+        self.require_trust_report(output, granted=False, reason=automatic)
         self.same_bytes(self.skill("project", self.project_source), self.project_skill(self.project_a),
                         "Project update did not install the current source revision")
-        self.observe("project-a-update", self.project_a, "UAP_NATIVE_USER_V2", 1, True)
+        self.observe("project-a-update", self.project_a, "UAP_NATIVE_USER_V2", 1)
         self.same_bytes(b_snapshot, self.project_skill(self.project_b), "Project A update changed B")
         self.remove_skill(self.project_skill(self.project_a))
-        self.observe("project-a-missing", self.project_a, "UAP_NATIVE_USER_V2", 0, True)
+        self.observe("project-a-missing", self.project_a, "UAP_NATIVE_USER_V2", 0)
         output = self.run_uap("project-a-repair", "repair", "hermes-uap-native-project", "--scope",
                               "project", "--project-root", self.project_a)
-        self.require_trust_report(output, granted=True)
-        self.observe("project-a-repair", self.project_a, "UAP_NATIVE_USER_V2", 1, True)
+        self.require_trust_report(output, granted=False, reason=automatic)
+        self.observe("project-a-repair", self.project_a, "UAP_NATIVE_USER_V2", 1)
         self.same_bytes(self.skill("project", self.project_source), self.project_skill(self.project_a),
                         "Project repair did not restore the recorded current revision")
         self.same_bytes(b_snapshot, self.project_skill(self.project_b), "Project A repair changed B")
         self.refuse_project_mcp()
         self.run_uap("project-a-remove", "remove", "hermes-uap-native-project", "--scope",
                      "project", "--project-root", self.project_a)
-        # Trust is the user's persistent preference; removal never revokes it.
-        self.observe("project-a-remove", self.project_a, "UAP_NATIVE_USER_V2", 0, True)
+        # Trust is the user's persistent preference; removal never changes it.
+        self.observe("project-a-remove", self.project_a, "UAP_NATIVE_USER_V2", 0)
         self.observe("project-b-retained", self.project_b, "UAP_NATIVE_USER_V2", 1, True)
         self.same_bytes(b_snapshot, self.project_skill(self.project_b), "Project A removal changed B")
         self.run_uap("project-b-remove", "remove", "hermes-uap-native-project", "--scope",
                      "project", "--project-root", self.project_b)
         self.observe("project-b-remove", self.project_b, "UAP_NATIVE_USER_V2", 0, True)
         self.unconfirmed_and_redirected_trust()
-        require(self.trusted_roots("project-after") == {self.project_a.resolve(), self.project_b.resolve()},
-                "Project operations trusted anything but the exact confirmed Git roots")
+        require(self.trusted_roots("project-after") == {self.project_b.resolve()},
+                "Project operations trusted anything but the explicitly added, unrevoked Git root")
         require(self.hermes_json("project-after", "mcp_servers") == servers,
                 "Project operations changed User MCP configuration")
 
