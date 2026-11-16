@@ -2,7 +2,6 @@ package copilot
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -25,30 +24,11 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 		}
 		return inspectCopilotProject(plan, managed, env.NativeConfig)
 	}
-	if managed != nil {
-		if err := requireRecordedUserProfile(managed.NativeProfileRoot, client.ConfigRoot); err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-	}
 	bound, err := userProfileEnv(env, client.ConfigRoot, plan.NativeRegistryRoot, plan.TargetContext.UserConfigRoot)
 	if err != nil {
 		return clients.RegistryIndeterminate, err
 	}
 	return shared.InspectCopilotRegistryWithListingRecognition(ctx, bound, plan, managed, recognizeCopilotUserRegistry)
-}
-
-// requireRecordedUserProfile refuses lifecycle work on an owned user binding
-// from a different Copilot profile than the one it was installed into (for
-// example after COPILOT_HOME was unset). Otherwise an update registered a
-// second, untracked copy in the newly selected profile that remove could not
-// clean, and a repeat add downgraded the tracked activation after listing the
-// wrong profile. Legacy bindings without a recorded profile keep the old
-// admission.
-func requireRecordedUserProfile(recordedRoot, selectedRoot string) error {
-	if recordedRoot == "" || recordedRoot == selectedRoot {
-		return nil
-	}
-	return fmt.Errorf("copilot plugin is installed in a different user profile than the selected one; set COPILOT_HOME to the profile used at install and retry")
 }
 
 func (*Adapter) InspectPreparedRegistry(plan domain.DeliveryPlan, name string, owned bool) (clients.RegistryFinding, error) {
