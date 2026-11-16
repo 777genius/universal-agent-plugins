@@ -58,6 +58,10 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		}
 		return finishClaudeMCPActivation(ctx, env, request, outcome)
 	}
+	// User @skills-dir registration is the already-owned package directory.
+	// Listing and health commands only observe it; exact approval writes below
+	// report their own committed or uncertain effect.
+	outcome.NativeEffect = domain.NativeEffectUnchanged
 	if err := verifyClaudePlugin(ctx, env, request); err != nil {
 		if domain.IsUnclosedClientProbe(err) {
 			outcome.NativeEffect = domain.NativeEffectUncertain

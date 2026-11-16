@@ -65,7 +65,7 @@
         "retry exact Claude Code MCP approval"
       ],
       "LocalEntryObservation": null,
-      "NativeEffect": "",
+      "NativeEffect": "unchanged",
       "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [

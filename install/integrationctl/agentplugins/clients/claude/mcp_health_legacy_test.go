@@ -156,3 +156,69 @@ func TestClaudeLegacyMCPFailureRemainsPreparedWithoutAuthenticationProof(t *test
 		t.Fatalf("read-only unready health changed approval: %v", err)
 	}
 }
+
+// These exact unready strings come from the official SHA-pinned 2.1.263
+// formatter (Ie/Ur). They are source-qualified, not captured Directory output.
+func claudeOfficialUnreadyHealthStatuses() map[string]string {
+	return map[string]string{
+		"authentication":      "! Needs authentication",
+		"tools-fetch":         "! Connected · tools fetch failed",
+		"not-configured":      "- Not configured",
+		"connection":          "✘ Connection error",
+		"fallback-connection": "× Connection error",
+		"disabled":            "⊘ Disabled for this project (re-enable via /mcp)",
+	}
+}
+
+func TestClaudeMCPHealthOfficialUnreadyStatuses(t *testing.T) {
+	const selector = "plugin:demo:local"
+	const prefix = selector + ":\n  Scope: Dynamic config (from command line)\n  Status: "
+	for name, status := range claudeOfficialUnreadyHealthStatuses() {
+		t.Run(name, func(t *testing.T) {
+			issue := ""
+			if name == "tools-fetch" {
+				issue = "  Issue: Tool catalog request failed\n"
+			}
+			for _, detail := range []string{"", "  Type: stdio\n"} {
+				body := prefix + status + "\n" + issue + detail
+				wantTransport := ""
+				if detail != "" {
+					wantTransport = "stdio"
+				}
+				got := observeClaudeMCPHealth([]byte(body), selector)
+				if got.state != claudeMCPHealthUnready || got.transport != wantTransport {
+					t.Fatalf("official unready status changed evidence: %+v", got)
+				}
+				for _, altered := range []string{status + " extra", strings.TrimPrefix(status, strings.Fields(status)[0]+" ")} {
+					unknown := strings.Replace(body, status, altered, 1)
+					if got := observeClaudeMCPHealth([]byte(unknown), selector); got != (claudeMCPObservation{}) {
+						t.Fatalf("unrecognized status %q accepted: %+v", altered, got)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestClaudeOfficialUnreadyMCPHealthDoesNotQualifyInstallation(t *testing.T) {
+	for name, status := range claudeOfficialUnreadyHealthStatuses() {
+		t.Run(name, func(t *testing.T) {
+			request, _ := claudeLegacyMCPRequest(t, domain.ScopeUser, "{\"local\":{\"command\":\"fixture\"}}")
+			runner := &claudeMCPTestRunner{t: t, status: status, omitType: true}
+			if name == "tools-fetch" {
+				runner.issue = "Tool catalog request failed"
+			}
+			initial := domain.ActivationOutcome{Activation: domain.ActivationActive, Verification: domain.VerificationInstalled,
+				Policy: domain.PolicyAllowed, Authentication: domain.AuthenticationNotChecked, NativeEffect: domain.NativeEffectUnchanged}
+			outcome, err := finishClaudeMCPActivation(t.Context(), clients.Env{Runner: runner, NativeConfig: nativeconfig.New()}, request, initial)
+			if err != nil || outcome.Activation != domain.ActivationPrepared || outcome.Authentication != initial.Authentication ||
+				outcome.Verification != initial.Verification || outcome.Policy != initial.Policy || outcome.NativeEffect != initial.NativeEffect ||
+				outcome.ActivationAttested || outcome.AuthenticationAttested || runner.calls != 2 || len(outcome.UserActions) == 0 {
+				t.Fatalf("unready health invented readiness or lost guidance: %+v %v", outcome, err)
+			}
+			if _, err := os.Lstat(filepath.Join(request.Plan.TargetAnchor, "settings.json")); !os.IsNotExist(err) {
+				t.Fatalf("read-only unready health changed approval: %v", err)
+			}
+		})
+	}
+}
