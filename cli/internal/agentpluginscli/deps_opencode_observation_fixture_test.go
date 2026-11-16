@@ -23,13 +23,10 @@ func dependencyOpenCodeObservation(command legacyports.Command) (legacyports.Com
 	return legacyports.CommandResult{Stdout: body, CleanupComplete: true}, nil
 }
 func dependencyOpenCodeOutput(command legacyports.Command) ([]byte, error) {
-	selected := ""
-	for _, entry := range command.Env {
-		if value, ok := strings.CutPrefix(entry, "OPENCODE_CONFIG_DIR="); ok {
-			selected = value
-		}
-	}
-	if selected == "" || selected != command.Dir || command.StdoutLimitBytes == 0 || len(command.Argv) != 3 {
+	// The selected OpenCode runner receives the prepared layout as its working
+	// directory. Its installed files are the fixture's observation authority.
+	selected := command.Dir
+	if !filepath.IsAbs(selected) || command.StdoutLimitBytes == 0 || len(command.Argv) != 3 {
 		return nil, fmt.Errorf("unexpected selected OpenCode fixture context: %v", command.Argv)
 	}
 	config, err := dependencyOpenCodeConfig(selected)

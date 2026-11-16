@@ -97,7 +97,7 @@ func (session *groupSession) activateIndependentGroupTargets(activator ports.Ind
 		// The serial stop happened before the independent results were
 		// published; classify and count again with every outcome in.
 		session.classifyActivationFailure()
-		return session.result, session.activationFailureError(serialCause)
+		return session.result, session.activationFailureError(errors.Join(serialCause, run.stopErr))
 	}
 	return run.finish()
 }
@@ -231,10 +231,14 @@ func (run *independentActivationRun) publish(got independentActivationResult) {
 	run.collected++
 	target := run.session.planned[got.index]
 	outcome, delivery, nativeComplete, err := run.session.finishGroupActivation(target, got.outcome, got.delivery, got.nativeComplete, got.err)
-	if publishErr := run.session.publishGroupActivation(len(run.session.planned), target, outcome, delivery, nativeComplete, err); publishErr != nil {
-		if run.stopErr == nil {
-			run.stopErr = publishErr
-		}
+	publishErr := run.session.publishGroupActivation(len(run.session.planned), target, outcome, delivery, nativeComplete, err)
+	// A persistence failure can replace the activation error in publication.
+	// Retain unconfirmed process cleanup before returning either failure.
+	if domain.IsUnclosedClientProbe(err) && !errors.Is(publishErr, err) {
+		publishErr = errors.Join(publishErr, err)
+	}
+	if publishErr != nil {
+		run.stopErr = errors.Join(run.stopErr, publishErr)
 		run.cancel(publishErr)
 	}
 }

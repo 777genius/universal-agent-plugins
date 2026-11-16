@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -469,5 +470,159 @@ func TestIndependentResultsArePublishedWhileSerialClientsStillRun(t *testing.T) 
 	}
 	if position["activated:codex"] > position["serial:gemini"] || position["activated:claude"] > position["serial:gemini"] {
 		t.Fatalf("finished independent results waited for the whole serial remainder: %v", order)
+	}
+}
+
+// The release follows an actual Codex publication, so the later cleanup result
+// cannot win a scheduler race and accidentally become the first error.
+type orderedIndependentFailureActivator struct {
+	independentFixtureActivator
+	parent         context.Context
+	first, late    error
+	serial         error
+	codexPublished chan struct{}
+	published      sync.Once
+	order          []domain.ClientID
+	failSave       *activationPublicationFailureStore
+}
+
+func (a *orderedIndependentFailureActivator) PrepareIndependentActivation(_ context.Context, request domain.ActivationRequest) (func(context.Context) (domain.ActivationOutcome, error), error) {
+	return func(ctx context.Context) (domain.ActivationOutcome, error) {
+		defer a.joined.Add(1)
+		if request.Client.ClientID == domain.ClientCodex {
+			if a.serial != nil {
+				<-ctx.Done()
+				return domain.ActivationOutcome{}, ctx.Err()
+			}
+			return domain.ActivationOutcome{}, a.first
+		}
+		select {
+		case <-a.codexPublished:
+		case <-a.parent.Done():
+			return domain.ActivationOutcome{}, a.parent.Err()
+		}
+		if a.failSave != nil {
+			a.failSave.armed.Store(true)
+		}
+		return domain.ActivationOutcome{}, a.late
+	}, nil
+}
+
+func (a *orderedIndependentFailureActivator) Activate(_ context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	if request.Client.ClientID != domain.ClientCursor || a.serial == nil {
+		return domain.ActivationOutcome{}, errors.New("unexpected serial activation")
+	}
+	return domain.ActivationOutcome{}, a.serial
+}
+
+func (a *orderedIndependentFailureActivator) observe(event GroupProgressEvent) {
+	if event.Phase != GroupProgressActivated {
+		return
+	}
+	a.order = append(a.order, event.ClientID)
+	if event.ClientID == domain.ClientCodex {
+		a.published.Do(func() { close(a.codexPublished) })
+	}
+}
+
+type activationPublicationFailureStore struct {
+	statev2.Store
+	armed    atomic.Bool
+	failures atomic.Int32
+	cause    error
+}
+
+func (store *activationPublicationFailureStore) Save(state domain.StateFileV2) error {
+	if store.armed.CompareAndSwap(true, false) {
+		store.failures.Add(1)
+		return store.cause
+	}
+	return store.Store.Save(state)
+}
+
+func TestIndependentActivationPreservesLaterCleanupStop(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		unclosed bool
+		persist  bool
+	}{
+		{"late cleanup", true, false},
+		{"late cleanup with persistence failure", true, true},
+		{"late ordinary failure", false, false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, store, _ := serviceFixture(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+			defer cancel()
+			first := errors.New("first ordinary activation failure")
+			closeErr := errors.New("later client process cleanup failed")
+			probe := &domain.UnclosedClientProbe{Operation: "Claude listing", Err: closeErr}
+			var late error = probe
+			if !test.unclosed {
+				late = errors.New("later closed activation failure")
+			}
+			persistErr := errors.New("activation state could not be saved")
+			failingStore := &activationPublicationFailureStore{Store: store, cause: persistErr}
+			a := &orderedIndependentFailureActivator{parent: ctx, first: first, late: late, codexPublished: make(chan struct{})}
+			if test.persist {
+				service.StateStore = failingStore
+				a.failSave = failingStore
+			}
+			service.Activator = a
+			claude, codex, _, _ := mixedClients(t)
+			inputs := []AddInput{addInput(t, claude, "https://example.com/ordered-stop"), addInput(t, codex, "https://example.com/ordered-stop")}
+			result, err := service.AddGroup(ctx, GroupInput{Targets: inputs, OperationGroupID: "ordered-stop", Confirmed: true, Progress: a.observe})
+			if ctx.Err() != nil || a.joined.Load() != 2 || fmt.Sprint(a.order) != "[codex claude]" {
+				t.Fatalf("effects did not finish in the required publication order: ctx=%v joined=%d order=%v", ctx.Err(), a.joined.Load(), a.order)
+			}
+			if !errors.Is(err, first) || result.Phase != GroupPhaseManagedActivationFailed {
+				t.Fatalf("first failure or failed group was lost: phase=%s err=%v", result.Phase, err)
+			}
+			for _, target := range result.Targets {
+				if target.GroupPhase != GroupTargetExternalFailed {
+					t.Fatalf("failed target was reported completed: %+v", target)
+				}
+			}
+			if test.unclosed {
+				var retained *domain.UnclosedClientProbe
+				if !errors.As(err, &retained) || retained != probe || !errors.Is(err, closeErr) {
+					t.Fatalf("later cleanup stop was hidden by the first failure: %v", err)
+				}
+			} else if domain.IsUnclosedClientProbe(err) || errors.Is(err, late) {
+				t.Fatalf("ordinary failures must retain the original first-error behavior: %v", err)
+			}
+			if test.persist && (!errors.Is(err, persistErr) || failingStore.failures.Load() != 1) {
+				t.Fatalf("persistence refusal was not exercised and retained: count=%d err=%v", failingStore.failures.Load(), err)
+			}
+		})
+	}
+}
+
+func TestIndependentActivationPreservesCleanupCollectedAfterSerialStop(t *testing.T) {
+	service, _, _ := serviceFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	serialErr := fmt.Errorf("serial activation stopped: %w", context.DeadlineExceeded)
+	closeErr := errors.New("later independent process cleanup failed")
+	probe := &domain.UnclosedClientProbe{Operation: "Claude listing", Err: closeErr}
+	a := &orderedIndependentFailureActivator{parent: ctx, late: probe, serial: serialErr, codexPublished: make(chan struct{})}
+	service.Activator = a
+	claude, codex, cursor, _ := mixedClients(t)
+	inputs := []AddInput{addInput(t, cursor, "https://example.com/serial-stop"), addInput(t, claude, "https://example.com/serial-stop"), addInput(t, codex, "https://example.com/serial-stop")}
+	result, err := service.AddGroup(ctx, GroupInput{Targets: inputs, OperationGroupID: "serial-stop", Confirmed: true, Progress: a.observe})
+	if ctx.Err() != nil || a.joined.Load() != 2 || fmt.Sprint(a.order) != "[cursor codex claude]" {
+		t.Fatalf("serial stop and effect collection were not ordered: ctx=%v joined=%d order=%v", ctx.Err(), a.joined.Load(), a.order)
+	}
+	var retained *domain.UnclosedClientProbe
+	if !errors.Is(err, serialErr) || !errors.Is(err, context.Canceled) || !errors.As(err, &retained) || retained != probe || !errors.Is(err, closeErr) {
+		t.Fatalf("serial cause or later collected stop cause was lost: %v", err)
+	}
+	if result.Phase != GroupPhaseManagedActivationFailed {
+		t.Fatalf("failed group phase changed: %s", result.Phase)
+	}
+	for _, target := range result.Targets {
+		if target.GroupPhase != GroupTargetExternalFailed {
+			t.Fatalf("failed target was reported completed: %+v", target)
+		}
 	}
 }

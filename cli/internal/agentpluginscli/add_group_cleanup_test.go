@@ -51,7 +51,7 @@ func TestGroupCleanupFailureKeepsTypedCauseAndPrivateDiagnostics(t *testing.T) {
 			}
 			setPreflightNextActions(combined.Targets[:2])
 			for _, target := range combined.Targets[:2] {
-				if target.RetryCommand != "" || target.Error.Stage != "native_process_cleanup" || !strings.Contains(target.NextAction, "process has stopped") || target.Output.NextAction != target.NextAction {
+				if target.RetryCommand != "" || target.Error.Stage != "cleanup" || !strings.Contains(target.NextAction, "processes have stopped") || target.Output.NextAction != target.NextAction {
 					t.Fatalf("cleanup row offered a retry or lost its action: %+v", target)
 				}
 			}
@@ -61,7 +61,7 @@ func TestGroupCleanupFailureKeepsTypedCauseAndPrivateDiagnostics(t *testing.T) {
 			if err := renderAddMultiResult(cmd, opts, combined, domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "demo"}}); err != nil {
 				t.Fatal(err)
 			}
-			if strings.Contains(out.String(), "private") || strings.Contains(out.String(), "npx universal-agent-plugins add demo") || !strings.Contains(out.String(), "process has stopped") {
+			if strings.Contains(out.String(), "private") || strings.Contains(out.String(), "npx universal-agent-plugins add demo") || !strings.Contains(out.String(), "processes have stopped") {
 				t.Fatalf("unsafe public group output: %s", out.String())
 			}
 			log, err := os.ReadFile(opts.installResult.LogFile)
@@ -93,7 +93,7 @@ func TestUnclosedCleanupBlocksMixedRetryHintsEvenWhenNotAttempted(t *testing.T) 
 	for _, status := range []environment.BindingStatus{environment.BindingFailed, environment.BindingNotAttempted} {
 		t.Run(string(status), func(t *testing.T) {
 			failure := describeBindingFailure(environment.BindingOutcome{Status: status, Err: &domain.UnclosedClientProbe{Operation: "native inventory", Err: context.DeadlineExceeded}})
-			if failure.Kind != failureNativeCleanup || failure.Retryable {
+			if failure.Kind != failureProcessCleanup || failure.Retryable {
 				t.Fatalf("skipped cleanup lost its retry barrier: %+v", failure)
 			}
 			reports := reportByAgent([]agentItem{failedItem("demo", "claude", errors.New("ordinary retryable failure")), {Alias: "demo", ClientID: "codex", Status: string(status), failure: failure}})

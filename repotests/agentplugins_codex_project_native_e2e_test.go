@@ -51,6 +51,11 @@ func codexNativeProjectPrepared(t *testing.T, result map[string]any) {
 
 func codexNativeProjectMCPReady(t *testing.T, result map[string]any) {
 	t.Helper()
+	codexNativeProjectReady(t, result)
+}
+
+func codexNativeProjectReady(t *testing.T, result map[string]any) {
+	t.Helper()
 	codexNativeProjectActivation(t, result, domain.ActivationActive)
 	outcome, err := commandsTargetOutcome(result)
 	if err != nil {
@@ -58,13 +63,13 @@ func codexNativeProjectMCPReady(t *testing.T, result map[string]any) {
 	}
 	activation, _ := outcome["activation"].(map[string]any)
 	if activation["authentication"] != string(domain.AuthenticationNotRequired) || activation["policy"] != string(domain.PolicyAllowed) {
-		t.Fatalf("project MCP outcome lacks no-auth native readiness: %v", activation)
+		t.Fatalf("project outcome lacks no-auth native readiness: %v", activation)
 	}
 }
 
 func codexNativeProjectSkillsReady(t *testing.T, result map[string]any) {
 	t.Helper()
-	codexNativeProjectActivation(t, result, domain.ActivationActive)
+	codexNativeProjectReady(t, result)
 	data, _ := result["data"].(map[string]any)
 	targets, _ := data["targets"].([]any)
 	target, _ := targets[0].(map[string]any)
@@ -207,7 +212,8 @@ func codexNativeProjectRepair(t *testing.T, f *codexProjectNativeFixture, stages
 		t.Fatalf("native discovery did not observe the missing owned command skill: %v", found)
 	}
 	repaired := f.run(t, "project-repair", "repair", commandsPluginName)
-	codexNativeProjectSkillsReady(t, repaired)
+	// Repair exposes the native outcome, without add/update's readiness summary.
+	codexNativeProjectReady(t, repaired)
 	codexNativeProjectSkills(t, f, "skills-after-project-repair", "wizard")
 	stages["project_missing_skill_repair"] = nativeStage{Status: "passed", Reason: "fresh Codex observes the missing owned directory before repair and exact restored command skill after UAP repair"}
 }

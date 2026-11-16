@@ -245,7 +245,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	// A preceding target may have created the shared installation. Resolve
 	// identity only from this alias's live owner receipt, never a package name.
-	if err := resolveDependencyBindingIdentity(view, &action); err != nil {
+	if err := adapter.resolvePreparedDependencyClient(ctx, view, &action, &client); err != nil {
 		return nil, err
 	}
 	operationID := adapter.operationIDs[action.Alias+"\x00"+action.ClientID]
@@ -258,6 +258,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	adapter.currentAction = action
 	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
+		ConfirmPluginEnable:    adapter.opts.confirmPluginEnable && action.Action == "repair",
 		ClientNativeConfigRoot: dependencyNativeConfigRoot(adapter.app, client),
 		ClientExecutable:       backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete}
@@ -371,9 +372,9 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	return loaded, nil
 }
 
-// repairOwnedDependencies retains the ordinary repair command and confirmation
+// repairOwnedDependenciesOnce retains the ordinary repair command and confirmation
 // policy, but uses the recorded per-binding pin through the public SDK.
-func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
+func repairOwnedDependenciesOnce(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
 	state, err := app.StateStore.Load()
 	if err != nil {
 		return false, err

@@ -123,13 +123,28 @@ func humanAddGroupPlans(targets []addTargetResult) []usecase.AddResult {
 // activation from a plan whose requirements were rejected.
 func setPreflightNextActions(targets []addTargetResult) {
 	for index := range targets {
-		if targets[index].Error != nil && targets[index].Error.Stage == "native_process_cleanup" {
+		if targets[index].Error != nil && targets[index].Error.Stage == "cleanup" {
 			continue
 		}
 		if targets[index].Output.Result.Plan.Status != domain.PlanUnsupported {
 			targets[index].NextAction = "resolve the reported client requirement and retry; nothing was installed"
 			targets[index].Output.NextAction = targets[index].NextAction
 		}
+	}
+}
+
+// A failed preparation changed no client. Each target is reported as not
+// attempted; the generic retry instruction is withheld when the failure left a
+// client process unconfirmed closed, because retrying could start more work.
+func (combined *addMultiResult) markPreparationNotAttempted(err error, cleanupUnconfirmed bool) {
+	for index := range combined.Targets {
+		combined.Targets[index].Status = string(usecase.GroupTargetExternalNotAttempted)
+		if !cleanupUnconfirmed {
+			combined.Targets[index].NextAction = "resolve the preparation error and retry the same command"
+			combined.Targets[index].Output.NextAction = combined.Targets[index].NextAction
+			combined.Targets[index].Error = &usecase.GroupTargetFailure{Stage: "preparation", Message: err.Error()}
+		}
+		combined.setTargetProof(domain.ClientID(combined.Targets[index].Target), "not_completed")
 	}
 }
 

@@ -38,9 +38,10 @@ func TestSkillsRetryStopsAfterLaterUnclosedNativeProbe(t *testing.T) {
 			closure := errors.New("fixture native process cleanup is unconfirmed")
 			probe := &domain.UnclosedClientProbe{Operation: "fixture native inventory", Err: closure}
 			var cause error = probe
-			if wrapping == "wrapped" {
+			switch wrapping {
+			case "wrapped":
 				cause = fmt.Errorf("native observation failed: %w", cause)
-			} else if wrapping == "joined" {
+			case "joined":
 				cause = errors.Join(errors.New("fixture companion failure"), cause)
 			}
 			adapter := &skillsUnclosedCodex{Adapter: codex.New(), failure: cause}

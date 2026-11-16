@@ -281,23 +281,18 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	}
 	err = app.recordGroupOutcome(cmd, opts, &combined, err)
 	if err != nil {
+		cleanupUnconfirmed := domain.IsUnclosedClientProbe(err)
 		if applied.Phase == usecase.GroupPhasePlanned && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded, combined.ActionRequired = "preflight_failed", len(inputs), 0, 0
-			setPreflightNextActions(combined.Targets)
+			if !cleanupUnconfirmed {
+				setPreflightNextActions(combined.Targets)
+			}
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 			return fmt.Errorf("group apply preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 		}
 		if applied.Phase == usecase.GroupPhasePreparationFailed && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded, combined.ActionRequired = "preparation_failed", len(inputs), 0, 0
-			for index := range combined.Targets {
-				combined.Targets[index].Status = string(usecase.GroupTargetExternalNotAttempted)
-				if !domain.IsUnclosedClientProbe(err) {
-					combined.Targets[index].NextAction = "resolve the preparation error and retry the same command"
-					combined.Targets[index].Output.NextAction = combined.Targets[index].NextAction
-					combined.Targets[index].Error = &usecase.GroupTargetFailure{Stage: "preparation", Message: err.Error()}
-				}
-				combined.setTargetProof(domain.ClientID(combined.Targets[index].Target), "not_completed")
-			}
+			combined.markPreparationNotAttempted(err, cleanupUnconfirmed)
 			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
 			return fmt.Errorf("group preparation failed before client changes (selected targets: %v): %w; no selected client was changed", targets, err)
 		}
@@ -307,11 +302,11 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			appendDeferredChatGPT(&combined, cmd, loaded)
 		}
 		_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
-		if domain.IsUnclosedClientProbe(err) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
 		if applied.Phase == usecase.GroupPhaseManagedActivationFailed || applied.Phase == usecase.GroupPhaseExternalPartialFailure {
-			return batchActivationAggregateError(combined)
+			return retainUnclosedInstallCause(batchActivationAggregateError(combined), err)
 		}
 		return err
 	}

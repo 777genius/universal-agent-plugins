@@ -17,8 +17,8 @@ type failureKind string
 
 const (
 	failureUnknown           failureKind = "FAILED"
+	failureProcessCleanup    failureKind = "PROCESS_CLEANUP_UNCONFIRMED"
 	failureRecovery          failureKind = "RECOVERY_REQUIRED"
-	failureNativeCleanup     failureKind = "NATIVE_PROCESS_UNCLOSED"
 	failureSecurityBlocked   failureKind = "SECURITY_REVIEW_BLOCKED"
 	failureForeignTarget     failureKind = "FOREIGN_DESTINATION"
 	failureManagedChanged    failureKind = "MANAGED_SKILL_CHANGED"
@@ -36,7 +36,7 @@ func failureKindOf(err error) failureKind {
 	case err == nil:
 		return failureUnknown
 	case domain.IsUnclosedClientProbe(err):
-		return failureNativeCleanup
+		return failureProcessCleanup
 	case errors.Is(err, installer.ErrRecoveryRequired):
 		return failureRecovery
 	case errors.Is(err, installer.ErrAssessmentRejected):
@@ -72,15 +72,6 @@ type installFailure struct {
 	Detail    string
 }
 
-// Keep the typed cause available without exposing native diagnostics in the UI.
-type installFailureWithCause struct {
-	summary string
-	cause   error
-}
-
-func (e installFailureWithCause) Error() string { return e.summary }
-func (e installFailureWithCause) Unwrap() error { return e.cause }
-
 // describeBindingFailure explains why one binding did not succeed. A binding
 // that was never reached says only that, and stays retryable.
 func describeBindingFailure(outcome environment.BindingOutcome) *installFailure {
@@ -97,7 +88,7 @@ func describeBindingFailure(outcome environment.BindingOutcome) *installFailure 
 		}
 	}
 	cause := failure.Kind
-	if outcome.Status == environment.BindingNotAttempted && failure.Kind != failureNativeCleanup {
+	if outcome.Status == environment.BindingNotAttempted && failure.Kind != failureProcessCleanup {
 		failure.Kind = failureSkipped
 	}
 	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
@@ -130,8 +121,8 @@ func failureKindOfOutcome(outcome installer.Outcome) failureKind {
 
 func applyFailureWording(kind failureKind) (summary, next string, retryable bool) {
 	switch kind {
-	case failureNativeCleanup:
-		return "Could not confirm that an agent process has finished.", "Confirm the earlier agent process has stopped before retrying.", false
+	case failureProcessCleanup:
+		return "The agent's process cleanup could not be confirmed.", "Confirm the agent's processes have stopped before starting another installation.", false
 	case failureRecovery:
 		return "An earlier installation was interrupted and needs recovery first.", "Run `agentplugins doctor`, follow its steps, then try again.", false
 	case failureSecurityBlocked:
@@ -156,4 +147,23 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 		return "Not attempted because an earlier problem stopped the installation.", "Retry this agent once the earlier problem is resolved.", true
 	}
 	return "The installation did not complete for this agent.", "Retry, or hand the technical log to an agent to diagnose.", true
+}
+
+// installFailureWithCause keeps a classifiable cause without putting its
+// technical detail in the public command error.
+type installFailureWithCause struct {
+	summary string
+	cause   error
+}
+
+func (err installFailureWithCause) Error() string { return err.summary }
+func (err installFailureWithCause) Unwrap() error { return err.cause }
+
+// retainUnclosedInstallCause keeps cleanup uncertainty through the group's
+// public aggregate. Ordinary group failures keep their existing presentation.
+func retainUnclosedInstallCause(summary, cause error) error {
+	if !domain.IsUnclosedClientProbe(cause) {
+		return summary
+	}
+	return installFailureWithCause{summary: summary.Error(), cause: cause}
 }

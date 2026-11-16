@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -126,7 +127,7 @@ func stopsSync(ctx context.Context, err error, result *installer.Result) bool {
 	}
 	var marked stopError
 	switch {
-	case errors.As(err, &marked),
+	case errors.As(err, &marked), domain.IsUnclosedClientProbe(err),
 		errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded),
 		errors.Is(err, installer.ErrCancelled), errors.Is(err, installer.ErrRecoveryRequired),
 		errors.Is(err, installer.ErrPlanChanged), errors.Is(err, ErrSourceChange),

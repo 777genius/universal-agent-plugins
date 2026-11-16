@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -136,4 +137,92 @@ func TestGroupContinuesOnlyAfterIsolatedProbeClosure(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSerialGroupRetainsCleanupCauseWhenActivationPersistenceFails(t *testing.T) {
+	closeErr := errors.New("native registry process cleanup failed")
+	marker := &domain.UnclosedClientProbe{Operation: "native client listing", Err: closeErr}
+	firstErr := errors.New("earlier closed activation failed")
+	for _, test := range []struct {
+		name              string
+		activationErr     error
+		firstErr          error
+		persist, unclosed bool
+	}{
+		{"bare cleanup", marker, nil, true, true},
+		{"wrapped cleanup", fmt.Errorf("native observation: %w", marker), nil, true, true},
+		{"joined cleanup", errors.Join(context.DeadlineExceeded, marker), nil, true, true},
+		{"closed failure", errors.New("closed native activation failed"), nil, true, false},
+		{"earlier failure then cleanup and persist", marker, firstErr, true, true},
+		{"earlier failure then cleanup", marker, firstErr, false, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, store, cursor := serviceFixture(t)
+			claude, codex, _, _ := mixedClients(t)
+			persistErr := errors.New("activation state save failed")
+			failingStore := &activationPublicationFailureStore{Store: store, cause: persistErr}
+			service.StateStore = failingStore
+			activator := &serialCleanupFailureActivator{first: test.firstErr}
+			activator.stop = func() error {
+				if test.persist {
+					failingStore.armed.Store(true)
+				}
+				return test.activationErr
+			}
+			service.Activator = activator // This fixture has no independent-activation capability.
+			result, err := service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{
+				addInput(t, cursor, "https://example.com/serial-cleanup"),
+				addInput(t, claude, "https://example.com/serial-cleanup"),
+				addInput(t, codex, "https://example.com/serial-cleanup"),
+			}, OperationGroupID: "serial-cleanup", Confirmed: true})
+			wantFailures := int32(0)
+			stage := "activation"
+			if test.persist {
+				wantFailures, stage = 1, "persist"
+			}
+			if activator.calls != 2 || failingStore.failures.Load() != wantFailures || errors.Is(err, persistErr) != test.persist {
+				t.Fatalf("persistence refusal or remaining-client stop changed: calls=%d saves=%d err=%v", activator.calls, failingStore.failures.Load(), err)
+			}
+			wantPhase, firstPhase := GroupPhaseExternalPartialFailure, GroupTargetExternalCompleted
+			if test.firstErr != nil {
+				wantPhase, firstPhase = GroupPhaseManagedActivationFailed, GroupTargetExternalFailed
+			}
+			if result.Phase != wantPhase || len(result.Targets) != 3 || len(result.Receipts) != 3 {
+				t.Fatalf("committed group facts changed: %+v", result)
+			}
+			want := []GroupTargetPhase{firstPhase, GroupTargetExternalFailed, GroupTargetExternalNotAttempted}
+			for index, phase := range want {
+				if result.Targets[index].GroupPhase != phase {
+					t.Fatalf("target %d phase=%s, want %s", index, result.Targets[index].GroupPhase, phase)
+				}
+			}
+			if (result.Targets[0].Failure != nil) != (test.firstErr != nil) || result.Targets[1].Failure == nil || result.Targets[1].Failure.Stage != stage || result.Targets[2].Failure == nil || result.Targets[2].Failure.Stage != stage {
+				t.Fatalf("original success/failure or stop classification changed: %+v", result.Targets)
+			}
+			if !test.unclosed {
+				if domain.IsUnclosedClientProbe(err) || errors.Is(err, test.activationErr) {
+					t.Fatalf("ordinary activation failure must keep the existing persistence-only cause: %v", err)
+				}
+				return
+			}
+			var retained *domain.UnclosedClientProbe
+			if !errors.As(err, &retained) || retained != marker || !errors.Is(err, closeErr) || !errors.Is(err, test.activationErr) {
+				t.Fatalf("serial persistence hid the exact cleanup marker or cause: %v", err)
+			}
+		})
+	}
+}
+
+type serialCleanupFailureActivator struct {
+	stopSecondGroupActivator
+	first error
+}
+
+func (activator *serialCleanupFailureActivator) Activate(ctx context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	outcome, err := activator.stopSecondGroupActivator.Activate(ctx, request)
+	if activator.calls == 1 && activator.first != nil {
+		outcome.Activation, outcome.Verification = domain.ActivationFailed, domain.VerificationFailed
+		err = activator.first
+	}
+	return outcome, err
 }

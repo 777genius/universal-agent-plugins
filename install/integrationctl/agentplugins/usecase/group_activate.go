@@ -76,6 +76,9 @@ func (session *groupSession) publishGroupActivation(remainingFrom int, target pl
 		session.externalFailed += len(target.resultIndexes)
 		session.classifyActivationFailure()
 		session.markRemainingNotAttempted(remainingFrom, "persist", "processing stopped because installation state could not be saved safely")
+		if domain.IsUnclosedClientProbe(activationErr) && !errors.Is(persistErr, activationErr) {
+			persistErr = errors.Join(persistErr, activationErr)
+		}
 		return session.activationFailureError(persistErr)
 	}
 	if activationErr == nil {

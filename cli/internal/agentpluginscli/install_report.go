@@ -116,7 +116,7 @@ func retryableAgents(reports []agentReport) []agentReport {
 	var retryable []agentReport
 	for _, report := range reports {
 		for _, problem := range report.Problems {
-			if problem.Failure.Kind == failureNativeCleanup {
+			if problem.Failure.Kind == failureProcessCleanup {
 				return nil // The whole run must wait for native process cleanup.
 			}
 		}
@@ -299,8 +299,8 @@ func groupFailure(target addTargetResult, kind failureKind) *installFailure {
 		if batchFailureNeedsDoctor(target) {
 			failure.Kind = failureRecovery
 		}
-		if target.Error.Stage == "native_process_cleanup" {
-			failure.Kind = failureNativeCleanup
+		if target.Error.Stage == "cleanup" {
+			failure.Kind = failureProcessCleanup
 		}
 	}
 	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
@@ -379,7 +379,7 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 				item.failure.Detail = detail + "\n" + item.failure.Detail
 			}
 			target := &combined.Targets[index]
-			target.Error = &usecase.GroupTargetFailure{Stage: "native_process_cleanup", Message: item.failure.Summary + " " + item.failure.Next}
+			target.Error = &usecase.GroupTargetFailure{Stage: "cleanup", Message: item.failure.Summary + " " + item.failure.Next}
 			target.Output.Result.Failure = target.Error
 			target.RetryCommand = ""
 			target.NextAction, target.Output.NextAction = item.failure.Next, item.failure.Next
@@ -404,15 +404,15 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 func runSingleTargetAdd(app App, opts *options, loaded loadedPackage, target domain.ClientID, completing bool, run func(*options) error) (bool, error) {
 	selected := *opts
 	selected.target = string(target)
-	if !completing {
-		state, err := app.StateStore.Load()
-		if err != nil {
-			return false, nil
+	eligible := completing
+	if !eligible {
+		if state, err := app.StateStore.Load(); err == nil {
+			installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name)
+			eligible = ok && installationHasTarget(installation, target, string(app.scope()))
 		}
-		installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name)
-		if !ok || !installationHasTarget(installation, target, string(app.scope())) {
-			return false, nil
-		}
+	}
+	if !eligible {
+		return false, nil
 	}
 	err := run(&selected)
 	opts.installResult = selected.installResult
@@ -498,4 +498,36 @@ func pinRetryPackage(opts *options, loaded loadedPackage) error {
 		return fmt.Errorf("the package changed since the first attempt; run the command again to review the new version")
 	}
 	return nil
+}
+
+// repairOwnedDependencies repairs one owned installation and, in an interactive
+// terminal, offers to run the repair again when some agents failed. Each run
+// plans from current state, so a retry never replays stale actions.
+func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
+	var handled bool
+	var run func() error
+	run = func() error {
+		opts.installResult = nil
+		var err error
+		handled, err = repairOwnedDependenciesOnce(cmd, app, opts, selector, targets)
+		return retryConverge(cmd, app, opts, err, run)
+	}
+	err := run()
+	return handled, err
+}
+
+// runSavedLifecycleRetryable runs a saved update or removal and, in an
+// interactive terminal, offers to run it again when some agents failed. Each run
+// plans from current state, so a retry never replays stale actions.
+func runSavedLifecycleRetryable(cmd *cobra.Command, app App, opts *options, selector, verb string) (bool, error) {
+	var handled bool
+	var run func() error
+	run = func() error {
+		opts.installResult = nil
+		var err error
+		handled, err = runSavedLifecycle(cmd, app, opts, selector, verb)
+		return retryConverge(cmd, app, opts, err, run)
+	}
+	err := run()
+	return handled, err
 }

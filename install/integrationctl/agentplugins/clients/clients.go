@@ -35,7 +35,9 @@ type Adapter interface {
 // by the dispatcher rather than owned by the adapter, so a client package never
 // reaches for a process, a clock or the filesystem policy on its own.
 type Env struct {
-	ProjectRoots ports.NativeProjectRootPublisher
+	UserHome          string
+	NativeTransitions ports.NativeTransitionRecovery
+	ProjectRoots      ports.NativeProjectRootPublisher
 	// SessionEnvironment is transient explicit-session authority, never persisted.
 	SessionEnvironment []string `json:"-"`
 	// LookupExecutable resolves a management CLI for an explicitly selected

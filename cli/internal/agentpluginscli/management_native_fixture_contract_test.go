@@ -53,9 +53,12 @@ func TestManagementNativeFixtureUsesCanonicalExecutable(t *testing.T) {
 		dependencyWrite(t, filepath.Join(target.ConfigRoot, "opencode.jsonc"), `{"retained":"native"}`)
 		dependencyWrite(t, skillPath, "---\nname: fixture-guide\ndescription: Fixture guide\n---\nExact native content.\n")
 		runner := newManagementNativeRunner(detected, base)
+		// Later caller edits must not replace the captured executable/profile.
+		detected[0].ExecutablePath = filepath.Join(t.TempDir(), "uncaptured-opencode")
+		detected[0].ConfigRoot = filepath.Join(t.TempDir(), "uncaptured-profile")
 		command := legacyports.Command{
 			Argv: []string{target.Executable, "debug", "config"}, Dir: target.ConfigRoot,
-			Env: []string{"OPENCODE_CONFIG_DIR=" + target.ConfigRoot}, StdoutLimitBytes: 1 << 20,
+			StdoutLimitBytes: 1 << 20,
 		}
 		out, err := runner.Run(t.Context(), command)
 		if err != nil {
@@ -71,8 +74,17 @@ func TestManagementNativeFixtureUsesCanonicalExecutable(t *testing.T) {
 		if err != nil || json.Unmarshal(out.Stdout, &skills) != nil || !reflect.DeepEqual(skills, []map[string]string{{"name": "fixture-guide", "location": skillPath, "content": "Exact native content.\n"}}) {
 			t.Fatalf("selected native Skill was not observed: %s, %v", out.Stdout, err)
 		}
+		command.Dir = t.TempDir()
+		if _, err := runner.Run(t.Context(), command); err == nil {
+			t.Fatal("uncaptured config root reached the selected responder")
+		}
+		command.Dir = target.ConfigRoot
 		// The responder still requires exact captured identity; it does not match
 		// another spelling at command dispatch or silently broaden its authority.
+		// Leave one valid config so a fallback cannot refuse merely on ambiguity.
+		if err := os.Remove(filepath.Join(target.ConfigRoot, "opencode.jsonc")); err != nil {
+			t.Fatal(err)
+		}
 		relative, err := filepath.Rel(physical, target.Executable)
 		if err != nil {
 			t.Fatal(err)
