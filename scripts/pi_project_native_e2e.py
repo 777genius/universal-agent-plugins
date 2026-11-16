@@ -226,6 +226,16 @@ def owned_project_trust(driver, pi, user, project, package, output, marker, targ
     owned_code.write_bytes(original)
     assert_observation(native_rpc(pi, project, user, marker, None, target, "C-restored"), "one", project)
     state["stages"].append("changed_owned_content_untrusted")
+    # Decisions Pi already owns win over the hook: a saved "Do not trust" and
+    # a defaultProjectTrust of "never" keep the owned project untrusted.
+    for name, body, stage in (
+            ("trust.json", {str(project.resolve()): False}, "C-saved-no"),
+            ("settings.json", {"defaultProjectTrust": "never"}, "C-never")):
+        decision = write(user, name, json.dumps(body))
+        assert_observation(native_rpc(pi, project, user, marker, None, target, stage), None, project)
+        decision.unlink()
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-own-again"), "one", project)
+    state["stages"].append("saved_pi_decisions_override_uap_hook")
     foreign = write(project, ".pi/extensions/later-foreign.ts",
                     'import { appendFileSync } from "node:fs";\n'
                     'appendFileSync(process.env.UAP_PI_PROJECT_EVENT_FILE, "foreign|" + process.cwd() + "\\n");\n'
