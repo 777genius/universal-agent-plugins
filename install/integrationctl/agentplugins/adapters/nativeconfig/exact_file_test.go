@@ -115,6 +115,52 @@ func TestExactFileVisibleWriteErrorReadbackAndRestore(t *testing.T) {
 	}
 }
 
+func TestExactFileRemoveRestoresExactOriginalAndRefusesForeignBytes(t *testing.T) {
+	t.Run("rollback", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "owned.json")
+		mustWrite(t, path, "original\n")
+		if err := os.Chmod(path, 0640); err != nil {
+			t.Fatal(err)
+		}
+		txn, err := New().BeginExactFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer closeExactFile(t, txn)
+		if err := txn.Remove(); err != nil || txn.Effect() != FileCommitted {
+			t.Fatalf("remove: %v %s", err, txn.Effect())
+		}
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("removed file still present: %v", err)
+		}
+		if err := txn.Rollback(); err != nil || txn.Effect() != FileUnchanged {
+			t.Fatalf("restore: %v %s", err, txn.Effect())
+		}
+		assertBytes(t, path, "original\n")
+		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0640 {
+			t.Fatalf("restore mode: %v %v", info, err)
+		}
+	})
+	t.Run("foreign", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "owned.json")
+		mustWrite(t, path, "original\n")
+		files := &boundaryMutationIO{}
+		txn, err := NewWithFileIO(files).BeginExactFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer closeExactFile(t, txn)
+		files.beforeRemove = func(path string, _ []byte) error { return os.WriteFile(path, []byte("foreign\n"), 0600) }
+		if err := txn.Remove(); !errors.Is(err, ErrConcurrentChange) || txn.Effect() != FileUncertain {
+			t.Fatalf("foreign bytes must not be removed: %v %s", err, txn.Effect())
+		}
+		if err := txn.Rollback(); !errors.Is(err, ErrConcurrentChange) {
+			t.Fatalf("foreign bytes must be retained: %v", err)
+		}
+		assertBytes(t, path, "foreign\n")
+	})
+}
+
 func TestExactFileDistinguishesEmptyFileFromAbsence(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "mcp.json")
 	txn, err := New().BeginExactFile(path)
