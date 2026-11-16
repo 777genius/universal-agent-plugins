@@ -7,6 +7,9 @@ import (
 )
 
 func (session *removeManySession) apply() error {
+	if err := session.prepareRemovalVersions(); err != nil {
+		return err
+	}
 	session.result.Status = "applying"
 	session.result.Succeeded = 0
 	session.result.Failed = 0

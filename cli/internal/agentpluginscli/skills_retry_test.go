@@ -4,16 +4,24 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -234,6 +242,164 @@ func TestAddRetryCancelKeepsTheOriginalError(t *testing.T) {
 	}
 }
 
+// The ordinary HTTPS/SDK fixture uses no Git or native process. Each prepared
+// retry owns its disposable preview, while the original belongs to the caller.
+func TestSkillsRetryWriteFailureClosesOnlyOwnedPreview(t *testing.T) {
+	for _, phase := range []string{"retry notice", "retry result"} {
+		t.Run(phase, func(t *testing.T) {
+			var roots []string
+			app, plan := retryCleanupPlan(t, &roots)
+			app.Prompter = fakePrompter{
+				selectFn: func(r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+					return prompt.TargetSelectionResult{IDs: r.DefaultIDs}, nil
+				},
+				confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
+			}
+			cmd, _, _ := retryTestCommand(t)
+			writeErr := errors.New("retry output failed")
+			writer := retryCleanupWriter{cause: writeErr, fail: func() bool { return len(roots) == 2 }}
+			if phase == "retry notice" {
+				cmd.SetErr(writer)
+			} else {
+				cmd.SetOut(writer)
+			}
+			err := applySkillsWithRecovery(cmd, app, &options{format: "human", scope: "user"}, plan, true)
+			if !errors.Is(err, writeErr) || (phase == "retry notice" && !errors.Is(err, installer.ErrTargetFactsUnavailable)) {
+				t.Fatalf("write failure lost its own or original installation cause: %v", err)
+			}
+			assertRetryPreviewOwnership(t, plan, roots)
+		})
+	}
+}
+
+func retryCleanupPlan(t *testing.T, roots *[]string) (App, *PreparedSkillsBatch) {
+	t.Helper()
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/.well-known/agent-skills/index.json":
+			_, _ = io.WriteString(w, `{"skills":[{"name":"pdf","description":"Read PDFs","files":["SKILL.md"]}]}`)
+		case "/.well-known/agent-skills/pdf/SKILL.md":
+			_, _ = io.WriteString(w, "---\nname: pdf\ndescription: Read PDF documents\n---\nRead PDFs.\n")
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	journey := newSavedJourney(t, t.TempDir())
+	app := withInstallLogDir(journey.cli.app)
+	app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: t.TempDir(), HTTPClient: server.Client()}
+	app.SourceAcquirerForDryRun = func(root string) SourceAcquirer {
+		*roots = append(*roots, root)
+		return app.SourceAcquirer
+	}
+	plan, err := app.PrepareSkills(context.Background(), SkillsBatchRequest{
+		Selections: []SkillsSelection{{Website: server.URL, Name: "pdf"}}, TargetIDs: []string{"codex"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(plan.Close)
+	broken := plan.request.detected[domain.ClientCodex]
+	broken.Status = domain.DetectionNotDetected
+	plan.request.detected[domain.ClientCodex] = broken
+	return app, plan
+}
+
+func assertRetryPreviewOwnership(t *testing.T, original *PreparedSkillsBatch, roots []string) {
+	t.Helper()
+	if len(roots) != 2 || original.closed {
+		t.Fatalf("retry did not retain original caller ownership: roots=%v closed=%v", roots, original.closed)
+	}
+	if _, err := os.Stat(roots[0]); err != nil {
+		t.Fatalf("original preview was closed by the retry: %v", err)
+	}
+	if _, err := os.Stat(roots[1]); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("retry-owned preview survived writer failure: %v", err)
+	}
+	original.Close()
+	if _, err := os.Stat(roots[0]); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("original caller could not close its preview: %v", err)
+	}
+}
+
+type retryCleanupWriter struct {
+	cause error
+	fail  func() bool
+}
+
+func (writer retryCleanupWriter) Write(body []byte) (int, error) {
+	if writer.fail() {
+		return 0, writer.cause
+	}
+	return len(body), nil
+}
+
+func TestAddRetryUnclosedProbeNeverPromptsOrRetries(t *testing.T) {
+	var offered []string
+	app, opts := retryAppAndOptions(t, &offered)
+	prompts := 0
+	app.Prompter = fakePrompter{selectFn: func(prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+		prompts++
+		return prompt.TargetSelectionResult{}, nil
+	}}
+	cmd, _, _ := retryTestCommand(t)
+	cause := errors.New("family closure unconfirmed")
+	failure := fmt.Errorf("install failed: %w", errors.Join(errors.New("ordinary client failed"), &domain.UnclosedClientProbe{Operation: "readonly inventory", Err: cause}))
+	calls := 0
+	err := retryFailedAgents(cmd, app, opts, failure, func(string, []string) error { calls++; return nil })
+	if !domain.IsUnclosedClientProbe(err) || !errors.Is(err, cause) || len(offered) != 0 || prompts != 0 || calls != 0 {
+		t.Fatalf("unsafe retry lost cause or prompted: %v offered=%v prompts=%d calls=%d", err, offered, prompts, calls)
+	}
+}
+func TestGroupedAddPreservesUnclosedProbeCause(t *testing.T) {
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCodex), fixtureClient(t, domain.ClientCursor)})
+	cause := errors.New("family closure unconfirmed")
+	fixture.app.Lifecycle.Activator = &cliObservedActivator{err: &domain.UnclosedClientProbe{Operation: "readonly inventory", Err: cause}}
+	_, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor", "--format", "json")
+	if !domain.IsUnclosedClientProbe(err) || !errors.Is(err, cause) {
+		t.Fatalf("group failure flattened unclosed probe: %v", err)
+	}
+}
+
+type unclosedSkillsStore struct {
+	statev2.Store
+	failure error
+	checks  int
+}
+
+func (store *unclosedSkillsStore) RequireMutationReady() error {
+	store.checks++
+	return store.failure
+}
+func TestSkillsUnclosedProbeNeverPromptsOrRetries(t *testing.T) {
+	fixture := newCLIFixture(t, nil)
+	fixture.app.DependenciesRoot = filepath.Join(fixture.root, "dependencies")
+	cause := errors.New("family closure unconfirmed")
+	failure := fmt.Errorf("skills apply: %w", errors.Join(errors.New("ordinary failure"), &domain.UnclosedClientProbe{Operation: "readonly inventory", Err: cause}))
+	store := &unclosedSkillsStore{Store: fixture.store, failure: failure}
+	fixture.app.StateStore = store
+	manifest, lock := fixture.app.dependencyPaths()
+	plan := &PreparedSkillsBatch{
+		app:     fixture.app,
+		request: dependencySyncRequest{intent: environmentapp.Intent{ManifestPath: manifest, LockPath: lock}},
+		actions: []SkillsAction{{Alias: "demo", ClientID: "codex"}, {Alias: "demo", ClientID: "claude"}},
+		cleanup: func() {},
+	}
+	defer plan.Close()
+	prompts := 0
+	app := fixture.app
+	app.Terminal = true
+	app.Prompter = fakePrompter{selectFn: func(prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+		prompts++
+		return prompt.TargetSelectionResult{}, nil
+	}}
+	cmd, _, _ := retryTestCommand(t)
+	err := applySkillsWithRecovery(cmd, app, &options{format: "human", scope: "user"}, plan, true)
+	if !domain.IsUnclosedClientProbe(err) || !errors.Is(err, cause) || prompts != 0 || store.checks != 1 {
+		t.Fatalf("unsafe skills retry or lost cause: %v prompts=%d checks=%d", err, prompts, store.checks)
+	}
+}
+
 func TestPrepareSkillsRetryPreservesPromptErrors(t *testing.T) {
 	readFailure := errors.Join(errors.New("retry terminal read failed"), prompt.ErrPromptInputClosed)
 	for name, test := range map[string]struct {
@@ -312,7 +478,7 @@ func TestSkillsHumanFailureBoundaryPreservesTypedCauses(t *testing.T) {
 			if strings.Contains(text, "private-native-stderr-marker") || strings.ContainsAny(text, "\n\x1b") || !strings.Contains(text, "Technical details: fixture-install.log") {
 				t.Fatalf("final stderr did not preserve the safe report boundary: %q", text)
 			}
-			if humanSkillsApplyError("json", items, syncErr, "log") != syncErr || humanSkillsApplyError("human", nil, syncErr, "log") != syncErr || humanSkillsApplyError("human", items, nil, "log") != nil {
+			if reflect.ValueOf(humanSkillsApplyError("json", items, syncErr, "log")) != reflect.ValueOf(syncErr) || reflect.ValueOf(humanSkillsApplyError("human", nil, syncErr, "log")) != reflect.ValueOf(syncErr) || humanSkillsApplyError("human", items, nil, "log") != nil {
 				t.Fatal("presentation changed an unreported, JSON, or successful result")
 			}
 		})

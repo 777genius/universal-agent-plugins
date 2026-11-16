@@ -234,7 +234,14 @@ jobs:
           AUDIT_VENDOR_OUTCOME: ${{ steps.vendor-install.outcome }}
         shell: bash
         run: |
-          export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          audit_node_bin=""
+          if [[ "$AUDIT_TARGET" == kiro ]]; then
+            # Preserve setup-node's selected runtime before narrowing Kiro's PATH.
+            audit_node="$(command -v node)"
+            [[ "$audit_node" == /* && -x "$audit_node" ]]
+            audit_node_bin="${audit_node%/*}:"
+          fi
+          export PATH="${audit_node_bin}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \
             --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \

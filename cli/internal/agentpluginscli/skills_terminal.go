@@ -229,7 +229,14 @@ func applySkillsTerminalAttempt(cmd *cobra.Command, app App, opts *options, prep
 func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchResult, logPath string) error {
 	if opts.format != "json" {
 		writer := cmd.OutOrStdout()
-		if err := renderHumanSkillsResult(writer, result); err != nil {
+		display := result
+		display.Items = append([]SkillsBatchItem(nil), result.Items...)
+		for i := range display.Items {
+			if display.Items[i].failure != nil {
+				display.Items[i].Reason = ""
+			}
+		}
+		if err := renderHumanSkillsResult(writer, display); err != nil {
 			return err
 		}
 		reports := reportByAgent(skillsAgentItems(result.Items))

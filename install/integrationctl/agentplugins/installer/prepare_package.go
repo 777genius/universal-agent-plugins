@@ -53,17 +53,14 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		previewFacts.InstallationID = installation.InstallationID
 	}
 	svc := confirmationLifecycle(handle, e.lifecycle(helper, previewFacts, handle.detected), true)
-	var hints domain.CompatibilityHints
-	if req.AcquiredSnapshot != nil {
-		hints = req.AcquiredSnapshot.Compatibility
-	}
 	preview, err := e.previewHostedPackage(ctx, handle, svc, usecase.AddInput{
 		Envelope: handle.envelope, Client: handle.client, Scope: e.scope(), DryRun: true, Confirmed: false,
 		OnlinePreview:                    req.OnlinePreview,
 		PersistAuthoritativeObservations: e.persistObservations,
 		InstallationID:                   req.InstallationID, OperationID: req.OperationID, BackendExecutable: req.ClientExecutable,
-		OriginMode: snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(snapshot.Directory), Hints: hints,
+		OriginMode: snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(snapshot.Directory), Hints: req.acquiredCompatibility(),
 		EnvironmentAuthority: req.EnvironmentAuthority,
+		ConfirmPluginEnable:  req.ConfirmPluginEnable,
 		ActivationComplete:   req.ActivationComplete, AuthComplete: req.AuthComplete,
 	}, dry)
 	if err != nil {

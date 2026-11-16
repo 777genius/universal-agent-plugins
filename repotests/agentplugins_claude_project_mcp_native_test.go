@@ -290,8 +290,9 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan, _ := outcome["plan"].(map[string]any)
-	if plan["client_id"] != "claude" || plan["scope"] != "project" {
-		t.Fatal("UAP project skills installation did not retain project scope")
+	physical, _ := plan["physical_artifact_id"].(string)
+	if plan["client_id"] != "claude" || plan["scope"] != "project" || physical == "" {
+		t.Fatal("UAP project skills installation did not retain project scope and identity")
 	}
 	f.requireForeign(t)
 	stages["install_and_foreign_mcp"] = nativeStage{Status: "passed", Reason: "UAP project skill install preserved exact foreign project MCP and disposable user/A/B configuration"}
@@ -320,7 +321,8 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	// Actual Claude sessions may update Claude's own profile metadata. Verify
 	// that both projects remain trusted, then pin the exact post-native bytes
 	// immediately before UAP remove. The installer must preserve this new
-	// baseline (and every other unchanged foreign file) without modification.
+	// baseline outside the exact owned pluginUsage entry deleted by native
+	// uninstall. Every foreign sibling and other file remains unchanged.
 	profilePath := filepath.Join(f.base.ConfigDir, ".claude.json")
 	profile, err := readClaudeTrustedProfile(profilePath)
 	if err != nil {
@@ -343,7 +345,7 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	f.foreign[profilePath] = nativeSHA(t, profilePath)
 	evidence["native_profile_baseline_refreshed_before_remove"] = true
 
-	claudeTrustedRemoveWithProfileDiagnostic(t, f, c, profile)
+	claudeTrustedRemoveWithProfileDiagnostic(t, f, c, profile, physical)
 	claudeProjectRunScripted(t, f, f.project, true)
 	afterRemoval, err := os.ReadFile(events)
 	if err != nil || len(afterRemoval) > 3072 {

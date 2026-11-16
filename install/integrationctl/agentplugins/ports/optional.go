@@ -38,6 +38,19 @@ type ActivationVerifierClassifier interface {
 	VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool
 }
 
+// PreparedMaterializationVerifier classifies a freshly completed VerifyOnly
+// observation after the core has proved the complete owned projection. The
+// selected adapter predicate is pure; wrappers may revalidate existing profile
+// authority around it. No materialization or activation mutation is permitted.
+// Success proves materialization, never activation. The caller supplies only
+// the current attempt's outcome, not stored guidance.
+type PreparedMaterializationVerifier interface {
+	// Availability is a pure selected-adapter membership check. It must not
+	// inspect profiles/state or borrow a setup-completion capability.
+	PreparedMaterializationVerifierAvailable(domain.DetectedClient) bool
+	PreparedMaterializationVerified(domain.ActivationRequest, domain.ActivationOutcome) bool
+}
+
 // ActivationReadinessInspector observes required native configuration without
 // mutating it. An absent capability preserves projection-only completeness.
 type ActivationReadinessInspector interface {

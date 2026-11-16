@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
@@ -62,7 +64,7 @@ func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
 		}
 	}()
 	added := f.run(t, "codex-model-foreign-add", "add", f.base.Package, "--no-save")
-	codexNativeProjectPrepared(t, added)
+	codexNativeProjectActivation(t, added, domain.ActivationActive)
 	codexProjectMCPBinding(t, f)
 	codexAssertForeignProjectMCP(t, projectConfig, foreign, true)
 	stages["install_preserved_foreign"] = nativeStage{Status: "passed", Reason: "project add retained foreign project MCP alongside UAP-managed MCP, with user/B isolation"}

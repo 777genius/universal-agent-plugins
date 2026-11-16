@@ -361,6 +361,7 @@ func TestOpenCodeProjectConfigRejectsMalformedEnabled(t *testing.T) {
 }
 
 func TestOpenCodeProjectPublicProgressIsExactAndLabelBound(t *testing.T) {
+	result := openCodeProjectResultFixture(false)
 	resolve := "Resolving and validating one Agent Plugin package for every selected target...\n"
 	cases := map[string]string{
 		"add-user":           resolve + "Installing uap-opencode-user-control for 1 selected clients...\n",
@@ -369,7 +370,7 @@ func TestOpenCodeProjectPublicProgressIsExactAndLabelBound(t *testing.T) {
 		"add-same-user":      resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
 		"add-same-A":         resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
 		"add-json":           resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
-		"repeat-add-A":       resolve + "Applying transactional client package...\n",
+		"repeat-add-A":       resolve,
 		"unchanged-update-A": "Resolving and validating one updated Agent Plugin package for every selected target...\n",
 		"update-A":           "Resolving and validating one updated Agent Plugin package for every selected target...\n",
 		"intact-repair-A":    "Resolving and validating each unique exact installed package revision once...\n",
@@ -379,25 +380,70 @@ func TestOpenCodeProjectPublicProgressIsExactAndLabelBound(t *testing.T) {
 	}
 	for label, expected := range cases {
 		t.Run(label, func(t *testing.T) {
-			if !openCodeProjectProgress(label, []byte(expected)) {
+			if !openCodeProjectProgress(label, []byte(expected), result) {
 				t.Fatal("source-established exact progress refused")
 			}
 			for _, dirty := range []string{expected + "warning\n", " " + expected, expected + "\r\n", strings.ReplaceAll(expected, "\n", "\r\n")} {
-				if dirty != expected && openCodeProjectProgress(label, []byte(dirty)) {
+				if dirty != expected && openCodeProjectProgress(label, []byte(dirty), result) {
 					t.Fatal("changed/extra progress bytes accepted")
 				}
 			}
-			if expected != "" && openCodeProjectProgress(label, nil) {
+			if expected != "" && openCodeProjectProgress(label, nil, result) {
 				t.Fatal("missing required progress admitted")
 			}
 		})
 	}
 	for _, label := range []string{"version", "initial-A-config", "git-A", "repeat-remove-A", "unknown"} {
-		if openCodeProjectProgress(label, nil) || openCodeProjectProgress(label, []byte(cases["add-A"])) {
+		if openCodeProjectProgress(label, nil, result) || openCodeProjectProgress(label, []byte(cases["add-A"]), result) {
 			t.Fatal("non-ordinary UAP lane acquired progress allowance", label)
 		}
 	}
-	if openCodeProjectProgress("repeat-add-A", []byte(cases["add-A"])) || openCodeProjectProgress("add-A", []byte(cases["repeat-add-A"])) {
+	if openCodeProjectProgress("repeat-add-A", []byte(cases["add-A"]), result) || openCodeProjectProgress("add-A", []byte(cases["repeat-add-A"]), result) {
 		t.Fatal("single/group imperative add progress conflated")
+	}
+}
+
+func TestOpenCodeProjectRepeatProgressRequiresActualNoChange(t *testing.T) {
+	resolve := "Resolving and validating one Agent Plugin package for every selected target...\n"
+	for _, name := range []string{"nil", "missing result", "mixed", "batch", "failed", "error", "missing no_change", "false no_change", "typed no_change", "missing mutated", "true mutated", "typed mutated"} {
+		t.Run(name, func(t *testing.T) {
+			result := openCodeProjectResultFixture(false)
+			data := result["data"].(map[string]any)
+			outcome := data["result"].(map[string]any)
+			switch name {
+			case "nil":
+				result = nil
+			case "missing result":
+				delete(data, "result")
+			case "mixed":
+				data["targets"] = []any{}
+			case "batch":
+				result = openCodeProjectResultFixture(true)
+			case "failed":
+				result["result"] = "error"
+			case "error":
+				result["error"] = "inert refusal"
+			case "missing no_change":
+				delete(outcome, "no_change")
+			case "false no_change":
+				outcome["no_change"] = false
+			case "typed no_change":
+				outcome["no_change"] = "true"
+			case "missing mutated":
+				delete(outcome, "mutated")
+			case "true mutated":
+				outcome["mutated"] = true
+			case "typed mutated":
+				outcome["mutated"] = "false"
+			}
+			for _, body := range []string{resolve, resolve + "Applying transactional client package...\n"} {
+				if openCodeProjectProgress("repeat-add-A", []byte(body), result) {
+					t.Fatal("repeat progress accepted without actual unchanged single result")
+				}
+			}
+		})
+	}
+	if openCodeProjectProgress("repeat-add-A", []byte(resolve+"Applying transactional client package...\n"), openCodeProjectResultFixture(false)) {
+		t.Fatal("confirmed no-change result accepted an Applying line")
 	}
 }

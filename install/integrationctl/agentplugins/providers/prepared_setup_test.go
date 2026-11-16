@@ -90,3 +90,48 @@ func TestPreparedSetupDispatchRequiresRegisteredExplicitOptIn(t *testing.T) {
 		t.Fatal("declined setup admitted")
 	}
 }
+
+type materializationOptIn struct {
+	setupIdentityOnly
+	calls int
+	allow bool
+}
+
+func (adapter *materializationOptIn) PreparedMaterializationVerified(request domain.ActivationRequest, observed domain.ActivationOutcome) bool {
+	adapter.calls++
+	return adapter.allow && request.VerifyOnly && request.DeclaredName == "reviewed" && observed.Activation == domain.ActivationPrepared
+}
+
+func TestPreparedMaterializationRequiresSeparateSelectedOptIn(t *testing.T) {
+	request := domain.ActivationRequest{Client: domain.DetectedClient{ClientID: "codex"}, DeclaredName: "reviewed", VerifyOnly: true}
+	observed := domain.ActivationOutcome{Activation: domain.ActivationPrepared}
+	if (Activator{}).PreparedMaterializationVerifierAvailable(request.Client) || (Activator{}).PreparedMaterializationVerified(request, observed) {
+		t.Fatal("missing registry admitted materialization")
+	}
+	setup := &setupOptIn{allow: true, available: true}
+	registry, err := clients.NewRegistry(setup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if (Activator{Registry: registry}).PreparedMaterializationVerifierAvailable(request.Client) || (Activator{Registry: registry}).PreparedMaterializationVerified(request, observed) || setup.calls != 0 {
+		t.Fatal("setup-completion capability became materialization proof")
+	}
+	adapter := &materializationOptIn{allow: true}
+	registry, err = clients.NewRegistry(adapter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := Activator{Registry: registry}
+	if !actor.PreparedMaterializationVerifierAvailable(request.Client) || !actor.PreparedMaterializationVerified(request, observed) || adapter.calls != 1 {
+		t.Fatal("selected materialization opt-in was not dispatched")
+	}
+	request.Client.ClientID = "claude"
+	if actor.PreparedMaterializationVerifierAvailable(request.Client) || actor.PreparedMaterializationVerified(request, observed) || adapter.calls != 1 {
+		t.Fatal("another adapter borrowed materialization authority")
+	}
+	request.Client.ClientID = "codex"
+	adapter.allow = false
+	if actor.PreparedMaterializationVerified(request, observed) || adapter.calls != 2 {
+		t.Fatal("declined materialization admitted")
+	}
+}

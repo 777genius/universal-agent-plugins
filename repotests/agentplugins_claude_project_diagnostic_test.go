@@ -7,8 +7,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
 )
 
 const claudeDiagnosticLimit = 1 << 20
@@ -97,10 +101,57 @@ func claudeFailureListingRecords(client, project, other string, env []string, ca
 	for _, selected := range []struct{ label, cwd string }{{"failure-project-A-list", project}, {"failure-project-B-list", other}} {
 		args := []string{"plugin", "list", "--json"}
 		result := capture(client, selected.cwd, append([]string(nil), env...), args)
-		stdout, stderr := selected.label+".stdout.log", selected.label+".stderr.log"
-		logs[stdout], logs[stderr] = result.Stdout, result.Stderr
-		digest := func(body []byte) string { sum := sha256.Sum256(body); return hex.EncodeToString(sum[:]) }
-		records = append(records, map[string]any{"argv": append([]string{client}, args...), "cwd": selected.cwd, "exit": result.Exit, "error": result.Error, "deadline": result.Deadline, "stdout_limit": result.StdoutLimit, "stderr_limit": result.StderrLimit, "elapsed_ms": result.Elapsed.Milliseconds(), "stdout_file": stdout, "stderr_file": stderr, "stdout_bytes": len(result.Stdout), "stderr_bytes": len(result.Stderr), "stdout_sha256": digest(result.Stdout), "stderr_sha256": digest(result.Stderr), "qualification": false})
+		record, streams := claudeDiagnosticRecord(selected.label, client, selected.cwd, args, result)
+		records = append(records, record)
+		for name, body := range streams {
+			logs[name] = body
+		}
 	}
 	return records, logs
+}
+
+func claudeDiagnosticRecord(label, client, cwd string, args []string, result claudeDiagnosticResult) (map[string]any, map[string][]byte) {
+	stdout, stderr := label+".stdout.log", label+".stderr.log"
+	digest := func(body []byte) string { sum := sha256.Sum256(body); return hex.EncodeToString(sum[:]) }
+	record := map[string]any{"argv": append([]string{client}, args...), "cwd": cwd, "exit": result.Exit, "error": result.Error, "deadline": result.Deadline, "stdout_limit": result.StdoutLimit, "stderr_limit": result.StderrLimit, "elapsed_ms": result.Elapsed.Milliseconds(), "stdout_file": stdout, "stderr_file": stderr, "stdout_bytes": len(result.Stdout), "stderr_bytes": len(result.Stderr), "stdout_sha256": digest(result.Stdout), "stderr_sha256": digest(result.Stderr), "qualification": false}
+	return record, map[string][]byte{stdout: result.Stdout, stderr: result.Stderr}
+}
+
+// This is a later diagnostic observation, not the missing original activation
+// response. It cannot qualify the failed installer or a native MCP session.
+func claudeFailureMCPRecord(label, client, project, configRoot string, originalEnv []string, capture claudeDiagnosticCapture) (map[string]any, map[string][]byte) {
+	if label != "managed-mcp-add" {
+		return nil, nil
+	}
+	args := []string{"mcp", "get", "plugin:uap-commands-fixture:uap_project_fixture"}
+	env, err := claudeFailureMCPEnvironment(configRoot, originalEnv)
+	result := claudeDiagnosticResult{Exit: -1}
+	if err != nil {
+		result.Error = boundedClaudeDiagnosticError(err)
+	} else {
+		result = capture(client, project, env, args)
+	}
+	record, logs := claudeDiagnosticRecord("failure-project-A-mcp-get", client, project, args, result)
+	record["post_failure"], record["capture_attempted"] = true, err == nil
+	record["config_root"] = configRoot
+	return record, logs
+}
+
+func claudeFailureMCPEnvironment(configRoot string, original []string) ([]string, error) {
+	if !filepath.IsAbs(configRoot) || len(configRoot) > 4096 || strings.ContainsRune(configRoot, '\x00') {
+		return nil, errors.New("invalid original Claude diagnostic config root")
+	}
+	env, _, err := claude.BoundedClaudeProbeEnvironmentFrom(original)
+	if err != nil {
+		return nil, err
+	}
+	env = append(env, "CLAUDE_CONFIG_DIR="+configRoot, "DISABLE_AUTOUPDATER=1", "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1")
+	total := 0
+	for _, entry := range env {
+		total += len(entry) + 1
+	}
+	if total > 32768 {
+		return nil, errors.New("claude diagnostic environment exceeds the bounded size")
+	}
+	return env, nil
 }

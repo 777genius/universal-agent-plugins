@@ -52,3 +52,31 @@ func (a profileActivator) CanCompletePreparedSetup(request domain.ActivationRequ
 	allowed := classifier.CanCompletePreparedSetup(request, observed)
 	return a.check() == nil && allowed
 }
+
+// Membership must not add profile/state observations for adapters that did
+// not opt in. The actual classifier is still guarded on both sides below.
+func (a profileActivator) PreparedMaterializationVerifierAvailable(client domain.DetectedClient) bool {
+	verifier, ok := a.ClientActivator.(ports.PreparedMaterializationVerifier)
+	return ok && verifier.PreparedMaterializationVerifierAvailable(clonePreparedVerifierClient(client))
+}
+
+func (a profileActivator) PreparedMaterializationVerified(request domain.ActivationRequest, observed domain.ActivationOutcome) bool {
+	verifier, ok := a.ClientActivator.(ports.PreparedMaterializationVerifier)
+	if !ok || a.check() != nil {
+		return false
+	}
+	request.Client = clonePreparedVerifierClient(request.Client)
+	request.Plan = clonePreparedVerifierPlan(request.Plan)
+	request.Delivery.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
+	request.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...)
+	verified := verifier.PreparedMaterializationVerified(request, cloneMaterializationOutcome(observed))
+	return a.check() == nil && verified
+}
+
+func cloneMaterializationOutcome(observed domain.ActivationOutcome) domain.ActivationOutcome {
+	observed.NativeObjects = append([]domain.NativeObjectOwnership(nil), observed.NativeObjects...)
+	observed.UserActions = append([]string(nil), observed.UserActions...)
+	observed.LocalActions = append([]string(nil), observed.LocalActions...)
+	observed.LocalEntryObservation = observed.LocalEntryObservation.Clone()
+	return observed
+}

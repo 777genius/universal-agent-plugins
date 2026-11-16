@@ -60,12 +60,13 @@ class Keyboard(Session):
         self.events[-1]['unchanged'] = state == self.fixture.before
 
     def pump(self, timeout=0.1):
-        super().pump(timeout)
+        received = super().pump(timeout)
         # This lane exercises reverse-index away from the top margin. Normalize
         # only the evidence renderer; PTY input/output bytes stay untouched.
         screen = Screen(self.screen.rows, self.screen.cols)
         screen.feed(bytes(self.raw).replace(b'\x1bM', b'\x1b[1A'))
         self.screen = screen
+        return received
 
     def send(self, keys):
         self.events.append({'event': 'raw-key', 'hex': keys.hex(),
@@ -281,7 +282,12 @@ def run_case(name, binary, evidence, timeout):
                         session.send(b'\x1b' if name.endswith('escape') else b'\x03')
                         session.finish(1); fixture.unchanged()
                     elif name == 'native-ownership':
+                        offset = len(session.raw)
                         session.send(b'\r')
+                        session.wait(r'Retry failed agents\? Enter retries the selected ones, Esc skips',
+                                     'native-ownership-retry', after=offset)
+                        fixture.unchanged()
+                        session.send(b'\x1b')
                         session.finish(1)
                         check('observe native identity for codex' in clean(session.raw),
                               'native ownership failure diagnostic missing')

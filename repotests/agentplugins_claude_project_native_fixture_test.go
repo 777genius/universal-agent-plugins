@@ -18,6 +18,7 @@ type claudeProjectNativeFixture struct {
 	diagnosticAttempted                      bool
 	untrustedProfile                         bool
 	untrustedProfileBaseline                 []byte
+	ownedUsageRemoval                        *claudeOwnedUsageRemoval
 }
 
 func newClaudeProjectNativeFixture(t *testing.T) *claudeProjectNativeFixture {
@@ -59,7 +60,7 @@ func (f *claudeProjectNativeFixture) requireForeign(t *testing.T) {
 		t.Fatal("native project registration changed the foreign disabled plugin")
 	}
 	for path, want := range f.foreign {
-		if got := nativeSHA(t, path); got != want {
+		if got := nativeSHA(t, path); got != want && !f.allowsOwnedUsageRemoval(path, want, got) {
 			t.Fatal(claudeForeignSnapshotChange(f.base.Root, path, want, got))
 		}
 	}
@@ -85,13 +86,21 @@ func (f *claudeProjectNativeFixture) run(t *testing.T, label string, args ...str
 	if label == "trusted-foreign-mcp-remove" {
 		claudeTrustedRecordRemoveBaseline(t, f)
 	}
-	result, err := commandsRunInstaller(t, f.base.Root, f.project, f.base.env(filepath.Dir(f.client)), f.installer, label, args...)
+	environment := f.base.env(filepath.Dir(f.client))
+	result, err := commandsRunInstaller(t, f.base.Root, f.project, environment, f.installer, label, args...)
 	if label == "trusted-foreign-mcp-remove" {
 		claudeTrustedRecordProfile(t, f, "trusted-foreign-mcp-remove-after-profile.json")
 	}
 	if err != nil && !f.diagnosticAttempted {
 		f.diagnosticAttempted = true
-		records, logs := claudeFailureListingRecords(f.client, f.project, f.otherProject, f.base.env(filepath.Dir(f.client)), captureClaudeDiagnostic)
+		f.requireForeign(t)
+		records, logs := claudeFailureListingRecords(f.client, f.project, f.otherProject, environment, captureClaudeDiagnostic)
+		if record, streams := claudeFailureMCPRecord(label, f.client, f.project, f.base.ConfigDir, environment, captureClaudeDiagnostic); record != nil {
+			records = append(records, record)
+			for name, body := range streams {
+				logs[name] = body
+			}
+		}
 		for name, body := range logs {
 			nativeWrite(t, filepath.Join(f.base.Root, name), body, 0600)
 		}

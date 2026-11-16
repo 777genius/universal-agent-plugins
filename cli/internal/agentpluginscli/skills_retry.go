@@ -9,25 +9,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // maxSkillsRetries bounds the interactive retry loop. A person who keeps
 // failing the same way is better served by the technical log than a fourth try.
 const maxSkillsRetries = 3
-
-// outstandingAgents tracks agents that failed in any attempt and were not fixed
-// since, so a successful last retry cannot hide an earlier unresolved agent.
-type outstandingAgents map[string]string
-
-func (outstanding outstandingAgents) record(reports []agentReport) {
-	for _, report := range reports {
-		if report.Failed() {
-			outstanding[string(report.ClientID)] = report.Label
-		} else {
-			delete(outstanding, string(report.ClientID))
-		}
-	}
-}
 
 // applySkillsWithRecovery applies a reviewed batch, explains agents that did not
 // succeed in plain words, records the technical detail in the install log and,
@@ -35,11 +22,17 @@ func (outstanding outstandingAgents) record(reports []agentReport) {
 func applySkillsWithRecovery(cmd *cobra.Command, app App, opts *options, prepared *PreparedSkillsBatch, canRetry bool) error {
 	reviewed := prepared.Actions()
 	current := prepared
-	outstanding := outstandingAgents{}
+	defer func() {
+		if current != prepared {
+			current.Close()
+		}
+	}()
+	// outstanding tracks agents that failed in any attempt and were not fixed
+	// since, so a successful last retry cannot hide an earlier unresolved agent.
+	outstanding := map[string]string{}
 	for attempt := 1; ; attempt++ {
 		result, err := applySkillsTerminalAttempt(cmd, app, opts, current)
-		reports := reportByAgent(skillsAgentItems(result.Items))
-		outstanding.record(reports)
+		updateOutstandingAgents(outstanding, reportByAgent(skillsAgentItems(result.Items)))
 		logPath := app.recordInstallRun("skills add", attempt, agentLogEntries(skillsAgentItems(result.Items)))
 		err = humanSkillsApplyError(opts.format, result.Items, err, logPath)
 		if writeErr := renderSkillsResult(cmd, opts, result, logPath); writeErr != nil {
@@ -51,18 +44,27 @@ func applySkillsWithRecovery(cmd *cobra.Command, app App, opts *options, prepare
 		if err == nil && len(outstanding) > 0 {
 			err = fmt.Errorf("%s still need attention; see the technical log", strings.Join(sortedValues(outstanding), ", "))
 		}
-		if err == nil || !canRetry || attempt > maxSkillsRetries || cmd.Context().Err() != nil || result.Status == "succeeded" {
+		if err == nil || domain.IsUnclosedClientProbe(err) || !canRetry || attempt > maxSkillsRetries || cmd.Context().Err() != nil || result.Status == "succeeded" {
 			return err
 		}
-		next, retryErr := prepareSkillsRetry(cmd, app, opts, prepared, reviewed, reports)
+		next, retryErr := prepareSkillsRetry(cmd, app, opts, prepared, reviewed, reportByAgent(skillsAgentItems(result.Items)))
 		if retryErr != nil {
 			return errors.Join(err, retryErr)
 		}
 		if next == nil {
 			return err
 		}
-		defer next.Close()
 		current = next
+	}
+}
+
+func updateOutstandingAgents(outstanding map[string]string, reports []agentReport) {
+	for _, report := range reports {
+		if report.Failed() {
+			outstanding[string(report.ClientID)] = report.Label
+		} else {
+			delete(outstanding, string(report.ClientID))
+		}
 	}
 }
 
@@ -197,7 +199,7 @@ func confirmChangedRetry(cmd *cobra.Command, app App, opts *options, prepared *P
 	return nil
 }
 
-func sortedValues(values outstandingAgents) []string {
+func sortedValues(values map[string]string) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, value)

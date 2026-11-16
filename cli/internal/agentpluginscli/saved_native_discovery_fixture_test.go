@@ -78,7 +78,7 @@ func savedCodexDiscovery(command legacyports.Command, registeredIDs map[string]b
 	}
 	var responses bytes.Buffer
 	encoder := json.NewEncoder(&responses)
-	if err := encoder.Encode(map[string]any{"id": 1, "result": map[string]any{"userAgent": "inert-codex-fixture", "codexHome": profile}}); err != nil {
+	if err := encoder.Encode(map[string]any{"id": 1, "result": map[string]any{"userAgent": "agentplugins/0.162.0", "codexHome": profile}}); err != nil {
 		return err
 	}
 	if err := encoder.Encode(map[string]any{"id": 3, "result": map[string]any{"data": []any{map[string]any{"cwd": command.Dir, "errors": []any{}, "skills": skills}}}}); err != nil {

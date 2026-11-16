@@ -59,16 +59,16 @@ func TestAgentpluginsCodexNativeTrustedProjectMCP(t *testing.T) {
 	codexProjectMCPSession(t, f, f.otherProject, "control-before-add", nil, "", false)
 	nativeAttempt(stages, "install", "trusted-add-installer.json")
 	added := f.run(t, "trusted-add", "add", f.base.Package, "--no-save")
-	codexNativeProjectPrepared(t, added)
+	codexNativeProjectActivation(t, added, domain.ActivationActive)
 	binding, data := codexProjectMCPBinding(t, f)
-	stages["install"] = nativeStage{Status: "passed", Reason: "public project add recorded exact Prepared package, MCP and data ownership"}
+	stages["install"] = nativeStage{Status: "passed", Reason: "public project add recorded exact Active package, MCP and data ownership"}
 	state := filepath.Join(f.base.Project, ".uap", "state-v2.json")
 	projectConfig := filepath.Join(f.base.Project, ".codex", "config.toml")
 	beforeState, beforeConfig := nativeSHA(t, state), nativeSHA(t, projectConfig)
 	requireStable := func() {
 		t.Helper()
 		if nativeSHA(t, state) != beforeState || nativeSHA(t, projectConfig) != beforeConfig {
-			t.Fatal("unchanged project operation/native session rewrote Prepared state or config")
+			t.Fatal("unchanged project operation/native session rewrote Active state or config")
 		}
 	}
 	nativeAttempt(stages, "native_project_mcp", "trusted-add-rpc.jsonl")
@@ -81,7 +81,7 @@ func TestAgentpluginsCodexNativeTrustedProjectMCP(t *testing.T) {
 		args  []string
 	}{{"trusted-repeat-add", []string{"add", f.base.Package, "--no-save"}}, {"trusted-unchanged-update", []string{"update", "native-proof"}}} {
 		result := codexProjectAssertionEnvelope(f.run(t, step.label, step.args...))
-		codexNativeProjectPrepared(t, result)
+		codexNativeProjectActivation(t, result, domain.ActivationActive)
 		commandsRequireMutated(t, step.label, result, false)
 		outcome, err := commandsTargetOutcome(result)
 		if err != nil || outcome["no_change"] != true {
@@ -91,7 +91,7 @@ func TestAgentpluginsCodexNativeTrustedProjectMCP(t *testing.T) {
 		codexProjectMCPSession(t, f, f.base.Project, step.label, &binding, data, true)
 		requireStable()
 	}
-	stages["unchanged"] = nativeStage{Status: "passed", Reason: "repeat add/update preserved exact Prepared state/config and direct MCP tool/data behavior"}
+	stages["unchanged"] = nativeStage{Status: "passed", Reason: "repeat add/update preserved exact Active state/config and direct MCP tool/data behavior"}
 	codexProjectMCPSession(t, f, f.otherProject, "control-after-replay", nil, "", false)
 	nativeAttempt(stages, "remove", "trusted-remove-installer.json")
 	f.run(t, "trusted-remove", "remove", "native-proof")
@@ -123,7 +123,7 @@ func codexProjectMCPBinding(t *testing.T, f *codexProjectNativeFixture) (domain.
 	}
 	for _, binding := range installation.Clients {
 		data := installation.DataReceipts[binding.DataReceiptID]
-		if binding.ClientID != "codex" || binding.Scope != "project" || binding.NativeProfileRoot != f.base.Project || binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled || binding.PhysicalArtifact == "" || data.DataReceiptID != binding.DataReceiptID || data.Scope != "project" || data.PhysicalBackend != binding.PhysicalArtifact || data.State != domain.DataReceiptOwned || data.OwnershipDigest == "" {
+		if binding.ClientID != "codex" || binding.Scope != "project" || binding.NativeProfileRoot != f.base.Project || binding.Activation != domain.ActivationActive || binding.Verification != domain.VerificationInstalled || binding.PhysicalArtifact == "" || data.DataReceiptID != binding.DataReceiptID || data.Scope != "project" || data.PhysicalBackend != binding.PhysicalArtifact || data.State != domain.DataReceiptOwned || data.OwnershipDigest == "" {
 			t.Fatal("project binding/data authority differs")
 		}
 		nativeRequireContained(t, filepath.Join(f.base.Project, ".uap", "managed"), binding.TargetLocator)

@@ -81,6 +81,68 @@ class RemotionTemporaryRootTest(unittest.TestCase):
                         resolve.assert_not_called()
 
 
+class RemotionRepeatNativePhaseTest(unittest.TestCase):
+    def setUp(self):
+        self.live = run_path(str(Path(__file__).with_name("live-install-audit.py")))
+
+    def test_every_phase_keeps_the_original_snapshot_without_adopting_new_files(self):
+        with tempfile.TemporaryDirectory(prefix="remotion-phases-inert-") as temporary:
+            root = Path(temporary) / ".codex"
+            root.mkdir()
+            (root / "foreign").write_bytes(b"private original contents")
+            before = self.live["snapshot"]([root])
+            original = dict(before)
+            snapshots = []
+            for name in ("after-add", "after-list", "after-native"):
+                member = root / ".tmp" / name / "HEAD"
+                member.parent.mkdir(parents=True)
+                member.write_bytes(b"ref: refs/heads/main\n")
+                snapshots.append(self.live["snapshot"]([root]))
+            phases = self.live["repeat_native_phase_evidence"](before, *snapshots)
+            self.assertEqual([row["phase"] for row in phases], [
+                "after-public-repeat-add", "after-public-repeat-list", "after-native-checkpoint"])
+            self.assertEqual([row["total"] for row in phases], [1, 2, 3])
+            for row in phases:
+                self.assertEqual(row["omitted"], 0)
+                self.assertTrue(all(entry["before"] is None for entry in row["entries"]))
+                self.assertTrue(all(len(entry["after"]) == 64 for entry in row["entries"]))
+            self.assertEqual(before, original)
+            self.assertNotEqual(snapshots[-1], before, "the original final equality must still fail")
+            text = json.dumps(phases)
+            self.assertNotIn(temporary, text)
+            self.assertNotIn("private original contents", text)
+            self.assertNotIn("ref: refs/heads/main", text)
+
+    def test_each_phase_retains_existing_bounds_and_unsafe_markers(self):
+        long_path = ".codex/000-" + "x" * 3000
+        before = {long_path: "symlink"}
+        after = {f".codex/{index:03d}": "a" * 64 for index in range(1, 105)}
+        after[long_path] = "unreadable"
+        phases = self.live["repeat_native_phase_evidence"](before, after, after, after)
+        self.assertEqual(len(phases), 3)
+        for row in phases:
+            self.assertEqual(row["total"], 105)
+            self.assertEqual(row["omitted"], 5)
+            self.assertEqual(len(row["entries"]), 100)
+            first = row["entries"][0]
+            self.assertEqual(len(first["path"]), 2048)
+            self.assertTrue(first["path_truncated"])
+            self.assertEqual((first["before"], first["after"]), ("symlink", "unreadable"))
+        self.assertEqual(before, {long_path: "symlink"})
+
+    def test_unchanged_phases_are_empty_and_failure_projection_preserves_verdict(self):
+        before = {".codex/foreign": "a" * 64}
+        phases = self.live["repeat_native_phase_evidence"](before, before, before, before)
+        self.assertTrue(all(row["total"] == 0 and row["omitted"] == 0
+                            and row["entries"] == [] for row in phases))
+        failed = {"repeat_native_phases": phases, "repeat_native_unchanged": False,
+                  "repeat_verified": False, "sentinels_preserved": True}
+        evidence = self.live["failed_case_diagnostics"](failed)
+        self.assertEqual(evidence, failed)
+        self.assertFalse(evidence["repeat_verified"])
+        self.assertFalse(evidence["repeat_native_unchanged"])
+
+
 class CodexRuntimeStateTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 // nativeRemovalAttempt freezes the exact state around this invocation's marker
@@ -14,6 +15,7 @@ import (
 type nativeRemovalAttempt struct {
 	before, attempted domain.StateFileV2
 	attemptID         string
+	attemptedDigest   string
 }
 
 func freezeNativeRemovalAttempt(before, attempted domain.StateFileV2, attemptID string) (*nativeRemovalAttempt, error) {
@@ -27,7 +29,26 @@ func freezeNativeRemovalAttempt(before, attempted domain.StateFileV2, attemptID 
 	if err := json.Unmarshal(body, &frozen); err != nil {
 		return nil, err
 	}
-	return &nativeRemovalAttempt{before: frozen[0], attempted: frozen[1], attemptID: attemptID}, nil
+	digest, err := transaction.ComparableStateDigest(frozen[1])
+	if err != nil {
+		return nil, err
+	}
+	return &nativeRemovalAttempt{before: frozen[0], attempted: frozen[1], attemptID: attemptID, attemptedDigest: digest}, nil
+}
+
+func (attempt *nativeRemovalAttempt) identity(installationID, bindingID string) domain.NativeAttemptIdentity {
+	if attempt != nil {
+		for _, installation := range attempt.attempted.Installations {
+			if installation.InstallationID == installationID {
+				binding, found := installation.Clients[bindingID]
+				if found && binding.NativeActivationAttempt == attempt.attemptID {
+					return domain.NativeAttemptIdentity{OperationID: attempt.attemptID, InstallationID: installationID,
+						BindingID: bindingID, NativeRoot: binding.NativeProfileRoot, StateDigest: attempt.attemptedDigest}
+				}
+			}
+		}
+	}
+	return domain.NativeAttemptIdentity{}
 }
 
 func (service Service) beginNativeRemovalAttempt(installationID, bindingID string, client domain.ClientBinding, predecessor domain.StateFileV2) (*nativeRemovalAttempt, error) {
