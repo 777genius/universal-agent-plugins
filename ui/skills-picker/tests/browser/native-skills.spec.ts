@@ -93,8 +93,8 @@ test('public browser installs one raw Skill into real Codex and Claude profiles'
     await expect(review).toHaveCount(0);
     const progress = page.getByRole('region', { name: 'Installation progress' });
     await expect(progress.locator('.operation-item')).toHaveCount(2);
-    await expect(progress).toContainText('codex · succeeded');
-    await expect(progress).toContainText('claude · succeeded');
+    await expect(progress).toContainText('codex · files ready');
+    await expect(progress).toContainText('claude · files ready');
     await expect.poll(() => operation?.state).toBe('succeeded');
     expect(operation!.items.map((item) => [item.targetId, item.status]).sort()).toEqual([
       ['claude', 'succeeded'], ['codex', 'succeeded'],
