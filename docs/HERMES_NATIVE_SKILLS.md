@@ -22,8 +22,45 @@ name. Platform-default selection has separate injected-host tests; the native
 lifecycle verifies the explicit profile. Existing legacy directories do not
 change the selected authority. See the [profile correction source review](plans/2026-11-10-hermes-windows-profile.md).
 
-Hermes honors project Skills only after its own project trust conditions. UAP
-never grants trust or equates installed filesystem bytes with live availability.
+Hermes honors project Skills only after its own project trust conditions. A
+confirmed Project installation with Skills asks the user's own Hermes CLI to
+trust the selected Git repository root; the install review says so before
+confirmation. Planning, dry runs and verification never change trust, and UAP
+never equates installed filesystem bytes with live availability.
+
+### Project trust on confirmed installation
+
+Hermes 0.23 keeps project trust in `skills.trusted_project_dirs` of the profile a
+bare `hermes` selects. Trust covers the whole Git repository root, both
+`.hermes/skills` and `.agents/skills`, including Skills added later, until
+`hermes skills untrust`. Skills that Hermes' `skills_guard` flags as dangerous
+stay quarantined and do not load. Trust is the user's preference: UAP removal
+never revokes it. Start a new Hermes session after installation.
+
+UAP never edits `config.yaml` for trust and never uses `hermes config set`,
+because a sticky active profile can make a bare `hermes` read another file. It
+runs `hermes skills trust <root>` with the user's environment and no `-p`, and
+only after all of these hold:
+
+- the root is the absolute physical `git rev-parse --show-toplevel` result, the
+  nearest ancestor with `.git` of the selected project, and neither the home
+  directory, a directory containing it nor a volume root;
+- `hermes config path` names `config.yaml` in the Hermes home UAP selected;
+- `HERMES_MANAGED` (other than `false`, `0`, `no`, `off`, `brew`, `homebrew`),
+  a `.managed` or `.container-mode` marker, a non-file
+  `HERMES_CONFIG_BACKEND` (environment, home `.env` or managed `.env`) or a
+  managed `config.yaml` that pins `skills.trusted_project_dirs` are all absent;
+- the existing trust list can be read; UAP holds its own configuration lock so
+  two UAP operations never save the same profile concurrently.
+
+The command exits 0 even when Hermes saved nothing, so UAP reports trust only
+when stderr is empty, the first line is exactly `Trusted: <root>` or
+`Already trusted: <root>`, a fresh read contains the root and every earlier
+entry, and `skills.project_discovery` is not false. Otherwise it reports that
+trust was not changed or could not be confirmed and prints the exact
+`hermes skills trust '<root>'` command to run before a new session. Repeating
+`add` for an older Skills-only Project installation finishes this step through
+the existing confirmed repair path.
 
 **Strict scope:** source-verified Skills and User MCP install/update/repair/remove,
 no reuse of foreign skill/MCP names. User MCP uses the existing atomic native
@@ -37,8 +74,9 @@ MCP. Packages requiring hooks or unqualified components are refused.
 lifecycle gate for its exact UAP head only. The public release qualification is linked above. The native smoke proves
 MCP listing, connection and tool discovery over loopback Streamable HTTP; it
 does not perform `tools/call`, a model turn or an authenticated provider session.
-Project discovery is observed without granting trust, so it does not establish
-trusted Project Skill execution. Portable commands are projected as Skills;
+The historical runs above observed Project discovery without trust; the current
+lifecycle checks trust after a confirmed install, its absence after a dry run
+or a redirected active profile, and loading in a new process, not execution. Portable commands are projected as Skills;
 explicit-only commands are withheld because Hermes cannot enforce explicit
 invocation. SSE and hooks remain unsupported.
 
@@ -59,9 +97,10 @@ native Windows, with the pinned official installer for each platform:
 - Native `hermes skills list`, `hermes mcp list`, and four `hermes mcp test`
   connections to a bounded loopback fixture, observing initialize/tools/list.
 - Project A/B isolation, update and repair of A while B retains its original
-  Skill, native untrusted-project discovery and removal.
+  Skill, confirmed exact-root trust, loading in a new process and removal that
+  keeps trust. A dry run and a sticky active profile leave trust unchanged.
 - Structured unsupported Project MCP refusal with `mutated: false`, unchanged
-  User YAML bytes and trust, and preservation of foreign Skills/MCP entries.
+  User YAML bytes, and preservation of foreign Skills/MCP entries.
 
 | Native platform | Evidence |
 | --- | --- |
