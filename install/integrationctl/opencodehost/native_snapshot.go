@@ -26,6 +26,10 @@ func NewNativePrepared(executable, root string, environment []string, evidence V
 	}
 	return h
 }
+
+// NativeObservationAuthority preserves the concrete prepared token through trusted wrappers.
+func (h *NativePrepared) NativeObservationAuthority() *NativePrepared { return h }
+
 func (h *NativePrepared) Profile() Profile { return h.profile.Clone() }
 
 // ConfigDialect exposes only the immutable prepared config selection.
