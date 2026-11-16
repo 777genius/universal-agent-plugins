@@ -108,7 +108,7 @@ func runCodex(ctx context.Context, env clients.Env, root, executable string, arg
 	}
 	result, err := env.Runner.Run(ctx, command)
 	if err != nil {
-		return result, fmt.Errorf("start %s: %w", codexCLIName, shared.CompletionProbeFailure(err))
+		return result, fmt.Errorf("run %s: %w", codexCLIName, shared.CommandClosureFailure(codexCLIName+" command", result, err))
 	}
 	if result.ExitCode != 0 {
 		return result, fmt.Errorf("%s command failed with exit code %d", codexCLIName, result.ExitCode)
