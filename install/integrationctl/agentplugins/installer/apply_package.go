@@ -42,6 +42,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 		OriginMode:        prepared.snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(prepared.snapshot.Directory),
 		Hints:                prepared.req.acquiredCompatibility(),
 		EnvironmentAuthority: prepared.req.EnvironmentAuthority,
+		ConfirmPluginEnable:  prepared.req.ConfirmPluginEnable,
 		ActivationComplete:   prepared.req.ActivationComplete, AuthComplete: prepared.req.AuthComplete,
 	})
 	err = wrapLifecycleError(err)

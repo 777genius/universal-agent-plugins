@@ -23,5 +23,5 @@ func (activator Activator) RequiresActivation(ctx context.Context, client domain
 	if !ok {
 		return false, nil
 	}
-	return readiness.RequiresActivation(ctx, activator.env(), client, plan)
+	return readiness.RequiresActivation(ctx, activator.env(client.ClientID), client, plan)
 }

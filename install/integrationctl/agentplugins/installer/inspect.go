@@ -59,10 +59,14 @@ func (e *Engine) observe() (Inspection, error) {
 	installations, bindingIndex := inspectInstallations(state)
 	out.Installations = installations
 	out.EnvironmentReceipts = append([]domain.EnvironmentReceipt(nil), state.EnvironmentReceipts...)
-	out.Recovery.NativeIntents, err = inspectNativeIntents(state)
+	pending, err := e.pendingTransitions()
 	if err != nil {
-		out.Recovery.Required = true
-		out.Recovery.Reason = err.Error()
+		out.Recovery.Required, out.Recovery.Reason = true, err.Error()
+		return out, err
+	}
+	out.Recovery.NativeIntents, err = inspectNativeIntents(state, pending...)
+	if err != nil {
+		out.Recovery.Required, out.Recovery.Reason = true, err.Error()
 		return out, err
 	}
 	open, err := dirswap.Manager{Namespace: e.cfg.StateRoot, JournalDir: e.cfg.OperationsDir}.ListOpen()
@@ -86,7 +90,7 @@ func (e *Engine) observe() (Inspection, error) {
 		})
 	}
 	out.Recovery.Receipts = unfinishedReceipts(state, openIDs, bindingIndex)
-	if err := e.appendPendingTransitions(&out); err != nil {
+	if err := appendPendingTransitions(&out, pending); err != nil {
 		out.Recovery.Required = true
 		out.Recovery.Reason = err.Error()
 		return out, err

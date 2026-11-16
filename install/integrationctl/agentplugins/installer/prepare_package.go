@@ -63,6 +63,7 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		InstallationID:                   req.InstallationID, OperationID: req.OperationID, BackendExecutable: req.ClientExecutable,
 		OriginMode: snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(snapshot.Directory), Hints: hints,
 		EnvironmentAuthority: req.EnvironmentAuthority,
+		ConfirmPluginEnable:  req.ConfirmPluginEnable,
 		ActivationComplete:   req.ActivationComplete, AuthComplete: req.AuthComplete,
 	}, dry)
 	if err != nil {

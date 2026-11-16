@@ -33,6 +33,9 @@ type applySession struct {
 }
 
 func (session *applySession) validateApplyInput() error {
+	if session.input.ConfirmPluginEnable {
+		return fmt.Errorf("explicit plugin enablement requires a single selected repair")
+	}
 	if err := session.input.InstallIntent.Validate(session.input.Client.ClientID); err != nil {
 		return err
 	}
