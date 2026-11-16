@@ -452,3 +452,19 @@ func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selecto
 	err := run()
 	return handled, err
 }
+
+// runSavedLifecycleRetryable runs a saved update or removal and, in an
+// interactive terminal, offers to run it again when some agents failed. Each run
+// plans from current state, so a retry never replays stale actions.
+func runSavedLifecycleRetryable(cmd *cobra.Command, app App, opts *options, selector, verb string) (bool, error) {
+	var handled bool
+	var run func() error
+	run = func() error {
+		opts.installResult = nil
+		var err error
+		handled, err = runSavedLifecycle(cmd, app, opts, selector, verb)
+		return retryConverge(cmd, app, opts, err, run)
+	}
+	err := run()
+	return handled, err
+}
