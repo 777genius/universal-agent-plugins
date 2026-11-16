@@ -30,6 +30,8 @@ import (
 const (
 	piTrustTreeEntryLimit = 16384
 	piTrustTreeByteLimit  = 64 << 20
+	// piTrustPiFileLimit bounds every JSON file the hook reads (its LIMIT).
+	piTrustPiFileLimit = 4 << 20
 )
 
 type piTrustBudget struct{ entries, bytes int64 }
@@ -155,13 +157,29 @@ func piTrustFrame(out *bytes.Buffer, value any) error {
 	return nil
 }
 
-// piTrustMCPServers parses .pi/mcp.json as Pi does, as generic JSON values.
-func piTrustMCPServers(path string) (map[string]any, error) {
-	body, err := os.ReadFile(path)
+// piTrustPiFile reads a Pi JSON input exactly as the hook does: only a
+// bounded regular file, never through a link. An absent file reads as nil.
+func piTrustPiFile(path string) ([]byte, error) {
+	info, err := os.Lstat(path)
 	if os.IsNotExist(err) {
 		return nil, nil
 	}
 	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", filepath.Base(path))
+	}
+	if info.Size() > piTrustPiFileLimit {
+		return nil, fmt.Errorf("%s exceeds %d bytes", filepath.Base(path), piTrustPiFileLimit)
+	}
+	return os.ReadFile(path)
+}
+
+// piTrustMCPServers parses .pi/mcp.json as the hook does, as generic JSON.
+func piTrustMCPServers(path string) (map[string]any, error) {
+	body, err := piTrustPiFile(path)
+	if body == nil || err != nil {
 		return nil, err
 	}
 	var document map[string]any

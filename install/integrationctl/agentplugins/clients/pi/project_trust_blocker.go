@@ -114,16 +114,12 @@ func piTrustConfigBlocker(config string, owned map[string]map[string]string) (st
 }
 
 func piTrustMCPBlocker(path string, owned map[string]string) (string, error) {
-	switch piTrustKind(path) {
-	case "absent":
-		return "", nil
-	case "file":
-	default:
-		return ".pi/mcp.json is not a regular file", nil
-	}
-	body, err := os.ReadFile(path)
+	body, err := piTrustPiFile(path)
 	if err != nil {
-		return "", err
+		return ".pi/" + err.Error(), nil //nolint:nilerr // A refusal is an explanation.
+	}
+	if body == nil {
+		return "", nil
 	}
 	var document map[string]json.RawMessage
 	if !piTrustDecodes(body, &document) || document == nil {
@@ -177,23 +173,16 @@ func piTrustPolicyBlocker(user, project string) (string, error) {
 	var settings struct {
 		DefaultProjectTrust any `json:"defaultProjectTrust"`
 	}
-	if body, err := os.ReadFile(filepath.Join(user, "settings.json")); err == nil {
-		if !piTrustDecodes(body, &settings) {
-			return "Pi's settings.json is unreadable", nil
-		}
-	} else if !os.IsNotExist(err) {
-		return "", err
+	// Like the hook: links, oversized or unreadable files leave Pi in charge.
+	if body, err := piTrustPiFile(filepath.Join(user, "settings.json")); err != nil || body != nil && !piTrustDecodes(body, &settings) {
+		return "Pi's settings.json is not a readable regular file", nil //nolint:nilerr // A refusal is an explanation.
 	}
 	if settings.DefaultProjectTrust == "always" || settings.DefaultProjectTrust == "never" {
 		return fmt.Sprintf("Pi's defaultProjectTrust setting is %q", settings.DefaultProjectTrust), nil
 	}
 	saved := map[string]json.RawMessage{}
-	if body, err := os.ReadFile(filepath.Join(user, "trust.json")); err == nil {
-		if !piTrustDecodes(body, &saved) {
-			return "Pi's trust.json is unreadable", nil
-		}
-	} else if !os.IsNotExist(err) {
-		return "", err
+	if body, err := piTrustPiFile(filepath.Join(user, "trust.json")); err != nil || body != nil && !piTrustDecodes(body, &saved) {
+		return "Pi's trust.json is not a readable regular file", nil //nolint:nilerr // A refusal is an explanation.
 	}
 	for directory := project; ; directory = filepath.Dir(directory) {
 		for path, decision := range saved {

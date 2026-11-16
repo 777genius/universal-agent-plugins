@@ -167,6 +167,9 @@ func TestPiProjectTrustHookAnswersOnlyForOwnedUnchangedProjects(t *testing.T) {
 	link := func(add func(string, string) error, name string) func() bool {
 		return func() bool { return add(filepath.Join(skill, "SKILL.md"), filepath.Join(skill, name)) == nil }
 	}
+	harmless := filepath.Join(root, "harmless.json")
+	piTrustWrite(t, harmless, "{}\n")
+	symlink := func(path string) func() bool { return func() bool { return os.Symlink(harmless, path) == nil } }
 	for _, change := range []struct {
 		name  string
 		add   func() bool
@@ -186,6 +189,8 @@ func TestPiProjectTrustHookAnswersOnlyForOwnedUnchangedProjects(t *testing.T) {
 		{"ancestor .agents skills", write(filepath.Join(work, ".agents", "skills", "x", "SKILL.md"), "x\n"), remove(filepath.Join(work, ".agents"))},
 		{"saved Pi decision", write(filepath.Join(user, "trust.json"), `{"`+filepath.ToSlash(project)+`":false}`), remove(filepath.Join(user, "trust.json"))},
 		{"Pi default policy", write(filepath.Join(user, "settings.json"), `{"defaultProjectTrust":"never"}`), remove(filepath.Join(user, "settings.json"))},
+		{"symlinked Pi settings", symlink(filepath.Join(user, "settings.json")), remove(filepath.Join(user, "settings.json"))},
+		{"symlinked Pi trust store", symlink(filepath.Join(user, "trust.json")), remove(filepath.Join(user, "trust.json"))},
 	} {
 		if !change.add() {
 			t.Logf("%s: not supported by this filesystem", change.name)
@@ -440,6 +445,15 @@ func TestPiProjectTrustConcurrentGrantsAndLeftoverTemporaries(t *testing.T) {
 func TestPiProjectTrustHookSourceIsBoundedAndMatchesNativeLocks(t *testing.T) {
 	if len(piTrustHookSource) > 16<<10 || !strings.HasPrefix(piTrustHookSource, piTrustHookMarker) || strings.Contains(piTrustHookSource, "remember") {
 		t.Fatal("generated Pi hook is unbounded, unmarked or asks Pi to persist trust")
+	}
+	for _, limit := range []string{
+		fmt.Sprintf("const LIMIT = %d;", piTrustPiFileLimit),
+		fmt.Sprintf("const TREE_ENTRIES = %d;", piTrustTreeEntryLimit),
+		fmt.Sprintf("const TREE_BYTES = %d;", piTrustTreeByteLimit),
+	} {
+		if !strings.Contains(piTrustHookSource, limit) {
+			t.Fatal("hook limit drifted from the Go mirror:", limit)
+		}
 	}
 	locks, err := nativeconfig.WriterLockPaths(nativeconfig.Paths{JSON: filepath.Join(piTrustTemp(t), ".pi", "mcp.json")}, nativeconfig.CodecMCPServers)
 	if err != nil || len(locks) != 1 || !strings.Contains(piTrustHookSource, `"`+filepath.Base(locks[0])+`"`) {
