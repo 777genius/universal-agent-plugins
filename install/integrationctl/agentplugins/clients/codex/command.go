@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -107,7 +108,7 @@ func runCodex(ctx context.Context, env clients.Env, root, executable string, arg
 	}
 	result, err := env.Runner.Run(ctx, command)
 	if err != nil {
-		return result, fmt.Errorf("start %s: %w", codexCLIName, err)
+		return result, fmt.Errorf("start %s: %w", codexCLIName, shared.CompletionProbeFailure(err))
 	}
 	if result.ExitCode != 0 {
 		return result, fmt.Errorf("%s command failed with exit code %d", codexCLIName, result.ExitCode)
