@@ -107,9 +107,11 @@ func TestCopilotUserUnclosedCommandStopsNativeFollowups(t *testing.T) {
 					failed = []string{exe, "plugin", "install", request.DeclaredName + "@" + marketplace}
 				}
 				cause := errors.New("native process closure is unproved")
-				var failure error = cause
+				var failure error
 				if typed {
 					failure = &legacyports.ProcessClosureError{Cause: cause}
+				} else {
+					failure = cause
 				}
 				steps = append(steps, copilotUserLiveStep{argv: failed, err: failure})
 				runner := &copilotUserLiveRunner{t: t, steps: steps}
