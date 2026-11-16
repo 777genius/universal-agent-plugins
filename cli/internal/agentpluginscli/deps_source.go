@@ -22,6 +22,19 @@ func gitSourceSpec(source environment.GitSource) sourcespec.Git {
 	return sourcespec.Git{URL: source.Endpoint(), Repository: source.Repository, Path: source.Path}
 }
 
+func dependencySourceHint(locked environment.LockedPackage) string {
+	if locked.Source.Web != nil {
+		return "uap-dependency-web-skill"
+	}
+	if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
+		return "uap-dependency-skill"
+	}
+	if locked.Source.Registry != nil {
+		return "uap-dependency-registry"
+	}
+	return "uap-dependency-git"
+}
+
 // Historical Repository pins keep the exact old identity, even when transport
 // acquisition uses native credentials. Identity is selected by the lock, never
 // by the transport implementation or the first writer of a shared store tree.

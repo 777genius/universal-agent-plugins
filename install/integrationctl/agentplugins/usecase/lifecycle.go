@@ -155,6 +155,10 @@ func (service Service) verifiedPreparedObservationUnchanged(input AddInput, plan
 	if input.Scope == domain.ScopeUser && traits.LifecycleKind == domain.LifecycleCLIRegistry && !traits.TracksNativeEffects && service.preparedSetupVerifierAvailable(input, plan) {
 		return service.verifiedPreparedBindingUnchanged(input, plan, client, delivery, outcome)
 	}
+	return service.verifiedPreparedProjectObservationUnchanged(input, plan, client, delivery, outcome)
+}
+
+func (service Service) verifiedPreparedProjectObservationUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome) bool {
 	return input.Scope == domain.ScopeProject && !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery, input.Scope) &&
 		service.clientVerifierAvailable(input, plan) && client.Materialization == domain.MaterializationMaterialized &&
 		client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationInstalled &&
