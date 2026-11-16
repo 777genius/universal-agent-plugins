@@ -109,6 +109,9 @@ func run() error {
 			}
 		}
 	}
+	if err != nil && ctx.Err() != nil {
+		err = fmt.Errorf("%w\ninterrupted: run the same command again to resume", err)
+	}
 	return err
 }
 
