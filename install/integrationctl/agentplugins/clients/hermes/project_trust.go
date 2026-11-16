@@ -182,6 +182,19 @@ func (grant hermesTrustGrant) run(ctx context.Context) (hermesTrustReport, error
 		return refuse("the Hermes CLI executable was not detected exactly")
 	}
 	values := hermesEnvironmentValues(grant.environ)
+	// Even config path can initialize a native home. Bind the inherited profile
+	// before running any command or taking the selected configuration lock.
+	home := hermesHome(values)
+	if home == "" {
+		return refuse("the home directory cannot be determined, so Hermes trust could cover it")
+	}
+	profile, err := selectedProfileRoot(clients.NewHost(clients.HostProbes{HomeDir: home, GOOS: runtime.GOOS, Environment: values}))
+	if err == nil {
+		profile, err = New().ResolveProfileRoot(profile)
+	}
+	if err != nil || profile != grant.profile {
+		return refuse("the user's Hermes environment selects a different or unavailable profile")
+	}
 	if reason := hermesTrustPolicyRefusal(grant.profile, grant.project, values); reason != "" {
 		return refuse(reason)
 	}
