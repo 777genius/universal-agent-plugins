@@ -67,7 +67,8 @@ type hostDeferredPlanner struct {
 
 func (planner hostDeferredPlanner) Plan(ctx context.Context, request domain.PlanRequest) (domain.DeliveryPlan, error) {
 	plan, err := planner.DeliveryPlanner.Plan(ctx, request)
-	if request.Client.OpenCodeHost == nil && errors.Is(err, clients.ErrOpenCodeAdapterUnavailable) {
+	// Only a detected executable can be qualified after selection.
+	if request.Client.OpenCodeHost == nil && request.Client.ExecutablePath != "" && errors.Is(err, clients.ErrOpenCodeAdapterUnavailable) {
 		planner.deferred[request.Client.ClientID] = true
 	}
 	return plan, err
