@@ -297,7 +297,7 @@ def snapshot_change_evidence(before, after):
 def failed_case_diagnostics(row):
     """Expose existing failed-case evidence in logs; never change qualification."""
     keys = ("codex_public_add_ready", "codex_public_repeat_ready",
-            "repeat_native_unchanged", "repeat_native_changes", "repeat_verified",
+            "repeat_native_unchanged", "repeat_native_runtime_only", "repeat_native_changes", "repeat_verified",
             "removal_verified", "sentinels_preserved")
     evidence = {key: row[key] for key in keys if row.get(key) is not None}
     if "error" in row:
@@ -1980,12 +1980,15 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_list = None
     repeat_identity_ids = []
     repeat_native_unchanged = None
+    repeat_native_runtime_only = False
     repeat_native_changes = None
     repeat_lock_unchanged = None
     repeat_project_unchanged = None
     repeat_verified = False
     if installed:
         before_repeat_native = snapshot(native_roots)
+        before_repeat_runtime = (codex_runtime.temporary_git_state()
+                                 if codex_runtime is not None else None)
         before_repeat_project = (snapshot([project / root for root in project_skill_roots])
                                  if grok_prepared else None)
         lock_root = project if kind == "skill" else data
@@ -2018,6 +2021,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if not repeat_native_unchanged:
             repeat_native_changes = snapshot_change_evidence(
                 before_repeat_native, after_repeat_native)
+            if codex_runtime is not None:
+                repeat_native_runtime_only = codex_runtime.repeat_runtime_only(
+                    before_repeat_native, after_repeat_native, before_repeat_runtime)
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
@@ -2025,7 +2031,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
             and len(repeat_matches) == 1
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
-            and repeat_native_unchanged and repeat_lock_unchanged
+            and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
             and (not grok_prepared or repeat_project_unchanged)
             and (not codex_skill_case or codex_repeat_ready)
         )
@@ -2261,6 +2267,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
+            "repeat_native_runtime_only": repeat_native_runtime_only,
             "repeat_native_changes": repeat_native_changes,
             "repeat_lock_unchanged": repeat_lock_unchanged,
             "repeat_project_unchanged": repeat_project_unchanged,

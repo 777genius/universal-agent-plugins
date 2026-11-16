@@ -123,7 +123,7 @@ class CopilotPostAddRegistryTests(unittest.TestCase):
         self.assertTrue(runtime.attempt_members(bodies, SOURCE)["test_failed"])
 
     def test_exact_canonical_selection_and_old_mode_isolation(self):
-        self.assertEqual(runtime.CASES["copilot"], {"test": "TestAgentpluginsCopilotNativeProjectCompleteCycle", "file": "repotests/agentplugins_copilot_cycle_lifecycle_test.go", "optin": "AGENTPLUGINS_COPILOT_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"})
+        self.assertEqual(runtime.CASES["copilot"], {"test": "TestAgentpluginsCopilotNativeProjectCompleteCycle", "file": "repotests/agentplugins_copilot_cycle_lifecycle_test.go", "optin": "AGENTPLUGINS_COPILOT_PROJECT_RUNTIME_ATTEMPT", "seconds": 300, "phase": "runtime-attempt"})
         root = Path(__file__).resolve().parents[1]
         self.assertIn("func TestAgentpluginsCopilotNativePostAddRegistryFirstObservation(t *testing.T)", (root / "repotests/agentplugins_copilot_post_add_registry_attempt_test.go").read_text())
         old = failed_prefix()

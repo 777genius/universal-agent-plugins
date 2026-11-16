@@ -18,6 +18,7 @@ import (
 type claudeMCPTestRunner struct {
 	t               *testing.T
 	status          string
+	omitType        bool
 	calls           int
 	healthError     error
 	cleanupComplete bool
@@ -34,7 +35,10 @@ func (r *claudeMCPTestRunner) Run(_ context.Context, command legacyports.Command
 	if r.healthError != nil {
 		return legacyports.CommandResult{CleanupComplete: r.cleanupComplete}, r.healthError
 	}
-	body := "plugin:demo:local:\n  Scope: Dynamic config (from command line)\n  Status: " + r.status + "\n  Type: stdio\n  Command: stdio\n"
+	body := "plugin:demo:local:\n  Scope: Dynamic config (from command line)\n  Status: " + r.status + "\n"
+	if !r.omitType {
+		body += "  Type: stdio\n  Command: stdio\n"
+	}
 	return legacyports.CommandResult{Stdout: []byte(body), NoChildStarted: true}, nil
 }
 

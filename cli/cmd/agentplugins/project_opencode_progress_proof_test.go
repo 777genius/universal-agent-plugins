@@ -54,7 +54,9 @@ func TestOpenCodeProjectPublicRepeatProgressSource(t *testing.T) {
 		}
 		expected := "Resolving and validating one Agent Plugin package for every selected target...\nInstalling uap-commands-fixture for 1 selected clients...\n"
 		if label == "repeat-add" {
-			expected = "Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+			// This unchanged fixture has no native setup that the version-only
+			// process can complete. The read-only result must not claim an apply.
+			expected = "Resolving and validating one Agent Plugin package for every selected target...\n"
 		}
 		if stderr.String() != expected {
 			t.Fatalf("%s progress: got %q, want %q", label, stderr.String(), expected)
@@ -63,7 +65,8 @@ func TestOpenCodeProjectPublicRepeatProgressSource(t *testing.T) {
 			Result string `json:"result"`
 			Data   struct {
 				Result struct {
-					Mutated *bool `json:"mutated"`
+					Mutated  *bool `json:"mutated"`
+					NoChange bool  `json:"no_change"`
 				} `json:"result"`
 			} `json:"data"`
 		}
@@ -71,6 +74,9 @@ func TestOpenCodeProjectPublicRepeatProgressSource(t *testing.T) {
 			t.Fatalf("%s public result: %v %s", label, err, output.Bytes())
 		}
 		if label == "repeat-add" {
+			if !envelope.Data.Result.NoChange {
+				t.Fatal("repeat add did not report the verified unchanged result")
+			}
 			if envelope.Data.Result.Mutated == nil || *envelope.Data.Result.Mutated {
 				t.Fatal("repeat add reported actual mutation or omitted the required flag")
 			}

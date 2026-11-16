@@ -49,7 +49,9 @@ func TestOpenCodeMCPPreviewRequiresConfirmation(t *testing.T) {
 		}
 	})
 	preview, err := observeOpenCodeNativeComponents(t.Context(), env, request, preparedOpenCodeObservation())
-	if err != nil || preview.Activation != domain.ActivationPrepared || !New().CanCompletePreparedSetup(request, preview) {
+	setup := request
+	setup.VerifyOnly = false // The core classifies the future acting repair packet.
+	if err != nil || preview.Activation != domain.ActivationPrepared || !New().CanCompletePreparedSetup(setup, preview) {
 		t.Fatalf("fresh owned preview did not require confirmed completion: %+v %v", preview, err)
 	}
 	if !slices.Equal(calls, []string{"debug config", "debug skill"}) {
@@ -108,7 +110,6 @@ func TestOpenCodePreparedCompletionRequiresFreshIntactObservation(t *testing.T) 
 		{"already active", func(_ *domain.ActivationRequest, out *domain.ActivationOutcome) {
 			out.Activation = domain.ActivationActive
 		}},
-		{"acting request", func(in *domain.ActivationRequest, _ *domain.ActivationOutcome) { in.VerifyOnly = false }},
 		{"nonautomatic intent", func(in *domain.ActivationRequest, _ *domain.ActivationOutcome) {
 			in.Plan.InstallIntent = domain.InstallIntentPrepare
 		}},

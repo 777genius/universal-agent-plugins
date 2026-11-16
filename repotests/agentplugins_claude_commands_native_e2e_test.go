@@ -77,7 +77,13 @@ func TestAgentpluginsClaudeNativeCommandsLifecycle(t *testing.T) {
 		target: "claude", pkg: f.PackageRoot, statePath: filepath.Join(f.StateHome, "state-v2.json"),
 		run: func(t *testing.T, label string, args ...string) (map[string]any, error) {
 			t.Helper()
-			return commandsRunInstaller(t, f.Root, f.Root, f.env(clientDir), installer, label, args...)
+			result, err := commandsRunInstaller(t, f.Root, f.Root, f.env(clientDir), installer, label, args...)
+			if err == nil && len(args) != 0 && args[0] != "remove" {
+				if err := validateClaudeSkillsInstallationReady(result); err != nil {
+					t.Fatal(err)
+				}
+			}
+			return result, err
 		},
 		skills: func(t *testing.T, label string) map[string]string {
 			t.Helper()
@@ -103,6 +109,67 @@ func TestAgentpluginsClaudeNativeCommandsLifecycle(t *testing.T) {
 			return path
 		},
 	}, stages)
+}
+
+func validateClaudeSkillsInstallationReady(result map[string]any) error {
+	outcome, err := commandsTargetOutcome(claudePreparedEnvelope(result))
+	if err != nil {
+		return err
+	}
+	activation, _ := outcome["activation"].(map[string]any)
+	if activation["activation"] != "active" || activation["verification"] != "installation_verified" ||
+		activation["authentication"] != "not_required" || activation["policy"] != "allowed" ||
+		activation["activation_attested"] == true || activation["authentication_attested"] == true {
+		return fmt.Errorf("the Claude Skill installation is not natively ready: %v", activation)
+	}
+	data, _ := result["data"].(map[string]any)
+	output := data
+	if targets, ok := data["targets"].([]any); ok && len(targets) == 1 {
+		target, _ := targets[0].(map[string]any)
+		output, _ = target["output"].(map[string]any)
+	}
+	// Repair's established JSON schema has no readiness field. Add and update
+	// must report the public result as ready, including verified unchanged work.
+	readiness, exists := output["readiness"]
+	if (exists || result["command"] == "add" || result["command"] == "update") && readiness != "ready" {
+		return fmt.Errorf("the Claude Skill public readiness still requires setup: %v", readiness)
+	}
+	return nil
+}
+
+func TestClaudeSkillsInstallationReadyRequiresNativeAndPublicEvidence(t *testing.T) {
+	for _, single := range []bool{false, true} {
+		for _, condition := range []string{"ready", "prepared", "unverified", "unchecked-auth", "blocked", "attested", "setup-required", "missing-readiness"} {
+			t.Run(fmt.Sprintf("single=%t/%s", single, condition), func(t *testing.T) {
+				activation := map[string]any{"activation": "active", "verification": "installation_verified", "authentication": "not_required", "policy": "allowed"}
+				output := map[string]any{"readiness": "ready", "result": map[string]any{"activation": activation}}
+				switch condition {
+				case "prepared":
+					activation["activation"] = "prepared"
+				case "unverified":
+					activation["verification"] = "package_validated"
+				case "unchecked-auth":
+					activation["authentication"] = "not_checked"
+				case "blocked":
+					activation["policy"] = "blocked"
+				case "attested":
+					activation["activation_attested"] = true
+				case "setup-required":
+					output["readiness"] = "needs_action"
+				case "missing-readiness":
+					delete(output, "readiness")
+				}
+				data := output
+				if !single {
+					data = map[string]any{"targets": []any{map[string]any{"output": output}}}
+				}
+				result := map[string]any{"command": "add", "data": data}
+				if err := validateClaudeSkillsInstallationReady(result); (err == nil) != (condition == "ready") {
+					t.Fatalf("ready proof accepted wrong evidence: %v", err)
+				}
+			})
+		}
+	}
 }
 
 func TestClaudeDiscoveredSkills(t *testing.T) {

@@ -52,7 +52,7 @@ func newClaudeProjectFixture(t *testing.T) *claudeProjectFixture {
 	}
 	// Scope-isolation checks exclude creation of the separately authorized
 	// exact-project trust preference by starting with that preference present.
-	projectTrustFixture(t, filepath.Join(user, ".claude.json"), fmt.Sprintf("{\"projects\":{%q:{\"hasTrustDialogAccepted\":true}}}\n", project))
+	projectTrustFixture(t, filepath.Join(user, ".claude.json"), fmt.Sprintf("{\"projects\":{%q:{\"hasTrustDialogAccepted\":true}}}\n", filepath.ToSlash(project)))
 	registry, err := clients.NewRegistry(legacyClaudeProjectRenderer{claude.New()})
 	if err != nil {
 		t.Fatal(err)

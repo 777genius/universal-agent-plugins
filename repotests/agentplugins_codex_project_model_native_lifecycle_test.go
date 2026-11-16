@@ -62,9 +62,12 @@ func TestAgentpluginsCodexNativeProjectModelForeignMCP(t *testing.T) {
 		}
 	}()
 	added := f.run(t, "codex-model-foreign-add", "add", f.base.Package, "--no-save")
-	codexNativeProjectPrepared(t, added)
+	codexNativeProjectMCPReady(t, added)
 	codexProjectMCPBinding(t, f)
 	codexAssertForeignProjectMCP(t, projectConfig, foreign, true)
+	if _, err := os.Lstat(events); !os.IsNotExist(err) {
+		t.Fatalf("installer started unselected foreign project MCP: %v", err)
+	}
 	stages["install_preserved_foreign"] = nativeStage{Status: "passed", Reason: "project add retained foreign project MCP alongside UAP-managed MCP, with user/B isolation"}
 
 	codexProjectModelSession(t, f, model, f.base.Project, "codex-model-before-remove-A", true, true)

@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 // agentReport is everything a person needs to know about one agent after an
@@ -305,12 +307,17 @@ func groupFailure(target addTargetResult, kind failureKind) *installFailure {
 // agent from an earlier attempt is still unresolved (not retryable, or
 // deselected): success of the last attempt alone must not turn into exit 0.
 func retryFailedAgents(cmd *cobra.Command, app App, opts *options, err error, rerun func(target string, unresolved []string) error) error {
-	if err == nil || !app.Terminal || opts.format != "human" || opts.yes || opts.dryRun ||
-		opts.retryAttempt >= maxSkillsRetries || cmd.Context().Err() != nil || opts.installResult == nil {
+	if !retryAllowed(cmd, app, opts, err) {
 		return err
 	}
 	targets, askErr := askRetryTargets(cmd, app, opts, opts.installResult.Agents)
-	if askErr != nil || len(targets) == 0 {
+	if errors.Is(askErr, prompt.ErrPromptCanceled) {
+		return err
+	}
+	if askErr != nil {
+		return errors.Join(err, askErr)
+	}
+	if len(targets) == 0 {
 		return err
 	}
 	public := make([]string, len(targets))
@@ -326,13 +333,25 @@ func retryFailedAgents(cmd *cobra.Command, app App, opts *options, err error, re
 		}
 	}
 	if _, writeErr := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(targets)); writeErr != nil {
-		return writeErr
+		return errors.Join(err, writeErr)
 	}
 	rerr := rerun(strings.Join(public, ","), pending)
-	if rerr == nil && len(pending) > 0 {
+	if rerr != nil {
+		return errors.Join(err, rerr)
+	}
+	if len(pending) > 0 {
 		return fmt.Errorf("%s still need attention; see the technical log", strings.Join(pending, ", "))
 	}
-	return rerr
+	return nil
+}
+
+// declinedInstallResult distinguishes abandoning a retry from a completed
+// retry. The outer retry boundary keeps the original installation failure.
+func declinedInstallResult(opts *options, renderErr error) error {
+	if opts.retryAttempt > 0 {
+		return errors.Join(renderErr, installer.ErrCancelled)
+	}
+	return renderErr
 }
 
 // recordGroupOutcome stores a plugin group's per-agent result for the retry
@@ -342,4 +361,104 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined ad
 	if outcome.LogFile != "" && opts.format == "human" {
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))
 	}
+}
+
+// runSingleTargetAdd dispatches an existing binding or explicit completion to
+// the one-agent path and hands its result back, so the retry step sees it.
+func runSingleTargetAdd(app App, opts *options, loaded loadedPackage, target domain.ClientID, completing bool, run func(*options) error) (bool, error) {
+	selected := *opts
+	selected.target = string(target)
+	if !completing {
+		state, err := app.StateStore.Load()
+		if err != nil {
+			return false, nil
+		}
+		installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name)
+		if !ok || !installationHasTarget(installation, target, string(app.scope())) {
+			return false, nil
+		}
+	}
+	err := run(&selected)
+	opts.installResult = selected.installResult
+	return true, err
+}
+
+// recordSingleAdd stores the result of a one-agent add for the retry step and
+// the technical log. Success needs no record.
+func (app App) recordSingleAdd(cmd *cobra.Command, opts *options, client domain.ClientID, alias string, err error) {
+	if err == nil {
+		return
+	}
+	item := agentItem{Alias: alias, ClientID: string(client), Status: "failed", failure: describeSyncFailure(err)}
+	outcome := app.finishInstall(opts, "add", []agentItem{item})
+	if outcome.LogFile != "" && opts.format == "human" {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))
+	}
+}
+
+// retryAllowed gates every interactive retry: only with a failure, a person
+// present, human output and the retry budget left.
+func retryAllowed(cmd *cobra.Command, app App, opts *options, err error) bool {
+	return err != nil && app.Terminal && opts.format == "human" && !opts.yes && !opts.dryRun &&
+		opts.retryAttempt < maxSkillsRetries && cmd.Context().Err() == nil && opts.installResult != nil
+}
+
+// retryConverge offers to run a converging command (install, repair) again. It
+// has no per-agent narrowing: every outstanding binding is retried together, so
+// nothing from an earlier attempt can stay unresolved behind a green result.
+func retryConverge(cmd *cobra.Command, app App, opts *options, err error, rerun func() error) error {
+	if !retryAllowed(cmd, app, opts, err) {
+		return err
+	}
+	retryable := retryableAgents(opts.installResult.Agents)
+	if len(retryable) == 0 {
+		return err
+	}
+	app, promptErr := withPrompter(cmd, app, opts)
+	if errors.Is(promptErr, prompt.ErrPromptCanceled) {
+		return err
+	}
+	if promptErr != nil {
+		return errors.Join(err, promptErr)
+	}
+	labels := make([]string, len(retryable))
+	for index, report := range retryable {
+		labels[index] = report.Label
+	}
+	answer, askErr := app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Retry " + strings.Join(labels, ", ") + "?", Default: true})
+	if errors.Is(askErr, prompt.ErrPromptCanceled) {
+		return err
+	}
+	if askErr != nil {
+		return errors.Join(err, askErr)
+	}
+	if !answer.Accepted {
+		return err
+	}
+	opts.retryAttempt++
+	if _, writeErr := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(retryable)); writeErr != nil {
+		return errors.Join(err, writeErr)
+	}
+	if retryErr := rerun(); retryErr != nil {
+		return errors.Join(err, retryErr)
+	}
+	return nil
+}
+
+// pinRetryPackage remembers the package the first attempt resolved and refuses a
+// retry that would install different bytes, such as a local folder edited in
+// between: the person reviewed the first package, not the changed one.
+func pinRetryPackage(opts *options, loaded loadedPackage) error {
+	digest := loaded.envelope.TreeDigest
+	if digest == "" {
+		return nil
+	}
+	if opts.firstTreeDigest == "" {
+		opts.firstTreeDigest = digest
+		return nil
+	}
+	if opts.firstTreeDigest != digest {
+		return fmt.Errorf("the package changed since the first attempt; run the command again to review the new version")
+	}
+	return nil
 }

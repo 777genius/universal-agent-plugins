@@ -198,7 +198,12 @@ func managementDependencySpecHarness(t *testing.T, repo string, spec dependencyC
 	}
 	client := fixtureClient(t, spec.id)
 	if spec.executable {
-		client.ExecutablePath = filepath.Join(t.TempDir(), string(spec.id))
+		// Management captures canonical executable identity before observation.
+		root, err := filepath.EvalSymlinks(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		client.ExecutablePath = filepath.Join(root, string(spec.id))
 		dependencyWrite(t, client.ExecutablePath, "inert native fixture; never launched")
 	}
 	runner := &dependencyFixtureRunner{id: spec.id}

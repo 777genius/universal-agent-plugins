@@ -169,7 +169,7 @@ func goldenRoot(t *testing.T) string {
 
 func goldenFor(t *testing.T, root string) goldentest.Golden {
 	t.Helper()
-	var replacements []goldentest.Replacement
+	replacements := make([]goldentest.Replacement, 0, len(domain.ClientDefinitions())+1)
 	for _, definition := range domain.ClientDefinitions() {
 		clientRoot := filepath.Join(root, "clients", string(definition.ID))
 		normalized := "<root>/clients/" + string(definition.ID)

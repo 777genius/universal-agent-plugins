@@ -70,7 +70,7 @@ export function InstallActions({ controller, request, progressHeading, feedback 
         <p><strong>Files:</strong> {operation.data.state === 'partial' ? `${appliedItems.length} of ${operation.data.items.length} targets installed or already up to date; others need attention.` : 'Installed or already up to date.'}</p>
         <p>{operation.data.result?.message ?? 'Check each target below for its installation and agent setup result.'}</p>
       </div>}
-      {operation.data.items.map((item, index) => <div className="operation-item" key={index}><strong>{item.alias || item.candidateId}</strong><span>{item.targetId} · {item.status}</span><small>{item.destinationPath}</small>{item.message && <p>{item.message}</p>}</div>)}
+      {operation.data.items.map((item, index) => <div className="operation-item" key={index}><strong>{item.alias || item.candidateId}</strong><span>{item.targetId} · {item.status === 'succeeded' ? 'files ready' : item.status}</span><small>{item.destinationPath}</small>{item.message && <p>{item.message}</p>}</div>)}
       <Diagnostics items={operation.data.diagnostics}/>
       {operation.data.result && <>{!showReadiness && <p>{operation.data.result.message}</p>}{operation.data.result.repairInstructions.map((instruction) => <p key={instruction} className="notice">{instruction}</p>)}</>}
     </section>}

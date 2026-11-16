@@ -369,7 +369,7 @@ func TestOpenCodeProjectPublicProgressIsExactAndLabelBound(t *testing.T) {
 		"add-same-user":      resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
 		"add-same-A":         resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
 		"add-json":           resolve + "Installing uap-commands-fixture for 1 selected clients...\n",
-		"repeat-add-A":       resolve + "Applying transactional client package...\n",
+		"repeat-add-A":       resolve,
 		"unchanged-update-A": "Resolving and validating one updated Agent Plugin package for every selected target...\n",
 		"update-A":           "Resolving and validating one updated Agent Plugin package for every selected target...\n",
 		"intact-repair-A":    "Resolving and validating each unique exact installed package revision once...\n",
@@ -399,5 +399,8 @@ func TestOpenCodeProjectPublicProgressIsExactAndLabelBound(t *testing.T) {
 	}
 	if openCodeProjectProgress("repeat-add-A", []byte(cases["add-A"])) || openCodeProjectProgress("add-A", []byte(cases["repeat-add-A"])) {
 		t.Fatal("single/group imperative add progress conflated")
+	}
+	if openCodeProjectProgress("repeat-add-A", []byte(resolve+"Applying transactional client package...\n")) {
+		t.Fatal("unchanged replay accepted transactional apply progress")
 	}
 }

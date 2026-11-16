@@ -103,9 +103,9 @@ func openCodeProjectProgress(label string, body []byte) bool {
 	case "add-A", "add-B", "add-same-user", "add-same-A", "add-json":
 		expected = resolve + "Installing uap-commands-fixture for 1 selected clients...\n"
 	case "repeat-add-A":
-		// Existing same-scope binding dispatches runAddLoaded before the group
-		// Installing line. The real public-source fixture measures this branch.
-		expected = resolve + "Applying transactional client package...\n"
+		// The same-scope binding is unchanged, so runAddLoaded returns before
+		// apply. The result contract also requires no_change and !mutated.
+		expected = resolve
 	case "unchanged-update-A", "update-A":
 		expected = "Resolving and validating one updated Agent Plugin package for every selected target...\n"
 	case "intact-repair-A", "missing-repair-A":
@@ -177,6 +177,7 @@ func openCodeProjectCheckSkills(found map[string]openCodeProjectSkill, expected 
 	}
 	return nil
 }
+
 // OpenCode V2's public "debug config" returns an ordered source inventory,
 // not the flattened V1 effective config object. Bind every source to the
 // independently selected fixture paths before computing the expected
@@ -299,6 +300,7 @@ func openCodeProjectConfig(body []byte) (map[string]any, error) {
 	}
 	return object, nil
 }
+
 // Read the actual V1/V2 MCP shape without treating a flattened test
 // projection as native evidence. V2 declares servers under mcp.servers.
 func openCodeProjectServers(object map[string]any) (map[string]any, error) {

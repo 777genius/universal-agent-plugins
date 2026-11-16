@@ -49,9 +49,29 @@ func codexNativeProjectPrepared(t *testing.T, result map[string]any) {
 	codexNativeProjectActivation(t, result, domain.ActivationPrepared)
 }
 
+func codexNativeProjectMCPReady(t *testing.T, result map[string]any) {
+	t.Helper()
+	codexNativeProjectActivation(t, result, domain.ActivationActive)
+	outcome, err := commandsTargetOutcome(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activation, _ := outcome["activation"].(map[string]any)
+	if activation["authentication"] != string(domain.AuthenticationNotRequired) || activation["policy"] != string(domain.PolicyAllowed) {
+		t.Fatalf("project MCP outcome lacks no-auth native readiness: %v", activation)
+	}
+}
+
 func codexNativeProjectSkillsReady(t *testing.T, result map[string]any) {
 	t.Helper()
 	codexNativeProjectActivation(t, result, domain.ActivationActive)
+	data, _ := result["data"].(map[string]any)
+	targets, _ := data["targets"].([]any)
+	target, _ := targets[0].(map[string]any)
+	output, _ := target["output"].(map[string]any)
+	if output["readiness"] != "ready" {
+		t.Fatalf("native Skill discovery did not finish installation readiness: %v", output)
+	}
 }
 
 func codexNativeProjectActivation(t *testing.T, result map[string]any, expected domain.ActivationState) {
@@ -155,8 +175,8 @@ func codexProjectAssertionEnvelope(result map[string]any) map[string]any {
 	if _, ok := data["targets"]; ok {
 		return result
 	}
-	if outcome, ok := data["result"].(map[string]any); ok {
-		return map[string]any{"data": map[string]any{"targets": []any{map[string]any{"output": map[string]any{"result": outcome}}}}}
+	if _, ok := data["result"].(map[string]any); ok {
+		return map[string]any{"data": map[string]any{"targets": []any{map[string]any{"output": data}}}}
 	}
 	return result
 }

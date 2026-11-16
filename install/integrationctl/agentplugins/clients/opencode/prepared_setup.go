@@ -31,7 +31,7 @@ func openCodeV1DiscoverySupported(request domain.ActivationRequest) bool {
 // the existing core repair path must still recheck intact ownership and obtain
 // its ordinary confirmation before native MCP startup.
 func (*Adapter) CanCompletePreparedSetup(request domain.ActivationRequest, observed domain.ActivationOutcome) bool {
-	if !request.VerifyOnly || request.Plan.InstallIntent != domain.InstallIntentAutomatic ||
+	if request.Plan.InstallIntent != domain.InstallIntentAutomatic ||
 		observed.Activation != domain.ActivationPrepared || observed.Verification != domain.VerificationInstalled ||
 		observed.Policy != domain.PolicyAllowed || observed.NativeEffect != domain.NativeEffectUnchanged ||
 		!slices.Contains(observed.UserActions, openCodeMCPConfirmationAction) ||

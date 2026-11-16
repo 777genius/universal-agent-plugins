@@ -63,6 +63,29 @@ func TestClaudeMCPHealthRequiresExactNativeSelectorAndSingleStatus(t *testing.T)
 	}
 }
 
+func TestClaudeMCPLegacyHealthRequiresCompleteCapturedShape(t *testing.T) {
+	// Native 2.1.263 capture: a default stdio entry has no Type or Command.
+	prefix := "plugin:demo:local:\n  Scope: Dynamic config (from command line)\n"
+	for _, status := range []string{"✔ Connected", "✘ Failed to connect", "⏸ Pending approval (run `claude` to approve)", "✘ Rejected (see disabledMcpjsonServers in settings)", "⚠ Needs authentication"} {
+		body := prefix + "  Status: " + status + "\n"
+		want := claudeMCPHealthUnready
+		if status == "✔ Connected" {
+			want = claudeMCPHealthConnected
+		}
+		for _, output := range []string{body, strings.ReplaceAll(body, "\n", "\r\n")} {
+			got := observeClaudeMCPHealth([]byte(output), "plugin:demo:local")
+			if got.state != want || got.transport != "" {
+				t.Fatalf("legacy health invented transport evidence: %+v from %q", got, output)
+			}
+		}
+		for _, bad := range []string{body + "  Command: ignored\n", body + "\n", body + "  Status: ✔ Connected\n", body + "  Type: unknown\n", body + "  Type: \n", body + "  Type: stdio\n  Type: http\n", strings.Replace(body, "demo", "foreign", 1), strings.Replace(body, "Dynamic config (from command line)", "Local config", 1), body + "\x1b[0m"} {
+			if got := observeClaudeMCPHealth([]byte(bad), "plugin:demo:local"); got.state != claudeMCPHealthUnknown {
+				t.Fatalf("incomplete or ambiguous legacy response accepted: %+v from %q", got, bad)
+			}
+		}
+	}
+}
+
 func TestClaudeMCPNamespaceRejectsSameNameAcrossNativeSources(t *testing.T) {
 	for _, test := range []struct {
 		body   string

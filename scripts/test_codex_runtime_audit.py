@@ -81,6 +81,126 @@ class RemotionTemporaryRootTest(unittest.TestCase):
                         resolve.assert_not_called()
 
 
+class CodexTemporaryGitStateTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="codex-git-audit-inert-")
+        self.addCleanup(self.temporary.cleanup)
+        self.profile = Path(self.temporary.name).resolve() / ".codex"
+        self.profile.mkdir()
+        self.root = self.profile / ".tmp"
+        self.root.mkdir()
+        self.snapshot = run_path(str(Path(__file__).with_name("live-install-audit.py")))["snapshot"]
+
+    def repository(self, name="git-Abc123", directories=True):
+        path = self.root / name
+        path.mkdir()
+        (path / "HEAD").write_bytes(audit.TEMPORARY_GIT_HEAD)
+        if directories:
+            (path / "objects").mkdir()
+            (path / "refs").mkdir()
+        return path
+
+    def test_only_new_exact_empty_native_repositories_qualify(self):
+        self.repository()
+        previous = audit._temporary_git_state(self.profile)
+        before = self.snapshot([self.profile])
+        self.repository("git-Def456", directories=False)
+        after = self.snapshot([self.profile])
+        self.assertNotEqual(before, after, "raw native mutation must stay visible")
+        self.assertTrue(audit._repeat_temporary_git_only(self.profile, before, after, previous))
+        self.assertFalse(audit._repeat_temporary_git_only(self.profile, after, after,
+                                                       audit._temporary_git_state(self.profile)))
+        for path, value in (("config.toml", "foreign configuration"),
+                            ("skills/foreign/SKILL.md", "foreign Skill")):
+            file = self.profile / path
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text(value)
+            self.assertFalse(audit._repeat_temporary_git_only(
+                self.profile, before, self.snapshot([self.profile]), previous))
+            file.unlink()
+
+    def test_existing_repository_removal_or_replacement_does_not_qualify(self):
+        original = self.repository()
+        previous = audit._temporary_git_state(self.profile)
+        before = self.snapshot([self.profile])
+        self.repository("git-Def456")
+        retired = self.profile / "retired"
+        original.rename(retired)
+        self.assertFalse(audit._repeat_temporary_git_only(
+            self.profile, before, self.snapshot([self.profile]), previous))
+        self.repository()
+        self.assertFalse(audit._repeat_temporary_git_only(
+            self.profile, before, self.snapshot([self.profile]), previous))
+
+    def test_unrecognized_names_members_and_head_bytes_fail(self):
+        for name in ("foreign", "git-abc", "git-1234567"):
+            path = self.repository(name)
+            with self.assertRaisesRegex(ValueError, "directory name"):
+                audit._temporary_git_state(self.profile)
+            shutil.rmtree(path)
+        path = self.repository()
+        for name in ("config", "objects/object", "refs/heads/main"):
+            member = path / name
+            member.parent.mkdir(parents=True, exist_ok=True)
+            member.write_bytes(b"foreign repository data")
+            with self.assertRaises(ValueError):
+                audit._temporary_git_state(self.profile)
+            if name.startswith("refs/"):
+                shutil.rmtree(path / "refs" / "heads")
+            else:
+                member.unlink()
+        for body in (b"ref: refs/heads/other\n", b"ref: refs/heads/main\r\n", b"", b"x" * 4096):
+            (path / "HEAD").write_bytes(body)
+            with self.assertRaises(ValueError):
+                audit._temporary_git_state(self.profile)
+
+    def test_symlinks_and_hardlinked_heads_fail(self):
+        path = self.repository()
+        foreign = self.profile / "foreign"
+        foreign.write_bytes(audit.TEMPORARY_GIT_HEAD)
+        (path / "HEAD").unlink()
+        os.link(foreign, path / "HEAD")
+        with self.assertRaisesRegex(ValueError, "exclusively linked"):
+            audit._temporary_git_state(self.profile)
+        (path / "HEAD").unlink()
+        try:
+            (path / "HEAD").symlink_to(foreign)
+        except OSError as error:
+            if os.name == "nt":
+                self.skipTest(f"Windows symlink privilege unavailable: {error}")
+            raise
+        with self.assertRaises(ValueError):
+            audit._temporary_git_state(self.profile)
+
+    def test_unreadable_or_replaced_namespace_is_refused(self):
+        path = self.repository()
+        original_scandir = os.scandir
+        def unreadable(member):
+            if Path(member) == path / "refs":
+                raise PermissionError("injected native scratch enumeration error")
+            return original_scandir(member)
+        with patch.object(os, "scandir", unreadable):
+            with self.assertRaises(PermissionError):
+                audit._temporary_git_state(self.profile)
+        read = audit._regular_bytes
+        def replaced(member, limit):
+            body = read(member, limit)
+            if member == path / "HEAD":
+                path.rename(self.profile / "retained-original")
+                self.repository()
+            return body
+        with patch.object(audit, "_regular_bytes", replaced):
+            with self.assertRaisesRegex(ValueError, "changed during inspection"):
+                audit._temporary_git_state(self.profile)
+
+    def test_repository_count_is_bounded(self):
+        self.repository()
+        self.repository("git-Def456")
+        with patch.object(audit, "TEMPORARY_GIT_LIMIT", 1):
+            with self.assertRaisesRegex(ValueError, "member count"):
+                audit._temporary_git_state(self.profile)
+
+
 class CodexRuntimeStateTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

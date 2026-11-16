@@ -48,6 +48,10 @@ jobs:
       - name: Install genuine native Codex CLI without model subscription
         id: native-install-pilot
         run: |
+          # Codex app-server checks system bwrap before reading Skill inventory.
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap
+          bwrap --version
           npm install --global @openai/codex@0.153.4
           command -v codex
           codex --version
@@ -98,6 +102,9 @@ jobs:
       - name: Install the actual public npm installer and Codex
         id: published-install
         run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap
+          bwrap --version
           npm install --global universal-agent-plugins@0.1.95 @openai/codex@0.153.4
           agentplugins version
           codex --version
@@ -153,7 +160,12 @@ jobs:
         run: |
           set -euo pipefail
           case "$TARGET" in
-            codex) npm install --global @openai/codex@0.153.4 ;;
+            codex)
+              sudo apt-get update
+              sudo apt-get install --yes --no-install-recommends bubblewrap
+              bwrap --version
+              npm install --global @openai/codex@0.153.4
+              ;;
             claude) npm install --global @anthropic-ai/claude-code@2.1.263 ;;
             opencode) npm install --global opencode-ai@1.18.34 ;;
             gemini) npm install --global @google/gemini-cli@0.66.0 ;;

@@ -35,6 +35,12 @@ func (outstanding outstandingAgents) record(reports []agentReport) {
 func applySkillsWithRecovery(cmd *cobra.Command, app App, opts *options, prepared *PreparedSkillsBatch, canRetry bool) error {
 	reviewed := prepared.Actions()
 	current := prepared
+	retryPlans := make([]*PreparedSkillsBatch, 0, maxSkillsRetries)
+	defer func() {
+		for i := len(retryPlans) - 1; i >= 0; i-- {
+			retryPlans[i].Close()
+		}
+	}()
 	outstanding := outstandingAgents{}
 	for attempt := 1; ; attempt++ {
 		result, err := applySkillsTerminalAttempt(cmd, app, opts, current)
@@ -61,7 +67,7 @@ func applySkillsWithRecovery(cmd *cobra.Command, app App, opts *options, prepare
 		if next == nil {
 			return err
 		}
-		defer next.Close()
+		retryPlans = append(retryPlans, next)
 		current = next
 	}
 }
@@ -133,6 +139,16 @@ func askRetryTargets(cmd *cobra.Command, app App, opts *options, reports []agent
 	app, err := withPrompter(cmd, app, opts)
 	if err != nil {
 		return nil, err
+	}
+	if len(retryable) == 1 {
+		answer, err := app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Retry " + retryable[0].Label + "?", Default: true})
+		if errors.Is(err, prompt.ErrPromptCanceled) || (err == nil && !answer.Accepted) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return []string{string(retryable[0].ClientID)}, nil
 	}
 	request := prompt.TargetSelectionRequest{Title: "Retry failed agents? Enter retries the selected ones, Esc skips"}
 	for _, report := range retryable {

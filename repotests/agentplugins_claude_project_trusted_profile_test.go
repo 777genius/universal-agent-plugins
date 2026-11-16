@@ -16,8 +16,9 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
-// Native first-start metadata belongs to fixture setup. There is exactly one
-// baseline, before public UAP; every later command keeps the whole-byte guard.
+// Native first-start metadata belongs to fixture setup. Its baseline precedes
+// public UAP. Trusted MCP sessions separately pin their post-session profile;
+// only scoped removal permits the exact owned usage-entry transition.
 func claudeTrustedInitializeProfile(t *testing.T, f *claudeProjectNativeFixture, authored []byte) {
 	t.Helper()
 	// Listing alone leaves userID uninitialized. The native SDK creates it
@@ -134,7 +135,7 @@ func validateClaudeTrustedProfile(body []byte, projects ...string) error {
 	return nil
 }
 
-func claudeTrustedRemoveWithProfileDiagnostic(t *testing.T, f *claudeProjectNativeFixture, c commandsNativeClient, before []byte) {
+func claudeTrustedRemoveWithProfileDiagnostic(t *testing.T, f *claudeProjectNativeFixture, before []byte, managed, label string) {
 	t.Helper()
 	nativeWrite(t, filepath.Join(f.base.Root, "trusted-mcp-profile-before-remove.json"), before, 0600)
 	wasFailed := t.Failed()
@@ -143,8 +144,7 @@ func claudeTrustedRemoveWithProfileDiagnostic(t *testing.T, f *claudeProjectNati
 			claudeTrustedRemovalProfileDiagnostic(t, f, before)
 		}
 	}()
-	c.succeed(t, "trusted-foreign-mcp-remove", "remove", commandsPluginName)
-	f.requireForeign(t)
+	claudeTrustedRemoveOwnedPlugin(t, f, before, managed, label)
 }
 
 func claudeTrustedRemovalProfileDiagnostic(t *testing.T, f *claudeProjectNativeFixture, before []byte) {

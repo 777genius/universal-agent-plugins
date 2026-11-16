@@ -36,6 +36,20 @@ func nativeBinary(t *testing.T, key string) string {
 	return p
 }
 
+func nativeCodexPin(t *testing.T) (string, string) {
+	t.Helper()
+	version := os.Getenv("AGENTPLUGINS_CODEX_VERSION")
+	switch version {
+	case "0.153.4":
+		return version, "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a"
+	case "0.162.0":
+		return version, "c1382380de69521303b416720a52f42d51af6248"
+	default:
+		t.Fatalf("unqualified Codex matrix version: %q", version)
+		return "", ""
+	}
+}
+
 type nativeRPC struct {
 	ctx      context.Context
 	cmd      *exec.Cmd
@@ -420,13 +434,14 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	}
 	client := nativeBinary(t, "AGENTPLUGINS_CODEX_BIN")
 	installer := nativeBinary(t, "AGENTPLUGINS_INSTALLER_BIN")
+	clientVersion, clientSource := nativeCodexPin(t)
 	f := newNativeFixture(t, true)
 	f.ClientBinDir = filepath.Dir(client)
 	stages := map[string]nativeStage{}
 	for _, name := range []string{"install", "A_native_tool", "B_native_tool", "same_version_native_tool", "unchanged", "explicit_user_scope", "owned_repair", "native_cache_repair", "partial_failure", "all_unsupported", "remove", "repeat_remove", "foreign_preservation", "collision_drift", "immutable_git", "immutable_git_native", "http", "redirect_headers", "skill_context", "real_model_skill_use", "oauth"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
 	}
-	evidence := map[string]any{"started_utc": time.Now().UTC().Format(time.RFC3339Nano), "os": runtime.GOOS, "arch": runtime.GOARCH, "profile": f.Root, "client_version": "0.153.4", "client_source": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a", "client_sha256": nativeSHA(t, client), "installer_sha256": nativeSHA(t, installer), "acquisition": "local_directory", "native_surface": "codex app-server direct thread MCP RPC", "stages": stages}
+	evidence := map[string]any{"started_utc": time.Now().UTC().Format(time.RFC3339Nano), "os": runtime.GOOS, "arch": runtime.GOARCH, "profile": f.Root, "client_version": clientVersion, "client_source": clientSource, "client_sha256": nativeSHA(t, client), "installer_sha256": nativeSHA(t, installer), "acquisition": "local_directory", "native_surface": "codex app-server direct thread MCP RPC", "stages": stages}
 	defer func() {
 		evidence["finished_utc"] = time.Now().UTC().Format(time.RFC3339Nano)
 		hashes := map[string]string{}
@@ -452,7 +467,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	providerURL := nativeScriptedProvider(t, f)
 	nativeWrite(t, filepath.Join(f.CodexHome, "config.toml"), []byte("cli_auth_credentials_store = \"file\"\nmcp_oauth_credentials_store = \"file\"\nmodel_provider = \"fixture\"\nmodel = \"fixture-model\"\n[model_providers.fixture]\nname = \"Fixture\"\nbase_url = \""+providerURL+"\"\nwire_api = \"responses\"\nrequires_openai_auth = false\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n"), 0600)
 	b, err := nativeCommand(t, f, client, "client-version", "--version")
-	if err != nil || strings.TrimSpace(string(b)) != "codex-cli 0.153.4" {
+	if err != nil || strings.TrimSpace(string(b)) != "codex-cli "+clientVersion {
 		t.Fatalf("wrong pinned client: %s %v", b, err)
 	}
 	nativeAttempt(stages, "scanner_prerequisite", "evidence.json")
