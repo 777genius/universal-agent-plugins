@@ -51,7 +51,9 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		outcome.LocalActions = append(outcome.LocalActions, fmt.Sprintf("install GitHub Copilot CLI, rerun add for the prepared package at %s, then verify with `copilot plugin list`", request.Delivery.ActivePath))
 		return outcome, nil
 	}
-	return shared.CompleteCopilotActivationWithListingRecognition(ctx, bound, request, outcome, recognizeCopilotUserActivation)
+	return shared.CompleteCopilotActivationWith(ctx, bound, request, outcome, recognizeCopilotUserActivation, func(ctx context.Context) error {
+		return activateCopilotUserPlugin(ctx, bound, request)
+	})
 }
 
 // Deactivate uninstalls through the Copilot CLI after confirmation.
