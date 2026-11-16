@@ -53,8 +53,10 @@ func SamePin(a, b LockedPackage) bool {
 
 func pinSourceIdentity(source LockedSource) LockedSource {
 	if source.Git != nil {
+		// Ref names record how a request resolved to the commit, not what it is:
+		// an initial raw Skill pin omits them while a fresh resolution fills them.
 		cloned := *source.Git
-		cloned.Requested = Selector{}
+		cloned.Requested, cloned.ResolvedRef, cloned.DefaultBranch = Selector{}, "", ""
 		source.Git = &cloned
 	}
 	if source.Registry != nil {

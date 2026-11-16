@@ -75,12 +75,11 @@ func TestCopilotEmptyDisabledBuiltinExactUserRegistry(t *testing.T) {
 
 func TestCopilotEmptyDisabledBuiltinRejectsAlteredWholeDocument(t *testing.T) {
 	cases := []string{
-		strings.ReplaceAll(copilotInertDisabledBuiltin, "[disabled]", "[enabled]"),
+		strings.ReplaceAll(copilotInertDisabledBuiltin, "[disabled]", "[pending]"),
 		strings.ReplaceAll(copilotInertDisabledBuiltin, " [disabled]", ""),
-		strings.ReplaceAll(copilotInertDisabledBuiltin, "browser-use", "other-builtin"),
-		strings.ReplaceAll(copilotInertDisabledBuiltin, "v0.0.4", "v0.0.5"),
-		copilotInertDisabledBuiltin + "  • other (v0.0.4) [disabled]\n",
 		copilotInertDisabledBuiltin + "  • browser-use (v0.0.4) [disabled]\n",
+		copilotInertDisabledBuiltin + "  • BROWSER-USE (v0.0.5) [disabled]\n",
+		copilot103BuiltinSection + copilotEmptyListingBody,
 		copilotInertDisabledBuiltin + "Built-in plugins:\n",
 		"unexpected\n" + copilotInertDisabledBuiltin,
 		copilotInertDisabledBuiltin + "unexpected\n",
@@ -99,6 +98,31 @@ func TestCopilotEmptyDisabledBuiltinRejectsAlteredWholeDocument(t *testing.T) {
 		finding, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: runner}, copilotInertUserPlan(), nil, recognizeCopilotUserRegistry)
 		if err != nil || finding != clients.RegistryIndeterminate || runner.calls != 1 {
 			t.Fatalf("case=%d finding=%v calls=%d err=%v", index, finding, runner.calls, err)
+		}
+	}
+}
+
+func TestCopilotEmptyBuiltinAcceptsReleaseBuiltinVariants(t *testing.T) {
+	for name, text := range map[string]string{
+		"1.0.112":         copilotEmptyListingBody + copilot112BuiltinSection,
+		"builtin-enabled": strings.ReplaceAll(copilotInertDisabledBuiltin, "[disabled]", "[enabled]"),
+		"builtin-other":   strings.ReplaceAll(copilotInertDisabledBuiltin, "browser-use", "other-builtin"),
+		"builtin-version": strings.ReplaceAll(copilotInertDisabledBuiltin, "v0.0.4", "v0.0.5"),
+		"builtin-added":   copilotInertDisabledBuiltin + "  • other (v0.0.4) [disabled]\n",
+	} {
+		runner := &copilotEmptyRegistryRunner{t: t, result: legacyports.CommandResult{Stdout: []byte(text)}}
+		finding, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: runner}, copilotInertUserPlan(), nil, recognizeCopilotUserRegistry)
+		if err != nil || finding != clients.RegistryClear || runner.calls != 1 {
+			t.Fatalf("case=%s finding=%v calls=%d err=%v", name, finding, runner.calls, err)
+		}
+	}
+	for _, name := range []string{"computer-use", "COMPUTER-USE", "browser-use"} {
+		plan := copilotInertUserPlan()
+		plan.DeclaredName = name
+		runner := &copilotEmptyRegistryRunner{t: t, result: legacyports.CommandResult{Stdout: []byte(copilotEmptyListingBody + copilot112BuiltinSection)}}
+		finding, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: runner}, plan, nil, recognizeCopilotUserRegistry)
+		if err != nil || finding != clients.RegistryIndeterminate || runner.calls != 1 {
+			t.Fatalf("same-name builtin %s finding=%v calls=%d err=%v", name, finding, runner.calls, err)
 		}
 	}
 }

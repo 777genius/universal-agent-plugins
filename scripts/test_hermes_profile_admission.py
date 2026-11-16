@@ -6754,7 +6754,7 @@ class PassiveHistoryIntegrationContracts(unittest.TestCase):
         outer, code = root / "outer", root / "bundle/hermes-agent"
         private = outer / "public-history"; project = private / "public-a"
         data = project / ".uap/plugin-data" / ("hermes-public-a-" + "a" * 12)
-        roots = [outer, private, project, private / "public-source-a", private / "evidence", private / "public-uap-state",
+        roots = [outer, private, project, private / "public-source-a", private / "evidence", private / "public-uap-state", private / "public-user",
                  project / ".hermes", project / ".hermes/uap-session", project / ".hermes/uap-session/logs", data]
         for path in [code, *roots]: path.mkdir(parents=True, exist_ok=True)
         suffix = ".exe" if os.name == "nt" else ""

@@ -8,6 +8,7 @@ on:
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/codex_runtime_audit.py'
+      - 'scripts/windows_owned_job.py'
       - 'scripts/test_codex_runtime_audit.py'
       - 'tests/live-install/fixtures.json'
       - 'install/integrationctl/agentplugins/adapters/securityscan/scanner*.go'

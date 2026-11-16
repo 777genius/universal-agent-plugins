@@ -157,11 +157,105 @@ class HeldHistoryProcesses(unittest.TestCase):
 
 
 class OriginalLedgerCapture(unittest.TestCase):
+    def test_private_add_trust_cannot_change_original_user_or_later_profile(self):
+        for effect in ("ordinary", "original-user", "private-source"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                outer = Path(temporary).resolve()
+                code, original_user = outer / "inert-code", outer / "original-user"
+                code.mkdir(); original_user.mkdir()
+                original_config = original_user / "config.yaml"
+                original_body = json.dumps({"_config_version": 52, "skills": {
+                    "trusted_project_dirs": ["retained-project-a", "retained-project-b"]}}).encode()
+                original_config.write_bytes(original_body)
+                env = dict(HERMES_CALL_NONCE=NONCE, HERMES_BIN="inert-hermes",
+                           HERMES_PROFILE_PYTHON="inert-python", HERMES_PROFILE_RUNTIME_ROOT=str(code),
+                           HERMES_HOME=str(original_user))
+                inherited, baseline = dict(env), CASE["inventory"](outer)
+                retained = copy.deepcopy(baseline)
+                helpers = {name: CASE[name] for name in control.HELPERS}
+                helpers["public_spawn_install"] = lambda *_: (CASE["directory_identity"](code), "c" * 64)
+                helpers["public_runtime_pins"] = lambda *_args, **_options: None
+                helpers["public_stdio_recipe"] = lambda *_: {"command": "inert-probe"}
+                proof = None
+                helpers["public_snapshot"] = lambda *_: (CASE["inventory"](outer), {"a": proof})
+                helpers["public_continuity"] = lambda before, after: self.assertEqual(before, after)
+                probes = {"a": SimpleNamespace(url="http://127.0.0.1:9/mcp", methods=lambda: [])}
+                owner = control.HistoryControl(helpers, outer, baseline, probes, env,
+                    {"uap": {"path": "inert-public-uap"}, "probe": {}}, time.monotonic() + 180)
+                environments = []
+
+                def capture(_api, argv, _cwd, environment, _evidence, label, *_args, **_options):
+                    nonlocal proof
+                    environments.append((label, dict(environment)))
+                    if label == "add":
+                        self.assertEqual(argv, owner.uap([
+                            "add", str(owner.source), "--no-save", "--yes", "--format", "json"]))
+                        skill = owner.source / "skills/hermes-public-a/SKILL.md"
+                        self.assertTrue(skill.is_file())
+                        user = Path(environment["HERMES_HOME"])
+                        config = user / "config.yaml"
+                        raw = config.read_text()
+                        if raw.startswith("{"):
+                            value = json.loads(raw)
+                        else:
+                            self.assertEqual(raw, "_config_version: 52\n")
+                            value = {"_config_version": 52}
+                        # Inert filesystem model of the pinned skills trust handler:
+                        # use the received HERMES_HOME and append this actual Project.
+                        value.setdefault("skills", {}).setdefault("trusted_project_dirs", []).append(str(owner.project))
+                        config.write_text(json.dumps(value))
+                        (user / "config.yaml.agentplugins.lock").write_bytes(b"")
+                        if effect == "original-user":
+                            original_config.write_bytes(original_body + b"\n")
+                        elif effect == "private-source":
+                            skill.write_bytes(skill.read_bytes() + b"unrelated source edit\n")
+                        owner.selected.mkdir(mode=0o700)
+                        data = owner.project / ".uap/plugin-data" / ("hermes-public-a-" + "a" * 12)
+                        data.mkdir(parents=True, mode=0o700)
+                        servers = {"hermes-public-a-http": {"url": probes["a"].url},
+                                   "hermes-public-a-stdio": {"command": "inert-probe"}}
+                        (owner.selected / "config.yaml").write_text(json.dumps({"mcp_servers": servers}))
+                        proof = {"data": data, "root_receipt": {"inert": True}}
+                    return {"label": label, "stdout": processes.encoded(b'{"result":"success"}')}, None
+
+                try:
+                    # Command receipts/native execution have separate controls;
+                    # this test retains the real constructor, paths, holds and snapshots.
+                    with mock.patch.object(control, "capture_command", side_effect=capture), \
+                            mock.patch.object(control, "rejoin_commands"), \
+                            mock.patch.dict(sys.modules, {"hermes_yaml": SimpleNamespace(safe_load=json.loads)}):
+                        if effect == "ordinary":
+                            owner.prepare()
+                            self.assertEqual(env, inherited)
+                            self.assertIs(owner.baseline, baseline)
+                            self.assertEqual(baseline, retained)
+                            self.assertEqual(original_config.read_bytes(), original_body)
+                            user = owner.private / "public-user"
+                            self.assertEqual(environments[-1][1]["HERMES_HOME"], str(user))
+                            self.assertEqual(json.loads((user / "config.yaml").read_text()),
+                                {"_config_version": 52, "skills": {"trusted_project_dirs": [str(owner.project)]}})
+                            self.assertEqual((user / "config.yaml.agentplugins.lock").read_bytes(), b"")
+                            self.assertEqual(len([row for row in owner.held if row[0] == user]), 1)
+                            (user / "later-unmeasured").write_bytes(b"refuse")
+                            with self.assertRaisesRegex(RuntimeError, "unmeasured inter-command effect"):
+                                owner.run_command("selection", ["inert-native"], native=True)
+                            self.assertEqual([label for label, _ in environments], ["git", "add"])
+                        else:
+                            message = ("original User/A/B/outer changed" if effect == "original-user"
+                                       else "unmeasured command effect")
+                            with self.assertRaisesRegex(RuntimeError, message):
+                                owner.prepare()
+                            self.assertIs(owner.baseline, baseline)
+                            self.assertEqual(baseline, retained)
+                finally:
+                    owner.close_handles()
+
     def test_prepare_holds_original_parent_before_add_without_recapture(self):
         with tempfile.TemporaryDirectory() as temporary:
             owner = object.__new__(control.HistoryControl)
             owner.private = Path(temporary).resolve() / "public-history"
             owner.project, owner.source = owner.private / "public-a", owner.private / "public-source-a"
+            owner.user = owner.private / "public-user"
             owner.evidence, owner.selected = owner.private / "evidence", owner.project / ".hermes/uap-session"
             owner.api, owner.held, owner.ledger = ledger_api(), [], None
             owner.api.ordinary_bytes, owner.api.public_stdio_recipe = CASE["ordinary_bytes"], lambda *_: {"command": "inert-probe"}

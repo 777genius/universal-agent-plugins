@@ -2,9 +2,13 @@ package usecase
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 )
 
 type preparedSetupBaseActivator struct{}
@@ -75,5 +79,34 @@ func TestPreparedSetupClassificationRequiresFreshProofAndDetachedPacket(t *testi
 				t.Fatal("classifier mutated reviewed setup facts")
 			}
 		})
+	}
+}
+
+// Regression: the core classification packet and the OpenCode classifier
+// disagreed on VerifyOnly, so a repeated confirmed add downgraded Active to
+// Prepared and never restarted the native MCP check. Use the real adapter.
+func TestOpenCodePreparedSetupClassifierAdmitsCorePacket(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	executable, active := filepath.Join(root, "opencode"), filepath.Join(root, "managed", "probe")
+	evidence := opencodehost.VersionEvidence{Version: "1.19.4", Source: "executable_version", ProbeStatus: "ok"}
+	host := opencodehost.NewNativePrepared(executable, root, nil, evidence, opencodehost.Resolve(evidence), nil)
+	session := repairSession{
+		service: Service{Activator: providerstest.NewActivator(providers.Activator{})},
+		input:   AddInput{Client: domain.DetectedClient{ClientID: domain.ClientOpenCode, ExecutablePath: executable, ConfigRoot: root}},
+		result: AddResult{Plan: domain.DeliveryPlan{
+			ClientID: domain.ClientOpenCode, Scope: domain.ScopeUser, InstallIntent: domain.InstallIntentAutomatic,
+			TargetContext: domain.TargetContext{Scope: domain.ScopeUser, UserConfigRoot: root}, NativeRegistryRoot: root,
+			ActivePath: active, OpenCodeHost: host, Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "local"}},
+		}},
+	}
+	observed := domain.ActivationOutcome{
+		Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Policy: domain.PolicyAllowed, NativeEffect: domain.NativeEffectUnchanged,
+		UserActions: []string{"confirm installation to start OpenCode and verify the installed local MCP servers"},
+	}
+	if !session.canCompletePreparedSetup(domain.StagedDelivery{ClientID: domain.ClientOpenCode, ActivePath: active}, observed) {
+		t.Fatal("OpenCode rejected the core prepared-setup classification packet")
 	}
 }

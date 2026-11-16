@@ -9,6 +9,7 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     paths:
     - .github/workflows/hermes-noauth-tool-call.yml
     - scripts/e2e/hermes-noauth-tool-call.py
+    - scripts/windows_owned_job.py
     - scripts/e2e/hermes-profile-admission.py
     - scripts/test_hermes_profile_admission.py
     - scripts/hermes_passive_history_control.py
@@ -36,6 +37,7 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     paths:
     - .github/workflows/hermes-noauth-tool-call.yml
     - scripts/e2e/hermes-noauth-tool-call.py
+    - scripts/windows_owned_job.py
     - scripts/e2e/hermes-profile-admission.py
     - scripts/test_hermes_profile_admission.py
     - scripts/hermes_passive_history_control.py

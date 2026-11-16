@@ -53,18 +53,27 @@ def run_case(name, binary, evidence, timeout):
         try:
             if name.startswith('json-'):
                 session.finish(1)
-                check((evidence / 'stdout.raw').read_bytes() == b'', 'JSON error polluted stdout')
+                # JSON failures emit exactly one versioned failure envelope on stdout.
+                envelope = json.loads((evidence / 'stdout.raw').read_bytes())
+                check(envelope.get('schema_version') == 1 and envelope.get('result') == 'failure'
+                      and envelope.get('data', {}).get('error', {}).get('code') == 'TARGET_REQUIRED',
+                      'JSON failure envelope missing')
                 check('requires --target' in clean(session.raw), 'missing target diagnostic absent')
                 check('Choose targets' not in clean(session.raw), 'JSON remove prompted')
                 fixture.unchanged()
             elif grouped:
                 session.finish()
-                fixture.installed(['cursor', 'opencode'], active=('opencode',))
+                # The version-only OpenCode stub cannot answer native skill
+                # observation, so readiness truthfully stays prepared.
+                fixture.installed(['cursor', 'opencode'])
                 body = clean(session.raw).lower()
                 check('setup required' in body, 'manual/auth-unchecked result missing')
                 check('3/3  installed' not in body and '✓ installed' not in body,
                       'unverified authentication was labeled installed')
-                check(not re.search(rb'\x1b\[[0-9;]*[AK]', session.raw), 'fallback moved cursor')
+                # The pre-install activity line redraws in place; the board itself must stay static.
+                board = bytes(session.raw).find(b'Installing ')
+                check(board >= 0, 'group install line missing')
+                check(not re.search(rb'\x1b\[[0-9;]*[AK]', session.raw[board:]), 'fallback moved cursor')
                 check('cursor' in body and 'opencode' in body, 'group omitted a selected client')
             else:
                 session.wait(SELECT, 'selection')

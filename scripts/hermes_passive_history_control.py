@@ -56,11 +56,12 @@ class HistoryControl:
         self.outer, self.baseline, self.probes, self.pins = outer, baseline, probes, pins
         self.private, self.project = outer / "public-history", outer / "public-history/public-a"
         self.source, self.evidence = self.private / "public-source-a", self.private / "evidence"
+        self.user = self.private / "public-user"
         self.selected = self.project / ".hermes/uap-session"
         require(all(name not in env or type(env[name]) is str and env[name] == ""
                     for name in ("HERMES_HOME_MODE", "HERMES_UID", "HERMES_GID", "HERMES_SKIP_CHMOD")),
                 "private inspection permission policy conflicts with inherited selectors")
-        self.env = dict(env, AGENTPLUGINS_HOME=str(self.private / "public-uap-state"))
+        self.env = dict(env, AGENTPLUGINS_HOME=str(self.private / "public-uap-state"), HERMES_HOME=str(self.user))
         self.nonce = env["HERMES_CALL_NONCE"]
         self.deadline = min(deadline - 50, time.monotonic() + 120)
         require(remaining(self.deadline) > 40, "insufficient original control/cold reserve")
@@ -120,9 +121,14 @@ class HistoryControl:
         require(not self.private.exists() and not self.private.is_symlink(), "fresh private fixture required")
         self.private.mkdir(mode=0o700)
         self.hold(self.private)
-        for directory in (self.project, self.selected.parent, self.source, self.evidence, self.private / "public-uap-state"):
+        for directory in (self.project, self.selected.parent, self.source, self.evidence,
+                          self.private / "public-uap-state", self.user):
             directory.mkdir(mode=0o700)
             self.hold(directory)
+        # Confirmed Project Skills add grants native trust in this fresh owned User profile.
+        with (self.user / "config.yaml").open("xb") as output:
+            output.write(b"_config_version: 52\n")
+        (self.user / "config.yaml").chmod(0o600)
         self.api.evidence_identity = self.api.directory_identity(self.evidence)
         self.run_command("git", ["git", "init", "-q", str(self.project)], authored=True)
         name = "hermes-public-a"
@@ -178,7 +184,8 @@ class HistoryControl:
                 after, _ = self.snapshot()
         allowed = ["public-history/evidence/" + label + suffix for suffix in (".stdout", ".stderr", ".status.json")]
         if label == "git": allowed += ["public-history/public-a/.git"]
-        if label == "add": allowed += ["public-history/public-a/.uap", "public-history/public-a/.hermes", "public-history/public-uap-state"]
+        if label == "add": allowed += ["public-history/public-a/.uap", "public-history/public-a/.hermes",
+                                       "public-history/public-uap-state", "public-history/public-user"]
         if label in {"bootstrap", "public-stdio-a"}: allowed += [self.selected.relative_to(self.outer).as_posix()]
         if label == "public-stdio-a": allowed += [(self.accepted["data"] / "hermes-events.jsonl").relative_to(self.outer).as_posix()]
         control_lock = "public-history/public-a/.uap/mutation.lock" if inspect or negative else None
@@ -492,7 +499,7 @@ def validate_phase_report(value):
     require(data.parent == private / "public-a/.uap/plugin-data"
             and re.fullmatch(r"hermes-public-a-[a-f0-9]{12}", data.name), "original data role differs")
     expected = {private.parent, private, private / "public-a", private / "public-source-a", private / "evidence",
-                private / "public-uap-state", private / "public-a/.hermes", private / "public-a/.hermes/uap-session",
+                private / "public-uap-state", private / "public-user", private / "public-a/.hermes", private / "public-a/.hermes/uap-session",
                 private / "public-a/.hermes/uap-session/logs", data}
     roots = fixture["roots"]
     require(type(roots) is list and len(roots) == len(expected)

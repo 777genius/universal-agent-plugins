@@ -2,6 +2,7 @@ package cursor
 
 import (
 	"path/filepath"
+	"slices"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -21,8 +22,11 @@ func (*Adapter) CanCompletePreparedSetup(request domain.ActivationRequest, outco
 	if !filepath.IsAbs(project) || filepath.Clean(project) != project || filepath.Dir(project) == project || request.Plan.NativeRegistryRoot != filepath.Join(project, ".cursor") {
 		return false
 	}
-	names, allMCP := cursorSelectedMCP(request.Plan.Components)
-	if !allMCP || len(names) == 0 {
+	// Only a fresh read-only observation of pending approval admits completion.
+	// Skills+MCP packages stay Prepared after approval (MCP never qualifies Skill
+	// discovery), and refused policy or profiles cannot be fixed by repetition:
+	// both would otherwise re-run native setup on every add.
+	if names, _ := cursorSelectedMCP(request.Plan.Components); len(names) == 0 || !slices.Contains(outcome.UserActions, cursorMCPApprovalPendingAction) {
 		return false
 	}
 	for _, surface := range request.Client.Surfaces {

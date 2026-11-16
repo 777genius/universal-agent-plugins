@@ -12,12 +12,9 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-// Copilot 1.0.103 includes this separate builtin inventory with its user plugin
-// listing. Only this observed section is accepted; the shared user-plugin parser
-// still validates the complete identity, version, enablement and install path.
-const builtinListingSection = "Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
-
-func userProfileEnv(env clients.Env, roots ...string) (clients.Env, error) {
+// userProfileEnv binds Copilot commands to the selected user profile. The
+// declared plugin name keeps a same-name builtin from being normalized away.
+func userProfileEnv(env clients.Env, declaredName string, roots ...string) (clients.Env, error) {
 	root := ""
 	for _, selected := range roots {
 		if selected == "" {
@@ -28,14 +25,14 @@ func userProfileEnv(env clients.Env, roots ...string) (clients.Env, error) {
 		}
 		root = selected
 	}
-	return listingEnv(env, root), nil
+	return listingEnv(env, root, declaredName), nil
 }
 
-func listingEnv(env clients.Env, root string) clients.Env {
+func listingEnv(env clients.Env, root, declaredName string) clients.Env {
 	if env.Runner == nil {
 		return env
 	}
-	runner := listingCommandRunner{CommandRunner: env.Runner, root: root}
+	runner := listingCommandRunner{CommandRunner: env.Runner, root: root, declaredName: declaredName}
 	if tree, ok := env.Runner.(ports.TreeCommandRunner); ok {
 		env.Runner = listingTreeRunner{runner, tree}
 	} else {
@@ -46,7 +43,8 @@ func listingEnv(env clients.Env, root string) clients.Env {
 
 type listingCommandRunner struct {
 	ports.CommandRunner
-	root string
+	root         string
+	declaredName string
 }
 
 func (r listingCommandRunner) command(command legacyports.Command) legacyports.Command {
@@ -70,7 +68,7 @@ func (r listingCommandRunner) command(command legacyports.Command) legacyports.C
 
 func (r listingCommandRunner) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	result, err := r.CommandRunner.Run(ctx, r.command(command))
-	return normalizeListing(command, result, err), err
+	return normalizeListing(command, result, err, r.declaredName), err
 }
 
 type listingTreeRunner struct {
@@ -80,21 +78,18 @@ type listingTreeRunner struct {
 
 func (r listingTreeRunner) RunWithTreeExitGrace(ctx context.Context, command legacyports.Command, grace time.Duration) (legacyports.CommandResult, error) {
 	result, err := r.tree.RunWithTreeExitGrace(ctx, r.command(command), grace)
-	return normalizeListing(command, result, err), err
+	return normalizeListing(command, result, err, r.declaredName), err
 }
 
-func normalizeListing(command legacyports.Command, result legacyports.CommandResult, err error) legacyports.CommandResult {
+func normalizeListing(command legacyports.Command, result legacyports.CommandResult, err error, declaredName string) legacyports.CommandResult {
 	if err != nil || result.ExitCode != 0 || len(command.Argv) != 3 || command.Argv[1] != "plugin" || command.Argv[2] != "list" {
 		return result
 	}
-	document := strings.ReplaceAll(string(result.Stdout), "\r\n", "\n")
-	if strings.Count(document, "Built-in plugins:") != 1 {
-		return result
-	}
-	if strings.HasPrefix(document, builtinListingSection) {
-		result.Stdout = []byte(strings.TrimPrefix(document, builtinListingSection))
-	} else if strings.HasSuffix(document, "\n"+builtinListingSection) {
-		result.Stdout = []byte(strings.TrimSuffix(document, builtinListingSection))
+	// The shared user-plugin parser still validates the complete identity,
+	// version, enablement and install path of what remains. A same-name
+	// builtin stays in place, so that parser fails closed for the request.
+	if listing, ok := splitBuiltinListing(strings.ReplaceAll(string(result.Stdout), "\r\n", "\n")); ok && !listing.lists(declaredName) {
+		result.Stdout = []byte(listing.rest)
 	}
 	return result
 }

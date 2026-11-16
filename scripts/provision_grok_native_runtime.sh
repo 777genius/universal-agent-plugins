@@ -24,7 +24,9 @@ done
 
 sudo apt-get update
 sudo apt-get install --yes --no-install-recommends debootstrap ubuntu-keyring
-sudo debootstrap --arch=amd64 --variant=minbase --components=main,universe \
+grok_runtime_scripts="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+sudo env WGETRC="$grok_runtime_scripts/grok_runtime_download.wgetrc" \
+  debootstrap --arch=amd64 --variant=minbase --components=main,universe \
   --force-check-gpg --keyring=/usr/share/keyrings/ubuntu-archive-keyring.gpg \
   --include=python3,git,bubblewrap,ca-certificates,libstdc++6 \
   noble "$RUNNER_TEMP/grok-runtime-root" https://archive.ubuntu.com/ubuntu
