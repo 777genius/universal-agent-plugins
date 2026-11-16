@@ -197,15 +197,30 @@ function leftToHook(agent, project) {
   }
 }
 
+function agentDir() {
+  // Pi's own agent directory: PI_CODING_AGENT_DIR with ~ and file:// support,
+  // otherwise ~/.pi/agent. Other spellings stay unmatched and undecided.
+  const configured = process.env.PI_CODING_AGENT_DIR;
+  if (!configured) return join(homedir(), ".pi", "agent");
+  if (configured === "~") return homedir();
+  if (configured.startsWith("~/") || (process.platform === "win32" && configured.startsWith("~\\"))) return join(homedir(), configured.slice(2));
+  if (configured.startsWith("file://")) return fileURLToPath(configured);
+  return resolve(configured);
+}
+
 function decide(cwd) {
   const hook = dirname(realpathSync(fileURLToPath(import.meta.url)));
   if (basename(hook) !== "agentplugins-project-trust" || basename(dirname(hook)) !== "extensions") return false;
+  // Answer only for the profile the hook was installed into. Another profile
+  // reaching it through a symlinked extensions directory keeps its own trust.
+  const agent = agentDir();
+  if (kind(join(agent, "extensions")) !== "directory" || comparable(realpathSync(agent)) !== comparable(dirname(dirname(hook)))) return false;
   const recorded = document(join(hook, "projects.json"));
   if (recorded.schema_version !== 1 || !object(recorded.projects)) return false;
   const project = realpathSync(resolve(cwd));
   const matches = Object.entries(recorded.projects).filter(([root]) => comparable(root) === comparable(project));
   if (matches.length !== 1 || !object(matches[0][1])) return false;
-  return leftToHook(dirname(dirname(hook)), project) && onlyOwned(project, matches[0][1]);
+  return leftToHook(agent, project) && onlyOwned(project, matches[0][1]);
 }
 
 export default function agentPluginsProjectTrust(pi) {

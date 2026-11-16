@@ -74,6 +74,13 @@ func piTrustRemoval(request domain.ActivationRequest) domain.DeactivationRequest
 // factory would and returns its project_trust answer for cwd.
 func piTrustNode(t *testing.T, node, user, home, cwd string) string {
 	t.Helper()
+	return piTrustNodeAs(t, node, user, user, home, cwd)
+}
+
+// piTrustNodeAs runs Pi with agent as PI_CODING_AGENT_DIR, loading the hook
+// through agent's extensions path while its bytes live in user's profile.
+func piTrustNodeAs(t *testing.T, node, user, agent, home, cwd string) string {
+	t.Helper()
 	_, entry, _ := piTrustHookPaths(user)
 	module := strings.TrimSuffix(entry, ".ts") + ".mjs"
 	body, err := os.ReadFile(entry)
@@ -82,6 +89,8 @@ func piTrustNode(t *testing.T, node, user, home, cwd string) string {
 	}
 	piTrustWrite(t, module, string(body))
 	defer func() { _ = os.Remove(module) }()
+	dir, _, _ := piTrustHookPaths(agent)
+	module = filepath.Join(dir, filepath.Base(module))
 	const runner = `import { pathToFileURL } from "node:url";
 const [hook, cwd] = process.argv.slice(1);
 const handlers = [];
@@ -89,7 +98,7 @@ const handlers = [];
 if (handlers.length !== 1) throw new Error("project_trust handler registration");
 process.stdout.write(JSON.stringify(await handlers[0]({ type: "project_trust", cwd }, {})));`
 	command := exec.CommandContext(t.Context(), node, "--input-type=module", "-e", runner, module, cwd)
-	command.Env = append(os.Environ(), "HOME="+home, "USERPROFILE="+home)
+	command.Env = append(os.Environ(), "HOME="+home, "USERPROFILE="+home, "PI_CODING_AGENT_DIR="+agent)
 	output, err := command.Output()
 	if err != nil {
 		t.Fatalf("execute generated Pi hook: %v", err)
@@ -185,6 +194,21 @@ func TestPiProjectTrustHookAnswersOnlyForOwnedUnchangedProjects(t *testing.T) {
 		expect(change.name, "undecided")
 		change.after()
 		expect(change.name+" withdrawn", "yes")
+	}
+	// Another profile sharing the extensions directory through a symlink
+	// keeps its own saved "Do not trust" instead of borrowing this profile's.
+	borrower := filepath.Join(root, "borrower", ".pi", "agent")
+	if err := os.MkdirAll(borrower, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(user, "extensions"), filepath.Join(borrower, "extensions")); err != nil {
+		t.Logf("symlinked profile: not supported by this filesystem: %v", err)
+	} else {
+		piTrustWrite(t, filepath.Join(borrower, "trust.json"), `{"`+filepath.ToSlash(project)+`":false}`)
+		if got := piTrustNodeAs(t, node, user, borrower, home, project); got != "undecided" {
+			t.Fatalf("symlinked profile borrowed trust: %q", got)
+		}
+		expect("symlinked profile withdrawn", "yes")
 	}
 	// A confirmed UAP update re-records the new content and keeps trust.
 	piTrustWrite(t, extension, "export default function owned() { /* updated by UAP */ }\n")
