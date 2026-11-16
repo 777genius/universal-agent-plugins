@@ -59,12 +59,17 @@ def run_case(name, binary, evidence, timeout):
                 fixture.unchanged()
             elif grouped:
                 session.finish()
-                fixture.installed(['cursor', 'opencode'], active=('opencode',))
+                # The version-only OpenCode stub cannot answer native skill
+                # observation, so readiness truthfully stays prepared.
+                fixture.installed(['cursor', 'opencode'])
                 body = clean(session.raw).lower()
                 check('setup required' in body, 'manual/auth-unchecked result missing')
                 check('3/3  installed' not in body and '✓ installed' not in body,
                       'unverified authentication was labeled installed')
-                check(not re.search(rb'\x1b\[[0-9;]*[AK]', session.raw), 'fallback moved cursor')
+                # The pre-install activity line redraws in place; the board itself must stay static.
+                board = bytes(session.raw).find(b'Installing ')
+                check(board >= 0, 'group install line missing')
+                check(not re.search(rb'\x1b\[[0-9;]*[AK]', session.raw[board:]), 'fallback moved cursor')
                 check('cursor' in body and 'opencode' in body, 'group omitted a selected client')
             else:
                 session.wait(SELECT, 'selection')
