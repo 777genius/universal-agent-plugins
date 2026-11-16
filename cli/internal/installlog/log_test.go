@@ -63,6 +63,10 @@ func TestWriteKeepsOnlyRecentFilesAndNeverTouchesForeignOnes(t *testing.T) {
 	if err := os.WriteFile(foreign, []byte("mine"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	foreignPrefixed := filepath.Join(dir, "install-00000000T000000Z-foreign.jsonl")
+	if err := os.WriteFile(foreignPrefixed, []byte("independently owned"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	var first string
 	for i := range maxFiles + 5 {
@@ -77,7 +81,7 @@ func TestWriteKeepsOnlyRecentFilesAndNeverTouchesForeignOnes(t *testing.T) {
 	entries, _ := os.ReadDir(dir)
 	logs := 0
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), filePrefix) {
+		if strings.HasPrefix(entry.Name(), filePrefix) && entry.Name() != filepath.Base(foreignPrefixed) {
 			logs++
 		}
 	}
@@ -89,6 +93,9 @@ func TestWriteKeepsOnlyRecentFilesAndNeverTouchesForeignOnes(t *testing.T) {
 	}
 	if _, err := os.Stat(foreign); err != nil {
 		t.Fatal("a file this package did not create must never be removed")
+	}
+	if body, err := os.ReadFile(foreignPrefixed); err != nil || string(body) != "independently owned" {
+		t.Fatalf("foreign prefixed log changed or disappeared: %q, %v", body, err)
 	}
 }
 
@@ -135,5 +142,43 @@ func TestSanitizeCoversCommonCredentialShapes(t *testing.T) {
 	kept := "prepare pdf/codex: target codex is not detected; nothing was changed at /Users/me/.codex (author=alice)"
 	if got := Sanitize(kept); got != kept {
 		t.Fatalf("redaction altered a harmless message:\n%s", got)
+	}
+}
+
+func TestSanitizeAuthorizationHeaders(t *testing.T) {
+	for _, tc := range []struct{ name, input, want string }{
+		{"quoted Basic short", `{"Authorization":"Basic dTpw","status":401}`, `{"Authorization":***,"status":401}`},
+		{"quoted Bearer short", `{"authorization":"Bearer x","path":"/tmp/agent"}`, `{"authorization":***,"path":"/tmp/agent"}`},
+		{"mixed case", `{"AuThOrIzAtIoN": "bAsIc dTpw"}`, `{"AuThOrIzAtIoN": ***}`},
+		{"single quotes", "{'AUTHORIZATION':'bEaReR x'}", "{'AUTHORIZATION':***}"},
+		{"plain Basic short", "Authorization: Basic dTpw; status=401", "Authorization: ***; status=401"},
+		{"plain Bearer short", "authorization=Bearer x; path=/tmp/agent", "authorization=***; path=/tmp/agent"},
+		{"prefixed underscore Basic", "MY_AUTHORIZATION=Basic dTpw", "MY_AUTHORIZATION=***"},
+		{"proxy underscore Bearer", "PROXY_AUTHORIZATION=Bearer x", "PROXY_AUTHORIZATION=***"},
+		{"prefixed hyphen Bearer", "Proxy-Authorization: Bearer x", "Proxy-Authorization: ***"},
+		{"plain long", "Authorization: Bearer abcdefghijklmnop; status=401", "Authorization: ***; status=401"},
+		{"useful diagnostics", `authorization_status=denied; method=Basic; path=/tmp/agent`, `authorization_status=denied; method=Basic; path=/tmp/agent`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Sanitize(tc.input); got != tc.want {
+				t.Fatalf("Sanitize() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestWriteRedactsQuotedAuthorization(t *testing.T) {
+	path, err := Write(t.TempDir(), Run{Command: "skills add", Entries: []Entry{{
+		Client: "codex", Status: "failed", Detail: `{"Authorization":"Basic dTpw","status":401}`,
+	}}}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "dTpw") || !strings.Contains(string(body), "401") {
+		t.Fatalf("private log must redact authorization and retain status: %s", body)
 	}
 }
