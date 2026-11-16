@@ -74,6 +74,14 @@ type ProfileResolver interface {
 	ResolveProfileRoot(root string) (string, error)
 }
 
+// UserExecutableOptional opts a client whose User lane only writes a prepared
+// package out of the generic CLI-registry executable requirement. The adapter
+// must never start, probe or register through the client in that lane, so an
+// application-only installation (no launcher on PATH) remains installable.
+type UserExecutableOptional interface {
+	UserScopeRunsNoClient() bool
+}
+
 // VersionProbeEnvironment pins a native version probe to the selected profile.
 // The detector still controls the isolated cwd, timeout and output limit.
 type VersionProbeEnvironment interface {

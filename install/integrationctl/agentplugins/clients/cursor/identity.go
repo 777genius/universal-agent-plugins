@@ -7,9 +7,17 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-var _ clients.RegistryInspector = (*Adapter)(nil)
+var (
+	_ clients.RegistryInspector      = (*Adapter)(nil)
+	_ clients.UserExecutableOptional = (*Adapter)(nil)
+)
 
 func (*Adapter) UsesNativeRegistryExecutable() bool { return false }
+
+// UserScopeRunsNoClient: the User lane only prepares plugins/local and reports
+// manual activation. Cursor.app without the optional `cursor` shell command is
+// therefore a complete editor installation for this lane, not a missing client.
+func (*Adapter) UserScopeRunsNoClient() bool { return true }
 
 func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, error) {
 	if err := ctx.Err(); err != nil {

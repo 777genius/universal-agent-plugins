@@ -26,7 +26,10 @@ func TestLocalClientSupportAndExecutableAuthority(t *testing.T) {
 		id         string
 		executable bool
 	}{
-		{"codex", true}, {"claude", true}, {"cursor", true}, {"copilot", true}, {"kiro", true}, {"grok", true}, {"opencode", true},
+		{"codex", true}, {"claude", true}, {"copilot", true}, {"kiro", true}, {"grok", true}, {"opencode", true},
+		// Cursor's User lane only prepares plugins/local: Cursor.app without the
+		// optional `cursor` shell command must remain installable.
+		{"cursor", false},
 		{"gemini", false}, {"cline", false}, {"windsurf", false}, {"kimi", false}, {"pi", false},
 		{"hermes", false},
 		{"antigravity", false},
