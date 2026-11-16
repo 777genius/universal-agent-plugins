@@ -78,6 +78,9 @@ func (adapter *ProjectAdapter) RefinePlan(ctx context.Context, in clients.PlanIn
 	action := piUserComponentAction
 	if plan.Scope == domain.ScopeProject {
 		action = piProjectComponentAction
+		// Disclose the persistent user-profile side effect in the review.
+		dir, _, _ := piTrustHookPaths(in.Client.ConfigRoot)
+		plan.LocalActions = shared.AppendUnique(plan.LocalActions, fmt.Sprintf(piProjectTrustPreviewFormat, plan.TargetContext.ProjectRoot, dir))
 	}
 	plan.UserActions = shared.AppendUnique(plan.UserActions, action)
 	return nil

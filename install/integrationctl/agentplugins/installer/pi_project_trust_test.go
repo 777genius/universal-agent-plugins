@@ -18,17 +18,18 @@ type piTrustFacade struct {
 	user, project, source string
 	write                 func(path, value string)
 	apply                 func(operation Operation, confirmed bool) Result
+	preview               Plan
 }
 
 // newPiTrustFacade drives one Pi project installation through the real
 // facade. Prepare is the host's read-only preview; only a confirmed Apply acts.
-func newPiTrustFacade(t *testing.T) piTrustFacade {
+func newPiTrustFacade(t *testing.T) *piTrustFacade {
 	t.Helper()
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	f := piTrustFacade{user: filepath.Join(root, "home", ".pi", "agent"), project: filepath.Join(root, "project"), source: filepath.Join(root, "source")}
+	f := &piTrustFacade{user: filepath.Join(root, "home", ".pi", "agent"), project: filepath.Join(root, "project"), source: filepath.Join(root, "source")}
 	f.write = func(path, value string) {
 		t.Helper()
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -57,6 +58,7 @@ func newPiTrustFacade(t *testing.T) piTrustFacade {
 	if err != nil {
 		t.Fatal(err)
 	}
+	preview := &f.preview
 	f.apply = func(operation Operation, confirmed bool) Result {
 		t.Helper()
 		req := Request{Operation: operation, Scope: domain.ScopeProject, ProjectRoot: f.project, ClientID: "pi", ClientConfigRoot: f.user, InstallationID: "TEST-pi-project-trust"}
@@ -67,6 +69,7 @@ func newPiTrustFacade(t *testing.T) piTrustFacade {
 		if err != nil {
 			t.Fatal(operation, err)
 		}
+		*preview = prepared.Plan()
 		var result Result
 		var applyErr error
 		if confirmed {
@@ -129,6 +132,11 @@ func TestPiProjectTrustFacadeCompletesOldInstallationAndRevokes(t *testing.T) {
 	}
 
 	installed := apply(OpInstall, true)
+	if !slices.ContainsFunc(f.preview.Delivery.LocalActions, func(action string) bool {
+		return strings.Contains(action, "UAP's user hook in "+filepath.Join(user, "extensions", "agentplugins-project-trust"))
+	}) {
+		t.Fatal("installation review did not disclose the persistent Pi trust hook", f.preview.Delivery.LocalActions)
+	}
 	artifact := filepath.Base(installed.Binding.TargetPath)
 	if installed.Outcome != OutcomeCompleted || installed.Client.Activation != string(domain.ActivationPrepared) || !ready(installed) {
 		t.Fatal("confirmed project install", installed.Outcome, installed.Client.Activation, installed.ManualActions)

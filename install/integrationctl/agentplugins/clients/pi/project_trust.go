@@ -41,7 +41,8 @@ const (
 // Project actions after activation. The pending action is also the only
 // observation that admits completing an old installation's setup.
 const (
-	piProjectTrustReadyAction   = "Open or restart Pi in this project, or reload resources; UAP's Pi trust hook trusts this exact project while its .pi holds only unchanged UAP-managed resources. Installed files do not prove runtime loading, authentication or model calls."
+	piProjectTrustReadyAction   = "Open or restart Pi in this project, or reload resources; UAP's Pi trust hook trusts this exact project while its .pi holds only unchanged UAP-managed resources. Trust still covers the whole folder: a running Pi session keeps it across /reload, and project node_modules imports, MCP working directories and .uap data are not checked. Installed files do not prove runtime loading, authentication or model calls."
+	piProjectTrustPreviewFormat = "Pi will trust %s through UAP's user hook in %s while the project's .pi holds only unchanged UAP-managed resources and Pi has no saved decision for it; removing the project's last UAP installation withdraws it."
 	piProjectTrustPendingAction = "Pi project trust is not set up for this installation; repeat the confirmed installation to set it up, or review project trust in Pi, then reload or restart. Installed files do not prove runtime loading."
 	piProjectTrustBlockedFormat = "UAP's Pi trust hook leaves this project to Pi's own trust decision because %s; review it and Pi's trust prompt, then reload or restart. Installed files do not prove runtime loading."
 	piProjectTrustFailedFormat  = "Pi project trust could not be set up automatically: %v; review project trust in Pi, then reload or restart. Installed files do not prove runtime loading."

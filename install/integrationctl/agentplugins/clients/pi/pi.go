@@ -168,7 +168,7 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 			return err
 		}
 		shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, eligible)
-		plan.UserActions = shared.AppendUnique(plan.UserActions, "Open or restart Pi in this project, review project trust, then reload resources; UAP does not grant trust or prove the extension was loaded.")
+		plan.UserActions = shared.AppendUnique(plan.UserActions, "Open or restart Pi in this project, answer its project trust prompt if it asks, then reload resources; installed files do not prove the extension was loaded.")
 		return nil
 	}
 	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, eligible)
