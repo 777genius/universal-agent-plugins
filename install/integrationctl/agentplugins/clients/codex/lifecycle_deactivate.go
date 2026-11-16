@@ -75,7 +75,7 @@ func deactivateConfirmedCodex(ctx context.Context, env clients.Env, request doma
 }
 
 func verifyCodexNativeRemoval(ctx context.Context, env clients.Env, request domain.DeactivationRequest, marketplace string) error {
-	listed, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "list", "--json")
+	listed, err := runCodexPluginList(ctx, env, request.Client.ConfigRoot, request.BackendExecutable)
 	if err != nil {
 		return shared.NativeProbeFailure(listed, err)
 	}

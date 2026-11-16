@@ -10,6 +10,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -162,6 +163,114 @@ func TestObservedOpenCodeSkillAuthenticationRequiresFullOwnedProof(t *testing.T)
 			}
 			if test.allow && (actual.Activation != domain.ActivationActive || actual.ActivationAttested || actual.AuthenticationAttested) {
 				t.Fatalf("fresh owned Skill did not qualify native installation: %+v", actual)
+			}
+		})
+	}
+}
+
+// Native Skill.all() can return the owned row after effective policy or a
+// same-name external Skill changed. Owned bytes alone cannot qualify that row.
+func TestObservedOpenCodeSkillsRecheckLatePolicyAndAliases(t *testing.T) {
+	for _, test := range []struct {
+		name, config, alias string
+		allow               bool
+	}{
+		{name: "unchanged", allow: true},
+		{name: "benign_config_change", config: `{"default_agent":"build","agent":{},"mode":{}}`, allow: true},
+		{name: "late_policy", config: `{"permission":{"skill":"deny"}}`},
+		{name: "late_agent_policy", config: `{"agent":{"build":{"permission":{"skill":"deny"}}}}`},
+		{name: "late_mode_tools", config: `{"mode":{"build":{"tools":{"skill":false}}}}`},
+		{name: "late_agents_alias", alias: ".agents"},
+		{name: "late_claude_alias", alias: ".claude"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request, env, outcome := observedOpenCodeSkillFixture(t)
+			skillRoot := request.Delivery.NativeObjects[0].Path
+			before, err := shared.DigestSkillDirectory(skillRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			configPath := filepath.Join(request.Client.ConfigRoot, "opencode.json")
+			if err := os.MkdirAll(request.Client.ConfigRoot, 0700); err != nil {
+				t.Fatal(err)
+			}
+			initialConfig := `{"agent":{},"mode":{}}`
+			if err := os.WriteFile(configPath, []byte(initialConfig), 0600); err != nil {
+				t.Fatal(err)
+			}
+			catalog, err := json.Marshal([]openCodeObservedSkill{{Name: "probe", Location: filepath.Join(skillRoot, "SKILL.md"), Content: "Expected body\n"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			foreign := []byte("---\nname: probe\ndescription: Foreign Skill\n---\nForeign body\n")
+			var aliasPath string
+			var probeContext context.Context
+			var calls []string
+			env.Runner = skillObservationRunner(func(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+				if command.Dir != request.Plan.NativeRegistryRoot || len(command.Argv) != 3 || command.Argv[0] != request.Client.ExecutablePath || command.StdoutLimitBytes == 0 {
+					t.Fatal("native revalidation escaped selected bounded authority")
+				}
+				if _, bounded := ctx.Deadline(); !bounded {
+					t.Fatal("native revalidation has no shared deadline")
+				}
+				if probeContext == nil {
+					probeContext = ctx
+				} else if ctx != probeContext {
+					t.Fatal("native revalidation replaced its original bounded context")
+				}
+				calls = append(calls, command.Argv[1]+" "+command.Argv[2])
+				if slices.Equal(command.Argv[1:], []string{"debug", "config"}) {
+					body, err := os.ReadFile(configPath)
+					if err != nil {
+						t.Fatal(err)
+					}
+					return legacyports.CommandResult{CleanupComplete: true, Stdout: body}, nil
+				}
+				if !slices.Equal(command.Argv[1:], []string{"debug", "skill"}) {
+					t.Fatalf("pure Skill observation started another command: %v", command.Argv)
+				}
+				if test.config != "" {
+					if err := os.WriteFile(configPath, []byte(test.config), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if test.alias != "" {
+					aliasPath = filepath.Join(request.Plan.NativeRegistryRoot, test.alias, "skills", "probe", "SKILL.md")
+					if err := os.MkdirAll(filepath.Dir(aliasPath), 0700); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(aliasPath, foreign, 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return legacyports.CommandResult{CleanupComplete: true, Stdout: catalog}, nil
+			})
+			actual, err := observeOpenCodeNativeComponents(t.Context(), env, request, outcome)
+			after, digestErr := shared.DigestSkillDirectory(skillRoot)
+			if digestErr != nil || after != before || !slices.Equal(actual.NativeObjects, outcome.NativeObjects) {
+				t.Fatalf("native observation changed owned Skill bytes or receipts: %v", digestErr)
+			}
+			wantConfig := initialConfig
+			if test.config != "" {
+				wantConfig = test.config
+			}
+			if body, readErr := os.ReadFile(configPath); readErr != nil || string(body) != wantConfig {
+				t.Fatalf("native observation changed external policy: %v", readErr)
+			}
+			if test.alias != "" {
+				if body, readErr := os.ReadFile(aliasPath); readErr != nil || string(body) != string(foreign) {
+					t.Fatalf("late external alias was not preserved: %v", readErr)
+				}
+			}
+			wantActivation, wantAuthentication := domain.ActivationPrepared, domain.AuthenticationNotChecked
+			if test.allow {
+				wantActivation, wantAuthentication = domain.ActivationActive, domain.AuthenticationNotRequired
+			}
+			if err != nil || actual.Activation != wantActivation || actual.Authentication != wantAuthentication || actual.Verification != domain.VerificationInstalled || actual.Policy != domain.PolicyAllowed || actual.NativeEffect != domain.NativeEffectUnchanged || actual.ActivationAttested || actual.AuthenticationAttested {
+				t.Fatalf("late native state was qualified incorrectly: %+v err=%v", actual, err)
+			}
+			if !slices.Equal(calls, []string{"debug config", "debug skill", "debug config"}) {
+				t.Fatalf("unexpected final policy observation sequence: %v", calls)
 			}
 		})
 	}

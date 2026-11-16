@@ -44,7 +44,7 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 		outcome.UserActions = shared.AppendUnique(outcome.UserActions, openCodeMCPConfirmationAction)
 		return outcome, nil
 	}
-	if !observed {
+	if !observed || (layout.Scope == domain.ScopeProject && openCodeProjectSkillAliases(layout, skills)) {
 		return outcome, nil
 	}
 	outcome.Activation = domain.ActivationActive
@@ -188,6 +188,12 @@ func openCodeCatalogsObserved(ctx context.Context, env clients.Env, request doma
 		if err != nil || !ok || !connectedOpenCodeMCP(listed, servers) {
 			return false, false, err
 		}
+	}
+	if len(skills) > 0 {
+		// Skill.all() does not filter effective permission policy. Recheck it
+		// after the catalog under the same bounded observation context.
+		config, ok, err = run("debug", "config")
+		return ok && openCodeSkillPermissionsUnrestricted(config), false, err
 	}
 	return true, false, nil
 }

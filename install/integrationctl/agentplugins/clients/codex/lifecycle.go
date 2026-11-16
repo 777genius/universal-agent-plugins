@@ -150,7 +150,7 @@ func registerCodexMarketplace(ctx context.Context, env clients.Env, request doma
 func verifyCodexPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest) error {
 	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	pluginSpec := request.DeclaredName + "@" + marketplace
-	listed, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "list", "--json")
+	listed, err := runCodexPluginList(ctx, env, request.Client.ConfigRoot, request.BackendExecutable)
 	if err != nil {
 		return fmt.Errorf("verify Codex plugin listing: %w", err)
 	}

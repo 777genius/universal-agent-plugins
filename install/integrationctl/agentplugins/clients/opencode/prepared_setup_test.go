@@ -64,7 +64,7 @@ func TestOpenCodeMCPPreviewRequiresConfirmation(t *testing.T) {
 	if err != nil || actual.Activation != domain.ActivationActive || actual.ActivationAttested {
 		t.Fatalf("confirmed native observation failed: %+v %v", actual, err)
 	}
-	if !slices.Equal(calls, []string{"debug config", "debug skill", "mcp list"}) || !slices.Equal(actual.UserActions, []string{"preserve unrelated warning"}) {
+	if !slices.Equal(calls, []string{"debug config", "debug skill", "mcp list", "debug config"}) || !slices.Equal(actual.UserActions, []string{"preserve unrelated warning"}) {
 		t.Fatalf("wrong observation sequence or stale action removal: %v %+v", calls, actual)
 	}
 	projection, err := ReadOpenCodeProjection(request.Delivery.ActivePath)

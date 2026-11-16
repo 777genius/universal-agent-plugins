@@ -14,7 +14,7 @@ import (
 // Codex owns defaults for optional plugin versions. Read its exact installed
 // identity instead of borrowing another client's fallback cache directory.
 func codexNativeUserVersion(ctx context.Context, env clients.Env, request domain.ActivationRequest) (string, error) {
-	listed, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "list", "--json")
+	listed, err := runCodexPluginList(ctx, env, request.Client.ConfigRoot, request.BackendExecutable)
 	if err != nil {
 		return "", shared.NativeProbeFailure(listed, err)
 	}

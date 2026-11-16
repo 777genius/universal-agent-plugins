@@ -175,7 +175,8 @@ def read_packet(source, *, client="opencode"):
     if not isinstance(commands, list) or len(commands) > 60:
         raise ValueError("project command receipt count refused")
     expected = {"opencode-project-evidence.json"}
-    expected.update(name for name in ("foreign-snapshots.json", "same-name-winners.json") if name in bodies)
+    expected.update(name for name in ("foreign-snapshots.json", "same-name-winners.json",
+                                     "pure-skill-ownership.json") if name in bodies)
     for command in commands:
         for stream in ("stdout", "stderr"):
             name = command[stream + "_file"]

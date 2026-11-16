@@ -114,3 +114,15 @@ func runCodex(ctx context.Context, env clients.Env, root, executable string, arg
 	}
 	return result, nil
 }
+
+// Listing is a read-only query even when it follows a registration or removal.
+// Keep it finite when the public CLI has only an interruptible parent context.
+func runCodexPluginList(ctx context.Context, env clients.Env, root, executable string) (legacyports.CommandResult, error) {
+	bounded, cancel := context.WithTimeout(ctx, codexProjectDiscoveryTimeout)
+	defer cancel()
+	result, err := runCodex(bounded, env, root, executable, "plugin", "list", "--json")
+	if err == nil {
+		err = bounded.Err()
+	}
+	return result, err
+}
