@@ -16,3 +16,7 @@ func (err *ProcessClosureError) Error() string {
 }
 
 func (err *ProcessClosureError) Unwrap() error { return err.Cause }
+
+// UnclosedProcess marks the error for agentplugins/domain.IsUnclosedClientProbe,
+// so every layer treats an unproved closure the same way.
+func (*ProcessClosureError) UnclosedProcess() {}

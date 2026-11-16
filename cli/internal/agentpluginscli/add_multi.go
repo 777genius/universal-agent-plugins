@@ -281,7 +281,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	}
 	err = app.recordGroupOutcome(cmd, opts, &combined, err)
 	if err != nil {
-		cleanupUnconfirmed := unclosedInstallProbe(err)
+		cleanupUnconfirmed := domain.IsUnclosedClientProbe(err)
 		if applied.Phase == usecase.GroupPhasePlanned && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded, combined.ActionRequired = "preflight_failed", len(inputs), 0, 0
 			if !cleanupUnconfirmed {

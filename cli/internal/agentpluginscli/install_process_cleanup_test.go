@@ -68,7 +68,7 @@ func TestUnclosedProbeBindingFailureIsNeverRetryable(t *testing.T) {
 // runner's own closure failure; it must block retry exactly like the marker.
 func TestRawRunnerClosureFailureIsNeverRetryable(t *testing.T) {
 	raw := fmt.Errorf("start client: %w", &legacyports.ProcessClosureError{Cause: errors.New("close failed")})
-	if !unclosedInstallProbe(raw) || failureKindOf(raw) != failureProcessCleanup {
+	if !domain.IsUnclosedClientProbe(raw) || failureKindOf(raw) != failureProcessCleanup {
 		t.Fatalf("raw closure failure lost its classification: %q", failureKindOf(raw))
 	}
 	for _, failure := range []*installFailure{
