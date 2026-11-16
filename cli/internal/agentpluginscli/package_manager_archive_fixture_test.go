@@ -342,7 +342,12 @@ func (f pmArchiveEnvironment) assertInstalled(t *testing.T, expected pmArchiveTa
 			}
 			name, target := binding.Owner.Alias, binding.ClientID
 			key := name + "/" + target
-			if !slices.Contains(expected[name], target) || bindings[key].BindingID != "" || binding.Materialization != "materialized" || binding.ProjectionStatus != "" || binding.Activation != "active" || binding.Verification != "installation_verified" {
+			activation := "active"
+			if target == "codex" {
+				pmArchiveCodexRemotePrepared(t, binding, name)
+				activation = "prepared"
+			}
+			if !slices.Contains(expected[name], target) || bindings[key].BindingID != "" || binding.Materialization != "materialized" || binding.ProjectionStatus != "" || binding.Activation != activation || binding.Verification != "installation_verified" {
 				t.Fatalf("unexpected/unhealthy binding: %+v", binding)
 			}
 			bindings[key] = binding
@@ -412,4 +417,23 @@ func pmArchiveWriteJSON(t *testing.T, path string, value any) {
 		t.Fatal(err)
 	}
 	dependencyWrite(t, path, string(body)+"\n")
+}
+
+// These archive fixtures deliberately declare remote HTTP MCP. Codex cannot
+// qualify remote authentication or initialization through its local-only probe.
+// Require the exact prepared boundary and delivered URL, never arbitrary
+// preparation as a substitute for observed local native readiness.
+func pmArchiveCodexRemotePrepared(t *testing.T, binding installer.InspectedBinding, name string) {
+	t.Helper()
+	if binding.ClientID != "codex" || binding.Activation != "prepared" || binding.Authentication != "not_checked" || binding.Verification != "installation_verified" || binding.LifecycleConverged {
+		t.Fatalf("remote Codex fixture must remain verified but unobserved: %+v", binding)
+	}
+	servers, err := savedProjectedMCP(binding.TargetPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := map[string]any{"type": "http", "url": "https://example.test/pm/" + name}
+	if len(servers) != 1 || !reflect.DeepEqual(servers[name], expected) {
+		t.Fatalf("remote Codex projection=%#v want=%#v", servers, expected)
+	}
 }

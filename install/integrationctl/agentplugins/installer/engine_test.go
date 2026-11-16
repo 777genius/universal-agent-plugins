@@ -620,12 +620,13 @@ func TestPreparedInstallIdentitySurvivesPublicHandoff(t *testing.T) {
 						if facts.BindingID != binding.BindingID || facts.Scope != binding.Scope || facts.TargetPath != binding.TargetPath || facts.DataRoot != binding.DataRoot || facts.TreeDigest != binding.TreeDigest {
 							t.Errorf("callback differs from inspect: callback=%+v inspect=%+v", facts, binding)
 						}
-						wantActivation := domain.ActivationActive
-						if group && binding.ClientID == "codex" {
-							wantActivation = domain.ActivationManual
-						}
-						if binding.Materialization != string(domain.MaterializationMaterialized) || binding.Activation != string(wantActivation) {
+						if binding.Materialization != string(domain.MaterializationMaterialized) || binding.Activation != string(domain.ActivationActive) {
 							t.Errorf("binding not materialized/activated: %+v", binding)
+						}
+						// Both the single and grouped runners now provide the exact
+						// native discovery contract for this local stdio fixture.
+						if binding.ClientID == "codex" && (binding.Authentication != string(domain.AuthenticationNotRequired) || binding.Verification != string(domain.VerificationInstalled)) {
+							t.Errorf("Codex stdio readiness was not preserved through handoff: %+v", binding)
 						}
 					}
 					if !matched {
@@ -6658,14 +6659,43 @@ func TestCommittedBindingFailureKeepsManagedCommit(t *testing.T) {
 }
 
 type recordingCodexRunner struct {
-	calls     [][]string
-	installed bool
-	pluginID  string
+	calls       [][]string
+	installed   bool
+	pluginID    string
+	marketRoots map[string]string
 }
 
 func (r *recordingCodexRunner) Run(_ context.Context, cmd ports.Command) (ports.CommandResult, error) {
 	argv := append([]string(nil), cmd.Argv...)
 	r.calls = append(r.calls, argv)
+	if containsArgSeq(argv, "plugin", "remove") {
+		if r.pluginID != "" && argv[3] != r.pluginID {
+			return ports.CommandResult{}, errors.New("fixture removal selected another plugin")
+		}
+		r.installed = false
+		return ports.CommandResult{Stdout: []byte(`{"ok":true}`)}, nil
+	}
+	if containsArgSeq(argv, "plugin", "marketplace", "remove") {
+		delete(r.marketRoots, argv[4])
+		return ports.CommandResult{Stdout: []byte(`{"ok":true}`)}, nil
+	}
+	if containsArgSeq(argv, "plugin", "marketplace", "update") && r.marketRoots[argv[4]] == "" {
+		return ports.CommandResult{ExitCode: 1, Stderr: []byte("marketplace not configured or installed")}, nil
+	}
+	if containsArgSeq(argv, "plugin", "marketplace", "add") {
+		body, err := os.ReadFile(filepath.Join(argv[4], ".agents", "plugins", "marketplace.json"))
+		if err != nil {
+			return ports.CommandResult{}, err
+		}
+		var manifest struct{ Name string }
+		if err := json.Unmarshal(body, &manifest); err != nil {
+			return ports.CommandResult{}, err
+		}
+		if r.marketRoots == nil {
+			r.marketRoots = map[string]string{}
+		}
+		r.marketRoots[manifest.Name] = argv[4]
+	}
 	if containsArgSeq(argv, "plugin", "marketplace", "add") || containsArgSeq(argv, "plugin", "marketplace", "update") || containsArgSeq(argv, "plugin", "add") {
 		r.installed = true
 		for _, arg := range argv {
@@ -6679,9 +6709,13 @@ func (r *recordingCodexRunner) Run(_ context.Context, cmd ports.Command) (ports.
 		if !r.installed || r.pluginID == "" || !strings.Contains(r.pluginID, "@") {
 			return ports.CommandResult{Stdout: []byte(`{"installed":[]}`)}, nil
 		}
-		name, market, _ := strings.Cut(r.pluginID, "@")
-		body := `{"installed":[{"pluginId":"` + r.pluginID + `","name":"` + name + `","marketplaceName":"` + market + `","installed":true,"enabled":true}]}`
-		return ports.CommandResult{Stdout: []byte(body)}, nil
+		_, market, _ := strings.Cut(r.pluginID, "@")
+		entry, err := fixtureCodexEntry(r.pluginID, r.marketRoots[market], true)
+		if err != nil {
+			return ports.CommandResult{}, err
+		}
+		body, err := json.Marshal(map[string]any{"installed": []any{entry}})
+		return ports.CommandResult{Stdout: body}, err
 	}
 	return ports.CommandResult{}, nil
 }

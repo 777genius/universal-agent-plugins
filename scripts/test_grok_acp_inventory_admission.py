@@ -1458,6 +1458,129 @@ class SessionOnlyContracts(unittest.TestCase):
         case.session_rpc_frame(notice,state,req,sent.append)
         return state,req,sent,frame
 
+    def repeated_catalog_fixture(self):
+        state,req,sent,first=self.available_commands_fixture()
+        # Exact frames13/14 from original Session artifact14217126006. Only
+        # SID/timestamp differ from the existing measured catalog fixture.
+        sid='01a1e3e5-b9e4-7463-a7b2-e8179361776f'
+        for prior in state['notifications']:
+            if prior['params'].get('sessionId') is not None:prior['params']['sessionId']=sid
+        first['params']['sessionId']=sid
+        first['params']['_meta'].update(eventId=sid+'-0',agentTimestampMs=1794824845818)
+        second=copy.deepcopy(first);second['params']['_meta']['eventId']=sid+'-1'
+        for frame,expected in zip((first,second),(
+                '381766c883fda7a4074e1a934a41278290e42fb24feac9eae80c8c682c13a9e4',
+                '546f7ebb5f439d1d14e2ec7120ee653778e62ce14df09a511d4291a5e4baf646')):
+            self.assertEqual(case.digest(json.dumps(frame,separators=(',',':')).encode()),expected)
+        return state,req,first,second
+
+    def repeated_catalog_command(self, prefix, req, notices, replies):
+        init=prefix['initialize'];frames=prefix['notifications']+list(notices)+list(replies)
+        first=json.dumps(init,separators=(',',':')).encode()+b'\n'
+        rest=b''.join(json.dumps(frame,separators=(',',':')).encode()+b'\n' for frame in frames)
+        expected_init={'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':1,
+                       'clientCapabilities':{},'clientInfo':{'name':'uap-inventory-admission','version':'1'}}}
+        expected_session={'jsonrpc':'2.0','id':2,'method':'session/new','params':{
+            'cwd':str(Path(req['input_root'])/'a'),'mcpServers':[],'_meta':{'modelId':'uap-local-driver'}}}
+        script=('import json,os,sys\n'
+                'assert json.loads(sys.stdin.readline()) == '+repr(expected_init)+'\n'
+                'os.write(1,'+repr(first)+')\n'
+                'assert json.loads(sys.stdin.readline()) == '+repr(expected_session)+'\n'
+                'os.write(1,'+repr(rest)+')\n')
+        if replies:
+            expected_list={'jsonrpc':'2.0','id':3,'method':'_x.ai/plugins/list',
+                           'params':{'sessionId':replies[0]['result']['sessionId']}}
+            script+='assert json.loads(sys.stdin.readline()) == '+repr(expected_list)+'\n'
+        if len(replies)>1:script+='sys.stdin.read()\n'
+        actual=subprocess.Popen;children=[];state=self.state()
+        def launch(*args,**kwargs):
+            child=actual(*args,**kwargs);children.append(child);return child
+        try:
+            with tempfile.TemporaryDirectory() as directory,mock.patch.object(case.subprocess,'Popen',side_effect=launch):
+                record=case.command([sys.executable,'-I','-c',script],'acp',Path(directory),
+                                    {'PATH':os.defpath},time.monotonic()+3,case.LIMIT,state,req)
+        finally:
+            self.assertEqual(len(children),1);self.assertIsNotNone(children[0].returncode)
+            self.assertTrue(children[0].stdin.closed);self.assertTrue(children[0].stdout.closed)
+        self.assertEqual(base64.b64decode(record['merged_base64'],validate=True),first+rest)
+        self.assertEqual(record['merged_bytes'],len(first+rest))
+        self.assertEqual(record['merged_sha256'],case.digest(first+rest))
+        return record,state
+
+    def test_measured_second_catalog_requires_real_session_and_inventory_completion(self):
+        prefix,req,first,second=self.repeated_catalog_fixture();sid=first['params']['sessionId']
+        reply={'jsonrpc':'2.0','id':2,'result':{'sessionId':sid}}
+        listing={'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}}
+        record,state=self.repeated_catalog_command(prefix,req,(first,second),(reply,listing))
+        self.assertIsNone(record['error'])
+        self.assertEqual(state['session'],reply);self.assertEqual(state['plugins'],listing)
+        self.assertEqual(state['notifications'],prefix['notifications']+[first,second])
+        packet=dict(source_commit='a'*40,source_tree='b'*40,nonce=req['nonce'])
+        members={'acquisition.json':b'{}','a.rpc.json':json.dumps(state).encode(),
+                 'a.ledger.json':json.dumps(dict(before={},after={},accepted=False)).encode()}
+        commands=[]
+        for row in help_rows()+[record]:
+            name='a-'+row['label']+'.merged.log'
+            members[name]=base64.b64decode(row['merged_base64'],validate=True)
+            commands.append(dict({k:v for k,v in row.items() if k!='merged_base64'},merged_file=name))
+        result=dict(packet,schema_version=1,scope='a',mode=case.SESSION_MODE,semantic_complete=True,reason='complete',
+                    provider=dict(requests=0,models_get=0,root_get=0,forbidden=0,settled=True),commands=commands)
+        scope=dict(packet,schema_version=1,scope='a',cleanup_complete=True,sealed_cleanup_complete=True,result=result)
+        summary=dict(packet,schema_version=1,mode=case.SESSION_MODE,collection_complete=False,cleanup_complete=True,
+                     qualification=copy.deepcopy(case.FALSE),scopes=[scope])
+        members['admission.json']=json.dumps(summary).encode()
+        facts=case.session_readout(members,packet,time.monotonic()+2)
+        self.assertEqual(facts['reason'],'measurement-only')
+        self.assertTrue(facts['session_reply']);self.assertTrue(facts['inventory_reply'])
+        self.assertFalse(facts['collection_complete']);self.assertNotIn(sid,json.dumps(facts))
+        self.assertTrue(all(value is False for value in summary['qualification'].values()))
+        detached=copy.deepcopy(state);detached['notifications'].pop()
+        members['a.rpc.json']=json.dumps(detached).encode()
+        self.assertEqual(case.session_readout(members,packet,time.monotonic()+2),
+                         dict(schema_version=1,mode=case.SESSION_MODE,reason='readout-refused'))
+
+    def test_second_catalog_rejects_replay_third_mutation_and_foreign_identity(self):
+        changes=('first-missing','replay','skipped','third','foreign-session','foreign-event','timestamp',
+                 'tokens','description','hint','workflow-path','tool-order','unknown-field','after-inventory','wrong-mode')
+        for change in changes:
+            state,req,first,second=self.repeated_catalog_fixture();sent=[];sid=first['params']['sessionId']
+            if change!='first-missing':case.session_rpc_frame(first,state,req,sent.append)
+            if change=='replay':second=copy.deepcopy(first)
+            elif change=='skipped':second['params']['_meta']['eventId']=sid+'-2'
+            elif change=='third':
+                case.session_rpc_frame(second,state,req,sent.append)
+                second=copy.deepcopy(second);second['params']['_meta']['eventId']=sid+'-2'
+            elif change=='foreign-session':
+                second['params']['sessionId']='foreign';second['params']['_meta']['eventId']='foreign-1'
+            elif change=='foreign-event':second['params']['_meta']['eventId']='foreign-1'
+            elif change=='timestamp':second['params']['_meta']['agentTimestampMs']+=1
+            elif change=='tokens':second['params']['_meta']['totalTokens']+=1
+            elif change=='description':second['params']['update']['availableCommands'][0]['description']='changed'
+            elif change=='hint':second['params']['update']['availableCommands'][1]['input']['hint']='changed'
+            elif change=='workflow-path':second['params']['update']['availableCommands'][7]['_meta']['workflowPath']='/changed'
+            elif change=='tool-order':second['params']['update']['_meta']['tools'].reverse()
+            elif change=='unknown-field':second['params']['unknown']=True
+            elif change=='after-inventory':
+                case.session_rpc_frame({'jsonrpc':'2.0','id':2,'result':{'sessionId':sid}},state,req,sent.append)
+                case.session_rpc_frame({'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}},state,req,sent.append)
+            elif change=='wrong-mode':req['mode']=case.CLI_MODE
+            before,outbound=copy.deepcopy(state),copy.deepcopy(sent)
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                case.session_rpc_frame(second,state,req,sent.append)
+            self.assertEqual(state,before);self.assertEqual(sent,outbound)
+
+    def test_two_catalogs_never_replace_missing_replies_or_allow_post_completion_frames(self):
+        prefix,req,first,second=self.repeated_catalog_fixture();sid=first['params']['sessionId']
+        reply={'jsonrpc':'2.0','id':2,'result':{'sessionId':sid}}
+        listing={'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}}
+        for suffix in ((),(reply,),(reply,listing,first),(reply,listing,listing)):
+            with self.subTest(replies=len(suffix),tail=suffix[-1].get('method') if suffix else None):
+                record,state=self.repeated_catalog_command(prefix,req,(first,second),suffix)
+                self.assertEqual(record['error'],'protocol-refused')
+                self.assertEqual(state['notifications'],prefix['notifications']+[first,second])
+                if not suffix:self.assertIsNone(state['session'])
+                if len(suffix)<2:self.assertIsNone(state['plugins'])
+
     def test_measured_available_commands_is_only_a_captured_notification(self):
         state,req,sent,frame=self.available_commands_fixture();before=copy.deepcopy(state);outbound=copy.deepcopy(sent)
         with mock.patch.object(case.os,'open',side_effect=AssertionError('metadata path was opened')):

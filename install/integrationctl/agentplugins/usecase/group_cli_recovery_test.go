@@ -67,7 +67,9 @@ func TestGroupedCLIRetryAfterCancellationPreservesPackageAndData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("retry Codex: %v; commands = %v", err, runner.commands)
 	}
-	if retried.Targets[0].Activation.Activation != domain.ActivationActive || retried.Targets[0].Activation.Verification != domain.VerificationInstalled || len(retried.Receipts) != 0 {
+	// The mixed stdio/HTTP package is registered, but this fixture supplies no
+	// native remote-server or authentication observation.
+	if retried.Targets[0].Activation.Activation != domain.ActivationPrepared || retried.Targets[0].Activation.Authentication != domain.AuthenticationNotChecked || retried.Targets[0].Activation.Verification != domain.VerificationInstalled || len(retried.Receipts) != 0 {
 		t.Fatalf("retry outcome = %+v", retried)
 	}
 	want := [][]string{
@@ -96,14 +98,22 @@ func TestGroupedCLIRetryAfterCancellationPreservesPackageAndData(t *testing.T) {
 	if binding.Activation != domain.ActivationPrepared {
 		t.Fatalf("unattempted activation = %s, want prepared", binding.Activation)
 	}
-	// Completed bindings stay read-only. Recognized negative listing evidence
-	// remains a failure, even with explicit activation attestation.
+	// Remote readiness is still unobserved, so a confirmed retry may register
+	// again without replacing the committed package or plugin data. Negative
+	// listing evidence remains a failure, even with activation attestation.
 	runner.commands = nil
-	if _, err := service.AddGroup(context.Background(), GroupInput{Targets: inputs[1:], OperationGroupID: "cli-verified", Confirmed: true}); err != nil {
+	verified, err := service.AddGroup(context.Background(), GroupInput{Targets: inputs[1:], OperationGroupID: "cli-verified", Confirmed: true})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(runner.commands, want[2:]) {
-		t.Fatalf("verified retry performed effects: %v", runner.commands)
+	if !reflect.DeepEqual(runner.commands, want) || verified.Targets[0].Activation.Activation != domain.ActivationPrepared || len(verified.Receipts) != 0 {
+		t.Fatalf("prepared retry changed registration or rebuilt package: commands=%v outcome=%+v", runner.commands, verified)
+	}
+	if repeatedInfo, err := os.Stat(binding.TargetLocator); err != nil || !os.SameFile(packageInfo, repeatedInfo) {
+		t.Fatalf("prepared retry replaced package directory: %v", err)
+	}
+	if body, err := os.ReadFile(marker); err != nil || string(body) != "retained" {
+		t.Fatalf("prepared retry changed retained plugin data: %q, %v", body, err)
 	}
 	runner.installed = false
 	inputs[1].ActivationComplete = true

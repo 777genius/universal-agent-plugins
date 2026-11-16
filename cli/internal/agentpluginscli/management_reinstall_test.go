@@ -31,7 +31,7 @@ func TestManagementSkillReinstallPreservesRetainedInstallation(t *testing.T) {
 			changeContent("---\nname: pdf\ndescription: Read PDFs\n---\nUpdated reviewed content.\n")
 			managementApply(t, managementPrepare(t, backend, management.ChangeRequest{Action: management.Update, Aliases: []string{"pdf"}}))
 			managementApply(t, managementPrepare(t, backend, management.ChangeRequest{Action: management.Remove,
-				Aliases: []string{"pdf"}, TargetIds: []string{"profile-codex"}, ExternalUninstalled: true}))
+				Aliases: []string{"pdf"}, TargetIds: []string{"profile-codex"}}))
 			removed := j.state(t)
 			if len(removed.Installations) != 1 || len(removed.EnvironmentReceipts) != 0 ||
 				len(removed.Installations[0].Clients) != 0 || !removed.Installations[0].DataRetained || len(removed.Installations[0].DataReceipts) == 0 {

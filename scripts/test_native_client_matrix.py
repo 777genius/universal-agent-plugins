@@ -9,6 +9,7 @@ import re
 import tarfile
 import tempfile
 import sys
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -142,6 +143,46 @@ class NativeMatrixTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     matrix.require_hosted("darwin-arm64")
 
+    def test_browser_skills_requires_the_exact_current_source_dual_client_lane(self):
+        _, required = matrix.select_native_tests("codex", project_components=True)
+        matrix.browser_native_tests("codex", "linux-amd64", True, False, required)
+        for client, target, project, released, selected in [
+            ("claude", "linux-amd64", True, False, required),
+            ("opencode", "linux-amd64", True, False, required),
+            ("codex", "darwin-arm64", True, False, required),
+            ("codex", "windows-amd64", True, False, required),
+            ("codex", "linux-amd64", False, False, required),
+            ("codex", "linux-amd64", True, True, required),
+            ("codex", "linux-amd64", True, False, matrix.REQUIRED_TESTS["codex"]),
+        ]:
+            with self.subTest(client=client, target=target, project=project, released=released, selected=selected):
+                with self.assertRaises(ValueError):
+                    matrix.browser_native_tests(client, target, project, released, selected)
+
+    def test_browser_tools_reject_non_disposable_execution_before_lookup(self):
+        for env in [{}, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "self-hosted",
+                         "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1"}]:
+            with patch.dict(matrix.os.environ, env, clear=True), patch.object(matrix.shutil, "which") as lookup:
+                with self.assertRaises(RuntimeError):
+                    matrix.browser_runtime_environment(Path("/unused"))
+                lookup.assert_not_called()
+
+    def test_browser_requires_both_native_lifecycles_without_widening_other_lanes(self):
+        _, ordinary = matrix.select_native_tests("codex", project_components=True)
+        self.assertNotIn(matrix.BROWSER_PROJECT_TEST, ordinary)
+        pattern, required = matrix.browser_native_tests("codex", "linux-amd64", True, False, ordinary)
+        self.assertEqual(required, ordinary | {matrix.BROWSER_PROJECT_TEST})
+        self.assertNotIn(matrix.BROWSER_PROJECT_TEST, ordinary)
+        declared = set()
+        for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
+            declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
+        self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
+        self.assertNotIn(matrix.BROWSER_PROJECT_TEST, released.CLIENT_TESTS["codex"])
+        with self.assertRaises(ValueError):
+            matrix.browser_native_tests("codex", "darwin-arm64", True, False, ordinary)
+        with self.assertRaises(ValueError):
+            matrix.browser_native_tests("codex", "linux-amd64", True, True, ordinary)
+
     def test_source_project_proof_selects_exact_required_codex_tests(self):
         pattern, required = matrix.select_native_tests("codex", project_components=True)
         declared = set()
@@ -163,6 +204,41 @@ class NativeMatrixTests(unittest.TestCase):
         self.assertNotIn("TestAgentpluginsClaudeNativeProjectPreparedLifecycle", released.CLIENT_TESTS["claude"])
         self.assertNotIn("TestAgentpluginsClaudeNativeTrustedProjectDiscovery", released.CLIENT_TESTS["claude"])
         self.assertNotIn("TestAgentpluginsClaudeNativeTrustedProjectMCPCall", released.CLIENT_TESTS["claude"])
+
+    def test_codex_source_pin_and_version_preserve_released_contract(self):
+        self.assertEqual(set(matrix.CODEX_SOURCE_PINS), set(matrix.PINS))
+        for target in matrix.PINS:
+            source = SimpleNamespace(client="codex", target=target, project_components=True)
+            pin = matrix.selected_pin(source, "codex")
+            self.assertEqual(pin[:3], ("github", "openai/codex", "rust-v0.162.0"))
+            matrix.require_verified_pin(pin[4])
+            self.assertEqual(matrix.expected_client_version(source), "0.162.0")
+            historical = matrix.PINS[target]["codex"]
+            self.assertEqual(historical[:3], ("github", "openai/codex", "rust-v0.153.4"))
+            self.assertNotEqual(pin, historical)
+            for mode in ({"release_tag": "agentplugins-v1.2.3"}, {"release_state": "draft"},
+                         {"prepared_input": Path("prepared")}, {"prepare_only": True}):
+                with self.subTest(target=target, mode=mode):
+                    args = SimpleNamespace(client="codex", target=target, **mode)
+                    self.assertEqual(matrix.selected_pin(args, "codex"), historical)
+                    self.assertEqual(matrix.expected_client_version(args), "0.153.4")
+            record = {}
+            for field, name in (("client_asset", "codex"), ("scanner_asset", "lintai"), ("ripgrep_asset", "rg")):
+                _, repo, version, archive, integrity, _ = matrix.PINS[target][name]
+                record[field] = {"source": f"https://github.com/{repo}/releases/tag/{version}",
+                                 "version": version, "archive": archive, "archive_integrity": integrity,
+                                 "binary_sha256": "a" * 64}
+            released.verify_tools(record, target, "codex")
+            record["client_asset"].update(source=f"https://github.com/{pin[1]}/releases/tag/{pin[2]}",
+                                          version=pin[2], archive_integrity=pin[4])
+            with self.assertRaisesRegex(ValueError, "wrong pinned tool"):
+                released.verify_tools(record, target, "codex")
+
+    def test_expected_version_follows_selected_claude_and_opencode_pin(self):
+        for client, generation, expected in (("claude", "v1", "2.1.263 (Claude Code)"),
+                                             ("opencode", "v1", "1.18.34"), ("opencode", "v2", "2.2.5")):
+            args = SimpleNamespace(client=client, target="linux-amd64", opencode_generation=generation)
+            self.assertEqual(matrix.expected_client_version(args), expected)
 
     def test_opencode_v2_is_separate_from_unchanged_v1_native_matrix(self):
         v1_pattern, v1_required = matrix.select_native_tests("opencode", project_components=True)

@@ -27,10 +27,16 @@ type profileRunner struct {
 
 // tempRoot returns a symlink-free temp directory: native root checks demand
 // canonical paths, which t.TempDir() does not guarantee on macOS (/var vs
-// /private/var).
+// /private/var). The short prefix also keeps unrelated Desktop-link tests
+// independent of the full test name and operator TMPDIR length.
 func tempRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.EvalSymlinks(t.TempDir())
+	directory, err := os.MkdirTemp("", "uap-codex-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	root, err := filepath.EvalSymlinks(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,8 +77,22 @@ func TestProfileProcess(t *testing.T) {
 	}
 	args := os.Args[index+1:]
 	if len(args) > 1 && args[1] == "list" {
+		if _, err := os.Stat(filepath.Join(os.Getenv("CODEX_HOME"), "removed")); err == nil {
+			fmt.Print(`{"installed":[]}`)
+			os.Exit(0)
+		}
 		fmt.Printf(`{"installed":[{"pluginId":"demo@%s","name":"demo","marketplaceName":"%s","installed":true,"enabled":true}]}`, shared.ManagedMarketplaceName("artifact"), shared.ManagedMarketplaceName("artifact"))
 	} else {
+		if len(args) > 1 && args[0] == "plugin" && args[1] == "remove" {
+			if err := os.WriteFile(filepath.Join(os.Getenv("CODEX_HOME"), "removed"), nil, 0600); err != nil {
+				os.Exit(2)
+			}
+		}
+		if len(args) > 2 && args[0] == "plugin" && args[1] == "marketplace" && args[2] == "remove" {
+			if err := os.WriteFile(filepath.Join(os.Getenv("CODEX_HOME"), "config.toml"), nil, 0600); err != nil {
+				os.Exit(2)
+			}
+		}
 		if err := os.WriteFile(filepath.Join(os.Getenv("CODEX_HOME"), "mutation"), []byte(strings.Join(args, " ")), 0600); err != nil {
 			os.Exit(2)
 		}
@@ -95,7 +115,7 @@ func TestEveryCommandUsesExplicitProfile(t *testing.T) {
 		{name: "update fallback", replacing: true, fail: "marketplace update", want: []string{"plugin marketplace update", "plugin marketplace add", "plugin add", "plugin list"}},
 		{name: "rollback", fail: "plugin add", want: []string{"plugin marketplace add", "plugin add", "plugin marketplace remove"}},
 		{name: "verify only", verify: true, want: []string{"plugin list"}},
-		{name: "removal", remove: true, want: []string{"plugin remove", "plugin marketplace remove"}},
+		{name: "removal", remove: true, want: []string{"plugin remove", "plugin marketplace remove", "plugin list"}},
 		{name: "registry", inspect: true, want: []string{"plugin list"}},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {

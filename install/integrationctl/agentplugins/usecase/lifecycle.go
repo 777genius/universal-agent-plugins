@@ -52,7 +52,7 @@ func (service Service) resume(
 		DeclaredName: input.Envelope.Manifest.Name, Replacing: true,
 		Interactive: input.Interactive, BackendExecutable: input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
-		VerifyOnly:            complete, ActivationComplete: input.ActivationComplete,
+		VerifyOnly:            complete, ActivationComplete: input.ActivationComplete, ProjectTrustConsent: input.ProjectTrustConsent,
 	}
 	var outcome domain.ActivationOutcome
 	var activationErr error
@@ -119,7 +119,7 @@ func (service Service) resumeActivationOutcome(input AddInput, plan domain.Deliv
 	if (client.Authentication == domain.AuthenticationPending || client.Authentication == domain.AuthenticationNotChecked) && input.AuthComplete {
 		outcome.Authentication = domain.AuthenticationComplete
 		outcome.AuthenticationAttested = true
-	} else if client.Authentication != "" {
+	} else if client.Authentication != "" && !service.observedAuthenticationNotRequired(input, plan, client, outcome, activationErr) {
 		outcome.Authentication = client.Authentication
 	}
 	if activationErr != nil && outcome.Activation == "" {
@@ -144,13 +144,21 @@ func (service Service) verifiedRegistrationUnchanged(input AddInput, plan domain
 		!input.AuthComplete && !outcome.AuthenticationAttested && len(outcome.UserActions) == 0
 }
 
-// verifiedPreparedObservationUnchanged classifies a repeated project-only,
-// read-only observation, not lifecycle convergence. The verified existing
+// verifiedPreparedObservationUnchanged classifies a fresh Prepared observation
+// within qualified scopes without claiming lifecycle convergence. The verified
 // delivery is reused; every subsequent request still reobserves the client.
 func (service Service) verifiedPreparedObservationUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome, nativeComplete bool) bool {
-	if plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope).LifecycleKind == domain.LifecycleNativeConfig {
+	traits := plan.SelectedDelivery.EffectiveTraitsForScope(input.Client.ClientID, input.Scope)
+	if traits.LifecycleKind == domain.LifecycleNativeConfig {
 		return nativeComplete && service.verifiedPreparedNativeConfigUnchanged(input, plan, client, delivery, outcome)
 	}
+	if input.Scope == domain.ScopeUser && traits.LifecycleKind == domain.LifecycleCLIRegistry && !traits.TracksNativeEffects && service.preparedSetupVerifierAvailable(input, plan) {
+		return service.verifiedPreparedBindingUnchanged(input, plan, client, delivery, outcome)
+	}
+	return service.verifiedPreparedProjectObservationUnchanged(input, plan, client, delivery, outcome)
+}
+
+func (service Service) verifiedPreparedProjectObservationUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome) bool {
 	return input.Scope == domain.ScopeProject && !nativeLifecycleClient(input.Client.ClientID, plan.SelectedDelivery, input.Scope) &&
 		service.clientVerifierAvailable(input, plan) && client.Materialization == domain.MaterializationMaterialized &&
 		client.Activation == domain.ActivationPrepared && client.Verification == domain.VerificationInstalled &&
@@ -164,7 +172,13 @@ func (service Service) verifiedPreparedObservationUnchanged(input AddInput, plan
 // A complete native projection can retain Prepared while exact file verification
 // succeeds. This classifies only that operation; it does not converge lifecycle.
 func (service Service) verifiedPreparedNativeConfigUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome) bool {
-	return input.Scope == domain.ScopeProject && plan.Scope == domain.ScopeProject && client.Scope == string(domain.ScopeProject) &&
+	return input.Scope == domain.ScopeProject && service.verifiedPreparedBindingUnchanged(input, plan, client, delivery, outcome)
+}
+
+// An explicit no-effect observation can preserve an owned Prepared binding.
+// This classifies physical change only; native readiness remains unqualified.
+func (service Service) verifiedPreparedBindingUnchanged(input AddInput, plan domain.DeliveryPlan, client domain.ClientBinding, delivery domain.StagedDelivery, outcome domain.ActivationOutcome) bool {
+	return plan.Scope == input.Scope && client.Scope == string(input.Scope) &&
 		plan.ClientID == input.Client.ClientID && client.ClientID == string(input.Client.ClientID) && delivery.ClientID == input.Client.ClientID &&
 		plan.ActivePath != "" && plan.ActivePath == client.TargetLocator &&
 		plan.SelectedDelivery.IsZero() && client.SelectedDelivery.IsZero() && service.clientVerifierAvailable(input, plan) &&

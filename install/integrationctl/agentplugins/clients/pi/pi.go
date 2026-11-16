@@ -22,6 +22,10 @@ const Namespace = "com.universal-agent-plugins.pi"
 const DescriptorName = ".agentplugins-pi.json"
 const BootstrapVersion = 1
 
+// piProjectExtensionAction is the base adapter's project guidance. The
+// project adapter replaces it with the trust outcome of its activation.
+const piProjectExtensionAction = "Review project trust in Pi and reload or restart to load the project extension; installed files are not runtime proof."
+
 type Adapter struct{}
 
 func New() *Adapter                  { return &Adapter{} }
@@ -164,7 +168,7 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 			return err
 		}
 		shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, eligible)
-		plan.UserActions = shared.AppendUnique(plan.UserActions, "Open or restart Pi in this project, review project trust, then reload resources; UAP does not grant trust or prove the extension was loaded.")
+		plan.UserActions = shared.AppendUnique(plan.UserActions, "Open or restart Pi in this project, answer its project trust prompt if it asks, then reload resources; installed files do not prove the extension was loaded.")
 		return nil
 	}
 	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, eligible)
@@ -273,7 +277,7 @@ func (a *Adapter) Activate(ctx context.Context, env clients.Env, request domain.
 	out.NativeEffect = domain.NativeEffectUnchanged
 	out.UserActions = []string{"Reload resources or restart Pi to load the installed extension."}
 	if request.Plan.Scope == domain.ScopeProject {
-		out.UserActions = []string{"Review project trust in Pi and reload or restart to load the project extension; installed files are not runtime proof."}
+		out.UserActions = []string{piProjectExtensionAction}
 	}
 	return out, nil
 }

@@ -17,6 +17,7 @@ func TestManagementRemovalAttestationBlocksAcceptanceAndPublication(t *testing.T
 	j := newSavedJourney(t, repo)
 	backend := managementJourneyBackend(t, j)
 	managementApply(t, managementPrepare(t, backend, managementInstallRequest("github:acme/demo@"+sha)))
+	backend = managementWithoutCodexCLI(t, &j, backend)
 	manifest, lock := j.cli.app.dependencyPaths()
 	beforeManifest, beforeLock := dependencyRead(t, manifest), dependencyRead(t, lock)
 	beforeState, calls := j.state(t), j.runner.calls
@@ -49,6 +50,8 @@ func TestManagementRemovalAttestationBlocksAcceptanceAndPublication(t *testing.T
 	if beforeManifest != dependencyRead(t, manifest) || beforeLock != dependencyRead(t, lock) || !reflect.DeepEqual(beforeState, j.state(t)) || calls != j.runner.calls {
 		t.Fatal("missing attestation changed intent, receipts or native client state")
 	}
+	// Model the operator removing this exact native plugin externally.
+	clear(j.runner.inner.codexIDs)
 	request.ExternalUninstalled = true
 	confirmed := managementPrepare(t, backend, request)
 	assertManagementRemovalAttested(t, confirmed.Review())
@@ -63,6 +66,7 @@ func TestManagementRemovalAttestationFollowsPreparedActions(t *testing.T) {
 	j := newSavedJourney(t, repo)
 	backend := managementJourneyBackend(t, j)
 	managementApply(t, managementPrepare(t, backend, managementInstallRequest("github:acme/demo@"+sha)))
+	backend = managementWithoutCodexCLI(t, &j, backend)
 	_, err := backend.Prepare(t.Context(), management.ChangeRequest{Action: management.Sync, ExternalUninstalled: true}, "irrelevant-attestation")
 	var refusal *management.Refusal
 	if !errors.As(err, &refusal) || refusal.Code != "EXTERNAL_UNINSTALL_NOT_APPLICABLE" {
@@ -80,6 +84,8 @@ func TestManagementRemovalAttestationFollowsPreparedActions(t *testing.T) {
 	}
 	defer blocked.Close()
 	assertManagementRemovalConflict(t, blocked.Review())
+	// Model the operator removing this exact native plugin externally.
+	clear(j.runner.inner.codexIDs)
 	request.ExternalUninstalled = true
 	confirmed := managementPrepare(t, backend, request)
 	assertManagementRemovalAttested(t, confirmed.Review())

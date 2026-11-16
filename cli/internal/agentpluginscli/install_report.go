@@ -1,7 +1,6 @@
 package agentpluginscli
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
@@ -114,6 +114,11 @@ func failedAgents(reports []agentReport) []agentReport {
 func retryableAgents(reports []agentReport) []agentReport {
 	var retryable []agentReport
 	for _, report := range reports {
+		for _, problem := range report.Problems {
+			if problem.Failure.Kind == failureProcessCleanup {
+				return nil // The whole run must wait for process cleanup.
+			}
+		}
 		if report.Retryable() {
 			retryable = append(retryable, report)
 		}
@@ -293,47 +298,12 @@ func groupFailure(target addTargetResult, kind failureKind) *installFailure {
 		if batchFailureNeedsDoctor(target) {
 			failure.Kind = failureRecovery
 		}
+		if target.Error.Stage == "cleanup" {
+			failure.Kind = failureProcessCleanup
+		}
 	}
 	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
 	return &failure
-}
-
-// retryFailedAgents offers to run the same command again for only the agents
-// that failed and a retry can help. It never runs without a person present. The
-// retried command resolves its source exactly as typing it again would and
-// repeats its normal review and confirmation.
-//
-// A retry can fix only part of a run, so the result stays an error while any
-// agent from an earlier attempt is still unresolved (not retryable, or
-// deselected): success of the last attempt alone must not turn into exit 0.
-func retryFailedAgents(cmd *cobra.Command, app App, opts *options, err error, rerun func(target string, unresolved []string) error) error {
-	if !retryAllowed(cmd, app, opts, err) {
-		return err
-	}
-	targets, askErr := askRetryTargets(cmd, app, opts, opts.installResult.Agents)
-	if askErr != nil || len(targets) == 0 {
-		return err
-	}
-	public := make([]string, len(targets))
-	selected := make(map[domain.ClientID]bool, len(targets))
-	for index, target := range targets {
-		public[index] = publicCLITargetName(domain.ClientID(target))
-		selected[domain.ClientID(target)] = true
-	}
-	pending := append([]string(nil), opts.unresolved...)
-	for _, report := range failedAgents(opts.installResult.Agents) {
-		if !selected[report.ClientID] {
-			pending = append(pending, report.Label)
-		}
-	}
-	if _, writeErr := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(targets)); writeErr != nil {
-		return writeErr
-	}
-	rerr := rerun(strings.Join(public, ","), pending)
-	if rerr == nil && len(pending) > 0 {
-		return fmt.Errorf("%s still need attention; see the technical log", strings.Join(pending, ", "))
-	}
-	return rerr
 }
 
 // recordGroupOutcome stores a plugin group's per-agent result for the retry
@@ -360,7 +330,7 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 				item.failure.Detail = detail + "\n" + item.failure.Detail
 			}
 			target := &combined.Targets[index]
-			target.Error = &usecase.GroupTargetFailure{Stage: "cleanup", Message: item.failure.Summary}
+			target.Error = &usecase.GroupTargetFailure{Stage: "cleanup", Message: item.failure.Summary + " " + item.failure.Next}
 			target.Output.Result.Failure = target.Error
 			target.RetryCommand = ""
 			target.NextAction = item.failure.Next
@@ -381,88 +351,53 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 	return cause
 }
 
-// runAddLoadedFor runs the one-agent add path with its own copy of the options
-// and hands the per-agent result back to the caller's options, so the retry
-// step sees it.
-func runAddLoadedFor(ctx context.Context, cmd *cobra.Command, app App, opts, selected *options, loaded loadedPackage, activationComplete, authComplete bool, clients []domain.DetectedClient, needsInstallConfirmation bool) error {
-	err := runAddLoaded(ctx, cmd, app, selected, loaded, activationComplete, authComplete, clients, needsInstallConfirmation)
-	opts.installResult = selected.installResult
-	return err
+// repairOwnedDependencies repairs one owned installation and, in an interactive
+// terminal, offers to run the repair again when some agents failed. Each run
+// plans from current state, so a retry never replays stale actions.
+func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
+	var handled bool
+	var run func() error
+	run = func() error {
+		opts.installResult = nil
+		attemptHandled, err := repairOwnedDependenciesOnce(cmd, app, opts, selector, targets)
+		if handled && !attemptHandled && err == nil {
+			return installer.ErrPlanChanged
+		}
+		handled = handled || attemptHandled
+		return retryConverge(cmd, app, opts, err, run)
+	}
+	err := run()
+	return handled, err
 }
 
-// checkLoadedPackage is the pre-apply gate for a resolved package: it must be
-// installable and, on a retry, identical to the package of the first attempt.
-func checkLoadedPackage(opts *options, loaded loadedPackage) error {
-	if err := rejectImperativePackageRequirements(loaded); err != nil {
-		return err
+// runSavedLifecycleRetryable runs a saved update or removal and, in an
+// interactive terminal, offers to run it again when some agents failed. Each run
+// plans from current state, so a retry never replays stale actions.
+func runSavedLifecycleRetryable(cmd *cobra.Command, app App, opts *options, selector, verb string) (bool, error) {
+	var handled bool
+	var run func() error
+	run = func() error {
+		opts.installResult = nil
+		attemptHandled, err := runSavedLifecycle(cmd, app, opts, selector, verb)
+		if handled && !attemptHandled && err == nil {
+			return installer.ErrPlanChanged
+		}
+		handled = handled || attemptHandled
+		return retryConverge(cmd, app, opts, err, run)
 	}
-	return pinRetryPackage(opts, loaded)
+	err := run()
+	return handled, err
 }
 
-// recordSingleAdd stores the result of a one-agent add for the retry step and
-// the technical log. Success needs no record.
-func (app App) recordSingleAdd(cmd *cobra.Command, opts *options, client domain.ClientID, alias string, err error) {
-	if err == nil {
-		return
+// runUpdateAllRetryable runs `update --all` and, in an interactive terminal,
+// offers to run it again when some saved agents failed. Each run plans from
+// current state, so a retry only touches what is still outdated or missing.
+func runUpdateAllRetryable(cmd *cobra.Command, app App, opts *options) error {
+	var run func() error
+	run = func() error {
+		opts.installResult = nil
+		err := runUpdateAll(cmd.Context(), cmd, app, opts)
+		return retryConverge(cmd, app, opts, err, run)
 	}
-	item := agentItem{Alias: alias, ClientID: string(client), Status: "failed", failure: describeSyncFailure(err)}
-	outcome := app.finishInstall(opts, "add", []agentItem{item})
-	if outcome.LogFile != "" && opts.format == "human" {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))
-	}
-}
-
-// retryAllowed gates every interactive retry: only with a failure, a person
-// present, human output and the retry budget left.
-func retryAllowed(cmd *cobra.Command, app App, opts *options, err error) bool {
-	return err != nil && !domain.IsUnclosedClientProbe(err) && app.Terminal && opts.format == "human" && !opts.yes && !opts.dryRun &&
-		opts.retryAttempt < maxSkillsRetries && cmd.Context().Err() == nil && opts.installResult != nil
-}
-
-// retryConverge offers to run a converging command (install, repair) again. It
-// has no per-agent narrowing: every outstanding binding is retried together, so
-// nothing from an earlier attempt can stay unresolved behind a green result.
-func retryConverge(cmd *cobra.Command, app App, opts *options, err error, rerun func() error) error {
-	if !retryAllowed(cmd, app, opts, err) {
-		return err
-	}
-	retryable := retryableAgents(opts.installResult.Agents)
-	if len(retryable) == 0 {
-		return err
-	}
-	app, promptErr := withPrompter(cmd, app, opts)
-	if promptErr != nil {
-		return err
-	}
-	labels := make([]string, len(retryable))
-	for index, report := range retryable {
-		labels[index] = report.Label
-	}
-	answer, askErr := app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Retry " + strings.Join(labels, ", ") + "?", Default: true})
-	if askErr != nil || !answer.Accepted {
-		return err
-	}
-	opts.retryAttempt++
-	if _, writeErr := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(retryable)); writeErr != nil {
-		return writeErr
-	}
-	return rerun()
-}
-
-// pinRetryPackage remembers the package the first attempt resolved and refuses a
-// retry that would install different bytes, such as a local folder edited in
-// between: the person reviewed the first package, not the changed one.
-func pinRetryPackage(opts *options, loaded loadedPackage) error {
-	digest := loaded.envelope.TreeDigest
-	if digest == "" {
-		return nil
-	}
-	if opts.firstTreeDigest == "" {
-		opts.firstTreeDigest = digest
-		return nil
-	}
-	if opts.firstTreeDigest != digest {
-		return fmt.Errorf("the package changed since the first attempt; run the command again to review the new version")
-	}
-	return nil
+	return run()
 }

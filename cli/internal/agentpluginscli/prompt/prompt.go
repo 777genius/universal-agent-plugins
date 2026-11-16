@@ -19,6 +19,7 @@ var (
 	ErrPromptCanceled    = errors.New("prompt canceled")
 	ErrPromptUnavailable = errors.New("an interactive terminal is required for this prompt; run the command in a terminal or pass the explicit flags it documents (for example --target <agent>)")
 	ErrPromptInputClosed = errors.New("prompt input closed before a complete answer")
+	ErrReviewTooLarge    = errors.New("confirmation review exceeds the terminal display budget")
 )
 
 type Prompter interface {
@@ -40,6 +41,7 @@ type TargetSelectionResult struct{ IDs []domain.ClientID }
 type ConfirmationRequest struct {
 	Title   string
 	Summary []string
+	Details []string
 	Default bool
 }
 type ConfirmationResult struct{ Accepted bool }

@@ -89,12 +89,22 @@ func TestSavedAddAutomaticTargetsRespectPackageHostPreflight(t *testing.T) {
 	}
 }
 
+// Eligibility/no-op fixtures start from observed native readiness, not merely
+// owned files, so an unavailable-discovery fallback cannot satisfy these cases.
+func assertSavedAddOpenCodeReady(t *testing.T, fixture cliFixture) {
+	t.Helper()
+	binding := dependencyBinding(t, fixture)
+	if binding.Activation != string(domain.ActivationActive) || binding.Authentication != string(domain.AuthenticationNotRequired) || binding.Verification != string(domain.VerificationInstalled) || !binding.LifecycleConverged {
+		t.Fatalf("fixture has no observed native OpenCode readiness: %+v", binding)
+	}
+}
+
 func TestSavedAddAutomaticTargetsRetainQualifiedOwnedOpenCode(t *testing.T) {
 	repo := dependencyRepo(t)
 	fixture, _, _ := dependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientOpenCode, executable: true})
 	source := githubIdentity("acme/demo", savedJourneyGit(t, repo, "rev-parse", "HEAD"), "")
 	dependencyRun(t, fixture, "add", source, "--target", "opencode", "--format", "json")
-	dependencyBinding(t, fixture)
+	assertSavedAddOpenCodeReady(t, fixture)
 	app := fixture.app
 	app.Terminal = true
 	cmd := &cobra.Command{}
@@ -212,7 +222,7 @@ func TestSavedAddDeferredHostQualifiesOnlyAfterSelection(t *testing.T) {
 	selected := false
 	fixture.app.PromptFactory = func(io.Reader, io.Writer, io.Writer, bool, bool) (prompt.Prompter, io.Writer, error) {
 		return fakePrompter{selectFn: func(request prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
-			if runner.probes != 0 || preparer.calls != 0 {
+			if runner.probes != 0 || runner.calls != 0 || preparer.calls != 0 {
 				t.Fatal("native host executed before target selection")
 			}
 			selected = true
@@ -232,7 +242,7 @@ func TestSavedAddDeferredHostQualifiesOnlyAfterSelection(t *testing.T) {
 	if preparer.calls != 0 {
 		t.Fatalf("selection preparation escaped into authoritative operation: %d", preparer.calls)
 	}
-	dependencyBinding(t, fixture)
+	assertSavedAddOpenCodeReady(t, fixture)
 }
 
 func TestSavedAddDeferredOwnedHostOfflineNoOpDoesNotProbe(t *testing.T) {
@@ -240,7 +250,8 @@ func TestSavedAddDeferredOwnedHostOfflineNoOpDoesNotProbe(t *testing.T) {
 	fixture, _, runner := dependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientOpenCode, executable: true})
 	source := githubIdentity("acme/demo", savedJourneyGit(t, repo, "rev-parse", "HEAD"), "")
 	dependencyRun(t, fixture, "add", source, "--target", "opencode", "--format", "json")
-	before := runner.probes
+	assertSavedAddOpenCodeReady(t, fixture)
+	before, beforeQueries := runner.probes, runner.calls
 	detected, err := fixture.app.Detector.Detect(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -253,8 +264,8 @@ func TestSavedAddDeferredOwnedHostOfflineNoOpDoesNotProbe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("offline owned default re-add failed: %v %s %s", err, output, stderr)
 	}
-	if runner.probes != before || preparer.calls != 0 {
-		t.Fatalf("offline unchanged action probed host: before=%d after=%d preparation=%d", before, runner.probes, preparer.calls)
+	if runner.probes != before || runner.calls != beforeQueries || preparer.calls != 0 {
+		t.Fatalf("offline unchanged action executed native work: probes=%d->%d queries=%d->%d preparation=%d", before, runner.probes, beforeQueries, runner.calls, preparer.calls)
 	}
-	dependencyBinding(t, fixture)
+	assertSavedAddOpenCodeReady(t, fixture)
 }

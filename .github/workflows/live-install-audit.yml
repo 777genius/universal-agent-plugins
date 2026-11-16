@@ -4,8 +4,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
+      - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/codex_runtime_audit.py'
+      - 'scripts/test_codex_runtime_audit.py'
       - 'tests/live-install/fixtures.json'
       - 'install/integrationctl/agentplugins/adapters/securityscan/scanner*.go'
       - '.github/workflows/live-install-audit.yml'
@@ -36,6 +39,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.11'
@@ -43,6 +49,9 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Install native Codex sandbox prerequisite
+        shell: bash
+        run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Install genuine native Codex CLI without model subscription
         id: native-install-pilot
         run: |
@@ -53,7 +62,9 @@ jobs:
       # require an ordinary release-semver CLI. This is still the PR source
       # binary, NOT the published agentplugins-v0.1.95 release.
       - name: Refuse ambient native-profile and Git configuration leakage
-        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+          python3 -m unittest discover -s scripts -p 'test_codex_runtime_audit.py'
       - name: Verify exact empty-stderr LintAI exit diagnostic
         run: go test ./install/integrationctl/agentplugins/adapters/securityscan -run '^TestCommandScannerIncludesNonzeroExitWhenStderrIsEmpty$' -count=1
       - name: Build actual PR CLI with current eligible directory version policy
@@ -88,9 +99,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Install native Codex sandbox prerequisite
+        shell: bash
+        run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Install the actual public npm installer and Codex
         id: published-install
         run: |
@@ -133,6 +150,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.11'
@@ -140,6 +160,10 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Install native Codex sandbox prerequisite
+        if: ${{ matrix.target == 'codex' }}
+        shell: bash
+        run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Install real native client binary, no login or model call
         id: native-install
         env:

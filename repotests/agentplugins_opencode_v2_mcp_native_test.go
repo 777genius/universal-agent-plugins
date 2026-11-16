@@ -346,6 +346,29 @@ func TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake(t *testing.T) {
 		result := captureProjectNative(ctx, client, project, env, args, 1<<20, 30*time.Second)
 		if result.Exit != 0 || result.Error != "" || result.Deadline ||
 			result.StdoutLimit || result.StderrLimit {
+			// Reuse the isolated model diagnostic's redaction before bounding and
+			// quoting these already captured streams. Never print argv or env.
+			label := "other"
+			switch strings.Join(args[:min(len(args), 2)], " ") {
+			case "mcp list":
+				label = "mcp-list"
+			case "service stop":
+				label = "service-stop"
+			case "run --format":
+				label = "model-run"
+			}
+			redact := strings.NewReplacer(root, "<fixture-root>", model.baseURL(), "<fixture-model>",
+				"local-fixture-not-a-vendor-secret", "<fixture-key>")
+			const diagnosticLimit = 4 << 10
+			stdout, stderr := redact.Replace(string(result.Stdout)), redact.Replace(string(result.Stderr))
+			t.Logf("native V2 managed service capture: command=%s exit=%d error_kind=%s "+
+				"error=%t deadline=%t stdout_limit=%t stderr_limit=%t elapsed_ms=%d",
+				label, result.Exit, result.ErrorKind, result.Error != "", result.Deadline,
+				result.StdoutLimit, result.StderrLimit, result.ElapsedMS)
+			t.Logf("native V2 managed service stdout (bytes=%d truncated=%t): %q", len(result.Stdout),
+				len(stdout) > diagnosticLimit, stdout[:min(len(stdout), diagnosticLimit)])
+			t.Logf("native V2 managed service stderr (bytes=%d truncated=%t): %q", len(result.Stderr),
+				len(stderr) > diagnosticLimit, stderr[:min(len(stderr), diagnosticLimit)])
 			t.Fatalf("native V2 managed service command failed (exit=%d error_kind=%s)", result.Exit, result.ErrorKind)
 		}
 		return result

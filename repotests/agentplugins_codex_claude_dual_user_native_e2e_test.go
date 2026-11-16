@@ -137,8 +137,14 @@ func TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle(t *testing.T) {
 	statePath := filepath.Join(f.Root, "installer-state", "state-v2.json")
 	add := []string{"skills", "add", nativeRawUserSkillSource, "--skill", nativeRawUserSkillName,
 		"--target", "codex,claude", "--no-ui", "--yes"}
-	result, runErr := commandsRunInstaller(t, f.Root, f.Project, env, installer, "dual-user-add", append(append([]string{}, add...), "--scope", "user")...)
-	dualNativeRawUserResult(t, result, runErr, "succeeded")
+	if os.Getenv("AGENTPLUGINS_NATIVE_BROWSER_LIVE") == "1" {
+		// Only the first install changes surface. The same fresh native inventory,
+		// repeat and selective removal assertions below qualify the browser result.
+		nativeBrowserSkillsInstall(t, f, installer, env)
+	} else {
+		result, runErr := commandsRunInstaller(t, f.Root, f.Project, env, installer, "dual-user-add", append(append([]string{}, add...), "--scope", "user")...)
+		dualNativeRawUserResult(t, result, runErr, "succeeded")
+	}
 	bindings := dualNativeRawUserBindings(t, statePath, 2, f.CodexHome, claudeProfile)
 	for client, binding := range bindings {
 		nativeRawUserFiles(t, binding, client)
@@ -174,7 +180,7 @@ func TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle(t *testing.T) {
 	verifyClaude("dual-user-installed", true)
 	beforeState, beforeCodex, beforeClaude := nativeSHA(t, statePath),
 		nativeTreeDigest(t, bindings["codex"].TargetLocator), nativeTreeDigest(t, bindings["claude"].TargetLocator)
-	result, runErr = commandsRunInstaller(t, f.Root, f.Project, env, installer, "dual-user-default-replay", add...)
+	result, runErr := commandsRunInstaller(t, f.Root, f.Project, env, installer, "dual-user-default-replay", add...)
 	dualNativeRawUserResult(t, result, runErr, "unchanged")
 	if nativeSHA(t, statePath) != beforeState ||
 		nativeTreeDigest(t, bindings["codex"].TargetLocator) != beforeCodex ||

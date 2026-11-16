@@ -31,12 +31,12 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 				if strings.TrimSpace(opts.target) != "" {
 					return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
 				}
-				return runUpdateAll(cmd.Context(), cmd, operationApp, opts)
+				return runUpdateAllRetryable(cmd, operationApp, opts)
 			}
 			if len(args) != 1 {
 				return fmt.Errorf("provide one installation or use --all")
 			}
-			if handled, err := runSavedLifecycle(cmd, operationApp, opts, args[0], "update"); handled || err != nil {
+			if handled, err := runSavedLifecycleRetryable(cmd, operationApp, opts, args[0], "update"); handled || err != nil {
 				return err
 			}
 			if strings.TrimSpace(opts.target) == "" {
@@ -123,7 +123,7 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 			if opts.yes && strings.TrimSpace(opts.target) == "" && !opts.purgeData {
 				return CLIUsageError{Code: "TARGET_REQUIRED", Message: "remove --yes requires explicit --target"}
 			}
-			if handled, err := runSavedLifecycle(cmd, app, opts, args[0], "remove"); handled || err != nil {
+			if handled, err := runSavedLifecycleRetryable(cmd, app, opts, args[0], "remove"); handled || err != nil {
 				return err
 			}
 			// JSON calls must reject missing selectors before

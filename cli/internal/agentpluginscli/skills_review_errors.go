@@ -73,8 +73,22 @@ func (s *skillsCatalogSession) reviewRefusal(err error) *skillspicker.ReviewRefu
 	if errors.As(err, &selection) {
 		s.addCandidateRefusalContext(refusal, selection.CandidateID)
 	}
+	return skillsPreflightRefusal(err, refusal)
+}
+
+func skillsPreflightRefusal(err error, refusal *skillspicker.ReviewRefusal) *skillspicker.ReviewRefusal {
+	var preflight *dependencyPreflightError
+	if !errors.As(err, &preflight) {
+		return refusal
+	}
+	if refusal.Code == "PLAN_REJECTED" {
+		refusal.Code = "TARGET_UNAVAILABLE"
+		refusal.Message = "Check this agent's supported CLI version and configuration with agentplugins doctor --target " + prompt.SafeText(preflight.ClientID) + ", or deselect this agent and review again."
+	}
+	refusal.Message = fmt.Sprintf("Skill %q for %s: %s", prompt.SafeText(preflight.Alias), prompt.SafeText(reviewClientName(domain.ClientID(preflight.ClientID))), refusal.Message)
 	return refusal
 }
+
 func (s *skillsCatalogSession) addCandidateRefusalContext(refusal *skillspicker.ReviewRefusal, id string) {
 	s.mu.Lock()
 	candidate, ok := s.candidates[id]

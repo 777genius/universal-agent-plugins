@@ -25,12 +25,12 @@ import (
 type preparedClaudeCLIRunner struct {
 	t                         *testing.T
 	project, user, executable string
-	calls                     int
+	calls, mutations          int
 }
 
 func (r *preparedClaudeCLIRunner) Run(_ context.Context, cmd legacyports.Command) (legacyports.CommandResult, error) {
 	r.t.Helper()
-	if !reflect.DeepEqual(cmd.Argv, []string{r.executable, "plugin", "list", "--json"}) || cmd.Dir != r.project {
+	if len(cmd.Argv) < 2 || cmd.Argv[0] != r.executable || cmd.Dir != r.project {
 		r.t.Fatalf("unexpected fixture command=%+v", cmd)
 	}
 	found := false
@@ -43,6 +43,15 @@ func (r *preparedClaudeCLIRunner) Run(_ context.Context, cmd legacyports.Command
 		r.t.Fatal("original user profile was replaced")
 	}
 	r.calls++
+	if !reflect.DeepEqual(cmd.Argv[1:], []string{"plugin", "list", "--json"}) {
+		return r.marketplaceCommand(cmd.Argv[1:])
+	}
+	if listed := r.marketplaceListing(); len(listed) != 0 {
+		body, err := json.Marshal(listed)
+		return legacyports.CommandResult{Stdout: body}, err
+	}
+	// Preserve the historical implicit-directory listing for the legacy
+	// projection refresh tests that share this fixture.
 	entries, err := os.ReadDir(filepath.Join(r.project, ".claude", "skills"))
 	if err != nil && !os.IsNotExist(err) {
 		return legacyports.CommandResult{}, err
@@ -63,7 +72,8 @@ func (r *preparedClaudeCLIRunner) Run(_ context.Context, cmd legacyports.Command
 }
 
 // The public saved-binding update command uses grouped activation even for one
-// target. The runner is inert; real native failure evidence is retained separately.
+// target. The runner models the observed native marketplace files and commands;
+// real executable evidence is retained separately.
 func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T) {
 	client := fixtureClient(t, domain.ClientClaude)
 	f := newCLIFixture(t, []domain.DetectedClient{client})
@@ -151,8 +161,8 @@ func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T
 		}
 		result := data["result"].(map[string]any)
 		activation := result["activation"].(map[string]any)
-		if activation["activation"] != "prepared" || activation["verification"] != "installation_verified" {
-			t.Fatalf("project observation promoted=%+v", result)
+		if activation["activation"] != "active" || activation["verification"] != "installation_verified" {
+			t.Fatalf("project installation not observed=%+v", result)
 		}
 		return result
 	}
@@ -171,10 +181,10 @@ func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T
 	}
 	treeBefore := preparedClaudeCLIFiles(t, managed)
 	for _, args := range [][]string{{"add", pkg, "--no-save"}, {"update", "demo"}} {
-		calls := runner.calls
+		calls, mutations := runner.calls, runner.mutations
 		result := run(args...)
-		if result["mutated"] != false || result["no_change"] != true || runner.calls <= calls {
-			t.Fatalf("unchanged Prepared did not reobserve without mutation=%+v calls%d/%d", result, runner.calls, calls)
+		if result["mutated"] != false || result["no_change"] != true || runner.calls <= calls || runner.mutations != mutations {
+			t.Fatalf("unchanged install did not reobserve without mutation=%+v calls%d/%d mutations%d/%d", result, runner.calls, calls, runner.mutations, mutations)
 		}
 		after, err := os.ReadFile(f.store.Path)
 		if err != nil || string(after) != string(before) {
@@ -185,9 +195,10 @@ func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T
 		}
 	}
 	writeSkill("version two")
+	mutations := runner.mutations
 	changed := run("update", "demo")
-	if changed["mutated"] != true || changed["no_change"] == true || reflect.DeepEqual(treeBefore, preparedClaudeCLIFiles(t, managed)) {
-		t.Fatalf("changed Prepared bytes misclassified=%+v", changed)
+	if changed["mutated"] != true || changed["no_change"] == true || runner.mutations <= mutations || reflect.DeepEqual(treeBefore, preparedClaudeCLIFiles(t, managed)) {
+		t.Fatalf("changed installed bytes misclassified=%+v", changed)
 	}
 	for path, want := range foreign {
 		body, err := os.ReadFile(path)

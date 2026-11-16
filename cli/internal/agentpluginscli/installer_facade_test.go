@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -110,6 +111,12 @@ func testExplicitLocalAddUsesInstallerFacade(t *testing.T, clientID domain.Clien
 			if len(command.Argv) == 0 || command.Argv[0] != client.ExecutablePath {
 				t.Fatalf("unexpected command: %v", command.Argv)
 			}
+			if reflect.DeepEqual(command.Argv[1:], []string{"mcp", "get", "plugin:demo:demo"}) {
+				return legacyports.CommandResult{NoChildStarted: true, Stdout: []byte("plugin:demo:demo:\n  Scope: Dynamic config (from command line)\n  Status: ⚠ Needs authentication\n  Type: http\n")}
+			}
+			if !reflect.DeepEqual(command.Argv[1:], []string{"plugin", "list", "--json"}) {
+				t.Fatalf("unexpected native Claude query: %v", command.Argv)
+			}
 			state, err := fixture.store.Load()
 			if err != nil {
 				t.Fatal(err)
@@ -194,17 +201,54 @@ func testExplicitLocalAddUsesInstallerFacade(t *testing.T, clientID domain.Clien
 	for key, binding := range state.Installations[0].Clients {
 		binding.Activation = domain.ActivationActive
 		binding.Authentication = domain.AuthenticationNotRequired
+		if clientID == domain.ClientClaude {
+			// This explicit HTTP fixture cannot prove remote authentication.
+			binding.Activation = domain.ActivationPrepared
+			binding.Authentication = domain.AuthenticationNotChecked
+		}
 		binding.Verification = domain.VerificationInstalled
 		state.Installations[0].Clients[key] = binding
 	}
 	if err := fixture.store.Save(state); err != nil {
 		t.Fatal(err)
 	}
+	var callsBefore int
+	if native, ok := runner.(*cliCommandRunner); ok {
+		callsBefore = native.calls
+		// SDK Prepare remains offline unless a host explicitly opts into native
+		// observation, even when its saved binding has a usable executable.
+		prepared, err := facade.Prepare(t.Context(), installer.Request{
+			Operation: installer.OpInstall, Scope: domain.ScopeUser, PackageRoot: plugin, SourceRoot: plugin,
+			ExecutableFiles: []string{},
+			ClientID:        string(clientID), ClientConfigRoot: client.ConfigRoot, ClientExecutable: client.ExecutablePath,
+			InstallationID: state.Installations[0].InstallationID,
+			Assessment:     &installer.Assessment{TreeDigest: installedClient.PackageRevision.TreeDigest, Outcome: installer.AssessmentAllow},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := prepared.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if native.calls != callsBefore {
+			t.Fatal("default SDK Prepare probed the native client")
+		}
+		if _, _, err := fixture.execute(false, "add", plugin, "--target", string(clientID), "--dry-run", "--format", "json"); err != nil {
+			t.Fatal(err)
+		}
+		if native.calls != callsBefore {
+			t.Fatal("explicit CLI dry-run probed the native client")
+		}
+	}
 	stdout, _, err = fixture.execute(false, "add", plugin, "--target", string(clientID), "--format", "json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, `"no_change":true`) {
+	if clientID == domain.ClientClaude {
+		if !strings.Contains(stdout, `"activation":"prepared"`) || !strings.Contains(stdout, `"authentication":"not_checked"`) || runner.(*cliCommandRunner).calls == callsBefore {
+			t.Fatalf("normal facade review skipped fresh remote readiness: %s", stdout)
+		}
+	} else if !strings.Contains(stdout, `"no_change":true`) {
 		t.Fatalf("facade repeat output = %s", stdout)
 	}
 	repeated, err := fixture.store.Load()

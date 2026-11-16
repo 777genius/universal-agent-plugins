@@ -89,6 +89,9 @@ func lifecycleAction(result usecase.AddResult, includePrivate bool) string {
 		return prepareLifecycleAction(result, includePrivate)
 	}
 	action := firstLifecycleAction(result, includePrivate)
+	if observedReadyActionResolved(result, action) {
+		return ""
+	}
 	return decorateLifecycleAction(result, action)
 }
 

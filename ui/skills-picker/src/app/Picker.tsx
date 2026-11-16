@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { ArrowUpRight, Check, ChevronRight, GitBranch, Search, ShieldCheck, ShoppingBag, X } from '../shared/ui/icons';
@@ -53,6 +53,33 @@ function Workspace({ session, catalog }: { session: Session; catalog: Catalog })
   });
   const install = useInstallation(session, request, scan.isPending);
   const locked = install.locked || scan.isPending;
+  const progressHeading = useRef<HTMLHeadingElement>(null);
+  const installFeedback = useRef<HTMLDivElement>(null);
+  const focusedOperation = useRef('');
+  const focusedFailure = useRef(false);
+  const operationId = install.operation.data?.operationId;
+  const observedApply = !!install.operation.data && install.operation.data.planId === install.apply.variables;
+  const failure = install.prepare.isError || (install.apply.isError && !observedApply) || install.operation.isError;
+  const reviewVisible = install.reviewOpen && !!install.plan && !install.uncertain;
+  useEffect(() => {
+    if ((operationId || failure) && window.matchMedia('(max-width:759px)').matches) setMobilePanel('selection');
+  }, [operationId, failure]);
+  useEffect(() => {
+    if (!failure) focusedFailure.current = false;
+    if (reviewVisible || mobilePanel !== 'selection' || !window.matchMedia('(max-width:759px)').matches) return;
+    const message = failure ? installFeedback.current : progressHeading.current;
+    if (!message) return;
+    // Present each new outcome once; polling must not interrupt browsing.
+    if (failure) {
+      if (focusedFailure.current) return;
+      focusedFailure.current = true;
+    } else {
+      if (!operationId || focusedOperation.current === operationId) return;
+      focusedOperation.current = operationId;
+    }
+    message.focus({ preventScroll: true });
+    message.scrollIntoView({ block: 'start' });
+  }, [operationId, failure, mobilePanel, reviewVisible]);
   useEffect(() => { if (selection.catalogId !== catalog.catalogId) { selection.reset(catalog.catalogId); useExpansion.getState().reset(); } }, [catalog.catalogId, selection.catalogId, selection.reset]);
   const results = useMemo(() => filterCatalog(catalog.candidates, search.q, search.path), [catalog.candidates, search.q, search.path]);
   const activeId = catalog.candidates.some((candidate) => candidate.id === search.skill) ? search.skill : undefined;
@@ -79,7 +106,7 @@ function Workspace({ session, catalog }: { session: Session; catalog: Catalog })
       <aside className="sidebar">
         <Basket candidates={chosen} locked={locked} remove={(id) => choose([id], false)} clear={() => choose(selected, false)}/>
         <Targets controller={install} selected={targetIds} setSelected={setTargetIds} locked={locked}/>
-        <InstallActions controller={install} request={request}/>
+        <InstallActions controller={install} request={request} progressHeading={progressHeading} feedback={installFeedback}/>
       </aside>
     </div>
     <footer className="bottom-bar"><span><ShoppingBag size={16}/><strong>{selected.length} selected</strong><span className="muted">across this repository</span></span><span className="security-note"><ShieldCheck size={15}/> Local installation. Reviewed before changes.</span><button className="primary" disabled={locked || !selected.length || !targetIds.length} onClick={(event) => install.prepareReview(event.currentTarget)}>{install.prepare.isPending ? <Busy>Checking installation…</Busy> : <>Review installation <ArrowRightIcon/></>}</button></footer>

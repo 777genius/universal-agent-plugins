@@ -176,7 +176,16 @@ func TestLinuxGroupedAddPreparesKiroWithoutAbortingCursor(t *testing.T) {
 
 func attachClaudeListingHarness(t *testing.T, fixture *cliFixture, skills string) {
 	t.Helper()
-	runner := &cliCommandRunner{run: func(int, legacyports.Command) legacyports.CommandResult {
+	runner := &cliCommandRunner{run: func(_ int, command legacyports.Command) legacyports.CommandResult {
+		if len(command.Argv) == 4 && command.Argv[1] == "mcp" && command.Argv[2] == "get" {
+			// Reuse the exact inert native MCP fixture: plugin listing JSON cannot
+			// substitute for Claude's distinct native MCP health output.
+			observed, err := (&dependencyClaudeListing{root: filepath.Dir(skills)}).fixtureClaudeMCP(command)
+			if err != nil {
+				return legacyports.CommandResult{ExitCode: 1, Stderr: []byte(err.Error())}
+			}
+			return observed
+		}
 		return claudeSkillsListing(skills)
 	}}
 	fixture.app.Lifecycle.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{

@@ -836,6 +836,8 @@ components:
           - install
           - update
           - unchanged
+          - repair
+          - refresh_projection
         destinationPath: *id003
         sourceMoved:
           $ref: '#/components/schemas/SourceMoved'

@@ -34,6 +34,7 @@ type ExactFile struct {
 	original   FileSnapshot
 	output     []byte
 	attempted  bool
+	removal    bool
 	conflicted bool
 	effect     FileEffect
 	release    func() error
@@ -183,6 +184,36 @@ func (file *ExactFile) Apply(body []byte) error {
 	return writeErr
 }
 
+// Remove is Apply's absent-result counterpart for a caller-owned document that
+// must disappear entirely. It deletes only the exact original bytes, reads back
+// and shares the single-attempt, Rollback and Close contract. An absent
+// original is unchanged. Plain transactions do not support removal.
+func (file *ExactFile) Remove() error {
+	if file.release == nil || file.attempted {
+		return fmt.Errorf("native config transaction is closed or already applied")
+	}
+	if file.plain != nil {
+		return fmt.Errorf("plain exact transactions do not support removal")
+	}
+	file.attempted, file.removal, file.output = true, true, nil
+	var removeErr error
+	if file.original.Exists {
+		removeErr = file.kernel.removeIfUnchanged(file.path, file.original.Body)
+	}
+	file.conflicted = errors.Is(removeErr, ErrConcurrentChange)
+	if removeErr != nil {
+		removeErr = fmt.Errorf("remove native config: %w", removeErr)
+	}
+	current, readErr := file.observe()
+	if readErr != nil {
+		return errors.Join(removeErr, fmt.Errorf("read back native config %q: %w", file.path, readErr))
+	}
+	if current.Exists {
+		return errors.Join(removeErr, fmt.Errorf("verify native config removal %q: %w", file.path, ErrConcurrentChange))
+	}
+	return removeErr
+}
+
 func (file *ExactFile) observe() (FileSnapshot, error) {
 	current, err := file.kernel.ReadExactFile(file.path)
 	file.effect = FileUncertain
@@ -190,7 +221,9 @@ func (file *ExactFile) observe() (FileSnapshot, error) {
 		switch {
 		case current.Exists == file.original.Exists && bytes.Equal(current.Body, file.original.Body):
 			file.effect = FileUnchanged
-		case file.attempted && !file.conflicted && current.Exists && bytes.Equal(current.Body, file.output):
+		case file.attempted && !file.conflicted && file.removal && !current.Exists:
+			file.effect = FileCommitted
+		case file.attempted && !file.conflicted && !file.removal && current.Exists && bytes.Equal(current.Body, file.output):
 			file.effect = FileCommitted
 		}
 	}
@@ -224,7 +257,9 @@ func (file *ExactFile) Rollback() error {
 		return fmt.Errorf("retain concurrent native config at %q: %w", file.path, ErrConcurrentChange)
 	}
 	var restoreErr error
-	if file.original.Exists {
+	if file.removal {
+		restoreErr = file.kernel.compareAndSwap(file.path, nil, false, file.original.Body, file.original.Mode)
+	} else if file.original.Exists {
 		restoreErr = file.kernel.compareAndSwap(file.path, file.output, true, file.original.Body, file.original.Mode)
 	} else {
 		restoreErr = file.kernel.removeIfUnchanged(file.path, file.output)

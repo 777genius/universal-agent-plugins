@@ -23,20 +23,19 @@ func TestSkillsHumanResultSeparatesFilesDiscoveryAndActivation(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, expected := range []string{
-		"Skills installation succeeded",
-		"review → codex: completed",
-		"review → claude: unchanged",
+		"Skills installation needs attention",
+		"OpenAI Codex",
+		"review — not completed",
+		"Claude Code",
+		"review — unchanged",
 		"Files: installed or already up to date.",
-		"Agent discovery: not verified",
-		"Activation: not verified",
-		"Next: open each agent, complete any trust/sign-in steps,",
-		"      reload if prompted, and confirm the Skill is visible.",
+		"Run agentplugins doctor to verify the installed Skills",
 	} {
 		if !strings.Contains(output.String(), expected) {
 			t.Fatalf("missing %q in %q", expected, output.String())
 		}
 	}
-	if strings.Contains(output.String(), "Skill activated") {
+	if strings.Contains(output.String(), "Skills are ready to use") {
 		t.Fatal("file delivery cannot attest native activation")
 	}
 }
@@ -53,7 +52,7 @@ func TestSkillsHumanPartialResultPrintsRecoveryWithoutSuccessClaim(t *testing.T)
 	if err := renderSkillsResult(cmd, &options{format: "human"}, result, ""); err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"Skills installation partial", "review → codex: failed", "Next: Inspect agentplugins deps status"} {
+	for _, expected := range []string{"Skills installation partial", "review — failed", "Next steps:", "Inspect agentplugins deps status"} {
 		if !strings.Contains(output.String(), expected) {
 			t.Fatalf("missing %q in %q", expected, output.String())
 		}
@@ -82,9 +81,8 @@ func TestSkillsHumanPartialWithAppliedItemsStillReportsUnverifiedNativeReadiness
 	for _, expected := range []string{
 		"Skills installation partial",
 		"Files: 2 of 3 target results installed or already up to date; other targets need attention.",
-		"Agent discovery: not verified by this Skills flow.",
-		"Activation: not verified.",
-		"Next: Repair the failed target.",
+		"Next steps:",
+		"Repair the failed target.",
 	} {
 		if !strings.Contains(output.String(), expected) {
 			t.Fatalf("missing %q in %q", expected, output.String())
@@ -98,11 +96,9 @@ func TestSkillsHumanCLIEndToEndReportsReadiness(t *testing.T) {
 		"--target", "codex", "--no-ui", "--yes")
 	for _, expected := range []string{
 		"Skills installation succeeded",
-		"review → codex:",
+		"review — installed",
 		"Files: installed or already up to date.",
-		"Agent discovery: not verified by this Skills flow.",
-		"Activation: not verified.",
-		"Next: open each agent, complete any trust/sign-in steps,",
+		"Skills installation verified.",
 	} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("real CLI human output is missing %q: %q", expected, out)
@@ -110,5 +106,28 @@ func TestSkillsHumanCLIEndToEndReportsReadiness(t *testing.T) {
 	}
 	if got := len(journey.state(t).EnvironmentReceipts); got != 1 {
 		t.Fatalf("human CLI report had no actual persisted installation: %d receipts", got)
+	}
+}
+
+func TestSkillsHumanClassifiedFailureKeepsManualActionsAndTechnicalLog(t *testing.T) {
+	var output bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&output)
+	failure := &installFailure{Kind: failureTargetUnavailable, Summary: "This agent needs native setup.", Next: "Retry the selected agent.", Retryable: true, Detail: "raw native stderr"}
+	result := SkillsBatchResult{Status: "partial", Items: []SkillsBatchItem{
+		{Alias: "one", ClientID: "codex", Status: "failed", Reason: failure.Detail, failure: failure, ManualActions: []string{"Reload the selected integration"}},
+		{Alias: "one", ClientID: "claude", Status: "completed", Client: completedSkillClient()},
+	}}
+	if err := renderSkillsResult(cmd, &options{format: "human"}, result, "fixture-install.log"); err != nil {
+		t.Fatal(err)
+	}
+	text := output.String()
+	for _, want := range []string{"Needs attention", failure.Summary, failure.Next, "Reload the selected integration", "Technical details: fixture-install.log"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("missing merged result guidance %q: %s", want, text)
+		}
+	}
+	if strings.Contains(text, failure.Detail) || strings.Contains(text, skillsReadyMessage) {
+		t.Fatal("partial failure leaked raw diagnostics or claimed complete readiness")
 	}
 }

@@ -20,6 +20,7 @@ type Activator struct {
 	NativeTransitions   NativeTransitions
 	OpenCodeTransitions ports.OpenCodeTransitionRecorder
 	Runner              ports.CommandRunner
+	LookupExecutable    func(string) (string, error)
 	NativeConfig        *nativeconfig.Kernel
 	// Registry supplies the client adapters that own lifecycle. It is injected
 	// by the composition root and never defaulted to "every client".
@@ -49,7 +50,7 @@ func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel, s
 }
 
 func (activator Activator) env(id domain.ClientID) clients.Env {
-	return clients.Env{ProjectRoots: activator.ProjectRoots, UserHome: activator.UserHome, NativeTransitions: activator.NativeTransitions.ForClient(id), OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel()}
+	return clients.Env{ProjectRoots: activator.ProjectRoots, UserHome: activator.UserHome, NativeTransitions: activator.NativeTransitions.ForClient(id), OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel(), LookupExecutable: activator.LookupExecutable}
 }
 
 func (activator Activator) nativeConfigKernel() nativeconfig.Kernel {

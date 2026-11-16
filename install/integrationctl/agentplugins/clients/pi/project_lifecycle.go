@@ -11,7 +11,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-const piProjectComponentAction = "Review project trust in Pi and reload or restart the session to load project Skills and MCP; authentication, active connections and model calls are not implied by file installation."
+const piProjectComponentAction = "Open or restart Pi in this project, or reload resources, to load its extensions, Skills and MCP; a confirmed installation lets UAP's Pi trust hook trust this exact project while its .pi holds only unchanged UAP-managed resources. Authentication, active connections and model calls are not implied by file installation."
 const piUserComponentAction = "Reload resources or restart Pi to discover user Skills and MCP; installed files do not prove an authenticated connection or model tool call."
 
 // piSelectedAuthority checks the selected real client separately from the
@@ -78,6 +78,9 @@ func (adapter *ProjectAdapter) RefinePlan(ctx context.Context, in clients.PlanIn
 	action := piUserComponentAction
 	if plan.Scope == domain.ScopeProject {
 		action = piProjectComponentAction
+		// Disclose the persistent user-profile side effect in the review.
+		dir, _, _ := piTrustHookPaths(in.Client.ConfigRoot)
+		plan.LocalActions = shared.AppendUnique(plan.LocalActions, fmt.Sprintf(piProjectTrustPreviewFormat, plan.TargetContext.ProjectRoot, dir))
 	}
 	plan.UserActions = shared.AppendUnique(plan.UserActions, action)
 	return nil
@@ -147,7 +150,11 @@ func (adapter *ProjectAdapter) Activate(ctx context.Context, env clients.Env, re
 	objects := piScopedNative(request.Delivery.NativeObjects, request.Plan.Scope)
 	previous := piScopedNative(request.PreviousNativeObjects, request.Plan.Scope)
 	if len(objects) == 0 && len(previous) == 0 {
-		return adapter.Adapter.Activate(ctx, env, request)
+		out, err := adapter.Adapter.Activate(ctx, env, request)
+		if err != nil {
+			return out, err
+		}
+		return completePiProjectTrust(env, request, out), nil
 	}
 	if request.ActivationComplete {
 		return domain.ActivationOutcome{}, fmt.Errorf("pi runtime activation cannot be attested by the installer")
@@ -187,6 +194,7 @@ func (adapter *ProjectAdapter) Activate(ctx context.Context, env clients.Env, re
 	if err == nil && out.Verification == domain.VerificationInstalled {
 		// File ownership is not a live Pi session, including user scope.
 		out.Activation, out.ActivationAttested = domain.ActivationPrepared, false
+		out = completePiProjectTrust(env, request, out)
 	}
 	return out, err
 }
@@ -202,7 +210,10 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	userOwned := piScopedNative(request.NativeObjects, domain.ScopeUser)
 	projectOwned := piScopedNative(request.NativeObjects, domain.ScopeProject)
 	if len(userOwned) == 0 && len(projectOwned) == 0 {
-		return adapter.Adapter.Deactivate(ctx, env, request)
+		trust := revokeConfirmedPiProjectTrust(env, request)
+		legacy, err := adapter.Adapter.Deactivate(ctx, env, request)
+		legacy.UserActions = appendPiTrustAction(legacy.UserActions, trust)
+		return legacy, err
 	}
 	layout, objects, err := piNativeRemovalLayout(request, len(userOwned)+len(projectOwned))
 	if err != nil {
@@ -215,6 +226,7 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 		out.UserActions = []string{"agentplugins will remove only its owned Pi Skills/MCP members and managed package"}
 		return out, nil
 	}
+	out.UserActions = appendPiTrustAction(out.UserActions, revokeConfirmedPiProjectTrust(env, request))
 	if len(objects) > 0 {
 		if err := (shared.ProjectComponentMutation{
 			Layout:   layout,
@@ -250,6 +262,29 @@ func (adapter *ProjectAdapter) Deactivate(ctx context.Context, env clients.Env, 
 	legacy.UserActions = append(out.UserActions, legacy.UserActions...)
 	legacy.UserActions = append(legacy.UserActions, "Restart Pi to clear previously loaded Skills and MCP connections.")
 	return legacy, nil
+}
+
+// revokeConfirmedPiProjectTrust withdraws this installation's project trust
+// record before any confirmed project removal effect. It is best effort and
+// never blocks removal: an unsuitable hook directory or unreadable record
+// only yields an action. A record left behind no longer applies once the
+// package directory is gone, because the hook ignores such owners.
+func revokeConfirmedPiProjectTrust(env clients.Env, request domain.DeactivationRequest) string {
+	if !request.Confirmed || request.TargetContext.Scope != domain.ScopeProject {
+		return ""
+	}
+	if err := revokePiProjectTrust(env, request); err != nil {
+		dir, _, _ := piTrustHookPaths(request.Client.ConfigRoot)
+		return fmt.Sprintf("Pi project trust for this installation was not withdrawn (%v); it stops applying once the package is removed. Delete %s to remove UAP's Pi trust hook entirely.", err, dir)
+	}
+	return ""
+}
+
+func appendPiTrustAction(actions []string, action string) []string {
+	if action == "" {
+		return actions
+	}
+	return shared.AppendUnique(actions, action)
 }
 
 func piNativeRemovalLayout(request domain.DeactivationRequest, totalNative int) (shared.ProjectComponents, []domain.NativeObjectOwnership, error) {

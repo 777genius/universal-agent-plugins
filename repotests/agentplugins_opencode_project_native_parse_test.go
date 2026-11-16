@@ -94,7 +94,7 @@ type openCodeProjectSkill struct{ Name, Location, Content string }
 
 // Public progress is a closed source-derived contract. Native and Git stderr
 // never use this allowance; repeated removal has its separate exact refusal.
-func openCodeProjectProgress(label string, body []byte) bool {
+func openCodeProjectProgress(label string, body []byte, result map[string]any) bool {
 	resolve := "Resolving and validating one Agent Plugin package for every selected target...\n"
 	var expected string
 	switch label {
@@ -103,9 +103,16 @@ func openCodeProjectProgress(label string, body []byte) bool {
 	case "add-A", "add-B", "add-same-user", "add-same-A", "add-json":
 		expected = resolve + "Installing uap-commands-fixture for 1 selected clients...\n"
 	case "repeat-add-A":
-		// Existing same-scope binding dispatches runAddLoaded before the group
-		// Installing line. The real public-source fixture measures this branch.
-		expected = resolve + "Applying transactional client package...\n"
+		// runAddLoaded returns before Applying only for this fixture's actual
+		// unchanged single-result replay. Other add labels still require Installing.
+		data, _ := result["data"].(map[string]any)
+		if _, single := data["result"].(map[string]any); !single {
+			return false
+		}
+		if _, err := openCodeProjectAssertionEnvelope(result); err != nil {
+			return false
+		}
+		expected = resolve
 	case "unchanged-update-A", "update-A":
 		expected = "Resolving and validating one updated Agent Plugin package for every selected target...\n"
 	case "intact-repair-A", "missing-repair-A":
@@ -177,6 +184,7 @@ func openCodeProjectCheckSkills(found map[string]openCodeProjectSkill, expected 
 	}
 	return nil
 }
+
 // OpenCode V2's public "debug config" returns an ordered source inventory,
 // not the flattened V1 effective config object. Bind every source to the
 // independently selected fixture paths before computing the expected
@@ -299,6 +307,7 @@ func openCodeProjectConfig(body []byte) (map[string]any, error) {
 	}
 	return object, nil
 }
+
 // Read the actual V1/V2 MCP shape without treating a flattened test
 // projection as native evidence. V2 declares servers under mcp.servers.
 func openCodeProjectServers(object map[string]any) (map[string]any, error) {

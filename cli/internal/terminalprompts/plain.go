@@ -71,14 +71,19 @@ func (p PlainPrompter) Confirm(ctx context.Context, r prompt.ConfirmationRequest
 		if err != nil {
 			return prompt.ConfirmationResult{}, err
 		}
-		result, err := t.Confirm(ctx, confirmationRequest(r))
+		result, err := t.ConfirmWithDetails(ctx, confirmationRequest(r), append([]string(nil), r.Details...))
 		return confirmationResult(result, err)
 	}
 	u, err := p.ui()
 	if err != nil {
 		return prompt.ConfirmationResult{}, err
 	}
-	result, err := u.Confirm(ctx, confirmationRequest(r))
+	var result installerui.Confirmation
+	if len(r.Details) > 0 {
+		result, err = u.ConfirmWithDetails(ctx, confirmationRequest(r), append([]string(nil), r.Details...))
+	} else {
+		result, err = u.Confirm(ctx, confirmationRequest(r))
+	}
 	if errors.Is(err, context.Canceled) {
 		return prompt.ConfirmationResult{}, canceledPrompt(err)
 	}

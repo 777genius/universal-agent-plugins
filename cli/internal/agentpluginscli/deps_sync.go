@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -26,19 +27,6 @@ func loadStoredDependencySnapshot(ctx context.Context, app App, snapshot domain.
 	}
 	loaded.cleanup = func() error { return packagedigest.Remove(snapshot) }
 	return loaded, nil
-}
-
-func dependencySourceHint(locked environment.LockedPackage) string {
-	if locked.Source.Web != nil {
-		return "uap-dependency-web-skill"
-	}
-	if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
-		return "uap-dependency-skill"
-	}
-	if locked.Source.Registry != nil {
-		return "uap-dependency-registry"
-	}
-	return "uap-dependency-git"
 }
 
 func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Package, locked environment.LockedPackage, recorded *domain.RecordedDirectoryRelease, operation ...domain.DirectoryOperation) (loadedPackage, error) {
@@ -97,7 +85,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 	for _, action := range actions {
 		if action.Action == environment.ActionUnchanged {
 			if err := adapter.verifyUnchangedProjection(ctx, action); err != nil {
-				return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+				return nil, &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
 			}
 			continue
 		}
@@ -107,7 +95,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		}
 		prepared, err := adapter.Prepare(ctx, action)
 		if err != nil {
-			return nil, fmt.Errorf("preflight %s/%s: %w", action.Alias, action.ClientID, err)
+			return nil, &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
 		}
 		plan := prepared.Plan()
 		if adapter.previewExternalUninstalled != nil && action.Action == environment.ActionRemove && plan.RequiresExternalUninstalled {
@@ -116,7 +104,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		if adapter.previewPaths != nil {
 			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
-		adapter.recordDependencyComponents(action, plan)
+		adapter.recordDependencyReview(action, plan)
 
 		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
 			updates[action.Alias] = prepared
@@ -169,14 +157,26 @@ func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context
 		if !ok || (action.Action != environment.ActionRemove && (client.Status != domain.DetectionDetected || client.DetectionError != nil)) {
 			return fmt.Errorf("target %s is not detected; nothing was changed: %w", action.ClientID, installer.ErrTargetFactsUnavailable)
 		}
-		if action.Action == environment.ActionInstall || action.Action == environment.ActionUpdate || action.Action == "repair" {
+		if action.Action == environment.ActionInstall || action.Action == environment.ActionUpdate || dependencyRepairOperation(action.Action) {
 			targets = append(targets, id)
 		}
 	}
 	return ensureSelectedProjectVersions(ctx, adapter.app, adapter.opts, targets, adapter.detected)
 }
 
-func (adapter *dependencyInstaller) recordDependencyComponents(action dependencyAction, plan installer.Plan) {
+func (adapter *dependencyInstaller) recordDependencyReview(action dependencyAction, plan installer.Plan) {
+	if adapter.previewWarnings != nil {
+		for _, warning := range plan.Delivery.Warnings {
+			switch warning {
+			case catalogSchemaOnlyWarning, catalogNotTestedWarning, catalogRuntimeNotTestedWarning:
+				continue
+			}
+			message := reviewWarningText(warning)
+			if !slices.Contains(*adapter.previewWarnings, message) {
+				*adapter.previewWarnings = append(*adapter.previewWarnings, message)
+			}
+		}
+	}
 	opts := adapter.opts
 	if opts.dependencyComponents == nil {
 		opts.dependencyComponents = map[string][]domain.ComponentDecision{}
@@ -198,13 +198,28 @@ type dependencyInstaller struct {
 	cmd                        *cobra.Command
 	beforeApply                func() error
 	consent                    map[string]bool
+	trustAliases               []string
 	previewUpdate              *installer.PreparedOperation
 	operationIDs               map[string]string
 	onResult                   func(environment.PreparedBinding, installer.Result)
+	onPrepare                  func(environment.PreparedBinding)
+	onApply                    func(environment.PreparedBinding)
 	currentAction              environment.PreparedBinding
 }
 
+// explicitAddAliases limits native project trust consent to the dependency
+// closure an explicit saved add installs. Sync, install and update never pass it.
+func explicitAddAliases(cmd *cobra.Command, aliases []string) []string {
+	if cmd == nil || cmd.Name() != "add" {
+		return nil
+	}
+	return slices.Clone(aliases)
+}
+
 func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environment.PreparedBinding) (*installer.PreparedOperation, error) {
+	if adapter.onPrepare != nil {
+		adapter.onPrepare(action)
+	}
 	if adapter.beforeApply != nil {
 		if err := adapter.beforeApply(); err != nil {
 			return nil, environment.Stop(err)
@@ -243,7 +258,8 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 		ConfirmPluginEnable:    adapter.opts.confirmPluginEnable && action.Action == "repair",
 		ClientNativeConfigRoot: dependencyNativeConfigRoot(adapter.app, client),
 		ClientExecutable:       backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
-		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete}
+		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete,
+		ProjectTrustConsent: action.Action == environment.ActionInstall && slices.Contains(adapter.trustAliases, action.Alias)}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
 	}
@@ -269,6 +285,9 @@ func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *install
 		if err := adapter.beforeApply(); err != nil {
 			return installer.Result{}, environment.Stop(err)
 		}
+	}
+	if adapter.onApply != nil {
+		adapter.onApply(adapter.currentAction)
 	}
 	result, err := adapter.app.Installer.Apply(ctx, prepared, installer.Decision{Confirmed: true})
 	if adapter.onResult != nil {
@@ -351,9 +370,9 @@ func verifyLockedDirectory(ctx context.Context, app App, loaded loadedPackage, l
 	return loaded, nil
 }
 
-// repairOwnedDependencies retains the ordinary repair command and confirmation
+// repairOwnedDependenciesOnce retains the ordinary repair command and confirmation
 // policy, but uses the recorded per-binding pin through the public SDK.
-func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
+func repairOwnedDependenciesOnce(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
 	state, err := app.StateStore.Load()
 	if err != nil {
 		return false, err
@@ -398,21 +417,6 @@ func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selecto
 	return true, applyDependencyRepairs(cmd, app, opts, actions, detected)
 }
 
-func resolveDependencyBindingIdentity(view installer.Inspection, action *environment.PreparedBinding) error {
-	for _, receipt := range view.EnvironmentReceipts {
-		if receipt.EnvironmentID == action.Authority.EnvironmentID && receipt.Alias == action.Alias {
-			if action.InstallationID == "" {
-				action.InstallationID = receipt.InstallationID
-				action.Authority.InstallationID = receipt.InstallationID
-			}
-			if receipt.ClientID == action.ClientID && action.Action == environment.ActionInstall {
-				return installer.ErrPlanChanged
-			}
-		}
-	}
-	return nil
-}
-
 func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Inspection, installationID string, request *installer.Request) error {
 	for _, installation := range view.Installations {
 		if installation.InstallationID != installationID {
@@ -434,7 +438,7 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 
 func (adapter *dependencyInstaller) recordedDependencyRelease(action environment.PreparedBinding) (*domain.RecordedDirectoryRelease, error) {
 	var recorded *domain.RecordedDirectoryRelease
-	if action.Package.Source.Registry != nil && (action.Action == "repair" || action.Action == environment.ActionInstall && action.InstallationID != "") {
+	if action.Package.Source.Registry != nil && (dependencyRepairOperation(action.Action) || action.Action == environment.ActionInstall && action.InstallationID != "") {
 		state, err := adapter.app.StateStore.Load()
 		if err != nil {
 			return nil, err
@@ -472,7 +476,7 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 	if action.Action == environment.ActionInstall {
 		operation = domain.DirectoryNewTarget
 	}
-	if action.Action == "repair" && action.Package.ExecutableFiles == nil {
+	if dependencyRepairOperation(action.Action) && action.Package.ExecutableFiles == nil {
 		pin, err := hydrateRecordedDependencyInventory(ctx, adapter.app, *action.Package)
 		if err != nil {
 			return nil, err
@@ -509,4 +513,8 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 		return adapter.app.Installer.PreviewInstallAfterUpdate(ctx, request, adapter.previewUpdate)
 	}
 	return adapter.app.Installer.Prepare(ctx, request)
+}
+
+func dependencyRepairOperation(action environment.DesiredAction) bool {
+	return action == environment.DesiredAction(installer.OpRepair) || action == environment.DesiredAction(installer.OpRefreshProjection)
 }

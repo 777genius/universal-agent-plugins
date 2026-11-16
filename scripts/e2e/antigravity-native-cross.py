@@ -2702,6 +2702,189 @@ def admission_contracts():
                 with patch.dict(os.environ, {"GITHUB_OUTPUT": str(parent / "output")}): self.assertIsNone(capture.publish())
                 self.assertFalse((parent / "output").exists())
 
+        @staticmethod
+        def failed_add_document(proof):
+            installed = proof["installed"]
+            return missing_config_json(dict(schema_version=1, command="add", result="failure", data=dict(
+                plugin=NAME, scope="user", dry_run=False, version=installed["package"]["version"],
+                tree_digest=installed["source"]["tree_digest"], manifest_digest=installed["package"]["manifest_digest"],
+                result=dict(mutated=False, plan=dict(client_id="antigravity", scope="user", status="ready"),
+                            activation=dict(activation="prepared")))))
+
+        @staticmethod
+        def failed_add_log(state):
+            import datetime
+            now = datetime.datetime.now(datetime.timezone.utc)
+            directory = state / "logs"; directory.mkdir(mode=0o700, exist_ok=True)
+            path = directory / ("install-" + now.strftime("%Y%m%dT%H%M%SZ") + "-1234abcd.jsonl")
+            header = dict(type="run", schema_version=1, time=now.strftime("%Y-%m-%dT%H:%M:%SZ"), command="add",
+                          version="0.1.0-development", scope="user", attempt=1,
+                          os={"linux": "linux", "darwin": "darwin", "win32": "windows"}[sys.platform],
+                          arch={"x86_64": "amd64", "amd64": "amd64", "arm64": "arm64", "aarch64": "arm64"}[platform.machine().lower()])
+            binding = dict(type="binding", alias=NAME, client="antigravity", status="failed", code="FAILED",
+                           summary="The installation did not complete for this agent.",
+                           detail="antigravity existing qualified config is required for native observation")
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o600)
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(missing_config_json(header) + missing_config_json(binding))
+            return path
+
+        @staticmethod
+        def failed_add_preserved(diagnostic, before, runtime):
+            diagnostic.before_snapshot()
+            after = public_state_snapshot(diagnostic.state, diagnostic.state, runtime[4])
+            projected = diagnostic.project(after)
+            public_refusal_preservation(((before, lambda: projected), ({}, lambda: {}), (set(), lambda: set()), ((1,), lambda: (1,))))
+            return after
+
+        def test_public_malformed_failed_add_uses_original_caller_and_preserves_state(self):
+            # Drive the real two first public worlds. Only the command transport
+            # is inert; the original proof, snapshots and comparator all run.
+            class CompletedWorlds(Exception): pass
+            with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as fixtures:
+                parent = Path(temporary).resolve(); source = parent / "source"; source.mkdir()
+                rows = [fixtures.enter_context(self.missing_config_fixture()) for _ in range(2)]
+                (source / "plugin.json").write_bytes((rows[0][1] / "source/plugin.json").read_bytes())
+                for _, root, _, _, _ in rows:
+                    (root / "source/plugin.json").unlink(); (root / "source").rmdir()
+                available, calls = iter(rows), []
+                @contextlib.contextmanager
+                def fixture(*unused):
+                    try: _, root, env, authority, _ = next(available)
+                    except StopIteration: raise CompletedWorlds from None
+                    yield root, env, authority
+                def command(runtime, root, authority, action, *, refused=False):
+                    calls.append((root, action, refused))
+                    if action == "uap-repeat" and refused:
+                        proof = public_binding_proof({"HOME": str(root / "home"), "AGENTPLUGINS_HOME": str(root / "uap-state")}, NAME, runtime[4])
+                        self.failed_add_log(root / "uap-state")
+                        return self.failed_add_document(proof)
+                    return b"{}\n"
+                with patch(__name__ + ".public_fixture", side_effect=fixture), patch(__name__ + ".public_uap", side_effect=command), \
+                        patch(__name__ + ".public_user_result"), patch(__name__ + ".public_missing_config_discovery", return_value=True):
+                    with self.assertRaises(CompletedWorlds):
+                        public_user_refusals(rows[0][0], source, rows[0][0][0].parent, parent)
+                self.assertEqual([(action, refused) for _, action, refused in calls],
+                                 [("uap-add", False), ("uap-repeat", False), ("uap-add", False), ("uap-repeat", True)])
+                self.assertFalse((rows[0][1] / "uap-state/logs").exists())
+                self.assertEqual(len(list((rows[1][1] / "uap-state/logs").iterdir())), 1)
+
+        def test_public_failed_add_log_refuses_schema_and_unrelated_effects(self):
+            faults = ("pass", "extra", "directory", "missing", "name", "unicode-year", "version", "attempt", "boolean-schema",
+                      "scope", "os", "arch", "alias", "client", "detail", "code", "summary", "header-extra", "binding-extra",
+                      "third-record", "duplicate-key", "crlf", "stale", "future", "empty", "oversize", "mode", "hardlink",
+                      "state-content", "state-replacement", "log-directory-replacement", "foreign-member") + (("symlink",) if os.name != "nt" else ())
+            for fault in faults:
+                with self.subTest(fault=fault), self.missing_config_fixture() as (runtime, root, env, authority, proof):
+                    path = None
+                    try:
+                        with contextlib.ExitStack() as cleanup:
+                            diagnostic = PublicFailedAddLog(root, Path(env["AGENTPLUGINS_HOME"]), authority, proof, runtime, cleanup)
+                            before = public_state_snapshot(diagnostic.state, diagnostic.state, runtime[4]); diagnostic.begin(before)
+                            path = self.failed_add_log(diagnostic.state)
+                            header, binding = map(json.loads, path.read_bytes().splitlines())
+                            if fault == "extra": (path.parent / "unknown").write_bytes(b"private unknown")
+                            elif fault == "directory": (path.parent / "unexpected-dir").mkdir()
+                            elif fault == "missing": path.unlink()
+                            elif fault in ("name", "unicode-year"):
+                                new = "unknown.jsonl" if fault == "name" else path.name.replace(path.name[8:12], "٢٠٢٦", 1)
+                                path.rename(path.with_name(new)); path = path.with_name(new)
+                            elif fault == "version": header["version"] = "0.1.0-other"
+                            elif fault == "attempt": header["attempt"] = 2
+                            elif fault == "boolean-schema": header["schema_version"] = True
+                            elif fault in ("scope", "os", "arch"): header[fault] = "foreign"
+                            elif fault in ("alias", "client", "detail", "code", "summary"): binding[fault] = "foreign"
+                            elif fault == "header-extra": header["operation_id"] = "not-produced-here"
+                            elif fault == "binding-extra": binding["unknown"] = "unknown"
+                            elif fault in ("stale", "future"):
+                                stamp = "20000101T000000Z" if fault == "stale" else "20990101T000000Z"
+                                path.rename(path.with_name("install-" + stamp + "-1234abcd.jsonl")); path = path.with_name("install-" + stamp + "-1234abcd.jsonl")
+                            elif fault == "mode": path.chmod(0o400)
+                            elif fault == "hardlink": os.link(path, root / "retained-output-alias")
+                            elif fault == "symlink":
+                                saved = root / "retained-log"; path.rename(saved); path.symlink_to(saved)
+                            elif fault == "state-content": (diagnostic.state / "state-v2.json").write_bytes(b"changed original")
+                            elif fault == "state-replacement":
+                                original = diagnostic.state / "state-v2.json"; replacement = root / "replacement"
+                                replacement.write_bytes(original.read_bytes()); replacement.chmod(stat.S_IMODE(original.stat().st_mode)); os.replace(replacement, original)
+                            elif fault == "log-directory-replacement":
+                                if os.name == "nt":
+                                    with self.assertRaises(OSError): diagnostic.path.rename(root / "moved-logs")
+                                    continue  # The original non-delete-sharing handle prevented replacement.
+                                diagnostic.path.rename(root / "moved-logs"); diagnostic.path.mkdir(mode=0o700)
+                                shutil.copy2(root / "moved-logs" / path.name, diagnostic.path / path.name)
+                            elif fault == "foreign-member": (diagnostic.state / "unrelated-private-file").write_bytes(b"unknown effect")
+                            if fault in ("version", "attempt", "boolean-schema", "scope", "os", "arch", "alias", "client", "detail", "code", "summary", "header-extra", "binding-extra"):
+                                path.write_bytes(missing_config_json(header) + missing_config_json(binding))
+                            elif fault == "third-record": path.write_bytes(path.read_bytes() + b"{}\n")
+                            elif fault == "duplicate-key": path.write_bytes(path.read_bytes().replace(b'"schema_version":1', b'"schema_version":1,"schema_version":1'))
+                            elif fault == "crlf": path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+                            elif fault == "empty": path.write_bytes(b"")
+                            elif fault == "oversize": path.write_bytes(b"x" * 4097)
+                            if fault == "pass":
+                                diagnostic.settle(self.failed_add_document(proof))
+                                self.failed_add_preserved(diagnostic, before, runtime)
+                            else:
+                                with self.assertRaises((AssertionError, ValueError, OSError)):
+                                    diagnostic.settle(self.failed_add_document(proof))
+                                    self.failed_add_preserved(diagnostic, before, runtime)
+                    finally:
+                        if fault == "mode" and path is not None and path.exists(): path.chmod(0o600)
+
+        def test_public_failed_add_requires_original_empty_authority_and_settled_command(self):
+            faults = ("occupied", "source", "root", "unsettled", "source-receipt", "runtime-receipt", "wrong-result", "wrong-package", "clock")
+            for fault in faults:
+                with self.subTest(fault=fault), self.missing_config_fixture() as (runtime, root, env, authority, proof), contextlib.ExitStack() as cleanup:
+                    state = Path(env["AGENTPLUGINS_HOME"])
+                    if fault == "occupied": (state / "logs").mkdir(mode=0o700)
+                    elif fault == "source": (root / "source/plugin.json").write_bytes(b'{"name":"foreign"}')
+                    elif fault == "root": authority = (authority[0], (0,) + authority[1][1:], authority[2])
+                    if fault in ("occupied", "source", "root"):
+                        with self.assertRaises((AssertionError, OSError)):
+                            PublicFailedAddLog(root, state, authority, proof, runtime, cleanup)
+                        continue
+                    diagnostic = PublicFailedAddLog(root, state, authority, proof, runtime, cleanup)
+                    before = public_state_snapshot(state, state, runtime[4]); diagnostic.begin(before)
+                    self.failed_add_log(state)
+                    body = self.failed_add_document(proof)
+                    if fault == "unsettled": runtime[5].pending = True
+                    elif fault == "source-receipt": runtime[5].source = ("c" * 40, "d" * 40)
+                    elif fault == "runtime-receipt": runtime[5].pins = ("0" * 64, "1" * 64)
+                    elif fault == "wrong-result": body = b'{"schema_version":1,"data":null}'
+                    elif fault == "wrong-package":
+                        value = json.loads(body); value["data"]["tree_digest"] = "other"; body = missing_config_json(value)
+                    elif fault == "clock": diagnostic.start = (time.time_ns() + 1_000_000_000, time.monotonic())
+                    with self.assertRaises(AssertionError): diagnostic.settle(body)
+
+        def test_public_failed_add_calibrates_only_owned_directory_child_links(self):
+            actual = ProfileLedger.directory_metadata
+            for delta in (0, 1, 2):
+                with self.subTest(delta=delta), self.missing_config_fixture() as (runtime, root, env, authority, proof), contextlib.ExitStack() as cleanup:
+                    baseline = []
+                    def metadata(ledger, path):
+                        value = actual(ledger, path)
+                        if path != Path(env["AGENTPLUGINS_HOME"]) / "logs": return value
+                        if not baseline: baseline.extend(row[5] for row in value)
+                        # Only the directory link-count convention is modeled;
+                        # real exclusive creation, unlink, ownership and bytes run.
+                        occupied = any(path.iterdir())
+                        return tuple(row[:5] + (base + (delta if occupied else 0),) + row[6:]
+                                     for row, base in zip(value, baseline, strict=True))
+                    with patch.object(ProfileLedger, "directory_metadata", metadata):
+                        if delta == 2:
+                            with self.assertRaisesRegex(AssertionError, "calibration changed authority"):
+                                PublicFailedAddLog(root, Path(env["AGENTPLUGINS_HOME"]), authority, proof, runtime, cleanup)
+                            continue
+                        diagnostic = PublicFailedAddLog(root, Path(env["AGENTPLUGINS_HOME"]), authority, proof, runtime, cleanup)
+                        self.assertEqual(diagnostic.link_delta, delta)
+                        before = public_state_snapshot(diagnostic.state, diagnostic.state, runtime[4]); diagnostic.begin(before)
+                        self.failed_add_log(diagnostic.state); diagnostic.settle(self.failed_add_document(proof))
+                        after = self.failed_add_preserved(diagnostic, before, runtime)
+                        changed = dict(after); row = changed["."]
+                        changed["."] = row[:2] + (tuple(item[:5] + (item[5] + 1,) + item[6:] for item in row[2]),)
+                        projected = diagnostic.project(changed)
+                        self.assertFalse(public_state_scratch_equal(before, projected, root_key="."))
+
         def test_config_is_closed_and_bounded(self):
             for body in (b'{"x":1,"x":2}', b'{} {}', b'{"x":NaN}', b'{"x":1e999}', b'[' * 10 + b'0' + b']' * 10, b'x' * 16385):
                 with self.assertRaises((AssertionError, ValueError)): closed_config(body)
@@ -3618,9 +3801,183 @@ def public_missing_config_discovery(runtime, root, env, authority, proof):
 
 
 
+
+class PublicFailedAddLog:
+    """One declared failed-add output, beneath an original held empty directory."""
+
+    detail = "antigravity existing qualified config is required for native observation"
+    version = "0.1.0-development"
+
+    def __init__(self, root, state, authority, proof, runtime, cleanup):
+        self.root, self.state, self.authority = root, state, authority
+        self.proof, self.runtime = proof, runtime
+        self.path = state / "logs"
+        if (state != root / "uap-state" or state.resolve() != state
+                or proof["binding"]["client_id"] != "antigravity" or proof["binding"]["scope"] != "user"
+                or proof["installed"]["declared_name"] != NAME or not proof["authored_source"]
+                or public_snapshot(root / "source") != proof["authored_source"]
+                or closed_config(proof["authored_source"]["plugin.json"][7]).get("name") != NAME):
+            raise AssertionError("Failed-add original source or User authority differs")
+        self.parent = owned_handle(state, True, None if os.name == "nt" else authority[0])
+        cleanup.callback(os.close, self.parent)
+        self.parent_identity = (object_identity(state.lstat(), True), object_identity(os.fstat(self.parent), True))
+        if self.parent_identity != proof["state_parent"]:
+            raise AssertionError("Failed-add original state parent differs")
+        self.parents_unchanged()
+        if os.name == "nt": self.path.mkdir(mode=0o700)
+        else: os.mkdir("logs", 0o700, dir_fd=self.parent)
+        self.ledger = ProfileLedger(self.path, public={})
+        cleanup.callback(self.ledger.close)
+        if set(self.ledger.base) != {"."} or (os.name != "nt" and stat.S_IMODE(self.path.lstat().st_mode) != 0o700):
+            raise AssertionError("Failed-add log directory is not original private and empty")
+        self.link_delta = self.calibrate()
+        self.original = self.ledger.scan(strict=True)["."]
+        self.start = self.end = None
+
+    def parents_unchanged(self):
+        fd, named, held = self.authority
+        if ((object_identity(self.root.lstat(), True), object_identity(os.fstat(fd), True)) != (named, held)
+                or (object_identity(self.state.lstat(), True), object_identity(os.fstat(self.parent), True)) != self.parent_identity):
+            raise AssertionError("Failed-add original parent was replaced")
+        if hasattr(self, "ledger"): self.ledger.directory(self.path)
+
+    def calibrate(self):
+        """Measure only this owned directory's regular-child nlink convention."""
+        before = self.ledger.directory_metadata(self.path)
+        descriptor = self.ledger.held[self.path][0]
+        probe = self.path / "owned-link-count-probe"
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+        writer = os.open(probe if os.name == "nt" else probe.name, flags, 0o600,
+                         dir_fd=None if os.name == "nt" else descriptor)
+        try:
+            if os.write(writer, b"owned calibration\n") != 18:
+                raise AssertionError("Failed-add calibration write incomplete")
+        finally: os.close(writer)  # Windows CRT creation sharing is not read-handle sharing.
+        probe_fd = owned_handle(probe, parent=None if os.name == "nt" else descriptor)
+        try:
+            named, held = probe.lstat(), os.fstat(probe_fd)
+            if (not public_opened_equal(probe, named, held) or named.st_nlink != 1
+                    or os.read(probe_fd, 19) != b"owned calibration\n"):
+                raise AssertionError("Failed-add calibration object differs")
+            during = self.ledger.directory_metadata(self.path)
+            deltas = tuple(current[5] - old[5] for old, current in zip(before, during, strict=True))
+            if (len(set(deltas)) != 1 or deltas[0] not in (0, 1)
+                    or any(old[:5] + old[9:] != current[:5] + current[9:]
+                           for old, current in zip(before, during, strict=True))
+                    or stable_file(probe.lstat()) != stable_file(named)
+                    or stable_file(os.fstat(probe_fd)) != stable_file(held)):
+                raise AssertionError("Failed-add calibration changed authority")
+            os.unlink(probe if os.name == "nt" else probe.name,
+                      dir_fd=None if os.name == "nt" else descriptor)
+        finally: os.close(probe_fd)
+        after = self.ledger.scan(strict=True)
+        if (set(after) != {"."} or any(old[:6] + old[9:] != current[:6] + current[9:]
+                for old, current in zip(before, after["."][2], strict=True))):
+            raise AssertionError("Failed-add calibration did not restore the empty directory")
+        self.parents_unchanged()
+        return deltas[0]
+
+    def begin(self, state_before):
+        self.parents_unchanged()
+        if (state_before.get("logs") != self.original
+                or any(key.startswith("logs/") for key in state_before)
+                or state_before.get("state-v2.json") != self.proof["state_row"]):
+            raise AssertionError("Failed-add original state snapshot differs")
+        self.start = time.time_ns(), time.monotonic()
+
+    def settle(self, body):
+        self.end = time.time_ns(), time.monotonic()
+        value = closed_config(body, limit=1 << 20, depth_bound=24)
+        data = value.get("data")
+        result = data.get("result") if type(data) is dict else None
+        if type(result) is not dict:
+            raise AssertionError("Failed-add public result shape differs")
+        plan, outcome = result.get("plan", {}), result.get("activation", {})
+        capture = self.runtime[5]
+        if (self.start is None or not 0 <= self.end[0] - self.start[0] <= 240_000_000_000
+                or not 0 <= self.end[1] - self.start[1] <= 240
+                or type(plan) is not dict or type(outcome) is not dict
+                or capture.pending is not False or capture.source != self.runtime[3]
+                or capture.pins != (self.runtime[4][1][1], self.runtime[4][2][1])
+                or type(value.get("schema_version")) is not int or value["schema_version"] != 1
+                or value.get("command") != "add" or value.get("result") != "failure"
+                or data.get("plugin") != NAME or data.get("scope") != "user" or data.get("dry_run") is not False
+                or data.get("tree_digest") != self.proof["installed"]["source"]["tree_digest"]
+                or data.get("manifest_digest") != self.proof["installed"]["package"]["manifest_digest"]
+                or data.get("version") != self.proof["installed"]["package"]["version"]
+                or result.get("mutated") is not False or plan.get("client_id") != "antigravity"
+                or plan.get("scope") != "user" or plan.get("status") != "ready"
+                or outcome.get("activation") != "prepared"):
+            raise AssertionError("Failed-add source/refusal/settlement differs")
+        self.parents_unchanged()
+
+    def before_snapshot(self):
+        # Refuse an oversized/unknown output before the existing full state
+        # reader; that reader and project() still rejoin its identity and bytes.
+        import re
+        self.parents_unchanged()
+        with os.scandir(self.path) as entries:
+            first = next(entries, None)
+            if first is None or next(entries, None) is not None:
+                raise AssertionError("Failed-add requires exactly one declared log")
+            name, info = first.name, first.stat(follow_symlinks=False)
+        if (re.fullmatch(r"install-[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}\.jsonl", name) is None
+                or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                or getattr(info, "st_file_attributes", 0) & 0x400 or not 0 < info.st_size <= 4096):
+            raise AssertionError("Failed-add output type/link/bound differs")
+        self.parents_unchanged()
+
+    def project(self, after):
+        import datetime
+        import re
+        self.parents_unchanged()
+        if self.start is None or self.end is None:
+            raise AssertionError("Failed-add command was not settled")
+        names = [name for name in after if name.startswith("logs/")]
+        if len(names) != 1:
+            raise AssertionError("Failed-add requires exactly one declared log")
+        key = names[0]
+        match = re.fullmatch(r"logs/install-([0-9]{8}T[0-9]{6}Z)-[0-9a-f]{8}\.jsonl", key)
+        row = after[key]
+        if (match is None or row[0] != "file" or len(row) != 10 or row[2] != 1
+                or not 0 < row[3] <= 4096 or type(row[7]) is not bytes or len(row[7]) != row[3]
+                or stat.S_IMODE(row[1][2]) != (0o666 if os.name == "nt" else 0o600)):
+            raise AssertionError("Failed-add log name/type/size/mode differs")
+        moment = datetime.datetime.strptime(match[1], "%Y%m%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
+        second = int(moment.timestamp())
+        if not self.start[0] // 1_000_000_000 <= second <= self.end[0] // 1_000_000_000:
+            raise AssertionError("Failed-add log timestamp is outside the actual command")
+        lines = row[7].splitlines(keepends=True)
+        if len(lines) != 2 or any(not line.endswith(b"\n") or b"\r" in line for line in lines):
+            raise AssertionError("Failed-add log framing differs")
+        header, binding = (closed_config(line, limit=4096) for line in lines)
+        system = {"linux": "linux", "darwin": "darwin", "win32": "windows"}.get(sys.platform)
+        arch = {"x86_64": "amd64", "amd64": "amd64", "aarch64": "arm64", "arm64": "arm64"}.get(platform.machine().lower())
+        expected_header = dict(type="run", schema_version=1, time=moment.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                               command="add", version=self.version, scope="user", attempt=1, os=system, arch=arch)
+        expected_binding = dict(type="binding", alias=NAME, client="antigravity", status="failed", code="FAILED",
+                                summary="The installation did not complete for this agent.", detail=self.detail)
+        if (system is None or arch is None or type(header.get("schema_version")) is not int
+                or type(header.get("attempt")) is not int or header != expected_header or binding != expected_binding):
+            raise AssertionError("Failed-add log is not the exact authored operation")
+        current = after.get("logs")
+        if (current is None or current[:2] != self.original[:2] or current[0] != "directory"
+                or any(old[:5] + old[9:] != new[:5] + new[9:] or new[5] != old[5] + self.link_delta
+                       for old, new in zip(self.original[2], current[2], strict=True))
+                or self.ledger.directory_metadata(self.path) != current[2]
+                or public_owned_bytes(self.state / key, limit=4096) != row[7]
+                or stable_file((self.state / key).lstat()) != row[8]
+                or self.ledger.directory_metadata(self.path) != current[2]):
+            raise AssertionError("Failed-add original output authority changed")
+        self.parents_unchanged()
+        projected = dict(after)
+        del projected[key]
+        projected["logs"] = self.original
+        return projected
+
 def public_user_refusals(runtime, source, executable_dir, parent):
     for condition in ("missing-config", "malformed-config", "foreign-collision", "config-alias", "missing-backend"):
-        with public_fixture(parent, executable_dir) as (root, env, authority):
+        with public_fixture(parent, executable_dir) as (root, env, authority), contextlib.ExitStack() as cleanup:
             shutil.copytree(source, root / "source")
             public_user_result(public_uap(runtime, root, authority, "uap-add"))
             proof = public_binding_proof(env, NAME, runtime[4])
@@ -3640,6 +3997,8 @@ def public_user_refusals(runtime, source, executable_dir, parent):
                 shim = root / "bin" / ("agy.exe" if os.name == "nt" else "agy")
                 shim.rename(shim.with_name("retained-native")); action = "uap-missing-backend"
                 if shutil.which("agy", path=env["PATH"]): raise AssertionError("Missing fixture would select ambient native CLI")
+            diagnostic = (PublicFailedAddLog(root, Path(env["AGENTPLUGINS_HOME"]), authority, proof, runtime, cleanup)
+                          if condition == "malformed-config" else None)
             state_before, bundle_before = public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4]), public_snapshot(selected.parent)
             members = {entry.name for entry in config.parent.iterdir()}
             parent_identity = object_identity(config.parent.lstat(), True)
@@ -3650,9 +4009,15 @@ def public_user_refusals(runtime, source, executable_dir, parent):
             if condition == "config-alias" and stable_file(original.lstat()) != original_identity:
                 raise AssertionError("Authored alias target changed before command")
             home_before = public_snapshot(Path(env["HOME"])) if condition == "missing-config" else None
+            if diagnostic is not None: diagnostic.begin(state_before)
             repeated = public_uap(runtime, root, authority, action, refused=condition != "missing-config")
+            if diagnostic is not None: diagnostic.settle(repeated)
+            def observed_state():
+                if diagnostic is not None: diagnostic.before_snapshot()
+                after = public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4])
+                return diagnostic.project(after) if diagnostic is not None else after
             public_refusal_preservation((
-                (state_before, lambda: public_state_snapshot(Path(env["AGENTPLUGINS_HOME"]), Path(env["AGENTPLUGINS_HOME"]), runtime[4])),
+                (state_before, observed_state),
                 (bundle_before, lambda: public_snapshot(selected.parent)),
                 (members, lambda: {entry.name for entry in config.parent.iterdir()}),
                 (parent_identity, lambda: object_identity(config.parent.lstat(), True)),

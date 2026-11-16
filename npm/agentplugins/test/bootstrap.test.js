@@ -4,11 +4,11 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
-const { EventEmitter } = require("node:events");
+const { EventEmitter, once } = require("node:events");
 const { PassThrough } = require("node:stream");
 const os = require("node:os");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const test = require("node:test");
 
 const { PROOF_MODE, acquireLock, downloadFile, ensureBinary, loadRelease } = require("../lib/bootstrap");
@@ -19,10 +19,9 @@ const COMMIT = "a".repeat(40);
 const BINARY = Buffer.from("#!/bin/sh\necho isolated-agentplugins-test\n");
 const HISTORICAL_COMMIT = "5630ccd92aa91c8ac8cafb37eea8752fd82edce0";
 
-async function fixturePackage(t, binary = BINARY) {
+async function fixturePackage(t, binary = BINARY, platformInfo = detectPlatform("linux", "x64")) {
   const root = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-npm-package-"));
   t.after(() => fsp.rm(root, { recursive: true, force: true }));
-  const platformInfo = detectPlatform("linux", "x64");
   const file = expectedAssetName(VERSION, platformInfo);
   await fsp.writeFile(path.join(root, "package.json"), JSON.stringify({ name: "universal-agent-plugins", version: VERSION }));
   await fsp.writeFile(path.join(root, "assets.json"), JSON.stringify({
@@ -84,6 +83,19 @@ async function fixturePackage(t, binary = BINARY) {
 }
 
 // Preserve the historical transport assertions with injected streams, no socket.
+test("cold download bounds DNS/connect wait before any response headers", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const request = new EventEmitter();
+  request.setTimeout = () => {};
+  request.destroy = error => request.emit("error", error);
+  const acquisition = downloadFile("https://github.com/owner/repo/releases/download/v1/asset", "unused", {
+    size: 1, sha256: "a".repeat(64)
+  }, { request: () => request });
+  const rejected = assert.rejects(acquisition, /timed out waiting for response headers/);
+  t.mock.timers.tick(30000);
+  await rejected;
+});
+
 const endpoints = new Map();
 async function listen(t, handler) {
   const url = `fixture:${endpoints.size}`;
@@ -123,20 +135,28 @@ test("cold, warm, corrupted, and concurrent cache paths stay verified", async (t
   const cache = await fsp.mkdtemp(path.join(os.tmpdir(), "agentplugins-npm-cache-parent-"));
   await fsp.rm(cache, { recursive: true, force: true });
   t.after(() => fsp.rm(cache, { recursive: true, force: true }));
+  const progress = [];
   const options = {
     packageRoot: fixture.root,
     cacheRoot: cache,
     request: requestThrough(endpoint.url),
+    onProgress: event => progress.push(event),
     platform: "linux",
     arch: "x64"
   };
   const [first, concurrent] = await Promise.all([ensureBinary(options), ensureBinary(options)]);
   assert.equal(await fsp.readFile(first.binaryPath, "utf8"), fixture.binary.toString());
   assert.equal(first.binaryPath, concurrent.binaryPath);
+  assert.equal(requests, 1, "concurrent cold callers download one shared binary");
+  assert.equal([first, concurrent].filter(result => result.cacheHit).length, 1);
+  assert.ok(progress.length > 0, "cold download reports byte progress before native CLI starts");
+  assert.deepEqual(progress.at(-1), { received: fixture.binary.length, total: fixture.binary.length });
   const beforeWarm = requests;
+  const beforeWarmProgress = progress.length;
   const warm = await ensureBinary(options);
   assert.equal(warm.cacheHit, true);
   assert.equal(requests, beforeWarm);
+  assert.equal(progress.length, beforeWarmProgress, "verified warm cache does not report a download");
   await fsp.writeFile(warm.binaryPath, "corrupted");
   const repaired = await ensureBinary(options);
   assert.equal(await fsp.readFile(repaired.binaryPath, "utf8"), fixture.binary.toString());
@@ -239,12 +259,13 @@ test("real npm launcher consumes local proof bootstrap variables without forward
   assert.equal(await fsp.readFile(path.join(cache, VERSION, "linux-amd64", "agentplugins"), "utf8"), launcherBinary.toString());
 });
 
-test("offline cold cache fails without creating the cache", async (t) => {
+test("offline cold acquisition leaves no binary or lock file", async (t) => {
   const fixture = await fixturePackage(t);
   const endpoint = await listen(t, (_request, response) => response.end(fixture.binary));
   const unavailable = endpoint.url;
   await new Promise((resolve) => endpoint.server.close(resolve));
   const cache = path.join(os.tmpdir(), `agentplugins-offline-${crypto.randomBytes(8).toString("hex")}`);
+  t.after(() => fsp.rm(cache, { recursive: true, force: true }));
   await assert.rejects(
     ensureBinary({
       packageRoot: fixture.root,
@@ -255,7 +276,8 @@ test("offline cold cache fails without creating the cache", async (t) => {
     }),
     /No client or plugin files were changed/
   );
-  assert.equal(fs.existsSync(cache), false);
+  assert.equal(fs.existsSync(path.join(cache, VERSION)), false);
+  assert.deepEqual(await fsp.readdir(path.join(cache, ".locks")), []);
 });
 
 test("redirected public download never inherits GITHUB_TOKEN", async (t) => {
@@ -630,4 +652,106 @@ test("npm binary gateway retry obeys cancellation without a second request", asy
     request: requestThrough(endpoint.url), platform: "linux", arch: "x64"
   }), /aborted|cancelled/i);
   assert.equal(requests, 1);
+});
+
+
+test("real launcher signals settle the pending download and release its cache lock", { timeout: 40000 }, async (t) => {
+  if (process.platform === "win32") {
+    t.skip("Windows child.kill forcibly terminates instead of delivering POSIX signals");
+    return;
+  }
+  for (const signal of ["SIGINT", "SIGTERM"]) {
+    await t.test(signal, async (t) => {
+      const fixture = await fixturePackage(t, BINARY, detectPlatform());
+      const packageSource = path.resolve(__dirname, "..");
+      await fsp.cp(path.join(packageSource, "bin"), path.join(fixture.root, "bin"), { recursive: true });
+      await fsp.cp(path.join(packageSource, "lib"), path.join(fixture.root, "lib"), { recursive: true });
+      const cache = path.join(fixture.root, "cache"), temporary = path.join(fixture.root, "tmp");
+      await fsp.mkdir(temporary, { mode: 0o700 });
+      const preload = path.join(fixture.root, "pending-download.cjs");
+      // Only transport bytes are injected. The actual launcher, metadata checks,
+      // verifier, exclusive lock, output close and filesystem cleanup all execute.
+      await fsp.writeFile(preload, [
+        '"use strict";',
+        'const fs = require("node:fs"), https = require("node:https");',
+        'const { EventEmitter } = require("node:events");',
+        'const { PassThrough } = require("node:stream");',
+        'const body = Buffer.from(' + JSON.stringify(fixture.binary.toString("base64")) + ', "base64");',
+        'const create = fs.createWriteStream;',
+        'fs.createWriteStream = function(file, options) {',
+        '  const stream = create(file, options);',
+        '  stream.once("open", () => process.send({ phase: "download-open", file }));',
+        '  return stream;',
+        '};',
+        'https.get = options => {',
+        '  if (options.hostname !== "github.com") throw new Error("unexpected fixture transport");',
+        '  const request = new EventEmitter();',
+        '  let keepAlive;',
+        '  request.setTimeout = () => {};',
+        '  request.destroy = error => { clearInterval(keepAlive); request.emit("error", error); return request; };',
+        '  process.nextTick(() => {',
+        '    const response = new PassThrough();',
+        '    response.statusCode = 200;',
+        '    response.headers = { "content-length": String(body.length) };',
+        '    request.emit("response", response);',
+        '    if (process.env.UAP_BOOTSTRAP_SIGNAL_FIXTURE === "stall") {',
+        '      keepAlive = setInterval(() => {}, 1000);',
+        '      response.write(body.subarray(0, 1));',
+        '    } else response.end(body);',
+        '  });',
+        '  return request;',
+        '};'
+      ].join("\n"), { mode: 0o600 });
+      const environment = Object.fromEntries(["PATH", "SystemRoot", "WINDIR", "LANG"]
+        .filter(key => process.env[key] !== undefined).map(key => [key, process.env[key]]));
+      const runs = [];
+      const launch = mode => {
+        const child = spawn(process.execPath, ["--require", preload, path.join(fixture.root, "bin", "agentplugins.js"), "version"], {
+          env: { ...environment, HOME: fixture.root, USERPROFILE: fixture.root,
+            TMPDIR: temporary, TMP: temporary, TEMP: temporary,
+            AGENTPLUGINS_CACHE_DIR: cache, UAP_BOOTSTRAP_SIGNAL_FIXTURE: mode },
+          stdio: ["ignore", "pipe", "pipe", "ipc"]
+        });
+        const run = { child, ready: once(child, "message"), closed: once(child, "close"), stdout: "", stderr: "" };
+        child.stdout.on("data", chunk => { run.stdout += chunk; });
+        child.stderr.on("data", chunk => { run.stderr += chunk; });
+        const timer = setTimeout(() => child.kill("SIGKILL"), 10000);
+        run.closed.then(() => clearTimeout(timer), () => clearTimeout(timer));
+        runs.push(run);
+        return run;
+      };
+      try {
+        const pending = launch("stall");
+        const [opened] = await Promise.race([
+          pending.ready,
+          pending.closed.then(result => { throw new Error("launcher exited before download opened: " + result + "; " + pending.stderr); })
+        ]);
+        assert.equal(opened.phase, "download-open");
+        assert.equal(path.dirname(opened.file), temporary);
+        assert.equal(fs.existsSync(opened.file), true);
+        assert.equal((await fsp.readdir(path.join(cache, ".locks"))).length, 1);
+        assert.equal(pending.child.kill(signal), true);
+        const [code, received] = await pending.closed;
+        assert.equal(code, null, pending.stderr);
+        assert.equal(received, signal, pending.stderr);
+        assert.equal(pending.stdout, "", "cancelled bootstrap must not launch native");
+        assert.match(pending.stderr, /cancelled/i);
+        assert.deepEqual(await fsp.readdir(path.join(cache, ".locks")), []);
+        assert.deepEqual(await fsp.readdir(temporary), []);
+        assert.equal(fs.existsSync(path.join(cache, VERSION)), false);
+        const retry = launch("complete");
+        const [retryCode, retrySignal] = await retry.closed;
+        assert.equal(retryCode, 0, retry.stderr);
+        assert.equal(retrySignal, null, retry.stderr);
+        assert.equal(retry.stdout.trim(), "isolated-agentplugins-test");
+        assert.deepEqual(await fsp.readdir(path.join(cache, ".locks")), []);
+        assert.deepEqual(await fsp.readdir(temporary), []);
+      } finally {
+        for (const run of runs) {
+          if (run.child.exitCode === null && run.child.signalCode === null) run.child.kill("SIGKILL");
+          await run.closed;
+        }
+      }
+    });
+  }
 });

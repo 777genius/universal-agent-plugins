@@ -25,6 +25,12 @@ type fakeClaudeLifecycleRunner struct {
 
 func (runner *fakeClaudeLifecycleRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	runner.commands = append(runner.commands, command)
+	if len(command.Argv) == 4 && command.Argv[1] == "mcp" && command.Argv[2] == "get" {
+		return runner.selectedMCPHealth(command)
+	}
+	if len(command.Argv) != 4 || command.Argv[1] != "plugin" || command.Argv[2] != "list" || command.Argv[3] != "--json" {
+		return legacyports.CommandResult{}, fmt.Errorf("unexpected inert Claude command")
+	}
 	if runner.hide {
 		return legacyports.CommandResult{Stdout: []byte("[]")}, nil
 	}

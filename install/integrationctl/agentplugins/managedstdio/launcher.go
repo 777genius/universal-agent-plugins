@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -73,29 +72,9 @@ func run(args []string) error {
 	if err != nil || !info.IsDir() {
 		return fmt.Errorf("cwd is not a directory")
 	}
-	command := child[0]
-	if strings.HasPrefix(command, "./") {
-		relative, err := pathcontract.ParseCommand(command)
-		if err != nil {
-			return err
-		}
-		result := pathcontract.Resolve(plugin, relative)
-		if result.State != pathcontract.Resolved {
-			return fmt.Errorf("bundled command unavailable: %w", result.Err)
-		}
-		command = result.Path
-	} else {
-		if command == "" || strings.ContainsAny(command, "/\\\x00") {
-			return fmt.Errorf("command must be a bare executable or bundled path")
-		}
-		// Resolve PATH before chdir. Go rejects implicit current-directory lookup.
-		command, err = exec.LookPath(command)
-		if err != nil {
-			return fmt.Errorf("runtime unavailable: %w", err)
-		}
-		if !filepath.IsAbs(command) {
-			return fmt.Errorf("runtime PATH resolved to a relative executable")
-		}
+	command, err := resolveRuntimeCommand(plugin, child[0])
+	if err != nil {
+		return err
 	}
 	return replaceProcess(command, append([]string{command}, child[1:]...), resolved.Path)
 }

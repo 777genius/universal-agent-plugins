@@ -197,6 +197,7 @@ func (session *updateAllSession) applySaved() error {
 	adapter := &dependencyInstaller{app: saved.app, opts: session.opts, detected: saved.request.detected, cmd: session.cmd, consent: saved.request.consent}
 	applied, applyErr := applyPreparedDependencies(session.ctx, saved.app, &saved.request, adapter, func(_ context.Context) error { return session.checkPrepared() })
 	session.recordSavedBindings(applied)
+	session.app.finishInstall(session.opts, "update --all", outcomeAgentItems(applied.Outcomes))
 	if applyErr != nil {
 		session.result.Status = "partial_failure"
 		if !applied.Published && len(applied.Results()) == 0 {

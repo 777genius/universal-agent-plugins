@@ -23,7 +23,7 @@ func TestManagementRecoveryRequiresCompleteNativeProjectionAndReviewedRepair(t *
 	dependencyGit(t, repo, "add", ".")
 	dependencyGit(t, repo, "commit", "-m", "test: second independently owned native Skill")
 	sha := savedJourneyGit(t, repo, "rev-parse", "HEAD")
-	fixture, _, _ := dependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientOpenCode, executable: true, activation: "active"})
+	fixture, _ := managementDependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientOpenCode, executable: true, activation: "active"})
 	detected, err := fixture.app.Detector.Detect(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -41,6 +41,21 @@ func TestManagementRecoveryRequiresCompleteNativeProjectionAndReviewedRepair(t *
 	original, untouched := []byte(dependencyRead(t, skill)), []byte(dependencyRead(t, second))
 	if coherent, _, err := backend.managementRecoveryCoherent(t.Context(), backend.app); err != nil || !coherent {
 		t.Fatalf("fresh intact native environment was not coherent: %v, %v", coherent, err)
+	}
+	// Materialization may settle without starting MCP. A new recovery review
+	// still requires explicit acceptance before fresh native startup verification.
+	stateBeforePreview, err := backend.app.StateStore.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview := managementPrepare(t, backend, management.ChangeRequest{Action: management.Recover})
+	if len(preview.Review().Actions) != 1 || preview.Review().Actions[0].Action != "repair" {
+		t.Fatal("materialization proof bypassed reviewed native setup", preview.Review())
+	}
+	preview.Close() // Declining the review must not promote stored readiness.
+	stateAfterPreview, err := backend.app.StateStore.Load()
+	if err != nil || !reflect.DeepEqual(stateBeforePreview, stateAfterPreview) {
+		t.Fatal("declined native setup review changed saved facts", err)
 	}
 	for _, surface := range []string{"one_of_two_skills", "native_config_entry"} {
 		t.Run(surface, func(t *testing.T) {

@@ -142,8 +142,9 @@ def session_available_command(value, name):
 
 
 def session_available_commands(value, state, req):
+    previous = [item['params'] for item in state['notifications'] if item['method'] == 'session/update']
     require(req.get('mode') == SESSION_MODE and state['initialize'] is not None and state['plugins'] is None
-            and not any(x['method'] == 'session/update' for x in state['notifications']), 'available-command-order')
+            and len(previous) < 2, 'available-command-order')
     params = closed(value, 'sessionId update _meta')
     sid = params['sessionId']
     require(session_metadata_text(sid, 256), 'session-id')
@@ -159,10 +160,14 @@ def session_available_commands(value, state, req):
     require(type(meta['agentTimestampMs']) is int and 0 < meta['agentTimestampMs'] < 1 << 63
             and type(meta['totalTokens']) is int and 0 <= meta['totalTokens'] <= 1 << 20
             and type(meta['requestTrimmedTokens']) is int and meta['requestTrimmedTokens'] == 0
-            and meta['eventId'] == sid + '-0' and meta['updateType'] == 'AvailableCommandsUpdate',
+            and meta['eventId'] == sid + '-' + str(len(previous)) and meta['updateType'] == 'AvailableCommandsUpdate',
             'available-command-meta')
     count = closed(meta['updateParams'], 'commandsCount')['commandsCount']
     require(type(count) is int and count == len(SESSION_COMMAND_NAMES), 'available-command-count')
+    if previous:
+        # Original 14217126006 repeats this catalog once with only eventId -1.
+        require(params == dict(previous[0], _meta=dict(previous[0]['_meta'], eventId=sid + '-1')),
+                'available-command-repeat')
     for item in state['notifications']:
         if item['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized'):
             require(item['params']['sessionId'] in (None, sid), 'session-notification-identity')

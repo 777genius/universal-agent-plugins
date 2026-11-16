@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -32,10 +33,9 @@ func TestUnclosedProbeBindingFailureIsNeverRetryable(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			for _, status := range []environment.BindingStatus{environment.BindingFailed, environment.BindingNotAttempted} {
 				outcome := environment.BindingOutcome{Status: status, Err: cause}
-				want := failureSkipped
+				want := failureProcessCleanup
 				if status == environment.BindingFailed {
 					outcome.Result = &installer.Result{Outcome: installer.OutcomeIncomplete}
-					want = failureProcessCleanup
 				}
 				failure := describeBindingFailure(outcome)
 				if failure == nil || failure.Kind != want || failure.Retryable {
@@ -70,7 +70,7 @@ func TestOrdinaryInstallerFailuresKeepTheirRetryBehavior(t *testing.T) {
 			t.Fatalf("ordinary failures must keep their existing retry classification: %+v", failure)
 		}
 		summary := errors.New("public group summary")
-		if got := retainUnclosedInstallCause(summary, cause); !errors.Is(got, summary) || !errors.Is(summary, got) {
+		if got := retainUnclosedInstallCause(summary, cause); reflect.ValueOf(got) != reflect.ValueOf(summary) {
 			t.Fatal("ordinary group errors must keep their existing public summary")
 		}
 	}
@@ -151,7 +151,7 @@ func TestUnclosedProbeBlocksRetryOfOtherRetryableFailures(t *testing.T) {
 				t.Fatal("a separate retryable failure must not restart work after uncertain cleanup")
 				return nil
 			})
-			if !errors.Is(got, cause) || !errors.Is(cause, got) || len(offered) != 0 {
+			if reflect.ValueOf(got) != reflect.ValueOf(cause) || len(offered) != 0 {
 				t.Fatalf("the run-wide cleanup refusal must survive without prompting: %v, offered=%v", got, offered)
 			}
 		})

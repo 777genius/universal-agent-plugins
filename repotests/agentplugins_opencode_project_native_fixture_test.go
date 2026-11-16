@@ -326,15 +326,15 @@ func (f *openCodeProjectFixture) run(t *testing.T, label, project string, args .
 		f.evidence["repeat_remove_contract"] = "empty stdout; exact fixed stderr; pure ExitError exit1; unchanged owned state/files"
 		return nil
 	}
-	if !openCodeProjectProgress(label, r.Stderr) {
-		t.Fatal("public UAP emitted unexpected progress bytes; see evidence")
-	}
 	result, err := openCodeProjectConfig(r.Stdout)
 	if err != nil {
 		t.Fatalf("public UAP whole JSON: %v", err)
 	}
 	if r.Exit != 0 || result["result"] != "success" {
 		t.Fatal("public UAP operation failed; see exact bounded evidence")
+	}
+	if !openCodeProjectProgress(label, r.Stderr, result) {
+		t.Fatal("public UAP emitted unexpected progress bytes; see evidence")
 	}
 	if args[0] != "remove" {
 		if project != "" {

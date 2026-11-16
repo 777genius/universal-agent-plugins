@@ -412,13 +412,18 @@ func TestOpenCodePendingHandoffRevalidates(t *testing.T) {
 	if err != nil || handoffs != 1 || result.InstallationID == "" {
 		t.Fatalf("pending fixture: %+v %v", result, err)
 	}
-	// Independent persisted host facts: this fixture has no authentication
-	// action. Settle that separate phase so the preview can be a no-op.
+	if result.Client.Activation != string(domain.ActivationPrepared) || result.Client.Verification != string(domain.VerificationInstalled) || result.Client.Authentication != string(domain.AuthenticationNotChecked) {
+		t.Fatalf("version-only fixture invented native discovery: %+v", result.Client)
+	}
+	// Independently acknowledged prior host facts settle the replay fixture.
+	// The version-only executable above intentionally supplies no live catalog;
+	// its first file installation remains Prepared, not proof of activation.
 	state, err := engine.store.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	for key, binding := range state.Installations[0].Clients {
+		binding.Activation = domain.ActivationActive
 		binding.Authentication = domain.AuthenticationNotRequired
 		state.Installations[0].Clients[key] = binding
 	}

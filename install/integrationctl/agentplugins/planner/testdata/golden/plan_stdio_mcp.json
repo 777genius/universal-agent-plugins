@@ -51,7 +51,7 @@
       "TargetRoot": "\u003croot\u003e/clients/antigravity/plugins",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
-        "Open or restart Antigravity and verify the UAP-owned plugin in Customizations/Installed or with agy plugin list; native enablement and model access are not asserted"
+        "Open a folder in agy or the Antigravity IDE and confirm its folder trust prompt; Antigravity enables installed plugins by default. Sign in to Google, because plugin MCP servers do not start without sign-in; installed files do not prove plugin discovery or MCP server startup"
       ],
       "Verification": "package_validated",
       "Warnings": [
@@ -175,7 +175,8 @@
       ],
       "Verification": "package_validated",
       "Warnings": [
-        "authentication_not_catalog_verified"
+        "authentication_not_catalog_verified",
+        "Installation may approve the selected Claude Code MCP servers: local. Existing rejections are preserved; these preferences remain after removal."
       ]
     }
   },
@@ -776,7 +777,8 @@
       ],
       "Verification": "package_validated",
       "Warnings": [
-        "authentication_not_catalog_verified"
+        "authentication_not_catalog_verified",
+        "After confirmation, OpenCode native MCP verification may start or connect every currently enabled MCP server from the workspace, selected profile, and extensions for \"\u003croot\u003e/clients/opencode\". Existing server and permission settings remain in effect."
       ]
     }
   },

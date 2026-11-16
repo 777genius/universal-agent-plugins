@@ -142,7 +142,7 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 	transitions := providers.NewNativeTransitions(e.cfg.Registry, clients.NativeTransitionContext{ProjectRoot: e.cfg.ProjectRoot, UserHome: e.cfg.UserHome, OperationsDir: e.cfg.OperationsDir, State: directoryKernel, Kernel: nativeKernel, PackageVerifier: stager}, legacyTransitions)
 	directoryKernel.NativeRecovery = transitions
 	projectRoots := transaction.ProjectRootPublisher{Kernel: directoryKernel}
-	inner := providers.Activator{Concurrent: e.cfg.IndependentActivations, ProjectRoots: projectRoots, UserHome: e.cfg.UserHome, NativeTransitions: transitions, OpenCodeTransitions: legacyTransitions, Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel}
+	inner := providers.Activator{Concurrent: e.cfg.IndependentActivations, ProjectRoots: projectRoots, UserHome: e.cfg.UserHome, NativeTransitions: transitions, OpenCodeTransitions: legacyTransitions, Runner: e.cfg.Runner, Registry: e.cfg.Registry, NativeConfig: &nativeKernel, LookupExecutable: e.cfg.LookupExecutable}
 	var observer usecase.NativeIdentityObserver
 	identity := providers.NativeIdentityObserver{ProjectRoots: projectRoots, Stager: stager, NativeConfig: &nativeKernel, Registry: e.cfg.Registry}
 	if e.cfg.EnableNativeObserver && e.cfg.Runner != nil {

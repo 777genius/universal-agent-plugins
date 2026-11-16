@@ -17,6 +17,7 @@ func TestReadOnlyCodexNoChangeRetainsDesktopHandoff(t *testing.T) {
 		Verification:   domain.VerificationInstalled,
 	}
 	verified := lifecycleOutcome(binding)
+	verified.UserActions = []string{"review the selected client's existing setup restriction"}
 	verified.LocalActions = []string{
 		"start a new Codex session; ChatGPT Desktop (optional, local): codex://plugins/demo?marketplacePath=%2Fprivate%2Fmarketplace.json",
 	}
@@ -45,6 +46,9 @@ func TestReadOnlyCodexNoChangeRetainsDesktopHandoff(t *testing.T) {
 	}
 	if !reflect.DeepEqual(result.Activation.LocalActions, verified.LocalActions) {
 		t.Fatalf("verified local guidance dropped: %+v", result.Activation)
+	}
+	if !reflect.DeepEqual(result.Activation.UserActions, verified.UserActions) {
+		t.Fatalf("verified setup guidance dropped: %+v", result.Activation)
 	}
 	if !sameLifecycleOutcome(result.Activation, lifecycleOutcome(binding)) {
 		t.Fatalf("local guidance changed the lifecycle status: %+v", result.Activation)

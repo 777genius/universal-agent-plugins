@@ -65,7 +65,9 @@ func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, locke
 	}
 	defer cleanup()
 	app = preview
+	stop := startCommandActivity(cmd, app, opts, "Resolving and verifying dependencies")
 	request, err := prepareDependencySyncCandidate(cmd, app, opts, lockedOnly)
+	stop()
 	if err != nil {
 		return err
 	}
@@ -112,7 +114,9 @@ func requireDependencyRecoveryClear(cmd *cobra.Command, app App) error {
 // runDependencySyncApply detects clients, preflights the planned actions and
 // either renders the dry-run plan or applies the converged sync.
 func runDependencySyncApply(cmd *cobra.Command, app App, opts *options, request dependencySyncRequest, actions []dependencyAction, yes bool) error {
+	stop := startCommandActivity(cmd, app, opts, "Detecting target agents")
 	detected, err := detectDependencyClients(cmd.Context(), app)
+	stop()
 	if err != nil {
 		return err
 	}
@@ -183,7 +187,7 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 	if err != nil || !confirmed {
 		return err
 	}
-	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent}
+	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent, trustAliases: explicitAddAliases(cmd, request.aliases)}
 	checked := func(ctx context.Context) error {
 		if err := request.checkInputs(); err != nil {
 			return err
@@ -399,7 +403,7 @@ func confirmDependencySync(cmd *cobra.Command, app App, opts *options, yes bool)
 		}
 		if !confirmed {
 			_, err := fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
-			return false, err
+			return false, declinedInstallResult(opts, err)
 		}
 		yes = confirmed
 	}

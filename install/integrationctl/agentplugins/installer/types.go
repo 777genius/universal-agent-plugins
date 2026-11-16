@@ -38,6 +38,9 @@ type Request struct {
 	ConfirmPluginEnable bool `json:"-"`
 	Scope               domain.InstallScope
 	ProjectRoot         string `json:"-"`
+	// OnlinePreview permits read-only host probing during normal-operation
+	// review. The default Prepare contract remains offline and grants no effects.
+	OnlinePreview bool `json:"-"`
 	// Completion flags attest explicit host-observed lifecycle completion.
 	ActivationComplete, AuthComplete bool
 	physical                         map[domain.ClientID]domain.DetectedClient
@@ -86,6 +89,10 @@ type Request struct {
 	// against owned state before using ConfigRoot or Executable; it never reads a
 	// host sidecar or guesses a profile from HOME.
 	KnownTargets []TargetFacts
+	// ProjectTrustConsent records that the host's user explicitly added this
+	// package. Hosts set it only for that operation, never for update, repair
+	// or dependency sync, so adapters do not re-grant revoked project trust.
+	ProjectTrustConsent bool `json:"-"`
 }
 
 func (req Request) acquiredCompatibility() domain.CompatibilityHints {

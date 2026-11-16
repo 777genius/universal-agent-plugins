@@ -55,7 +55,7 @@ func (e *Engine) previewGroup(ctx context.Context, svc usecase.Service, req Requ
 	}
 	group := usecase.GroupInput{
 		Targets: inputs, CompatibilityChecks: checks, OperationGroupID: firstNonEmpty(req.OperationID, "group"),
-		DryRun: true, Confirmed: false, Repair: req.Operation == OpRepair,
+		DryRun: true, OnlinePreview: req.OnlinePreview, Confirmed: false, Repair: req.Operation == OpRepair,
 	}
 	switch req.Operation {
 	case OpUpdate:

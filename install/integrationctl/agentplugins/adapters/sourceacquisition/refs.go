@@ -152,11 +152,22 @@ func (acquirer Acquirer) resolveNamedGitRef(ctx context.Context, repository, sel
 	if err != nil {
 		return RefResolution{}, err
 	}
-	commit, err := acquirer.resolveCommit(ctx, url, repository, match.object)
+	commit, err := acquirer.resolveRemoteRefCommit(ctx, url, repository, match)
 	if err != nil {
 		return RefResolution{}, err
 	}
 	return RefResolution{RequestedRef: selector, ResolvedRef: match.name, Commit: commit}, nil
+}
+
+func (acquirer Acquirer) resolveRemoteRefCommit(ctx context.Context, url, repository string, ref remoteRef) (string, error) {
+	// A branch ref already names its commit. The subsequent immutable tree
+	// acquisition verifies the object; fetching a second repository here would
+	// download all blobs merely to repeat that observation. Tags may name an
+	// annotated tag object and still require peeling to a commit.
+	if strings.HasPrefix(ref.name, "refs/heads/") && fullSHA.MatchString(ref.object) {
+		return ref.object, nil
+	}
+	return acquirer.resolveCommit(ctx, url, repository, ref.object)
 }
 
 func selectExactGitRef(output []byte, patterns []string, selector, resolvedRef string) (remoteRef, error) {
@@ -227,7 +238,7 @@ func (acquirer Acquirer) ResolveGitHubURLPath(ctx context.Context, repository, t
 		return RefResolution{}, "", fmt.Errorf("GitHub URL ref/path is unavailable or ambiguous; provide --ref")
 	}
 	r := matches[0]
-	commit, err := acquirer.resolveCommit(ctx, url, repository, r.object)
+	commit, err := acquirer.resolveRemoteRefCommit(ctx, url, repository, r)
 	if err != nil {
 		return RefResolution{}, "", err
 	}

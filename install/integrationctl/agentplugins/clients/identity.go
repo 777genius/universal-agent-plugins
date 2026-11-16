@@ -71,6 +71,13 @@ type ScopedSelectionReader interface {
 	ManagedMCPSelectionForScope(domain.InstallScope) (SelectionLayout, error)
 }
 
+// ArtifactSelectionReader recognizes an owned projection format inside a
+// digest-verified artifact. The caller verifies the digest before and after
+// reading selection; adapters must refuse unrecognized or contradictory formats.
+type ArtifactSelectionReader interface {
+	ManagedMCPSelectionForArtifact(domain.InstallScope, string) (SelectionLayout, error)
+}
+
 // NativeDiscoveryPolicy supplies an adapter's bounded CLI registry budget.
 // The observer's explicit timeout remains authoritative when supplied.
 type NativeDiscoveryPolicy interface {

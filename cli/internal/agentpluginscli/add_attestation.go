@@ -18,7 +18,12 @@ func resumeInteractiveLifecycle(
 	envelope domain.PackageEnvelope,
 	current usecase.AddResult,
 ) error {
-	if current.Plan.InstallIntent == domain.InstallIntentPrepare ||
+	// Prepared automatic installs retain their native-observation next steps.
+	// Asking for an attestation here would block a completed file installation
+	// and replace missing native evidence with a user claim. Manual activation
+	// and explicit completion flags keep their existing resume paths.
+	if current.Activation.Activation == domain.ActivationPrepared ||
+		current.Plan.InstallIntent == domain.InstallIntentPrepare ||
 		(current.Activation.Activation == domain.ActivationActive &&
 			current.Activation.Verification == domain.VerificationInstalled &&
 			current.Activation.Authentication != domain.AuthenticationPending &&

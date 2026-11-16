@@ -837,8 +837,8 @@ func TestDeactivatorPreviewsThenRemovesNativeCopilotLifecycle(t *testing.T) {
 
 func TestDeactivatorPreviewsThenCleansManagedCodexMarketplace(t *testing.T) {
 	t.Parallel()
-	runner := &recordingRunner{}
 	request := codexDeactivationRequest(t)
+	runner := codexRemovalRunner(t, request, false)
 	preview, err := testActivator(Activator{Runner: runner}).Deactivate(context.Background(), request)
 	if err != nil {
 		t.Fatal(err)
@@ -858,6 +858,7 @@ func TestDeactivatorPreviewsThenCleansManagedCodexMarketplace(t *testing.T) {
 	want := [][]string{
 		{"/test/bin/codex", "plugin", "remove", request.DeclaredName + "@" + marketplace, "--json"},
 		{"/test/bin/codex", "plugin", "marketplace", "remove", marketplace, "--json"},
+		{"/test/bin/codex", "plugin", "list", "--json"},
 	}
 	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v, want %#v", got, want)
@@ -875,8 +876,8 @@ func TestDeactivatorPreviewsThenCleansManagedCodexMarketplace(t *testing.T) {
 // independent of marketplace registration.
 func TestDeactivatorCleansStalePluginEntryWhenMarketplaceAlreadyGone(t *testing.T) {
 	t.Parallel()
-	runner := &recordingRunner{}
 	request := codexDeactivationRequest(t)
+	runner := codexRemovalRunner(t, request, false)
 	request.Confirmed = true
 	marketplace := shared.ManagedMarketplaceName(request.PhysicalArtifactID)
 	writeTestFile(t, filepath.Join(request.Client.ConfigRoot, "config.toml"), fmt.Sprintf(`
@@ -890,7 +891,7 @@ enabled = true
 	if !outcome.ArtifactRemovalAllowed || !outcome.ExternalRemovalComplete {
 		t.Fatalf("outcome = %+v", outcome)
 	}
-	want := [][]string{{"/test/bin/codex", "plugin", "remove", request.DeclaredName + "@" + marketplace, "--json"}}
+	want := [][]string{{"/test/bin/codex", "plugin", "remove", request.DeclaredName + "@" + marketplace, "--json"}, {"/test/bin/codex", "plugin", "list", "--json"}}
 	if got := commandArgv(runner.commands); !reflect.DeepEqual(got, want) {
 		t.Fatalf("commands = %#v, want %#v (marketplace remove must NOT run -- there is no marketplace source left to clean)", got, want)
 	}
@@ -924,10 +925,11 @@ enabled = true
 
 func TestDeactivatorTreatsAbsentManagedCodexMarketplaceAsClean(t *testing.T) {
 	t.Parallel()
-	runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
-		return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("marketplace `agentplugins-demo` is not configured or installed")}
-	}}
 	request := codexDeactivationRequest(t)
+	// Model actual native absence, not an absent-command message while the
+	// selected profile still retains this manager-owned marketplace.
+	writeTestFile(t, filepath.Join(request.Client.ConfigRoot, "config.toml"), "[marketplaces.user-marketplace]\nsource_type='local'\nsource='/user/marketplace'\n")
+	runner := codexRemovalRunner(t, request, true)
 	request.Confirmed = true
 	outcome, err := testActivator(Activator{Runner: runner}).Deactivate(context.Background(), request)
 	if err != nil {

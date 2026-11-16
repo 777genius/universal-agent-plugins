@@ -61,6 +61,7 @@ func runInstallerFacadeLocalAdd(ctx context.Context, cmd *cobra.Command, app App
 	}
 	request := installer.Request{
 		Scope: app.scope(), ProjectRoot: app.ProjectRoot, Operation: installer.OpInstall, PackageRoot: loaded.envelope.SnapshotRoot,
+		OnlinePreview:   !opts.dryRun,
 		SourceRoot:      loaded.envelope.Source.CanonicalSource,
 		ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
 		ClientID:        string(selected.ClientID), ClientConfigRoot: selected.ConfigRoot,

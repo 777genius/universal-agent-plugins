@@ -7,6 +7,8 @@ on:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/run-native-client-matrix.py'
+      - 'scripts/native_client_draft.py'
       - 'tests/live-install/fixtures.json'
       - 'install/integrationctl/agentplugins/**'
       - 'cli/cmd/agentplugins/**'
@@ -26,7 +28,7 @@ concurrency:
 
 jobs:
   remaining-client-install:
-    name: ${{ matrix.target == 'kiro' && matrix.kind == 'plugin' && 'Prepared installation 30' || 'Full 30' }} ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
+    name: ${{ matrix.target == 'kiro' && matrix.kind == 'plugin' && 'Prepared installation 30' || matrix.target == 'vscode' && matrix.kind == 'plugin' && 'Manual preparation observation 30' || 'Full 30' }} ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
     # Darwin refuses Kiro's automatic MCP duplex containment. This lane can
     # measure the real native CLI and owned Prepared lifecycle, while keeping
     # native activation incomplete until a contained host route is qualified.
@@ -38,6 +40,11 @@ jobs:
       matrix:
         target: [cursor, kiro, windsurf, grok, vscode, chatgpt]
         kind: [plugin, skill]
+        # Public ChatGPT Desktop supports User scope only; Skills use Project.
+        # Keep its documented-unsupported refusal outside this positive audit.
+        exclude:
+          - target: chatgpt
+            kind: skill
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -95,6 +102,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           KIND: ${{ matrix.kind }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
@@ -123,9 +131,8 @@ jobs:
                 # Homebrew/homebrew-cask Casks/d/devin-cli.rb @ b0b0899868cd5816cfc754d2461a50920af612e0
                 URL="https://static.devin.ai/cli/3000.11.205/devin-3000.11.205-x86_64-unknown-linux.tar.gz"
               else
-                # Preserve the independently reviewed user/plugin version.
-                # Homebrew/homebrew-cask Casks/d/devin-cli.rb @ c9adad21951a075e35556930e7396a87818f8980
-                URL="https://static.devin.ai/cli/3000.11.234/devin-3000.11.234-x86_64-unknown-linux.tar.gz"
+                # Same official reviewed SPEC as devin_structured_inventory_admission.py.
+                URL="https://static.devin.ai/cli/3000.12.57/devin-3000.12.57-x86_64-unknown-linux.tar.gz"
               fi
               BIN="devin"
               ;;
@@ -140,11 +147,42 @@ jobs:
               BIN="code"
               ;;
             chatgpt)
-              echo "ChatGPT is a remote/manual app target; no Linux agent executable" \
-                | tee "$RUNNER_TEMP/vendor-proof/manual-client.txt"
-              exit 0
+              test "$KIND" = plugin
+              # The public Desktop alias uses the current-source Codex backend.
+              # Reuse its reviewed pin, regular-member selection and digest gate.
+              python3 - "$RUNNER_TEMP" <<'CHATGPT_CODEX'
+          import importlib.util, json, os, platform, stat, sys
+          from pathlib import Path
+          from types import SimpleNamespace
+          if sys.platform != "linux" or platform.machine() != "x86_64":
+              raise SystemExit("ChatGPT Desktop bootstrap requires Linux amd64")
+          root = Path(sys.argv[1]).resolve(strict=True)
+          directory = root / "vendor-root"
+          directory.mkdir()
+          source = Path.cwd() / "scripts/run-native-client-matrix.py"
+          spec = importlib.util.spec_from_file_location("chatgpt_codex_matrix", source)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          args = SimpleNamespace(target="linux-amd64", release_state="public")
+          pin = module.selected_pin(args, "codex")
+          binary, proof = module.provision(pin, directory, "codex")
+          if (binary != directory / "codex" or binary.is_symlink()
+                  or not stat.S_ISREG(binary.lstat().st_mode)
+                  or not os.access(binary, os.X_OK)
+                  or binary.resolve(strict=True) != binary):
+              raise SystemExit("unverified staged Codex executable")
+          proof.update(public_target="chatgpt", canonical_client_id="codex",
+                       pin_family="current-source", executable=str(binary))
+          with (root / "vendor-proof/codex-runtime.json").open("x") as stream:
+              stream.write(json.dumps(proof, sort_keys=True) + "\n")
+          (root / "vendor-proof/source.txt").write_text(proof["source"] + "\n")
+          CHATGPT_CODEX
+              BIN="codex"
+              executable="$RUNNER_TEMP/vendor-root/codex"
+              ln -s "$executable" "$HOME/.local/bin/codex"
               ;;
           esac
+          if [[ "$TARGET" != chatgpt ]]; then
           printf '%s\n' "$URL" > "$RUNNER_TEMP/vendor-proof/source.txt"
           # BUG-012: download, fingerprint, and preserve proposed vendor bytes;
           # never execute without a separately reviewed immutable digest pin.
@@ -162,7 +200,7 @@ jobs:
               if [[ "$KIND" == skill ]]; then
                 SHA256="2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4" # Cask b0b08998, project 3000.11.205
               else
-                SHA256="201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a" # Cask c9adad21, user 3000.11.234
+                SHA256="0946784ef886d716e82a8026f76933bf0a6e4f0a804a23722bb62047e8c07d4a" # Reviewed SPEC, user 3000.12.57
               fi
               ;;
             grok) SHA256="22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9" ;; # Homebrew Cask grok-build 1.0.70, Linux x86_64
@@ -253,6 +291,7 @@ jobs:
           else
             echo "Unsupported verified vendor format: $TARGET" >&2
             exit 4
+          fi
           fi
           hash -r
           command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"
@@ -468,6 +507,14 @@ jobs:
             fi
           else
             export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          fi
+          if [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == plugin ]]; then
+            acceptance=(--acceptance cursor-prepared-installation)
+          elif [[ "$AUDIT_TARGET" == grok && "$AUDIT_KIND" == skill ]]; then
+            acceptance=(--acceptance grok-prepared-skills-installation)
+          elif [[ "$AUDIT_TARGET" == vscode && "$AUDIT_KIND" == plugin ]]; then
+            # User preparation and preserved refusal only; no uninstall attestation.
+            acceptance=(--acceptance vscode-user-manual-preparation)
           fi
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \
