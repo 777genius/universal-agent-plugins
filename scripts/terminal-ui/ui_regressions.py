@@ -53,7 +53,11 @@ def run_case(name, binary, evidence, timeout):
         try:
             if name.startswith('json-'):
                 session.finish(1)
-                check((evidence / 'stdout.raw').read_bytes() == b'', 'JSON error polluted stdout')
+                # JSON failures emit exactly one versioned failure envelope on stdout.
+                envelope = json.loads((evidence / 'stdout.raw').read_bytes())
+                check(envelope.get('schema_version') == 1 and envelope.get('result') == 'failure'
+                      and envelope.get('data', {}).get('error', {}).get('code') == 'TARGET_REQUIRED',
+                      'JSON failure envelope missing')
                 check('requires --target' in clean(session.raw), 'missing target diagnostic absent')
                 check('Choose targets' not in clean(session.raw), 'JSON remove prompted')
                 fixture.unchanged()
