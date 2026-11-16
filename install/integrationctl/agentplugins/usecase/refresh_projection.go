@@ -128,6 +128,7 @@ func (session *repairSession) activateRefreshedProjection(delivery domain.Staged
 		DeclaredName: session.input.Envelope.Manifest.Name, Replacing: true,
 		Interactive: session.input.Interactive, BackendExecutable: session.input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),
+		ProjectTrustConsent:   session.input.ProjectTrustConsent,
 	})
 	outcome = preserveManagedAuthentication(outcome, session.client.Authentication)
 	if activationErr != nil {

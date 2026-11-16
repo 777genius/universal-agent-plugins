@@ -42,5 +42,6 @@ func canConfirmPreparedSetup(service usecase.Service, input usecase.AddInput, pl
 		Client: client, Plan: plan, DeclaredName: input.Envelope.Manifest.Name, BackendExecutable: input.BackendExecutable, Replacing: true,
 		Delivery:              domain.StagedDelivery{ClientID: client.ClientID, OwnedBase: plan.TargetRoot, ActivePath: plan.ActivePath, ArtifactDigest: planned.Receipt.AfterDigest, NativeObjects: append([]domain.NativeObjectOwnership(nil), plan.PreviousNativeObjects...)},
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), plan.PreviousNativeObjects...),
+		ProjectTrustConsent:   input.ProjectTrustConsent,
 	}, observed)
 }

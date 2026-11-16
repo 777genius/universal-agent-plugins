@@ -44,7 +44,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	input := usecase.AddInput{
 		InstallIntent: opts.installIntents[selected.ClientID],
 		Envelope:      loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
-		DryRun: opts.dryRun, Confirmed: false, Interactive: app.Terminal,
+		DryRun: opts.dryRun, Confirmed: false, Interactive: app.Terminal, ProjectTrustConsent: true,
 		Hints: loaded.hints, BackendExecutable: backendExecutable(selected, detectedMap, app.scope()),
 		ActivationComplete: activationComplete, AuthComplete: authComplete,
 		PersistAuthoritativeObservations: true,

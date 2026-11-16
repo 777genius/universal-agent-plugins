@@ -40,6 +40,7 @@ func (session *repairSession) canCompletePreparedSetup(delivery domain.StagedDel
 		DeclaredName: session.input.Envelope.Manifest.Name, Replacing: true,
 		BackendExecutable:     session.input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),
+		ProjectTrustConsent:   session.input.ProjectTrustConsent,
 	}, observed)
 }
 

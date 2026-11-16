@@ -131,5 +131,6 @@ func (session *groupSession) groupActivationRequest(target plannedGroupTarget) (
 		DeclaredName: target.input.Envelope.Manifest.Name, Replacing: session.replace, Interactive: target.input.Interactive,
 		BackendExecutable: target.input.BackendExecutable, PreviousNativeObjects: previous,
 		VerifyOnly: target.noChange && nativeComplete, ActivationComplete: target.input.ActivationComplete,
+		ProjectTrustConsent: target.input.ProjectTrustConsent,
 	}, domain.ActivationOutcome{}, delivery, nativeComplete, nil
 }

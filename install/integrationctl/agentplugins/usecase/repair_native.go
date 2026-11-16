@@ -61,6 +61,7 @@ func (session *repairSession) reapplyIntactNative(delivery domain.StagedDelivery
 		DeclaredName: session.input.Envelope.Manifest.Name, Replacing: true,
 		BackendExecutable:     session.input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),
+		ProjectTrustConsent:   session.input.ProjectTrustConsent,
 	})
 	outcome = preserveManagedAuthentication(outcome, session.client.Authentication)
 	session.result.Activation = outcome

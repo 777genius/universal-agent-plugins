@@ -86,6 +86,10 @@ type Request struct {
 	// against owned state before using ConfigRoot or Executable; it never reads a
 	// host sidecar or guesses a profile from HOME.
 	KnownTargets []TargetFacts
+	// ProjectTrustConsent records that the host's user explicitly added this
+	// package. Hosts set it only for that operation, never for update, repair
+	// or dependency sync, so adapters do not re-grant revoked project trust.
+	ProjectTrustConsent bool `json:"-"`
 }
 
 func (req Request) acquiredCompatibility() domain.CompatibilityHints {
