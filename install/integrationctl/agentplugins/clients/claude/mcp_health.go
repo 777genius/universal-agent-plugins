@@ -38,9 +38,9 @@ func observeClaudeMCPHealth(body []byte, selector string) claudeMCPObservation {
 		if strings.HasPrefix(line, "  Status: ") {
 			statuses++
 			switch line {
-			case "  Status: ✔ Connected":
+			case "  Status: ✔ Connected", "  Status: √ Connected":
 				state = claudeMCPHealthConnected
-			case "  Status: ✘ Failed to connect", "  Status: ⏸ Pending approval (run `claude` to approve)", "  Status: ✘ Rejected (see disabledMcpjsonServers in settings)", "  Status: ⚠ Needs authentication":
+			case "  Status: ✘ Failed to connect", "  Status: × Failed to connect", "  Status: ⏸ Pending approval (run `claude` to approve)", "  Status: ✘ Rejected (see disabledMcpjsonServers in settings)", "  Status: × Rejected (see disabledMcpjsonServers in settings)", "  Status: ⚠ Needs authentication":
 				state = claudeMCPHealthUnready
 			default:
 				return claudeMCPObservation{}
@@ -54,13 +54,24 @@ func observeClaudeMCPHealth(body []byte, selector string) claudeMCPObservation {
 			}
 		}
 	}
-	// Claude 2.1.263 omits transport details for default stdio entries. Accept
-	// only its complete three-line response, without inferring a transport.
-	legacy := types == 0 && len(lines) == 4 && lines[3] == ""
+	// Claude 2.1.263 omits transport details for default stdio entries and
+	// may append an issue after an unready status. Neither proves transport.
+	legacy := types == 0 && claudeLegacyMCPHealthShape(lines, state)
 	if statuses != 1 || types > 1 || types == 0 && !legacy {
 		return claudeMCPObservation{}
 	}
 	return claudeMCPObservation{state: state, transport: transport}
+}
+
+func claudeLegacyMCPHealthShape(lines []string, state claudeMCPHealth) bool {
+	if len(lines) == 4 {
+		return lines[3] == ""
+	}
+	if len(lines) != 5 || lines[4] != "" || state != claudeMCPHealthUnready {
+		return false
+	}
+	issue, ok := strings.CutPrefix(lines[3], "  Issue: ")
+	return ok && len(issue) <= 4096 && strings.TrimSpace(issue) != "" && !strings.ContainsRune(issue, '\r')
 }
 
 func finishClaudeMCPActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {

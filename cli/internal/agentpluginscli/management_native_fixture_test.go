@@ -69,6 +69,9 @@ func newManagementNativeRunner(detected []domain.DetectedClient, base ports.Comm
 func (r *managementNativeRunner) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	profile, selected := r.profiles[command.Argv[0]]
 	if !selected {
+		if fixture, ok := r.base.(*dependencyFixtureRunner); ok && fixture.id == domain.ClientOpenCode {
+			return legacyports.CommandResult{NoChildStarted: true}, fmt.Errorf("management native fixture executable was not captured")
+		}
 		return r.base.Run(ctx, command)
 	}
 	if fixture, ok := r.base.(*dependencyFixtureRunner); ok {
