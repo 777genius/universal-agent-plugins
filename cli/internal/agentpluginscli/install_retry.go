@@ -94,7 +94,7 @@ func (app App) recordSingleAdd(cmd *cobra.Command, opts *options, client domain.
 }
 
 func retryAllowed(cmd *cobra.Command, app App, opts *options, err error) bool {
-	return err != nil && !domain.IsUnclosedClientProbe(err) && app.Terminal && opts.format == "human" && !opts.yes && !opts.dryRun &&
+	return err != nil && !unclosedInstallProbe(err) && app.Terminal && opts.format == "human" && !opts.yes && !opts.dryRun &&
 		opts.retryAttempt < maxSkillsRetries && cmd.Context().Err() == nil && opts.installResult != nil
 }
 
