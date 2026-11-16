@@ -675,7 +675,12 @@ def run_case(name, binary, root, args):
                 session.send(selection_keys(session.raw, {'codex', 'cursor'}))
                 session.wait(args.confirmation, 'group-confirmation')
                 fixture.unchanged()
+                offset = len(session.raw)
                 session.send(b'\r')
+                session.wait(r'Retry failed agents\? Enter retries the selected ones, Esc skips',
+                             'group-retry', after=offset)
+                fixture.unchanged()
+                session.send(b'\x1b')
                 session.finish(1)
                 fixture.unchanged()
                 raw = bytes(session.raw)

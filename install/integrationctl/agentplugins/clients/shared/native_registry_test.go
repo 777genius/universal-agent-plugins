@@ -54,7 +54,7 @@ func TestRunNativeRegistryPreservesCleanupEvidence(t *testing.T) {
 				}
 				if test.wrap {
 					var probe *domain.UnclosedClientProbe
-					if !errors.As(err, &probe) || !errors.Is(probe.Err, test.err) || !errors.Is(err, cause) {
+					if !errors.As(err, &probe) || !errors.Is(probe.Err, test.err) || !errors.Is(test.err, probe.Err) || !errors.Is(err, cause) {
 						t.Fatalf("cleanup evidence or original cause lost: %v", err)
 					}
 				} else if !errors.Is(err, test.err) || !errors.Is(test.err, err) { // same error, not a wrapper around it
