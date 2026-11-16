@@ -19,6 +19,14 @@ import (
 // post-install native inventories, repeat and removals qualify these same bytes.
 func nativeBrowserSkillsInstall(t *testing.T, f *nativeFixture, installer string, env []string) {
 	t.Helper()
+	nativeBrowserSkillsScenario(t, f, installer, env, "user-benchmark", nativeRawUserSkillSource)
+}
+
+func nativeBrowserSkillsScenario(t *testing.T, f *nativeFixture, installer string, env []string, scenario, skillSource string) {
+	t.Helper()
+	if scenario != "user-benchmark" && scenario != "project-anthropic" {
+		t.Fatal("unknown browser/native scenario")
+	}
 	if runtime.GOOS != "linux" || os.Getenv("GITHUB_ACTIONS") != "true" ||
 		os.Getenv("RUNNER_ENVIRONMENT") != "github-hosted" || os.Getenv("AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED") != "1" {
 		t.Fatal("browser/native proof requires the opted-in disposable Linux hosted lane")
@@ -57,7 +65,8 @@ func nativeBrowserSkillsInstall(t *testing.T, f *nativeFixture, installer string
 		"AGENTPLUGINS_NATIVE_BROWSER_ROOT="+f.Root,
 		"AGENTPLUGINS_NATIVE_BROWSER_PROJECT="+f.Project,
 		"AGENTPLUGINS_NATIVE_BROWSER_INSTALLER="+installer,
-		"AGENTPLUGINS_NATIVE_BROWSER_SKILL_SOURCE="+nativeRawUserSkillSource,
+		"AGENTPLUGINS_NATIVE_BROWSER_SCENARIO="+scenario,
+		"AGENTPLUGINS_NATIVE_BROWSER_SKILL_SOURCE="+skillSource,
 		"AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED=1", "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted")
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
