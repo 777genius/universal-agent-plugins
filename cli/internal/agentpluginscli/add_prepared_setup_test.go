@@ -32,7 +32,7 @@ func (port *setupConfirmPort) PreparedSetupVerifierAvailable(domain.DetectedClie
 func (port *setupConfirmPort) CanCompletePreparedSetup(request domain.ActivationRequest, _ domain.ActivationOutcome) bool {
 	port.calls++
 	port.request = request
-	return port.allow
+	return port.allow && request.VerifyOnly
 }
 
 func TestInteractivePreparedSetupUsesNativeOptInAndNormalConfirmation(t *testing.T) {
@@ -69,7 +69,7 @@ func TestInteractivePreparedSetupUsesNativeOptInAndNormalConfirmation(t *testing
 				if manual {
 					t.Fatal("automatic native setup was intercepted by manual handoff")
 				}
-				if port.request.VerifyOnly || port.request.DeclaredName != "reviewed" || port.request.BackendExecutable != "/selected/native" || port.request.Delivery.ActivePath != "/selected/owned" {
+				if !port.request.VerifyOnly || port.request.DeclaredName != "reviewed" || port.request.BackendExecutable != "/selected/native" || port.request.Delivery.ActivePath != "/selected/owned" {
 					t.Fatalf("setup classification lost selected identity: %+v", port.request)
 				}
 				var output bytes.Buffer

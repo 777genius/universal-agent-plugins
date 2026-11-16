@@ -36,7 +36,8 @@ func (session *repairSession) canCompletePreparedSetup(delivery domain.StagedDel
 	observed.LocalActions = append([]string(nil), observed.LocalActions...)
 	observed.LocalEntryObservation = observed.LocalEntryObservation.Clone()
 	return classifier.CanCompletePreparedSetup(domain.ActivationRequest{
-		Client: clonePreparedVerifierClient(session.input.Client), Plan: clonePreparedVerifierPlan(session.result.Plan), Delivery: delivery,
+		VerifyOnly: true,
+		Client:     clonePreparedVerifierClient(session.input.Client), Plan: clonePreparedVerifierPlan(session.result.Plan), Delivery: delivery,
 		DeclaredName: session.input.Envelope.Manifest.Name, Replacing: true,
 		BackendExecutable:     session.input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),

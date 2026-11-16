@@ -34,7 +34,7 @@ func (probe *preparedSetupProbe) CanCompletePreparedSetup(request domain.Activat
 	request.Delivery.NativeObjects[0].Path = "changed by classifier"
 	request.PreviousNativeObjects[0].Path = "changed by classifier"
 	observed.UserActions[0] = "changed by classifier"
-	return probe.allow
+	return probe.allow && request.VerifyOnly
 }
 
 func TestPreparedSetupClassificationRequiresFreshProofAndDetachedPacket(t *testing.T) {
@@ -68,8 +68,8 @@ func TestPreparedSetupClassificationRequiresFreshProofAndDetachedPacket(t *testi
 			if probe.calls != expectedCalls {
 				t.Fatalf("unproved setup reached classifier: calls=%d", probe.calls)
 			}
-			if probe.calls > 0 && (probe.request.DeclaredName != "reviewed" || probe.request.BackendExecutable != "/native" || probe.request.VerifyOnly) {
-				t.Fatalf("classification differs from acting setup packet: %+v", probe.request)
+			if probe.calls > 0 && (probe.request.DeclaredName != "reviewed" || probe.request.BackendExecutable != "/native" || !probe.request.VerifyOnly) {
+				t.Fatalf("classification lost fresh read-only observation mode: %+v", probe.request)
 			}
 			if delivery.NativeObjects[0].Path != "/owned" || session.client.NativeObjects[0].Path != "/owned" || session.result.Plan.Components[0].Name != "selected" || observed.UserActions[0] != "finish setup" {
 				t.Fatal("classifier mutated reviewed setup facts")
