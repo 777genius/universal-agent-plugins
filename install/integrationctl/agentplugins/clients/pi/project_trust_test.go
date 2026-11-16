@@ -377,7 +377,9 @@ func TestPiProjectTrustHookSourceIsBoundedAndMatchesNativeLocks(t *testing.T) {
 }
 
 func TestPiProjectCanCompletePreparedSetupIsConservative(t *testing.T) {
-	user, project := filepath.Join(string(filepath.Separator), "home", ".pi", "agent"), filepath.Join(string(filepath.Separator), "work", "project")
+	// The predicate reads nothing, but its roots must be absolute on every OS.
+	root := piTrustTemp(t)
+	user, project := filepath.Join(root, "home", ".pi", "agent"), filepath.Join(root, "work", "project")
 	valid := piTrustRequest(t, user, project, "owned-0123456789ab", nil, nil)
 	pending := domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Policy: domain.PolicyAllowed, UserActions: []string{piProjectTrustPendingAction}}
 	adapter := NewProject()
