@@ -10,18 +10,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
-func (app App) directAcquirer() (sourceacquisition.DirectAcquirer, error) {
-	acquirer, ok := app.SourceAcquirer.(sourceacquisition.DirectAcquirer)
-	if !ok {
-		return nil, errors.New("direct Git and archive source acquisition is unavailable")
-	}
-	return acquirer, nil
-}
-
-func gitSourceSpec(source environment.GitSource) sourcespec.Git {
-	return sourcespec.Git{URL: source.Endpoint(), Repository: source.Repository, Path: source.Path}
-}
-
 func dependencySourceHint(locked environment.LockedPackage) string {
 	if locked.Source.Web != nil {
 		return "uap-dependency-web-skill"
@@ -33,6 +21,18 @@ func dependencySourceHint(locked environment.LockedPackage) string {
 		return "uap-dependency-registry"
 	}
 	return "uap-dependency-git"
+}
+
+func (app App) directAcquirer() (sourceacquisition.DirectAcquirer, error) {
+	acquirer, ok := app.SourceAcquirer.(sourceacquisition.DirectAcquirer)
+	if !ok {
+		return nil, errors.New("direct Git and archive source acquisition is unavailable")
+	}
+	return acquirer, nil
+}
+
+func gitSourceSpec(source environment.GitSource) sourcespec.Git {
+	return sourcespec.Git{URL: source.Endpoint(), Repository: source.Repository, Path: source.Path}
 }
 
 // Historical Repository pins keep the exact old identity, even when transport

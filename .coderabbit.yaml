@@ -1,0 +1,6 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Review draft pull requests too: this repository keeps work in Draft while CI runs.
+reviews:
+  auto_review:
+    enabled: true
+    drafts: true
