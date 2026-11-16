@@ -289,3 +289,31 @@ func TestConvergeRetryUnclosedProbeNeverPromptsOrRetries(t *testing.T) {
 		t.Fatalf("unsafe retry lost cause or prompted: %v offered=%v prompts=%d calls=%d", err, offered, prompts, calls)
 	}
 }
+
+func TestConvergeUnclosedProbeNeverPromptsOrRetries(t *testing.T) {
+	closeErr := errors.New("client process cleanup failed")
+	probe := &domain.UnclosedClientProbe{Operation: "readonly inventory", Err: closeErr}
+	for name, cause := range map[string]error{
+		"bare":    probe,
+		"wrapped": fmt.Errorf("install failed: %w", probe),
+		"joined":  errors.Join(errors.New("another agent failed"), probe),
+	} {
+		t.Run(name, func(t *testing.T) {
+			var offered []string
+			app, opts := retryAppAndOptions(t, &offered)
+			cmd, out, errOut := retryTestCommand(t)
+			before := opts.installResult
+			reruns := 0
+			// The ordinary failed agent is retryable, but the run's unclosed
+			// process must prevent every new convergence attempt.
+			got := retryConverge(cmd, app, opts, cause, func() error { reruns++; return nil })
+			var retained *domain.UnclosedClientProbe
+			if !errors.Is(got, cause) || !errors.Is(cause, got) || !errors.As(got, &retained) || retained != probe || !errors.Is(got, closeErr) {
+				t.Fatalf("convergence lost the cleanup refusal or its cause: %v", got)
+			}
+			if len(offered) != 0 || reruns != 0 || opts.retryAttempt != 0 || opts.installResult != before || out.Len() != 0 || errOut.Len() != 0 {
+				t.Fatalf("unclosed convergence prompted, reran or changed its result: offered=%v reruns=%d attempt=%d", offered, reruns, opts.retryAttempt)
+			}
+		})
+	}
+}
