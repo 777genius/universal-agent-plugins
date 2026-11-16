@@ -115,3 +115,38 @@ func relocateEnablementFrames(t *testing.T, frames, project string) string {
 	}
 	return strings.ReplaceAll(frames, enablementDigest([]byte(oldRoot))[7:15], enablementDigest([]byte(newRoot))[7:15])
 }
+
+// The single measured metadata event may arrive before or after the listing
+// response, but never both and never more than once in total.
+func TestEnablementACPConsumerKeepsOneMeasuredNotificationBudget(t *testing.T) {
+	const event = `{"jsonrpc":"2.0","method":"_x.ai/mcp/servers_updated","params":{"mcpServers":[]}}` + "\n"
+	early := enablementACPFrames(t, true)
+	late := strings.Replace(early, event, "", 1)
+	if late == early {
+		t.Fatal("fixture lacks the measured notification")
+	}
+	for name, tc := range map[string]struct {
+		frames, trailing string
+		accepted         bool
+	}{
+		"event-before-response":       {early, "", true},
+		"event-after-response":        {late, event, true},
+		"no-event":                    {late, "", true},
+		"event-before-and-after":      {early, event, false},
+		"two-events-after-response":   {late, event + event, false},
+		"event-then-extra-after":      {late, event + "{}\n", false},
+		"foreign-notification-after":  {late, strings.ReplaceAll(event, "_x.ai/mcp/servers_updated", "session/update"), false},
+		"partial-event-after":         {late, strings.TrimSuffix(event, "\n"), false},
+		"event-after-with-nonempty":   {late, strings.ReplaceAll(event, "[]", `[{"name":"x"}]`), false},
+		"response-shaped-frame-after": {late, `{"jsonrpc":"2.0","id":2,"result":{}}` + "\n", false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			inputs, _ := inventoryInputsFixture(t)
+			fixture := &enablementDuplexFixture{frames: relocateEnablementFrames(t, tc.frames, inputs.inputs.Project.Path), trailing: tc.trailing}
+			plugins, err := readEnablementInventory(t.Context(), fixture, inputs, inputs.profile.config.Original())
+			if (err == nil) != tc.accepted || tc.accepted && (len(plugins) != 1 || !plugins[0].enabled) {
+				t.Fatalf("accepted=%v want %v: %+v %v", err == nil, tc.accepted, plugins, err)
+			}
+		})
+	}
+}
