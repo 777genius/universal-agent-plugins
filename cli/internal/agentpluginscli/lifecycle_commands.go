@@ -31,7 +31,7 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 				if strings.TrimSpace(opts.target) != "" {
 					return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
 				}
-				return runUpdateAll(cmd.Context(), cmd, operationApp, opts)
+				return runUpdateAllRetryable(cmd, operationApp, opts)
 			}
 			if len(args) != 1 {
 				return fmt.Errorf("provide one installation or use --all")
