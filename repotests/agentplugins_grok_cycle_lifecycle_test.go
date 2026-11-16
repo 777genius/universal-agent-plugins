@@ -113,7 +113,7 @@ func grokCycleProgress(stage, name string) string {
 	case "add-a", "add-b":
 		return "Resolving and validating one Agent Plugin package for every selected target...\nInstalling " + name + " for 1 selected clients...\n"
 	case "repeat-add-a":
-		return "Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+		return "Resolving and validating one Agent Plugin package for every selected target...\n"
 	case "update-a", "unchanged-update-a":
 		return "Resolving and validating one updated Agent Plugin package for every selected target...\n"
 	case "intact-repair-a", "missing-repair-a":
@@ -134,36 +134,23 @@ func grokCycleRepeatAdd(stage, scope string, mutated bool, document map[string]a
 		return refused
 	}
 	data, ok := document["data"].(map[string]any)
-	if !ok || projectNativeRuntimeKeys(data, "plugin scope version source tree_digest manifest_digest dry_run result readiness next_action next_actions", "security") != nil {
+	if !ok || projectNativeRuntimeKeys(data, "plugin scope version source tree_digest manifest_digest dry_run result readiness", "security") != nil {
 		return refused
 	}
-	for key, value := range map[string]any{"plugin": r.Name, "scope": "project", "version": "1.0.0", "source": "direct local source", "tree_digest": r.Digest, "manifest_digest": r.Installation.Package.ManifestDigest, "dry_run": false, "readiness": "needs_action"} {
+	for key, value := range map[string]any{"plugin": r.Name, "scope": "project", "version": "1.0.0", "source": "direct local source", "tree_digest": r.Digest, "manifest_digest": r.Installation.Package.ManifestDigest, "dry_run": false, "readiness": "ready"} {
 		if data[key] != value {
 			return refused
 		}
 	}
-	// Repeat is a no-op; the native trust/verification step must remain
-	// explicit. Neither an updated action sentence nor a successful file
-	// receipt may be mistaken for runtime MCP activation.
-	actions, ok := data["next_actions"].([]any)
-	if !ok || len(actions) != 1 {
-		return refused
-	}
-	action, ok := actions[0].(map[string]any)
-	next, _ := data["next_action"].(string)
-	message, _ := action["message"].(string)
-	if !ok || projectNativeRuntimeKeys(action, "code actor message", "") != nil ||
-		action["code"] != "verify_native" || action["actor"] != "native_client" ||
-		message == "" || next != message {
-		return refused
-	}
+	// These Skills were already explicitly trusted and freshly discovered.
+	// A no-op repeat must retain Ready without obsolete setup instructions.
 	outcome, ok := data["result"].(map[string]any)
-	if !ok || projectNativeRuntimeKeys(outcome, "installation_id plan activation requires_confirmation mutated", "") != nil || outcome["installation_id"] != r.Installation.InstallationID || outcome["requires_confirmation"] != false || outcome["mutated"] != false {
+	if !ok || projectNativeRuntimeKeys(outcome, "installation_id plan activation requires_confirmation mutated no_change", "") != nil || outcome["installation_id"] != r.Installation.InstallationID || outcome["requires_confirmation"] != false || outcome["mutated"] != false || outcome["no_change"] != true {
 		return refused
 	}
 	plan, p := outcome["plan"].(map[string]any)
 	activation, a := outcome["activation"].(map[string]any)
-	if !p || !a || projectNativeRuntimeKeys(plan, "client_id scope status package_mode activation authentication policy verification physical_artifact_id components", "user_actions warnings") != nil || projectNativeRuntimeKeys(activation, "activation authentication policy verification", "user_actions") != nil {
+	if !p || !a || projectNativeRuntimeKeys(plan, "client_id scope status package_mode activation authentication policy verification physical_artifact_id components", "user_actions warnings") != nil || projectNativeRuntimeKeys(activation, "activation authentication policy verification", "") != nil {
 		return refused
 	}
 	for key, value := range map[string]any{"client_id": "grok", "scope": "project", "status": "ready", "package_mode": "native", "physical_artifact_id": r.Binding.PhysicalArtifact} {
@@ -172,7 +159,12 @@ func grokCycleRepeatAdd(stage, scope string, mutated bool, document map[string]a
 		}
 	}
 	for key, value := range map[string]any{"activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "package_validated"} {
-		if plan[key] != value || activation[key] != value {
+		if plan[key] != value {
+			return refused
+		}
+	}
+	for key, value := range map[string]any{"activation": "active", "authentication": "not_required", "policy": "allowed", "verification": "installation_verified"} {
+		if activation[key] != value {
 			return refused
 		}
 	}
@@ -212,6 +204,9 @@ func (c *grokProjectCycle) apply(t *testing.T, stage, scope string, mutated bool
 			}
 		} else {
 			commandsRequireMutated(t, stage, document, mutated)
+			if strings.HasPrefix(stage, "add-") || stage == "update-a" || stage == "unchanged-update-a" {
+				codexNativeProjectSkillsReady(t, document)
+			}
 		}
 	}
 	if strings.HasPrefix(stage, "remove-") {
