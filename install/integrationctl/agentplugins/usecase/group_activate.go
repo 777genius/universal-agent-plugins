@@ -94,8 +94,8 @@ func (session *groupSession) publishGroupActivation(remainingFrom int, target pl
 		stage, message := groupActivationStopReason(session.ctx, activationErr)
 		session.markRemainingNotAttempted(remainingFrom, stage, message)
 		cause := activationErr
-		if ctxErr := session.ctx.Err(); ctxErr != nil && !errors.Is(activationErr, ctxErr) {
-			cause = errors.Join(activationErr, ctxErr)
+		if root := context.Cause(session.ctx); root != nil && !errors.Is(activationErr, root) {
+			cause = errors.Join(activationErr, root)
 		}
 		return session.activationFailureError(cause)
 	}

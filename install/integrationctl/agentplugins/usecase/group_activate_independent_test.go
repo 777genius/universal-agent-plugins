@@ -604,20 +604,29 @@ func TestIndependentUnclosedProbeCancelsRunningSerialEffect(t *testing.T) {
 	service, _, _ := serviceFixture(t)
 	a := &cancelSerialOnUnclosedActivator{serialStarted: make(chan struct{}), serialJoined: make(chan struct{})}
 	service.Activator = a
-	claude, codex, cursor, _ := mixedClients(t)
-	inputs := []AddInput{addInput(t, claude, "https://example.com/cancel-running"), addInput(t, codex, "https://example.com/cancel-running"), addInput(t, cursor, "https://example.com/cancel-running")}
+	claude, codex, cursor, gemini := mixedClients(t)
+	inputs := []AddInput{addInput(t, claude, "https://example.com/cancel-running"), addInput(t, codex, "https://example.com/cancel-running"), addInput(t, cursor, "https://example.com/cancel-running"), addInput(t, gemini, "https://example.com/cancel-running")}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	done := make(chan error, 1)
+	type outcome struct {
+		result GroupResult
+		err    error
+	}
+	done := make(chan outcome, 1)
 	go func() {
-		_, err := service.AddGroup(ctx, GroupInput{Targets: inputs, OperationGroupID: "cancel-running-serial", Confirmed: true})
-		done <- err
+		result, err := service.AddGroup(ctx, GroupInput{Targets: inputs, OperationGroupID: "cancel-running-serial", Confirmed: true})
+		done <- outcome{result, err}
 	}()
 	select {
-	case err := <-done:
+	case got := <-done:
 		var probe *domain.UnclosedClientProbe
-		if !errors.As(err, &probe) {
-			t.Fatalf("lost unclosed probe: %v", err)
+		if !errors.As(got.err, &probe) {
+			t.Fatalf("lost unclosed probe: %v", got.err)
+		}
+		for _, target := range got.result.Targets {
+			if target.GroupPhase == GroupTargetExternalNotAttempted && (target.Failure == nil || target.Failure.Stage != "activation") {
+				t.Fatalf("skipped target blamed on cancellation instead of unconfirmed cleanup: %+v", target.Failure)
+			}
 		}
 	case <-time.After(10 * time.Second):
 		cancel()
