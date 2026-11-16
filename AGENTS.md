@@ -129,3 +129,14 @@ existing owners of the affected behavior.
   changes; run affected contract, cross-OS and genuine native E2E for behavioral
   changes. Verify exact-HEAD checks and independent review findings before
   merging. A skipped, unrun, blocked or evidence-only test is not a PASS.
+
+## Keep the Directory and client support simple (owner, 2026-11-16)
+
+The owner wants every plugin and Skill to work with every supported agent,
+easily, for users and for maintainers. Do not over-engineer the Directory or
+client support: one feed, one signer and one implementation; no extra rules,
+flags, modes, per-package gates or Pi-specific paths without a clear user
+benefit. Treat a new client like the existing ones, derive its support from the
+client's capabilities, and let the installer refuse clearly at install time.
+Keep at most a tiny data list for known exclusions. Propose the simplest
+option first.
