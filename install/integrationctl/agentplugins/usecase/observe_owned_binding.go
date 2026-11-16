@@ -15,6 +15,16 @@ import (
 // acknowledges an attempt, or persists readiness. Known manual registration can
 // be coherent while authentication and activation remain incomplete.
 func (service Service) InspectOwnedBinding(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, binding domain.ClientBinding) (bool, error) {
+	return service.inspectOwnedBinding(ctx, input, plan, installation, binding, false)
+}
+
+// InspectOwnedMaterialization accepts a fresh, adapter-qualified prepared
+// installation without treating it as observed native runtime readiness.
+func (service Service) InspectOwnedMaterialization(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, binding domain.ClientBinding) (bool, error) {
+	return service.inspectOwnedBinding(ctx, input, plan, installation, binding, true)
+}
+
+func (service Service) inspectOwnedBinding(ctx context.Context, input AddInput, plan domain.DeliveryPlan, installation domain.Installation, binding domain.ClientBinding, materializationOnly bool) (bool, error) {
 	guarded, complete, manual, err := service.inspectOwnedProjection(ctx, input, plan, installation, binding)
 	if err != nil || !complete {
 		return false, err
@@ -22,7 +32,7 @@ func (service Service) InspectOwnedBinding(ctx context.Context, input AddInput, 
 	if manual {
 		return true, nil
 	}
-	return guarded.inspectOwnedVerification(ctx, input, plan, binding)
+	return guarded.inspectOwnedVerification(ctx, input, plan, binding, materializationOnly)
 }
 
 // InspectOwnedProjection verifies immutable ownership and current projection
@@ -64,7 +74,7 @@ func (service Service) inspectOwnedProjection(ctx context.Context, input AddInpu
 	return service, true, manual, nil
 }
 
-func (service Service) inspectOwnedVerification(ctx context.Context, input AddInput, plan domain.DeliveryPlan, binding domain.ClientBinding) (bool, error) {
+func (service Service) inspectOwnedVerification(ctx context.Context, input AddInput, plan domain.DeliveryPlan, binding domain.ClientBinding, materializationOnly bool) (bool, error) {
 	if plan.SelectedDelivery.IsZero() && !domain.ShouldReadOnlyVerify(input.Client.ClientID, input.BackendExecutable, input.InstallIntent) {
 		return service.inspectOwnedNativeIdentity(ctx, input, plan, binding)
 	}
@@ -82,6 +92,9 @@ func (service Service) inspectOwnedVerification(ctx context.Context, input AddIn
 	verified := outcome.Verification == domain.VerificationInstalled || outcome.Verification == domain.VerificationRuntime
 	if outcome.Activation == domain.ActivationActive && verified {
 		return true, nil
+	}
+	if !materializationOnly {
+		return false, nil
 	}
 	return service.inspectPreparedMaterialization(ctx, input, plan, binding, outcome)
 }

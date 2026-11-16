@@ -162,7 +162,9 @@ class Screen:
             elif c == '\b': self.col = max(0, self.col - 1)
             elif c >= ' ' and c != '\x7f':
                 if self.col >= self.cols:
-                    self.col = 0; self.row = min(self.rows - 1, self.row + 1)
+                    self.col = 0; self.row += 1
+                    if self.row >= self.rows:
+                        self.grid.pop(0); self.grid.append([' '] * self.cols); self.row -= 1
                 self.grid[self.row][self.col] = c; self.col += 1
             i += 1
 
@@ -675,9 +677,10 @@ def run_case(name, binary, root, args):
                 session.send(selection_keys(session.raw, {'codex', 'cursor'}))
                 session.wait(args.confirmation, 'group-confirmation')
                 fixture.unchanged()
+                offset = len(session.raw)
                 session.send(b'\r')
                 session.wait(r'Retry failed agents\? Enter retries the selected ones, Esc skips',
-                             'group-retry', after=len(session.raw))
+                             'group-retry', after=offset)
                 fixture.unchanged()
                 session.send(b'\x1b')
                 session.finish(1)

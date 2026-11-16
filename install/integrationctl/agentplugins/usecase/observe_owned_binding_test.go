@@ -148,7 +148,7 @@ func (f *materializationTestFixture) checkProfile() error {
 }
 
 func (f *materializationTestFixture) inspect(ctx context.Context) (bool, error) {
-	return f.service.inspectOwnedVerification(ctx, f.input, f.plan, f.binding)
+	return f.service.inspectOwnedVerification(ctx, f.input, f.plan, f.binding, true)
 }
 
 func materializationTestBytes(t *testing.T, paths ...string) [][]byte {
@@ -407,6 +407,37 @@ func TestOwnedPreparedMaterializationFreezesAliasingStore(t *testing.T) {
 			complete, err := f.inspect(t.Context())
 			if complete || err == nil || f.probe.calls != 1 {
 				t.Fatalf("aliasing store changed original comparison basis: complete=%v err=%v", complete, err)
+			}
+		})
+	}
+}
+
+func TestOwnedBindingSeparatesReadinessFromMaterialization(t *testing.T) {
+	// The opted-in verifier revalidates the original binding before and after Activate.
+	const verifierStateReads = 2
+	for _, tc := range []struct {
+		name                string
+		materializationOnly bool
+		activation          domain.ActivationState
+		want                bool
+		classifications     int
+		classifierReads     int
+	}{
+		{"prepared is not readiness", false, domain.ActivationPrepared, false, 0, 0},
+		{"prepared materialization", true, domain.ActivationPrepared, true, 1, 2},
+		{"active readiness", false, domain.ActivationActive, true, 0, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newMaterializationTestFixture(t)
+			f.probe.outcome.Activation = tc.activation
+			before := materializationTestBytes(t, f.store.path, f.profile)
+			complete, err := f.service.inspectOwnedVerification(t.Context(), f.input, f.plan, f.binding, tc.materializationOnly)
+			if err != nil || complete != tc.want || len(f.probe.requests) != 1 || f.probe.calls != tc.classifications || f.probe.setupCalls != 0 {
+				t.Fatalf("readiness/materialization boundary changed: complete=%v want=%v probes=%d classifiers=%d setup=%d err=%v", complete, tc.want, len(f.probe.requests), f.probe.calls, f.probe.setupCalls, err)
+			}
+			wantReads := verifierStateReads + tc.classifierReads
+			if f.store.loads != wantReads || f.store.saves != 0 || !reflect.DeepEqual(before, materializationTestBytes(t, f.store.path, f.profile)) {
+				t.Fatalf("observation changed retained state or access: reads=%d want=%d writes=%d", f.store.loads, wantReads, f.store.saves)
 			}
 		})
 	}

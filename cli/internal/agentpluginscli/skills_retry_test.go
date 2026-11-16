@@ -67,6 +67,7 @@ func TestSkillsFailureIsIsolatedExplainedLoggedAndRetriedPerAgent(t *testing.T) 
 	plan.request.detected[domain.ClientCodex] = broken
 
 	var offered []string
+	confirms := 0
 	app := withInstallLogDir(j.cli.app)
 	app.Prompter = fakePrompter{
 		selectFn: func(r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
@@ -75,7 +76,10 @@ func TestSkillsFailureIsIsolatedExplainedLoggedAndRetriedPerAgent(t *testing.T) 
 			}
 			return prompt.TargetSelectionResult{IDs: r.DefaultIDs}, nil
 		},
-		confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
+		confirmFn: func() (prompt.ConfirmationResult, error) {
+			confirms++
+			return prompt.ConfirmationResult{Accepted: true}, nil
+		},
 	}
 	cmd, out, errOut := retryTestCommand(t)
 	app.Terminal, app.ErrorOutput = true, errOut
@@ -83,8 +87,9 @@ func TestSkillsFailureIsIsolatedExplainedLoggedAndRetriedPerAgent(t *testing.T) 
 		t.Fatalf("the retry should have completed the installation: %v\n%s", err, out.String())
 	}
 
-	if strings.Join(offered, ",") != "codex" {
-		t.Fatalf("only the failed agent may be offered for retry, got %v", offered)
+	// One failed agent is offered as a plain yes/no, never as a one-item list.
+	if confirms != 1 || len(offered) != 0 {
+		t.Fatalf("the single failed agent must be offered with one confirmation: confirms=%d offered=%v", confirms, offered)
 	}
 	text := out.String()
 	for _, want := range []string{"Needs attention", "Codex", "could not be verified", "Skills installation succeeded"} {
@@ -163,7 +168,10 @@ func TestSkillsFailureWithoutAPersonDoesNotPromptButStillExplains(t *testing.T) 
 
 func retryAppAndOptions(t *testing.T, offered *[]string) (App, *options) {
 	t.Helper()
-	app := App{Terminal: true, Prompter: fakePrompter{selectFn: func(r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+	app := App{Terminal: true, Prompter: fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+		*offered = append(*offered, "codex")
+		return prompt.ConfirmationResult{Accepted: true}, nil
+	}, selectFn: func(r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
 		for _, choice := range r.Choices {
 			*offered = append(*offered, string(choice.ID))
 		}
@@ -232,8 +240,8 @@ func TestAddRetryNeverPromptsWithoutAPersonOrAfterTheLimit(t *testing.T) {
 func TestAddRetryCancelKeepsTheOriginalError(t *testing.T) {
 	var offered []string
 	app, opts := retryAppAndOptions(t, &offered)
-	app.Prompter = fakePrompter{selectFn: func(prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
-		return prompt.TargetSelectionResult{}, prompt.ErrPromptCanceled
+	app.Prompter = fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+		return prompt.ConfirmationResult{}, prompt.ErrPromptCanceled
 	}}
 	cmd, _, _ := retryTestCommand(t)
 	boom := errors.New("failed")
@@ -403,10 +411,17 @@ func TestSkillsUnclosedProbeNeverPromptsOrRetries(t *testing.T) {
 func TestPrepareSkillsRetryPreservesPromptErrors(t *testing.T) {
 	readFailure := errors.Join(errors.New("retry terminal read failed"), prompt.ErrPromptInputClosed)
 	for name, test := range map[string]struct {
-		app  App
-		want error
+		app    App
+		want   error
+		single bool
 	}{
 		"terminal unavailable": {app: App{}, want: prompt.ErrPromptUnavailable},
+		"confirmation read failed": {
+			app: App{Prompter: fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+				return prompt.ConfirmationResult{}, readFailure
+			}}},
+			want: prompt.ErrPromptInputClosed, single: true,
+		},
 		"selection read failed": {
 			app: App{Prompter: fakePrompter{selectFn: func(prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
 				return prompt.TargetSelectionResult{}, readFailure
@@ -416,7 +431,10 @@ func TestPrepareSkillsRetryPreservesPromptErrors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			cmd, _, _ := retryTestCommand(t)
-			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable)})
+			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable), failedItem("pdf", "gemini", installer.ErrTargetFactsUnavailable)})
+			if test.single {
+				reports = reports[:1]
+			}
 			// No original plan is needed: an input failure must stop before preparation.
 			next, err := prepareSkillsRetry(cmd, test.app, &options{format: "human"}, nil, nil, reports)
 			if next != nil || !errors.Is(err, test.want) {
@@ -433,7 +451,7 @@ func TestPrepareSkillsRetryEscapeDeclinesWithoutError(t *testing.T) {
 				return prompt.TargetSelectionResult{}, canceled
 			}}}
 			cmd, _, _ := retryTestCommand(t)
-			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable)})
+			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable), failedItem("pdf", "gemini", installer.ErrTargetFactsUnavailable)})
 			next, err := prepareSkillsRetry(cmd, app, &options{format: "human"}, nil, nil, reports)
 			if next != nil || err != nil {
 				t.Fatalf("Escape must decline without replacing the original installation failure: next=%v err=%v", next, err)
@@ -453,7 +471,7 @@ func TestPrepareSkillsRetryRejectsInvalidSelection(t *testing.T) {
 				return prompt.TargetSelectionResult{IDs: ids}, nil
 			}}}
 			cmd, _, _ := retryTestCommand(t)
-			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable)})
+			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", installer.ErrTargetFactsUnavailable), failedItem("pdf", "gemini", installer.ErrTargetFactsUnavailable)})
 			next, err := prepareSkillsRetry(cmd, app, &options{format: "human"}, nil, nil, reports)
 			if next != nil || err == nil {
 				t.Fatalf("invalid selection was treated as a declined retry: next=%v err=%v", next, err)

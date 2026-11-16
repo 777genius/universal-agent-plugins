@@ -123,7 +123,7 @@ func codexNativeAuthentication(plan domain.DeliveryPlan) domain.AuthenticationSt
 	if (plan.Authentication == "" || plan.Authentication == domain.AuthenticationNotChecked) && len(shared.SupportedMCPNames(plan)) > 0 {
 		return domain.AuthenticationNotRequired
 	}
-	return plan.Authentication
+	return shared.ObservedSkillInstallationAuthentication(plan)
 }
 
 // Bind the native status to the selected project's effective command, not just

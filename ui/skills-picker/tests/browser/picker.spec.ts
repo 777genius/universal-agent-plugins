@@ -54,6 +54,9 @@ test('partial result limits file readiness to successful and unchanged targets',
   await expect(readiness).toContainText('2 of 3 targets applied');
   await expect(readiness).not.toContainText('Not verified');
   await expect(page.getByRole('region', { name: 'Installation progress' })).toContainText('Write refused');
+  await expect(page.getByRole('region', { name: 'Installation progress' }).locator('.operation-item > span')).toHaveText([
+    `${operation.items[0].targetId} · files ready`, `${operation.items[1].targetId} · unchanged`, 'failed-target · failed',
+  ]);
 });
 
 for (const setupRequired of [false, true]) {
@@ -81,6 +84,7 @@ for (const setupRequired of [false, true]) {
     await expect(page.getByRole('status', { name: 'Skills readiness' })).toContainText(summary);
     await expect(progress.getByText(summary, { exact: true })).toHaveCount(1);
     await expect(progress).toContainText(message);
+    await expect(progress.locator('.operation-item > span')).toHaveText(`${operation.items[0].targetId} · files ready`);
     if (setupRequired) {
       await expect(progress).toContainText('1 / 1 · setup required');
       await expect(progress).toContainText('Agent setup required');

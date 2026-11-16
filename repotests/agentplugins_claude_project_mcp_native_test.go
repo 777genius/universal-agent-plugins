@@ -321,8 +321,8 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	// Actual Claude sessions may update Claude's own profile metadata. Verify
 	// that both projects remain trusted, then pin the exact post-native bytes
 	// immediately before UAP remove. The installer must preserve this new
-	// baseline outside the exact owned pluginUsage entry deleted by native
-	// uninstall. Every foreign sibling and other file remains unchanged.
+	// baseline, apart from native removal of this exact owned plugin's usage
+	// entry. Every foreign profile member and file must remain unchanged.
 	profilePath := filepath.Join(f.base.ConfigDir, ".claude.json")
 	profile, err := readClaudeTrustedProfile(profilePath)
 	if err != nil {
@@ -345,7 +345,8 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	f.foreign[profilePath] = nativeSHA(t, profilePath)
 	evidence["native_profile_baseline_refreshed_before_remove"] = true
 
-	claudeTrustedRemoveWithProfileDiagnostic(t, f, c, profile, physical)
+	managed := filepath.Join(f.project, ".claude", "skills", physical)
+	claudeTrustedRemoveWithProfileDiagnostic(t, f, profile, managed, "trusted-foreign-mcp-remove")
 	claudeProjectRunScripted(t, f, f.project, true)
 	afterRemoval, err := os.ReadFile(events)
 	if err != nil || len(afterRemoval) > 3072 {
@@ -512,11 +513,10 @@ func claudeProjectManagedMCPCall(t *testing.T) {
 		t.Fatal("native Claude session lost authored A/B trust")
 	}
 	f.foreign[profilePath] = nativeSHA(t, profilePath)
-	c.succeed(t, "managed-mcp-remove", "remove", commandsPluginName)
+	claudeTrustedRemoveWithProfileDiagnostic(t, f, profile, managed, "managed-mcp-remove")
 	if _, err := os.Lstat(managed); !os.IsNotExist(err) {
 		t.Fatal("UAP-managed plugin survived scoped removal", err)
 	}
-	f.requireForeign(t)
 	claudeProjectRunScriptedForTool(t, f, f.project, claudeManagedProjectTool, false)
 	afterRemove, err := os.ReadFile(events)
 	if err != nil || !bytes.Equal(afterRemove, methods) {

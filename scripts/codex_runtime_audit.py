@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 from runpy import run_path
 import signal
 import sqlite3
@@ -24,6 +25,8 @@ _FILES = run_path(str(Path(__file__).with_name("native_client_project_artifacts.
 FILE_LIMIT = 32 << 20
 TOTAL_LIMIT = 64 << 20
 ROW_LIMIT = 20000
+TEMPORARY_GIT_HEAD = b"ref: refs/heads/main\n"
+TEMPORARY_GIT_LIMIT = 64
 DATABASES = frozenset(("state_5.sqlite", "logs_2.sqlite", "goals_1.sqlite",
                       "memories_1.sqlite", "queue_1.sqlite", "thread_history_1.sqlite"))
 
@@ -63,6 +66,104 @@ def _real_directory(path):
             or path.resolve(strict=True) != path):
         raise ValueError("Codex audit directory is redirected")
     return info
+
+
+def _bounded_member_names(path, limit):
+    before = _FILES["identity"](_real_directory(path))
+    names = []
+    with os.scandir(path) as entries:
+        for entry in entries:
+            names.append(entry.name)
+            if len(names) > limit:
+                raise ValueError("Codex temporary Git member count exceeds its bound")
+    if _FILES["identity"](_real_directory(path)) != before:
+        raise ValueError("Codex temporary Git directory changed during enumeration")
+    return sorted(names)
+
+
+def _temporary_git_state(profile):
+    """Verify the pinned client's empty automatic-Git staging repositories.
+
+    Codex 0.153.4 core-plugins/src/git_policy.rs writes this skeleton under
+    CODEX_HOME/.tmp. Optional objects/refs must be empty; this structural
+    check does not identify the historical writer of a matching residue.
+    """
+    root = profile / ".tmp"
+    try:
+        root.lstat()
+    except FileNotFoundError:
+        return {}, {}
+    _real_directory(profile)
+    files, identities, witnesses = {}, {}, {}
+
+    def directory(path):
+        info = _real_directory(path)
+        witnesses[path] = _FILES["identity"](info)
+        identities[path] = (info.st_dev, info.st_ino, info.st_mode,
+                            getattr(info, "st_file_attributes", None))
+
+    directory(root)
+    names = _bounded_member_names(root, TEMPORARY_GIT_LIMIT)
+    layouts = {}
+    for name in names:
+        if re.fullmatch(r"git-[A-Za-z0-9]{6}", name) is None:
+            raise ValueError("Codex temporary Git directory name is not qualified")
+        repository = root / name
+        directory(repository)
+        members = _bounded_member_names(repository, 3)
+        if "HEAD" not in members or not set(members) <= {"HEAD", "objects", "refs"}:
+            raise ValueError("Codex temporary Git repository has unexpected members")
+        layouts[repository] = members
+        for child in (member for member in members if member != "HEAD"):
+            path = repository / child
+            directory(path)
+            _bounded_member_names(path, 0)
+            layouts[path] = []
+        head = repository / "HEAD"
+        before = _FILES["identity"](head.lstat())
+        if _regular_bytes(head, len(TEMPORARY_GIT_HEAD)) != TEMPORARY_GIT_HEAD:
+            raise ValueError("Codex temporary Git HEAD differs from the pinned native bytes")
+        if before != _FILES["identity"](head.lstat()):
+            raise ValueError("Codex temporary Git HEAD changed during inspection")
+        identities[head] = before
+        files[f"{profile.name}/{head.relative_to(profile)}"] = hashlib.sha256(TEMPORARY_GIT_HEAD).hexdigest()
+    if _bounded_member_names(root, TEMPORARY_GIT_LIMIT) != names:
+        raise ValueError("Codex temporary Git namespace changed during inspection")
+    for path, members in layouts.items():
+        if _bounded_member_names(path, 3) != members:
+            raise ValueError("Codex temporary Git members changed during inspection")
+    _confirm_temporary_git_identities(identities, witnesses)
+    return files, identities
+
+
+def _confirm_temporary_git_identities(identities, witnesses):
+    for path, previous in identities.items():
+        if path.name == "HEAD":
+            current = _FILES["identity"](path.lstat())
+        else:
+            info = _real_directory(path)
+            if _FILES["identity"](info) != witnesses[path]:
+                raise ValueError("Codex temporary Git directory changed during inspection")
+            current = (info.st_dev, info.st_ino, info.st_mode,
+                       getattr(info, "st_file_attributes", None))
+        if current != previous:
+            raise ValueError("Codex temporary Git identity changed during inspection")
+
+
+def _repeat_temporary_git_only(profile, before, after, previous):
+    """Accept only newly observed empty native Git HEADs; retain raw differences."""
+    old_files, old_identities = previous
+    files, identities = _temporary_git_state(profile)
+    if any(identities.get(path) != value for path, value in old_identities.items()):
+        return False
+    if any(before.get(path) != digest or after.get(path) != digest
+           for path, digest in old_files.items()):
+        return False
+    if any(after.get(path) != digest for path, digest in files.items()):
+        return False
+    changed = {path for path in before.keys() | after.keys() if before.get(path) != after.get(path)}
+    return bool(changed) and all(path not in before and path not in old_files
+                                and path in files and after[path] == files[path] for path in changed)
 
 
 def _runtime_files(root):
@@ -418,14 +519,28 @@ class CodexRuntimeAudit:
             raise ValueError("Codex selected Skill bytes changed during native discovery")
         verify_skill_inventory(listing, self.project, self.identity, self.selected, self.foreign, present)
         state, files = runtime_state(self.runtime, self.temporary, self.baseline)
+        git_files, _ = _temporary_git_state(self.profile)
         self.guard()
         if self.baseline is None:
             self.baseline = state
         self.observations.append({"phase": phase, "selected_skill_present": present,
                                   "foreign_skill_present": True, "native_exit_code": 0,
                                   "runtime_integrity_verified": True, "runtime_semantics_unchanged": True,
-                                  "runtime_files_fully_read": files})
+                                  "runtime_files_fully_read": files,
+                                  "temporary_git_files_fully_read": git_files})
         return True
+
+    def temporary_git_state(self):
+        self.guard()
+        state = _temporary_git_state(self.profile)
+        self.guard()
+        return state
+
+    def repeat_runtime_only(self, before, after, previous):
+        self.guard()
+        qualified = _repeat_temporary_git_only(self.profile, before, after, previous)
+        self.guard()
+        return qualified
 
     def evidence(self):
         return {"native_version": "0.153.4", "runtime_root": str(self.runtime.relative_to(self.case)),

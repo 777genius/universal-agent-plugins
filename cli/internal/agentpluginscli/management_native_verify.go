@@ -42,7 +42,7 @@ func verifyManagementNativeBindings(ctx context.Context, app App, actions []depe
 		return false, err
 	}
 	for _, action := range actions {
-		coherent, err := managementNativeBindingCoherent(ctx, adapter, action)
+		coherent, err := managementNativeBindingObserved(ctx, adapter, action, app.Installer.VerifyPreparedMaterialization)
 		if err != nil || !coherent {
 			return false, err
 		}
@@ -69,10 +69,14 @@ func managementNativeRepair(action dependencyAction) dependencyAction {
 }
 
 func managementNativeBindingCoherent(ctx context.Context, adapter *dependencyInstaller, action dependencyAction) (bool, error) {
+	return managementNativeBindingObserved(ctx, adapter, action, adapter.app.Installer.VerifyPreparedBinding)
+}
+
+func managementNativeBindingObserved(ctx context.Context, adapter *dependencyInstaller, action dependencyAction, observe func(context.Context, *installer.PreparedOperation) (bool, error)) (bool, error) {
 	prepared, err := adapter.Prepare(ctx, managementNativeRepair(action))
 	if err != nil {
 		return false, err
 	}
 	defer func() { _ = prepared.Close() }()
-	return adapter.app.Installer.VerifyPreparedBinding(ctx, prepared)
+	return observe(ctx, prepared)
 }

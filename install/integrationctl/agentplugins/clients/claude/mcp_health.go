@@ -54,7 +54,10 @@ func observeClaudeMCPHealth(body []byte, selector string) claudeMCPObservation {
 			}
 		}
 	}
-	if statuses != 1 || types != 1 {
+	// Claude 2.1.263 omits transport details for default stdio entries. Accept
+	// only its complete three-line response, without inferring a transport.
+	legacy := types == 0 && len(lines) == 4 && lines[3] == ""
+	if statuses != 1 || types > 1 || types == 0 && !legacy {
 		return claudeMCPObservation{}
 	}
 	return claudeMCPObservation{state: state, transport: transport}
@@ -63,7 +66,7 @@ func observeClaudeMCPHealth(body []byte, selector string) claudeMCPObservation {
 func finishClaudeMCPActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
 	names := shared.SupportedMCPNames(request.Plan)
 	if len(names) == 0 {
-		return outcome, nil
+		return qualifyClaudeNativeSkillAuthentication(request.Plan, outcome), nil
 	}
 	unique, err := inspectClaudeMCPNamespace(ctx, env, request)
 	if err != nil {
@@ -96,7 +99,7 @@ func finishClaudeMCPActivation(ctx context.Context, env clients.Env, request dom
 			return shared.FailedActivation(outcome, "inspect the selected Claude Code MCP server", fmt.Errorf("claude Code MCP health command failed with exit %d", result.ExitCode))
 		}
 		observation := observeClaudeMCPHealth(result.Stdout, selector)
-		allLocal = allLocal && observation.transport == "stdio"
+		allLocal = allLocal && claudeMCPIsLocal(ctx, request, name, observation)
 		switch observation.state {
 		case claudeMCPHealthConnected:
 		case claudeMCPHealthUnready:

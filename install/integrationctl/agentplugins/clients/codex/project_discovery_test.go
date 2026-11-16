@@ -50,6 +50,7 @@ func projectDiscoveryFixture(t *testing.T) (clients.Env, domain.ActivationReques
 	active := filepath.Join(root, ".uap", "managed")
 	plan := domain.DeliveryPlan{ClientID: domain.ClientCodex, Scope: domain.ScopeProject,
 		InstallIntent: domain.InstallIntentAutomatic, NativeRegistryRoot: root, ActivePath: active,
+		Authentication: domain.AuthenticationNotChecked, Warnings: []string{"authentication_not_catalog_verified"},
 		TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: root, UserConfigRoot: profile},
 		Components:    []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "first", Support: domain.SupportNative}, {Kind: domain.ComponentSkill, Name: "second", Support: domain.SupportNative}},
 	}
@@ -135,7 +136,7 @@ func TestCodexProjectSkillsBecomeActiveOnlyAfterNativeDiscovery(t *testing.T) {
 				t.Fatal(err)
 			}
 			if scenario == "valid" {
-				if outcome.Activation != domain.ActivationActive || len(outcome.UserActions) != 0 || len(outcome.LocalActions) != 0 {
+				if outcome.Activation != domain.ActivationActive || outcome.Authentication != domain.AuthenticationNotRequired || len(outcome.UserActions) != 0 || len(outcome.LocalActions) != 0 {
 					t.Fatalf("native discovery did not finish installation: %+v", outcome)
 				}
 				if runner.command.Dir != request.Plan.NativeRegistryRoot || strings.Join(runner.command.Argv, " ") != request.BackendExecutable+" app-server" {
@@ -144,7 +145,7 @@ func TestCodexProjectSkillsBecomeActiveOnlyAfterNativeDiscovery(t *testing.T) {
 				if !strings.Contains(runner.written.String(), `"method":"skills/list"`) || strings.Contains(runner.written.String(), "thread/") || strings.Contains(runner.written.String(), "turn/") || strings.Contains(runner.written.String(), "config/read") || strings.Contains(runner.written.String(), "mcpServerStatus/list") {
 					t.Fatalf("unexpected native protocol: %s", &runner.written)
 				}
-			} else if outcome.Activation != domain.ActivationPrepared || len(outcome.LocalActions) == 0 {
+			} else if outcome.Activation != domain.ActivationPrepared || outcome.Authentication != domain.AuthenticationNotChecked || len(outcome.LocalActions) == 0 {
 				t.Fatalf("unproved native state was upgraded: %+v", outcome)
 			}
 		})

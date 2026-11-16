@@ -297,45 +297,6 @@ func groupFailure(target addTargetResult, kind failureKind) *installFailure {
 	return &failure
 }
 
-// retryFailedAgents offers to run the same command again for only the agents
-// that failed and a retry can help. It never runs without a person present. The
-// retried command resolves its source exactly as typing it again would and
-// repeats its normal review and confirmation.
-//
-// A retry can fix only part of a run, so the result stays an error while any
-// agent from an earlier attempt is still unresolved (not retryable, or
-// deselected): success of the last attempt alone must not turn into exit 0.
-func retryFailedAgents(cmd *cobra.Command, app App, opts *options, err error, rerun func(target string, unresolved []string) error) error {
-	if err == nil || domain.IsUnclosedClientProbe(err) || !app.Terminal || opts.format != "human" || opts.yes || opts.dryRun ||
-		opts.retryAttempt >= maxSkillsRetries || cmd.Context().Err() != nil || opts.installResult == nil {
-		return err
-	}
-	targets, askErr := askRetryTargets(cmd, app, opts, opts.installResult.Agents)
-	if askErr != nil || len(targets) == 0 {
-		return err
-	}
-	public := make([]string, len(targets))
-	selected := make(map[domain.ClientID]bool, len(targets))
-	for index, target := range targets {
-		public[index] = publicCLITargetName(domain.ClientID(target))
-		selected[domain.ClientID(target)] = true
-	}
-	pending := append([]string(nil), opts.unresolved...)
-	for _, report := range failedAgents(opts.installResult.Agents) {
-		if !selected[report.ClientID] {
-			pending = append(pending, report.Label)
-		}
-	}
-	if _, writeErr := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(targets)); writeErr != nil {
-		return writeErr
-	}
-	rerr := rerun(strings.Join(public, ","), pending)
-	if rerr == nil && len(pending) > 0 {
-		return fmt.Errorf("%s still need attention; see the technical log", strings.Join(pending, ", "))
-	}
-	return rerr
-}
-
 // recordGroupOutcome stores a plugin group's per-agent result for the retry
 // step and the technical log. The group's own table stays the visible summary.
 func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *addMultiResult, cause error) error {
