@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // maxSkillsRetries bounds the interactive retry loop. A person who keeps
@@ -44,7 +43,7 @@ func applySkillsWithRecovery(cmd *cobra.Command, app App, opts *options, prepare
 		if err == nil && len(outstanding) > 0 {
 			err = fmt.Errorf("%s still need attention; see the technical log", strings.Join(sortedValues(outstanding), ", "))
 		}
-		if err == nil || domain.IsUnclosedClientProbe(err) || !canRetry || attempt > maxSkillsRetries || cmd.Context().Err() != nil || result.Status == "succeeded" {
+		if err == nil || unclosedInstallProbe(err) || !canRetry || attempt > maxSkillsRetries || cmd.Context().Err() != nil || result.Status == "succeeded" {
 			return err
 		}
 		next, retryErr := prepareSkillsRetry(cmd, app, opts, prepared, reviewed, reportByAgent(skillsAgentItems(result.Items)))

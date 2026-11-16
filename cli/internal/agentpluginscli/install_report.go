@@ -310,7 +310,7 @@ func groupFailure(target addTargetResult, kind failureKind) *installFailure {
 // step and the technical log. The group's own table stays the visible summary.
 func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *addMultiResult, cause error) error {
 	items := groupAgentItems(combined.Plugin, combined.Targets)
-	unclosed := domain.IsUnclosedClientProbe(cause)
+	unclosed := unclosedInstallProbe(cause)
 	if unclosed {
 		// An unconfirmed process stops retries for this whole failed group.
 		// Preserve the original detail for the log before making the public

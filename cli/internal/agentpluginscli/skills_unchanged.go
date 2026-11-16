@@ -45,7 +45,7 @@ func (p *PreparedSkillsBatch) observeUnchangedSkills(ctx context.Context) (map[s
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		if errors.Is(err, installer.ErrPlanChanged) || domain.IsUnclosedClientProbe(err) {
+		if errors.Is(err, installer.ErrPlanChanged) || unclosedInstallProbe(err) {
 			return nil, errors.Join(ErrSkillsPlanStale, err)
 		}
 		if err == nil && coherent {
