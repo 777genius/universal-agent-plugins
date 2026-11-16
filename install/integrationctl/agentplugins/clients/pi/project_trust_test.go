@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -361,6 +363,54 @@ func TestPiProjectTrustRecordGrantRevokeAndRollback(t *testing.T) {
 		t.Fatal("foreign hook changed")
 	}
 	absent("foreign hook", record)
+}
+
+// Concurrent first grants into one profile all succeed and record every
+// project; a leftover atomic-write temporary never blocks grant or observe.
+func TestPiProjectTrustConcurrentGrantsAndLeftoverTemporaries(t *testing.T) {
+	root := piTrustTemp(t)
+	user := filepath.Join(root, "home", ".pi", "agent")
+	if err := os.MkdirAll(user, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	env := clients.Env{NativeConfig: nativeconfig.New()}
+	requests := make([]domain.ActivationRequest, 24)
+	for index := range requests {
+		project := filepath.Join(root, fmt.Sprintf("project-%02d", index))
+		piTrustWrite(t, filepath.Join(project, ".pi", "extensions", "owned-0123456789ab", "index.ts"), "owned\n")
+		requests[index] = piTrustRequest(t, user, project, "owned-0123456789ab", nil, nil)
+	}
+	errs := make([]error, len(requests))
+	var wait sync.WaitGroup
+	for index := range requests {
+		wait.Add(1)
+		go func() {
+			defer wait.Done()
+			errs[index] = grantPiProjectTrust(env, requests[index])
+		}()
+	}
+	wait.Wait()
+	if err := errors.Join(errs...); err != nil {
+		t.Fatal("concurrent first grants failed:", err)
+	}
+	_, _, record := piTrustHookPaths(user)
+	piTrustWrite(t, record+".tmp-12345", "partial")
+	body, err := os.ReadFile(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := decodePiTrust(nativeconfig.FileSnapshot{Body: body, Exists: true})
+	if err != nil || len(document.Projects) != len(requests) {
+		t.Fatalf("recorded %d of %d projects: %v", len(document.Projects), len(requests), err)
+	}
+	verify := requests[0]
+	verify.VerifyOnly = true
+	if recorded, err := observePiProjectTrust(env.NativeConfig, verify); err != nil || !recorded {
+		t.Fatal("leftover temporary broke observation:", err)
+	}
+	if err := grantPiProjectTrust(env, requests[1]); err != nil {
+		t.Fatal("leftover temporary broke a later grant:", err)
+	}
 }
 
 func TestPiProjectTrustHookSourceIsBoundedAndMatchesNativeLocks(t *testing.T) {

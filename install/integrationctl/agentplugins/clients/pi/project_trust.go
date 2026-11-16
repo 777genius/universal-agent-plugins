@@ -225,65 +225,51 @@ const (
 	piTrustDirRevoke
 )
 
-// checkPiTrustHookDir admits only real directories. A grant creates them, and
-// a grant or observation also requires that the hook is discoverable and that
-// its directory holds only the hook's files and their native writer locks:
-// foreign bytes there could redirect Pi's discovery, so they are refused
-// rather than adopted. Revocation needs neither and must not be blocked by
-// unrelated user extensions.
-func checkPiTrustHookDir(user string, use piTrustDirUse) error {
-	dir, entry, projects := piTrustHookPaths(user)
-	allowed := map[string]bool{}
-	for _, path := range []string{entry, projects} {
-		allowed[filepath.Base(path)] = true
-		locks, err := nativeconfig.WriterLockPaths(nativeconfig.Paths{JSON: path}, nativeconfig.CodecMCPServers)
-		if err != nil {
-			return err
-		}
-		for _, lock := range locks {
-			allowed[filepath.Base(lock)] = true
-		}
-	}
+// preparePiTrustHookDir admits only real directories for the extensions root
+// and the hook directory. A grant creates them and tolerates a concurrent
+// creator; observation and revocation report errPiTrustAbsent instead.
+func preparePiTrustHookDir(user string, use piTrustDirUse) error {
+	dir, _, _ := piTrustHookPaths(user)
 	for _, path := range []string{filepath.Dir(dir), dir} {
-		info, err := os.Lstat(path)
-		if os.IsNotExist(err) {
+		if _, err := os.Lstat(path); os.IsNotExist(err) {
 			if use != piTrustDirGrant {
 				return errPiTrustAbsent
 			}
-			if err := os.Mkdir(path, 0o700); err != nil {
+			if err := os.Mkdir(path, 0o700); err != nil && !os.IsExist(err) {
 				return err
 			}
-			continue
-		}
-		if err != nil {
+		} else if err != nil {
 			return err
 		}
-		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		if piTrustKind(path) != "directory" {
 			return fmt.Errorf("pi trust hook directory is not a real directory")
 		}
 	}
-	if use == piTrustDirRevoke {
-		return nil
-	}
+	return nil
+}
+
+// checkPiTrustHookDiscovery refuses only names that change how Pi discovers
+// the hook: a foreign entrypoint at the extensions root, or a package.json or
+// index.js beside index.ts. Writer locks and atomic-write temporaries do not
+// affect discovery and are ignored.
+func checkPiTrustHookDiscovery(user string) error {
+	dir, _, _ := piTrustHookPaths(user)
 	if err := checkDiscoveryRoot(filepath.Dir(dir)); err != nil {
 		return err
 	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	for _, found := range entries {
-		if !allowed[found.Name()] {
-			return fmt.Errorf("pi trust hook directory contains foreign %q", found.Name())
+	for _, name := range []string{"package.json", "index.js"} {
+		if piTrustKind(filepath.Join(dir, name)) != "absent" {
+			return fmt.Errorf("pi trust hook directory contains a foreign %s", name)
 		}
 	}
 	return nil
 }
 
 // updatePiTrust holds both hook files under native writer locks in one fixed
-// order, then commits the mutated record through commitPiTrust.
+// order, checks discovery under those locks, then commits the mutated record
+// through commitPiTrust.
 func updatePiTrust(kernel nativeconfig.Kernel, user string, use piTrustDirUse, mutate func(*piTrustDocument)) (err error) {
-	if err := checkPiTrustHookDir(user, use); err != nil {
+	if err := preparePiTrustHookDir(user, use); err != nil {
 		return err
 	}
 	_, entryPath, projectsPath := piTrustHookPaths(user)
@@ -297,6 +283,11 @@ func updatePiTrust(kernel nativeconfig.Kernel, user string, use piTrustDirUse, m
 		return err
 	}
 	defer func() { err = errors.Join(err, record.Close()) }()
+	if use == piTrustDirGrant {
+		if err := checkPiTrustHookDiscovery(user); err != nil {
+			return err
+		}
+	}
 	return commitPiTrust(hook, record, use == piTrustDirGrant, mutate)
 }
 
@@ -432,9 +423,12 @@ func observePiProjectTrust(kernel nativeconfig.Kernel, request domain.Activation
 	if err != nil {
 		return false, err
 	}
-	if err := checkPiTrustHookDir(user, piTrustDirObserve); errors.Is(err, errPiTrustAbsent) {
+	if err := preparePiTrustHookDir(user, piTrustDirObserve); errors.Is(err, errPiTrustAbsent) {
 		return false, nil
 	} else if err != nil {
+		return false, err
+	}
+	if err := checkPiTrustHookDiscovery(user); err != nil {
 		return false, err
 	}
 	_, entryPath, projectsPath := piTrustHookPaths(user)
