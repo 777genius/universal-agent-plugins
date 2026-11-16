@@ -43,6 +43,9 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 		_, err := copilotProjectRoot(in.Client, plan.TargetContext, plan.NativeRegistryRoot)
 		return err
 	}
+	if in.PreviousBindingRecorded {
+		return requireRecordedUserProfile(in.PreviousNativeProfileRoot, in.Client.ConfigRoot)
+	}
 	return nil
 }
 

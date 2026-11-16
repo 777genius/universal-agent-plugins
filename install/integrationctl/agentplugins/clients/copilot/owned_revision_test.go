@@ -56,3 +56,32 @@ func TestCopilotUserUpdateAcceptsInstalledOwnedRevision(t *testing.T) {
 		})
 	}
 }
+
+// Regression: with COPILOT_HOME unset after a selected-profile install, update
+// registered an untracked second copy in the default profile.
+func TestCopilotUserBindingRefusesDifferentSelectedProfile(t *testing.T) {
+	request := copilotUserLiveRequest(t)
+	recorded, other := filepath.Join(t.TempDir(), "selected"), filepath.Join(t.TempDir(), "default")
+	managed := &domain.ClientBinding{ClientID: "copilot", Scope: "user", PhysicalArtifact: request.Plan.PhysicalArtifactID,
+		TargetLocator: request.Plan.ActivePath, NativeProfileRoot: recorded}
+	runner := &copilotUserLiveRunner{t: t}
+	finding, err := New().InspectNativeRegistry(context.Background(), clients.Env{Runner: runner}, domain.DetectedClient{ClientID: domain.ClientCopilot, ConfigRoot: other}, request.Plan, managed)
+	if err == nil || finding != clients.RegistryIndeterminate || runner.calls != 0 {
+		t.Fatalf("different profile admitted: finding=%v err=%v calls=%d", finding, err, runner.calls)
+	}
+	plan := domain.DeliveryPlan{ClientID: domain.ClientCopilot, Scope: domain.ScopeUser}
+	for _, test := range []struct {
+		name     string
+		input    clients.PlanInput
+		admitted bool
+	}{
+		{"fresh install", clients.PlanInput{Client: domain.DetectedClient{ConfigRoot: other}}, true},
+		{"legacy binding", clients.PlanInput{Client: domain.DetectedClient{ConfigRoot: other}, PreviousBindingRecorded: true}, true},
+		{"recorded profile", clients.PlanInput{Client: domain.DetectedClient{ConfigRoot: recorded}, PreviousBindingRecorded: true, PreviousNativeProfileRoot: recorded}, true},
+		{"other profile", clients.PlanInput{Client: domain.DetectedClient{ConfigRoot: other}, PreviousBindingRecorded: true, PreviousNativeProfileRoot: recorded}, false},
+	} {
+		if err := New().CheckPlanPrecondition(test.input, &plan); (err == nil) != test.admitted {
+			t.Fatalf("%s: err=%v", test.name, err)
+		}
+	}
+}
