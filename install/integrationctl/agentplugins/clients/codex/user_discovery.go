@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -57,8 +59,18 @@ func pendingCodexUserDiscovery(outcome domain.ActivationOutcome, err error) (dom
 		outcome.NativeEffect = domain.NativeEffectUncertain
 		return outcome, err
 	}
-	outcome.LocalActions = append(outcome.LocalActions, "Codex registered the plugin but native component readiness is unconfirmed: "+err.Error())
+	outcome.LocalActions = append(outcome.LocalActions, "Codex registered the plugin but native component readiness is unconfirmed: "+codexDiscoveryReason(err))
 	return outcome, nil
+}
+
+// codexDiscoveryReason keeps the human next action on one readable line. The
+// runner joins every cleanup cause, so a timeout otherwise prints a multi-line
+// chain of repeated deadline errors and kill signals.
+func codexDiscoveryReason(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Sprintf("Codex did not finish native discovery within %s; start a new Codex session and check the plugin's skills and MCP servers", codexProjectDiscoveryTimeout)
+	}
+	return strings.Join(strings.Fields(err.Error()), " ")
 }
 
 func exchangeCodexUserDiscovery(stdin io.Writer, stdout io.Reader, request domain.ActivationRequest, version string) error {
@@ -93,8 +105,8 @@ func verifyCodexUserSkills(listing map[string]any, request domain.ActivationRequ
 	if !ok || !codexDiscoveryPathMatches(group["cwd"], request.Delivery.ActivePath) {
 		return fmt.Errorf("codex returned another user plugin context")
 	}
-	errors, ok := group["errors"].([]any)
-	if !ok || len(errors) != 0 {
+	skillErrors, ok := group["errors"].([]any)
+	if !ok || len(skillErrors) != 0 {
 		return fmt.Errorf("codex reported user plugin skill errors")
 	}
 	skills, ok := group["skills"].([]any)

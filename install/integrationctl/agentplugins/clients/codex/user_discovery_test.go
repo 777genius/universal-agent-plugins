@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -104,5 +105,29 @@ func TestCodexCacheVersionComesFromExactNativeSource(t *testing.T) {
 				t.Fatalf("version=%q err=%v", version, err)
 			}
 		})
+	}
+}
+
+// A discovery timeout used to reach the human "Next:" line as the runner's raw
+// joined error chain: several lines of repeated deadline causes and signals.
+func TestCodexPendingUserDiscoveryReasonIsOneReadableLine(t *testing.T) {
+	timeout := errors.Join(errors.New("codex discovery ended or exceeded its response bound"), context.DeadlineExceeded,
+		context.DeadlineExceeded, errors.New("duplex process required forced supervised cleanup after its exit grace\nsignal: killed"))
+	other := errors.Join(errors.New("codex returned another user plugin context"), errors.New("second\tcause"))
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{err: timeout, want: "did not finish native discovery within " + codexProjectDiscoveryTimeout.String()},
+		{err: other, want: "codex returned another user plugin context second cause"},
+	} {
+		outcome, err := pendingCodexUserDiscovery(domain.ActivationOutcome{}, tc.err)
+		if err != nil || len(outcome.LocalActions) != 1 || outcome.Activation != domain.ActivationPrepared {
+			t.Fatalf("pending discovery outcome=%+v err=%v", outcome, err)
+		}
+		action := outcome.LocalActions[0]
+		if strings.ContainsAny(action, "\n\r\t") || !strings.Contains(action, tc.want) || strings.Count(action, "deadline exceeded") > 0 {
+			t.Fatalf("unreadable pending discovery action %q, want %q", action, tc.want)
+		}
 	}
 }
