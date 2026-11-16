@@ -69,7 +69,10 @@ func applySkillsWithRecovery(cmd *cobra.Command, app App, opts *options, prepare
 // reviewed plan is shown and confirmed first.
 func prepareSkillsRetry(cmd *cobra.Command, app App, opts *options, original *PreparedSkillsBatch, reviewed []SkillsAction, reports []agentReport) (*PreparedSkillsBatch, error) {
 	targets, err := askRetryTargets(cmd, app, opts, reports)
-	if err != nil || len(targets) == 0 {
+	if err != nil {
+		return nil, err
+	}
+	if len(targets) == 0 {
 		return nil, nil
 	}
 	next, err := app.PrepareSkills(cmd.Context(), SkillsBatchRequest{Selections: original.selections, TargetIDs: targets})
