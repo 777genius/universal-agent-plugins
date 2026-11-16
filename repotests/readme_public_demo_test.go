@@ -97,7 +97,7 @@ func TestREADMEImagesAreWebPOrSVG(t *testing.T) {
 		reference := match[1] + match[2]
 		found++
 		path := strings.SplitN(strings.SplitN(reference, "#", 2)[0], "?", 2)[0]
-		if strings.Contains(reference, "user-attachments") || !(strings.HasSuffix(path, ".webp") || strings.HasSuffix(path, ".svg")) {
+		if strings.Contains(reference, "user-attachments") || (!strings.HasSuffix(path, ".webp") && !strings.HasSuffix(path, ".svg")) {
 			t.Errorf("README image %q must be a local WebP or SVG file", reference)
 		}
 	}
