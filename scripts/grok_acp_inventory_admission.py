@@ -165,8 +165,14 @@ def session_available_commands(value, state, req):
     count = closed(meta['updateParams'], 'commandsCount')['commandsCount']
     require(type(count) is int and count == len(SESSION_COMMAND_NAMES), 'available-command-count')
     if previous:
-        # Original 14217126006 repeats this catalog once with only eventId -1.
-        require(params == dict(previous[0], _meta=dict(previous[0]['_meta'], eventId=sid + '-1')),
+        # Grok 1.0.70 also advances agentTimestampMs by 1 ms in artifact
+        # 14275931080. Permit only a bounded monotonic clock advance;
+        # every other catalog, identity and metadata field stays exact.
+        prior_meta = previous[0]['_meta']
+        advance_ms = meta['agentTimestampMs'] - prior_meta['agentTimestampMs']
+        require(0 <= advance_ms <= 1000
+                and params == dict(previous[0], _meta=dict(prior_meta, eventId=sid + '-1',
+                                                            agentTimestampMs=meta['agentTimestampMs'])),
                 'available-command-repeat')
     for item in state['notifications']:
         if item['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized'):

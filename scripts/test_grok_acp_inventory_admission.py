@@ -1539,8 +1539,28 @@ class SessionOnlyContracts(unittest.TestCase):
         self.assertEqual(case.session_readout(members,packet,time.monotonic()+2),
                          dict(schema_version=1,mode=case.SESSION_MODE,reason='readout-refused'))
 
+    def test_measured_catalog_allows_only_bounded_clock_advance_not_native_admission(self):
+        for delta in (1, 1000):
+            prefix,req,first,second=self.repeated_catalog_fixture()
+            second['params']['_meta']['agentTimestampMs']+=delta
+            sid=first['params']['sessionId']
+            reply={'jsonrpc':'2.0','id':2,'result':{'sessionId':sid}}
+            listing={'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}}
+            with self.subTest(delta=delta):
+                record,state=self.repeated_catalog_command(prefix,req,(first,second),(reply,listing))
+                self.assertIsNone(record['error'])
+                self.assertEqual(state['notifications'],prefix['notifications']+[first,second])
+                self.assertEqual(state['session'],reply)
+                self.assertEqual(state['plugins'],listing)
+                record,state=self.repeated_catalog_command(prefix,req,(first,second),())
+                self.assertEqual(record['error'],'protocol-refused')
+                self.assertEqual(state['notifications'],prefix['notifications']+[first,second])
+                self.assertIsNone(state['session'])
+                self.assertIsNone(state['plugins'])
+
     def test_second_catalog_rejects_replay_third_mutation_and_foreign_identity(self):
-        changes=('first-missing','replay','skipped','third','foreign-session','foreign-event','timestamp',
+        changes=('first-missing','replay','skipped','third','foreign-session','foreign-event',
+                 'timestamp-regression','timestamp-jump','timestamp-bool','timestamp-float',
                  'tokens','description','hint','workflow-path','tool-order','unknown-field','after-inventory','wrong-mode')
         for change in changes:
             state,req,first,second=self.repeated_catalog_fixture();sent=[];sid=first['params']['sessionId']
@@ -1553,7 +1573,10 @@ class SessionOnlyContracts(unittest.TestCase):
             elif change=='foreign-session':
                 second['params']['sessionId']='foreign';second['params']['_meta']['eventId']='foreign-1'
             elif change=='foreign-event':second['params']['_meta']['eventId']='foreign-1'
-            elif change=='timestamp':second['params']['_meta']['agentTimestampMs']+=1
+            elif change=='timestamp-regression':second['params']['_meta']['agentTimestampMs']-=1
+            elif change=='timestamp-jump':second['params']['_meta']['agentTimestampMs']+=1001
+            elif change=='timestamp-bool':second['params']['_meta']['agentTimestampMs']=True
+            elif change=='timestamp-float':second['params']['_meta']['agentTimestampMs']+=0.5
             elif change=='tokens':second['params']['_meta']['totalTokens']+=1
             elif change=='description':second['params']['update']['availableCommands'][0]['description']='changed'
             elif change=='hint':second['params']['update']['availableCommands'][1]['input']['hint']='changed'
