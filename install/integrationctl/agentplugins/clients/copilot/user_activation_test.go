@@ -215,6 +215,7 @@ func TestSharedCopilotRemovalUnclosedProcessDoesNotContinue(t *testing.T) {
 		})
 	}
 }
+
 // A closed install failure may begin rollback, but a rollback command whose
 // child remains unclosed must be reported as uncertain, not as a safe retry.
 func TestCopilotUserUnclosedRollbackPreservesUncertainOutcome(t *testing.T) {
