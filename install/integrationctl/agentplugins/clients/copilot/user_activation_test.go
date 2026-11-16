@@ -2,6 +2,7 @@ package copilot
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -24,7 +25,7 @@ func copilotUserActivationSteps(request domain.ActivationRequest, steps ...copil
 }
 
 func failedStep(argv ...string) copilotUserLiveStep {
-	return copilotUserLiveStep{argv: argv, result: legacyports.CommandResult{ExitCode: 1, Stderr: []byte("failed")}}
+	return copilotUserLiveStep{argv: argv, result: legacyports.CommandResult{ExitCode: 1, Stderr: []byte("failed"), CleanupComplete: true}}
 }
 
 // Regression: a retry after a failed first `plugin install` replaces the
@@ -68,5 +69,55 @@ func TestCopilotUserReplacementInstallFailureKeepsMarketplace(t *testing.T) {
 	outcome, err := New().Activate(context.Background(), clients.Env{Runner: runner}, request)
 	if err == nil || outcome.Activation != domain.ActivationFailed || runner.calls != len(runner.steps) {
 		t.Fatalf("outcome=%+v err=%v calls=%d", outcome, err, runner.calls)
+	}
+}
+
+
+// A client command whose process closure was not proved must never be
+// followed by a marketplace fallback, another install, or rollback cleanup.
+// Both typed process-closure errors and a raw runner cleanup failure are
+// admissible evidence of an unclosed child.
+func TestCopilotUserUnclosedCommandStopsNativeFollowups(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		replacing bool
+		install   bool
+	}{
+		{name: "initial registration"},
+		{name: "replacement refresh", replacing: true},
+		{name: "initial plugin install", install: true},
+		{name: "replacement plugin install", replacing: true, install: true},
+	} {
+		for _, typed := range []bool{false, true} {
+			name := tc.name + "/raw"
+			if typed {
+				name = tc.name + "/typed"
+			}
+			t.Run(name, func(t *testing.T) {
+				request := copilotUserActivationRequest(t, tc.replacing)
+				exe, marketplace := request.BackendExecutable, copilotUserLiveExpectedMarketplace(request.Plan.PhysicalArtifactID)
+				first := []string{exe, "plugin", "marketplace", "add", request.Delivery.ActivePath}
+				if tc.replacing {
+					first = []string{exe, "plugin", "marketplace", "update", marketplace}
+				}
+				steps := []copilotUserLiveStep{}
+				failed := first
+				if tc.install {
+					steps = append(steps, copilotUserLiveStep{argv: first, result: legacyports.CommandResult{CleanupComplete: true}})
+					failed = []string{exe, "plugin", "install", request.DeclaredName + "@" + marketplace}
+				}
+				cause := errors.New("native process closure is unproved")
+				var failure error = cause
+				if typed {
+					failure = &legacyports.ProcessClosureError{Cause: cause}
+				}
+				steps = append(steps, copilotUserLiveStep{argv: failed, err: failure})
+				runner := &copilotUserLiveRunner{t: t, steps: steps}
+				outcome, err := New().Activate(context.Background(), clients.Env{Runner: runner}, request)
+				if !domain.IsUnclosedClientProbe(err) || !errors.Is(err, cause) || outcome.NativeEffect != domain.NativeEffectUncertain || outcome.Activation != domain.ActivationFailed || runner.calls != len(steps) {
+					t.Fatalf("unclosed native command not held: outcome=%+v err=%v calls=%d expected=%d", outcome, err, runner.calls, len(steps))
+				}
+			})
+		}
 	}
 }
