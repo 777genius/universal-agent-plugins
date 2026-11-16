@@ -107,6 +107,10 @@ func completeCodexActivation(ctx context.Context, env clients.Env, request domai
 		}
 		return outcome, nil
 	}
+	if domain.IsUnclosedClientProbe(err) {
+		outcome.NativeEffect = domain.NativeEffectUncertain
+		return outcome, err
+	}
 	if errors.Is(err, ErrListContractUnknown) {
 		return manualCodexVerification(outcome, request), nil
 	}
@@ -124,8 +128,11 @@ func activateCodexPlugin(ctx context.Context, env clients.Env, request domain.Ac
 	}
 	pluginSpec := request.DeclaredName + "@" + marketplace
 	if _, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "add", pluginSpec, "--json"); err != nil {
-		if !request.Replacing {
-			_, _ = runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "marketplace", "remove", marketplace, "--json")
+		if !request.Replacing && !domain.IsUnclosedClientProbe(err) {
+			_, cleanupErr := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "marketplace", "remove", marketplace, "--json")
+			if domain.IsUnclosedClientProbe(cleanupErr) {
+				return fmt.Errorf("activate Codex plugin: %w; rollback: %w", err, cleanupErr)
+			}
 		}
 		return fmt.Errorf("activate Codex plugin: %w", err)
 	}
@@ -135,6 +142,9 @@ func activateCodexPlugin(ctx context.Context, env clients.Env, request domain.Ac
 func registerCodexMarketplace(ctx context.Context, env clients.Env, request domain.ActivationRequest, marketplace string) error {
 	if request.Replacing {
 		if _, err := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "marketplace", "update", marketplace, "--json"); err != nil {
+			if domain.IsUnclosedClientProbe(err) {
+				return err
+			}
 			if _, fallbackErr := runCodex(ctx, env, request.Client.ConfigRoot, request.BackendExecutable, "plugin", "marketplace", "add", request.Delivery.ActivePath, "--json"); fallbackErr != nil {
 				return fmt.Errorf("refresh Codex marketplace: %w; fallback registration: %w", err, fallbackErr)
 			}
