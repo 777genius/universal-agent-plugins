@@ -758,7 +758,8 @@ def session_config_body(nonce):
             '[models]\ndefault = "uap-local-driver"\nsession_summary = "uap-local-driver"\nprompt_suggestion = "uap-local-driver"\n'
             '[endpoints]\nmodels_base_url = "' + url + '"\n'
             '[model.uap-local-driver]\nmodel = "uap-local-driver"\nbase_url = "' + url + '"\n'
-            'api_backend = "chat_completions"\napi_key = "uap-inert-local-driver"\ncontext_window = 64000\n')
+            'api_backend = "chat_completions"\napi_key = "uap-inert-local-driver"\ncontext_window = 64000\n'
+            '\n[marketplace]\ndefault_skills_installs_purged = true\n')
     return text.encode()
 
 

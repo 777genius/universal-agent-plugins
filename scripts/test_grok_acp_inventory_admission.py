@@ -1823,6 +1823,11 @@ class SessionOnlyContracts(unittest.TestCase):
         self.assertEqual(events[-1],('/usr/bin/setpriv',['/usr/bin/setpriv','--no-new-privs'],{'PATH':'/usr/bin:/bin','LANG':'C.UTF-8'}))
 
     def test_session_config_precedes_only_baseline_and_measurement_never_reads_unknown_bodies(self):
+        # Exact captured postimage from artifact14275931080: author the measured
+        # bootstrap marker before the original-state baseline, never accept it later.
+        measured=case.session_config_body('3af5220b87c7d858b22beabc89d1f5bb')
+        self.assertEqual(len(measured),458)
+        self.assertEqual(case.digest(measured),'5761335114f82cfdb2936c083514ac446b5433ce98aeb2fe003b395d6dc41c8b')
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary).resolve();(root/'home/.grok').mkdir(parents=True)
             case.session_fixture_config(root,'c'*32)
