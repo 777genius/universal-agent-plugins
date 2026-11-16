@@ -163,10 +163,17 @@ func TestPiProjectTrustHookAnswersOnlyForOwnedUnchangedProjects(t *testing.T) {
 	restore := func(path, body string) func() { return func() { piTrustWrite(t, path, body) } }
 	write := func(path, body string) func() bool { return func() bool { piTrustWrite(t, path, body); return true } }
 	drop := func(path string) func() bool { return func() bool { return os.RemoveAll(path) == nil } }
-	// Link creation can need privileges (Windows symlinks); skip only that case.
-	link := func(add func(string, string) error, name string) func() bool {
-		return func() bool { return add(filepath.Join(skill, "SKILL.md"), filepath.Join(skill, name)) == nil }
+	// Replace the existing owned SKILL.md by a link to identical bytes, so only
+	// the link checks can refuse it. Link creation can need privileges
+	// (Windows symlinks); skip only that case.
+	skillFile := filepath.Join(skill, "SKILL.md")
+	skillBody := "---\nname: owned\ndescription: d\n---\n"
+	identical := filepath.Join(root, "identical-skill.md")
+	piTrustWrite(t, identical, skillBody)
+	link := func(add func(string, string) error) func() bool {
+		return func() bool { return os.Remove(skillFile) == nil && add(identical, skillFile) == nil }
 	}
+	unlink := func() { _ = os.Remove(skillFile); piTrustWrite(t, skillFile, skillBody) }
 	harmless := filepath.Join(root, "harmless.json")
 	piTrustWrite(t, harmless, "{}\n")
 	symlink := func(path string) func() bool { return func() bool { return os.Symlink(harmless, path) == nil } }
@@ -183,8 +190,8 @@ func TestPiProjectTrustHookAnswersOnlyForOwnedUnchangedProjects(t *testing.T) {
 		{"extra file in owned skill", write(filepath.Join(skill, "extra.md"), "x\n"), remove(filepath.Join(skill, "extra.md"))},
 		{"missing file in owned skill", drop(filepath.Join(skill, "références")), restore(filepath.Join(skill, "références", "ü.md"), "unicode\n")},
 		{"same-name MCP command", write(filepath.Join(config, "mcp.json"), strings.Replace(ownedMCP, `"command":"node"`, `"command":"sh"`, 1)), restore(filepath.Join(config, "mcp.json"), ownedMCP)},
-		{"symlink inside owned skill", link(os.Symlink, "linked.md"), remove(filepath.Join(skill, "linked.md"))},
-		{"hardlink inside owned skill", link(os.Link, "hard.md"), remove(filepath.Join(skill, "hard.md"))},
+		{"owned file replaced by symlink to identical bytes", link(os.Symlink), unlink},
+		{"owned file replaced by hardlink to identical bytes", link(os.Link), unlink},
 		{"project settings", write(filepath.Join(config, "settings.json"), "{}\n"), remove(filepath.Join(config, "settings.json"))},
 		{"ancestor .agents skills", write(filepath.Join(work, ".agents", "skills", "x", "SKILL.md"), "x\n"), remove(filepath.Join(work, ".agents"))},
 		{"saved Pi decision", write(filepath.Join(user, "trust.json"), `{"`+filepath.ToSlash(project)+`":false}`), remove(filepath.Join(user, "trust.json"))},
