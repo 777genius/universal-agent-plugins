@@ -152,7 +152,7 @@ func verifyCodexPlugin(ctx context.Context, env clients.Env, request domain.Acti
 	pluginSpec := request.DeclaredName + "@" + marketplace
 	listed, err := runCodexPluginList(ctx, env, request.Client.ConfigRoot, request.BackendExecutable)
 	if err != nil {
-		return fmt.Errorf("verify Codex plugin listing: %w", err)
+		return fmt.Errorf("verify Codex plugin listing: %w", shared.CompletionProbeFailure(err))
 	}
 	switch PluginStatusFromList(listed.Stdout, request.DeclaredName, marketplace) {
 	case StatusInstalled:

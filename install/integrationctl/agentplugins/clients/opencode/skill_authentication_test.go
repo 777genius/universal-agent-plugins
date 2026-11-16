@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -169,11 +170,11 @@ func TestObservedOpenCodeSkillAuthenticationRequiresFullOwnedProof(t *testing.T)
 }
 
 // Native Skill.all() can return the owned row after effective policy or a
-// same-name external Skill changed. Owned bytes alone cannot qualify that row.
+// discovery source changed. Owned bytes alone cannot qualify that earlier row.
 func TestObservedOpenCodeSkillsRecheckLatePolicyAndAliases(t *testing.T) {
 	for _, test := range []struct {
-		name, config, alias string
-		allow               bool
+		name, initial, config, alias string
+		allow, discoveryPath         bool
 	}{
 		{name: "unchanged", allow: true},
 		{name: "benign_config_change", config: `{"default_agent":"build","agent":{},"mode":{}}`, allow: true},
@@ -182,6 +183,23 @@ func TestObservedOpenCodeSkillsRecheckLatePolicyAndAliases(t *testing.T) {
 		{name: "late_mode_tools", config: `{"mode":{"build":{"tools":{"skill":false}}}}`},
 		{name: "late_agents_alias", alias: ".agents"},
 		{name: "late_claude_alias", alias: ".claude"},
+		{name: "unchanged_sources", initial: `{"skills":{"paths":["one","two"],"urls":["https://example.invalid/a","https://example.invalid/b"]}}`, allow: true},
+		{name: "equivalent_empty_sources", config: `{"skills":{"paths":[],"urls":[]}}`, allow: true},
+		{name: "source_object_key_order", initial: `{"skills":{"paths":["one"],"urls":["https://example.invalid/a"]}}`,
+			config: `{ "default_agent": "build", "skills": { "urls": ["https://example.invalid/a"], "paths": ["one"] } }`, allow: true},
+		{name: "late_configured_path", config: `{"skills":{"paths":["FOREIGN_ROOT"]}}`, discoveryPath: true},
+		{name: "late_changed_path", initial: `{"skills":{"paths":["one"]}}`, config: `{"skills":{"paths":["FOREIGN_ROOT"]}}`, discoveryPath: true},
+		{name: "late_removed_path", initial: `{"skills":{"paths":["one"]}}`, config: `{}`},
+		{name: "late_reordered_paths", initial: `{"skills":{"paths":["one","two"]}}`, config: `{"skills":{"paths":["two","one"]}}`},
+		{name: "late_url", config: `{"skills":{"urls":["https://example.invalid/a"]}}`},
+		{name: "late_changed_url", initial: `{"skills":{"urls":["https://example.invalid/a"]}}`, config: `{"skills":{"urls":["https://example.invalid/b"]}}`},
+		{name: "late_removed_url", initial: `{"skills":{"urls":["https://example.invalid/a"]}}`, config: `{}`},
+		{name: "late_reordered_urls", initial: `{"skills":{"urls":["https://example.invalid/a","https://example.invalid/b"]}}`,
+			config: `{"skills":{"urls":["https://example.invalid/b","https://example.invalid/a"]}}`},
+		{name: "unrecognized_sources", initial: `{"skills":[]}`},
+		{name: "null_source_list", config: `{"skills":{"paths":null}}`},
+		{name: "non_string_source", config: `{"skills":{"urls":[false]}}`},
+		{name: "ambiguous_source_keys", config: `{"skills":{"paths":["one"],"paths":[]}}`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			request, env, outcome := observedOpenCodeSkillFixture(t)
@@ -194,7 +212,16 @@ func TestObservedOpenCodeSkillsRecheckLatePolicyAndAliases(t *testing.T) {
 			if err := os.MkdirAll(request.Client.ConfigRoot, 0700); err != nil {
 				t.Fatal(err)
 			}
-			initialConfig := `{"agent":{},"mode":{}}`
+			initialConfig := test.initial
+			if initialConfig == "" {
+				initialConfig = `{"agent":{},"mode":{}}`
+			}
+			foreignRoot := filepath.Join(request.Plan.NativeRegistryRoot, "late-external-skills")
+			quotedRoot, err := json.Marshal(foreignRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			config := strings.ReplaceAll(test.config, `"FOREIGN_ROOT"`, string(quotedRoot))
 			if err := os.WriteFile(configPath, []byte(initialConfig), 0600); err != nil {
 				t.Fatal(err)
 			}
@@ -229,13 +256,16 @@ func TestObservedOpenCodeSkillsRecheckLatePolicyAndAliases(t *testing.T) {
 				if !slices.Equal(command.Argv[1:], []string{"debug", "skill"}) {
 					t.Fatalf("pure Skill observation started another command: %v", command.Argv)
 				}
-				if test.config != "" {
-					if err := os.WriteFile(configPath, []byte(test.config), 0600); err != nil {
+				if config != "" {
+					if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
 						t.Fatal(err)
 					}
 				}
-				if test.alias != "" {
-					aliasPath = filepath.Join(request.Plan.NativeRegistryRoot, test.alias, "skills", "probe", "SKILL.md")
+				if test.alias != "" || test.discoveryPath {
+					aliasPath = filepath.Join(foreignRoot, "probe", "SKILL.md")
+					if test.alias != "" {
+						aliasPath = filepath.Join(request.Plan.NativeRegistryRoot, test.alias, "skills", "probe", "SKILL.md")
+					}
 					if err := os.MkdirAll(filepath.Dir(aliasPath), 0700); err != nil {
 						t.Fatal(err)
 					}
@@ -251,13 +281,13 @@ func TestObservedOpenCodeSkillsRecheckLatePolicyAndAliases(t *testing.T) {
 				t.Fatalf("native observation changed owned Skill bytes or receipts: %v", digestErr)
 			}
 			wantConfig := initialConfig
-			if test.config != "" {
-				wantConfig = test.config
+			if config != "" {
+				wantConfig = config
 			}
 			if body, readErr := os.ReadFile(configPath); readErr != nil || string(body) != wantConfig {
 				t.Fatalf("native observation changed external policy: %v", readErr)
 			}
-			if test.alias != "" {
+			if test.alias != "" || test.discoveryPath {
 				if body, readErr := os.ReadFile(aliasPath); readErr != nil || string(body) != string(foreign) {
 					t.Fatalf("late external alias was not preserved: %v", readErr)
 				}

@@ -192,10 +192,50 @@ func openCodeCatalogsObserved(ctx context.Context, env clients.Env, request doma
 	if len(skills) > 0 {
 		// Skill.all() does not filter effective permission policy. Recheck it
 		// after the catalog under the same bounded observation context.
-		config, ok, err = run("debug", "config")
-		return ok && openCodeSkillPermissionsUnrestricted(config), false, err
+		fresh, ok, err := run("debug", "config")
+		return ok && openCodeSkillObservationAllowed(config, fresh), false, err
 	}
 	return true, false, nil
+}
+
+// The current policy must allow Skills, and the ordered discovery sources must
+// still describe the catalog that was observed before this final config read.
+func openCodeSkillObservationAllowed(before, after []byte) bool {
+	if !openCodeSkillPermissionsUnrestricted(after) {
+		return false
+	}
+	previous, beforeOK := openCodeSkillSources(before)
+	current, afterOK := openCodeSkillSources(after)
+	return beforeOK && afterOK && slices.Equal(previous["paths"], current["paths"]) &&
+		slices.Equal(previous["urls"], current["urls"])
+}
+
+func openCodeSkillSources(body []byte) (map[string][]string, bool) {
+	config, err := shared.DecodeStrictJSONObject(body)
+	if err != nil {
+		return nil, false
+	}
+	value, present := config["skills"]
+	if !present {
+		return nil, true
+	}
+	skills, ok := value.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	sources := make(map[string][]string, 2)
+	for _, key := range []string{"paths", "urls"} {
+		value, present := skills[key]
+		if !present {
+			continue
+		}
+		items, err := openCodeStrings(value)
+		if value == nil || err != nil {
+			return nil, false
+		}
+		sources[key] = items
+	}
+	return sources, true
 }
 
 func openCodeSkillPermissionsUnrestricted(body []byte) bool {

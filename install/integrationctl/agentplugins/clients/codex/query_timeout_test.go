@@ -16,13 +16,14 @@ import (
 )
 
 type codexQueryDeadlineRunner struct {
-	t        *testing.T
-	deadline time.Time
-	listing  []byte
-	failure  error
-	cancel   context.CancelFunc
-	wait     bool
-	calls    int
+	t               *testing.T
+	deadline        time.Time
+	listing         []byte
+	failure         error
+	cleanupComplete bool
+	cancel          context.CancelFunc
+	wait            bool
+	calls           int
 }
 
 func (runner *codexQueryDeadlineRunner) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
@@ -49,7 +50,7 @@ func (runner *codexQueryDeadlineRunner) Run(ctx context.Context, command legacyp
 		<-ctx.Done()
 		return legacyports.CommandResult{CleanupComplete: true}, ctx.Err()
 	}
-	return legacyports.CommandResult{Stdout: runner.listing, CleanupComplete: runner.failure == nil}, runner.failure
+	return legacyports.CommandResult{Stdout: runner.listing, CleanupComplete: runner.failure == nil || runner.cleanupComplete}, runner.failure
 }
 
 func codexQueryDeadlineFixture(t *testing.T) (domain.ActivationRequest, []byte) {
@@ -98,7 +99,7 @@ func TestCodexPluginQueriesHaveFiniteDeadline(t *testing.T) {
 	for _, kind := range []string{"verification", "cache version", "removal"} {
 		t.Run(kind, func(t *testing.T) {
 			request, _ := codexQueryDeadlineFixture(t)
-			runner := &codexQueryDeadlineRunner{t: t, failure: context.DeadlineExceeded}
+			runner := &codexQueryDeadlineRunner{t: t, failure: context.DeadlineExceeded, cleanupComplete: true}
 			env := clients.Env{Runner: runner}
 			outcome, err := invokeCodexQuery(context.Background(), kind, env, request)
 			if runner.calls != 1 || !errors.Is(err, context.DeadlineExceeded) || outcome.Activation == domain.ActivationActive {
@@ -149,6 +150,32 @@ func TestCodexPluginQueryPreservesClosureFailure(t *testing.T) {
 			var got *legacyports.ProcessClosureError
 			if !errors.As(err, &got) || got != closure || !errors.Is(err, cause) || outcome.Activation == domain.ActivationActive || runner.calls != 1 {
 				t.Fatalf("query lost closure failure: calls=%d outcome=%+v err=%v", runner.calls, outcome, err)
+			}
+			if !domain.IsUnclosedClientProbe(err) {
+				t.Fatalf("query lost unsafe process marker: %v", err)
+			}
+		})
+	}
+}
+
+func TestCodexPluginQueryClosedFailuresStayOrdinary(t *testing.T) {
+	for _, kind := range []string{"verification", "cache version", "removal"} {
+		t.Run(kind, func(t *testing.T) {
+			for _, test := range []struct {
+				name string
+				err  error
+			}{
+				{name: "ordinary error", err: errors.New("native listing failed after cleanup")},
+				{name: "deadline", err: context.DeadlineExceeded},
+			} {
+				t.Run(test.name, func(t *testing.T) {
+					request, listing := codexQueryDeadlineFixture(t)
+					runner := &codexQueryDeadlineRunner{t: t, listing: listing, failure: test.err, cleanupComplete: true}
+					outcome, err := invokeCodexQuery(context.Background(), kind, clients.Env{Runner: runner}, request)
+					if runner.calls != 1 || !errors.Is(err, test.err) || outcome.Activation == domain.ActivationActive || domain.IsUnclosedClientProbe(err) {
+						t.Fatalf("closed failure lost its ordinary cause: calls=%d outcome=%+v err=%v", runner.calls, outcome, err)
+					}
+				})
 			}
 		})
 	}
