@@ -59,6 +59,7 @@ func TestSkillsFailureIsIsolatedExplainedLoggedAndRetriedPerAgent(t *testing.T) 
 	plan.request.detected[domain.ClientCodex] = broken
 
 	var offered []string
+	confirms := 0
 	app := withInstallLogDir(j.cli.app)
 	app.Prompter = fakePrompter{
 		selectFn: func(r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
@@ -67,15 +68,19 @@ func TestSkillsFailureIsIsolatedExplainedLoggedAndRetriedPerAgent(t *testing.T) 
 			}
 			return prompt.TargetSelectionResult{IDs: r.DefaultIDs}, nil
 		},
-		confirmFn: func() (prompt.ConfirmationResult, error) { return prompt.ConfirmationResult{Accepted: true}, nil },
+		confirmFn: func() (prompt.ConfirmationResult, error) {
+			confirms++
+			return prompt.ConfirmationResult{Accepted: true}, nil
+		},
 	}
 	cmd, out, errOut := retryTestCommand(t)
 	if err := applySkillsWithRecovery(cmd, app, &options{format: "human", scope: "user"}, plan, true); err != nil {
 		t.Fatalf("the retry should have completed the installation: %v\n%s", err, out.String())
 	}
 
-	if strings.Join(offered, ",") != "codex" {
-		t.Fatalf("only the failed agent may be offered for retry, got %v", offered)
+	// One failed agent is offered as a plain yes/no, never as a one-item list.
+	if confirms != 1 || len(offered) != 0 {
+		t.Fatalf("the single failed agent must be offered with one confirmation: confirms=%d offered=%v", confirms, offered)
 	}
 	text := out.String()
 	for _, want := range []string{"Needs attention", "Codex", "could not be verified", "Skills installation succeeded"} {
@@ -146,7 +151,10 @@ func TestSkillsFailureWithoutAPersonDoesNotPromptButStillExplains(t *testing.T) 
 
 func retryAppAndOptions(t *testing.T, offered *[]string) (App, *options) {
 	t.Helper()
-	app := App{Terminal: true, Prompter: fakePrompter{selectFn: func(r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+	app := App{Terminal: true, Prompter: fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+		*offered = append(*offered, "codex")
+		return prompt.ConfirmationResult{Accepted: true}, nil
+	}, selectFn: func(r prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
 		for _, choice := range r.Choices {
 			*offered = append(*offered, string(choice.ID))
 		}
@@ -215,12 +223,96 @@ func TestAddRetryNeverPromptsWithoutAPersonOrAfterTheLimit(t *testing.T) {
 func TestAddRetryCancelKeepsTheOriginalError(t *testing.T) {
 	var offered []string
 	app, opts := retryAppAndOptions(t, &offered)
-	app.Prompter = fakePrompter{selectFn: func(prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
-		return prompt.TargetSelectionResult{}, prompt.ErrPromptCanceled
+	app.Prompter = fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+		return prompt.ConfirmationResult{}, prompt.ErrPromptCanceled
 	}}
 	cmd, _, _ := retryTestCommand(t)
 	boom := errors.New("failed")
 	if err := retryFailedAgents(cmd, app, opts, boom, func(string, []string) error { t.Fatal("must not rerun"); return nil }); !errors.Is(err, boom) {
 		t.Fatalf("declining the retry must keep the failure: %v", err)
+	}
+}
+
+// A failed one-agent add must reach the same retry step as a group: it records
+// a per-agent result, writes the technical log and offers a plain yes/no.
+func TestSingleAgentAddFailureIsRecordedLoggedAndRetried(t *testing.T) {
+	cmd, _, errOut := retryTestCommand(t)
+	app := App{Terminal: true, InstallLogDir: filepath.Join(t.TempDir(), "logs")}
+	var asked []string
+	app.Prompter = fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+		asked = append(asked, "retry")
+		return prompt.ConfirmationResult{Accepted: true}, nil
+	}}
+	opts := &options{format: "human"}
+	boom := installer.ErrTargetFactsUnavailable
+	app.recordSingleAdd(cmd, opts, domain.ClientCodex, "demo", boom)
+	if opts.installResult == nil || len(opts.installResult.failedAgents()) != 1 || opts.installResult.LogFile == "" {
+		t.Fatalf("failure not recorded: %+v", opts.installResult)
+	}
+	if !strings.Contains(errOut.String(), "Technical details: "+opts.installResult.LogFile) {
+		t.Fatalf("log path not shown: %s", errOut.String())
+	}
+	var rerun string
+	err := retryFailedAgents(cmd, app, opts, boom, func(target string, _ []string) error { rerun = target; return nil })
+	if err != nil || rerun != "codex" || len(asked) != 1 {
+		t.Fatalf("rerun=%q asked=%v err=%v", rerun, asked, err)
+	}
+	// Success records nothing.
+	clean := &options{format: "human"}
+	app.recordSingleAdd(cmd, clean, domain.ClientCodex, "demo", nil)
+	if clean.installResult != nil {
+		t.Fatal("a successful add must not create a failure record")
+	}
+}
+
+func TestSingleTargetAddHandsItsResultBackToTheCaller(t *testing.T) {
+	outer, inner := &options{}, &options{}
+	want := &installOutcome{LogFile: "x"}
+	err := runSingleTargetAdd(outer, inner, func() error { inner.installResult = want; return errors.New("failed") })
+	if err == nil || outer.installResult != want {
+		t.Fatalf("the retry step must see the one-agent result: %v %v", err, outer.installResult)
+	}
+}
+
+func TestConvergeRetryRerunsEverythingOutstandingAndRespectsTheGate(t *testing.T) {
+	var asked []string
+	app := App{Terminal: true, Prompter: fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+		asked = append(asked, "retry")
+		return prompt.ConfirmationResult{Accepted: true}, nil
+	}}}
+	opts := &options{format: "human", installResult: &installOutcome{Agents: reportByAgent([]agentItem{
+		failedItem("demo", "codex", errors.New("native command failed")),
+		{Alias: "demo", ClientID: "claude", Status: "completed"},
+	})}}
+	cmd, _, _ := retryTestCommand(t)
+	reruns := 0
+	if err := retryConverge(cmd, app, opts, errors.New("failed"), func() error { reruns++; return nil }); err != nil || reruns != 1 || len(asked) != 1 || opts.retryAttempt != 1 {
+		t.Fatalf("reruns=%d asked=%v attempt=%d err=%v", reruns, asked, opts.retryAttempt, err)
+	}
+	boom := errors.New("failed")
+	opts.yes = true
+	if err := retryConverge(cmd, app, opts, boom, func() error { t.Fatal("--yes must never prompt"); return nil }); !errors.Is(err, boom) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestRetryInstallsExactlyThePackageOfTheFirstAttempt(t *testing.T) {
+	first := loadedPackage{}
+	first.envelope.TreeDigest = "sha256:first"
+	opts := &options{}
+	if err := pinRetryPackage(opts, first); err != nil || opts.firstTreeDigest != "sha256:first" {
+		t.Fatalf("first attempt must pin its package: %v %q", err, opts.firstTreeDigest)
+	}
+	retry := *opts
+	if err := pinRetryPackage(&retry, first); err != nil {
+		t.Fatalf("an unchanged package may be retried: %v", err)
+	}
+	changed := loadedPackage{}
+	changed.envelope.TreeDigest = "sha256:edited"
+	if err := pinRetryPackage(&retry, changed); err == nil {
+		t.Fatal("a retry must refuse a package that changed since the first attempt")
+	}
+	if err := pinRetryPackage(&options{}, loadedPackage{}); err != nil {
+		t.Fatalf("a package without a digest cannot be pinned: %v", err)
 	}
 }

@@ -105,6 +105,9 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err := rejectImperativePackageRequirements(loaded); err != nil {
 		return err
 	}
+	if err := pinRetryPackage(opts, loaded); err != nil {
+		return err
+	}
 
 	applyLoadedGuidedIntents(opts, loaded, targets)
 	if err := revalidateLoadedTargetIntents(ctx, app, opts, loaded, targets, clients); err != nil {
@@ -141,11 +144,15 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		selectedOptions := *opts
 		selectedOptions.target = string(executionTargets[0])
 		if activationComplete || authComplete {
-			return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, activationComplete, authComplete, clients, needsInstallConfirmation)
+			return runSingleTargetAdd(opts, &selectedOptions, func() error {
+				return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, activationComplete, authComplete, clients, needsInstallConfirmation)
+			})
 		}
 		if state, err := app.StateStore.Load(); err == nil {
 			if installation, ok := locallyMatchedInstallation(state, loaded.envelope.Manifest.Name); ok && installationHasTarget(installation, executionTargets[0], string(app.scope())) {
-				return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, false, false, clients, needsInstallConfirmation)
+				return runSingleTargetAdd(opts, &selectedOptions, func() error {
+					return runAddLoaded(ctx, cmd, app, &selectedOptions, loaded, false, false, clients, needsInstallConfirmation)
+				})
 			}
 		}
 	}
