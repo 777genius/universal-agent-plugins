@@ -16,20 +16,9 @@ func completeGeminiProject(ctx context.Context, env clients.Env, request domain.
 		// readiness is reported separately and is never observed by this request.
 		return outcome, nil
 	}
-	var err error
-	if request.Plan.Scope == domain.ScopeProject && outcome.Verification == domain.VerificationInstalled {
-		changed, trustErr := trustGeminiProject(env, request)
-		if changed && outcome.NativeEffect != domain.NativeEffectUncertain {
-			outcome.NativeEffect = domain.NativeEffectCommitted
-		}
-		if trustErr != nil {
-			var observed *shared.NativeEffectError
-			if errors.As(trustErr, &observed) && observed.Effect == domain.NativeEffectUncertain {
-				outcome.NativeEffect = domain.NativeEffectUncertain
-				return outcome, trustErr
-			}
-			outcome.UserActions = shared.AppendUnique(outcome.UserActions, "Gemini project trust needs verification: "+trustErr.Error())
-		}
+	outcome, err := recordGeminiProjectTrust(env, request, outcome)
+	if err != nil {
+		return outcome, err
 	}
 	outcome, err = geminiProjectStatus(env, request, outcome)
 	if err != nil || request.Plan.Scope != domain.ScopeProject || outcome.Verification != domain.VerificationInstalled {
@@ -66,4 +55,26 @@ func geminiNativeDecisionPresent(components []domain.ComponentDecision) bool {
 		}
 	}
 	return false
+}
+
+// recordGeminiProjectTrust trusts an installed project and returns an error
+// only when the trust change itself may have left an uncertain native effect.
+func recordGeminiProjectTrust(env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
+	if request.Plan.Scope != domain.ScopeProject || outcome.Verification != domain.VerificationInstalled {
+		return outcome, nil
+	}
+	changed, trustErr := trustGeminiProject(env, request)
+	if changed && outcome.NativeEffect != domain.NativeEffectUncertain {
+		outcome.NativeEffect = domain.NativeEffectCommitted
+	}
+	if trustErr == nil {
+		return outcome, nil
+	}
+	var observed *shared.NativeEffectError
+	if errors.As(trustErr, &observed) && observed.Effect == domain.NativeEffectUncertain {
+		outcome.NativeEffect = domain.NativeEffectUncertain
+		return outcome, trustErr
+	}
+	outcome.UserActions = shared.AppendUnique(outcome.UserActions, "Gemini project trust needs verification: "+trustErr.Error())
+	return outcome, nil
 }
