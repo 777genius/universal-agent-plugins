@@ -52,6 +52,8 @@ func (s *terminalTestScreen) feed(input string) {
 			}
 		case "\b":
 			s.col = max(0, s.col-1)
+		case "\t":
+			s.col = min(s.cols-1, (s.col/8+1)*8)
 		default:
 			if strings.HasPrefix(seq, "\x1b[") {
 				s.csi(seq)

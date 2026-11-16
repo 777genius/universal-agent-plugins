@@ -44,6 +44,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 		EnvironmentAuthority: prepared.req.EnvironmentAuthority,
 		ConfirmPluginEnable:  prepared.req.ConfirmPluginEnable,
 		ActivationComplete:   prepared.req.ActivationComplete, AuthComplete: prepared.req.AuthComplete,
+		ProjectTrustConsent: prepared.req.ProjectTrustConsent,
 	})
 	err = wrapLifecycleError(err)
 	result := Result{Operation: prepared.req.Operation, InstallationID: added.InstallationID, Binding: prepared.facts,

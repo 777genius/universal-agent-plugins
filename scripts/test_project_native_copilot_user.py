@@ -177,7 +177,7 @@ class CopilotUserCaptureContracts(unittest.TestCase):
         case = runtime.CASES["copilot"]
         self.assertEqual(case, {"test": "TestAgentpluginsCopilotNativeProjectCompleteCycle",
             "file": "repotests/agentplugins_copilot_cycle_lifecycle_test.go",
-            "optin": "AGENTPLUGINS_COPILOT_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"})
+            "optin": "AGENTPLUGINS_COPILOT_PROJECT_RUNTIME_ATTEMPT", "seconds": 300, "phase": "runtime-attempt"})
         source = Path(__file__).resolve().parents[1]
         self.assertIn("func TestAgentpluginsCopilotNativeProjectRuntimeAttempt(t *testing.T)",
                       (source / "repotests/agentplugins_copilot_project_native_attempt_test.go").read_text())

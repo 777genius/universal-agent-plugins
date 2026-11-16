@@ -45,7 +45,7 @@ These are classifications of the existing state machine, not new persisted activ
 | Gemini CLI | .gemini/skills and .gemini/settings.json | Workspace trust, Skills discovery, MCP status |
 | GitHub Copilot CLI | .github/skills, project MCP config and remembered selected-folder trust after confirmed installation | Fresh project session, effective MCP discovery and real tool call |
 | Cursor | .cursor/skills and project MCP | Editor trust, native server status |
-| Pi | .pi/extensions, .pi/skills and .pi/mcp.json | Explicit Pi trust, fresh extension loading and real MCP tool |
+| Pi | .pi/extensions, .pi/skills and .pi/mcp.json, plus a UAP-owned user trust hook after confirmed installation | Pi's effective trust decision, fresh extension loading and real MCP tool |
 | Kimi Code | .kimi-code/skills and .kimi-code/mcp.json | Correct selected Git root, native loaded Skill |
 | Windsurf / Devin | Selected project-native surfaces | Exact observed client generation and import |
 | Kiro | Project .kiro surfaces | Settings, agent selection and trust |
@@ -63,6 +63,29 @@ Removing a plugin retains this user choice. Doctor remains read-only; revoked
 trust or an older installation can be restored by a confirmed installation.
 This describes the source change in [#935](https://github.com/777genius/universal-agent-plugins/pull/935),
 not availability in an already published CLI release.
+
+Pi project installation discloses its trust hook in the same review. Pi has
+no trust-file API, so confirmation (or `--yes`) does not write Pi's
+`trust.json`. Instead it installs one UAP-owned user extension,
+`<Pi agent dir>/extensions/agentplugins-project-trust/` (`index.ts` and
+`projects.json`; `PI_CODING_AGENT_DIR` is respected), and records the exact
+canonical project with a content digest of each owned extension, Skill and
+`.pi/mcp.json` server entry. The hook answers Pi's documented `project_trust`
+event with "yes" only while the project's `.pi` holds nothing but those
+unchanged resources, no `.agents/skills` exists in the project or its parents,
+and Pi has no saved `trust.json` decision or non-default `defaultProjectTrust`
+for it. Anything else, including a foreign or changed file after `git pull`,
+leaves the decision to Pi's normal prompt. Removing the project's last UAP
+installation withdraws its record, and the hook is deleted with the last
+recorded project; if that cleanup cannot run, removal still completes and
+reports the hook path.
+
+The check does not cover the whole folder. A running Pi session keeps a trust
+decision across `/reload`, and code the trusted extension imports from the
+project's `node_modules`, MCP working directories outside the package and
+data under `.uap` are not part of the digest. Doctor remains read-only. This
+describes a source change, not availability in an already published CLI
+release.
 
 ## Bounded Codex file audit
 

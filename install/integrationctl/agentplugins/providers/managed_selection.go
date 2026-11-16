@@ -35,7 +35,7 @@ func (stager Stager) managedMCPNames(ctx context.Context, client domain.ClientID
 	if err := stager.Verify(ctx, root, digest); err != nil {
 		return nil, err
 	}
-	layout, err := stager.managedSelectionLayout(client, scope)
+	layout, err := stager.managedSelectionLayout(client, scope, root)
 	if err != nil {
 		return nil, err
 	}
@@ -50,8 +50,11 @@ func (stager Stager) managedMCPNames(ctx context.Context, client domain.ClientID
 	return names, nil
 }
 
-func (stager Stager) managedSelectionLayout(client domain.ClientID, scope domain.InstallScope) (clients.SelectionLayout, error) {
+func (stager Stager) managedSelectionLayout(client domain.ClientID, scope domain.InstallScope, root string) (clients.SelectionLayout, error) {
 	if scope != "" {
+		if reader, ok := clients.As[clients.ArtifactSelectionReader](stager.Registry, client); ok {
+			return reader.ManagedMCPSelectionForArtifact(scope, root)
+		}
 		if reader, ok := clients.As[clients.ScopedSelectionReader](stager.Registry, client); ok {
 			return reader.ManagedMCPSelectionForScope(scope)
 		}

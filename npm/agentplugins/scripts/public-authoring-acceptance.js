@@ -987,7 +987,7 @@ function admitProducerInputs(r, api) {
   }
   assert.ok(retained.some(x => x.kind === 'input' && x.relative === contract.INPUT_FILE && x.bytes.equals(inputBytes)), 'original I subject');
   for (const product of c.PRODUCTS) {
-    agree(Object.keys(stage.generated[product]).length, 17, 'both authenticated exact seventeen-entry packs');
+    agree(Object.keys(stage.generated[product]).length, product === 'agentplugins' ? 18 : 17, 'authenticated exact product package entry count');
     const pack = retained.find(x => x.kind === 'stage' && x.relative === stage.packs[product].file);
     assert.ok(pack, 'both original pack subjects'); agree(pack.sha256, stage.packs[product].sha256, 'pack SHA256'); agree(pack.bytes.length, stage.packs[product].size, 'pack size');
     const crypto = require('node:crypto');

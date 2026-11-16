@@ -226,7 +226,7 @@ export interface components {
             targetId: string;
             alias: string;
             /** @enum {string} */
-            action: "install" | "update" | "unchanged";
+            action: "install" | "update" | "unchanged" | "repair" | "refresh_projection";
             destinationPath: string;
             sourceMoved?: components["schemas"]["SourceMoved"];
             reasonCodes: string[];

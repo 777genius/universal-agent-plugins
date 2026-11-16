@@ -36,6 +36,13 @@ func (r *deathFixtureRunner) Run(ctx context.Context, command legacyports.Comman
 	return (processadapter.OS{}).Run(ctx, command)
 }
 
+// Count finite protocol starts too, so post-crash fencing still proves that no
+// native process ran. Preserve the production supervisor and closure contract.
+func (r *deathFixtureRunner) RunDuplexToCompletion(ctx context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+	r.calls++
+	return (processadapter.OS{}).RunDuplexToCompletion(ctx, command, exchange)
+}
+
 // Only the child uses this wrapper. All scope, ownership, projection and native
 // mutation behavior delegates to the real adapter. The existing primitive seam
 // pauses after the real native skill swap and before the MCP writer lock/write.

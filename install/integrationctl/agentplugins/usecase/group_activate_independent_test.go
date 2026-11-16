@@ -287,8 +287,15 @@ func (a *unclosedProbeActivator) PrepareIndependentActivation(_ context.Context,
 	return func(ctx context.Context) (domain.ActivationOutcome, error) {
 		defer a.joined.Add(1)
 		if request.Client.ClientID == domain.ClientClaude {
+			// Prove both effects entered before cancellation can stop admission.
+			select {
+			case <-a.release:
+			case <-ctx.Done():
+				return domain.ActivationOutcome{}, ctx.Err()
+			}
 			return domain.ActivationOutcome{}, &domain.UnclosedClientProbe{Operation: "Claude listing", Err: errors.New("containment close failed")}
 		}
+		close(a.release)
 		<-ctx.Done()
 		return domain.ActivationOutcome{}, ctx.Err()
 	}, nil
@@ -319,8 +326,8 @@ func TestIndependentUnclosedProbeStopsTheRemainingSerialClients(t *testing.T) {
 	defer cancel()
 	inputs := []AddInput{addInput(t, claude, "https://example.com/unclosed"), addInput(t, codex, "https://example.com/unclosed"), addInput(t, cursor, "https://example.com/unclosed"), addInput(t, gemini, "https://example.com/unclosed")}
 	result, err := service.AddGroup(ctx, GroupInput{Targets: inputs, OperationGroupID: "unclosed-probe", Confirmed: true})
-	if err == nil {
-		t.Fatal("an unconfirmed client process must fail the group")
+	if !domain.IsUnclosedClientProbe(err) {
+		t.Fatalf("the unconfirmed client process cause must be retained: %v", err)
 	}
 	if got := result.Targets[3].GroupPhase; got != GroupTargetExternalNotAttempted {
 		t.Fatalf("the second serial client must not run after an unclosed probe, got %q (phase %s, err %v, %d targets)", got, result.Phase, err, len(result.Targets))

@@ -65,6 +65,8 @@ func claudeSHA256(t *testing.T, path string) string {
 type claudeNativeFixture struct {
 	Root, Home, ConfigDir, PackageRoot, StateHome string
 	transcriptSeq                                 int
+	diagnosticClient                              string
+	diagnosticAttempted                           bool
 	transcriptSHA256                              map[string]string
 }
 
@@ -146,6 +148,7 @@ func claudeRunInstaller(t *testing.T, f *claudeNativeFixture, installer, clientD
 			t.Fatal(err)
 		}
 	}
+	f.captureNativeHealthFailure(ctx, t, label, args, cmd.Env, decoded)
 	return decoded
 }
 
@@ -427,6 +430,7 @@ func TestAgentpluginsClaudeNativeLifecycle(t *testing.T) {
 	claudeWriteFixturePackage(t, f.PackageRoot, "claude-native-proof", "1.0.0")
 
 	// install
+	f.diagnosticClient = client
 	result := claudeRunInstaller(t, f, installer, clientDir, "add-v1", "add", f.PackageRoot, "--target", "claude")
 	if data, _ := result["data"].(map[string]any); data == nil || data["status"] != "completed" {
 		t.Fatalf("install did not complete: %+v", result)
@@ -883,6 +887,14 @@ type claudeProfileChange struct {
 
 func claudeProfileFiles(t *testing.T, root string) map[string]claudeProfileFile {
 	t.Helper()
+	files, err := claudeProfileFilesResult(root)
+	if err != nil {
+		t.Fatalf("incomplete Claude native profile inventory: %v", err)
+	}
+	return files
+}
+
+func claudeProfileFilesResult(root string) (map[string]claudeProfileFile, error) {
 	files := map[string]claudeProfileFile{}
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -926,10 +938,7 @@ func claudeProfileFiles(t *testing.T, root string) map[string]claudeProfileFile 
 		files[filepath.ToSlash(rel)] = f
 		return nil
 	})
-	if err != nil {
-		t.Fatalf("incomplete Claude native profile inventory: %v", err)
-	}
-	return files
+	return files, err
 }
 
 // TestAgentpluginsClaudeNativeSecondaryProfileIsolation is a genuine pinned
@@ -1074,6 +1083,7 @@ func TestAgentpluginsClaudeNativeSecondaryProfileIsolation(t *testing.T) {
 	capture("after_A_native_only_initialization")
 	preB, preBState := nativeTreeDigest(t, rootB), nativeTreeDigest(t, stateB)
 	f.ConfigDir, f.StateHome = rootA, stateA
+	f.diagnosticClient = client
 	first := claudeRunInstaller(t, f, installer, clientDir, "A-install", "add", f.PackageRoot, "--target", "claude")
 	if first["result"] != "success" {
 		t.Fatalf("A install did not succeed: %+v", first)

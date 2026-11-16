@@ -88,7 +88,7 @@ func TestManagementMutableArchiveUpdateRetainsAllTargets(t *testing.T) {
 			}
 			probes := 0
 			fixture, _ := newDependencyHarness(t, t.TempDir(), detected, installer.Config{
-				Runner: &dependencyClaudeListing{root: detected[0].ConfigRoot}, EnableNativeObserver: true,
+				Runner: newManagementNativeRunner(detected, &dependencyClaudeListing{root: detected[0].ConfigRoot}), EnableNativeObserver: true,
 				OpenCodeProbe: func(_ context.Context, target clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
 					probes++
 					if !withOpenCode || target.Executable != detected[2].ExecutablePath {

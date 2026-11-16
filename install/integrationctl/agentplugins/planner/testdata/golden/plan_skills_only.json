@@ -43,7 +43,7 @@
       "TargetRoot": "\u003croot\u003e/clients/antigravity/plugins",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
-        "Open or restart Antigravity and verify the UAP-owned plugin in Customizations/Installed or with agy plugin list; native enablement and model access are not asserted"
+        "Open a folder in agy or the Antigravity IDE and confirm its folder trust prompt; Antigravity enables installed plugins by default; installed files do not prove plugin discovery"
       ],
       "Verification": "package_validated",
       "Warnings": [

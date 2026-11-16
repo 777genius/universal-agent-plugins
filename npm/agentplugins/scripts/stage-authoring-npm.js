@@ -17,7 +17,7 @@ const PREFIX = "npm/agentplugins/";
 const COMMON = Object.freeze(["lib/verifier.js", "lib/public-authoring.js", "scripts/dual-authoring-candidate.js"]);
 const STAGE_COMMON = Object.freeze([...COMMON, "lib/public-authoring-contract.js", "lib/public-authoring-input.js"]);
 const ownFiles = product => ["LICENSE", "README.md", "package.json", `bin/${product}.js`, "lib/platform.js",
-  product === "agentplugins" ? "lib/bootstrap.js" : "lib/install.js"];
+  ...(product === "agentplugins" ? ["lib/bootstrap.js", "lib/bootstrap-progress.js"] : ["lib/install.js"])];
 const ALLOWLIST = Object.freeze([...new Set([...COMMON.map(n => PREFIX + n),
   ...c.PRODUCTS.flatMap(p => ownFiles(p).map(n => `npm/${p}/${n}`)),
   ...["stage-authoring-npm.js", "stage-dual-authoring-npm.js", "stage-dual-authoring-candidate.js",

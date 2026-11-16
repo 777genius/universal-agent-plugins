@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -61,11 +62,21 @@ func (s *savedJourneySource) ResolveGit(ctx context.Context, source sourcespec.G
 type savedJourneyRunner struct {
 	inner dependencyClaudeListing
 	calls int
+	t     *testing.T
 }
 
 func (r *savedJourneyRunner) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	r.calls++
 	return r.inner.Run(ctx, command)
+}
+
+func (r *savedJourneyRunner) RunDuplexToCompletion(_ context.Context, command legacyports.Command, exchange func(io.Writer, io.Reader) error) error {
+	r.calls++
+	err := savedCodexDiscovery(command, r.inner.codexIDs, exchange)
+	if err != nil && r.t != nil {
+		r.t.Logf("inert native discovery fixture: %v", err)
+	}
+	return err
 }
 
 type savedJourney struct {
@@ -85,7 +96,7 @@ func newSavedJourney(t *testing.T, repo string) savedJourney {
 	if err != nil {
 		t.Fatal(err)
 	}
-	runner := &savedJourneyRunner{inner: dependencyClaudeListing{root: claude.ConfigRoot}}
+	runner := &savedJourneyRunner{inner: dependencyClaudeListing{root: claude.ConfigRoot}, t: t}
 	f.app.Installer, err = installer.New(installer.Config{StateRoot: root, StateFile: f.store.Path, LockFile: filepath.Join(root, "mutation.lock"), OperationsDir: f.operations, PluginDataBase: filepath.Join(root, "plugin-data"), ManagedRoot: f.app.ManagedRoot, TempRoot: filepath.Join(root, "installer-tmp"), Registry: f.app.ClientRegistry, HelperExecutable: helper, Runner: runner})
 	if err != nil {
 		t.Fatal(err)
@@ -305,6 +316,20 @@ func TestSavedAddGitLifecycleAndPortableRestore(t *testing.T) {
 	if _, ok := requirements.Dependencies["demo"]; !ok {
 		t.Fatal("target removal removed dependency")
 	}
+	// Exercise the manual fallback explicitly: a detected CLI now supports
+	// automatic removal, while this case verifies receipt-only reconciliation.
+	nativeDetector := j.cli.app.Detector
+	detected, err := nativeDetector.Detect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	detected = append([]domain.DetectedClient(nil), detected...)
+	for index := range detected {
+		if detected[index].ClientID == domain.ClientCodex {
+			detected[index].ExecutablePath = ""
+		}
+	}
+	j.cli.app.Detector = staticDetector{clients: detected}
 	if _, _, err := j.cli.execute(false, "remove", "demo", "--format", "json"); err == nil {
 		t.Fatal("manual Codex removal incorrectly reported terminal success")
 	}
@@ -316,6 +341,8 @@ func TestSavedAddGitLifecycleAndPortableRestore(t *testing.T) {
 		t.Fatal("partial last removal dropped its live receipt")
 	}
 	downloads, refs = j.source.downloads, j.source.refs
+	// The operator has now removed the native plugin externally.
+	clear(j.runner.inner.codexIDs)
 	j.run(t, "remove", "demo", "--external-uninstalled", "--format", "json")
 	state = j.state(t)
 	if len(state.EnvironmentReceipts) != 0 || downloads != j.source.downloads || refs != j.source.refs {
@@ -338,6 +365,7 @@ func TestSavedAddGitLifecycleAndPortableRestore(t *testing.T) {
 	if !retained {
 		t.Fatal("removed installation did not retain data")
 	}
+	j.cli.app.Detector = nativeDetector
 	source = "github:acme/demo@" + savedJourneyGit(t, repo, "rev-parse", "HEAD")
 	j.run(t, "add", source, "--target", "codex", "--format", "json")
 	_, lock = j.intent(t)

@@ -290,13 +290,14 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan, _ := outcome["plan"].(map[string]any)
-	if plan["client_id"] != "claude" || plan["scope"] != "project" {
-		t.Fatal("UAP project skills installation did not retain project scope")
+	physical, _ := plan["physical_artifact_id"].(string)
+	if plan["client_id"] != "claude" || plan["scope"] != "project" || physical == "" {
+		t.Fatal("UAP project skills installation did not retain project scope and identity")
 	}
 	f.requireForeign(t)
 	stages["install_and_foreign_mcp"] = nativeStage{Status: "passed", Reason: "UAP project skill install preserved exact foreign project MCP and disposable user/A/B configuration"}
 
-	claudeProjectRunScripted(t, f, f.project, true)
+	claudeTrustedRunScriptedProfile(t, f, f.project, true)
 	methods, err := os.ReadFile(events)
 	if err != nil || len(methods) > 2048 {
 		t.Fatal("native Claude stdio MCP methods absent/unbounded", err)
@@ -310,7 +311,7 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	}
 	stages["actual_native_tool_call"] = nativeStage{Status: "passed", Reason: "real pinned Claude project session invoked stdio tools/call exactly once and returned uap-pong to local scripted model"}
 
-	claudeProjectRunScripted(t, f, f.otherProject, false)
+	claudeTrustedRunScriptedProfile(t, f, f.otherProject, false)
 	afterB, err := os.ReadFile(events)
 	if err != nil || !bytes.Equal(afterB, methods) {
 		t.Fatal("trusted project B started project A MCP subprocess")
@@ -320,7 +321,8 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	// Actual Claude sessions may update Claude's own profile metadata. Verify
 	// that both projects remain trusted, then pin the exact post-native bytes
 	// immediately before UAP remove. The installer must preserve this new
-	// baseline (and every other unchanged foreign file) without modification.
+	// baseline, apart from native removal of this exact owned plugin's usage
+	// entry. Every foreign profile member and file must remain unchanged.
 	profilePath := filepath.Join(f.base.ConfigDir, ".claude.json")
 	profile, err := readClaudeTrustedProfile(profilePath)
 	if err != nil {
@@ -343,8 +345,8 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	f.foreign[profilePath] = nativeSHA(t, profilePath)
 	evidence["native_profile_baseline_refreshed_before_remove"] = true
 
-	c.succeed(t, "trusted-foreign-mcp-remove", "remove", commandsPluginName)
-	f.requireForeign(t)
+	managed := filepath.Join(f.project, ".claude", "skills", physical)
+	claudeTrustedRemoveWithProfileDiagnostic(t, f, profile, managed, "trusted-foreign-mcp-remove")
 	claudeProjectRunScripted(t, f, f.project, true)
 	afterRemoval, err := os.ReadFile(events)
 	if err != nil || len(afterRemoval) > 3072 {
@@ -439,7 +441,7 @@ func claudeProjectManagedMCPCall(t *testing.T) {
 	}
 	managed := filepath.Join(f.project, ".claude", "skills", physical)
 	nativeRequireContained(t, f.project, managed)
-	manifestBody, err := os.ReadFile(filepath.Join(managed, ".claude-plugin", "plugin.json"))
+	manifestBody, err := os.ReadFile(filepath.Join(managed, ".agentplugins-plugin", ".claude-plugin", "plugin.json"))
 	if err != nil {
 		t.Fatal("UAP-managed Claude plugin manifest missing", err)
 	}
@@ -447,7 +449,7 @@ func claudeProjectManagedMCPCall(t *testing.T) {
 	if json.Unmarshal(manifestBody, &manifest) != nil || manifest["mcpServers"] != "./.mcp.json" {
 		t.Fatal("installed Claude plugin does not reference its owned MCP definition")
 	}
-	mcpBody, err := os.ReadFile(filepath.Join(managed, ".mcp.json"))
+	mcpBody, err := os.ReadFile(filepath.Join(managed, ".agentplugins-plugin", ".mcp.json"))
 	if err != nil {
 		t.Fatal("UAP-managed Claude MCP definition missing", err)
 	}
@@ -511,11 +513,10 @@ func claudeProjectManagedMCPCall(t *testing.T) {
 		t.Fatal("native Claude session lost authored A/B trust")
 	}
 	f.foreign[profilePath] = nativeSHA(t, profilePath)
-	c.succeed(t, "managed-mcp-remove", "remove", commandsPluginName)
+	claudeTrustedRemoveWithProfileDiagnostic(t, f, profile, managed, "managed-mcp-remove")
 	if _, err := os.Lstat(managed); !os.IsNotExist(err) {
 		t.Fatal("UAP-managed plugin survived scoped removal", err)
 	}
-	f.requireForeign(t)
 	claudeProjectRunScriptedForTool(t, f, f.project, claudeManagedProjectTool, false)
 	afterRemove, err := os.ReadFile(events)
 	if err != nil || !bytes.Equal(afterRemove, methods) {

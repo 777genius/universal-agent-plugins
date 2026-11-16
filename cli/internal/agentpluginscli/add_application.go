@@ -44,7 +44,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 	input := usecase.AddInput{
 		InstallIntent: opts.installIntents[selected.ClientID],
 		Envelope:      loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
-		DryRun: opts.dryRun, Confirmed: false, Interactive: app.Terminal,
+		DryRun: opts.dryRun, Confirmed: false, Interactive: app.Terminal, ProjectTrustConsent: true,
 		Hints: loaded.hints, BackendExecutable: backendExecutable(selected, detectedMap, app.scope()),
 		ActivationComplete: activationComplete, AuthComplete: authComplete,
 		PersistAuthoritativeObservations: true,
@@ -74,13 +74,14 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 		}
 	}
 	freshInstall := planned.Activation.Activation == ""
-	if shouldResumeInteractiveLifecycle(app, opts, planned, activationComplete, authComplete) {
+	automaticSetup := canConfirmPreparedSetup(service, input, planned)
+	if shouldResumeInteractiveLifecycle(app, opts, planned, activationComplete, authComplete, automaticSetup) {
 		if err := renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false); err != nil {
 			return err
 		}
 		return resumeInteractiveLifecycle(ctx, cmd, service, input, loaded.envelope, planned)
 	}
-	confirmed, err := confirmPlannedAdd(ctx, cmd, app, opts, loaded, planned, freshInstall, needsInstallConfirmation)
+	confirmed, err := confirmPlannedAdd(ctx, cmd, app, opts, loaded, planned, freshInstall, needsInstallConfirmation, automaticSetup)
 	if err != nil {
 		return err
 	}
@@ -104,23 +105,23 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 	return err
 }
 
-func shouldResumeInteractiveLifecycle(app App, opts *options, planned usecase.AddResult, activationComplete, authComplete bool) bool {
+func shouldResumeInteractiveLifecycle(app App, opts *options, planned usecase.AddResult, activationComplete, authComplete, automaticSetup bool) bool {
 	pendingObservation := planned.RequiresConfirmation && fullyInstalled(planned.Activation) &&
 		planned.Plan.SelectedDelivery.EffectiveTraitsForScope(planned.Plan.ClientID, planned.Plan.Scope).LifecycleKind == domain.LifecyclePrepared
-	return planned.Activation.Activation != "" && !pendingObservation && opts.format == "human" &&
+	return planned.Activation.Activation != "" && !pendingObservation && !automaticSetup && opts.format == "human" &&
 		app.Terminal && !opts.yes && !activationComplete && !authComplete
 }
 
 // renderDeclinedPlannedAdd reports an unconfirmed plan without mutating anything.
 func renderDeclinedPlannedAdd(cmd *cobra.Command, opts *options, loaded loadedPackage, planned usecase.AddResult) error {
 	if opts.format == "json" {
-		return renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false)
+		return declinedInstallResult(opts, renderAddResultWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, planned, false))
 	}
-	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
-	return nil
+	_, err := fmt.Fprintln(cmd.OutOrStdout(), "No changes made.")
+	return declinedInstallResult(opts, err)
 }
 
-func confirmPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, planned usecase.AddResult, freshInstall, needsInstallConfirmation bool) (bool, error) {
+func confirmPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *options, loaded loadedPackage, planned usecase.AddResult, freshInstall, needsInstallConfirmation, automaticSetup bool) (bool, error) {
 	confirmed := mutationConfirmed(app, opts) && (!needsInstallConfirmation || opts.yes)
 	if needsInstallConfirmation && !opts.yes {
 		return confirmInstall(ctx, cmd, app, loaded, []usecase.AddResult{planned})
@@ -129,7 +130,7 @@ func confirmPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *o
 		return confirmed, nil
 	}
 	question := "Apply this plan? [Y/n]"
-	if !freshInstall {
+	if !freshInstall && !automaticSetup {
 		question = "Apply these explicit lifecycle attestations? [y/N]"
 		return promptYesNo(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), question)
 	}

@@ -152,6 +152,20 @@ func (u *UI) Confirm(ctx context.Context, req ConfirmRequest) (Confirmation, err
 	return Confirmation{Accepted: line == "y" || line == "yes"}, nil
 }
 
+// ConfirmWithDetails validates the combined review and prints every authority
+// row in plain mode. Confirm and its public request shape remain unchanged.
+func (u *UI) ConfirmWithDetails(ctx context.Context, req ConfirmRequest, details []string) (Confirmation, error) {
+	if err := terminalContext(ctx); err != nil {
+		return Confirmation{}, err
+	}
+	review, err := normalizeConfirmationReview(confirmationReview{ConfirmRequest: req, Details: details})
+	if err != nil {
+		return Confirmation{}, err
+	}
+	review.Summary = append(review.Summary, review.Details...)
+	return u.Confirm(ctx, review.ConfirmRequest)
+}
+
 func (u *UI) read(ctx context.Context) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -31,6 +32,20 @@ type projectListObservation struct {
 }
 
 const claudeUntrustedProjectNote = "1 project-scope directory under ./.claude/skills/ that may load as a plugin was skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies."
+
+const claudeUntrustedProjectsNoteSuffix = " project-scope directories under ./.claude/skills/ that may load as plugins were skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies."
+
+func knownClaudeUntrustedProjectNote(note string) bool {
+	if note == claudeUntrustedProjectNote {
+		return true
+	}
+	count, matches := strings.CutSuffix(note, claudeUntrustedProjectsNoteSuffix)
+	if !matches {
+		return false
+	}
+	n, err := strconv.ParseUint(count, 10, 32)
+	return err == nil && n > 1 && strconv.FormatUint(n, 10) == count
+}
 
 type projectListQuery struct {
 	name, active, project, user string
@@ -224,14 +239,29 @@ func validProjectListMetadata(entry map[string]any, project string) bool {
 }
 
 func projectSuppression(entry map[string]any) (bool, bool) {
-	if len(entry) != 6 || entry["version"] != "unknown" || entry["scope"] != "project" || entry["enabled"] != false || entry["installPath"] != "" || !boundedProjectStrings(entry["notes"], true) {
+	if entry["version"] != "unknown" || entry["scope"] != "project" || entry["enabled"] != false || entry["installPath"] != "" || !boundedProjectStrings(entry["notes"], true) {
 		return false, false
 	}
 	trust := false
 	for _, note := range entry["notes"].([]any) {
-		if note == claudeUntrustedProjectNote {
+		if knownClaudeUntrustedProjectNote(note.(string)) {
 			trust = true
 		}
+	}
+	if details, exists := entry["noteDetails"]; exists {
+		// Claude Code 2.1.325 adds typed metadata to this exact trust sentinel.
+		// It is not activation evidence; require the corresponding native note
+		// and preserve refusal for unknown, contradictory or unbounded shapes.
+		values, ok := details.([]any)
+		if len(entry) != 7 || !trust || len(entry["notes"].([]any)) != 1 || !ok || len(values) != 1 {
+			return false, false
+		}
+		detail, ok := values[0].(map[string]any)
+		if !ok || len(detail) != 1 || detail["type"] != "project-scope-suppressed-untrusted" {
+			return false, false
+		}
+	} else if len(entry) != 6 {
+		return false, false
 	}
 	return trust, true
 }

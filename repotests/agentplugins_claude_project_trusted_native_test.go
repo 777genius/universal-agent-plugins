@@ -11,8 +11,9 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
-// This positive discovery fixture authors documented trust in its own original
-// disposable profile. It never changes production trust or the untrusted gate.
+// This second discovery fixture preserves pre-existing trust metadata in its
+// disposable profile. Native marketplace discovery supplies the proof; authored
+// trust metadata alone does not establish that Claude accepted a trust dialog.
 func TestAgentpluginsClaudeNativeTrustedProjectDiscovery(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_CLAUDE_PROJECT_NATIVE_E2E") != "1" {
 		t.Skip("opt-in source trusted project discovery")
@@ -37,7 +38,7 @@ func TestAgentpluginsClaudeNativeTrustedProjectDiscovery(t *testing.T) {
 	stages["native_mcp_initialization"] = nativeStage{Status: "not_evaluated", Reason: "skills-only listing/details fixture"}
 	stages["model_use"] = nativeStage{Status: "not_evaluated", Reason: "no session/model/account or trust-dialog execution"}
 	evidence := claudeProjectNativeIdentity(t, f)
-	evidence["project_contract"], evidence["native_surface"] = "trusted_project_discovery_v1", "documented fixture-authored exact project trust; genuine plugin list/details and owned skill bytes; no MCP/model/authentication claim"
+	evidence["project_contract"], evidence["native_surface"] = "trusted_project_discovery_v1", "pre-existing fixture trust metadata preserved; explicit scoped native plugin list/details and owned skill bytes; no MCP/model/authentication claim"
 	defer f.writeEvidence(t, evidence, stages)
 	defer claudeTrustedRecordProfile(t, f, "trust-profile-final.json")
 	nativeAttempt(stages, "profile_initialization", "trust-profile-initialized.json")
@@ -69,56 +70,26 @@ func TestAgentpluginsClaudeNativeTrustedProjectDiscovery(t *testing.T) {
 	if nativeSHA(t, state) != before {
 		t.Fatal("native observation changed installer state")
 	}
-	stages["native_project_discovery"] = nativeStage{Status: "passed", Reason: "fresh enabled project-scope listing has exact version/path and native details expose exact guide/ordinary command skills and bytes; no A plugin in trusted B"}
+	stages["native_project_discovery"] = nativeStage{Status: "passed", Reason: "fresh enabled A registration has exact version/path and native details expose exact guide/command Skills; B disables A and refuses its details"}
 	nativeAttempt(stages, "remove", "trusted-remove-installer.json")
 	c.succeed(t, "trusted-remove", "remove", commandsPluginName)
 	if _, err := os.Lstat(managed); !os.IsNotExist(err) {
 		t.Fatalf("owned project directory survived removal: %v", err)
 	}
 	claudeTrustedProjectObservation(t, f, "trusted-removed", managed, false)
-	stages["remove"] = nativeStage{Status: "passed", Reason: "owned project directory absent and fresh trusted A/B native listings expose no removed plugin"}
+	stages["remove"] = nativeStage{Status: "passed", Reason: "owned project directory absent and fresh A/B native listings expose no removed registration"}
 	f.requireForeign(t)
-	stages["scope_preservation"] = nativeStage{Status: "passed", Reason: "original user profile/trust and disabled foreign user/A/B settings, skills and cache bytes remained exact"}
+	stages["scope_preservation"] = nativeStage{Status: "passed", Reason: "original user profile/trust, foreign user/B settings and Skill/cache bytes stayed exact; A preserved its foreign disabled key"}
 }
 
 func claudeTrustedProjectObservation(t *testing.T, f *claudeProjectNativeFixture, label, managed string, present bool) {
 	t.Helper()
-	capture := func(suffix, project string, args ...string) []byte {
-		t.Helper()
-		result := captureClaudeDiagnostic(f.client, project, f.base.env(filepath.Dir(f.client)), args)
-		prefix := label + "-native-" + suffix
-		nativeWrite(t, filepath.Join(f.base.Root, prefix+".stdout.log"), result.Stdout, 0600)
-		nativeWrite(t, filepath.Join(f.base.Root, prefix+".stderr.log"), result.Stderr, 0600)
-		nativeJSON(t, filepath.Join(f.base.Root, prefix+".json"), map[string]any{"argv": args, "cwd": project, "exit": result.Exit, "error": result.Error, "deadline": result.Deadline, "stdout_limit": result.StdoutLimit, "stderr_limit": result.StderrLimit})
-		if result.Exit != 0 || result.Error != "" || result.Deadline || result.StdoutLimit || result.StderrLimit {
-			t.Fatal("bounded trusted native observation failed; raw evidence retained")
-		}
-		profile := claudeTrustedRecordProfile(t, f, prefix+"-profile.json")
-		if err := validateClaudeTrustedProfile(profile, f.project, f.otherProject); err != nil {
-			t.Fatal(err)
-		}
-		f.requireForeign(t)
-		return result.Stdout
+	claudeProjectMarketplaceObservation(t, f, label, managed, "echo", present)
+	profile := claudeTrustedRecordProfile(t, f, label+"-profile.json")
+	if err := validateClaudeTrustedProfile(profile, f.project, f.otherProject); err != nil {
+		t.Fatal(err)
 	}
-	for _, selected := range []struct {
-		suffix, project string
-		want            bool
-	}{{"A", f.project, present}, {"B", f.otherProject, false}} {
-		body := capture(selected.suffix, selected.project, "plugin", "list", "--json")
-		if err := validateClaudeTrustedListing(body, f.project, managed, selected.want); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if present {
-		details := capture("A-details", f.project, "plugin", "details", claudeCommandsPluginID)
-		skills, err := claudeDiscoveredSkills(string(details), managed)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := commandsCheckSkills(skills, "echo"); err != nil {
-			t.Fatal(err)
-		}
-	}
+	f.requireForeign(t)
 }
 
 func validateClaudeTrustedListing(body []byte, project, managed string, present bool) error {

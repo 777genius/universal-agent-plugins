@@ -39,7 +39,9 @@ func (selection *skillsAddOptions) runWebsite(cmd *cobra.Command, app App, opts 
 	for _, target := range targets {
 		request.TargetIDs = append(request.TargetIDs, string(target))
 	}
+	stop := startCommandActivity(cmd, app, opts, "Fetching Skills and preparing installation review")
 	prepared, err := app.PrepareSkills(cmd.Context(), request)
+	stop()
 	if err != nil {
 		return reportSkillsPreparationRefusal(cmd, opts, &skillsCatalogSession{}, err)
 	}

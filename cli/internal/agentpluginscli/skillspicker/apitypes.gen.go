@@ -9,15 +9,21 @@ import (
 
 // Defines values for ActionAction.
 const (
-	ActionActionInstall   ActionAction = "install"
-	ActionActionUnchanged ActionAction = "unchanged"
-	ActionActionUpdate    ActionAction = "update"
+	ActionActionInstall           ActionAction = "install"
+	ActionActionRefreshProjection ActionAction = "refresh_projection"
+	ActionActionRepair            ActionAction = "repair"
+	ActionActionUnchanged         ActionAction = "unchanged"
+	ActionActionUpdate            ActionAction = "update"
 )
 
 // Valid indicates whether the value is a known member of the ActionAction enum.
 func (e ActionAction) Valid() bool {
 	switch e {
 	case ActionActionInstall:
+		return true
+	case ActionActionRefreshProjection:
+		return true
+	case ActionActionRepair:
 		return true
 	case ActionActionUnchanged:
 		return true

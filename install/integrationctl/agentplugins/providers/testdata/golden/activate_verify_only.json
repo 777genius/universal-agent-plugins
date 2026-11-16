@@ -291,7 +291,7 @@
     "Commands": [],
     "Error": "",
     "Outcome": {
-      "Activation": "active",
+      "Activation": "prepared",
       "ActivationAttested": false,
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
@@ -302,7 +302,9 @@
       "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
-        "restart OpenCode to load the installed plugin"
+        "restart OpenCode to load the installed plugin",
+        "OpenCode user configuration is installed; effective config, native skill discovery, permissions and MCP initialization remain unobserved; start OpenCode in the neutral selected user profile and inspect debug config, debug skill and mcp list",
+        "OpenCode merges ancestor, user, custom-directory, inline and managed configuration; preserved higher-priority settings or same-name skills can shadow the managed project components"
       ],
       "Verification": "installation_verified"
     }

@@ -45,7 +45,7 @@ func TestProjectCodexSkillWarningsRespectPinnedUserSelectorContract(t *testing.T
 				user += "[[skills.config]]\npath='relative/SKILL.md'\nname='unrelated'\nenabled=true\n"
 				want = false
 			}
-			projectCodexWrite(t, filepath.Join(f.user, "config.toml"), user)
+			projectTrustFixture(t, filepath.Join(f.user, "config.toml"), user+fmt.Sprintf("\n[projects.%q]\ntrust_level='trusted'\n", f.a))
 			if project != "" {
 				projectCodexWrite(t, filepath.Join(f.a, ".codex", "config.toml"), project)
 			}

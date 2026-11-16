@@ -132,8 +132,8 @@ func TestOpenCodeSupportsAutomaticMCPAndSkillLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if added.Targets[0].Activation.Activation != domain.ActivationActive || added.Targets[0].Activation.Verification != domain.VerificationInstalled {
-		t.Fatalf("OpenCode add did not complete native installation: %+v", added.Targets[0])
+	if added.Targets[0].Activation.Activation != domain.ActivationPrepared || added.Targets[0].Activation.Authentication != domain.AuthenticationNotChecked || added.Targets[0].Activation.Verification != domain.VerificationInstalled {
+		t.Fatalf("OpenCode file installation claimed unobserved runtime readiness: %+v", added.Targets[0])
 	}
 	config := readUsecaseObject(t, filepath.Join(client.ConfigRoot, "opencode.json"))
 	server := config["mcp"].(map[string]any)["docs"].(map[string]any)

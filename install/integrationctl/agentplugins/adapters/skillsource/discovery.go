@@ -243,6 +243,32 @@ func (s *Session) scanDocuments(ctx context.Context, scope string, c *Catalog) (
 func (s *Session) reserveDocuments(ctx context.Context, documents []sourceacquisition.TreeEntry, c *Catalog) []bool {
 	c.Candidates = make([]Candidate, len(documents))
 	readable := make([]bool, len(documents))
+	type blobMetadata struct {
+		size int64
+		err  error
+	}
+	metadata := make(map[string]*blobMetadata, len(documents))
+	var pending errgroup.Group
+	pending.SetLimit(2)
+	// In a blob-filtered repository even cat-file -s may fetch the promised
+	// object. Bound those network reads too, instead of serializing the entire
+	// catalog before the already-concurrent document decoding stage. Deduplicate
+	// shared objects; apply every budget below in canonical path order.
+	for _, entry := range documents {
+		if entry.Type != "blob" || (entry.Mode != "100644" && entry.Mode != "100755") {
+			continue
+		}
+		if _, exists := metadata[entry.Object]; exists {
+			continue
+		}
+		result := &blobMetadata{}
+		metadata[entry.Object] = result
+		pending.Go(func() error {
+			result.size, result.err = s.blobSize(ctx, entry.Object)
+			return nil
+		})
+	}
+	_ = pending.Wait()
 	aggregate := int64(0)
 	// Reserve bytes in canonical path order before concurrent reads. The aggregate
 	// bound and partial catalog are therefore independent of process scheduling.
@@ -253,12 +279,13 @@ func (s *Session) reserveDocuments(ctx context.Context, documents []sourceacquis
 			c.Candidates[i].Diagnostics = []string{"skill_document_wrong_kind"}
 			continue
 		}
-		n, e := s.blobSize(ctx, e.Object)
-		if e != nil {
+		result := metadata[e.Object]
+		if result.err != nil {
 			c.Candidates[i].Diagnostics = []string{"skill_document_unavailable"}
 			c.incomplete("document_unavailable")
 			continue
 		}
+		n := result.size
 		if n > int64(s.policy.MaxDocumentBytes) {
 			c.Candidates[i].Diagnostics = []string{"skill_document_too_large"}
 			c.incomplete("document_bytes_limit")

@@ -15,8 +15,10 @@ import (
 // turning ambient client detection into an unsafe all-or-nothing guess. It
 // first narrows the installed clients to one complete target set that the
 // selected package can actually serve, then asks the user to confirm it.
-func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, source string, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.ClientID, []domain.DetectedClient, *loadedPackage, error) {
+func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, app App, opts *options, source string, intents ...map[domain.ClientID]domain.InstallIntent) ([]domain.ClientID, []domain.DetectedClient, *loadedPackage, error) {
+	stop := startCommandActivity(cmd, app, opts, "Finding installed agents")
 	clients, err := app.Detector.Detect(ctx)
+	stop()
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("detect AI clients: %w", err)
 	}
@@ -32,7 +34,9 @@ func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, ap
 		return selection, all, nil, err
 	}
 
-	compatible, skipped, preloaded, err := app.compatibleDetectedTargets(ctx, source, detected, intents...)
+	stop = startCommandActivity(cmd, app, opts, "Checking plugin compatibility")
+	compatible, skipped, preloaded, err := stopPluginActivityOnWrite(app, stop).compatibleDetectedTargets(ctx, source, detected, intents...)
+	stop()
 	if err != nil {
 		return nil, nil, nil, err
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
@@ -22,8 +21,5 @@ func RunNativeRegistry(ctx context.Context, runner ports.CommandRunner, command 
 	} else {
 		result, err = runner.Run(ctx, command)
 	}
-	if err != nil && !result.CleanupComplete && !result.NoChildStarted && !domain.IsUnclosedClientProbe(err) {
-		err = &domain.UnclosedClientProbe{Operation: "native client registry observation", Err: err}
-	}
-	return result, err
+	return result, NativeProbeFailure(result, err)
 }

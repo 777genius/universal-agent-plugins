@@ -38,6 +38,9 @@ func (session *repairSession) repairNative() (AddResult, error) {
 		}
 		return session.reapplyIntactNative(delivery)
 	}
+	if session.canCompletePreparedSetup(delivery, verified) {
+		return session.reapplyIntactNative(delivery)
+	}
 	return session.correctIntactLifecycle(verified)
 }
 
@@ -63,6 +66,7 @@ func (session *repairSession) reapplyIntactNative(delivery domain.StagedDelivery
 		ConfirmPluginEnable:   session.input.ConfirmPluginEnable,
 		BackendExecutable:     session.input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), session.client.NativeObjects...),
+		ProjectTrustConsent:   session.input.ProjectTrustConsent,
 	})
 	outcome = preserveManagedAuthentication(outcome, session.client.Authentication)
 	session.result.Activation = outcome

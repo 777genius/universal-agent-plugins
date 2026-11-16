@@ -88,16 +88,13 @@ func describeBindingFailure(outcome environment.BindingOutcome) *installFailure 
 		}
 	}
 	cause := failure.Kind
-	if outcome.Status == environment.BindingNotAttempted {
+	if outcome.Status == environment.BindingNotAttempted && cause != failureProcessCleanup {
 		failure.Kind = failureSkipped
 	}
 	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
 	if failure.Kind == failureSkipped {
 		// A skipped agent is only worth retrying when what stopped the run can be fixed by retrying.
 		_, _, failure.Retryable = applyFailureWording(cause)
-		if cause == failureProcessCleanup {
-			_, failure.Next, _ = applyFailureWording(cause)
-		}
 	}
 	return &failure
 }

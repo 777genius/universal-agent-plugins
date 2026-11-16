@@ -62,15 +62,16 @@ func (service Service) repairGroup(ctx context.Context, input GroupInput) (Group
 }
 
 type plannedGroupTarget struct {
-	input           AddInput
-	plan            domain.DeliveryPlan
-	resultIndexes   []int
-	clientBindingID string
-	managed         *domain.ClientBinding
-	delivery        domain.StagedDelivery
-	dataReceipt     domain.DataReceipt
-	dataCreated     bool
-	noChange        bool
+	input                 AddInput
+	plan                  domain.DeliveryPlan
+	resultIndexes         []int
+	clientBindingID       string
+	managed               *domain.ClientBinding
+	delivery              domain.StagedDelivery
+	dataReceipt           domain.DataReceipt
+	dataCreated           bool
+	noChange              bool
+	completePreparedSetup bool
 	// recovering marks a confirmed repair target whose managed native object is
 	// positively absent from the filesystem, proven without ever running native
 	// client discovery. Its full native identity is deferred until the group's
@@ -120,10 +121,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if err := session.planGroupTargets(); err != nil {
 		return session.result, err
 	}
-	if err := session.preflightCompatibleBindings(); err != nil {
-		return session.result, err
-	}
-	if err := session.preflightUnchangedProjections(); err != nil {
+	if err := session.preflightGroupTargets(); err != nil {
 		return session.result, err
 	}
 	if session.input.DryRun || !session.input.Confirmed {
@@ -165,6 +163,16 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		return session.result, err
 	}
 	return session.activateGroupTargets()
+}
+
+func (session *groupSession) preflightGroupTargets() error {
+	if err := session.preflightCompatibleBindings(); err != nil {
+		return err
+	}
+	if err := session.preflightUnchangedProjections(); err != nil {
+		return err
+	}
+	return session.observeGroupPreparedSetups()
 }
 
 func (session *groupSession) prepareGroupInputs() error {

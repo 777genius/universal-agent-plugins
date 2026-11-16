@@ -1137,7 +1137,7 @@ func TestInteractiveAddProbesOnlyTargetsSelectedAfterReadOnlyDetection(t *testin
 	command.SetIn(strings.NewReader("1\n"))
 	fixture.app.Prompter = terminalprompts.PlainPrompter{Input: command.InOrStdin(), Output: io.Discard}
 	command.SetOut(io.Discard)
-	selection, clients, loaded, err := promptCompatibleDetectedTargets(context.Background(), command, fixture.app, writeCLIPlugin(t))
+	selection, clients, loaded, err := promptCompatibleDetectedTargets(context.Background(), command, fixture.app, &options{format: "human"}, writeCLIPlugin(t))
 	if err != nil {
 		t.Fatal(err)
 	}

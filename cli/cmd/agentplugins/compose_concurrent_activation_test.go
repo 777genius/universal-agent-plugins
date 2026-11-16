@@ -19,12 +19,12 @@ import (
 // The CLI is the one composition root that qualified its process runner for
 // simultaneous client commands, so it must be the one that opts in.
 func TestCLICompositionRunsAttestedClientsConcurrently(t *testing.T) {
-	dataRoot := t.TempDir()
+	home, dataRoot := t.TempDir(), t.TempDir()
 	registry := clientregistry.Default()
 	paths := pathpolicy.Policy{}
 	store := statev2.Store{Path: filepath.Join(dataRoot, "state-v2.json")}
 	plan := planner.Planner{ManagedRoot: filepath.Join(dataRoot, "managed"), Paths: paths, Registry: registry}
-	service := newAgentpluginsLifecycle(t.TempDir(), dataRoot, store, paths, registry, providers.Stager{},
+	service := newAgentpluginsLifecycle(home, dataRoot, store, paths, registry, providers.Stager{},
 		processadapter.OS{}, plan, dirswap.Manager{JournalDir: filepath.Join(dataRoot, "operations")},
 		processlock.Lock{Path: filepath.Join(dataRoot, "mutation.lock")}, nativeconfig.New())
 	activator, ok := service.Activator.(providers.Activator)

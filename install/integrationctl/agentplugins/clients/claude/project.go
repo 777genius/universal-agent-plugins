@@ -12,10 +12,11 @@ import (
 )
 
 var (
-	_ clients.Projector       = (*Adapter)(nil)
-	_ clients.StagingLayout   = (*Adapter)(nil)
-	_ clients.SelectionReader = (*Adapter)(nil)
-	_ clients.SkillsLocator   = (*Adapter)(nil)
+	_ clients.Projector             = (*Adapter)(nil)
+	_ clients.StagingLayout         = (*Adapter)(nil)
+	_ clients.SelectionReader       = (*Adapter)(nil)
+	_ clients.SkillsLocator         = (*Adapter)(nil)
+	_ clients.ActiveNativeProjector = (*Adapter)(nil)
 )
 
 // StagingBase keeps the transaction staging directory beside Claude Code's
@@ -55,20 +56,30 @@ func (*Adapter) InstalledSkillsDirectory(plan domain.DeliveryPlan) string {
 	if plan.PackageMode != domain.PackageProjection {
 		return "skills"
 	}
+	if plan.Scope == domain.ScopeProject {
+		return claudeProjectBundleDirectory + "/" + ClaudeRuntimeDirectory + "/skills"
+	}
 	return ClaudeRuntimeDirectory + "/skills"
 }
 
 // Project renders the portable envelope into Claude Code's skills-directory
 // layout. Native-mode packages keep the sanitized snapshot as-is.
-func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
 	if in.Plan.PackageMode != domain.PackageProjection {
 		return nil, nil
 	}
 	if err := shared.DeliverManagedStdio(in.DeliverLauncher(), in.StagingPath, in.Envelope, in.Plan); err != nil {
 		return nil, err
 	}
-	if err := ProjectClaude(in.StagingPath, in.Envelope, in.Plan, in.PluginDataPath); err != nil {
+	project := ProjectClaude
+	if in.Plan.Scope == domain.ScopeProject {
+		project = projectClaudeMarketplace
+	}
+	if err := project(in.StagingPath, in.Envelope, in.Plan, in.PluginDataPath); err != nil {
 		return nil, err
+	}
+	if in.Plan.Scope == domain.ScopeProject {
+		return claudeProjectCacheProjection(ctx, in.StagingPath, in.Plan)
 	}
 	return nil, nil
 }

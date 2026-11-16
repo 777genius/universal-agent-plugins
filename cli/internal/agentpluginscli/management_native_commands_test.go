@@ -26,7 +26,7 @@ func managementCommandsBackend(t *testing.T) *ManagementBackend {
 	dependencyGit(t, repo, "add", ".")
 	dependencyGit(t, repo, "commit", "-m", "test: exact command projection fixture")
 	sha := savedJourneyGit(t, repo, "rev-parse", "HEAD")
-	fixture, _, _ := dependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientOpenCode, executable: true})
+	fixture, _ := managementDependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientOpenCode, executable: true})
 	backend := managementJourneyBackend(t, savedJourney{cli: fixture})
 	managementApply(t, managementPrepare(t, backend, management.ChangeRequest{Action: management.Install, Source: "github:acme/demo@" + sha, Alias: "demo", TargetIds: []string{"profile-opencode"}}))
 	return backend

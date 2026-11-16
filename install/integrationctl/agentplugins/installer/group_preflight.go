@@ -48,6 +48,7 @@ func (e *Engine) planMutatingGroup(handle *PreparedOperation, roots []string, en
 		handle.artifact = preview.Targets[0].Plan.PhysicalArtifactID
 	}
 	for i, target := range preview.Targets {
+		handle.plan.RequiresConfirmation = handle.plan.RequiresConfirmation || target.RequiresConfirmation
 		client := clients[i]
 		handle.plan.Targets = append(handle.plan.Targets, PlanTarget{ProfileAuthority: domain.CloneProfileAuthority(client.ProfileAuthority),
 			ClientID: string(client.ClientID), ConfigRoot: client.ConfigRoot,

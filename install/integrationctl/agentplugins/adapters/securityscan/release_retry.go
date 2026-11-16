@@ -40,12 +40,7 @@ func downloadReleaseArchive(ctx context.Context, client *http.Client, url string
 			}
 		} else {
 			if response.StatusCode == http.StatusOK {
-				body, readErr := io.ReadAll(io.LimitReader(response.Body, maxReleaseAsset+1))
-				_ = response.Body.Close()
-				if readErr != nil || len(body) > maxReleaseAsset {
-					return nil, errors.New("downloaded lintai release asset is unreadable or oversized")
-				}
-				return body, nil
+				return readReleaseArchive(response.Body)
 			}
 			status := response.StatusCode
 			_ = response.Body.Close()
@@ -64,4 +59,13 @@ func downloadReleaseArchive(ctx context.Context, client *http.Client, url string
 		}
 	}
 	return nil, errors.New("download lintai security scanner: retries exhausted")
+}
+
+func readReleaseArchive(response io.ReadCloser) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(response, maxReleaseAsset+1))
+	_ = response.Close()
+	if err != nil || len(body) > maxReleaseAsset {
+		return nil, errors.New("downloaded lintai release asset is unreadable or oversized")
+	}
+	return body, nil
 }

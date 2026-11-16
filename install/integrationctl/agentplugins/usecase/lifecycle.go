@@ -52,7 +52,7 @@ func (service Service) resume(
 		DeclaredName: input.Envelope.Manifest.Name, Replacing: true,
 		Interactive: input.Interactive, BackendExecutable: input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
-		VerifyOnly:            complete, ActivationComplete: input.ActivationComplete,
+		VerifyOnly:            complete, ActivationComplete: input.ActivationComplete, ProjectTrustConsent: input.ProjectTrustConsent,
 	}
 	var outcome domain.ActivationOutcome
 	var activationErr error
@@ -119,7 +119,7 @@ func (service Service) resumeActivationOutcome(input AddInput, plan domain.Deliv
 	if (client.Authentication == domain.AuthenticationPending || client.Authentication == domain.AuthenticationNotChecked) && input.AuthComplete {
 		outcome.Authentication = domain.AuthenticationComplete
 		outcome.AuthenticationAttested = true
-	} else if client.Authentication != "" {
+	} else if client.Authentication != "" && !service.observedAuthenticationNotRequired(input, plan, client, outcome, activationErr) {
 		outcome.Authentication = client.Authentication
 	}
 	if activationErr != nil && outcome.Activation == "" {

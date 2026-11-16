@@ -49,7 +49,11 @@ func normalizeMulti(req MultiSelectRequest) (MultiSelectRequest, error) {
 	if len(req.Defaults) > len(req.Options) {
 		return MultiSelectRequest{}, fmt.Errorf("%w: too many defaults", ErrInvalidRequest)
 	}
-	if len(req.Options) < 1 || len(req.Options) > 64 || req.MinSelected < 0 || req.MinSelected > len(req.Options) {
+	maxOptions, maxDisplayBytes := 64, 64*1024
+	if req.Filterable {
+		maxOptions, maxDisplayBytes = 2000, 1024*1024
+	}
+	if len(req.Options) < 1 || len(req.Options) > maxOptions || req.MinSelected < 0 || req.MinSelected > len(req.Options) {
 		return MultiSelectRequest{}, fmt.Errorf("%w: options/minimum out of range", ErrInvalidRequest)
 	}
 	total := len(req.Title)
@@ -72,8 +76,8 @@ func normalizeMulti(req MultiSelectRequest) (MultiSelectRequest, error) {
 		}
 		options[i] = option
 	}
-	if total > 64*1024 {
-		return MultiSelectRequest{}, fmt.Errorf("%w: display exceeds 64 KiB", ErrInvalidRequest)
+	if total > maxDisplayBytes {
+		return MultiSelectRequest{}, fmt.Errorf("%w: display exceeds %d bytes", ErrInvalidRequest, maxDisplayBytes)
 	}
 	defaults := make(map[string]bool, len(req.Defaults))
 	for _, id := range req.Defaults {
@@ -87,27 +91,36 @@ func normalizeMulti(req MultiSelectRequest) (MultiSelectRequest, error) {
 	return req, nil
 }
 
-func normalizeConfirm(req ConfirmRequest) (ConfirmRequest, error) {
+func normalizeConfirmationReview(req confirmationReview) (confirmationReview, error) {
 	total := len(req.Title)
 	title, err := displayField(req.Title, true)
 	if err != nil || strings.TrimSpace(title) == "" {
-		return ConfirmRequest{}, fmt.Errorf("%w: confirmation title", ErrInvalidRequest)
+		return confirmationReview{}, fmt.Errorf("%w: confirmation title", ErrInvalidRequest)
 	}
-	if len(req.Summary) > 128 {
-		return ConfirmRequest{}, fmt.Errorf("%w: summary exceeds 128 rows", ErrInvalidRequest)
+	if len(req.Summary)+len(req.Details) > 128 {
+		return confirmationReview{}, fmt.Errorf("%w: summary exceeds 128 rows: %w", ErrInvalidRequest, ErrReviewTooLarge)
 	}
-	summary := make([]string, len(req.Summary))
-	for i, row := range req.Summary {
-		total += len(row)
-		if len(row) > 4096 || !utf8.ValidString(row) {
-			return ConfirmRequest{}, fmt.Errorf("%w: invalid summary row", ErrInvalidRequest)
+	for _, rows := range []*[]string{&req.Summary, &req.Details} {
+		if *rows == nil {
+			continue
 		}
-		summary[i] = clean(row) // Authority rows are never clipped.
+		cleaned := make([]string, len(*rows))
+		for i, row := range *rows {
+			total += len(row)
+			if len(row) > 4096 {
+				return confirmationReview{}, fmt.Errorf("%w: confirmation row exceeds 4096 bytes: %w", ErrInvalidRequest, ErrReviewTooLarge)
+			}
+			if !utf8.ValidString(row) {
+				return confirmationReview{}, fmt.Errorf("%w: invalid summary row", ErrInvalidRequest)
+			}
+			cleaned[i] = clean(row) // Authority rows are never clipped.
+		}
+		*rows = cleaned
 	}
 	if total > 64*1024 {
-		return ConfirmRequest{}, fmt.Errorf("%w: display exceeds 64 KiB", ErrInvalidRequest)
+		return confirmationReview{}, fmt.Errorf("%w: display exceeds 64 KiB: %w", ErrInvalidRequest, ErrReviewTooLarge)
 	}
-	req.Title, req.Summary = title, summary
+	req.Title = title
 	return req, nil
 }
 

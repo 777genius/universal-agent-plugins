@@ -3,6 +3,7 @@ package providers_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/loader"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/specregistry"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/claude"
@@ -28,6 +30,18 @@ type claudeProjectFixture struct {
 	runner              *claudeProjectRunner
 }
 
+// This renderer materializes the prior on-disk format so these tests continue
+// exercising legacy receipt/list/removal compatibility through today's adapter.
+type legacyClaudeProjectRenderer struct{ *claude.Adapter }
+
+func (legacyClaudeProjectRenderer) Project(_ context.Context, in clients.ProjectionInput) ([]domain.NativeObjectOwnership, error) {
+	return nil, claude.ProjectClaude(in.StagingPath, in.Envelope, in.Plan, in.PluginDataPath)
+}
+
+func (legacyClaudeProjectRenderer) InstalledSkillsDirectory(domain.DeliveryPlan) string {
+	return claude.ClaudeRuntimeDirectory + "/skills"
+}
+
 func newClaudeProjectFixture(t *testing.T) *claudeProjectFixture {
 	t.Helper()
 	base := projectGeminiTemp(t)
@@ -36,7 +50,10 @@ func newClaudeProjectFixture(t *testing.T) *claudeProjectFixture {
 		projectGeminiWrite(t, filepath.Join(root, "settings.json"), `{"enabledPlugins":{"foreign@skills-dir":false}}`)
 		projectGeminiWrite(t, filepath.Join(root, "skills", "foreign", "SKILL.md"), "foreign skill\n")
 	}
-	registry, err := clients.NewRegistry(claude.New())
+	// Scope-isolation checks exclude creation of the separately authorized
+	// exact-project trust preference by starting with that preference present.
+	projectTrustFixture(t, filepath.Join(user, ".claude.json"), fmt.Sprintf("{\"projects\":{%q:{\"hasTrustDialogAccepted\":true}}}\n", filepath.ToSlash(project)))
+	registry, err := clients.NewRegistry(legacyClaudeProjectRenderer{claude.New()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +110,8 @@ func (f *claudeProjectFixture) stage(t *testing.T, operation string) {
 }
 
 func (f *claudeProjectFixture) activator() providers.Activator {
-	return providers.Activator{Registry: f.registry, Runner: f.runner}
+	kernel := nativeconfig.New()
+	return providers.Activator{Registry: f.registry, Runner: f.runner, NativeConfig: &kernel}
 }
 
 func (f *claudeProjectFixture) removal() domain.DeactivationRequest {
@@ -116,7 +134,8 @@ type claudeProjectRunner struct {
 func (r *claudeProjectRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	r.t.Helper()
 	f := r.fixture
-	if !reflect.DeepEqual(command.Argv, []string{f.request.Client.ExecutablePath, "plugin", "list", "--json"}) || command.Dir != f.request.Plan.TargetContext.ProjectRoot {
+	health := len(command.Argv) == 4 && command.Argv[0] == f.request.Client.ExecutablePath && command.Argv[1] == "mcp" && command.Argv[2] == "get"
+	if (!health && !reflect.DeepEqual(command.Argv, []string{f.request.Client.ExecutablePath, "plugin", "list", "--json"})) || command.Dir != f.request.Plan.TargetContext.ProjectRoot {
 		r.t.Fatalf("wrong scoped native command: %+v", command)
 	}
 	want := "CLAUDE_CONFIG_DIR=" + f.user
@@ -130,6 +149,9 @@ func (r *claudeProjectRunner) Run(_ context.Context, command legacyports.Command
 		r.t.Fatalf("original user authority lost: %q", command.Env)
 	}
 	r.calls++
+	if health {
+		return r.selectedMCPHealth(command.Argv[3])
+	}
 	if r.malformed {
 		return legacyports.CommandResult{Stdout: []byte(`{"unexpected":true}`)}, nil
 	}

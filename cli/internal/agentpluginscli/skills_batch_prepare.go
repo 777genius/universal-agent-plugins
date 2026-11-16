@@ -110,6 +110,9 @@ func (candidate *skillsBatchCandidate) prepare(ctx context.Context, app, preview
 	}
 	request := dependencySyncRequest{targets: candidate.targets, requirements: candidate.requirements, lock: locked, intent: snapshot.intent(manifest, lockBody), aliases: aliases, prepared: bindings, detected: detected}
 	plan := &PreparedSkillsBatch{app: app, preview: preview, cleanup: cleanup, request: request, warnings: warnings}
+	// Keep the command-owned immutable bytes through confirmation and Apply.
+	// Consumers still copy, rehash, reload and rescan them on every use.
+	plan.app.dependencySnapshots = preview.dependencySnapshots
 	for _, binding := range bindings {
 		plan.actions = append(plan.actions, SkillsAction{Alias: binding.Alias, ClientID: binding.ClientID, Action: string(binding.Action), TargetPath: paths[binding.Alias+"\x00"+binding.ClientID], CandidateID: candidate.candidateIDs[binding.Alias]})
 	}
@@ -143,6 +146,9 @@ func prepareSkillsBindings(ctx context.Context, app App, requirements environmen
 	adapter := &dependencyInstaller{app: app, opts: app.skillsOptions(), detected: detected, previewPaths: paths}
 	if len(warnings) > 0 {
 		adapter.previewWarnings = warnings[0]
+	}
+	if err := prepareSkillsResumes(ctx, adapter, view, prepared.Bindings, paths); err != nil {
+		return nil, nil, nil, err
 	}
 	// Match saved dependency preflight: selected project clients need an
 	// exact, profile-bound native version before the installer plans delivery.

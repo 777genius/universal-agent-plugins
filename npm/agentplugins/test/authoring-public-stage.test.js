@@ -18,7 +18,7 @@ const json = v => Buffer.from(JSON.stringify(v, null, 2) + "\n");
 const clone = v => JSON.parse(JSON.stringify(v));
 const inventory = p => ["LICENSE", "README.md", "package.json", `bin/${p}.js`, "bin/package.json",
   "lib/package.json", "lib/platform.js", "lib/verifier.js", "lib/public-authoring.js",
-  p === "agentplugins" ? "lib/bootstrap.js" : "lib/install.js", "scripts/package.json",
+  ...(p === "agentplugins" ? ["lib/bootstrap.js", "lib/bootstrap-progress.js"] : ["lib/install.js"]), "scripts/package.json",
   "scripts/dual-authoring-candidate.js", "public-release.json", "release-manifest.json", "native-inputs.json", "lib/public-authoring-contract.js", "lib/public-authoring-input.js"].sort();
 const assertions = ["authenticated_native_inputs", "exact_preparation_binding", "exact_source_blobs",
   "exact_generated_closures", "exact_pack_entries_modes_bytes", "both_products_complete", "shared_runtime_bytes_equal",
@@ -115,7 +115,7 @@ test("C1 pure pair: exact two-product closure, metadata and identical I/runtime 
     assert.deepEqual(pair[p]["release-manifest.json"], f.manifests[p]);
     assert.deepEqual(pair[p]["native-inputs.json"], f.inputBytes);
     for (const n of ["LICENSE", "README.md", `bin/${p}.js`, "lib/platform.js",
-      p === "agentplugins" ? "lib/bootstrap.js" : "lib/install.js"]) {
+      ...(p === "agentplugins" ? ["lib/bootstrap.js", "lib/bootstrap-progress.js"] : ["lib/install.js"])]) {
       assert.deepEqual(pair[p][n], f.source[`npm/${p}/${n}`].bytes);
     }
     for (const dir of ["bin", "lib", "scripts"]) assert.deepEqual(pair[p][`${dir}/package.json`], json({ type: "commonjs" }));
@@ -392,7 +392,7 @@ test("C1 pure v1 regression: same descriptor, metadata, null/private and all oth
 
 test("C1 pure inventories: separate exact stage additions and unchanged legacy exports", () => {
   const own = p => ["LICENSE", "README.md", "package.json", `bin/${p}.js`, "lib/platform.js",
-    p === "agentplugins" ? "lib/bootstrap.js" : "lib/install.js"].map(n => `npm/${p}/${n}`);
+    ...(p === "agentplugins" ? ["lib/bootstrap.js", "lib/bootstrap-progress.js"] : ["lib/install.js"])].map(n => `npm/${p}/${n}`);
   assert.deepEqual(stage.COMMON, ["lib/verifier.js", "lib/public-authoring.js", "scripts/dual-authoring-candidate.js"]);
   const legacy = [...stage.COMMON.map(n => prefix + n), ...products.flatMap(own),
     ...["stage-authoring-npm.js", "stage-dual-authoring-npm.js", "stage-dual-authoring-candidate.js", "authoring-release.js"]

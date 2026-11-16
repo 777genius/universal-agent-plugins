@@ -97,19 +97,21 @@ function engine(t, f, product, warm = false) {
   const io = Object.fromEntries(["mkdir", "lstat", "mkdtemp", "unlink", "rmdir"].map(name => [name, async () => {
     invoke(name); return name === "lstat" ? { ...stat } : name === "mkdtemp" ? "/unit-cache/public-authoring-v2/.download-unit" : undefined;
   }]));
+  const options = { packageRoot: "/unit-package", cacheRoot: "/unit-cache", platform: "linux", arch: "x64", io, environment: {} };
   t.mock.method(v, "privateDirectory", async () => invoke("directory"));
   t.mock.method(v, "acquireLock", async () => { invoke("lock"); return async () => invoke("unlock"); });
   t.mock.method(v, "strictCachedBinary", async (file, pin) => { invoke("strict"); assert.deepEqual(pin, asset.binary); return valid; });
   t.mock.method(v, "commitVerifiedBinary", async (bytes, file, pin) => {
     invoke("commit"); assert.deepEqual(bytes, native(product, "linux-amd64")); assert.deepEqual(pin, asset.binary); valid = true;
   });
-  t.mock.method(v, "downloadFile", async (url, file, pin, options) => {
+  t.mock.method(v, "downloadFile", async (url, file, pin, downloadOptions) => {
     invoke("download"); assert.equal(url, `https://github.com/${c.REPOSITORY}/releases/download/${f.input.products[product].tag}/${asset.file}`);
-    assert.deepEqual(pin, asset); assert.deepEqual(Object.keys(options).sort(), ["onOpen", "request", "signal"]);
+    assert.deepEqual(pin, asset); assert.deepEqual(Object.keys(downloadOptions).sort(), ["onOpen", "onProgress", "request", "signal"]);
+    for (const key of ["onProgress", "request", "signal"]) assert.strictEqual(downloadOptions[key], options[key]);
   });
   t.mock.method(c, "readFile", () => { invoke("read-download"); return Buffer.from(f.outers[asset.file]); });
   t.mock.method(c, "unpack", (bytes, name) => { invoke("unpack"); assert.deepEqual(bytes, f.outers[asset.file]); assert.equal(name, asset.binary.file); return native(product, "linux-amd64"); });
-  return { calls, fault, stat, options: { packageRoot: "/unit-package", cacheRoot: "/unit-cache", platform: "linux", arch: "x64", io, environment: {} } };
+  return { calls, fault, stat, options };
 }
 function local(m, f, product) {
   const a = f.input.products[product].assets["linux-amd64"], parent = "/custody space ü", file = `${parent}/${a.file}`;
@@ -267,6 +269,7 @@ if (require.main === module) {
     const f = fixture();
     for (const p of c.PRODUCTS) {
       const m = memory(t, f.pair[p]), e = engine(t, f, p);
+      e.options.onProgress = () => {};
       e.options.environment = { PLUGIN_KIT_AI_REPOSITORY: "wrong", PLUGIN_KIT_AI_VERSION: "wrong", UAP_PUBLIC_AUTHORING_VERIFIED: "true" };
       const result = await runtime.ensureBinary(p, e.options);
       assert.equal(result.repository, c.REPOSITORY); assert.ok(e.calls.indexOf("download") < e.calls.indexOf("commit")); assert.equal(m.handles.size, 0); t.mock.restoreAll();
@@ -425,7 +428,7 @@ if (require.main === module) {
     const f = fixture();
     for (const p of c.PRODUCTS) {
       const files = stage.packageFiles(p, source, f.manifests[p], { identity: f.input.identity, manifestDigest: f.input.candidate_sha256 });
-      assert.equal(Object.keys(files).length, 14); assert.equal(JSON.parse(files["package.json"]).private, true);
+      assert.equal(Object.keys(files).length, p === "agentplugins" ? 15 : 14); assert.equal(JSON.parse(files["package.json"]).private, true);
       for (const locator of ["/anything", ""]) {
         const m = memory(t, files), e = engine(t, f, p);
         t.mock.method(c, "readFile", file => files[path.basename(file)]);

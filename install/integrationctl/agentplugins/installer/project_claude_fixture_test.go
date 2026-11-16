@@ -37,7 +37,7 @@ func claudeSDKWrite(t *testing.T, path, body string) {
 	}
 }
 
-func newClaudeSDKFixture(t *testing.T, base, project, user, pkg string) *claudeSDKFixture {
+func newClaudeSDKFixture(t *testing.T, base, project, user, pkg string, adapters ...clients.Adapter) *claudeSDKFixture {
 	t.Helper()
 	f := &claudeSDKFixture{project: project, user: user, packageRoot: pkg, state: filepath.Join(base, "user-uap"), executable: filepath.Join(base, "inert-claude")}
 	scope := domain.ScopeUser
@@ -49,7 +49,10 @@ func newClaudeSDKFixture(t *testing.T, base, project, user, pkg string) *claudeS
 	if err := os.Chmod(f.executable, 0700); err != nil {
 		t.Fatal(err)
 	}
-	registry, err := clients.NewRegistry(claude.New())
+	if len(adapters) == 0 {
+		adapters = []clients.Adapter{claude.New()}
+	}
+	registry, err := clients.NewRegistry(adapters...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +60,7 @@ func newClaudeSDKFixture(t *testing.T, base, project, user, pkg string) *claudeS
 	f.engine, err = installer.New(installer.Config{ProjectRoot: project, StateRoot: f.state, Registry: registry, Runner: f.runner, HelperExecutable: f.executable, EnableNativeObserver: true, TrustedLocalPackages: true,
 		OnCommittedBinding: func(_ context.Context, facts installer.BindingFacts) error {
 			if f.failAfterCommit {
-				body, err := os.ReadFile(filepath.Join(facts.TargetPath, claude.ClaudeRuntimeDirectory, "skills", "docs", "SKILL.md"))
+				body, err := os.ReadFile(claudeSDKSkillPath(facts.TargetPath, scope))
 				if err == nil && strings.Contains(string(body), "Moving source bytes.") {
 					f.runner.fail = true
 				}
@@ -122,7 +125,7 @@ type claudeSDKRunner struct {
 
 func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	r.t.Helper()
-	if !reflect.DeepEqual(command.Argv, []string{r.executable, "plugin", "list", "--json"}) {
+	if len(command.Argv) < 3 || command.Argv[0] != r.executable {
 		r.t.Fatalf("unexpected SDK native command=%+v", command)
 	}
 	root, scope := r.user, "user"
@@ -143,9 +146,13 @@ func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (l
 		r.t.Fatalf("SDK replaced original user config=%q", command.Env)
 	}
 	if r.fail {
-		return legacyports.CommandResult{}, fmt.Errorf("inert unavailable native listing")
+		return legacyports.CommandResult{NoChildStarted: true}, fmt.Errorf("inert unavailable native listing")
 	}
 	r.calls++
+	health := len(command.Argv) == 4 && command.Argv[1] == "mcp" && command.Argv[2] == "get"
+	if !health && !reflect.DeepEqual(command.Argv[1:], []string{"plugin", "list", "--json"}) {
+		return r.marketplaceCommand(command.Argv[1:])
+	}
 	listing := claudeSDKListing(r.t, r.user, "user")
 	if scope == "project" {
 		projectRows := claudeSDKListing(r.t, root, "project")
@@ -166,6 +173,11 @@ func (r *claudeSDKRunner) Run(_ context.Context, command legacyports.Command) (l
 		}
 	}
 
+	listing = append(listing, r.marketplaceListing()...)
+	if health {
+		body, err := claudeSDKHealth(command.Argv[3], listing)
+		return legacyports.CommandResult{Stdout: body}, err
+	}
 	body, err := json.Marshal(listing)
 	return legacyports.CommandResult{Stdout: body}, err
 }
@@ -193,4 +205,48 @@ func claudeSDKListing(t *testing.T, root, scope string) []map[string]any {
 		listing = append(listing, map[string]any{"id": fmt.Sprint(manifest["name"]) + "@skills-dir", "version": manifest["version"], "scope": scope, "enabled": true, "installPath": path})
 	}
 	return listing
+}
+
+func claudeSDKHealth(selector string, listings []map[string]any) ([]byte, error) {
+	parts := strings.Split(selector, ":")
+	if len(parts) != 3 || parts[0] != "plugin" || parts[1] == "" || parts[2] == "" {
+		return nil, fmt.Errorf("invalid fixture MCP selector")
+	}
+	matches := 0
+	var selected map[string]any
+	for _, row := range listings {
+		id, _ := row["id"].(string)
+		name, _, _ := strings.Cut(id, "@")
+		if name != parts[1] || row["enabled"] != true {
+			continue
+		}
+		root, _ := row["installPath"].(string)
+		body, err := os.ReadFile(filepath.Join(root, ".mcp.json"))
+		if err != nil {
+			return nil, err
+		}
+		var servers map[string]map[string]any
+		if err := json.Unmarshal(body, &servers); err != nil {
+			return nil, err
+		}
+		server, exists := servers[parts[2]]
+		if !exists {
+			return nil, fmt.Errorf("selected fixture plugin has no MCP server %q", parts[2])
+		}
+		selected = server
+		matches++
+	}
+	if matches != 1 {
+		return nil, fmt.Errorf("fixture MCP selector must resolve exactly once, got %d", matches)
+	}
+	kind, _ := selected["type"].(string)
+	if kind == "" {
+		if command, _ := selected["command"].(string); command != "" {
+			kind = "stdio"
+		}
+	}
+	if kind != "stdio" && kind != "http" && kind != "sse" {
+		return nil, fmt.Errorf("unsupported delivered fixture MCP transport %q", kind)
+	}
+	return []byte(fmt.Sprintf("%s:\n  Scope: Dynamic config (from command line)\n  Status: ✔ Connected\n  Type: %s\n", selector, kind)), nil
 }
