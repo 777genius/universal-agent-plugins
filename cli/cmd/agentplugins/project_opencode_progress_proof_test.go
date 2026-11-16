@@ -54,7 +54,7 @@ func TestOpenCodeProjectPublicRepeatProgressSource(t *testing.T) {
 		}
 		expected := "Resolving and validating one Agent Plugin package for every selected target...\nInstalling uap-commands-fixture for 1 selected clients...\n"
 		if label == "repeat-add" {
-			expected = "Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+			// A byte-identical replay takes the verified no-op path, so it\n\t\t\t// must not claim that a transaction was applied.\n\t\t\texpected = "Resolving and validating one Agent Plugin package for every selected target...\n"
 		}
 		if stderr.String() != expected {
 			t.Fatalf("%s progress: got %q, want %q", label, stderr.String(), expected)
