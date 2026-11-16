@@ -2,7 +2,9 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -78,7 +80,10 @@ func (service Service) inspectOwnedVerification(ctx context.Context, input AddIn
 		return false, errors.New("verify-only native adapter reported an effect")
 	}
 	verified := outcome.Verification == domain.VerificationInstalled || outcome.Verification == domain.VerificationRuntime
-	return outcome.Activation == domain.ActivationActive && verified, nil
+	if outcome.Activation == domain.ActivationActive && verified {
+		return true, nil
+	}
+	return service.inspectPreparedMaterialization(ctx, input, plan, binding, outcome)
 }
 
 func (service Service) inspectOwnedNativeIdentity(ctx context.Context, input AddInput, plan domain.DeliveryPlan, binding domain.ClientBinding) (bool, error) {
@@ -90,4 +95,111 @@ func (service Service) inspectOwnedNativeIdentity(ctx context.Context, input Add
 		return false, err
 	}
 	return observation.State == domain.NativeIdentityManaged && observation.Digest == managedDigest(binding) && observation.NativeDiscoveryReconciled, nil
+}
+
+// The only input to this optional proof is the fresh observation above. Stored
+// readiness and guidance cannot replace it, and success never persists Active.
+func (service Service) inspectPreparedMaterialization(ctx context.Context, input AddInput, plan domain.DeliveryPlan, binding domain.ClientBinding, outcome domain.ActivationOutcome) (bool, error) {
+	verifier, ok := service.Activator.(ports.PreparedMaterializationVerifier)
+	if !ok || !verifier.PreparedMaterializationVerifierAvailable(clonePreparedVerifierClient(input.Client)) || !preparedMaterializationCandidate(binding, outcome) {
+		return false, nil
+	}
+	if err := service.checkMaterializationContext(ctx); err != nil {
+		return false, err
+	}
+	if service.StateStore == nil {
+		return false, errors.New("materialization state verification is unavailable")
+	}
+	before, err := service.StateStore.Load()
+	if err != nil {
+		return false, err
+	}
+	if !retainedMaterializationBinding(before, binding) {
+		return false, errors.New("materialization binding changed before classification")
+	}
+	before, err = freezeMaterializationState(before)
+	if err != nil {
+		return false, err
+	}
+	request := preparedMaterializationRequest(input, plan, binding)
+	verified := verifier.PreparedMaterializationVerified(request, cloneMaterializationOutcome(outcome))
+	if err := service.checkMaterializationContext(ctx); err != nil {
+		return false, err
+	}
+	after, err := service.StateStore.Load()
+	if err != nil {
+		return false, err
+	}
+	if !reflect.DeepEqual(before, after) {
+		return false, errors.New("materialization classifier changed retained state")
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	return verified, nil
+}
+
+func preparedMaterializationCandidate(binding domain.ClientBinding, outcome domain.ActivationOutcome) bool {
+	return binding.Materialization == domain.MaterializationMaterialized &&
+		binding.NativeActivationAttempt == "" && binding.PendingNativeIntent == nil &&
+		len(binding.NativeObjects) > 0 && reflect.DeepEqual(binding.NativeObjects, outcome.NativeObjects) &&
+		outcome.Activation == domain.ActivationPrepared && outcome.Verification == domain.VerificationInstalled &&
+		outcome.Policy == domain.PolicyAllowed && outcome.NativeEffect == domain.NativeEffectUnchanged &&
+		!outcome.ActivationAttested && !outcome.AuthenticationAttested && !outcome.AuthoritativeObservation &&
+		outcome.LocalEntryObservation == nil
+}
+
+func preparedMaterializationRequest(input AddInput, plan domain.DeliveryPlan, binding domain.ClientBinding) domain.ActivationRequest {
+	plan = clonePreparedVerifierPlan(plan)
+	plan.LocalEntryObservation = binding.LocalEntryObservation.Clone()
+	plan.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)
+	return domain.ActivationRequest{
+		Client: clonePreparedVerifierClient(input.Client), Plan: plan,
+		Delivery: domain.StagedDelivery{ClientID: input.Client.ClientID, OwnedBase: plan.TargetRoot,
+			ActivePath: binding.TargetLocator, ArtifactDigest: managedDigest(binding),
+			NativeObjects: append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...)},
+		DeclaredName: input.Envelope.Manifest.Name, Replacing: true, VerifyOnly: true,
+		BackendExecutable:     input.BackendExecutable,
+		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), binding.NativeObjects...),
+	}
+}
+
+func retainedMaterializationBinding(state domain.StateFileV2, expected domain.ClientBinding) bool {
+	if expected.ClientBindingID == "" {
+		return false
+	}
+	matches := 0
+	for _, installation := range state.Installations {
+		if actual, ok := installation.Clients[expected.ClientBindingID]; ok {
+			if !reflect.DeepEqual(actual, expected) {
+				return false
+			}
+			matches++
+		}
+	}
+	return matches == 1
+}
+
+func (service Service) checkMaterializationContext(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if service.profileCheck != nil {
+		return service.profileCheck()
+	}
+	return nil
+}
+
+func freezeMaterializationState(state domain.StateFileV2) (domain.StateFileV2, error) {
+	// As for native removal, snapshot the entire persisted representation.
+	// A memory-backed store must not retain aliases into this comparison basis.
+	body, err := json.Marshal(state)
+	if err != nil {
+		return domain.StateFileV2{}, err
+	}
+	var frozen domain.StateFileV2
+	if err := json.Unmarshal(body, &frozen); err != nil {
+		return domain.StateFileV2{}, err
+	}
+	return frozen, nil
 }

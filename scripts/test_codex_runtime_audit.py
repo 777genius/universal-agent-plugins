@@ -81,6 +81,68 @@ class RemotionTemporaryRootTest(unittest.TestCase):
                         resolve.assert_not_called()
 
 
+class RemotionRepeatNativePhaseTest(unittest.TestCase):
+    def setUp(self):
+        self.live = run_path(str(Path(__file__).with_name("live-install-audit.py")))
+
+    def test_every_phase_keeps_the_original_snapshot_without_adopting_new_files(self):
+        with tempfile.TemporaryDirectory(prefix="remotion-phases-inert-") as temporary:
+            root = Path(temporary) / ".codex"
+            root.mkdir()
+            (root / "foreign").write_bytes(b"private original contents")
+            before = self.live["snapshot"]([root])
+            original = dict(before)
+            snapshots = []
+            for name in ("after-add", "after-list", "after-native"):
+                member = root / ".tmp" / name / "HEAD"
+                member.parent.mkdir(parents=True)
+                member.write_bytes(b"ref: refs/heads/main\n")
+                snapshots.append(self.live["snapshot"]([root]))
+            phases = self.live["repeat_native_phase_evidence"](before, *snapshots)
+            self.assertEqual([row["phase"] for row in phases], [
+                "after-public-repeat-add", "after-public-repeat-list", "after-native-checkpoint"])
+            self.assertEqual([row["total"] for row in phases], [1, 2, 3])
+            for row in phases:
+                self.assertEqual(row["omitted"], 0)
+                self.assertTrue(all(entry["before"] is None for entry in row["entries"]))
+                self.assertTrue(all(len(entry["after"]) == 64 for entry in row["entries"]))
+            self.assertEqual(before, original)
+            self.assertNotEqual(snapshots[-1], before, "the original final equality must still fail")
+            text = json.dumps(phases)
+            self.assertNotIn(temporary, text)
+            self.assertNotIn("private original contents", text)
+            self.assertNotIn("ref: refs/heads/main", text)
+
+    def test_each_phase_retains_existing_bounds_and_unsafe_markers(self):
+        long_path = ".codex/000-" + "x" * 3000
+        before = {long_path: "symlink"}
+        after = {f".codex/{index:03d}": "a" * 64 for index in range(1, 105)}
+        after[long_path] = "unreadable"
+        phases = self.live["repeat_native_phase_evidence"](before, after, after, after)
+        self.assertEqual(len(phases), 3)
+        for row in phases:
+            self.assertEqual(row["total"], 105)
+            self.assertEqual(row["omitted"], 5)
+            self.assertEqual(len(row["entries"]), 100)
+            first = row["entries"][0]
+            self.assertEqual(len(first["path"]), 2048)
+            self.assertTrue(first["path_truncated"])
+            self.assertEqual((first["before"], first["after"]), ("symlink", "unreadable"))
+        self.assertEqual(before, {long_path: "symlink"})
+
+    def test_unchanged_phases_are_empty_and_failure_projection_preserves_verdict(self):
+        before = {".codex/foreign": "a" * 64}
+        phases = self.live["repeat_native_phase_evidence"](before, before, before, before)
+        self.assertTrue(all(row["total"] == 0 and row["omitted"] == 0
+                            and row["entries"] == [] for row in phases))
+        failed = {"repeat_native_phases": phases, "repeat_native_unchanged": False,
+                  "repeat_verified": False, "sentinels_preserved": True}
+        evidence = self.live["failed_case_diagnostics"](failed)
+        self.assertEqual(evidence, failed)
+        self.assertFalse(evidence["repeat_verified"])
+        self.assertFalse(evidence["repeat_native_unchanged"])
+
+
 class CodexRuntimeStateTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
@@ -317,102 +379,115 @@ class CodexNativeQualificationTest(unittest.TestCase):
                 self.assertFalse(audit.public_skill_ready(added, self.matches, "selected"))
 
 
-class CodexProjectTrustGuardTest(unittest.TestCase):
+class CodexSkillProfileGuardTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.case = Path(self.temporary.name).resolve()
         self.home, self.project = self.case / "home", self.case / "project"
-        profile = self.home / ".codex"
-        for path in (self.home, profile, self.project, self.case / "tmp"):
+        self.profile = self.home / ".codex"
+        for path in (self.home, self.profile, self.project, self.case / "tmp"):
             path.mkdir()
-        foreign = self.project / ".agents/skills/foreign-neighbor/SKILL.md"
-        foreign.parent.mkdir(parents=True)
-        foreign.write_text("independently owned fixture\n")
-        existing = run_path(str(Path(__file__).with_name("live-install-audit.py")))
-        # Only native subprocess discovery is replaced; the real constructor,
-        # path/FD checks and parsed full-configuration guard remain under test.
-        with patch.object(audit.CodexRuntimeAudit, "checkpoint", return_value=True):
-            self.observer = audit.CodexRuntimeAudit(
-                "/TEST/codex", self.case, self.home, self.project, {}, "selected", foreign,
-                existing["codex_marketplace_source_in_case"])
-        self.original = self.observer.config_bytes.decode()
-        self.observer.guard()
+        self.foreign = self.project / ".agents/skills/foreign-neighbor/SKILL.md"
+        self.foreign.parent.mkdir(parents=True)
+        self.foreign.write_text("independently owned fixture\n", encoding="utf-8")
+        self.selected = self.project / ".agents/skills/selected/SKILL.md"
+        # Mock only the finite native exchange. Constructor, four-phase guard,
+        # exact inventory checks and complete SQLite reads remain real.
+        observer = patch.object(audit, "_exchange", side_effect=self.discover)
+        self.exchange = observer.start()
+        self.addCleanup(observer.stop)
+        self.observer = audit.CodexRuntimeAudit(
+            Path(sys.executable), self.case, self.home, self.project, {}, "selected", self.foreign)
+        self.original = self.observer.config_bytes
 
-    def configured(self, project=None, trust="trusted", extra=""):
-        return (self.original + "\n[projects." + json.dumps(str(project or self.project))
-                + "]\ntrust_level = " + json.dumps(trust) + "\n" + extra)
+    async def discover(self, binary, project, profile, environment):
+        self.assertEqual(binary, Path(sys.executable))
+        self.assertEqual(project, self.project)
+        self.assertEqual(profile, self.profile)
+        self.assertEqual(environment["CODEX_HOME"], str(self.profile))
+        database = self.home / ".local/state/codex-sqlite/state_5.sqlite"
+        if not database.exists():
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("CREATE TABLE fixture_rows (id INTEGER PRIMARY KEY, value TEXT)")
+                connection.execute("INSERT INTO fixture_rows VALUES (1, 'unchanged')")
+                connection.commit()
+        skills = [{"name": "foreign-neighbor", "path": str(self.foreign),
+                   "scope": "repo", "enabled": True, "pluginId": None}]
+        if self.selected.exists():
+            skills.append({"name": "selected", "path": str(self.selected),
+                           "scope": "repo", "enabled": True, "pluginId": None})
+        return {"data": [{"cwd": str(self.project), "errors": [], "skills": skills}]}
 
-    def write(self, body):
-        self.observer.config.write_text(body, encoding="utf-8")
+    def test_raw_skill_lifecycle_requires_unchanged_profile_without_trust(self):
+        baseline = copy.deepcopy(self.observer.baseline)
+        self.selected.parent.mkdir()
+        self.selected.write_text("inert selected Skill\n", encoding="utf-8")
+        self.assertTrue(self.observer.checkpoint("installed", True))
+        self.assertTrue(self.observer.checkpoint("repeat", True))
+        self.selected.unlink()
+        self.assertTrue(self.observer.checkpoint("removed", False))
+        self.assertEqual(self.exchange.call_count, 4)
+        self.assertEqual(self.observer.config.read_bytes(), self.original)
+        self.assertEqual(self.observer.baseline, baseline)
+        self.assertEqual(self.foreign.read_text(encoding="utf-8"), "independently owned fixture\n")
+        observations = self.observer.evidence()["observations"]
+        self.assertEqual([row["phase"] for row in observations],
+                         ["before-install", "installed", "repeat", "removed"])
+        self.assertEqual([row["selected_skill_present"] for row in observations], [False, True, True, False])
+        self.assertTrue(all(row["foreign_skill_present"] and row["native_exit_code"] == 0
+                            and row["runtime_integrity_verified"] and row["runtime_semantics_unchanged"]
+                            and set(row["runtime_files_fully_read"]) == {"state_5.sqlite"}
+                            for row in observations))
 
-    def test_exact_trust_cannot_precede_confirmed_install_boundary(self):
-        self.write(self.configured())
-        with self.assertRaisesRegex(ValueError, "outside the confirmed installation"):
-            self.observer.guard()
-        with self.assertRaises(ValueError):
-            self.observer.begin_install()
-        self.assertFalse(self.observer.trust_authorized)
-
-    def test_authorized_grant_is_required_for_install_and_retained_on_remove(self):
-        self.observer.begin_install()
-        self.observer.guard()  # A refused add need not have granted trust.
-        with patch.object(audit, "_exchange") as exchange:
-            with self.assertRaisesRegex(ValueError, "trust is missing"):
-                self.observer.checkpoint("installed", True)
-            exchange.assert_not_called()
-        self.write(self.configured())
-        self.observer.guard(require_trust=True)
-        self.observer.guard()  # Repeat/removal retain this persistent preference.
-        self.assertTrue(self.observer.trust_observed)
-        self.write(self.original)
-        with self.assertRaisesRegex(ValueError, "revoked"):
-            self.observer.guard()
-
-    def test_only_exact_trust_and_unchanged_full_runtime_configuration_are_admitted(self):
-        self.observer.begin_install()
-        other = self.case / "other-project"
-        other.mkdir()
+    def test_all_unexpected_profile_bytes_fail_before_or_after_discovery(self):
+        trust = ("\n[projects." + json.dumps(str(self.project)) + ']\ntrust_level = "trusted"\n').encode()
         cases = {
-            "other project": self.configured(other),
-            "broader case": self.configured(self.case),
-            "relative project": self.configured(Path("project")),
-            "untrusted": self.configured(trust="untrusted"),
-            "extra preference": self.configured(extra="extra = true\n"),
-            "second project": self.configured() + "\n[projects." + json.dumps(str(other))
-                              + ']\ntrust_level = "trusted"\n',
-            "unexpected root key": 'model = "foreign"\n' + self.configured(),
-            "runtime changed": self.configured().replace("codex-sqlite", "foreign-sqlite"),
-            "runtime omitted": "\n".join(self.configured().splitlines()[1:]),
+            "selected trust": self.original + trust,
+            "formatting": self.original + b"\n",
+            "unknown preference": self.original + b'model = "foreign"\n',
+            "runtime changed": self.original.replace(b"codex-sqlite", b"foreign-sqlite"),
+            "runtime omitted": b"",
         }
+        calls = self.exchange.call_count
         for name, body in cases.items():
             with self.subTest(name=name):
-                self.write(body)
-                with self.assertRaises(ValueError):
-                    self.observer.guard(require_trust=True)
-        # TOML formatting may change; the complete parsed document may not.
-        self.write(self.original + "\nprojects = {" + json.dumps(str(self.project))
-                   + ' = { trust_level = "trusted" }}\n')
-        self.observer.guard(require_trust=True)
+                self.observer.config.write_bytes(body)
+                with self.assertRaisesRegex(ValueError, "runtime configuration changed"):
+                    self.observer.checkpoint("refused", False)
+                self.assertEqual(self.exchange.call_count, calls)
+                self.observer.config.write_bytes(self.original)
+                self.observer.guard()
 
-    def test_physical_project_identity_rejects_redirected_aliases(self):
-        self.observer.begin_install()
-        alias = self.case / "alias"
+        async def mutate_during_discovery(*args):
+            listing = await self.discover(*args)
+            self.observer.config.write_bytes(self.original + trust)
+            return listing
+
+        with patch.object(audit, "_exchange", side_effect=mutate_during_discovery):
+            with self.assertRaisesRegex(ValueError, "runtime configuration changed"):
+                self.observer.checkpoint("changed-during-discovery", False)
+        self.assertEqual(len(self.observer.observations), 1)
+
+    def test_redirected_configuration_is_rejected_without_a_native_process(self):
+        foreign = self.case / "foreign-config.toml"
+        self.observer.config.rename(foreign)
+        calls = self.exchange.call_count
+        os.link(foreign, self.observer.config)
         try:
-            alias.symlink_to(self.project, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "exclusively linked"):
+                self.observer.checkpoint("hardlinked-config", False)
+            self.assertEqual(self.exchange.call_count, calls)
+        finally:
+            self.observer.config.unlink()
+        try:
+            self.observer.config.symlink_to(foreign)
         except OSError as error:
             self.skipTest(str(error))
-        self.write(self.configured(alias))
         with self.assertRaises(ValueError):
-            self.observer.guard(require_trust=True)
-        alias.unlink()
-        alias.symlink_to(self.case, target_is_directory=True)
-        self.write(self.configured(alias / "project"))
-        with self.assertRaises(ValueError):
-            self.observer.guard(require_trust=True)
-        if os.name == "nt":
-            self.write(self.configured(Path("\\\\?\\" + str(self.project))))
-            self.observer.guard(require_trust=True)
+            self.observer.checkpoint("redirected-config", False)
+        self.assertEqual(self.exchange.call_count, calls)
+        self.assertEqual(foreign.read_bytes(), self.original)
 
 
 def process_running(pid):
@@ -449,6 +524,48 @@ def process_running(pid):
 
 
 class CodexNativeProcessCleanupTest(unittest.TestCase):
+    def observed_exit(self, exit_code, stderr):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            profile = root / "profile"
+            profile.mkdir()
+            # Valid finite protocol replies isolate the exit/diagnostic gate;
+            # this real process fixture is not native Codex discovery evidence.
+            script = textwrap.dedent("""
+                import json, os, sys
+                first = json.loads(sys.stdin.readline())
+                print(json.dumps({'id': first['id'], 'result': {
+                    'codexHome': os.environ['CODEX_HOME'], 'userAgent': 'agentplugins/0.153.4 (fixture)'}}), flush=True)
+                json.loads(sys.stdin.readline())
+                second = json.loads(sys.stdin.readline())
+                print(json.dumps({'id': second['id'], 'result': {'data': []}}), flush=True)
+                sys.stdin.read()
+            """)
+            script += f"sys.stderr.buffer.write(bytes.fromhex({stderr.hex()!r}))\n"
+            script += f"sys.stderr.buffer.flush()\nraise SystemExit({exit_code})\n"
+            (root / "app-server").write_text(script, encoding="utf-8")
+            environment = {key: value for key, value in os.environ.items()
+                           if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR"}}
+            environment.update(HOME=str(root), USERPROFILE=str(root), CODEX_HOME=str(profile))
+            return asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment))
+
+    def test_nonzero_exit_still_refuses_with_observed_diagnostic(self):
+        self.assertEqual(self.observed_exit(0, b""), {"data": []})
+        with self.assertRaises(ValueError) as raised:
+            self.observed_exit(7, b"")
+        self.assertIn("did not exit cleanly: exit_code=7, stderr_bytes=0, stderr_prefix=b''", str(raised.exception))
+
+    def test_stderr_still_refuses_with_bounded_escaped_diagnostic(self):
+        stderr = b"\x1b[31mfirst\n" + b"x" * 4096 + b"omitted-tail"
+        with self.assertRaises(ValueError) as raised:
+            self.observed_exit(0, stderr)
+        message = str(raised.exception)
+        self.assertIn(f"exit_code=0, stderr_bytes={len(stderr)}", message)
+        self.assertIn("\\x1b[31mfirst\\n", message)
+        self.assertNotIn("\x1b", message)
+        self.assertNotIn("omitted-tail", message)
+        self.assertLess(len(message), 4 * 2048 + 160)
+
     def test_exited_launcher_with_child_held_pipes_cannot_pass_or_leak(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()

@@ -54,6 +54,14 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 		}
 	}
 	shared.QualifyRawSkillInstallationAuthentication(in.Envelope, plan)
+	if in.Intent == domain.InstallIntentAutomatic {
+		if in.TargetContext.Scope == domain.ScopeProject {
+			plan.Warnings = shared.AppendUnique(plan.Warnings, fmt.Sprintf("Installation may trust the selected project %q in Claude Code. This preference remains after removal.", in.TargetContext.ProjectRoot))
+		}
+		if names := shared.SupportedMCPNames(*plan); len(names) > 0 {
+			plan.Warnings = shared.AppendUnique(plan.Warnings, "Installation may approve the selected Claude Code MCP servers: "+strings.Join(names, ", ")+". Existing rejections are preserved; these preferences remain after removal.")
+		}
+	}
 	plan.UserActions = shared.AppendUnique(plan.UserActions, "start a new Claude Code session or run /reload-plugins")
 	return nil
 }

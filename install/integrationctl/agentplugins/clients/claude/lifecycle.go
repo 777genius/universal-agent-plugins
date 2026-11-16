@@ -47,6 +47,7 @@ func (*Adapter) Activate(ctx context.Context, env clients.Env, request domain.Ac
 		return domain.ActivationOutcome{}, err
 	}
 	outcome := shared.StartedActivation(request)
+	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
 		return shared.FailedActivation(outcome, "install Claude Code CLI and retry exact @skills-dir verification", fmt.Errorf("trusted Claude Code CLI is required"))
 	}

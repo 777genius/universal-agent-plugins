@@ -197,20 +197,7 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 			return err
 		}
 	}
-	var result SkillsBatchResult
-	var err error
-	if board := startSkillsProgressBoard(app, opts, prepared.Actions()); board != nil {
-		result, err = prepared.ApplyWithProgress(cmd.Context(), board.observe)
-		board.finish(result)
-	} else {
-		stop := startCommandActivity(cmd, app, opts, "Installing selected Skills")
-		result, err = prepared.Apply(cmd.Context())
-		stop()
-	}
-	if writeErr := renderSkillsResult(cmd, opts, result); writeErr != nil {
-		return errors.Join(err, writeErr)
-	}
-	return err
+	return applySkillsWithRecovery(cmd, app, opts, prepared, confirm && opts.format != "json")
 }
 func confirmSkillsReview(cmd *cobra.Command, app App, review skillspicker.Plan, rich bool) (bool, error) {
 	request := prompt.ConfirmationRequest{Title: "Install these Skills?", Default: true}
@@ -227,9 +214,33 @@ func confirmSkillsReview(cmd *cobra.Command, app App, review skillspicker.Plan, 
 	return answer.Accepted, err
 }
 
-func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchResult) error {
+func applySkillsTerminalAttempt(cmd *cobra.Command, app App, opts *options, prepared *PreparedSkillsBatch) (SkillsBatchResult, error) {
+	if board := startSkillsProgressBoard(app, opts, prepared.Actions()); board != nil {
+		result, err := prepared.ApplyWithProgress(cmd.Context(), board.observe)
+		board.finish(result)
+		return result, err
+	}
+	stop := startCommandActivity(cmd, app, opts, "Installing selected Skills")
+	result, err := prepared.Apply(cmd.Context())
+	stop()
+	return result, err
+}
+
+func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchResult, logPath string) error {
 	if opts.format != "json" {
-		return renderHumanSkillsResult(cmd.OutOrStdout(), result)
+		writer := cmd.OutOrStdout()
+		display := result
+		display.Items = append([]SkillsBatchItem(nil), result.Items...)
+		for i := range display.Items {
+			if display.Items[i].failure != nil {
+				display.Items[i].Reason = ""
+			}
+		}
+		if err := renderHumanSkillsResult(writer, display); err != nil {
+			return err
+		}
+		reports := reportByAgent(skillsAgentItems(result.Items))
+		return renderAgentAttention(writer, reports, logPath, retryTargetHint(reports))
 	}
 	outcome := skillBatchOutcome(result)
 	output := struct {
@@ -239,11 +250,12 @@ func renderSkillsResult(cmd *cobra.Command, opts *options, result SkillsBatchRes
 		Status               string                       `json:"status"`
 		Items                []skillspicker.OperationItem `json:"items"`
 		RepairInstructions   []string                     `json:"repairInstructions"`
+		LogFile              string                       `json:"log_file,omitempty"`
 		Readiness            string                       `json:"readiness"`
 		NextActions          []AgentAction                `json:"next_actions,omitempty"`
 		Scope                string                       `json:"scope"`
 		ScopeSelectionReason string                       `json:"scope_selection_reason"`
-	}{SchemaVersion: outputSchemaVersion, Command: "skills add", Result: outputResultSuccess, Status: result.Status, Items: outcome.Items, RepairInstructions: outcome.Result.RepairInstructions}
+	}{SchemaVersion: outputSchemaVersion, Command: "skills add", Result: outputResultSuccess, Status: result.Status, Items: outcome.Items, RepairInstructions: outcome.Result.RepairInstructions, LogFile: logPath}
 	output.Readiness, output.NextActions = deriveSkillsReadiness(result.Status, result.Items...)
 	if output.Readiness == "failed" {
 		output.Result = outputResultFailure

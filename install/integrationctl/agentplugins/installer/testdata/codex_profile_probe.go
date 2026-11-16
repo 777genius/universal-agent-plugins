@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 type registry struct {
@@ -139,7 +141,75 @@ func main() {
 
 // Inert native inventory is bound to the registered local source and its actual
 // delivered files; it never starts an MCP server or performs a model call.
+// The initialize version models the qualified 0.162.0 selected-server protocol.
 func nativeDiscovery(profile, cwd string, state registry) {
+	pluginID := ""
+	var skills []any
+	var servers map[string]map[string]any
+	var projectConfig map[string]any
+	if _, err := os.Lstat(filepath.Join(cwd, "plugin.json")); os.IsNotExist(err) {
+		skills, servers, projectConfig = nativeProjectDiscoveryState(profile, cwd)
+	} else {
+		skills, servers, pluginID = nativeUserDiscoveryState(profile, cwd, state)
+	}
+	scanner := bufio.NewScanner(os.Stdin)
+	encoder := json.NewEncoder(os.Stdout)
+	initialized := false
+	for scanner.Scan() {
+		var request struct {
+			ID     any
+			Method string
+			Params struct {
+				ServerName string
+				Cwds       []string
+				CWD        string
+			}
+		}
+		must(json.Unmarshal(scanner.Bytes(), &request))
+		var result any
+		switch request.Method {
+		case "initialize":
+			if initialized {
+				must(fmt.Errorf("duplicate initialization"))
+			}
+			initialized = true
+			result = map[string]any{"userAgent": "agentplugins/0.162.0", "codexHome": profile}
+		case "initialized":
+			if !initialized {
+				must(fmt.Errorf("uninitialized fixture"))
+			}
+			continue
+		case "config/read":
+			if !initialized || projectConfig == nil || request.Params.CWD != cwd {
+				must(fmt.Errorf("foreign or nonproject fixture config context"))
+			}
+			result = map[string]any{"config": projectConfig}
+		case "skills/list":
+			if !initialized || len(request.Params.Cwds) != 1 || request.Params.Cwds[0] != cwd {
+				must(fmt.Errorf("foreign fixture skills context"))
+			}
+			result = map[string]any{"data": []any{map[string]any{"cwd": cwd, "errors": []any{}, "skills": skills}}}
+		case "mcpServerStatus/list":
+			server, ok := servers[request.Params.ServerName]
+			if !initialized || !ok || server["command"] == nil || server["enabled"] == false {
+				must(fmt.Errorf("unknown fixture MCP server"))
+			}
+			if kind, _ := server["type"].(string); kind != "" && kind != "stdio" {
+				must(fmt.Errorf("fixture MCP is not local stdio"))
+			}
+			if projectConfig != nil {
+				validateProjectFixtureCommand(server)
+			}
+			result = map[string]any{"data": []any{map[string]any{"name": request.Params.ServerName, "pluginId": pluginID, "authStatus": "unsupported", "runtimeStatus": "connected", "serverInfo": map[string]string{"name": "inert-" + request.Params.ServerName, "version": "1"}, "tools": map[string]any{}}}, "nextCursor": nil}
+		default:
+			must(fmt.Errorf("unsupported fixture discovery method %q", request.Method))
+		}
+		must(encoder.Encode(map[string]any{"id": request.ID, "result": result}))
+	}
+	must(scanner.Err())
+}
+
+func nativeUserDiscoveryState(profile, cwd string, state registry) ([]any, map[string]map[string]any, string) {
 	body, err := os.ReadFile(filepath.Join(cwd, "plugin.json"))
 	must(err)
 	var manifest struct{ Name, Version string }
@@ -182,50 +252,84 @@ func nativeDiscovery(profile, cwd string, state registry) {
 	} else if !os.IsNotExist(err) {
 		must(err)
 	}
-	scanner := bufio.NewScanner(os.Stdin)
-	encoder := json.NewEncoder(os.Stdout)
-	initialized := false
-	for scanner.Scan() {
-		var request struct {
-			ID     any
-			Method string
-			Params struct {
-				ServerName string
-				Cwds       []string
-			}
-		}
-		must(json.Unmarshal(scanner.Bytes(), &request))
-		var result any
-		switch request.Method {
-		case "initialize":
-			if initialized {
-				must(fmt.Errorf("duplicate initialization"))
-			}
-			initialized = true
-			result = map[string]any{"userAgent": "inert-installer-fixture", "codexHome": profile}
-		case "initialized":
-			if !initialized {
-				must(fmt.Errorf("uninitialized fixture"))
-			}
-			continue
-		case "skills/list":
-			if !initialized || len(request.Params.Cwds) != 1 || request.Params.Cwds[0] != cwd {
-				must(fmt.Errorf("foreign fixture skills context"))
-			}
-			result = map[string]any{"data": []any{map[string]any{"cwd": cwd, "errors": []any{}, "skills": skills}}}
-		case "mcpServerStatus/list":
-			server, ok := mcp.Servers[request.Params.ServerName]
-			if !initialized || !ok || server["command"] == nil {
-				must(fmt.Errorf("unknown fixture MCP server"))
-			}
-			if kind, _ := server["type"].(string); kind != "" && kind != "stdio" {
-				must(fmt.Errorf("fixture MCP is not local stdio"))
-			}
-			result = map[string]any{"data": []any{map[string]any{"name": request.Params.ServerName, "pluginId": pluginID, "authStatus": "unsupported", "runtimeStatus": "connected", "serverInfo": map[string]string{"name": "inert-" + request.Params.ServerName, "version": "1"}, "tools": map[string]any{}}}, "nextCursor": nil}
-		default:
-			must(fmt.Errorf("unsupported fixture discovery method %q", request.Method))
-		}
-		must(encoder.Encode(map[string]any{"id": request.ID, "result": result}))
+	return skills, mcp.Servers, pluginID
+}
+
+// This inert project protocol reports only the fixture's actual persisted trust,
+// native MCP configuration and Skill files. It never starts an MCP server and
+// does not substitute for the separately pinned real-client runtime tests.
+func nativeProjectDiscoveryState(profile, cwd string) ([]any, map[string]map[string]any, map[string]any) {
+	if !filepath.IsAbs(cwd) || filepath.Clean(cwd) != cwd {
+		must(fmt.Errorf("fixture project requires an exact absolute cwd"))
 	}
-	must(scanner.Err())
+	for _, path := range []string{cwd, filepath.Join(cwd, ".codex"), filepath.Join(cwd, ".agents"), filepath.Join(cwd, ".agents", "skills")} {
+		info, err := os.Lstat(path)
+		must(err)
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			must(fmt.Errorf("fixture project directory is absent or redirected"))
+		}
+	}
+	readConfig := func(path string, target any) {
+		info, err := os.Lstat(path)
+		must(err)
+		if !info.Mode().IsRegular() || info.Size() > 1<<20 {
+			must(fmt.Errorf("fixture config is not a bounded regular file"))
+		}
+		body, err := os.ReadFile(path)
+		must(err)
+		must(toml.Unmarshal(body, target))
+	}
+	var user struct {
+		Projects map[string]map[string]any `toml:"projects"`
+	}
+	readConfig(filepath.Join(profile, "config.toml"), &user)
+	if user.Projects[cwd]["trust_level"] != "trusted" {
+		must(fmt.Errorf("fixture project lacks exact persisted trust"))
+	}
+	var project struct {
+		Servers map[string]map[string]any `toml:"mcp_servers"`
+	}
+	readConfig(filepath.Join(cwd, ".codex", "config.toml"), &project)
+	config := map[string]any{"projects": user.Projects, "mcp_servers": project.Servers}
+	return nativeProjectFixtureSkills(cwd), project.Servers, config
+}
+
+func nativeProjectFixtureSkills(cwd string) []any {
+	skills := []any{}
+	root := filepath.Join(cwd, ".agents", "skills")
+	dirs, err := os.ReadDir(root)
+	must(err)
+	for _, dir := range dirs {
+		if !dir.IsDir() {
+			continue
+		}
+		path := filepath.Join(root, dir.Name(), "SKILL.md")
+		info, err := os.Lstat(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		must(err)
+		if !info.Mode().IsRegular() || info.Size() > 1<<20 {
+			must(fmt.Errorf("fixture Skill is not a bounded regular file"))
+		}
+		body, err := os.ReadFile(path)
+		must(err)
+		if !strings.HasPrefix(string(body), "---\n") || !strings.Contains(string(body), "\nname: "+dir.Name()+"\n") {
+			continue
+		}
+		skills = append(skills, map[string]any{"name": dir.Name(), "scope": "repo", "enabled": true, "path": path})
+	}
+	return skills
+}
+
+func validateProjectFixtureCommand(server map[string]any) {
+	command, ok := server["command"].(string)
+	if !ok || !filepath.IsAbs(command) {
+		must(fmt.Errorf("fixture project MCP command is not absolute"))
+	}
+	info, err := os.Lstat(command)
+	must(err)
+	if !info.Mode().IsRegular() {
+		must(fmt.Errorf("fixture project MCP command is not a regular file"))
+	}
 }

@@ -21,6 +21,8 @@ var (
 	gitCommitPattern  = regexp.MustCompile(`^(?:[0-9A-Fa-f]{40}|[0-9A-Fa-f]{64})$`)
 )
 
+var reviewWarningCodePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$`)
+
 func reviewWarningText(code string) string {
 	if message, ok := map[string]string{
 		"authentication_not_catalog_verified":                          "Authentication requirements are not verified by catalog evidence.",
@@ -39,7 +41,10 @@ func reviewWarningText(code string) string {
 	}[code]; ok {
 		return message
 	}
-	return reviewStateName(code)
+	if reviewWarningCodePattern.MatchString(code) {
+		return reviewStateName(code)
+	}
+	return prompt.SafeText(code)
 }
 
 func reviewComponentKind(kind domain.ComponentKind) string {

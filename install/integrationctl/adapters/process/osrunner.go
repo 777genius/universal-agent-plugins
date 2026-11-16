@@ -345,7 +345,9 @@ func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.
 	// termination could not prove shutdown, the buffered sole-reaper goroutine
 	// retains ownership until a later exit while caller cleanup stays bounded.
 	waitErr := closeContainmentAndWait(closeContainment, cmd.Wait, processReapTimeout)
+	containmentCloseMu.Lock()
 	pipes.closure.record(termination, waitErr, containmentClosed)
+	containmentCloseMu.Unlock()
 	if !exchangeDone {
 		observedExchangeErr := <-exchanged
 		exchangeDone = true
@@ -699,8 +701,10 @@ func runExplicit(ctx context.Context, command ports.Command, treeExitGrace time.
 	// Only a raw Wait exit status (including a supervised kill) proves reaping.
 	// Joined cleanup/close/reap-timeout errors never attest process closure.
 	_, reapedWithStatus := waitErr.(*exec.ExitError) //nolint:errorlint // Only a raw Wait exit status proves reaping; joined cleanup failures must stay unproven.
+	containmentCloseMu.Lock()
 	capturedResult.CleanupComplete = termination.leaderStopped && termination.err == nil &&
 		(waitErr == nil || reapedWithStatus) && containmentClosed
+	containmentCloseMu.Unlock()
 	stdoutErr := stdout.Err()
 	if supervisionErr != nil {
 		return capturedResult, withDuplexDiagnostic(errors.Join(supervisionErr, capturedErr, stdoutErr), stderr.Bytes())

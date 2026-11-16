@@ -33,8 +33,10 @@ const (
 
 // Request is copied by Prepare. Subsequent caller edits do not change the handle.
 type Request struct {
-	Scope       domain.InstallScope
-	ProjectRoot string `json:"-"`
+	// ConfirmPluginEnable is transient single-Project repair consent.
+	ConfirmPluginEnable bool `json:"-"`
+	Scope               domain.InstallScope
+	ProjectRoot         string `json:"-"`
 	// OnlinePreview permits read-only host probing during normal-operation
 	// review. The default Prepare contract remains offline and grants no effects.
 	OnlinePreview bool `json:"-"`

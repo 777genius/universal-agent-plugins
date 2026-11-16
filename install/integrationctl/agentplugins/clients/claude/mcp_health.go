@@ -67,10 +67,7 @@ func finishClaudeMCPActivation(ctx context.Context, env clients.Env, request dom
 	}
 	unique, err := inspectClaudeMCPNamespace(ctx, env, request)
 	if err != nil {
-		if domain.IsUnclosedClientProbe(err) {
-			outcome.NativeEffect = domain.NativeEffectUncertain
-		}
-		return shared.FailedActivation(outcome, "inspect the selected Claude Code MCP namespace", err)
+		return failedClaudeMCPProbe(outcome, "inspect the selected Claude Code MCP namespace", err)
 	}
 	if !unique {
 		outcome.Activation = domain.ActivationPrepared
@@ -84,17 +81,16 @@ func finishClaudeMCPActivation(ctx context.Context, env clients.Env, request dom
 	allLocal := true
 	for _, name := range names {
 		selector := "plugin:" + request.DeclaredName + ":" + name
-		if _, err := grantClaudeMCPApproval(env, request, selector); err != nil {
+		changed, err := grantClaudeMCPApproval(env, request, selector)
+		observeClaudeSetupEffect(&outcome.NativeEffect, changed, err)
+		if err != nil {
 			return shared.FailedActivation(outcome, "retry exact Claude Code MCP approval", err)
 		}
 		command := probe.Command
 		command.Argv = []string{command.Argv[0], "mcp", "get", selector}
 		result, err := RunClaudeListCommand(ctx, env.Runner, command)
 		if err != nil {
-			if domain.IsUnclosedClientProbe(err) {
-				outcome.NativeEffect = domain.NativeEffectUncertain
-			}
-			return shared.FailedActivation(outcome, "retry exact Claude Code MCP health", err)
+			return failedClaudeMCPProbe(outcome, "retry exact Claude Code MCP health", err)
 		}
 		if result.ExitCode != 0 {
 			return shared.FailedActivation(outcome, "inspect the selected Claude Code MCP server", fmt.Errorf("claude Code MCP health command failed with exit %d", result.ExitCode))
@@ -111,4 +107,11 @@ func finishClaudeMCPActivation(ctx context.Context, env clients.Env, request dom
 		}
 	}
 	return qualifyClaudeNativeAuthentication(request.Plan, outcome, allLocal), nil
+}
+
+func failedClaudeMCPProbe(outcome domain.ActivationOutcome, action string, err error) (domain.ActivationOutcome, error) {
+	if domain.IsUnclosedClientProbe(err) {
+		outcome.NativeEffect = domain.NativeEffectUncertain
+	}
+	return shared.FailedActivation(outcome, action, err)
 }

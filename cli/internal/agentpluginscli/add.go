@@ -44,7 +44,19 @@ func addCommandArgs(opts *options) cobra.PositionalArgs {
 	}
 }
 
+// executeAddCommand runs one add and, in an interactive terminal, offers to
+// retry only the agents that failed with the same reviewed command.
 func executeAddCommand(cmd *cobra.Command, app App, opts *options, source string, activationComplete, authComplete bool) error {
+	opts.installResult = nil
+	err := executeAddOnce(cmd, app, opts, source, activationComplete, authComplete)
+	return retryFailedAgents(cmd, app, opts, err, func(target string, unresolved []string) error {
+		next := *opts
+		next.target, next.retryAttempt, next.installResult, next.unresolved = target, opts.retryAttempt+1, nil, unresolved
+		return executeAddCommand(cmd, app, &next, source, activationComplete, authComplete)
+	})
+}
+
+func executeAddOnce(cmd *cobra.Command, app App, opts *options, source string, activationComplete, authComplete bool) error {
 	if err := validateCommonOptions(opts); err != nil {
 		return err
 	}
@@ -77,7 +89,7 @@ func executeAddCommand(cmd *cobra.Command, app App, opts *options, source string
 		}
 		app.chatGPTAppID = opts.chatGPTAppID
 	}
-	targetProvided := cmd.Flags().Changed("target") && strings.TrimSpace(opts.target) != ""
+	targetProvided := (cmd.Flags().Changed("target") || opts.retryAttempt > 0) && strings.TrimSpace(opts.target) != ""
 	if !targetProvided && app.Terminal && opts.format == "human" {
 		return executePromptedAdd(cmd, app, opts, source, activationComplete, authComplete)
 	}

@@ -19,7 +19,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import tomllib
 
 _FILES = run_path(str(Path(__file__).with_name("native_client_project_artifacts.py")))
 FILE_LIMIT = 32 << 20
@@ -295,7 +294,10 @@ async def _exchange(binary, project, profile, environment):
             await tail
             stderr = await errors
             if process.returncode != 0 or stderr:
-                raise ValueError("Codex native discovery did not exit cleanly")
+                raise ValueError(
+                    "Codex native discovery did not exit cleanly: "
+                    f"exit_code={process.returncode}, stderr_bytes={len(stderr)}, "
+                    f"stderr_prefix={stderr[:2048]!r}")
             while _windows_active(job) if job is not None else _posix_group_active(process.pid):
                 await asyncio.sleep(.02)  # Still inside the same finite 15-second budget.
             completed = True
@@ -372,14 +374,12 @@ def public_skill_ready(added, matches, identity):
 
 
 class CodexRuntimeAudit:
-    def __init__(self, binary, case, home, project, environment, identity, foreign, path_in_case):
+    def __init__(self, binary, case, home, project, environment, identity, foreign):
         self.binary, self.case, self.project = Path(binary), case, project
         self.profile, self.temporary = home / ".codex", case / "tmp"
         self.runtime = home / ".local/state/codex-sqlite"
         self.config = self.profile / "config.toml"
         self.identity, self.foreign = identity, foreign
-        self.path_in_case = path_in_case
-        self.trust_authorized, self.trust_observed = False, False
         self.selected = project / ".agents/skills" / identity / "SKILL.md"
         self.environment = {key: value for key, value in environment.items()
                             if key.upper() in {"PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR",
@@ -400,43 +400,17 @@ class CodexRuntimeAudit:
         self.baseline, self.observations = None, []
         self.checkpoint("before-install", False)
 
-    def begin_install(self):
-        """Authorize only the upcoming confirmed project Skill installation."""
-        self.guard()
-        self.trust_authorized = True
-
-    def _guard_config(self, require_trust):
-        body = _regular_bytes(self.config, 65536)
-        expected = tomllib.loads(self.config_bytes.decode("utf-8"))
-        observed = tomllib.loads(body.decode("utf-8"))
-        projects = observed.pop("projects", None)
-        if observed != expected:
-            raise ValueError("Codex native runtime configuration changed")
-        if projects is None:
-            if require_trust or self.trust_observed:
-                raise ValueError("Codex exact project trust is missing or was revoked")
-            if not self.trust_authorized and body != self.config_bytes:
-                raise ValueError("Codex native runtime configuration changed before installation")
-            return
-        if not self.trust_authorized or not isinstance(projects, dict) or len(projects) != 1:
-            raise ValueError("Codex project trust changed outside the confirmed installation")
-        selected, trust = next(iter(projects.items()))
-        if (trust != {"trust_level": "trusted"}
-                or not self.path_in_case(Path(selected), self.case)
-                or not _path_equal(selected, self.project)):
-            raise ValueError("Codex project trust differs from the exact selected project")
-        self.trust_observed = True
-
-    def guard(self, require_trust=False):
+    def guard(self):
         for path, previous in self.anchors.items():
             if not os.path.samestat(previous, _real_directory(path)):
                 raise ValueError("Codex runtime audit root identity changed")
-        self._guard_config(require_trust)
+        if _regular_bytes(self.config, 65536) != self.config_bytes:
+            raise ValueError("Codex native runtime configuration changed")
         if _regular_bytes(self.foreign, FILE_LIMIT) != self.foreign_bytes:
             raise ValueError("Codex foreign Skill bytes changed")
 
     def checkpoint(self, phase, present):
-        self.guard(require_trust=present)
+        self.guard()
         selected_bytes = _regular_bytes(self.selected, FILE_LIMIT) if present else None
         listing = asyncio.run(_exchange(self.binary, self.project, self.profile, self.environment))
         self.guard()

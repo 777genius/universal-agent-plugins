@@ -118,7 +118,7 @@ func decodeClaudeTrustDocument(body []byte) (map[string]json.RawMessage, error) 
 	return doc, nil
 }
 
-func observeClaudeProjectActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, probe ClaudeActivationProbe) (projectListObservation, error) {
+func observeClaudeProjectActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, probe ClaudeActivationProbe, effect *domain.NativeEffectState) (projectListObservation, error) {
 	listed, err := runPreparedClaudeList(ctx, env, probe.Command)
 	if err != nil {
 		return projectListObservation{}, err
@@ -130,7 +130,9 @@ func observeClaudeProjectActivation(ctx context.Context, env clients.Env, reques
 	if observation.state != projectListSuppressed || !observation.untrusted || request.VerifyOnly {
 		return observation, nil
 	}
-	if _, err := grantClaudeProjectTrust(env, request); err != nil {
+	changed, err := grantClaudeProjectTrust(env, request)
+	observeClaudeSetupEffect(effect, changed, err)
+	if err != nil {
 		return projectListObservation{}, err
 	}
 	listed, err = runPreparedClaudeList(ctx, env, probe.Command)
@@ -138,4 +140,14 @@ func observeClaudeProjectActivation(ctx context.Context, env clients.Env, reques
 		return projectListObservation{}, err
 	}
 	return observe(listed.Stdout), nil
+}
+
+func observeClaudeSetupEffect(effect *domain.NativeEffectState, changed bool, err error) {
+	if changed && *effect != domain.NativeEffectUncertain {
+		*effect = domain.NativeEffectCommitted
+	}
+	var failure *shared.NativeEffectError
+	if errors.As(err, &failure) && failure.Effect == domain.NativeEffectUncertain {
+		*effect = domain.NativeEffectUncertain
+	}
 }

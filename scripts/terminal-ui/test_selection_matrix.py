@@ -6,9 +6,11 @@ import shutil
 import tempfile
 import subprocess
 import os
+from unittest.mock import patch
 from harness import Fixture
 from harness import Screen
-from selection_matrix import CASES, SETS, choices, plan_ids, selected_frame, prepare_codex_registry, installed
+from harness import Session
+from selection_matrix import CASES, SETS, Keyboard, choices, plan_ids, selected_frame, prepare_codex_registry, installed
 from types import SimpleNamespace
 
 
@@ -105,6 +107,28 @@ class InstallationTests(unittest.TestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_inherited_drain_reads_every_ready_chunk_until_empty(self):
+        for chunks in ((b'line_probe\r\n', b'RESTORE_OK_probe\r\n'), ()):
+            with self.subTest(chunks=chunks):
+                session = object.__new__(Keyboard)
+                session.timeout = 1
+                session.raw = bytearray()
+                session.screen = Screen()
+                pending = iter(chunks)
+
+                def base_pump(owner, timeout):
+                    self.assertEqual(timeout, 0)
+                    data = next(pending, b'')
+                    owner.raw.extend(data)
+                    owner.screen.feed(data)
+                    return bool(data)
+
+                with patch.object(Session, 'pump', autospec=True, side_effect=base_pump) as pump:
+                    session.drain()
+                self.assertEqual(bytes(session.raw), b''.join(chunks))
+                self.assertEqual(pump.call_count, len(chunks) + 1)
+                self.assertEqual('RESTORE_OK_probe' in session.screen.snapshot(), bool(chunks))
+
     def test_matrix_covers_each_nonempty_set_both_decisions(self):
         self.assertEqual(set(SETS.values()), {('codex',), ('cursor',), ('codex', 'cursor')})
         for name in SETS:

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
@@ -79,7 +80,7 @@ func TestSkillsProgressPreservesReadinessAndUnchanged(t *testing.T) {
 		{"sign in", SkillsBatchItem{Status: "completed", Client: installer.ClientResult{Authentication: string(domain.AuthenticationPending)}}, "sign-in required"},
 		{"rollback", SkillsBatchItem{Status: "incomplete", Client: installer.ClientResult{GroupPhase: string(usecase.GroupTargetManagedRolledBack)}}, "rolled back"},
 		{"unchanged", SkillsBatchItem{Status: "unchanged"}, "unchanged"},
-		{"cancel", SkillsBatchItem{Status: "cancelled"}, "canceled"}, //nolint:misspell // Preserve the published status value.
+		{"cancel", SkillsBatchItem{Status: string(installer.OutcomeCancelled)}, "canceled"},
 		{"removed", SkillsBatchItem{Status: "completed", Action: "remove"}, "removed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -108,25 +109,53 @@ func TestSkillsProgressCompletedCounterDoesNotHideSetupRequired(t *testing.T) {
 func TestSkillsResultMappingDoesNotBlameAnUnattemptedBinding(t *testing.T) {
 	actions := []SkillsAction{{Alias: "one", ClientID: "claude", Action: "install"}, {Alias: "one", ClientID: "codex", Action: "install"}, {Alias: "two", ClientID: "claude", Action: "install"}}
 	failure := errors.New("native error")
+	outcome := func(index int, status environment.BindingStatus, result *installer.Result, err error) environment.BindingOutcome {
+		action := actions[index]
+		return environment.BindingOutcome{Binding: environment.PreparedBinding{Alias: action.Alias, ClientID: action.ClientID, Action: environment.ActionInstall}, Status: status, Result: result, Err: err}
+	}
+	completed := &installer.Result{Outcome: installer.OutcomeCompleted}
 	for _, tc := range []struct {
-		name, started string
-		native        []installer.Result
-		want          []string
+		name    string
+		native  []environment.BindingOutcome
+		want    []string
+		mutated bool
 	}{
-		{"before bindings", "", nil, []string{"not_attempted", "not_attempted", "not_attempted"}},
-		{"first prepare", skillsBindingKey("one", "claude", "install"), nil, []string{"failed", "not_attempted", "not_attempted"}},
-		{"first apply", skillsBindingKey("one", "claude", "install"), []installer.Result{{Outcome: installer.OutcomeIncomplete}}, []string{"incomplete", "not_attempted", "not_attempted"}},
-		{"second prepare", skillsBindingKey("one", "codex", "install"), []installer.Result{{Outcome: installer.OutcomeCompleted}}, []string{"completed", "failed", "not_attempted"}},
+		{"before bindings", nil, []string{"not_attempted", "not_attempted", "not_attempted"}, false},
+		{"first prepare", []environment.BindingOutcome{outcome(0, environment.BindingFailed, nil, failure)}, []string{"failed", "not_attempted", "not_attempted"}, false},
+		{"first apply", []environment.BindingOutcome{outcome(0, environment.BindingFailed, &installer.Result{Outcome: installer.OutcomeIncomplete, Mutated: true}, failure)}, []string{"incomplete", "not_attempted", "not_attempted"}, true},
+		{"second prepare", []environment.BindingOutcome{outcome(0, environment.BindingApplied, completed, nil), outcome(1, environment.BindingFailed, nil, failure)}, []string{"completed", "failed", "not_attempted"}, true},
+		{"later success after prepare failure", []environment.BindingOutcome{outcome(1, environment.BindingApplied, completed, nil), outcome(0, environment.BindingFailed, nil, failure), outcome(2, environment.BindingNotAttempted, nil, failure)}, []string{"failed", "completed", "not_attempted"}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var got []string
-			for _, item := range skillsBatchItems(actions, tc.native, failure, tc.started) {
+			items, mutated := skillsBatchItems(actions, tc.native, failure)
+			for _, item := range items {
 				got = append(got, item.Status)
 			}
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("%v != %v", got, tc.want)
+			if !reflect.DeepEqual(got, tc.want) || mutated != tc.mutated {
+				t.Fatalf("statuses=%v mutated=%v; want %v mutated=%v", got, mutated, tc.want, tc.mutated)
 			}
 		})
+	}
+}
+
+func TestSkillsOutcomeMappingPreservesLaterNativeFactsAndManualActions(t *testing.T) {
+	actions := []SkillsAction{{Alias: "one", ClientID: "codex", Action: "install"}, {Alias: "one", ClientID: "claude", Action: "install"}}
+	native := installer.Result{Outcome: installer.OutcomeCompleted, Client: completedSkillClient(), ManualActions: []string{"Reload the selected plugin"}}
+	outcomes := []environment.BindingOutcome{
+		{Binding: environment.PreparedBinding{Alias: "one", ClientID: "claude", Action: environment.ActionInstall}, Status: environment.BindingApplied, Result: &native},
+		{Binding: environment.PreparedBinding{Alias: "one", ClientID: "codex", Action: environment.ActionInstall}, Status: environment.BindingFailed, Err: installer.ErrTargetFactsUnavailable},
+	}
+	items, mutated := skillsBatchItems(actions, outcomes, installer.ErrTargetFactsUnavailable)
+	if !mutated || items[0].Status != "failed" || items[0].failure == nil || items[0].failure.Kind != failureTargetUnavailable {
+		t.Fatalf("prepare failure lost its own classification: %+v", items)
+	}
+	if items[1].Status != "completed" || items[1].failure != nil || !reflect.DeepEqual(items[1].Client, native.Client) || !reflect.DeepEqual(items[1].ManualActions, native.ManualActions) {
+		t.Fatalf("later native facts shifted onto another binding: %+v", items)
+	}
+	items[1].ManualActions[0] = "changed presentation"
+	if native.ManualActions[0] != "Reload the selected plugin" {
+		t.Fatal("presentation changed the installer's manual action")
 	}
 }
 

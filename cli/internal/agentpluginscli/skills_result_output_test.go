@@ -57,7 +57,7 @@ func TestSkillsHumanResultUsesObservedNativeReadiness(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := output.String()
-	for _, want := range []string{"Skills installation succeeded", "docx — installed", "frontend-design — installed", "Skills installation verified. Model execution was not tested."} {
+	for _, want := range []string{"Skills installation succeeded", "docx — installed", "frontend-design — installed", "Skills installation verified."} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %q: %s", want, text)
 		}

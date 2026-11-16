@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"path/filepath"
+	"slices"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -25,11 +26,25 @@ func (*Adapter) CanCompletePreparedSetup(request domain.ActivationRequest, outco
 		return false
 	}
 	for _, component := range request.Plan.Components {
-		// Transport cannot be established by this pure classifier. An existing
-		// initialized mixed package is handled by the read-only verifier instead.
-		if component.Kind != domain.ComponentSkill || component.Support != domain.SupportNative {
+		if !geminiPreparedComponentReady(component, outcome.UserActions) {
 			return false
 		}
 	}
 	return true
+}
+
+func geminiPreparedComponentReady(component domain.ComponentDecision, actions []string) bool {
+	if component.Support != domain.SupportNative {
+		return false
+	}
+	switch component.Kind {
+	case domain.ComponentSkill:
+		return true
+	case domain.ComponentMCPServer:
+		// Only a fresh verifier that checked exact local owned entries may
+		// offer the existing confirmed repair path for this acting check.
+		return slices.Contains(actions, geminiMCPConfirmationAction)
+	default:
+		return false
+	}
 }

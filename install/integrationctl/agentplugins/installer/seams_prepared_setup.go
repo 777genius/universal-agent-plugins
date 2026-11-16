@@ -9,3 +9,11 @@ func (a seamActivator) PreparedSetupVerifierAvailable(client domain.DetectedClie
 func (a seamActivator) CanCompletePreparedSetup(request domain.ActivationRequest, observed domain.ActivationOutcome) bool {
 	return a.inner.CanCompletePreparedSetup(request, observed)
 }
+
+func (a seamActivator) PreparedMaterializationVerified(request domain.ActivationRequest, observed domain.ActivationOutcome) bool {
+	return a.inner.PreparedMaterializationVerified(request, observed)
+}
+
+func (a seamActivator) PreparedMaterializationVerifierAvailable(client domain.DetectedClient) bool {
+	return a.inner.PreparedMaterializationVerifierAvailable(client)
+}

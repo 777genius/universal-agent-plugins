@@ -60,9 +60,13 @@ check_pattern() {
 
 check_pattern "removed Cursor rules import" '\.cursorrules' 'docs/research/**'
 # Reviewed disposable native controls and negative inheritance assertions do not
-# restore a public environment-config compatibility surface.
+# restore a public environment-config compatibility surface. The three CLI test
+# paths below select or validate mock OpenCode profile commands.
 check_pattern "removed OpenCode env-config compatibility" 'OPENCODE_CONFIG(_DIR)?' \
   'install/integrationctl/**' 'docs/UNIVERSAL_INSTALL_UPDATE_CONTROL_PLANE_PLAN.md' \
+  'cli/internal/agentpluginscli/deps_e2e_test.go' \
+  'cli/internal/agentpluginscli/deps_opencode_observation_fixture_test.go' \
+  'cli/internal/agentpluginscli/management_native_fixture_test.go' \
   'repotests/agentplugins_opencode_project_native_contract_test.go' \
   'repotests/agentplugins_opencode_project_native_e2e_test.go' \
   'docs/plans/project-install-e2e/opencode-project-native-gate-plan.md' \

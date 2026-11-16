@@ -159,8 +159,9 @@ func applyDeclaredEnvironmentRepairs(cmd *cobra.Command, app App, opts *options,
 		return err
 	}
 	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
-	results, applyErr := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: prepared}, true)
-	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
+	outcomes, applyErr := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: prepared}, true)
+	app.finishInstall(opts, cmd.CommandPath(), outcomeAgentItems(outcomes))
+	if renderErr := renderDependencyResults(cmd, opts, prepared, environment.Results(outcomes), applyErr); renderErr != nil && applyErr == nil {
 		return renderErr
 	}
 	if applyErr != nil {

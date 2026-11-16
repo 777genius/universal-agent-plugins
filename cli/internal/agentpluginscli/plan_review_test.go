@@ -265,3 +265,14 @@ func installReviewFixture() (domain.PackageEnvelope, []usecase.AddResult) {
 		openCode,
 	}
 }
+
+func TestReviewWarningPreservesExactNativeProjectPaths(t *testing.T) {
+	for _, message := range []string{
+		"Review project \"/workspace/my_project\" before installation.",
+		"MCP server \"native_server\" remains enabled.",
+	} {
+		if got := reviewWarningText(message); got != message {
+			t.Fatalf("native review message changed: got %q; want %q", got, message)
+		}
+	}
+}

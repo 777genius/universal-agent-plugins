@@ -283,6 +283,36 @@ def snapshot(root):
     return found
 
 
+def snapshot_change_evidence(before, after):
+    """Describe existing snapshot differences without reading or exporting file bytes."""
+    changed = sorted(path for path in before.keys() | after.keys()
+                     if before.get(path) != after.get(path))
+    entries = [{"path": path[:2048], "path_truncated": len(path) > 2048,
+                "before": before.get(path), "after": after.get(path)}
+               for path in changed[:100]]
+    return {"total": len(changed), "omitted": max(0, len(changed) - len(entries)),
+            "entries": entries}
+
+
+def repeat_native_phase_evidence(before, after_add, after_list, after_native):
+    """Compare every closed phase to the same original snapshot; no new baseline."""
+    return [{"phase": phase, **snapshot_change_evidence(before, after)}
+            for phase, after in (("after-public-repeat-add", after_add),
+                                 ("after-public-repeat-list", after_list),
+                                 ("after-native-checkpoint", after_native))]
+
+
+def failed_case_diagnostics(row):
+    """Expose existing failed-case evidence in logs; never change qualification."""
+    keys = ("codex_public_add_ready", "codex_public_repeat_ready",
+            "repeat_native_unchanged", "repeat_native_changes", "repeat_native_phases", "repeat_verified",
+            "removal_verified", "sentinels_preserved")
+    evidence = {key: row[key] for key in keys if row.get(key) is not None}
+    if "error" in row:
+        evidence["error"] = str(row["error"])[:8192]
+    return evidence
+
+
 def scoped_snapshot(roots, *, snapshotter=None):
     """Record protected file and directory identities without following links."""
     roots = tuple(Path(root) for root in roots)
@@ -1876,8 +1906,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         initialize_project_skill_git_root(project, env, case_root)
     if codex_skill_case and AGENT_BINARIES.get("codex"):
         codex_runtime = CODEX_RUNTIME_AUDIT["CodexRuntimeAudit"](
-            AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign,
-            codex_marketplace_source_in_case)
+            AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign)
         assert_case_unchanged()
     before = snapshot(native_roots)
     if kind == "plugin":
@@ -1900,8 +1929,6 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # inherited Windows Firebase child pipe handles masking parent exit.
     file_capture = (sys.platform == "win32" and kind == "plugin" and item == "firebase")
     capture_option = {"capture_files": True} if file_capture else {}
-    if codex_runtime is not None:
-        codex_runtime.begin_install()
     output = audited_call([cli, *args], env, project, add_timeout, **capture_option)
     added_json = output.pop("_json", None)
     native_components = (native_components_from_add(added_json)
@@ -1961,6 +1988,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_list = None
     repeat_identity_ids = []
     repeat_native_unchanged = None
+    repeat_native_changes = None
+    repeat_native_phases = None
     repeat_lock_unchanged = None
     repeat_project_unchanged = None
     repeat_verified = False
@@ -1979,9 +2008,11 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         before_repeat_lock = lock_state()
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
                                   **capture_option)
+        after_repeat_add = snapshot(native_roots) if codex_runtime is not None else None
         repeat_add_json = repeat_add.pop("_json", None)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
+        after_repeat_list = snapshot(native_roots) if codex_runtime is not None else None
         repeat_list_json = repeat_list.pop("_json", None)
         repeat_matches = (grok_prepared_skill_installations(
             repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
@@ -1993,7 +2024,14 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_runtime.checkpoint("repeat-installed", True)
             codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
                 repeat_add_json, repeat_matches, identity)
-        repeat_native_unchanged = snapshot(native_roots) == before_repeat_native
+        after_repeat_native = snapshot(native_roots)
+        if codex_runtime is not None:
+            repeat_native_phases = repeat_native_phase_evidence(
+                before_repeat_native, after_repeat_add, after_repeat_list, after_repeat_native)
+        repeat_native_unchanged = after_repeat_native == before_repeat_native
+        if not repeat_native_unchanged:
+            repeat_native_changes = snapshot_change_evidence(
+                before_repeat_native, after_repeat_native)
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
@@ -2237,6 +2275,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
+            "repeat_native_changes": repeat_native_changes,
+            "repeat_native_phases": repeat_native_phases,
             "repeat_lock_unchanged": repeat_lock_unchanged,
             "repeat_project_unchanged": repeat_project_unchanged,
             "repeat_verified": repeat_verified,
@@ -2472,6 +2512,8 @@ def main():
             save()
             line = {"target": args.target, "kind": args.kind, "index": i,
                     "status": result["status"]}
+            if result["status"] != "passed":
+                line.update(failed_case_diagnostics(result))
             if result["status"] == "incomplete-native-proof" and args.kind == "plugin":
                 line["observed_signed_release"] = result.get("signed_release_observation", [])
                 line["expected_signed_release"] = doc["signed_release_pins"].get(item)

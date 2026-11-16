@@ -91,6 +91,7 @@ type PluginDataManager interface {
 }
 
 type AddInput struct {
+	ConfirmPluginEnable     bool `json:"-"`
 	refreshSelectedDelivery bool
 	// refreshChangedProjectionOnly limits a refresh to a changed projected
 	// digest. Update sets it: the update itself finishes any outstanding

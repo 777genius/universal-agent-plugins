@@ -61,6 +61,9 @@ func (e *Engine) validateProjectClients(req Request) error {
 		}
 	}
 	for _, id := range ids {
+		if req.ConfirmPluginEnable && !clients.SupportsPluginEnablement(e.cfg.Registry, domain.ClientID(id), req.Scope) {
+			return fmt.Errorf("%w: selected client does not support explicit Project plugin enablement", ErrInvalidRequest)
+		}
 		if !ClientScopeSupported(e.cfg.Registry, id, req.Scope) {
 			return fmt.Errorf("%w: project scope is not qualified for %s", ErrInvalidRequest, id)
 		}

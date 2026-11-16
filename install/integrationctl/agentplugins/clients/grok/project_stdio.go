@@ -39,7 +39,10 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 	if err := plan.SelectedDelivery.ValidatePlan(plan, envelope.TreeDigest); err != nil {
 		return nil, err
 	}
-	return nil, validateGrokStdio(root, envelope, plan, dataPath)
+	if err := validateGrokStdio(root, envelope, plan, dataPath); err != nil {
+		return nil, err
+	}
+	return retainedEnabledObjects(plan)
 }
 
 func grokMCPDocument(root string) (map[string]any, map[string]any, error) {

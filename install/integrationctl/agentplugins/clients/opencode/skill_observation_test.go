@@ -64,6 +64,7 @@ func TestProjectSkillObservationRequiresExactUsableCatalog(t *testing.T) {
 				components = append(components, domain.ComponentDecision{Kind: domain.ComponentMCPServer, Name: "server"})
 			}
 			request := domain.ActivationRequest{Client: domain.DetectedClient{ExecutablePath: "/TEST/opencode", ConfigRoot: filepath.Join(root, "user-opencode")}, Plan: domain.DeliveryPlan{Scope: domain.ScopeProject, TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: root}, NativeRegistryRoot: root, Components: components}}
+			qualifyOpenCodeObservation(&request, "1.18.34")
 			runner := skillObservationRunner(func(_ context.Context, c legacyports.Command) (legacyports.CommandResult, error) {
 				if c.Dir != root || len(c.Argv) != 3 || c.Argv[0] != "/TEST/opencode" || c.Argv[1] != "debug" || c.StdoutLimitBytes == 0 {
 					t.Fatalf("unbounded or misplaced native probe: %+v", c)

@@ -34,6 +34,9 @@ type groupSession struct {
 
 func (session *groupSession) validateGroupInput() error {
 	for _, target := range append(append([]AddInput(nil), session.input.Targets...), session.input.CompatibilityChecks...) {
+		if target.ConfirmPluginEnable {
+			return fmt.Errorf("explicit plugin enablement cannot be applied to a group")
+		}
 		if err := target.InstallIntent.Validate(target.Client.ClientID); err != nil {
 			return err
 		}

@@ -117,7 +117,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		if adapter.previewPaths != nil {
 			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
-		adapter.recordDependencyComponents(action, plan)
+		adapter.recordDependencyReview(action, plan)
 
 		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
 			updates[action.Alias] = prepared
@@ -177,7 +177,19 @@ func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context
 	return ensureSelectedProjectVersions(ctx, adapter.app, adapter.opts, targets, adapter.detected)
 }
 
-func (adapter *dependencyInstaller) recordDependencyComponents(action dependencyAction, plan installer.Plan) {
+func (adapter *dependencyInstaller) recordDependencyReview(action dependencyAction, plan installer.Plan) {
+	if adapter.previewWarnings != nil {
+		for _, warning := range plan.Delivery.Warnings {
+			switch warning {
+			case catalogSchemaOnlyWarning, catalogNotTestedWarning, catalogRuntimeNotTestedWarning:
+				continue
+			}
+			message := reviewWarningText(warning)
+			if !slices.Contains(*adapter.previewWarnings, message) {
+				*adapter.previewWarnings = append(*adapter.previewWarnings, message)
+			}
+		}
+	}
 	opts := adapter.opts
 	if opts.dependencyComponents == nil {
 		opts.dependencyComponents = map[string][]domain.ComponentDecision{}
@@ -223,7 +235,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	if adapter.beforeApply != nil {
 		if err := adapter.beforeApply(); err != nil {
-			return nil, err
+			return nil, environment.Stop(err)
 		}
 	}
 	if action.Authority != nil {
@@ -243,7 +255,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	// A preceding target may have created the shared installation. Resolve
 	// identity only from this alias's live owner receipt, never a package name.
-	if err := resolveDependencyBindingIdentity(view, &action); err != nil {
+	if err := adapter.resolvePreparedDependencyClient(ctx, view, &action, &client); err != nil {
 		return nil, err
 	}
 	operationID := adapter.operationIDs[action.Alias+"\x00"+action.ClientID]
@@ -256,6 +268,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	adapter.currentAction = action
 	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
+		ConfirmPluginEnable:    adapter.opts.confirmPluginEnable && action.Action == "repair",
 		ClientNativeConfigRoot: dependencyNativeConfigRoot(adapter.app, client),
 		ClientExecutable:       backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete,
@@ -283,7 +296,7 @@ func dependencyNativeConfigRoot(app App, client domain.DetectedClient) string {
 func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *installer.PreparedOperation) (installer.Result, error) {
 	if adapter.beforeApply != nil {
 		if err := adapter.beforeApply(); err != nil {
-			return installer.Result{}, err
+			return installer.Result{}, environment.Stop(err)
 		}
 	}
 	if adapter.onApply != nil {

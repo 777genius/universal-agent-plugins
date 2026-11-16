@@ -79,10 +79,8 @@ func nativeBrowserSkillsInstall(t *testing.T, f *nativeFixture, installer string
 	nativeWrite(t, filepath.Join(f.Root, "native-browser-playwright.json"), stdout, 0600)
 	nativeWrite(t, filepath.Join(f.Root, "native-browser-stderr.log"), diagnostic, 0600)
 	if err != nil || ctx.Err() != nil {
-		if len(diagnostic) > 65536 {
-			diagnostic = diagnostic[len(diagnostic)-65536:]
-		}
-		t.Fatalf("browser/native install failed: %v; deadline=%v\n%s", err, ctx.Err(), diagnostic)
+		t.Fatalf("browser/native install failed: %v; deadline=%v\n%s\nPlaywright report tail:\n%s",
+			err, ctx.Err(), nativeBrowserReportTail(diagnostic), nativeBrowserReportTail(stdout))
 	}
 	var report struct {
 		Stats struct {
@@ -93,4 +91,13 @@ func nativeBrowserSkillsInstall(t *testing.T, f *nativeFixture, installer string
 		report.Stats.Unexpected != 0 || report.Stats.Skipped != 0 || report.Stats.Flaky != 0 {
 		t.Fatalf("browser/native proof did not execute exactly one passing, unskipped scenario: %+v; %v", report.Stats, err)
 	}
+}
+
+// Reports are already capability-redacted before reaching this failure-only log.
+func nativeBrowserReportTail(report []byte) []byte {
+	const limit = 65536
+	if len(report) > limit {
+		return report[len(report)-limit:]
+	}
+	return report
 }

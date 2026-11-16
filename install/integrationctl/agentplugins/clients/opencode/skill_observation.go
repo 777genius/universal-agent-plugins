@@ -22,7 +22,7 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 		return outcome, nil
 	}
 	outcome = openCodeNativeStatus(request, outcome)
-	if env.Runner == nil || request.Client.ExecutablePath == "" {
+	if env.Runner == nil || request.Client.ExecutablePath == "" || !openCodeV1DiscoverySupported(request) {
 		return outcome, nil
 	}
 	skills, servers, ok := openCodeObservableComponents(request.Plan.Components)
@@ -34,10 +34,14 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 	if !observable {
 		return outcome, nil
 	}
-	observed, err := openCodeCatalogsObserved(ctx, env, request, layout, skills, servers)
+	observed, pendingConfirmation, err := openCodeCatalogsObserved(ctx, env, request, layout, skills, servers)
 	if err != nil {
 		outcome.NativeEffect = domain.NativeEffectUncertain
 		return shared.FailedActivation(outcome, "confirm prior OpenCode discovery process cleanup before retrying", err)
+	}
+	if pendingConfirmation {
+		outcome.UserActions = shared.AppendUnique(outcome.UserActions, openCodeMCPConfirmationAction)
+		return outcome, nil
 	}
 	if !observed {
 		return outcome, nil
@@ -49,16 +53,20 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 	if len(servers) > 0 && outcome.Authentication == domain.AuthenticationNotChecked && request.Plan.Authentication == domain.AuthenticationNotChecked && slices.Contains(request.Plan.Warnings, "authentication_not_catalog_verified") {
 		outcome.Authentication = domain.AuthenticationNotRequired
 	}
-	// Keep unrelated cleanup warnings; remove only actions this probe superseded.
-	actions := outcome.UserActions[:0]
-	for _, action := range outcome.UserActions {
-		if action == "restart OpenCode to load the installed plugin" || strings.HasPrefix(action, "OpenCode project configuration is installed;") || strings.HasPrefix(action, "OpenCode user configuration is installed;") || strings.HasPrefix(action, "OpenCode merges ancestor,") {
+	outcome.UserActions = removeOpenCodeDiscoveryActions(outcome.UserActions)
+	return outcome, nil
+}
+
+// Only a successful fresh observation supersedes these actions.
+func removeOpenCodeDiscoveryActions(actions []string) []string {
+	kept := actions[:0]
+	for _, action := range actions {
+		if action == openCodeMCPConfirmationAction || action == "restart OpenCode to load the installed plugin" || strings.HasPrefix(action, "OpenCode project configuration is installed;") || strings.HasPrefix(action, "OpenCode user configuration is installed;") || strings.HasPrefix(action, "OpenCode merges ancestor,") {
 			continue
 		}
-		actions = append(actions, action)
+		kept = append(kept, action)
 	}
-	outcome.UserActions = actions
-	return outcome, nil
+	return kept
 }
 
 func openCodeObservableComponents(components []domain.ComponentDecision) ([]domain.ComponentDecision, []string, bool) {
@@ -93,7 +101,7 @@ func openCodeProjectSkillAliases(layout openCodeNativeLayout, skills []domain.Co
 	return false
 }
 
-func openCodeCatalogsObserved(ctx context.Context, env clients.Env, request domain.ActivationRequest, layout openCodeNativeLayout, skills []domain.ComponentDecision, servers []string) (bool, error) {
+func openCodeCatalogsObserved(ctx context.Context, env clients.Env, request domain.ActivationRequest, layout openCodeNativeLayout, skills []domain.ComponentDecision, servers []string) (bool, bool, error) {
 	probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	environment := append(os.Environ(), "OPENCODE_DISABLE_AUTOUPDATE=1", "OPENCODE_DISABLE_MODELS_FETCH=1", "NO_COLOR=1", "OPENCODE_CONFIG_DIR="+request.Client.ConfigRoot)
@@ -109,24 +117,30 @@ func openCodeCatalogsObserved(ctx context.Context, env clients.Env, request doma
 	}
 	config, ok, err := run("debug", "config")
 	if err != nil || !ok || !openCodeSkillPermissionsUnrestricted(config) {
-		return false, err
+		return false, false, err
 	}
 	if len(skills) > 0 {
 		body, ok, err := run("debug", "skill")
 		if err != nil || !ok || !exactOpenCodeSkills(body, layout, skills) {
-			return false, err
+			return false, false, err
 		}
 	}
 	if len(servers) > 0 {
 		if !exactOpenCodeLocalMCPConfig(env, config, request, servers) {
-			return false, nil
+			return false, false, nil
+		}
+		// Native MCP status starts all currently enabled servers. A read-only
+		// preview records the fresh local-config proof; only the existing
+		// confirmed repair path may perform the disclosed native startup.
+		if request.VerifyOnly {
+			return false, true, nil
 		}
 		listed, ok, err := run("mcp", "list")
 		if err != nil || !ok || !connectedOpenCodeMCP(listed, servers) {
-			return false, err
+			return false, false, err
 		}
 	}
-	return true, nil
+	return true, false, nil
 }
 
 func openCodeSkillPermissionsUnrestricted(body []byte) bool {

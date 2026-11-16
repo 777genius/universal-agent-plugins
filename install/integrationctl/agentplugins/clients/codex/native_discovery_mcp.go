@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -29,8 +31,43 @@ func verifyCodexNativeProjectConfig(reader *bufio.Scanner, writer *json.Encoder,
 	return verifyCodexEffectiveProjectMCP(config, plan)
 }
 
-func verifyCodexNativeMCP(reader *bufio.Scanner, writer *json.Encoder, plan domain.DeliveryPlan, pluginID string) error {
-	for index, name := range shared.SupportedMCPNames(plan) {
+// Older app-server versions ignore serverName and can initialize every enabled
+// MCP server. Only the same process's qualified stable version may receive this
+// selected-server request; a detected executable version is not that proof.
+func codexNativeVersionSupportsSelectedMCP(agent string) bool {
+	fields := strings.Fields(agent)
+	if len(fields) == 0 || !strings.HasPrefix(fields[0], "agentplugins/") {
+		return false
+	}
+	parts := strings.Split(strings.TrimPrefix(fields[0], "agentplugins/"), ".")
+	if len(parts) != 3 {
+		return false
+	}
+	var version [3]uint64
+	for i, part := range parts {
+		if part == "" || len(part) > 1 && part[0] == '0' {
+			return false
+		}
+		for _, digit := range part {
+			if digit < '0' || digit > '9' {
+				return false
+			}
+		}
+		number, err := strconv.ParseUint(part, 10, 64)
+		if err != nil {
+			return false
+		}
+		version[i] = number
+	}
+	return version[0] > 0 || version[1] >= 162
+}
+
+func verifyCodexNativeMCP(reader *bufio.Scanner, writer *json.Encoder, plan domain.DeliveryPlan, pluginID, nativeAgent string) error {
+	names := shared.SupportedMCPNames(plan)
+	if len(names) > 0 && !codexNativeVersionSupportsSelectedMCP(nativeAgent) {
+		return fmt.Errorf("automatic selected-server MCP discovery requires Codex 0.162.0 or newer; native server policy was preserved")
+	}
+	for index, name := range names {
 		id := index + 4
 		if err := writer.Encode(map[string]any{"id": id, "method": "mcpServerStatus/list", "params": map[string]any{"serverName": name, "detail": "toolsAndAuthOnly"}}); err != nil {
 			return err

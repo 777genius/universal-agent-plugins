@@ -14,7 +14,11 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func observeGeminiProjectMCP(ctx context.Context, env clients.Env, request domain.ActivationRequest) (bool, error) {
+const geminiMCPConfirmationAction = "Run the reviewed Gemini CLI MCP connection check for this project."
+
+const geminiMCPReviewWarning = "Gemini CLI verification starts or connects to all enabled MCP servers from this project, your profile and extensions under their current policy. Readiness is checked for the selected plugin."
+
+func geminiExpectedMCPConnections(env clients.Env, request domain.ActivationRequest) (map[string]string, bool) {
 	expected := map[string]string{}
 	for _, component := range request.Plan.Components {
 		if component.Kind != domain.ComponentMCPServer {
@@ -22,16 +26,25 @@ func observeGeminiProjectMCP(ctx context.Context, env clients.Env, request domai
 		}
 		command, args, ok := geminiOwnedMCPCommand(env, request, component.Name)
 		if !ok {
-			return false, nil
+			return nil, false
 		}
 		row := "✓ " + component.Name + ": " + command + " " + strings.Join(args, " ") + " (stdio) - Connected"
 		if strings.ContainsAny(row, "\x00\r\n\x1b") {
-			return false, nil
+			return nil, false
 		}
 		expected[component.Name] = row
 	}
+	return expected, true
+}
+
+func observeGeminiProjectMCP(ctx context.Context, env clients.Env, request domain.ActivationRequest, expected map[string]string) (bool, error) {
 	if len(expected) == 0 {
 		return true, nil
+	}
+	// The native list command connects every enabled server. It is an acting
+	// check disclosed by the install review, never an online preview effect.
+	if request.VerifyOnly {
+		return false, nil
 	}
 	result, probeErr := runGeminiInventory(ctx, env, request, "mcp", "list")
 	if probeErr != nil {

@@ -16,6 +16,8 @@ import (
 
 type Activator struct {
 	ProjectRoots        ports.NativeProjectRootPublisher
+	UserHome            string
+	NativeTransitions   NativeTransitions
 	OpenCodeTransitions ports.OpenCodeTransitionRecorder
 	Runner              ports.CommandRunner
 	LookupExecutable    func(string) (string, error)
@@ -23,6 +25,10 @@ type Activator struct {
 	// Registry supplies the client adapters that own lifecycle. It is injected
 	// by the composition root and never defaulted to "every client".
 	Registry *clients.Registry
+	// Concurrent lets groups run attested clients' activation effects together.
+	// The zero value keeps activation strictly serial; only a composition root
+	// that qualified its runner for simultaneous commands sets it.
+	Concurrent bool
 }
 
 func (activator Activator) requireRegistry() error {
@@ -43,8 +49,8 @@ func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel, s
 	return kernel.RequireFileIO()
 }
 
-func (activator Activator) env() clients.Env {
-	return clients.Env{ProjectRoots: activator.ProjectRoots, OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel(), LookupExecutable: activator.LookupExecutable}
+func (activator Activator) env(id domain.ClientID) clients.Env {
+	return clients.Env{ProjectRoots: activator.ProjectRoots, UserHome: activator.UserHome, NativeTransitions: activator.NativeTransitions.ForClient(id), OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel(), LookupExecutable: activator.LookupExecutable}
 }
 
 func (activator Activator) nativeConfigKernel() nativeconfig.Kernel {
@@ -71,7 +77,7 @@ func (activator Activator) AutomaticallyActivates(request domain.ActivationReque
 	if !ok {
 		return false
 	}
-	return automatic.AutomaticallyActivates(activator.env(), request)
+	return automatic.AutomaticallyActivates(activator.env(request.Client.ClientID), request)
 }
 
 // PreflightActivation rejects lifecycle configurations that would otherwise
@@ -83,8 +89,11 @@ func (activator Activator) PreflightActivation(request domain.ActivationRequest)
 	if err := activator.requireRegistry(); err != nil {
 		return err
 	}
+	if request.ConfirmPluginEnable && !clients.SupportsPluginEnablement(activator.Registry, request.Client.ClientID, request.Plan.Scope) {
+		return fmt.Errorf("selected client does not support explicit plugin enablement in this scope")
+	}
 	if preflight, ok := clients.As[clients.ActivationPreflighter](activator.Registry, request.Client.ClientID); ok {
-		return preflight.PreflightActivation(activator.env(), request)
+		return preflight.PreflightActivation(activator.env(request.Client.ClientID), request)
 	}
 	return nil
 }
@@ -100,7 +109,7 @@ func (activator Activator) Deactivate(ctx context.Context, request domain.Deacti
 		return domain.DeactivationOutcome{}, err
 	}
 	if lifecycle, ok := clients.As[clients.Lifecycle](activator.Registry, request.Client.ClientID); ok {
-		return lifecycle.Deactivate(ctx, activator.env(), request)
+		return lifecycle.Deactivate(ctx, activator.env(request.Client.ClientID), request)
 	}
 	return domain.DeactivationOutcome{}, fmt.Errorf("unsupported deactivation client %q", request.Client.ClientID)
 }
@@ -154,13 +163,29 @@ func (activator Activator) Activate(ctx context.Context, request domain.Activati
 
 func (activator Activator) dispatchActivate(ctx context.Context, request domain.ActivationRequest) (domain.ActivationOutcome, error) {
 	if lifecycle, ok := clients.As[clients.Lifecycle](activator.Registry, request.Client.ClientID); ok {
-		return lifecycle.Activate(ctx, activator.env(), request)
+		return lifecycle.Activate(ctx, activator.env(request.Client.ClientID), request)
 	}
 	return domain.ActivationOutcome{}, fmt.Errorf("unsupported activation client %q", request.Client.ClientID)
 }
 
-// SupportsIndependentActivation delegates effect isolation to adapter metadata.
+// SupportsIndependentActivation delegates effect isolation to adapter metadata
+// and only offers it when the composition opted into concurrent activation.
 func (activator Activator) SupportsIndependentActivation(request domain.ActivationRequest) bool {
+	if !activator.Concurrent {
+		return false
+	}
 	independent, ok := clients.As[clients.IndependentActivator](activator.Registry, request.Client.ClientID)
 	return ok && independent.SupportsIndependentActivation(request)
+}
+
+// PrepareIndependentActivation returns the client effect of a target whose
+// adapter attested isolation. The returned operation only runs the client's
+// own activation; the coordinator keeps state writes and publication serial.
+func (activator Activator) PrepareIndependentActivation(_ context.Context, request domain.ActivationRequest) (func(context.Context) (domain.ActivationOutcome, error), error) {
+	if !activator.SupportsIndependentActivation(request) {
+		return nil, fmt.Errorf("client activation cannot run independently")
+	}
+	return func(effectContext context.Context) (domain.ActivationOutcome, error) {
+		return activator.Activate(effectContext, request)
+	}, nil
 }

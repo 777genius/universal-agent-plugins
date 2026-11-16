@@ -20,6 +20,8 @@ func cursorApprovalFixture(t *testing.T) (domain.ActivationRequest, nativeconfig
 	t.Helper()
 	project := t.TempDir()
 	root := filepath.Join(t.TempDir(), ".cursor")
+	t.Setenv("CURSOR_CONFIG_DIR", root)
+	t.Setenv("CURSOR_DATA_DIR", root)
 	native := filepath.Join(project, ".cursor")
 	active := filepath.Join(project, "managed")
 	for _, path := range []string{root, native, active} {

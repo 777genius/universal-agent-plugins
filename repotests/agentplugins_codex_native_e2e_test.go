@@ -426,7 +426,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	for _, name := range []string{"install", "A_native_tool", "B_native_tool", "same_version_native_tool", "unchanged", "explicit_user_scope", "owned_repair", "native_cache_repair", "partial_failure", "all_unsupported", "remove", "repeat_remove", "foreign_preservation", "collision_drift", "immutable_git", "immutable_git_native", "http", "redirect_headers", "skill_context", "real_model_skill_use", "oauth"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
 	}
-	evidence := map[string]any{"started_utc": time.Now().UTC().Format(time.RFC3339Nano), "os": runtime.GOOS, "arch": runtime.GOARCH, "profile": f.Root, "client_version": "0.153.4", "client_source": "3d2ee51ca2d5db578f328aa75e20aa22c0197c9a", "client_sha256": nativeSHA(t, client), "installer_sha256": nativeSHA(t, installer), "acquisition": "local_directory", "native_surface": "codex app-server direct thread MCP RPC", "stages": stages}
+	evidence := map[string]any{"started_utc": time.Now().UTC().Format(time.RFC3339Nano), "os": runtime.GOOS, "arch": runtime.GOARCH, "profile": f.Root, "client_version": os.Getenv("AGENTPLUGINS_CODEX_VERSION"), "client_release_tag": "rust-v" + os.Getenv("AGENTPLUGINS_CODEX_VERSION"), "client_sha256": nativeSHA(t, client), "installer_sha256": nativeSHA(t, installer), "acquisition": "local_directory", "native_surface": "codex app-server direct thread MCP RPC", "stages": stages}
 	defer func() {
 		evidence["finished_utc"] = time.Now().UTC().Format(time.RFC3339Nano)
 		hashes := map[string]string{}
@@ -452,7 +452,7 @@ func TestAgentpluginsCodexNativeLifecycle(t *testing.T) {
 	providerURL := nativeScriptedProvider(t, f)
 	nativeWrite(t, filepath.Join(f.CodexHome, "config.toml"), []byte("cli_auth_credentials_store = \"file\"\nmcp_oauth_credentials_store = \"file\"\nmodel_provider = \"fixture\"\nmodel = \"fixture-model\"\n[model_providers.fixture]\nname = \"Fixture\"\nbase_url = \""+providerURL+"\"\nwire_api = \"responses\"\nrequires_openai_auth = false\n[analytics]\nenabled = false\n[feedback]\nenabled = false\n"), 0600)
 	b, err := nativeCommand(t, f, client, "client-version", "--version")
-	if err != nil || strings.TrimSpace(string(b)) != "codex-cli 0.153.4" {
+	if want := os.Getenv("AGENTPLUGINS_CODEX_VERSION"); err != nil || want == "" || strings.TrimSpace(string(b)) != "codex-cli "+want {
 		t.Fatalf("wrong pinned client: %s %v", b, err)
 	}
 	nativeAttempt(stages, "scanner_prerequisite", "evidence.json")

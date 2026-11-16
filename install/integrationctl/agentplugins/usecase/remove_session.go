@@ -80,6 +80,7 @@ func (session *removeSession) deactivateRemoveTarget() error {
 		}
 	}
 	deactivation, err := session.service.deactivateWithFrozenObservation(session.ctx, session.installation.InstallationID, session.clientKey, domain.DeactivationRequest{
+		NativeAttempt:         attempt.identity(session.installation.InstallationID, session.clientKey),
 		TargetContext:         session.service.targetContext(session.input.Client, session.input.Scope),
 		NativeRegistryRoot:    nativeRegistryForBinding(session.client, session.input.Client),
 		LocalEntryObservation: session.client.LocalEntryObservation.Clone(),
@@ -99,7 +100,7 @@ func (session *removeSession) deactivateRemoveTarget() error {
 		return session.service.acknowledgeUnchangedRemoval(attempt, deactivation, err)
 	}
 	if err == nil && nativeAttempt {
-		if persistErr := session.service.completeNativeRemoval(session.installation.InstallationID, session.clientKey, deactivation.ExternalRemovalComplete); persistErr != nil {
+		if persistErr := session.service.completeNativeRemoval(session.ctx, session.installation.InstallationID, session.clientKey, deactivation.ExternalRemovalComplete); persistErr != nil {
 			return persistErr
 		}
 	}

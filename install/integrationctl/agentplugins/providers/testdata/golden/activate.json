@@ -310,13 +310,7 @@
     }
   },
   "opencode": {
-    "Commands": [
-      [
-        "\u003croot\u003e/bin/opencode",
-        "debug",
-        "config"
-      ]
-    ],
+    "Commands": [],
     "Error": "",
     "Outcome": {
       "Activation": "prepared",

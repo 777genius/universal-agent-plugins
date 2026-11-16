@@ -221,7 +221,8 @@
       ],
       "Verification": "package_validated",
       "Warnings": [
-        "authentication_not_catalog_verified"
+        "authentication_not_catalog_verified",
+        "Installation may approve the selected Claude Code MCP servers: remote. Existing rejections are preserved; these preferences remain after removal."
       ]
     }
   },
@@ -980,7 +981,8 @@
       ],
       "Verification": "package_validated",
       "Warnings": [
-        "authentication_not_catalog_verified"
+        "authentication_not_catalog_verified",
+        "After confirmation, OpenCode native MCP verification may start or connect every currently enabled MCP server from the workspace, selected profile, and extensions for \"\u003croot\u003e/clients/opencode\". Existing server and permission settings remain in effect."
       ]
     }
   },

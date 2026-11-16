@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
@@ -78,30 +81,55 @@ func (p skillsPickerPrepared) Apply(ctx context.Context) (skillspicker.Outcome, 
 }
 
 func skillBatchOutcome(result SkillsBatchResult) skillspicker.Outcome {
-	outcome := skillspicker.Outcome{State: skillspicker.OperationState(result.Status), Items: []skillspicker.OperationItem{}, Diagnostics: []skillspicker.Diagnostic{}, Result: skillspicker.OperationResult{Message: fmt.Sprintf("Skills installation %s", result.Status), RepairInstructions: append([]string{}, result.RepairInstructions...)}}
+	outcome := skillspicker.Outcome{State: skillspicker.OperationState(result.Status), Items: []skillspicker.OperationItem{}, Diagnostics: skillSetupDiagnostics(result.Items), Result: skillspicker.OperationResult{Message: fmt.Sprintf("Skills installation %s", result.Status), RepairInstructions: append([]string{}, result.RepairInstructions...)}}
 	readiness, _ := deriveSkillsReadiness(result.Status, result.Items...)
 	switch readiness {
 	case "ready":
 		outcome.Result.Message = skillsReadyMessage
 	case "needs_action":
 		outcome.Result.Message = "Skill files installed. Some agents still need setup; check each result below."
-		outcome.Diagnostics = append(outcome.Diagnostics, skillspicker.Diagnostic{Code: "NATIVE_SETUP_REQUIRED", Severity: skillspicker.Warning,
-			Message: "Run agentplugins doctor to verify the installed Skills and see any remaining setup steps."})
+		if len(outcome.Diagnostics) == 0 {
+			outcome.Diagnostics = append(outcome.Diagnostics, skillspicker.Diagnostic{Code: "NATIVE_SETUP_REQUIRED", Severity: skillspicker.Warning,
+				Message: "Run agentplugins doctor to verify the installed Skills and see any remaining setup steps."})
+		}
 	}
 	for _, item := range result.Items {
 		alias, path := item.Alias, item.TargetPath
 		message := skillBatchItemMessage(item)
+		if item.failure != nil {
+			message = item.failure.Summary + " " + item.failure.Next
+		}
 		outcome.Items = append(outcome.Items, skillspicker.OperationItem{CandidateId: item.CandidateID, TargetId: item.ClientID, Alias: &alias, DestinationPath: &path, Message: &message, Status: skillOperationItemStatus(item.Status)})
 	}
 	return outcome
 }
 
+func skillSetupDiagnostics(items []SkillsBatchItem) []skillspicker.Diagnostic {
+	diagnostics, seen := []skillspicker.Diagnostic{}, map[string]bool{}
+	for _, item := range items {
+		for _, action := range item.ManualActions {
+			message := strings.TrimSpace(prompt.SafeText(action))
+			if message == "" {
+				continue
+			}
+			if client := reviewClientName(domain.ClientID(item.ClientID)); client != "" {
+				message = client + ": " + message
+			}
+			if !seen[message] {
+				seen[message] = true
+				diagnostics = append(diagnostics, skillspicker.Diagnostic{Code: "NATIVE_SETUP_REQUIRED", Severity: skillspicker.Warning, Message: message})
+			}
+		}
+	}
+	return diagnostics
+}
+
 func skillBatchItemMessage(item SkillsBatchItem) string {
 	if skillsNativeReady([]SkillsBatchItem{item}) {
 		if item.Status == "unchanged" {
-			return "The Skill is up to date and its owned native projection was verified. Agent-session discovery was not checked."
+			return "Skill is up to date; installation verified."
 		}
-		return "The Skill files and owned native projection were verified. Agent-session discovery was not checked."
+		return "Skill installed and verified."
 	}
 	switch skillsItemPresentation(item) {
 	case "setup required", "installed":

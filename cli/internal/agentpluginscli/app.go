@@ -55,6 +55,10 @@ type App struct {
 
 	dependencySnapshots *dependencySnapshotCache
 
+	// InstallLogDir receives technical install logs. It is always a per-user
+	// location: a project root belongs to the repository and never holds logs.
+	InstallLogDir string
+
 	Version              string
 	UserHome             string
 	ManagedRoot          string
@@ -110,6 +114,7 @@ type options struct {
 	scope                string
 	dryRun               bool
 	yes                  bool
+	confirmPluginEnable  bool
 	scopeInferred        bool
 	format               string
 	plain                bool
@@ -118,6 +123,12 @@ type options struct {
 	acceptSecurityRisk   bool
 	securityDetails      bool
 	dependencyPolicyFile string
+	// installResult is the last apply's per-agent outcome; retryAttempt counts
+	// interactive retries of the same command.
+	installResult *installOutcome
+	retryAttempt  int
+	// unresolved names agents from earlier attempts that still need attention.
+	unresolved []string
 }
 
 func (app App) input() io.Reader {

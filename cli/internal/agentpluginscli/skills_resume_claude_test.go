@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -104,6 +105,10 @@ func TestSkillsResumeReviewsLegacyClaudeProjectionRefresh(t *testing.T) {
 	defer plan.Close()
 	if actions := plan.Actions(); len(actions) != 1 || actions[0].Action != string(installer.OpRefreshProjection) || actions[0].TargetPath != binding.TargetLocator {
 		t.Fatalf("legacy projection refresh was not explicitly reviewed: %+v", actions)
+	}
+	warnings := strings.Join(plan.Warnings(), "\n")
+	if !strings.Contains(warnings, strconv.Quote(journey.cli.app.ProjectRoot)) || !strings.Contains(warnings, "trust") {
+		t.Fatalf("review omitted the exact persistent project trust change: %s", warnings)
 	}
 	action := plan.request.prepared[0]
 	if action.Authority.ExpectedAction != string(installer.OpRepair) || action.Authority.ReceiptID == "" ||

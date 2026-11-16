@@ -1,6 +1,7 @@
 package codex
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -46,6 +47,16 @@ func grantCodexProjectTrust(env clients.Env, request domain.ActivationRequest) e
 }
 
 func pendingCodexProjectTrust(outcome domain.ActivationOutcome, err error) (domain.ActivationOutcome, error) {
+	var nativeErr *shared.NativeEffectError
+	if errors.As(err, &nativeErr) {
+		if nativeErr.Effect == domain.NativeEffectUncertain {
+			outcome.NativeEffect = domain.NativeEffectUncertain
+			return outcome, err
+		}
+		if nativeErr.Effect == domain.NativeEffectCommitted && outcome.NativeEffect != domain.NativeEffectUncertain {
+			outcome.NativeEffect = domain.NativeEffectCommitted
+		}
+	}
 	outcome.LocalActions = append(outcome.LocalActions, "Codex exact project trust could not be persisted: "+err.Error())
 	return outcome, nil
 }

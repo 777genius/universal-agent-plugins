@@ -53,6 +53,9 @@ func (session *groupSession) preserveNoChangeActivation(target plannedGroupTarge
 		outcome.AuthenticationAttested = true
 		return
 	}
+	if session.service.observedAuthenticationNotRequired(target.input, target.plan, *target.managed, *outcome, activationErr) {
+		return
+	}
 	if target.managed.Authentication != "" {
 		outcome.Authentication = target.managed.Authentication
 	}

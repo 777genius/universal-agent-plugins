@@ -39,14 +39,12 @@ func (p *managementPrepared) operationItem(action dependencyAction, result insta
 }
 func (p *managementPrepared) outcome(applied dependencyApplicationResult, applyErr error) management.Outcome {
 	result := management.OperationResult{Outcome: "completed", Mutated: applied.Published, Items: []management.OperationItem{}, NextActions: []management.NextAction{}, Message: "Environment change completed"}
-	cursor := 0
-	for _, action := range p.request.prepared {
+	for index, action := range p.request.prepared {
 		item := management.OperationItem{Alias: action.Alias, TargetId: p.backend.targetID(action.ClientID), Status: "not_attempted", DestinationPath: p.paths[action.Alias+"\x00"+action.ClientID]}
 		if action.Action == environment.ActionUnchanged {
 			item.Status = "unchanged"
-		} else if cursor < len(applied.Results) {
-			native := applied.Results[cursor]
-			cursor++
+		} else if index < len(applied.Outcomes) && applied.Outcomes[index].Result != nil {
+			native := *applied.Outcomes[index].Result
 			item = p.operationItem(action, native)
 			result.Mutated = result.Mutated || native.Mutated
 			result.DataRetained = result.DataRetained || native.DataRetained
@@ -54,6 +52,9 @@ func (p *managementPrepared) outcome(applied dependencyApplicationResult, applyE
 				result.NextActions = append(result.NextActions, managementNativeNextAction(next.Kind, action.Alias, item.TargetId))
 			}
 			result.NextActions = append(result.NextActions, managementManualNextActions(native.ManualActions, action.Alias, item.TargetId)...)
+		} else if index < len(applied.Outcomes) && applied.Outcomes[index].Status == environment.BindingFailed {
+			// The binding failed before the installer produced a result.
+			item.Status, item.Message = "failed", "Binding failed before the installer reported a result; inspect current installer state"
 		}
 		result.Items = append(result.Items, item)
 	}

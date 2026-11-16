@@ -1,5 +1,7 @@
 """Regression proof for released-CLI native component attribution and negative outcomes."""
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -219,6 +221,57 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
                 "grok", "docs/user-guide/custom-plugin.json"))
             self.assertFalse(audit.passive_native_path(
                 "grok", "plugins/documentation/plugin.json"))
+
+
+class SnapshotChangeEvidenceTest(unittest.TestCase):
+    def test_reports_created_changed_deleted_hashes_without_file_contents(self):
+        audit = load_audit()
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp) / ".codex"
+            root.mkdir()
+            (root / "changed").write_bytes(b"private before")
+            (root / "deleted").write_bytes(b"private deleted")
+            (root / "stable").write_bytes(b"private stable")
+            before = audit.snapshot([root])
+            (root / "changed").write_bytes(b"private after")
+            (root / "deleted").unlink()
+            (root / "created").write_bytes(b"private created")
+            after = audit.snapshot([root])
+            evidence = audit.snapshot_change_evidence(before, after)
+            self.assertEqual(evidence["total"], 3)
+            self.assertEqual(evidence["omitted"], 0)
+            entries = {entry["path"]: entry for entry in evidence["entries"]}
+            self.assertEqual(list(entries), [".codex/changed", ".codex/created", ".codex/deleted"])
+            self.assertEqual(entries[".codex/changed"]["before"],
+                             hashlib.sha256(b"private before").hexdigest())
+            self.assertEqual(entries[".codex/changed"]["after"],
+                             hashlib.sha256(b"private after").hexdigest())
+            self.assertIsNone(entries[".codex/created"]["before"])
+            self.assertEqual(entries[".codex/created"]["after"], after[".codex/created"])
+            self.assertEqual(entries[".codex/deleted"]["before"], before[".codex/deleted"])
+            self.assertIsNone(entries[".codex/deleted"]["after"])
+            self.assertFalse(any(entry["path_truncated"] for entry in evidence["entries"]))
+            self.assertNotIn("private", json.dumps(evidence))
+            self.assertEqual(audit.snapshot_change_evidence(after, after),
+                             {"total": 0, "omitted": 0, "entries": []})
+
+    def test_bounds_entries_and_paths_and_preserves_unsafe_markers(self):
+        audit = load_audit()
+        long_path = ".codex/000-" + "x" * 3000
+        before = {long_path: "symlink"}
+        after = {f".codex/{index:03d}": "a" * 64 for index in range(1, 105)}
+        after[long_path] = "unreadable"
+        evidence = audit.snapshot_change_evidence(before, after)
+        self.assertEqual(evidence["total"], 105)
+        self.assertEqual(len(evidence["entries"]), 100)
+        self.assertEqual(evidence["omitted"], 5)
+        first = evidence["entries"][0]
+        self.assertEqual(len(first["path"]), 2048)
+        self.assertTrue(first["path_truncated"])
+        self.assertEqual(first["before"], "symlink")
+        self.assertEqual(first["after"], "unreadable")
+        self.assertEqual(evidence, audit.snapshot_change_evidence(
+            dict(reversed(list(before.items()))), dict(reversed(list(after.items())))))
 
 
 if __name__ == "__main__":
