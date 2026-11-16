@@ -10,6 +10,12 @@ import (
 )
 
 func completeGeminiProject(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
+	if request.VerifyOnly && !geminiNativeDecisionPresent(request.Plan.Components) {
+		// Doctor's read-only projection check selects no native component. It
+		// asks only whether the exact owned objects are intact; project discovery
+		// readiness is reported separately and is never observed by this request.
+		return outcome, nil
+	}
 	var err error
 	if request.Plan.Scope == domain.ScopeProject && outcome.Verification == domain.VerificationInstalled {
 		changed, trustErr := trustGeminiProject(env, request)
@@ -51,4 +57,13 @@ func completeGeminiProject(ctx context.Context, env clients.Env, request domain.
 		outcome.UserActions = actions
 	}
 	return outcome, err
+}
+
+func geminiNativeDecisionPresent(components []domain.ComponentDecision) bool {
+	for _, component := range components {
+		if component.Support == domain.SupportNative {
+			return true
+		}
+	}
+	return false
 }
