@@ -110,7 +110,7 @@ func geminiCycleProgress(label string) string {
 	case "add-user", "add-a", "add-b":
 		return "Resolving and validating one Agent Plugin package for every selected target...\nInstalling " + geminiCycleName + " for 1 selected clients...\n"
 	case "repeat-add-a":
-		return "Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+		return "Resolving and validating one Agent Plugin package for every selected target...\n"
 	case "unchanged-update-a", "update-a":
 		return "Resolving and validating one updated Agent Plugin package for every selected target...\n"
 	case "intact-repair-a", "missing-repair-a":

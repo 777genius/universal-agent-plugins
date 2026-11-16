@@ -183,7 +183,7 @@ func (p *geminiPureSkillFixture) listings(t *testing.T, phase string, installed 
 			want[geminiPureSkillName] = geminiCycleSkillRow{Description: geminiPureSkillDescription, Path: p.skillPath, Enabled: true}
 		}
 		result := f.command(t, "pure-"+phase+"-"+scope.label, scope.path, f.env(), []string{f.node, f.client, "skills", "list", "--all"}, 10*time.Second)
-		if !geminiCycleListingStderr(result.Stderr, scope.label, nil) {
+		if !geminiPureSkillListingStderr(result.Stderr, phase, scope.label) {
 			t.Fatal("pure Skill native inventory emitted unrecognized diagnostics")
 		}
 		if err := geminiCycleSkills(result.Stdout, want); err != nil {
