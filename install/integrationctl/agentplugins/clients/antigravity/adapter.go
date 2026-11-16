@@ -16,6 +16,12 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// Folder trust and plugin enablement are deliberately not automated: trust is
+// Antigravity's only consent before it loads .agents content such as foreign
+// hooks or MCP, and the IDE keeps it in a state database UAP must never write.
+// Installed plugins are enabled by default; sign-in remains the user's step.
+const preparedPluginAction = "Open your project in agy or the Antigravity IDE, confirm folder trust when asked and sign in to Google, because plugin MCP servers do not start without sign-in; the plugin is enabled by default, but installed files do not prove plugin discovery or MCP server startup"
+
 type Adapter struct{}
 
 func New() *Adapter                  { return &Adapter{} }
@@ -167,7 +173,6 @@ func (*Adapter) RefinePlan(ctx context.Context, _ clients.PlanInput, plan *domai
 	}
 	shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, shared.OnlyNativeComponents(plan.Components))
 	plan.Activation = domain.ActivationPrepared
-	plan.UserActions = shared.AppendUnique(plan.UserActions,
-		"Open or restart Antigravity and verify the UAP-owned plugin in Customizations/Installed or with agy plugin list; native enablement and model access are not asserted")
+	plan.UserActions = shared.AppendUnique(plan.UserActions, preparedPluginAction)
 	return nil
 }
