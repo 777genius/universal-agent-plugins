@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/contracttest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/opencodehost"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -410,6 +411,27 @@ func TestOpenCodePreparedMaterializationRejectsIncompleteNativeProjection(t *tes
 					t.Fatalf("incomplete native projection gained materialization proof: %+v", observed)
 				}
 			})
+		}
+	}
+}
+
+type missingOpenCodeNativeToken struct{ contracttest.OpenCodeV1Host }
+
+func (missingOpenCodeNativeToken) NativeObservationAuthority() *opencodehost.NativePrepared {
+	return nil
+}
+
+func TestOpenCodeForeignAuthorityStartsNoNativeCommands(t *testing.T) {
+	for _, host := range []domain.OpenCodeHostAuthority{contracttest.OpenCodeV1Host{}, missingOpenCodeNativeToken{}} {
+		request, env, _, _ := nativeProbeFailureFixture(t)
+		request.Plan.OpenCodeHost = host
+		env.Runner = skillObservationRunner(func(context.Context, legacyports.Command) (legacyports.CommandResult, error) {
+			t.Fatal("foreign authority launched native discovery")
+			return legacyports.CommandResult{}, nil
+		})
+		actual, err := observeOpenCodeNativeComponents(t.Context(), env, request, preparedOpenCodeObservation())
+		if err != nil || actual.Activation != domain.ActivationPrepared {
+			t.Fatalf("foreign authority claimed readiness: %+v %v", actual, err)
 		}
 	}
 }
