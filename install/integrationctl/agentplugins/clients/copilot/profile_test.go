@@ -103,7 +103,7 @@ func TestProfileWrapperPreservesCommandAndExecutionEvidence(t *testing.T) {
 			if tree {
 				runner = treeRunner
 			}
-			wrapped := listingEnv(clients.Env{Runner: runner}, root).Runner
+			wrapped := listingEnv(clients.Env{Runner: runner}, root, "").Runner
 			ctx := context.WithValue(t.Context(), profileContextKey{}, "context")
 			command := legacyports.Command{Argv: []string{"copilot", "plugin", "list"}, Env: base, Dir: "/working-directory", StdoutLimitBytes: 123}
 			var result legacyports.CommandResult

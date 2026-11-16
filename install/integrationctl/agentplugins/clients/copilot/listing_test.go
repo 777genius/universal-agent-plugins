@@ -34,6 +34,29 @@ func TestNativeRegistryEmptyBuiltinListing(t *testing.T) {
 	}
 }
 
+// Regression: the adapter's listing normalization removed the builtin section
+// before the same-name guard could see it, so a plugin named like a builtin
+// was reported absent and verified through the adapter.
+func TestNativeRegistryRefusesSameNameBuiltinThroughAdapter(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "managed-artifact")
+	for _, name := range []string{"computer-use", "Browser-Use"} {
+		plan := domain.DeliveryPlan{ClientID: domain.ClientCopilot, Scope: domain.ScopeUser, NativeRegistryExecutable: "copilot",
+			DeclaredName: name, DeclaredVersion: "1.0.0", PhysicalArtifactID: "fixture-physical-artifact", ActivePath: path}
+		empty := clients.Env{Runner: listingRunner{copilotEmptyListingBody + copilot112BuiltinSection}}
+		if finding, err := New().InspectNativeRegistry(context.Background(), empty, domain.DetectedClient{}, plan, nil); err != nil || finding != clients.RegistryIndeterminate {
+			t.Fatalf("%s: empty listing finding=%v err=%v", name, finding, err)
+		}
+		live := copilot112BuiltinSection + "Live Plugins (loaded from a local marketplace directory, never copied):\n  • " + name + "@" +
+			shared.ManagedMarketplaceName(plan.PhysicalArtifactID) + " (v1.0.0) (enabled)\n      from " + path + "\n"
+		outcome, err := New().Activate(context.Background(), clients.Env{Runner: listingRunner{live}}, domain.ActivationRequest{
+			Client: domain.DetectedClient{ClientID: domain.ClientCopilot}, DeclaredName: name, Plan: plan,
+			Delivery: domain.StagedDelivery{ClientID: domain.ClientCopilot, ActivePath: path}, BackendExecutable: "copilot", VerifyOnly: true})
+		if err != nil || outcome.Verification == domain.VerificationInstalled {
+			t.Fatalf("%s: same-name builtin verified: outcome=%+v err=%v", name, outcome, err)
+		}
+	}
+}
+
 func TestNativeRegistryLiveBuiltinListing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "managed-artifact")
 	live := "Live Plugins (loaded from a local marketplace directory, never copied):\n  • uap-commands-fixture@agentplugins-012345abcdef (v1.0.0) (enabled)\n      from " + path + "\n"
@@ -98,13 +121,13 @@ func (r *treeListingRunner) RunWithTreeExitGrace(_ context.Context, command lega
 }
 
 func TestListingRunnerPreservesCapabilitiesAndFailures(t *testing.T) {
-	if _, ok := listingEnv(clients.Env{Runner: listingRunner{}}, "").Runner.(ports.TreeCommandRunner); ok {
+	if _, ok := listingEnv(clients.Env{Runner: listingRunner{}}, "", "").Runner.(ports.TreeCommandRunner); ok {
 		t.Fatal("advertised unsupported tree capability")
 	}
 	sentinel := errors.New("containment failure")
 	original := legacyports.CommandResult{Stdout: []byte(emptyBuiltinListing), Stderr: []byte("diagnostic"), ExitCode: 7, NoChildStarted: true, CleanupComplete: true}
 	runner := &treeListingRunner{result: original, err: sentinel}
-	env := listingEnv(clients.Env{Runner: runner}, "")
+	env := listingEnv(clients.Env{Runner: runner}, "", "")
 	_, err := New().InspectNativeRegistry(context.Background(), env, domain.DetectedClient{}, domain.DeliveryPlan{NativeRegistryExecutable: "copilot"}, nil)
 	if !errors.Is(err, sentinel) || !runner.called || runner.grace != time.Second || !reflect.DeepEqual(runner.command.Argv, []string{"copilot", "plugin", "list"}) {
 		t.Fatalf("lost tree invocation: runner=%+v err=%v", runner, err)
