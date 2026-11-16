@@ -8,6 +8,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 // scriptedMutator answers per client so tests describe one agent's behavior.
@@ -242,5 +243,54 @@ func TestApplySyncUnclosedProbeStopsRemainingBindings(t *testing.T) {
 				t.Fatal("later client prepared after unclosed probe")
 			}
 		})
+	}
+}
+
+func TestApplySyncRawProcessClosureStopsRemainingBindings(t *testing.T) {
+	for _, kind := range []string{"domain", "runner"} {
+		for _, stage := range []string{"prepare", "apply"} {
+			t.Run(kind+"/"+stage, func(t *testing.T) {
+				cause := errors.New("containment close failed")
+				domainProbe := &domain.UnclosedClientProbe{Operation: "native observation", Err: cause}
+				runnerProbe := &legacyports.ProcessClosureError{Cause: cause}
+				var probe error = domainProbe
+				if kind == "runner" {
+					probe = runnerProbe
+				}
+				mutator := &scriptedMutator{}
+				if stage == "prepare" {
+					mutator.prepareErr = map[string]error{"codex": fmt.Errorf("prepare native command: %w", probe)}
+				} else {
+					mutator.applyErr = map[string]error{"codex": fmt.Errorf("apply native command: %w", probe)}
+					mutator.results = map[string]installer.Result{"codex": {Outcome: installer.OutcomeIncomplete}}
+				}
+				outcomes, err := (Coordinator{Mutator: mutator}).ApplySync(context.Background(), bindings("claude", "codex", "gemini"), true)
+				if got := statuses(outcomes); fmt.Sprint(got) != fmt.Sprint([]BindingStatus{BindingApplied, BindingFailed, BindingNotAttempted}) {
+					t.Fatalf("unsafe continuation: %v", got)
+				}
+				if outcomes[0].Result == nil || outcomes[0].Result.Outcome != installer.OutcomeCompleted || !outcomes[0].Result.Mutated {
+					t.Fatalf("lost completed predecessor: %+v", outcomes[0])
+				}
+				if kind == "runner" {
+					var observed *legacyports.ProcessClosureError
+					if !errors.As(err, &observed) || observed != runnerProbe {
+						t.Fatalf("lost original runner probe: %v", err)
+					}
+				} else {
+					var observed *domain.UnclosedClientProbe
+					if !errors.As(err, &observed) || observed != domainProbe {
+						t.Fatalf("lost original domain probe: %v", err)
+					}
+				}
+				if !errors.Is(err, cause) {
+					t.Fatalf("lost underlying cause: %v", err)
+				}
+				for _, client := range mutator.applied {
+					if client == "gemini" {
+						t.Fatal("acted after unclosed probe")
+					}
+				}
+			})
+		}
 	}
 }
