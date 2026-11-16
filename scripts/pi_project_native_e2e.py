@@ -218,6 +218,14 @@ def owned_project_trust(driver, pi, user, project, package, output, marker, targ
     project_operation(driver, project / ".uap", user, project, package, "install", output / "c-repeat.json")
     assert_observation(native_rpc(pi, project, user, marker, None, target, "C-granted"), "one", project)
     state["stages"].append("confirmed_repeat_granted_owned_project_trust")
+    # Trust is bound to the recorded content, not only to the owned name.
+    owned_code = active / "native/index.ts"
+    original = owned_code.read_bytes()
+    owned_code.write_bytes(original + b"// changed after trust was recorded\n")
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-changed"), None, project)
+    owned_code.write_bytes(original)
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-restored"), "one", project)
+    state["stages"].append("changed_owned_content_untrusted")
     foreign = write(project, ".pi/extensions/later-foreign.ts",
                     'import { appendFileSync } from "node:fs";\n'
                     'appendFileSync(process.env.UAP_PI_PROJECT_EVENT_FILE, "foreign|" + process.cwd() + "\\n");\n'
@@ -225,6 +233,11 @@ def owned_project_trust(driver, pi, user, project, package, output, marker, targ
     assert_observation(native_rpc(pi, project, user, marker, None, target, "C-foreign"), None, project)
     foreign.unlink()
     state["stages"].append("later_foreign_extension_untrusted")
+    author_source(package, "c-two")
+    project_operation(driver, project / ".uap", user, project, package, "update", output / "c-update.json")
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-updated"), "c-two", project)
+    author_source(package, "one")
+    state["stages"].append("confirmed_update_rerecorded_owned_content")
     return active
 
 

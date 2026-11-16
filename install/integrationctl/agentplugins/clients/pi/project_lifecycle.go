@@ -11,7 +11,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-const piProjectComponentAction = "Open or restart Pi in this project, or reload resources, to load its extensions, Skills and MCP; a confirmed installation lets UAP's Pi trust hook trust this exact project while its .pi holds only UAP-managed resources. Authentication, active connections and model calls are not implied by file installation."
+const piProjectComponentAction = "Open or restart Pi in this project, or reload resources, to load its extensions, Skills and MCP; a confirmed installation lets UAP's Pi trust hook trust this exact project while its .pi holds only unchanged UAP-managed resources. Authentication, active connections and model calls are not implied by file installation."
 const piUserComponentAction = "Reload resources or restart Pi to discover user Skills and MCP; installed files do not prove an authenticated connection or model tool call."
 
 // piSelectedAuthority checks the selected real client separately from the

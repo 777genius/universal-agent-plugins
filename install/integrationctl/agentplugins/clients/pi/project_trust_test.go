@@ -101,8 +101,9 @@ process.stdout.write(JSON.stringify(await handlers[0]({ type: "project_trust", c
 }
 
 // The generated hook is the runtime authority. Executing its exact bytes
-// proves the owned-only decision, and the Go explanation must agree with it.
-func TestPiProjectTrustHookAnswersOnlyForOwnedOnlyProjects(t *testing.T) {
+// proves the owned-only, unchanged-content decision, and the Go explanation
+// (with the same digests) must agree with it on every step.
+func TestPiProjectTrustHookAnswersOnlyForOwnedUnchangedProjects(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node is required to execute the generated Pi hook")
@@ -113,16 +114,22 @@ func TestPiProjectTrustHookAnswersOnlyForOwnedOnlyProjects(t *testing.T) {
 	work := filepath.Join(root, "work")
 	project, other := filepath.Join(work, "project"), filepath.Join(root, "other")
 	artifact := "owned-0123456789ab"
-	for _, dir := range []string{user, filepath.Join(project, ".pi", "extensions", artifact), filepath.Join(other, ".pi", "extensions", artifact)} {
+	config := filepath.Join(project, ".pi")
+	extension := filepath.Join(config, "extensions", artifact, "native", "index.ts")
+	skill := filepath.Join(config, "skills", "owned")
+	for _, dir := range []string{user, filepath.Join(other, ".pi", "extensions", artifact, "empty"), filepath.Join(skill, "empty")} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			t.Fatal(err)
 		}
 	}
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	config := filepath.Join(project, ".pi")
-	ownedMCP := `{"mcpServers":{"owned":{"command":"true"}}}`
-	piTrustWrite(t, filepath.Join(config, "skills", "owned", "SKILL.md"), "---\nname: owned\ndescription: d\n---\n")
+	// Unicode names, nesting and diverse JSON numbers exercise Go/JS digest parity.
+	ownedEntry := `{"command":"node","args":["s\u00e9rver.js","--port",8080,1.5,-0,1e21,1e-7],"env":{"Z":"1","\u00c4":null,"a":true},"nested":[{"b":false,"a":[]}]}`
+	ownedMCP := `{"mcpServers":{"owned":` + ownedEntry + `}}`
+	piTrustWrite(t, extension, "export default function owned() {}\n")
+	piTrustWrite(t, filepath.Join(skill, "SKILL.md"), "---\nname: owned\ndescription: d\n---\n")
+	piTrustWrite(t, filepath.Join(skill, "références", "ü.md"), "unicode\n")
 	piTrustWrite(t, filepath.Join(config, "mcp.json"), ownedMCP)
 	piTrustWrite(t, filepath.Join(config, "mcp.json.agentplugins.lock"), "")
 	env := clients.Env{NativeConfig: nativeconfig.New()}
@@ -142,28 +149,48 @@ func TestPiProjectTrustHookAnswersOnlyForOwnedOnlyProjects(t *testing.T) {
 	}
 	expect("owned resources only", "yes")
 	remove := func(path string) func() { return func() { _ = os.RemoveAll(path) } }
-	for _, foreign := range []struct {
-		name       string
-		add, after func()
-	}{
-		{"foreign project extension", func() {
-			piTrustWrite(t, filepath.Join(config, "extensions", "foreign.ts"), "export default () => {}\n")
-		}, remove(filepath.Join(config, "extensions", "foreign.ts"))},
-		{"later foreign skill", func() { piTrustWrite(t, filepath.Join(config, "skills", "foreign", "SKILL.md"), "x\n") }, remove(filepath.Join(config, "skills", "foreign"))},
-		{"foreign prompt", func() { piTrustWrite(t, filepath.Join(config, "prompts", "foreign.md"), "x\n") }, remove(filepath.Join(config, "prompts"))},
-		{"foreign MCP server", func() {
-			piTrustWrite(t, filepath.Join(config, "mcp.json"), `{"mcpServers":{"owned":{"command":"true"},"foreign":{"command":"true"}}}`)
-		}, func() { piTrustWrite(t, filepath.Join(config, "mcp.json"), ownedMCP) }},
-		{"project settings", func() { piTrustWrite(t, filepath.Join(config, "settings.json"), "{}\n") }, remove(filepath.Join(config, "settings.json"))},
-		{"ancestor .agents skills", func() { piTrustWrite(t, filepath.Join(work, ".agents", "skills", "x", "SKILL.md"), "x\n") }, remove(filepath.Join(work, ".agents"))},
-		{"saved Pi decision", func() { piTrustWrite(t, filepath.Join(user, "trust.json"), `{"`+filepath.ToSlash(project)+`":false}`) }, remove(filepath.Join(user, "trust.json"))},
-		{"Pi default policy", func() { piTrustWrite(t, filepath.Join(user, "settings.json"), `{"defaultProjectTrust":"never"}`) }, remove(filepath.Join(user, "settings.json"))},
-	} {
-		foreign.add()
-		expect(foreign.name, "undecided")
-		foreign.after()
-		expect(foreign.name+" withdrawn", "yes")
+	restore := func(path, body string) func() { return func() { piTrustWrite(t, path, body) } }
+	write := func(path, body string) func() bool { return func() bool { piTrustWrite(t, path, body); return true } }
+	drop := func(path string) func() bool { return func() bool { return os.RemoveAll(path) == nil } }
+	// Link creation can need privileges (Windows symlinks); skip only that case.
+	link := func(add func(string, string) error, name string) func() bool {
+		return func() bool { return add(filepath.Join(skill, "SKILL.md"), filepath.Join(skill, name)) == nil }
 	}
+	for _, change := range []struct {
+		name  string
+		add   func() bool
+		after func()
+	}{
+		{"foreign project extension", write(filepath.Join(config, "extensions", "foreign.ts"), "export default () => {}\n"), remove(filepath.Join(config, "extensions", "foreign.ts"))},
+		{"later foreign skill", write(filepath.Join(config, "skills", "foreign", "SKILL.md"), "x\n"), remove(filepath.Join(config, "skills", "foreign"))},
+		{"foreign prompt", write(filepath.Join(config, "prompts", "foreign.md"), "x\n"), remove(filepath.Join(config, "prompts"))},
+		{"foreign MCP server", write(filepath.Join(config, "mcp.json"), `{"mcpServers":{"owned":`+ownedEntry+`,"foreign":{"command":"true"}}}`), restore(filepath.Join(config, "mcp.json"), ownedMCP)},
+		{"same-name extension content", write(extension, "export default function owned() { /* changed */ }\n"), restore(extension, "export default function owned() {}\n")},
+		{"extra file in owned skill", write(filepath.Join(skill, "extra.md"), "x\n"), remove(filepath.Join(skill, "extra.md"))},
+		{"missing file in owned skill", drop(filepath.Join(skill, "références")), restore(filepath.Join(skill, "références", "ü.md"), "unicode\n")},
+		{"same-name MCP command", write(filepath.Join(config, "mcp.json"), strings.Replace(ownedMCP, `"command":"node"`, `"command":"sh"`, 1)), restore(filepath.Join(config, "mcp.json"), ownedMCP)},
+		{"symlink inside owned skill", link(os.Symlink, "linked.md"), remove(filepath.Join(skill, "linked.md"))},
+		{"hardlink inside owned skill", link(os.Link, "hard.md"), remove(filepath.Join(skill, "hard.md"))},
+		{"project settings", write(filepath.Join(config, "settings.json"), "{}\n"), remove(filepath.Join(config, "settings.json"))},
+		{"ancestor .agents skills", write(filepath.Join(work, ".agents", "skills", "x", "SKILL.md"), "x\n"), remove(filepath.Join(work, ".agents"))},
+		{"saved Pi decision", write(filepath.Join(user, "trust.json"), `{"`+filepath.ToSlash(project)+`":false}`), remove(filepath.Join(user, "trust.json"))},
+		{"Pi default policy", write(filepath.Join(user, "settings.json"), `{"defaultProjectTrust":"never"}`), remove(filepath.Join(user, "settings.json"))},
+	} {
+		if !change.add() {
+			t.Logf("%s: not supported by this filesystem", change.name)
+			continue
+		}
+		expect(change.name, "undecided")
+		change.after()
+		expect(change.name+" withdrawn", "yes")
+	}
+	// A confirmed UAP update re-records the new content and keeps trust.
+	piTrustWrite(t, extension, "export default function owned() { /* updated by UAP */ }\n")
+	expect("update before confirmed activation", "undecided")
+	if err := grantPiProjectTrust(env, request); err != nil {
+		t.Fatal(err)
+	}
+	expect("confirmed update re-recorded content", "yes")
 	if err := revokePiProjectTrust(env, piTrustRemoval(request)); err != nil {
 		t.Fatal(err)
 	}
@@ -202,11 +229,15 @@ func TestPiProjectTrustRecordGrantRevokeAndRollback(t *testing.T) {
 	root := piTrustTemp(t)
 	user := filepath.Join(root, "home", ".pi", "agent")
 	projectA, projectB := filepath.Join(root, "a"), filepath.Join(root, "b")
-	for _, dir := range []string{user, projectA, projectB} {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			t.Fatal(err)
-		}
+	if err := os.MkdirAll(user, 0o700); err != nil {
+		t.Fatal(err)
 	}
+	// The owned content each confirmed activation has just installed.
+	piTrustWrite(t, filepath.Join(projectA, ".pi", "extensions", "one-0123456789ab", "index.ts"), "one\n")
+	piTrustWrite(t, filepath.Join(projectA, ".pi", "skills", "skill", "SKILL.md"), "skill\n")
+	piTrustWrite(t, filepath.Join(projectA, ".pi", "extensions", "two-0123456789ab", "index.ts"), "two\n")
+	piTrustWrite(t, filepath.Join(projectA, ".pi", "mcp.json"), `{"mcpServers":{"server":{"command":"node"}}}`)
+	piTrustWrite(t, filepath.Join(projectB, ".pi", "extensions", "one-0123456789ab", "index.ts"), "b\n")
 	env := clients.Env{NativeConfig: nativeconfig.New()}
 	dir, entry, record := piTrustHookPaths(user)
 	a1 := piTrustRequest(t, user, projectA, "one-0123456789ab", []string{"skill"}, nil)
@@ -269,12 +300,24 @@ func TestPiProjectTrustRecordGrantRevokeAndRollback(t *testing.T) {
 	if err := json.Unmarshal([]byte(read(record)), &document); err != nil {
 		t.Fatal(err)
 	}
+	tree := func(path string) string {
+		t.Helper()
+		digest, err := piTrustTreeDigest(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return digest
+	}
+	server, err := piTrustValueDigest(map[string]any{"command": "node"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := map[string]map[string]piTrustOwner{
 		projectA: {
-			"one-0123456789ab": {Extensions: []string{"one-0123456789ab"}, Skills: []string{"skill"}, MCPServers: []string{}},
-			"two-0123456789ab": {Extensions: []string{"two-0123456789ab"}, Skills: []string{}, MCPServers: []string{"server"}},
+			"one-0123456789ab": {Extensions: map[string]string{"one-0123456789ab": tree(a1.Plan.ActivePath)}, Skills: map[string]string{"skill": tree(filepath.Join(projectA, ".pi", "skills", "skill"))}, MCPServers: map[string]string{}},
+			"two-0123456789ab": {Extensions: map[string]string{"two-0123456789ab": tree(a2.Plan.ActivePath)}, Skills: map[string]string{}, MCPServers: map[string]string{"server": server}},
 		},
-		projectB: {"one-0123456789ab": {Extensions: []string{"one-0123456789ab"}, Skills: []string{}, MCPServers: []string{}}},
+		projectB: {"one-0123456789ab": {Extensions: map[string]string{"one-0123456789ab": tree(b1.Plan.ActivePath)}, Skills: map[string]string{}, MCPServers: map[string]string{}}},
 	}
 	if document.SchemaVersion != piTrustSchemaVersion || !reflect.DeepEqual(document.Projects, want) {
 		t.Fatalf("recorded projects: %+v", document)

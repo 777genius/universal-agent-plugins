@@ -16,7 +16,8 @@ import (
 
 // A confirmed installation records exact-project Pi trust. Repeating add on
 // an installation made before that setup completes it through the confirmed
-// repair path; preview writes nothing and removal revokes it.
+// repair path; preview writes nothing, a confirmed update re-records the new
+// owned content and removal revokes it.
 func TestPiProjectTrustFacadeCompletesOldInstallationAndRevokes(t *testing.T) {
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -88,14 +89,14 @@ func TestPiProjectTrustFacadeCompletesOldInstallationAndRevokes(t *testing.T) {
 		}
 		var document struct {
 			Projects map[string]map[string]struct {
-				Extensions []string `json:"extensions"`
+				Extensions map[string]string `json:"extensions"`
 			} `json:"projects"`
 		}
 		if err := json.Unmarshal(body, &document); err != nil {
 			t.Fatal(stage, err)
 		}
 		owner, ok := document.Projects[project][artifact]
-		if !ok || len(document.Projects) != 1 || !slices.Equal(owner.Extensions, []string{artifact}) {
+		if !ok || len(document.Projects) != 1 || len(owner.Extensions) != 1 || !strings.HasPrefix(owner.Extensions[artifact], "sha256:") {
 			t.Fatalf("%s: project trust not recorded for %s: %s", stage, artifact, body)
 		}
 		if info, err := os.Stat(entry); err != nil || !info.Mode().IsRegular() {
@@ -144,6 +145,16 @@ func TestPiProjectTrustFacadeCompletesOldInstallationAndRevokes(t *testing.T) {
 	}
 	if after, err := os.ReadFile(record); err != nil || string(after) != string(before) {
 		t.Fatal("unchanged repeat rewrote the trust record", err)
+	}
+
+	// A confirmed UAP update re-records the changed owned content.
+	write(filepath.Join(source, "native", "index.ts"), "export default function(pi) { /* updated */ }\n")
+	if updated := apply(OpUpdate, true); updated.Outcome != OutcomeCompleted || !ready(updated) {
+		t.Fatal("confirmed update lost owned project trust", updated.Outcome, updated.ManualActions)
+	}
+	recorded("update", artifact)
+	if after, err := os.ReadFile(record); err != nil || string(after) == string(before) {
+		t.Fatal("update did not refresh the recorded content digest", err)
 	}
 
 	if removed := apply(OpRemove, true); removed.Outcome != OutcomeCompleted {

@@ -6,9 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
-	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -22,10 +23,13 @@ import (
 )
 
 // Pi documents no trust-file API, and UAP never writes Pi's trust.json. A
-// confirmed project installation instead records its exact canonical project
-// and owned resource names beside one UAP-owned user extension that answers
-// Pi's documented project_trust event (see piTrustHookSource). Removing the
-// last owned installation of a project deletes its record immediately.
+// confirmed project installation instead records its exact canonical project,
+// owned resource names and their content digests beside one UAP-owned user
+// extension that answers Pi's documented project_trust event (see
+// piTrustHookSource). Any later change to owned content, such as a git pull,
+// returns the project to Pi's own trust flow until a confirmed UAP activation
+// records the new content. Removing the last owned installation of a project
+// deletes its record immediately.
 const (
 	piTrustHookName      = "agentplugins-project-trust"
 	piTrustHookEntry     = "index.ts"
@@ -37,20 +41,25 @@ const (
 // Project actions after activation. The pending action is also the only
 // observation that admits completing an old installation's setup.
 const (
-	piProjectTrustReadyAction   = "Open or restart Pi in this project, or reload resources; UAP's Pi trust hook trusts this exact project while its .pi holds only UAP-managed resources. Installed files do not prove runtime loading, authentication or model calls."
+	piProjectTrustReadyAction   = "Open or restart Pi in this project, or reload resources; UAP's Pi trust hook trusts this exact project while its .pi holds only unchanged UAP-managed resources. Installed files do not prove runtime loading, authentication or model calls."
 	piProjectTrustPendingAction = "Pi project trust is not set up for this installation; repeat the confirmed installation to set it up, or review project trust in Pi, then reload or restart. Installed files do not prove runtime loading."
 	piProjectTrustBlockedFormat = "UAP's Pi trust hook leaves this project to Pi's own trust decision because %s; review it and Pi's trust prompt, then reload or restart. Installed files do not prove runtime loading."
 	piProjectTrustFailedFormat  = "Pi project trust could not be set up automatically: %v; review project trust in Pi, then reload or restart. Installed files do not prove runtime loading."
 )
 
-var errPiTrustAbsent = errors.New("pi project trust hook is absent")
+var (
+	errPiTrustAbsent     = errors.New("pi project trust hook is absent")
+	piTrustDigestPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+)
 
-// piTrustOwner is one installation's owned names per Pi project surface. Its
-// key in the record is the installation's managed package directory.
+// piTrustOwner maps one installation's owned names per Pi project surface to
+// content digests (see project_trust_digest.go). Its key in the record is the
+// installation's managed package directory. The hook trusts a name only while
+// its live content still has the recorded digest.
 type piTrustOwner struct {
-	Extensions []string `json:"extensions"`
-	Skills     []string `json:"skills"`
-	MCPServers []string `json:"mcp_servers"`
+	Extensions map[string]string `json:"extensions"`
+	Skills     map[string]string `json:"skills"`
+	MCPServers map[string]string `json:"mcp_servers"`
 }
 
 type piTrustDocument struct {
@@ -87,36 +96,75 @@ func piTrustTarget(client domain.DetectedClient, plan domain.DeliveryPlan) (stri
 	return project, client.ConfigRoot, nil
 }
 
-func piTrustInventory(plan domain.DeliveryPlan, objects []domain.NativeObjectOwnership) (string, piTrustOwner, error) {
+// piTrustNames lists this installation's owned names without reading disk.
+func piTrustNames(plan domain.DeliveryPlan, objects []domain.NativeObjectOwnership) (string, piTrustOwner, error) {
 	artifact := filepath.Base(plan.ActivePath)
 	if artifact != plan.PhysicalArtifactID || pathpolicy.ValidateLeafID(artifact) != nil {
 		return "", piTrustOwner{}, fmt.Errorf("pi project trust requires the managed package directory")
 	}
-	owner := piTrustOwner{Extensions: []string{artifact}, Skills: []string{}, MCPServers: []string{}}
+	owner := piTrustOwner{Extensions: map[string]string{artifact: ""}, Skills: map[string]string{}, MCPServers: map[string]string{}}
 	for _, object := range piScopedNative(objects, domain.ScopeProject) {
 		switch object.Kind {
 		case piProjectSkillKind:
-			owner.Skills = append(owner.Skills, object.LogicalName)
+			owner.Skills[object.LogicalName] = ""
 		case piProjectMCPKind:
-			owner.MCPServers = append(owner.MCPServers, object.LogicalName)
+			owner.MCPServers[object.LogicalName] = ""
 		}
 	}
-	slices.Sort(owner.Skills)
-	slices.Sort(owner.MCPServers)
-	return artifact, owner, validPiTrustOwner(artifact, owner)
+	return artifact, owner, validPiTrustOwner(artifact, owner, false)
+}
+
+// piTrustInventory digests the owned content that a confirmed activation has
+// just installed and verified, so the hook can refuse any later change.
+func piTrustInventory(project string, plan domain.DeliveryPlan, objects []domain.NativeObjectOwnership) (string, piTrustOwner, error) {
+	artifact, owner, err := piTrustNames(plan, objects)
+	if err != nil {
+		return "", owner, err
+	}
+	config := filepath.Join(project, ".pi")
+	if plan.ActivePath != filepath.Join(config, "extensions", artifact) {
+		return "", owner, fmt.Errorf("pi project trust package differs from the selected project")
+	}
+	for surface, names := range map[string]map[string]string{"extensions": owner.Extensions, "skills": owner.Skills} {
+		for name := range names {
+			if names[name], err = piTrustTreeDigest(filepath.Join(config, surface, name)); err != nil {
+				return "", owner, err
+			}
+		}
+	}
+	if len(owner.MCPServers) > 0 {
+		servers, err := piTrustMCPServers(filepath.Join(config, "mcp.json"))
+		if err != nil {
+			return "", owner, err
+		}
+		for name := range owner.MCPServers {
+			entry, ok := servers[name]
+			if !ok {
+				return "", owner, fmt.Errorf("owned Pi MCP server %q is missing", name)
+			}
+			if owner.MCPServers[name], err = piTrustValueDigest(entry); err != nil {
+				return "", owner, err
+			}
+		}
+	}
+	return artifact, owner, validPiTrustOwner(artifact, owner, true)
 }
 
 // Directory names must be portable path segments; MCP server names are JSON
-// member names and only need to be printable.
-func validPiTrustOwner(artifact string, owner piTrustOwner) error {
-	for _, name := range append(append([]string{artifact}, owner.Extensions...), owner.Skills...) {
-		if pathpolicy.ValidatePortablePathSegment(name) != nil {
-			return fmt.Errorf("pi project trust has an invalid owned directory name")
-		}
+// member names and only need to be printable. Recorded digests are exact.
+func validPiTrustOwner(artifact string, owner piTrustOwner, digested bool) error {
+	if _, ok := owner.Extensions[artifact]; !ok || len(owner.Extensions) != 1 {
+		return fmt.Errorf("pi project trust owner must own exactly its package directory")
 	}
-	for _, name := range owner.MCPServers {
-		if name == "" || !utf8.ValidString(name) || strings.IndexFunc(name, unicode.IsControl) >= 0 {
-			return fmt.Errorf("pi project trust has an invalid owned MCP server name")
+	for surface, names := range map[string]map[string]string{"extensions": owner.Extensions, "skills": owner.Skills, "mcp_servers": owner.MCPServers} {
+		for name, digest := range names {
+			if surface == "mcp_servers" && (name == "" || !utf8.ValidString(name) || strings.IndexFunc(name, unicode.IsControl) >= 0) ||
+				surface != "mcp_servers" && pathpolicy.ValidatePortablePathSegment(name) != nil {
+				return fmt.Errorf("pi project trust has an invalid owned %s name", surface)
+			}
+			if digested && !piTrustDigestPattern.MatchString(digest) {
+				return fmt.Errorf("pi project trust has an invalid %s digest", surface)
+			}
 		}
 	}
 	return nil
@@ -149,7 +197,7 @@ func decodePiTrust(snapshot nativeconfig.FileSnapshot) (piTrustDocument, error) 
 			return document, fmt.Errorf("pi project trust record has an invalid project")
 		}
 		for artifact, owner := range owners {
-			if err := validPiTrustOwner(artifact, owner); err != nil {
+			if err := validPiTrustOwner(artifact, owner, true); err != nil {
 				return document, err
 			}
 		}
@@ -326,7 +374,7 @@ func grantPiProjectTrust(env clients.Env, request domain.ActivationRequest) erro
 	if err != nil {
 		return err
 	}
-	artifact, owner, err := piTrustInventory(request.Plan, request.Delivery.NativeObjects)
+	artifact, owner, err := piTrustInventory(project, request.Plan, request.Delivery.NativeObjects)
 	if err != nil {
 		return err
 	}
@@ -372,13 +420,15 @@ func revokePiProjectTrust(env clients.Env, request domain.DeactivationRequest) e
 }
 
 // observePiProjectTrust is the read-only verifier's view: the current hook
-// bytes and this installation's exact owned names are recorded.
+// bytes and this installation's exact owned names are recorded. It never
+// derives digests from live content, so a changed resource is reported by
+// piTrustBlocker instead of becoming a reason to record its new content.
 func observePiProjectTrust(kernel nativeconfig.Kernel, request domain.ActivationRequest) (bool, error) {
 	project, user, err := piTrustTarget(request.Client, request.Plan)
 	if err != nil {
 		return false, err
 	}
-	artifact, owner, err := piTrustInventory(request.Plan, request.Delivery.NativeObjects)
+	artifact, owner, err := piTrustNames(request.Plan, request.Delivery.NativeObjects)
 	if err != nil {
 		return false, err
 	}
@@ -401,7 +451,12 @@ func observePiProjectTrust(kernel nativeconfig.Kernel, request domain.Activation
 		return false, err
 	}
 	recorded, ok := document.Projects[project][artifact]
-	return ok && reflect.DeepEqual(recorded, owner), nil
+	return ok && piTrustSameNames(recorded.Extensions, owner.Extensions) && piTrustSameNames(recorded.Skills, owner.Skills) &&
+		piTrustSameNames(recorded.MCPServers, owner.MCPServers), nil
+}
+
+func piTrustSameNames(left, right map[string]string) bool {
+	return slices.Equal(slices.Sorted(maps.Keys(left)), slices.Sorted(maps.Keys(right)))
 }
 
 // piProjectTrustAction grants trust during confirmed activation, observes it

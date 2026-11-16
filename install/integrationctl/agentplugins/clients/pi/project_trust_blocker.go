@@ -35,7 +35,10 @@ func piTrustBlocker(kernel nativeconfig.Kernel, user, project string) (string, e
 	if piTrustKind(config) != "directory" {
 		return ".pi is not a real directory", nil
 	}
-	owned := piTrustLiveNames(config, document.Projects[project])
+	owned, conflict := piTrustLiveNames(config, document.Projects[project])
+	if conflict != "" {
+		return conflict, nil
+	}
 	if blocker, err := piTrustConfigBlocker(config, owned); blocker != "" || err != nil {
 		return blocker, err
 	}
@@ -45,27 +48,30 @@ func piTrustBlocker(kernel nativeconfig.Kernel, user, project string) (string, e
 	return piTrustAgentsSkillsBlocker(project), nil
 }
 
-// piTrustLiveNames unions owned names of installations whose managed package
-// directory still exists, as the hook does.
-func piTrustLiveNames(config string, owners map[string]piTrustOwner) map[string]map[string]bool {
-	owned := map[string]map[string]bool{"mcp_servers": {}}
+// piTrustLiveNames unions recorded name digests of installations whose
+// managed package directory still exists, as the hook does.
+func piTrustLiveNames(config string, owners map[string]piTrustOwner) (map[string]map[string]string, string) {
+	owned := map[string]map[string]string{"mcp_servers": {}}
 	for _, surface := range piTrustSurfaces {
-		owned[surface] = map[string]bool{}
+		owned[surface] = map[string]string{}
 	}
 	for artifact, owner := range owners {
 		if piTrustKind(filepath.Join(config, "extensions", artifact)) != "directory" {
 			continue
 		}
-		for surface, names := range map[string][]string{"extensions": owner.Extensions, "skills": owner.Skills, "mcp_servers": owner.MCPServers} {
-			for _, name := range names {
-				owned[surface][name] = true
+		for surface, names := range map[string]map[string]string{"extensions": owner.Extensions, "skills": owner.Skills, "mcp_servers": owner.MCPServers} {
+			for name, digest := range names {
+				if recorded, ok := owned[surface][name]; ok && recorded != digest {
+					return nil, fmt.Sprintf("two UAP installations record different content for %s %q", surface, name)
+				}
+				owned[surface][name] = digest
 			}
 		}
 	}
-	return owned
+	return owned, ""
 }
 
-func piTrustConfigBlocker(config string, owned map[string]map[string]bool) (string, error) {
+func piTrustConfigBlocker(config string, owned map[string]map[string]string) (string, error) {
 	locks, err := nativeconfig.WriterLockPaths(nativeconfig.Paths{JSON: filepath.Join(config, "mcp.json")}, nativeconfig.CodecMCPServers)
 	if err != nil {
 		return "", err
@@ -95,15 +101,19 @@ func piTrustConfigBlocker(config string, owned map[string]map[string]bool) (stri
 			return "", err
 		}
 		for _, name := range names {
-			if !owned[surface][name.Name()] || piTrustKind(filepath.Join(directory, name.Name())) != "directory" {
+			recorded, ok := owned[surface][name.Name()]
+			if !ok {
 				return fmt.Sprintf(".pi/%s/%s is not managed by UAP", surface, name.Name()), nil
+			}
+			if digest, err := piTrustTreeDigest(filepath.Join(directory, name.Name())); err != nil || digest != recorded {
+				return fmt.Sprintf(".pi/%s/%s changed after UAP recorded its content", surface, name.Name()), nil //nolint:nilerr // A refusal is an explanation.
 			}
 		}
 	}
 	return "", nil
 }
 
-func piTrustMCPBlocker(path string, owned map[string]bool) (string, error) {
+func piTrustMCPBlocker(path string, owned map[string]string) (string, error) {
 	switch piTrustKind(path) {
 	case "absent":
 		return "", nil
@@ -119,18 +129,22 @@ func piTrustMCPBlocker(path string, owned map[string]bool) (string, error) {
 	if !piTrustDecodes(body, &document) || document == nil {
 		return ".pi/mcp.json is not a JSON object", nil
 	}
-	servers := map[string]json.RawMessage{}
-	for key, value := range document {
+	for key := range document {
 		if key != "mcpServers" {
 			return fmt.Sprintf(".pi/mcp.json key %q is not managed by UAP", key), nil
 		}
-		if !piTrustDecodes(value, &servers) || servers == nil {
-			return ".pi/mcp.json mcpServers is not an object", nil
-		}
 	}
-	for name := range servers {
-		if !owned[name] {
+	servers, err := piTrustMCPServers(path)
+	if err != nil {
+		return err.Error(), nil //nolint:nilerr // A refusal is an explanation.
+	}
+	for name, entry := range servers {
+		recorded, ok := owned[name]
+		if !ok {
 			return fmt.Sprintf(".pi/mcp.json server %q is not managed by UAP", name), nil
+		}
+		if digest, err := piTrustValueDigest(entry); err != nil || digest != recorded {
+			return fmt.Sprintf(".pi/mcp.json server %q changed after UAP recorded it", name), nil //nolint:nilerr // A refusal is an explanation.
 		}
 	}
 	return "", nil
