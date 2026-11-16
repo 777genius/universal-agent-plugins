@@ -52,9 +52,16 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 			}
 			opts.installSelection = &installSelection{Scope: string(app.scope()), ProjectRoot: app.ProjectRoot, ManifestPath: manifestPath, LockPath: lockPath, ScopeSelectionReason: scopeSelectionReason(cmd, opts)}
 			app.Lifecycle.PrepareHostsForPreview = true
-			return runDependencySyncConverge(cmd, app, opts, lockedOnly, yes, func(convergeApp App) (bool, error) {
-				return repairDeclaredEnvironmentDrift(cmd, convergeApp, opts, yes)
-			})
+			var converge func() error
+			converge = func() error {
+				opts.installResult = nil
+				err := runDependencySyncConverge(cmd, app, opts, lockedOnly, yes, func(convergeApp App) (bool, error) {
+					return repairDeclaredEnvironmentDrift(cmd, convergeApp, opts, yes)
+				})
+				// Running install again converges only what is still missing.
+				return retryConverge(cmd, app, opts, err, converge)
+			}
+			return converge()
 		},
 	}
 	// Retain the add flags so the positional-source alias is flag-compatible.

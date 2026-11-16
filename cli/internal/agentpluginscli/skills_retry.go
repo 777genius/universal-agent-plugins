@@ -103,6 +103,16 @@ func askRetryTargets(cmd *cobra.Command, app App, opts *options, reports []agent
 	if err != nil {
 		return nil, err
 	}
+	if len(retryable) == 1 {
+		answer, err := app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Retry " + retryable[0].Label + "?", Default: true})
+		if errors.Is(err, prompt.ErrPromptCanceled) || (err == nil && !answer.Accepted) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return []string{string(retryable[0].ClientID)}, nil
+	}
 	request := prompt.TargetSelectionRequest{Title: "Retry failed agents? Enter retries the selected ones, Esc skips"}
 	for _, report := range retryable {
 		request.Choices = append(request.Choices, prompt.TargetChoice{ID: report.ClientID, Label: report.Label})
