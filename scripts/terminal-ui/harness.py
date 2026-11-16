@@ -484,7 +484,7 @@ class Session:
             while ready.encode() not in self.raw[offset:] and time.monotonic() < deadline: self.pump()
             check(ready.encode() in self.raw[offset:], 'restoration probe not ready')
             self.send((answer + '\n').encode())
-            while probe.poll() is None and time.monotonic() < deadline: self.pump()
+            while (probe.poll() is None or success.encode() not in self.raw[offset:]) and time.monotonic() < deadline: self.pump()
             self.drain()
             echo = answer.encode() in self.raw[offset:]
             ok = probe.poll() == 0 and success.encode() in self.raw[offset:]
