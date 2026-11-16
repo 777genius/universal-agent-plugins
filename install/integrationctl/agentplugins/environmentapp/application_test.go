@@ -126,7 +126,7 @@ func TestApplyRetainsPublicationAndBindingGuardOrdering(t *testing.T) {
 		return change.Intent.Check(host)
 	}
 	result, err := service.Apply(t.Context(), change)
-	if err != nil || !result.Published || len(result.Results) != 2 || guards != 5 {
+	if err != nil || !result.Published || len(result.Results()) != 2 || guards != 5 {
 		t.Fatalf("application lost advanced preimages/custom guard: result=%+v guards=%d err=%v", result, guards, err)
 	}
 	want := []string{"ready", "acquire", "ready", "review", "materialize", "write manifest", "write lock", "prepare a", "apply a", "prepare b", "apply b", "release"}
@@ -236,7 +236,7 @@ func TestApplyChecksInputsBeforeEachPrepareAndApply(t *testing.T) {
 			if !errors.Is(err, installer.ErrPlanChanged) || !result.Published || host.prepares != 1 || host.applies != wantApplies {
 				t.Fatalf("stale binding crossed input guard: result=%+v trace=%v err=%v", result, host.trace, err)
 			}
-			if during == "apply" && (len(result.Results) != 1 || result.Results[0].Outcome != installer.OutcomeCompleted) {
+			if during == "apply" && (len(result.Results()) != 1 || result.Results()[0].Outcome != installer.OutcomeCompleted) {
 				t.Fatal("later stale-input refusal lost completed binding result", result)
 			}
 		})
@@ -249,18 +249,23 @@ func TestApplyRepairAndUnchangedIntent(t *testing.T) {
 	host.materializeErr = errInterrupted
 	change.Intent.CandidateManifest, change.Intent.CandidateLock = nil, nil
 	result, err := service.Apply(t.Context(), change)
-	if err != nil || result.Published || host.writes != 0 || host.materialized.LockVersion != 0 || len(result.Results) != 2 {
+	if err != nil || result.Published || host.writes != 0 || host.materialized.LockVersion != 0 || len(result.Results()) != 2 {
 		t.Fatalf("repair changed intent or materialized a new graph: result=%+v trace=%v err=%v", result, host.trace, err)
 	}
 }
 
-func TestApplyPreservesPartialInstallerResults(t *testing.T) {
+func TestApplyIsolatesFailedBindingAndAttemptsTheRest(t *testing.T) {
 	host, service, change := applicationFixture()
 	host.failApply = 2
-	change.Plan.Bindings = append(change.Plan.Bindings, environment.PreparedBinding{Alias: "never attempted", ClientID: "codex", Action: environment.ActionInstall})
+	change.Plan.Bindings = append(change.Plan.Bindings, environment.PreparedBinding{Alias: "later", ClientID: "codex", Action: environment.ActionInstall})
 	result, err := service.Apply(t.Context(), change)
-	if !errors.Is(err, errInterrupted) || !result.Published || len(result.Results) != 2 || result.Results[0].Outcome != installer.OutcomeCompleted || result.Results[1].Outcome != installer.OutcomeIncomplete || host.prepares != 2 {
-		t.Fatalf("binding loop lost partial result or continued after failure: result=%+v trace=%v err=%v", result, host.trace, err)
+	results := result.Results()
+	if !errors.Is(err, errInterrupted) || !result.Published || len(results) != 3 || results[0].Outcome != installer.OutcomeCompleted || results[1].Outcome != installer.OutcomeIncomplete || host.prepares != 3 {
+		t.Fatalf("a failed binding lost its result or blocked an independent one: result=%+v trace=%v err=%v", result, host.trace, err)
+	}
+	last := len(result.Outcomes) - 1
+	if result.Outcomes[last].Status != environment.BindingApplied || result.Outcomes[last-1].Status != environment.BindingFailed {
+		t.Fatalf("outcomes %+v", result.Outcomes)
 	}
 }
 

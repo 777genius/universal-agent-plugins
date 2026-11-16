@@ -1,7 +1,6 @@
 package agentpluginscli
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -30,32 +28,32 @@ func reportSkillsPreparationRefusal(cmd *cobra.Command, opts *options, s *skills
 
 func (s *skillsCatalogSession) reviewRefusal(err error) *skillspicker.ReviewRefusal {
 	refusal := &skillspicker.ReviewRefusal{Code: "PLAN_REJECTED", Message: "Review one Skill and target at a time to identify the refused selection, or inspect agentplugins deps status for recovery guidance"}
-	switch {
-	case errors.Is(err, installer.ErrRecoveryRequired):
+	switch failureKindOf(err) {
+	case failureRecovery:
 		refusal.Code = "RECOVERY_REQUIRED"
 		refusal.Message = "The environment has an unfinished operation. Run agentplugins deps status and follow its recovery instructions before reviewing again."
-	case errors.Is(err, installer.ErrAssessmentRejected):
+	case failureSecurityBlocked:
 		refusal.Code = "SECURITY_REVIEW_BLOCKED"
 		refusal.Message = "Automated security assessment blocked this selection. Remove this Skill or inspect its security findings before reviewing again."
-	case errors.Is(err, installer.ErrForeignSkillDestination), errors.Is(err, nativeconfig.ErrCollision), errors.Is(err, nativeconfig.ErrNotOwned):
+	case failureForeignTarget:
 		refusal.Code = "FOREIGN_DESTINATION"
 		refusal.Message = "A selected client already has an entry at this destination that UAP does not own or can no longer verify. Inspect the existing entry, rename or remove it yourself, then prepare a new review. UAP will not overwrite it."
-	case errors.Is(err, installer.ErrManagedSkillChanged):
+	case failureManagedChanged:
 		refusal.Code = "MANAGED_SKILL_CHANGED"
 		refusal.Message = "A previously installed Skill was edited outside UAP. Preserve or review those edits and prepare a new review before changing the installation."
-	case errors.Is(err, installer.ErrTargetFactsUnavailable), errors.Is(err, installer.ErrCompatibilityUnavailable):
+	case failureTargetUnavailable:
 		refusal.Code = "TARGET_UNAVAILABLE"
 		refusal.Message = "A selected client's configuration or compatibility could not be verified. Choose another target or correct its configuration before reviewing again."
-	case errors.Is(err, installer.ErrUnsupported), errors.Is(err, installer.ErrIncomplete):
+	case failureTargetUnsupported:
 		refusal.Code = "TARGET_UNSUPPORTED"
 		refusal.Message = "A selected target cannot install all required components. Remove that target or choose a compatible Skill."
-	case errors.Is(err, installer.ErrUpdateRequired):
+	case failureUpdateRequired:
 		refusal.Code = "UPDATE_REQUIRED"
 		refusal.Message = "An existing installation requires an explicit update. Use agentplugins update for the saved dependency before reviewing again."
-	case errors.Is(err, installer.ErrPlanChanged), errors.Is(err, ErrSkillsPlanStale):
+	case failureEnvironmentChange:
 		refusal.Code = "ENVIRONMENT_CHANGED"
 		refusal.Message = "The environment changed during review. Refresh the selection and prepare a new review."
-	case errors.Is(err, context.DeadlineExceeded):
+	case failureTimeout:
 		refusal.Code = "REVIEW_TIMEOUT"
 		// Preparation has no aggregate review deadline: a bounded source or
 		// client check can expire even for one Skill. Do not imply that reducing

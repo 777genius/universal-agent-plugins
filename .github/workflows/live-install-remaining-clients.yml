@@ -26,7 +26,7 @@ concurrency:
 
 jobs:
   remaining-client-install:
-    name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
+    name: ${{ matrix.target == 'kiro' && matrix.kind == 'plugin' && 'Prepared installation 30' || 'Full 30' }} ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
     # Darwin refuses Kiro's automatic MCP duplex containment. This lane can
     # measure the real native CLI and owned Prepared lifecycle, while keeping
     # native activation incomplete until a contained host route is qualified.
@@ -108,8 +108,11 @@ jobs:
                 URL="https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz"
                 BIN="cursor-agent"
               else
-                # User-scope Plugins require the editor; its .deb has no reviewed digest.
-                URL="https://downloads.cursor.com/production/25b52e7d03ebf2d5608914158e119f7992432a34/linux/x64/deb/amd64/deb/cursor_3.28.7_amd64.deb"
+                # User-scope Plugins require the editor. Official signed stable APT, 2026-11-15:
+                # cursor 3.30.14-1794552202 amd64, 228316960B; signer 380FF4BCDC34A4BD92A3565342A1772E62E492D6.
+                # InRelease SHA256 c325991d4e0875e9e95ade53ab95c46a331976e40fcdc392c039767d4b0bd8ab.
+                # Packages SHA256 931e88984ea91becae06457992a25a4ce55699281c0f270980d2a38854ce8e5e.
+                URL="https://downloads.cursor.com/aptrepo/pool/stable/c/cu/cursor_3.30.14_amd64.deb"
                 BIN="cursor"
               fi
               ;;
@@ -150,7 +153,7 @@ jobs:
               if [[ "$KIND" == skill ]]; then
                 SHA256="85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294"
               else
-                SHA256="" # No independent digest for the editor .deb; fail closed.
+                SHA256="c8003e009f96a6e4fd7185f7016c66d7e36e03d8fa2e2394197511907bcd8226"
               fi
               ;;
             vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20" ;; # Microsoft official SHA-256 for Linux .deb x64 1.144.0
@@ -448,16 +451,20 @@ jobs:
           KIRO_NODE_BIN: ${{ steps.kiro-node.outputs.bin }}
         shell: bash
         run: |
+          acceptance=()
           if [[ "$AUDIT_TARGET" == kiro ]]; then
             test -n "$KIRO_NODE_BIN"
             export PATH="$KIRO_NODE_BIN:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+            if [[ "$AUDIT_KIND" == plugin ]]; then
+              acceptance=(--acceptance kiro-prepared-installation)
+            fi
           else
             export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
           fi
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \
             --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \
-            --report-dir "$RUNNER_TEMP/live-audit-report"
+            --report-dir "$RUNNER_TEMP/live-audit-report" "${acceptance[@]}"
       - name: Preserve exact per-case evidence, even if vendor install or CLI fails
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

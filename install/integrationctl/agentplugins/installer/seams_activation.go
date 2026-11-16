@@ -6,8 +6,11 @@ import (
 	"reflect"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 )
+
+var _ ports.ActivationReadinessInspector = seamActivator{}
 
 type seamActivator struct {
 	independent  bool
@@ -136,6 +139,15 @@ func (a seamActivator) AutomaticallyActivates(request domain.ActivationRequest) 
 
 func (a seamActivator) VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, executable string) bool {
 	return a.inner.VerifierAvailable(client, plan, executable)
+}
+
+func (a seamActivator) RequiresActivation(ctx context.Context, client domain.DetectedClient, plan domain.DeliveryPlan) (bool, error) {
+	if a.profileCheck != nil {
+		if err := a.profileCheck(ctx); err != nil {
+			return false, err
+		}
+	}
+	return a.inner.RequiresActivation(ctx, client, plan)
 }
 
 func (a seamActivator) PreflightActivation(request domain.ActivationRequest) error {

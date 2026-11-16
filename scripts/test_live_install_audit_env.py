@@ -8147,5 +8147,192 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             self.assertEqual(audit.install_case_timeout("claude", "plugin", "firebase"), 105)
 
 
+
+
+class KiroPreparedInstallationAcceptanceContracts(unittest.TestCase):
+    def original_report(self):
+        import base64
+        import hashlib
+        import zlib
+
+        # Fixed original artifact 14185522204 at b9d1cfff: all 30 ordered rows.
+        # Retain only existing acceptance facts and the complete recorded
+        # marketing-kit tails. Omit unrelated successful command bodies.
+        # Original JSON SHA256: 5b0f8da23f14a6f4333cff6fd0629a2ad5388ebe0c79a1d0c5d5de31dfd4ef24.
+        encoded = (
+            "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"
+        )
+        body = zlib.decompress(base64.b64decode(encoded))
+        self.assertEqual(len(body), 12780)
+        self.assertEqual(hashlib.sha256(body).hexdigest(),
+                         "0a7973589bdf8f0280b7b779d4a242c84ee72c71001f61c738d4e428b335a437")
+        return json.loads(body)
+
+    def invoke(self, report, *, acceptance=None, target="kiro",
+               kind="plugin", platform="darwin", limit=30):
+        import copy
+        from contextlib import redirect_stderr, redirect_stdout
+        from io import StringIO
+
+        audit = load_audit()
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "report"
+            argv = ["live-install-audit", "--cli", sys.executable,
+                    "--target", target, "--kind", kind, "--limit", str(limit),
+                    "--report-dir", str(output)]
+            if acceptance is not None:
+                argv.extend(("--acceptance", acceptance))
+            stdout, stderr = StringIO(), StringIO()
+            versions = [{"status": "reported", "exit_code": 0,
+                         "value": "agentplugins 0.1.95"}, report["client_version"]]
+            with (patch.object(audit.sys, "argv", argv),
+                  patch.object(audit.sys, "platform", platform),
+                  patch.object(audit, "vendor_bootstrap_attested", return_value=True),
+                  patch.dict(audit.AGENT_BINARIES, {"kiro-cli": sys.executable}, clear=True),
+                  patch.object(audit, "version_evidence", side_effect=versions) as version,
+                  patch.object(audit, "do_case", side_effect=copy.deepcopy(report["results"])) as cases,
+                  redirect_stdout(stdout), redirect_stderr(stderr)):
+                try:
+                    code = audit.main()
+                except SystemExit as error:
+                    code = error.code
+            saved = output / f"{target}-{kind}.json"
+            return (code, json.loads(saved.read_text()) if saved.exists() else None,
+                    stdout.getvalue(), version.call_count, cases.call_count)
+
+    def test_original_thirty_rows_accept_installation_and_preserve_native_refusal(self):
+        original = self.original_report()
+        default, native, _, _, _ = self.invoke(original)
+        self.assertEqual(default, 1)
+        self.assertEqual(native["passed"], 6)
+        self.assertEqual(native["prepared_lifecycle_passed"], 23)
+        self.assertEqual(native["verified_negative_coverage"], 0)
+        self.assertNotIn("installation_acceptance_passed", native)
+
+        code, measured, output, version_calls, case_calls = self.invoke(
+            original, acceptance="kiro-prepared-installation")
+        self.assertEqual(code, 0)
+        self.assertEqual((version_calls, case_calls), (2, 30))
+        self.assertEqual(measured["results"], original["results"])
+        self.assertEqual(measured["passed"], 6)
+        self.assertEqual(measured["prepared_lifecycle_passed"], 23)
+        self.assertEqual(measured["verified_negative_coverage"], 0)
+        self.assertEqual(measured["installation_passed"], 29)
+        self.assertEqual(measured["installation_prepared_lifecycle_passed"], 23)
+        self.assertEqual(measured["installation_verified_negative_coverage"], 1)
+        self.assertIs(measured["installation_acceptance_passed"], True)
+        self.assertIn("Prepared installation", output)
+
+    def test_mutated_lifecycles_fixed_negative_and_source_pin_refuse(self):
+        import copy
+
+        audit = load_audit()
+        original = self.original_report()
+        fixtures = json.loads(audit.FIXTURES.read_text())
+        mutations = (
+            (0, "kiro_prepared_lifecycle_verified", False),
+            (0, "kiro_prepared_lifecycle_verified", 1),
+            (0, "status", "passed"),
+            (0, "repeat_verified", False),
+            (0, "removal_verified", False),
+            (0, "sentinels_preserved", False),
+            (0, "failed_install_registered", True),
+            (0, "failed_install_residue", True),
+            (0, "target", "cursor"),
+            (0, "source", "foreign-source"),
+            (0, "index", 1),
+            (0, "index", False),
+            (22, "removal_verified", False),
+            (13, "native_file_delta", 1),
+            (13, "native_file_delta", False),
+            (13, "native_identity_files", ["foreign"]),
+            (13, "listed_identity", True),
+            (13, "failed_install_registered", True),
+            (13, "failed_install_residue", True),
+            (13, "sentinels_preserved", False),
+            (13, "native_residuals", ["foreign"]),
+            (13, "post_remove_identity_registered", True),
+            (13, "status", "install-failed"),
+        )
+        for index, field, value in mutations:
+            with self.subTest(index=index, field=field, value=value):
+                changed = copy.deepcopy(original)
+                changed["results"][index][field] = value
+                self.assertIs(audit.kiro_prepared_installation_summary(
+                    changed, fixtures)["installation_acceptance_passed"], False)
+        for command, field, value in (
+                ("install", "exit_code", 0), ("install", "timeout", True),
+                ("install", "stdout_tail", "unexpected output"),
+                ("install", "stderr_tail", "unsupported"),
+                ("install", "stderr_tail", original["results"][13]["install"]["stderr_tail"].replace(
+                    "missing kiro", "missing cursor")),
+                ("list", "exit_code", 1), ("list", "timeout", True),
+                ("list", "stdout_tail", '{"result":"success","data":{"installations":[{}]}}')):
+            with self.subTest(command=command, field=field):
+                changed = copy.deepcopy(original)
+                changed["results"][13][command][field] = value
+                self.assertIs(audit.kiro_prepared_installation_summary(
+                    changed, fixtures)["installation_acceptance_passed"], False)
+        for field, value in (
+                ("revision", "0" * 40), ("sequence", 2), ("sequence", True),
+                ("distribution", "foreign/kit"),
+                ("tree_digest", "sha256:" + "0" * 64)):
+            with self.subTest(pin_field=field):
+                changed = copy.deepcopy(fixtures)
+                changed["signed_release_pins"]["marketing-kit"][field] = value
+                self.assertIs(audit.kiro_prepared_installation_summary(
+                    original, changed)["installation_acceptance_passed"], False)
+        for field, value in (
+                ("platform", "linux"), ("full_coverage", False),
+                ("client_version", {"status": "reported", "value": "kiro-cli 3.0.1",
+                                    "exit_code": 0}),
+                ("client_version", {"status": "reported", "value": "kiro-cli 3.0.0",
+                                    "exit_code": False})):
+            with self.subTest(report_field=field):
+                changed = copy.deepcopy(original)
+                changed[field] = value
+                self.assertIs(audit.kiro_prepared_installation_summary(
+                    changed, fixtures)["installation_acceptance_passed"], False)
+        changed = copy.deepcopy(original)
+        changed["results"].pop()
+        self.assertIs(audit.kiro_prepared_installation_summary(
+            changed, fixtures)["installation_acceptance_passed"], False)
+
+    def test_installation_mode_refuses_other_targets_platforms_and_partial_selection(self):
+        for target, kind, platform, limit in (
+                ("cursor", "plugin", "darwin", 30),
+                ("grok", "plugin", "darwin", 30),
+                ("kiro", "skill", "darwin", 30),
+                ("kiro", "plugin", "linux", 30),
+                ("kiro", "plugin", "win32", 30),
+                ("kiro", "plugin", "darwin", 29)):
+            with self.subTest(target=target, kind=kind, platform=platform, limit=limit):
+                code, report, _, versions, cases = self.invoke(
+                    self.original_report(), acceptance="kiro-prepared-installation",
+                    target=target, kind=kind, platform=platform, limit=limit)
+                self.assertEqual((code, report, versions, cases), (2, None, 0, 0))
+
+
 if __name__ == "__main__":
     unittest.main()

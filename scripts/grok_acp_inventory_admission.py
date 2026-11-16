@@ -1999,8 +1999,11 @@ def readonly_bwrap_argv(req, phase, original):
             '--cap-drop', 'ALL', '--tmpfs', '/', '--ro-bind', '/usr', '/usr']
     for path in READONLY_RUNTIME_ROOTS[1:]:
         argv += ['--ro-bind-try', path, path]
-    argv += ['--ro-bind', str(root), str(root), '--ro-bind', str(sealed), str(sealed),
-             '--bind', str(root / 'readonly-witness'), str(root / 'readonly-witness'),
+    # The controller already mounts the original witness separately writable.
+    # Preserve that submount: bwrap ro-bind is recursive, whereas remount-ro
+    # changes only the input mount. Do not create a second covered witness row.
+    argv += ['--bind', str(root), str(root), '--remount-ro', str(root),
+             '--ro-bind', str(sealed), str(sealed),
              '--proc', '/proc', '--remount-ro', '/proc', '--dev', '/dev']
     for name in READONLY_DEVICES:
         argv += ['--remount-ro', '/dev/' + name]

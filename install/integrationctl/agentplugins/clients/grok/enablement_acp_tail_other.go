@@ -16,6 +16,6 @@ func captureGrokACPTail(io.Reader) (*grokACPTail, error) {
 
 func (*grokACPTail) close() error { return nil }
 
-func (*grokACPTail) drain(context.Context, []byte) error {
+func (*grokACPTail) drain(context.Context, []byte, func([]byte) bool) error {
 	return fmt.Errorf("grok ACP complete-stream verification is unqualified on this platform")
 }

@@ -205,7 +205,8 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 		return err
 	}
 	applied, applyErr := applyPreparedDependencies(cmd.Context(), app, &request, adapter, checked)
-	results := applied.Results
+	results := applied.Results()
+	app.finishInstall(opts, cmd.CommandPath(), outcomeAgentItems(applied.Outcomes))
 	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
 		return renderErr
 	}
@@ -378,6 +379,7 @@ func (request dependencySyncRequest) recheck(cmd *cobra.Command, app App, opts *
 	if err != nil {
 		return nil, err
 	}
+	actions = reviewedCopilotSavedAddActions(cmd, app, opts, request.targets, actions)
 	if _, err = preflightDependencyActions(cmd, app, opts, actions, detected, request.consent); err != nil {
 		return nil, fmt.Errorf("dependency sync changed after preflight: %w", err)
 	}

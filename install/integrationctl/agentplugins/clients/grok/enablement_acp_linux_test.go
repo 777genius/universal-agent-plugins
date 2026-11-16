@@ -14,12 +14,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 type enablementDuplexFixture struct {
 	frames, trailing string
 	cleanupError     error
+	beforeExchange   bool
 	requests         bytes.Buffer
 	calls            int
 }
@@ -33,6 +35,9 @@ func (fixture *enablementDuplexFixture) RunReadonlyDuplexWithPlannedShutdown(_ c
 		return err
 	}
 	fixture.calls++
+	if fixture.beforeExchange {
+		return fixture.cleanupError
+	}
 	reader, writer, err := os.Pipe()
 	if err != nil {
 		return err
@@ -54,11 +59,15 @@ func TestEnablementACPConsumerRequiresWholePipeAndFamilySuccess(t *testing.T) {
 		{frames: enablementACPFrames(t, true), trailing: `{"jsonrpc":`},
 		{frames: enablementACPFrames(t, true) + `{"jsonrpc":`},
 		{frames: enablementACPFrames(t, true), cleanupError: errors.New("family remains unproved")},
+		{beforeExchange: true, cleanupError: errors.New("readonly runner failed before exchange")},
 	} {
 		wantSuccess := fixture.trailing == "" && fixture.cleanupError == nil && fixture.frames == enablementACPFrames(t, true)
 		inputs, _ := inventoryInputsFixture(t)
 		fixture.frames = relocateEnablementFrames(t, fixture.frames, inputs.inputs.Project.Path)
 		plugins, err := readEnablementInventory(t.Context(), fixture, inputs, inputs.profile.config.Original())
+		if fixture.cleanupError != nil && (!domain.IsUnclosedClientProbe(err) || !errors.Is(err, fixture.cleanupError)) {
+			t.Fatalf("runner failure lost unclosed family marker or original cause: %v", err)
+		}
 		if fixture.calls != 1 {
 			t.Fatal("consumer did not reach the targeted pipe fixture", err, fixture.calls)
 		}

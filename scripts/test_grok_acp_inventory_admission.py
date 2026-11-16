@@ -2386,9 +2386,9 @@ class ReadonlyInventoryContracts(unittest.TestCase):
         root = req['input_root']
         self.assertEqual(argv.count('--bind'), 1)
         index = argv.index('--bind')
-        self.assertEqual(argv[index + 1:index + 3], [root + '/readonly-witness'] * 2)
+        self.assertEqual(argv[index + 1:index + 3], [root] * 2)
         remounts = [argv[index + 1] for index, word in enumerate(argv) if word == '--remount-ro']
-        self.assertEqual(remounts, ['/proc'] + ['/dev/' + name for name in case.READONLY_DEVICES]
+        self.assertEqual(remounts, [root, '/proc'] + ['/dev/' + name for name in case.READONLY_DEVICES]
                          + ['/dev/pts', '/dev', '/'])
         self.assertNotIn('--share-net', argv)
         self.assertNotIn('--ro-bind', argv[argv.index('--') + 1:])
@@ -2400,6 +2400,70 @@ class ReadonlyInventoryContracts(unittest.TestCase):
         for key, value in (('mode', case.SESSION_MODE), ('scope', 'b')):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 case.readonly_bwrap_argv(dict(req, **{key:value}), 'native', original)
+
+    def test_wrapper_preserves_the_original_service_witness_submount(self):
+        import project_native_runtime as runtime
+        req, _ = self.request()
+        root = req['input_root']
+        witness = root + '/readonly-witness'
+        env = dict(PATH='/usr/bin:/bin', LANG='C.UTF-8', GITHUB_ACTIONS='true',
+                   RUNNER_ENVIRONMENT='github-hosted', AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED='1',
+                   EXPECTED_COMMIT=req['source_commit'])
+        unit = 'uap-grok-readonly-controller-' + 'b' * 32 + '.service'
+        service = runtime.grok_readonly_controller_argv(Path(root), env, unit,
+                    req['uid'], req['gid'], req['start_monotonic_ns'],
+                    runtime_root=Path('/tmp/fixed-clean-runtime'))
+        self.assertIn('--property=BindReadOnlyPaths=' + root, service)
+        self.assertIn('--property=BindPaths=' + witness + ' /sys/fs/cgroup', service)
+        self.assertIn('--property=NoNewPrivileges=yes', service)
+
+        def inherited_mounts(argv, outer):
+            # The fixed bwrap 0.13.1 setup_op_bind_mount_fd always uses
+            # BIND_RECURSIVE. RO bind changes every cloned submount; a plain
+            # bind preserves its flags. SETUP_REMOUNT_RO_NO_RECURSIVE changes
+            # only the selected mount. Covered rows remain in mountinfo.
+            mounted = []
+            for index, word in enumerate(argv[:argv.index('--')]):
+                if word in ('--bind', '--ro-bind'):
+                    source, destination = argv[index + 1:index + 3]
+                    if source not in (root, witness):
+                        continue
+                    mounted.extend((destination + path[len(source):], readonly or word == '--ro-bind')
+                                   for path, readonly in outer
+                                   if path == source or path.startswith(source + '/'))
+                elif word == '--remount-ro':
+                    target = argv[index + 1]
+                    for selected in range(len(mounted) - 1, -1, -1):
+                        if mounted[selected][0] == target:
+                            mounted[selected] = (target, True)
+                            break
+            rows = [line for line in self.mount_rows(req).splitlines()
+                    if not line.split()[4].decode().startswith(root)]
+            rows.extend(f'{1000 + index} 99 0:1 / {path} {"ro" if readonly else "rw"},nosuid - ext4 source rw'.encode()
+                        for index, (path, readonly) in enumerate(mounted))
+            return b'\n'.join(rows) + b'\n'
+
+        outer = [(root, True), (witness, False)]
+        for phase in ('control', 'native'):
+            with self.subTest(phase=phase):
+                argv = case.readonly_bwrap_argv(req, phase, self.original(req))
+                accepted = case.readonly_mounts(inherited_mounts(argv, outer), req)
+                self.assertEqual([path for path, row in accepted['rows'].items() if not row['readonly']],
+                                 [witness])
+                self.assertEqual(len(accepted['rows']), len(self.mount_rows(req).splitlines()))
+                for changed in ([(root, True), (witness, True)], [(root, True)],
+                                outer + [(root + '/a', False)]):
+                    with self.subTest(outer=changed), self.assertRaises(ValueError):
+                        case.readonly_mounts(inherited_mounts(argv, changed), req)
+
+        # The original two recursive binds retain the first RO witness row,
+        # exactly the finite refusal observed before any private header/native.
+        original = ['--ro-bind', root, root, '--bind', witness, witness, '--']
+        with self.assertRaises(ValueError) as raised:
+            case.readonly_mounts(inherited_mounts(original, outer), req)
+        self.assertEqual(raised.exception.args, ('readonly-mount-writable',))
+        self.assertEqual(raised.exception.__notes__,
+                         ['readonly-mount-flags: role=witness ro=1 rw=0 duplicates=0'])
 
     def test_one_clock_refuses_future_zero_exact_active_and_final_expiry(self):
         req, _ = self.request()

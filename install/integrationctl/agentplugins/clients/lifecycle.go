@@ -59,6 +59,14 @@ type ReadOnlyVerifier interface {
 	VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool
 }
 
+// ActivationReadiness observes required native configuration outside plugin
+// ownership. Missing configuration can require a confirmed activation even
+// when the immutable package and owned component projection are unchanged.
+// It must not mutate configuration or execute a model session.
+type ActivationReadiness interface {
+	RequiresActivation(context.Context, Env, domain.DetectedClient, domain.DeliveryPlan) (bool, error)
+}
+
 // IndependentActivator attests that an adapter's activation effects do not
 // write shared installation state or invoke host handoff callbacks.
 type IndependentActivator interface {

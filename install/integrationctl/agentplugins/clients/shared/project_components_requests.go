@@ -30,6 +30,13 @@ func (mutation ProjectComponentMutation) revalidate() error {
 	return nil
 }
 
+// Preflight checks component authority without staging or acquiring writer locks.
+// Apply repeats these checks at the actual mutation boundary.
+func (mutation ProjectComponentMutation) Preflight(ctx context.Context) error {
+	_, err := mutation.prepare(ctx)
+	return err
+}
+
 func (mutation ProjectComponentMutation) prepare(ctx context.Context) ([]nativeconfig.Request, error) {
 	if err := mutation.revalidate(); err != nil {
 		return nil, err

@@ -233,6 +233,9 @@ func (f *copilotProjectAttempt) authorOriginalConfig(t *testing.T) error {
 	return nil
 }
 func (f *copilotProjectAttempt) preparePackage(t *testing.T) {
+	f.preparePackageWithConfig(t, f.authorOriginalConfig)
+}
+func (f *copilotProjectAttempt) preparePackageWithConfig(t *testing.T, authorConfig func(*testing.T) error) {
 	t.Helper()
 	for _, project := range []struct{ name, path string }{{"A", f.base.Project}, {"B", f.other}} {
 		r := f.command(t, "git-"+project.name, project.path, f.env(), []string{f.git, "-c", "core.hooksPath=/dev/null", "init", "--quiet"}, 30*time.Second)
@@ -240,7 +243,7 @@ func (f *copilotProjectAttempt) preparePackage(t *testing.T) {
 			t.Fatal("Git project setup emitted diagnostics")
 		}
 	}
-	if err := f.authorOriginalConfig(t); err != nil {
+	if err := authorConfig(t); err != nil {
 		t.Fatal(err)
 	}
 	r := f.command(t, "version", f.outside, f.env(), []string{f.client, "--version"}, 30*time.Second)
@@ -262,7 +265,14 @@ func (f *copilotProjectAttempt) preparePackage(t *testing.T) {
 func (f *copilotProjectAttempt) setup(t *testing.T) {
 	t.Helper()
 	f.preparePackage(t)
-	r := f.command(t, "add-A", f.base.Project, f.env(), []string{f.installer, "add", f.base.Package, "--no-save", "--scope", "project", "--project-root", f.base.Project, "--target", "copilot", "--format", "json"}, 30*time.Second)
+	f.setupPrepared(t)
+}
+func (f *copilotProjectAttempt) setupPrepared(t *testing.T, extraArgs ...string) {
+	t.Helper()
+	args := make([]string, 0, 12+len(extraArgs))
+	args = append(args, f.installer, "add", f.base.Package, "--no-save", "--scope", "project", "--project-root", f.base.Project, "--target", "copilot", "--format", "json")
+	args = append(args, extraArgs...)
+	r := f.command(t, "add-A", f.base.Project, f.env(), args, 30*time.Second)
 	if string(r.Stderr) != "Resolving and validating one Agent Plugin package for every selected target...\nInstalling native-proof for 1 selected clients...\n" {
 		t.Fatal("unexpected public installer diagnostic")
 	}

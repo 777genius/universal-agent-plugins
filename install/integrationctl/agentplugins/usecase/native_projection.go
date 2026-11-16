@@ -61,7 +61,7 @@ func (service Service) activeNativeDelivery(ctx context.Context, input AddInput,
 		return delivery, false, false, err
 	}
 	if confirmedNativeProjection(client.NativeObjects, delivery.NativeObjects) {
-		return delivery, true, false, nil
+		return service.nativeDeliveryReadiness(ctx, input, plan, delivery)
 	}
 	// Classify before replacing the projection: the acting request carries the
 	// full desired delivery, and adapters gate on its native objects.

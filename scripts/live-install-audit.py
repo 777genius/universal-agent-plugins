@@ -2337,6 +2337,89 @@ def expected_negative_coverage(row, cli_version=None):
                         in diagnostic))
 
 
+def kiro_prepared_installation_negative(row, fixtures):
+    """One measured unsupported fixture; never native qualification."""
+    release = MARKETING_KIT_SIGNED_CLOSURE["777genius/marketing-kit"]
+    expected_pin = {"distribution": "777genius/marketing-kit",
+                    "repository": release["repository"], "path": release["package_path"],
+                    "revision": release["resolved_revision"],
+                    "sequence": release["release_sequence"],
+                    "tree_digest": release["tree_digest"],
+                    "manifest_digest": release["manifest_digest"]}
+    install, listed = row.get("install"), row.get("list")
+    if not isinstance(install, dict) or not isinstance(listed, dict):
+        return False
+    pin = fixtures["signed_release_pins"].get("marketing-kit")
+    return bool(
+        type(pin) is dict and type(pin.get("sequence")) is int and pin == expected_pin
+        and row.get("index") == 13 and row.get("source") == "marketing-kit"
+        and row.get("identity") == "marketing-kit"
+        and row.get("status") == "documented-or-source-unsupported"
+        and type(row.get("native_file_delta")) is int and row["native_file_delta"] == 0
+        and row.get("native_identity_files") == [] and row.get("native_residuals") == []
+        and all(row.get(key) is False for key in (
+            "listed_identity", "failed_install_registered", "failed_install_residue",
+            "post_remove_identity_registered"))
+        and row.get("sentinels_preserved") is True
+        and type(install.get("exit_code")) is int and install["exit_code"] == 1
+        and install.get("timeout") is False and install.get("stdout_tail") == ""
+        and install.get("stderr_tail") == (
+            'agentplugins: no eligible directory release for "marketing-kit": '
+            '777genius/marketing-kit: release does not support complete target set; missing kiro\n')
+        and type(listed.get("exit_code")) is int and listed["exit_code"] == 0
+        and listed.get("timeout") is False and listed.get("stderr_tail") == ""
+        and listed.get("stdout_tail") == (
+            '{"schema_version":1,"command":"list","result":"success",'
+            '"data":{"installations":[]}}\n'))
+
+
+def kiro_prepared_installation_summary(report, fixtures):
+    """Count installation coverage separately from the unchanged native gate."""
+    result = {"installation_passed": 0, "installation_prepared_lifecycle_passed": 0,
+              "installation_verified_negative_coverage": 0,
+              "installation_acceptance_passed": False}
+    rows, sources = report.get("results"), fixtures["plugin_aliases"]
+    version = report.get("client_version")
+    if ((report.get("target"), report.get("kind"), report.get("platform"))
+            != ("kiro", "plugin", "darwin")
+            or type(version) is not dict or type(version.get("exit_code")) is not int
+            or version != {
+                "status": "reported", "value": "kiro-cli 3.0.0", "exit_code": 0}
+            or report.get("fixture_count") != 30 or report.get("cases_attempted") != 30
+            or report.get("source_selection_complete") is not True
+            or report.get("full_coverage") is not True
+            or type(rows) is not list or len(rows) != 30 or len(sources) != 30):
+        return result
+    for index, row in enumerate(rows):
+        if (type(row) is not dict or type(row.get("index")) is not int or row["index"] != index
+                or row.get("source") != sources[index]
+                or row.get("identity") != fixtures["plugin_declared_names"].get(
+                    sources[index], sources[index])
+                or (row.get("target"), row.get("kind")) != ("kiro", "plugin")):
+            return result
+        lifecycle = all(row.get(key) is True for key in (
+            "repeat_verified", "removal_verified", "sentinels_preserved")) and all(
+                row.get(key) is False for key in (
+                    "failed_install_registered", "failed_install_residue")) and all(
+                        isinstance(row.get(label), dict)
+                        and type(row[label].get("exit_code")) is int
+                        and row[label]["exit_code"] == 0
+                        and row[label].get("timeout") is False
+                        for label in ("install", "list"))
+        prepared = (row.get("status") == "incomplete-native-proof"
+                    and row.get("kiro_prepared_lifecycle_verified") is True)
+        native = (row.get("status") == "passed"
+                  and row.get("kiro_prepared_lifecycle_verified") is False)
+        if lifecycle and (prepared or native):
+            result["installation_passed"] += 1
+            result["installation_prepared_lifecycle_passed"] += int(prepared)
+        elif kiro_prepared_installation_negative(row, fixtures):
+            result["installation_verified_negative_coverage"] += 1
+    result["installation_acceptance_passed"] = (
+        result["installation_passed"] + result["installation_verified_negative_coverage"] == 30)
+    return result
+
+
 def unexecuted_source_rows(selected, kind, target, status, declared_names):
     """Record exact fixture slots on a refused bootstrap, never native PASS."""
     if status not in ("client-unavailable", "documented-unsupported"):
@@ -2392,7 +2475,13 @@ def main():
     p.add_argument("--target", required=True)
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--report-dir", required=True)
+    p.add_argument("--acceptance", choices=("native", "kiro-prepared-installation"),
+                   default="native")
     args = p.parse_args()
+    if (args.acceptance == "kiro-prepared-installation"
+            and (args.target, args.kind, sys.platform, args.limit)
+            != ("kiro", "plugin", "darwin", 30)):
+        p.error("Prepared installation acceptance requires the complete Kiro plugin Darwin lane")
     doc = json.loads(FIXTURES.read_text())
     validate_fixtures(doc)
     if args.target not in doc["targets"] or not 1 <= args.limit <= 30:
@@ -2416,6 +2505,9 @@ def main():
               "fixture_count": len(cases), "cases_attempted": 0,
               "source_selection_complete": args.limit == 30,
               "full_coverage": False, "results": []}
+    if args.acceptance == "kiro-prepared-installation":
+        report["acceptance"] = "kiro-prepared-installation"
+        report.update(kiro_prepared_installation_summary(report, doc))
     report_file = report_dir / f"{args.target}-{args.kind}.json"
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
@@ -2500,6 +2592,14 @@ def main():
     save()
     print(f'{args.target} {args.kind}: {passed}/{args.limit} native PASS; '
           f'verified_negative={len(accepted_negatives)}; attempted={report["cases_attempted"]}')
+    if args.acceptance == "kiro-prepared-installation":
+        report.update(kiro_prepared_installation_summary(report, doc))
+        save()
+        print(f'Kiro Prepared installation: {report["installation_passed"]}/30 installed; '
+              f'prepared={report["installation_prepared_lifecycle_passed"]}; '
+              f'verified_negative={report["installation_verified_negative_coverage"]}; '
+              'native activation remains unqualified')
+        return 0 if report["installation_acceptance_passed"] else 1
     return 0 if (report["cases_attempted"] == args.limit
                  and passed + len(accepted_negatives) == args.limit) else 1
 

@@ -82,6 +82,10 @@ func skillBatchOutcome(result SkillsBatchResult) skillspicker.Outcome {
 	for _, item := range result.Items {
 		alias, path := item.Alias, item.TargetPath
 		message := skillOperationMessage(skillOperationItemStatus(item.Status), item.Reason)
+		if item.failure != nil {
+			// The plain cause replaces the generic stop message; technical detail stays in the install log.
+			message = item.failure.Summary + " " + item.failure.Next
+		}
 		outcome.Items = append(outcome.Items, skillspicker.OperationItem{CandidateId: item.CandidateID, TargetId: item.ClientID, Alias: &alias, DestinationPath: &path, Message: &message, Status: skillOperationItemStatus(item.Status)})
 	}
 	return outcome
