@@ -113,6 +113,11 @@ func failedAgents(reports []agentReport) []agentReport {
 func retryableAgents(reports []agentReport) []agentReport {
 	var retryable []agentReport
 	for _, report := range reports {
+		for _, problem := range report.Problems {
+			if problem.Failure.Kind == failureProcessCleanup {
+				return nil // The whole run must wait for process cleanup.
+			}
+		}
 		if report.Retryable() {
 			retryable = append(retryable, report)
 		}
@@ -292,6 +297,9 @@ func groupFailure(target addTargetResult, kind failureKind) *installFailure {
 		if batchFailureNeedsDoctor(target) {
 			failure.Kind = failureRecovery
 		}
+		if target.Error.Stage == "cleanup" {
+			failure.Kind = failureProcessCleanup
+		}
 	}
 	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
 	return &failure
@@ -321,7 +329,7 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 				item.failure.Detail = detail + "\n" + item.failure.Detail
 			}
 			target := &combined.Targets[index]
-			target.Error = &usecase.GroupTargetFailure{Stage: "cleanup", Message: item.failure.Summary}
+			target.Error = &usecase.GroupTargetFailure{Stage: "cleanup", Message: item.failure.Summary + " " + item.failure.Next}
 			target.Output.Result.Failure = target.Error
 			target.RetryCommand = ""
 			target.NextAction = item.failure.Next

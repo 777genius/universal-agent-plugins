@@ -24,7 +24,7 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		}{result, map[string]any{"saved": false, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts), "reason": opts.environmentReason}})
 	}
 	if result.Status == "preflight_failed" {
-		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Nothing was installed: a selected client could not pass the checks before installation. See the error below; there is no new configuration to activate."); err != nil {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), noChangeFailureMessage(result)); err != nil {
 			return err
 		}
 		for _, target := range result.Targets {
@@ -37,7 +37,7 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		return nil
 	}
 	if result.Status == "preparation_failed" {
-		_, err := fmt.Fprintln(cmd.OutOrStdout(), "No selected client was changed: package preparation failed. See the error below, then retry the same command.")
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), noChangeFailureMessage(result))
 		return err
 	}
 	if result.DryRun {
@@ -52,6 +52,19 @@ func renderAddMultiResult(cmd *cobra.Command, opts *options, result addMultiResu
 		return renderAddResult(cmd.OutOrStdout(), "human", envelope, result.Targets[0].Output.Result, false)
 	}
 	return renderAddMultiApplySummary(cmd.OutOrStdout(), result, envelope)
+}
+
+func noChangeFailureMessage(result addMultiResult) string {
+	for _, target := range result.Targets {
+		if target.Error != nil && target.Error.Stage == "cleanup" {
+			summary, next, _ := applyFailureWording(failureProcessCleanup)
+			return "No selected client was changed. " + summary + " " + next
+		}
+	}
+	if result.Status == "preflight_failed" {
+		return "Nothing was installed: a selected client could not pass the checks before installation. See the error below; there is no new configuration to activate."
+	}
+	return "No selected client was changed: package preparation failed. See the error below, then retry the same command."
 }
 
 func renderAddMultiDryRun(writer io.Writer, result addMultiResult) error {

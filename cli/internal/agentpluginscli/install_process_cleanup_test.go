@@ -33,10 +33,9 @@ func TestUnclosedProbeBindingFailureIsNeverRetryable(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			for _, status := range []environment.BindingStatus{environment.BindingFailed, environment.BindingNotAttempted} {
 				outcome := environment.BindingOutcome{Status: status, Err: cause}
-				want := failureSkipped
+				want := failureProcessCleanup
 				if status == environment.BindingFailed {
 					outcome.Result = &installer.Result{Outcome: installer.OutcomeIncomplete}
-					want = failureProcessCleanup
 				}
 				failure := describeBindingFailure(outcome)
 				if failure == nil || failure.Kind != want || failure.Retryable {

@@ -637,3 +637,38 @@ func TestRefusedGroupKeepsUnclosedCauseWithoutLoggingOrRetry(t *testing.T) {
 		}
 	}
 }
+
+func TestInstallRetriesRefuseUnclosedNativeProbe(t *testing.T) {
+	for _, mode := range []string{"add", "converge"} {
+		for _, wrapping := range []string{"bare", "wrapped", "joined"} {
+			t.Run(mode+"/"+wrapping, func(t *testing.T) {
+				closeErr := errors.New("native process cleanup is unconfirmed")
+				probe := &domain.UnclosedClientProbe{Operation: "native inventory", Err: closeErr}
+				var cause error = probe
+				switch wrapping {
+				case "wrapped":
+					cause = fmt.Errorf("installation failed: %w", cause)
+				case "joined":
+					cause = errors.Join(errors.New("another agent failed"), cause)
+				}
+				var offered []string
+				app, opts := retryAppAndOptions(t, &offered)
+				cmd, out, errOut := retryTestCommand(t)
+				before, reruns := opts.installResult, 0
+				var actual error
+				if mode == "add" {
+					actual = retryFailedAgents(cmd, app, opts, cause, func(string, []string) error { reruns++; return nil })
+				} else {
+					actual = retryConverge(cmd, app, opts, cause, func() error { reruns++; return nil })
+				}
+				var retained *domain.UnclosedClientProbe
+				if !errors.Is(actual, cause) || !errors.Is(cause, actual) || !errors.As(actual, &retained) || retained != probe || !errors.Is(actual, closeErr) {
+					t.Fatalf("retry lost or changed the process-cleanup refusal: %v", actual)
+				}
+				if len(offered) != 0 || reruns != 0 || opts.retryAttempt != 0 || opts.installResult != before || out.Len() != 0 || errOut.Len() != 0 {
+					t.Fatalf("unclosed process allowed a new attempt: offered=%v reruns=%d attempt=%d", offered, reruns, opts.retryAttempt)
+				}
+			})
+		}
+	}
+}
