@@ -161,6 +161,11 @@ type ActivationRequest struct {
 	// accepted only when verification is unavailable or returns unknown evidence.
 	VerifyOnly         bool `json:"verify_only,omitempty"`
 	ActivationComplete bool `json:"activation_complete,omitempty"`
+	// ProjectTrustConsent marks a confirmed, explicit user add of this package.
+	// An adapter may grant persistent native project trust only with it, so
+	// update, repair, dependency sync and verification never re-grant trust a
+	// user revoked. It is transient request data, never persisted.
+	ProjectTrustConsent bool `json:"-"`
 }
 
 type ActivationOutcome struct {

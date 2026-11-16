@@ -13,6 +13,7 @@ HERMES_SHA = "2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19"
 USER_SKILL = "native-smoke-user"
 PROJECT_SKILL = "native-smoke-project"
 FOREIGN_SKILL = "native-smoke-foreign"
+TRUST_STATES = ("trusted", "untrusted")
 
 
 def require(condition, message):
@@ -20,9 +21,10 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
-def observe_skills(user_marker, project_count):
+def observe_skills(user_marker, project_count, trusted):
     # runtime_command uses the installed Hermes Python/bootstrap/dependencies.
-    # No copied parser or mocked loader.
+    # No copied parser or mocked loader. The caller selects HERMES_HOME as the
+    # profile a bare `hermes` resolves, so trust is read from that same file.
     from tools import skills_tool
     from hermes_cli.mcp_config import _get_mcp_servers
     from agent.skill_utils import (find_project_root,
@@ -47,23 +49,37 @@ def observe_skills(user_marker, project_count):
         expected = Path(os.environ["HERMES_HOME"]) / "skills" / USER_SKILL
         require(Path(view["skill_dir"]).resolve() == expected.resolve(),
                 "native Hermes selected a different Skill instance")
-    require(PROJECT_SKILL not in catalog, "untrusted Project Skill became loadable")
     root = find_project_root()
     if root is not None:
         require(root.resolve() == Path.cwd().resolve(), "Hermes selected another Git root")
-        require(not is_project_root_trusted(root), "UAP granted native project trust")
     pending = get_untrusted_project_skills_root()
-    if project_count:
-        require(pending is not None and pending[0].resolve() == Path.cwd().resolve()
-                and pending[1] == project_count,
-                "native Hermes did not detect the selected untrusted Project Skill")
+    if trusted:
+        # A confirmed UAP install asked the user's Hermes CLI for exact-root trust.
+        require(root is not None and is_project_root_trusted(root),
+                "confirmed Project install did not leave native project trust")
+        require(pending is None, "trusted Project still reports untrusted Skills")
+        project_view = json.loads(skills_tool.skill_view(PROJECT_SKILL, preprocess=False))
+        if project_count:
+            require(PROJECT_SKILL in catalog and project_view.get("success") is True,
+                    "trusted Project Skill is not loadable in a new Hermes process")
+        else:
+            require(PROJECT_SKILL not in catalog and not project_view.get("success"),
+                    "removed Project Skill remains natively loadable")
     else:
-        require(pending is None, "removed Project Skill remains natively discoverable")
+        require(PROJECT_SKILL not in catalog, "untrusted Project Skill became loadable")
+        if root is not None:
+            require(not is_project_root_trusted(root), "UAP granted unconfirmed native project trust")
+        if project_count:
+            require(pending is not None and pending[0].resolve() == Path.cwd().resolve()
+                    and pending[1] == project_count,
+                    "native Hermes did not detect the selected untrusted Project Skill")
+        else:
+            require(pending is None, "removed Project Skill remains natively discoverable")
     print(json.dumps({"user_marker": user_marker, "project_skill_count": project_count,
-                      "project_trusted": False, "native_skill_observation": "passed"}))
+                      "project_trusted": trusted, "native_skill_observation": "passed"}))
 
 
-def invoke_skills(user_marker, project_count):
+def invoke_skills(user_marker, project_count, trust):
     source = Path(os.environ["RUNNER_TEMP"]) / "hermes-agent"
     # This official pre-bootstrap API is stdlib-only. The host Python builds
     # argv; only the installation-bound interpreter executes the observation.
@@ -81,7 +97,7 @@ def invoke_skills(user_marker, project_count):
             and isinstance(native_argv[0], str) and Path(native_argv[0]).is_absolute(),
             "Hermes did not resolve its installation-bound interpreter")
     command = runtime_command(
-        source, args=["skills", user_marker, str(project_count)], python=native_argv[0],
+        source, args=["skills", user_marker, str(project_count), trust], python=native_argv[0],
         code=f"runpy.run_path({str(Path(__file__).resolve())!r}, run_name='__main__')")
     subprocess.run(command, check=True, timeout=60)
 
@@ -175,18 +191,19 @@ def run_lifecycle(script):
         require(methods.count("initialize") >= 4 and methods.count("tools/list") >= 4,
                 "native Hermes MCP exchange missing after a User lifecycle stage")
         require("tools/call" not in methods, "discovery smoke unexpectedly invoked a tool")
-    print("Hermes native lifecycle, Skill read, project trust and MCP discovery passed: "
+    print("Hermes native lifecycle, Skill read, confirmed project trust and MCP discovery passed: "
           + str(evidence))
 
 
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "run":
         run_lifecycle(Path(sys.argv[2]).resolve())
-    elif len(sys.argv) == 4 and sys.argv[1] == "skills":
-        observe_skills(sys.argv[2], int(sys.argv[3]))
-    elif len(sys.argv) == 4 and sys.argv[1] == "observe":
-        invoke_skills(sys.argv[2], int(sys.argv[3]))
+    elif len(sys.argv) == 5 and sys.argv[1] == "skills" and sys.argv[4] in TRUST_STATES:
+        observe_skills(sys.argv[2], int(sys.argv[3]), sys.argv[4] == "trusted")
+    elif len(sys.argv) == 5 and sys.argv[1] == "observe" and sys.argv[4] in TRUST_STATES:
+        invoke_skills(sys.argv[2], int(sys.argv[3]), sys.argv[4])
     elif len(sys.argv) == 3 and sys.argv[1] == "refusal":
         check_project_refusal(sys.argv[2])
     else:
-        raise SystemExit("Usage: hermes-native.py run <script> | observe <marker|absent> <count>")
+        raise SystemExit("Usage: hermes-native.py run <script> | "
+                         "observe <marker|absent> <count> <trusted|untrusted>")

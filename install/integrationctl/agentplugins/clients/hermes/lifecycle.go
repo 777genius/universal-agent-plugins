@@ -149,7 +149,7 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, req domai
 		UnavailableAction: "Select automatic installation for owned Hermes Skills",
 		RepairAction:      "Repair UAP-managed Hermes Skills in the selected scope",
 		RetryAction:       "Retry Hermes Skills installation after restoring ownership",
-		CompletedAction:   "Restart Hermes and review project trust before using installed Skills",
+		CompletedAction:   hermesCompletedAction,
 		Verify: func() error {
 			if err := adapter.verifyProjectRoot(ctx, env, req.Plan, req.Delivery.NativeObjects); err != nil {
 				return err
@@ -171,11 +171,19 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, req domai
 			})
 		},
 	})
-	if err == nil && outcome.Verification == domain.VerificationInstalled {
-		outcome.Activation = domain.ActivationPrepared
-		outcome.ActivationAttested = false
+	return finishHermesActivation(ctx, env, req, outcome, err)
+}
+
+// Installed files prepare Hermes; only a new native session can activate them.
+func finishHermesActivation(ctx context.Context, env clients.Env, req domain.ActivationRequest, outcome domain.ActivationOutcome, err error) (domain.ActivationOutcome, error) {
+	if err != nil || outcome.Verification != domain.VerificationInstalled {
+		return outcome, err
 	}
-	return outcome, err
+	outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
+	if hermesTrustApplies(req) {
+		return completeHermesProjectTrust(ctx, env, req, outcome)
+	}
+	return outcome, nil
 }
 
 func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, req domain.DeactivationRequest) (domain.DeactivationOutcome, error) {

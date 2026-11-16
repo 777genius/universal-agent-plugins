@@ -33,7 +33,9 @@ class Lifecycle:
         self.project_source = root / "project-src"
         self.project_a = root / "project"
         self.project_b = root / "project-b"
+        self.project_c = root / "project-c"
         self.config = self.profile / "config.yaml"
+        self.native_home = None
 
     def capture(self, command, name, cwd=None, expected_failure=False, env=None):
         output = self.evidence / name
@@ -54,11 +56,44 @@ class Lifecycle:
         return self.capture([self.uap, *args, "--target", "hermes", "--yes",
                              "--format", "json"], stage + "-uap.json")
 
-    def observe(self, stage, cwd, marker, project_count):
-        env = dict(os.environ, TERMINAL_CWD=str(cwd))
-        output = self.capture([sys.executable, HELPER, "observe", marker,
-                               str(project_count)], stage + "-skills.json", cwd, env=env)
+    def observe(self, stage, cwd, marker, project_count, trusted=False):
+        # Observe the profile a bare `hermes` resolves, never an assumed file.
+        env = dict(os.environ, TERMINAL_CWD=str(cwd), HERMES_HOME=str(self.native_home))
+        output = self.capture([sys.executable, HELPER, "observe", marker, str(project_count),
+                               "trusted" if trusted else "untrusted"],
+                              stage + "-skills.json", cwd, env=env)
         print(output.read_text(encoding="utf-8"), end="", flush=True)
+
+    def resolved_home(self, stage):
+        output = self.capture([*self.hermes, "config", "path"], stage + "-config-path.txt")
+        return Path(output.read_text(encoding="utf-8").strip()).parent.resolve()
+
+    def hermes_json(self, stage, key):
+        output = self.capture([*self.hermes, "config", "get", "--json", key], stage + "-" + key + ".json")
+        return json.loads(output.read_text(encoding="utf-8"))
+
+    def trusted_roots(self, stage):
+        value = self.hermes_json(stage, "skills.trusted_project_dirs")
+        value = [] if value is None else [value] if isinstance(value, str) else value
+        require(isinstance(value, list) and all(isinstance(item, str) for item in value),
+                "native Hermes trust list is not a list of paths")
+        return {Path(item).resolve() for item in value}
+
+    def require_trust_report(self, output, granted, reason=""):
+        data = json.loads(output.read_text(encoding="utf-8"))["data"]
+        if "targets" in data:
+            data = data["targets"][0]["output"]
+        actions = "\n".join((data["result"].get("activation") or {}).get("user_actions") or [])
+        # Public JSON stays path-free; the exact command is human output only.
+        require(str(self.root) not in actions and str(self.root.resolve()) not in actions,
+                "public Hermes trust guidance contains a host path")
+        if granted:
+            require("Hermes now trusts this project's Git repository root" in actions,
+                    "explicit Project add did not report verified Hermes trust")
+        else:
+            require("UAP did not change Hermes project trust: " + reason in actions
+                    and "run `hermes skills trust` inside it" in actions,
+                    "Project lifecycle did not report why trust was unchanged and how to grant it")
 
     def probe_mcp(self, stage):
         self.capture([*self.hermes, "mcp", "test", "uap-native-test-server"],
@@ -106,6 +141,9 @@ class Lifecycle:
                                encoding="utf-8")
         self.config.chmod(0o600)
         self.capture([*self.hermes, "--version"], "native-version.txt")
+        self.native_home = self.resolved_home("native")
+        require(self.native_home == self.profile.resolve(),
+                "bare Hermes resolves another profile than the selected HERMES_HOME")
 
     def advance(self, source, scope):
         manifest = source / "plugin.json"
@@ -150,27 +188,37 @@ class Lifecycle:
         self.probe_mcp("user-repair")
 
     def project_lifecycle(self):
-        before = self.root / "user-before-projects.yaml"
-        shutil.copyfile(self.config, before)
+        servers = self.hermes_json("project-before", "mcp_servers")
+        require(not self.trusted_roots("project-before"), "disposable profile already trusts a project")
         for label, project in (("a", self.project_a), ("b", self.project_b)):
-            self.run_uap("project-" + label + "-add", "add", self.project_source,
-                         "--scope", "project", "--project-root", project, "--no-save")
-        self.run_uap("project-a-repeat", "add", self.project_source, "--scope", "project",
-                     "--project-root", self.project_a, "--no-save")
+            output = self.run_uap("project-" + label + "-add", "add", self.project_source,
+                                  "--scope", "project", "--project-root", project, "--no-save")
+            self.require_trust_report(output, granted=True)
+        output = self.run_uap("project-a-repeat", "add", self.project_source, "--scope", "project",
+                              "--project-root", self.project_a, "--no-save")
+        self.require_trust_report(output, granted=True)
         for label, project in (("a", self.project_a), ("b", self.project_b)):
-            self.observe("project-" + label + "-add", project, "UAP_NATIVE_USER_V2", 1)
+            self.observe("project-" + label + "-add", project, "UAP_NATIVE_USER_V2", 1, True)
+        # The user revokes A. Update and repair must not grant it again.
+        self.capture([*self.hermes, "skills", "untrust", self.project_a], "project-a-untrust.txt")
+        require(self.project_a.resolve() not in self.trusted_roots("project-a-untrust"),
+                "native Hermes did not revoke project A trust")
+        automatic = "UAP grants it only during an explicit add"
         b_snapshot = self.root / "project-b-skill.md"
         shutil.copyfile(self.project_skill(self.project_b), b_snapshot)
         self.advance(self.project_source, "project")
-        self.run_uap("project-a-update", "update", "hermes-uap-native-project", "--scope",
-                     "project", "--project-root", self.project_a)
+        output = self.run_uap("project-a-update", "update", "hermes-uap-native-project", "--scope",
+                              "project", "--project-root", self.project_a)
+        self.require_trust_report(output, granted=False, reason=automatic)
         self.same_bytes(self.skill("project", self.project_source), self.project_skill(self.project_a),
                         "Project update did not install the current source revision")
+        self.observe("project-a-update", self.project_a, "UAP_NATIVE_USER_V2", 1)
         self.same_bytes(b_snapshot, self.project_skill(self.project_b), "Project A update changed B")
         self.remove_skill(self.project_skill(self.project_a))
         self.observe("project-a-missing", self.project_a, "UAP_NATIVE_USER_V2", 0)
-        self.run_uap("project-a-repair", "repair", "hermes-uap-native-project", "--scope",
-                     "project", "--project-root", self.project_a)
+        output = self.run_uap("project-a-repair", "repair", "hermes-uap-native-project", "--scope",
+                              "project", "--project-root", self.project_a)
+        self.require_trust_report(output, granted=False, reason=automatic)
         self.observe("project-a-repair", self.project_a, "UAP_NATIVE_USER_V2", 1)
         self.same_bytes(self.skill("project", self.project_source), self.project_skill(self.project_a),
                         "Project repair did not restore the recorded current revision")
@@ -178,13 +226,53 @@ class Lifecycle:
         self.refuse_project_mcp()
         self.run_uap("project-a-remove", "remove", "hermes-uap-native-project", "--scope",
                      "project", "--project-root", self.project_a)
+        # Trust is the user's persistent preference; removal never changes it.
         self.observe("project-a-remove", self.project_a, "UAP_NATIVE_USER_V2", 0)
-        self.observe("project-b-retained", self.project_b, "UAP_NATIVE_USER_V2", 1)
+        self.observe("project-b-retained", self.project_b, "UAP_NATIVE_USER_V2", 1, True)
         self.same_bytes(b_snapshot, self.project_skill(self.project_b), "Project A removal changed B")
         self.run_uap("project-b-remove", "remove", "hermes-uap-native-project", "--scope",
                      "project", "--project-root", self.project_b)
-        self.observe("project-b-remove", self.project_b, "UAP_NATIVE_USER_V2", 0)
-        self.same_bytes(before, self.config, "Project operations changed User YAML or trust")
+        self.observe("project-b-remove", self.project_b, "UAP_NATIVE_USER_V2", 0, True)
+        self.unconfirmed_and_redirected_trust()
+        require(self.trusted_roots("project-after") == {self.project_b.resolve()},
+                "Project operations trusted anything but the explicitly added, unrevoked Git root")
+        require(self.hermes_json("project-after", "mcp_servers") == servers,
+                "Project operations changed User MCP configuration")
+
+    def unconfirmed_and_redirected_trust(self):
+        project = self.project_c
+        project.mkdir()
+        subprocess.run(["git", "-C", str(project), "init", "-q"], check=True, timeout=30)
+        before = self.config.read_bytes()
+        self.run_uap("project-c-dry-run", "add", self.project_source, "--scope", "project",
+                     "--project-root", project, "--no-save", "--dry-run")
+        require(not (project / ".hermes").exists() and before == self.config.read_bytes()
+                and project.resolve() not in self.trusted_roots("project-c-dry-run"),
+                "a dry run installed files or changed Hermes trust")
+        # A sticky active profile redirects a bare `hermes` away from the
+        # selected HERMES_HOME. UAP must refuse instead of writing either file.
+        work = self.profile / "profiles" / "work"
+        work.mkdir(parents=True)
+        (work / "config.yaml").write_text("model: offline-native-smoke\n", encoding="utf-8")
+        marker = self.profile / "active_profile"
+        marker.write_text("work\n", encoding="utf-8")
+        try:
+            require(self.resolved_home("project-c-sticky") == work.resolve(),
+                    "sticky active profile did not redirect a bare Hermes")
+            files = {path: path.read_bytes() for path in (self.config, work / "config.yaml")}
+            output = self.run_uap("project-c-sticky-add", "add", self.project_source, "--scope", "project",
+                                  "--project-root", project, "--no-save")
+            self.require_trust_report(output, granted=False)
+            require(all(path.read_bytes() == body for path, body in files.items()),
+                    "UAP wrote Hermes trust despite a redirected active profile")
+            require(project.resolve() not in self.trusted_roots("project-c-sticky"),
+                    "redirected active profile trusts an unverified project")
+        finally:
+            marker.unlink()
+        require(project.resolve() not in self.trusted_roots("project-c-selected"),
+                "selected profile trusts a project after the grant fell back")
+        self.run_uap("project-c-remove", "remove", "hermes-uap-native-project", "--scope",
+                     "project", "--project-root", project)
 
     def refuse_project_mcp(self):
         before = self.config.read_bytes()

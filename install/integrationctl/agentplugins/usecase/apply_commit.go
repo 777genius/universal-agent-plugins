@@ -188,6 +188,7 @@ func (session *applySession) activateCommitted(delivery domain.StagedDelivery, p
 		DeclaredName: session.input.Envelope.Manifest.Name, Replacing: session.replace || session.registrationMigration,
 		Interactive: session.input.Interactive, BackendExecutable: session.input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), previousClient.NativeObjects...),
+		ProjectTrustConsent:   session.input.ProjectTrustConsent,
 	})
 	session.result.Activation = outcome
 	if activationErr != nil && outcome.Activation == "" {

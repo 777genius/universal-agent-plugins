@@ -187,7 +187,7 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 	if err != nil || !confirmed {
 		return err
 	}
-	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent}
+	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent, trustAliases: explicitAddAliases(cmd, request.aliases)}
 	checked := func(ctx context.Context) error {
 		if err := request.checkInputs(); err != nil {
 			return err

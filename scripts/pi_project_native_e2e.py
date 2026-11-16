@@ -3,7 +3,9 @@
 
 Runs only on explicitly opted-in disposable GitHub-hosted runners. Pi's
 --approve/--no-approve flags change trust for a single child process and never
-write an approval to the user's profile. All effects stay under runner temp.
+write an approval to the user's profile. Runs without either flag leave the
+decision to UAP's owned project_trust hook and Pi's default policy. All effects
+stay under runner temp.
 """
 import hashlib
 import io
@@ -139,6 +141,7 @@ def project_operation(driver, state, user, project, source, action, evidence):
 
 
 def native_rpc(pi, project, user, event_file, approve, target, stage):
+    """approve=None passes no trust override, so Pi asks extensions first."""
     if event_file.exists():
         event_file.unlink()
     env = {
@@ -157,8 +160,9 @@ def native_rpc(pi, project, user, event_file, approve, target, stage):
         env["LOCALAPPDATA"] = str(user.parent.parent / "AppData/Local")
         Path(env["APPDATA"]).mkdir(parents=True, exist_ok=True)
         Path(env["LOCALAPPDATA"]).mkdir(parents=True, exist_ok=True)
-    command = [str(pi), "--mode", "rpc", "--no-session", "--offline",
-               "--approve" if approve else "--no-approve"]
+    command = [str(pi), "--mode", "rpc", "--no-session", "--offline"]
+    if approve is not None:
+        command.append("--approve" if approve else "--no-approve")
     payload = json.dumps({"id": stage, "type": "get_state"}).encode() + b"\n"
     output = run(command, project, env=env, input_bytes=payload, timeout=45, max_output=1 << 20)
     records = [json.loads(line) for line in output.splitlines() if line.strip()]
@@ -183,6 +187,83 @@ def assert_observation(lines, revision, project):
         observed = Path(lines[0].split("|", 1)[1])
         if observed.resolve() != project.resolve():
             raise RuntimeError("Pi loaded extension in a different project")
+
+
+HOOK = "extensions/agentplugins-project-trust"
+
+
+def trust_hook_files(user):
+    return [user / HOOK / "index.ts", user / HOOK / "projects.json"]
+
+
+def owned_project_trust(driver, pi, user, project, package, output, marker, target, state):
+    """UAP's hook trusts an owned-only project, never foreign or revoked names."""
+    def installed_artifact(evidence):
+        active = Path(evidence.get("binding", {}).get("target_path") or "")
+        if active.parent != project / ".pi/extensions" or not (active / "index.ts").is_file():
+            raise RuntimeError("UAP public project install did not produce Pi native discovery leaf")
+        return active
+
+    active = installed_artifact(project_operation(driver, project / ".uap", user, project, package,
+                                                  "install", output / "c.json"))
+    if not all(path.is_file() for path in trust_hook_files(user)):
+        raise RuntimeError("confirmed project install did not record UAP's Pi trust hook")
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-owned"), "one", project)
+    state["stages"].append("owned_only_project_trusted_by_uap_hook")
+    # An installation saved before UAP set up trust has neither hook file.
+    for path in trust_hook_files(user):
+        path.unlink()
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-before-grant"), None, project)
+    state["stages"].append("project_untrusted_before_grant")
+    project_operation(driver, project / ".uap", user, project, package, "install", output / "c-repeat.json")
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-granted"), "one", project)
+    state["stages"].append("confirmed_repeat_granted_owned_project_trust")
+    # Trust is bound to the recorded content, not only to the owned name.
+    owned_code = active / "native/index.ts"
+    original = owned_code.read_bytes()
+    owned_code.write_bytes(original + b"// changed after trust was recorded\n")
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-changed"), None, project)
+    owned_code.write_bytes(original)
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-restored"), "one", project)
+    state["stages"].append("changed_owned_content_untrusted")
+    # Decisions Pi already owns win over the hook: a saved "Do not trust" and
+    # a defaultProjectTrust of "never" keep the owned project untrusted.
+    for name, body, stage in (
+            ("trust.json", {str(project.resolve()): False}, "C-saved-no"),
+            ("settings.json", {"defaultProjectTrust": "never"}, "C-never")):
+        decision = write(user, name, json.dumps(body))
+        assert_observation(native_rpc(pi, project, user, marker, None, target, stage), None, project)
+        decision.unlink()
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-own-again"), "one", project)
+    state["stages"].append("saved_pi_decisions_override_uap_hook")
+    foreign = write(project, ".pi/extensions/later-foreign.ts",
+                    'import { appendFileSync } from "node:fs";\n'
+                    'appendFileSync(process.env.UAP_PI_PROJECT_EVENT_FILE, "foreign|" + process.cwd() + "\\n");\n'
+                    'export default function laterForeign() {}\n')
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-foreign"), None, project)
+    foreign.unlink()
+    state["stages"].append("later_foreign_extension_untrusted")
+    author_source(package, "c-two")
+    project_operation(driver, project / ".uap", user, project, package, "update", output / "c-update.json")
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-updated"), "c-two", project)
+    author_source(package, "one")
+    state["stages"].append("confirmed_update_rerecorded_owned_content")
+    return active
+
+
+def revoked_project_trust(driver, pi, user, project, package, active, output, marker, target, state):
+    """Removal revokes at once, while the hook still serves other projects."""
+    project_operation(driver, project / ".uap", user, project, package, "remove", output / "c-remove.json")
+    if not all(path.is_file() for path in trust_hook_files(user)):
+        raise RuntimeError("removing one project dropped the hook other projects use")
+    # A recreated formerly owned name must not inherit revoked trust.
+    write(project, ".pi/extensions/" + active.name + "/index.ts",
+          'import { appendFileSync } from "node:fs";\n'
+          'appendFileSync(process.env.UAP_PI_PROJECT_EVENT_FILE, "revoked|" + process.cwd() + "\\n");\n'
+          'export default function revoked() {}\n')
+    assert_observation(native_rpc(pi, project, user, marker, None, target, "C-revoked"), None, project)
+    shutil.rmtree(active)
+    state["stages"].append("removal_revoked_project_trust")
 
 
 def main():
@@ -218,6 +299,10 @@ def main():
                 write(project, ".pi/extensions/foreign.ts", "export default function foreign() {}\n")
             write(user, "extensions/foreign.ts", "export default function foreign() {}\n")
             author_source(package, "one")
+            marker = root / "pi-load-events.log"
+            c = root / "project-C"
+            c.mkdir()
+            c_active = owned_project_trust(driver, pi, user, c, package, output, marker, target, state)
             file_a, file_b = output / "a.json", output / "b.json"
             installed_a = project_operation(driver, a / ".uap", user, a, package, "install", file_a)
             installed_b = project_operation(driver, b / ".uap", user, b, package, "install", file_b)
@@ -228,7 +313,8 @@ def main():
                 active = Path(binding.get("TargetPath") or binding.get("target_path") or "")
                 if active.parent != project / ".pi/extensions" or not (active / "index.ts").is_file():
                     raise RuntimeError("UAP public project install did not produce Pi native discovery leaf")
-            marker = root / "pi-load-events.log"
+            assert_observation(native_rpc(pi, a, user, marker, None, target, "A-foreign"), None, a)
+            state["stages"].append("foreign_project_extension_untrusted")
             assert_observation(native_rpc(pi, a, user, marker, False, target, "untrusted"), None, a)
             state["stages"].append("untrusted_project_suppressed")
             assert_observation(native_rpc(pi, a, user, marker, True, target, "A-1"), "one", a)
@@ -247,6 +333,15 @@ def main():
                 if path.read_text() != "export default function foreign() {}\n":
                     raise RuntimeError("Pi project native cleanup changed caller-owned extension")
             state["stages"].append("native_A_remove_B_user_foreign_preserved")
+            revoked_project_trust(driver, pi, user, c, package, c_active, output, marker, target, state)
+            project_operation(driver, b / ".uap", user, b, package, "remove", output / "b-remove.json")
+            if any(path.exists() for path in trust_hook_files(user)):
+                raise RuntimeError("removing the last owned project left UAP's Pi trust hook")
+            if (b / ".pi/extensions/foreign.ts").read_text() != "export default function foreign() {}\n":
+                raise RuntimeError("Pi project native cleanup changed caller-owned extension")
+            state["stages"].append("last_project_removal_removed_trust_hook")
+            if (user / "trust.json").exists():
+                raise RuntimeError("Pi persisted a trust decision during the E2E")
             state["status"] = "passed"
     finally:
         (output / "native-pi-project-evidence.json").write_text(

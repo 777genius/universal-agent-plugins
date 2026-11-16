@@ -52,7 +52,7 @@ func (service Service) resume(
 		DeclaredName: input.Envelope.Manifest.Name, Replacing: true,
 		Interactive: input.Interactive, BackendExecutable: input.BackendExecutable,
 		PreviousNativeObjects: append([]domain.NativeObjectOwnership(nil), client.NativeObjects...),
-		VerifyOnly:            complete, ActivationComplete: input.ActivationComplete,
+		VerifyOnly:            complete, ActivationComplete: input.ActivationComplete, ProjectTrustConsent: input.ProjectTrustConsent,
 	}
 	var outcome domain.ActivationOutcome
 	var activationErr error
