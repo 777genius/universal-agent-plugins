@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -334,7 +336,7 @@ func TestHermesProjectTrustPostCheckNeverTrustsExitCode(t *testing.T) {
 			}
 			action, local := report.actions()
 			if !strings.HasPrefix(action, "UAP could not confirm Hermes project trust: ") || strings.Contains(action, f.project) ||
-				local[0] != "Exact Hermes trust command for this project: "+hermesTrustCommand(f.project) {
+				local[0] != hermesTrustCommandAction(f.project) || !strings.HasPrefix(local[0], "Exact Hermes trust command for this project: hermes skills trust ") {
 				t.Fatalf("post-check failure lacks the exact manual command: %q %q", action, local)
 			}
 			if tc.missing != strings.Contains(strings.Join(local, "\n"), "/srv/prior") || strings.Contains(action, "/srv/prior") {
@@ -496,6 +498,39 @@ func TestHermesPreparedSetupAdmitsOnlyExactSkillProject(t *testing.T) {
 		mutate(&changed, &observed)
 		if adapter.CanCompletePreparedSetup(changed, observed) {
 			t.Fatalf("%s qualified for prepared setup completion", name)
+		}
+	}
+}
+
+// A printed command must never become code: shells expand $(), backticks,
+// %VAR% and history inside double quotes, and quotes or newlines escape them.
+func TestHermesManualTrustCommandIsNeverUnsafeToRun(t *testing.T) {
+	for _, root := range []string{
+		"/tmp/$(calc)", "/tmp/$HOME", "/tmp/`id`", "/tmp/%PATH%", `/tmp/a"b`, "/tmp/a'b", "/tmp/a\nb", "/tmp/a\rb", "/tmp/a\tb",
+		"-rf", "--help", "/tmp/a;b", "/tmp/a&b", "/tmp/a|b", "/tmp/a!b", "/tmp/~x", "/tmp/a*b", "/tmp/a?b", "/tmp/{a,b}", "/tmp/[a]",
+		"/tmp/a#b", "/tmp/a^b", "/tmp/a<b>", "/tmp/(x)", `C:\Users\$env:X`, "/tmp/\u2018quoted\u2019", "/tmp/\u201cquoted\u201d", "/tmp/en\u2013dash", "",
+	} {
+		if command, ok := hermesTrustCommand(root); ok || command != "" {
+			t.Fatalf("unsafe root %q produced a runnable command %q", root, command)
+		}
+		action := hermesTrustCommandAction(root)
+		if strings.Contains(action, "Exact Hermes trust command") || strings.Contains(action, "hermes skills trust "+root) ||
+			!strings.Contains(action, "run `hermes skills trust` from inside the repository") || !strings.Contains(action, "(not a command): "+strconv.Quote(root)) {
+			t.Fatalf("unsafe root %q was not reduced to guidance and quoted data: %s", root, action)
+		}
+		user, local := hermesTrustReport{root: root, reason: "test"}.actions()
+		if root != "" && strings.Contains(user, root) || len(local) != 1 || local[0] != action {
+			t.Fatalf("unsafe root %q leaked into public guidance or lost local guidance: %q %q", root, user, local)
+		}
+	}
+	for _, root := range []string{"/tmp/project", "/tmp/my project", "/tmp/\u043f\u0440\u043e\u0435\u043a\u0442", `C:\Users\dev\proj`, "/srv/a+b@c,d_e-f.1", "D:/work/repo"} {
+		command, ok := hermesTrustCommand(root)
+		want := "hermes skills trust '" + root + "'"
+		if runtime.GOOS == "windows" {
+			want = `hermes skills trust "` + root + `"`
+		}
+		if !ok || command != want || hermesTrustCommandAction(root) != "Exact Hermes trust command for this project: "+want {
+			t.Fatalf("safe root %q printed %q, want %q", root, command, want)
 		}
 	}
 }

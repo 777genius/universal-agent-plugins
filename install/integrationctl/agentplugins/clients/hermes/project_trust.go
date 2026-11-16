@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -116,21 +117,48 @@ func (report hermesTrustReport) actions() (string, []string) {
 	if report.attempted {
 		prefix = "UAP could not confirm Hermes project trust: "
 	}
-	local := []string{"Exact Hermes trust command for this project: " + hermesTrustCommand(report.root)}
+	local := []string{hermesTrustCommandAction(report.root)}
 	if len(report.missing) > 0 {
 		local = append(local, "Previously trusted Hermes entries missing afterwards: "+strings.Join(report.missing, ", "))
 	}
 	return prefix + report.reason + ". To trust the whole Git repository (.hermes/skills and .agents/skills, including future content), run `hermes skills trust` inside it, then start a new Hermes session", local
 }
 
-// POSIX shells take single quotes. On Windows, double quotes work in both
-// PowerShell and cmd.exe for paths without $, backtick or %.
-func hermesTrustCommand(root string) string {
-	quoted := "'" + strings.ReplaceAll(root, "'", `'\''`) + "'"
-	if runtime.GOOS == "windows" {
-		quoted = `"` + root + `"`
+// hermesTrustCommandAction prints a runnable command only for a root that no
+// supported shell can expand or split. Any other root is shown as quoted data,
+// never as a command a user could copy and run.
+func hermesTrustCommandAction(root string) string {
+	if command, ok := hermesTrustCommand(root); ok {
+		return "Exact Hermes trust command for this project: " + command
 	}
-	return "hermes skills trust " + quoted
+	return "The repository path contains shell-sensitive characters, so no command is printed; run `hermes skills trust` from inside the repository, then start a new Hermes session. Repository path (not a command): " + strconv.Quote(root)
+}
+
+// POSIX shells take single quotes. On Windows, double quotes work in both
+// PowerShell and cmd.exe because a safe root has no $, backtick, % or quote.
+func hermesTrustCommand(root string) (string, bool) {
+	if !hermesSafeCommandPath(root) {
+		return "", false
+	}
+	if runtime.GOOS == "windows" {
+		return `hermes skills trust "` + root + `"`, true
+	}
+	return "hermes skills trust '" + root + "'", true
+}
+
+// hermesSafeCommandPath admits letters (including non-ASCII), digits, space
+// and `/ \ : . _ - + @ ,` only, and refuses a leading dash that could read as
+// a flag. Canonical absolute roots begin with a separator or a drive letter.
+func hermesSafeCommandPath(root string) bool {
+	if root == "" || strings.HasPrefix(root, "-") {
+		return false
+	}
+	for _, r := range root {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune(` /\:._-+@,`, r) {
+			return false
+		}
+	}
+	return true
 }
 
 // run returns an error only when a native process was not proven closed or the
