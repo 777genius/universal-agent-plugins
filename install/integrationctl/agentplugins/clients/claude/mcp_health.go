@@ -40,7 +40,10 @@ func observeClaudeMCPHealth(body []byte, selector string) claudeMCPObservation {
 			switch line {
 			case "  Status: ✔ Connected", "  Status: √ Connected":
 				state = claudeMCPHealthConnected
-			case "  Status: ✘ Failed to connect", "  Status: × Failed to connect", "  Status: ⏸ Pending approval (run `claude` to approve)", "  Status: ✘ Rejected (see disabledMcpjsonServers in settings)", "  Status: × Rejected (see disabledMcpjsonServers in settings)", "  Status: ⚠ Needs authentication":
+			case "  Status: ✘ Failed to connect", "  Status: × Failed to connect", "  Status: ⏸ Pending approval (run `claude` to approve)", "  Status: ✘ Rejected (see disabledMcpjsonServers in settings)", "  Status: × Rejected (see disabledMcpjsonServers in settings)", "  Status: ⚠ Needs authentication",
+				"  Status: ! Needs authentication", "  Status: ! Connected · tools fetch failed",
+				"  Status: - Not configured", "  Status: ✘ Connection error", "  Status: × Connection error",
+				"  Status: ⊘ Disabled for this project (re-enable via /mcp)":
 				state = claudeMCPHealthUnready
 			default:
 				return claudeMCPObservation{}
