@@ -28,8 +28,8 @@ func piTrustBlocker(kernel nativeconfig.Kernel, user, project string) (string, e
 	if err != nil {
 		return "", err
 	}
-	if blocker, err := piTrustPolicyBlocker(user, project); blocker != "" || err != nil {
-		return blocker, err
+	if blocker := piTrustPolicyBlocker(user, project); blocker != "" {
+		return blocker, nil
 	}
 	config := filepath.Join(project, ".pi")
 	if piTrustKind(config) != "directory" {
@@ -42,8 +42,8 @@ func piTrustBlocker(kernel nativeconfig.Kernel, user, project string) (string, e
 	if blocker, err := piTrustConfigBlocker(config, owned); blocker != "" || err != nil {
 		return blocker, err
 	}
-	if blocker, err := piTrustMCPBlocker(filepath.Join(config, "mcp.json"), owned["mcp_servers"]); blocker != "" || err != nil {
-		return blocker, err
+	if blocker := piTrustMCPBlocker(filepath.Join(config, "mcp.json"), owned["mcp_servers"]); blocker != "" {
+		return blocker, nil
 	}
 	return piTrustAgentsSkillsBlocker(project), nil
 }
@@ -113,37 +113,37 @@ func piTrustConfigBlocker(config string, owned map[string]map[string]string) (st
 	return "", nil
 }
 
-func piTrustMCPBlocker(path string, owned map[string]string) (string, error) {
+func piTrustMCPBlocker(path string, owned map[string]string) string {
 	body, err := piTrustPiFile(path)
 	if err != nil {
-		return ".pi/" + err.Error(), nil //nolint:nilerr // A refusal is an explanation.
+		return ".pi/" + err.Error()
 	}
 	if body == nil {
-		return "", nil
+		return ""
 	}
 	var document map[string]json.RawMessage
 	if !piTrustDecodes(body, &document) || document == nil {
-		return ".pi/mcp.json is not a JSON object", nil
+		return ".pi/mcp.json is not a JSON object"
 	}
 	for key := range document {
 		if key != "mcpServers" {
-			return fmt.Sprintf(".pi/mcp.json key %q is not managed by UAP", key), nil
+			return fmt.Sprintf(".pi/mcp.json key %q is not managed by UAP", key)
 		}
 	}
 	servers, err := piTrustMCPServers(path)
 	if err != nil {
-		return err.Error(), nil //nolint:nilerr // A refusal is an explanation.
+		return err.Error()
 	}
 	for name, entry := range servers {
 		recorded, ok := owned[name]
 		if !ok {
-			return fmt.Sprintf(".pi/mcp.json server %q is not managed by UAP", name), nil
+			return fmt.Sprintf(".pi/mcp.json server %q is not managed by UAP", name)
 		}
 		if digest, err := piTrustValueDigest(entry); err != nil || digest != recorded {
-			return fmt.Sprintf(".pi/mcp.json server %q changed after UAP recorded it", name), nil //nolint:nilerr // A refusal is an explanation.
+			return fmt.Sprintf(".pi/mcp.json server %q changed after UAP recorded it", name)
 		}
 	}
-	return "", nil
+	return ""
 }
 
 // Pi loads .agents/skills from the project and its ancestors once trusted,
@@ -169,29 +169,29 @@ func piTrustAgentsSkillsBlocker(project string) string {
 }
 
 // piTrustPolicyBlocker reports decisions Pi owns before the hook is asked.
-func piTrustPolicyBlocker(user, project string) (string, error) {
+func piTrustPolicyBlocker(user, project string) string {
 	var settings struct {
 		DefaultProjectTrust any `json:"defaultProjectTrust"`
 	}
 	// Like the hook: links, oversized or unreadable files leave Pi in charge.
 	if body, err := piTrustPiFile(filepath.Join(user, "settings.json")); err != nil || body != nil && !piTrustDecodes(body, &settings) {
-		return "Pi's settings.json is not a readable regular file", nil //nolint:nilerr // A refusal is an explanation.
+		return "Pi's settings.json is not a readable regular file"
 	}
 	if settings.DefaultProjectTrust == "always" || settings.DefaultProjectTrust == "never" {
-		return fmt.Sprintf("Pi's defaultProjectTrust setting is %q", settings.DefaultProjectTrust), nil
+		return fmt.Sprintf("Pi's defaultProjectTrust setting is %q", settings.DefaultProjectTrust)
 	}
 	saved := map[string]json.RawMessage{}
 	if body, err := piTrustPiFile(filepath.Join(user, "trust.json")); err != nil || body != nil && !piTrustDecodes(body, &saved) {
-		return "Pi's trust.json is not a readable regular file", nil //nolint:nilerr // A refusal is an explanation.
+		return "Pi's trust.json is not a readable regular file"
 	}
 	for directory := project; ; directory = filepath.Dir(directory) {
 		for path, decision := range saved {
 			if (string(decision) == "true" || string(decision) == "false") && piTrustComparable(path) == piTrustComparable(directory) {
-				return "Pi keeps your saved trust decision for " + path, nil
+				return "Pi keeps your saved trust decision for " + path
 			}
 		}
 		if filepath.Dir(directory) == directory {
-			return "", nil
+			return ""
 		}
 	}
 }
