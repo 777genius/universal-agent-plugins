@@ -392,6 +392,9 @@ func TestPiProjectTrustRecordGrantRevokeAndRollback(t *testing.T) {
 	if err := grantPiProjectTrust(env, a1); err == nil {
 		t.Fatal("foreign hook adopted")
 	}
+	if action := piProjectTrustAction(env, verify); action == piProjectTrustPendingAction || !strings.Contains(action, "foreign extension") {
+		t.Fatalf("foreign hook offered a repair that can only fail: %q", action)
+	}
 	if err := revokePiProjectTrust(env, piTrustRemoval(a1)); err != nil {
 		t.Fatal(err)
 	}

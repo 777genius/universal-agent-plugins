@@ -433,8 +433,15 @@ func observePiProjectTrust(kernel nativeconfig.Kernel, request domain.Activation
 	}
 	_, entryPath, projectsPath := piTrustHookPaths(user)
 	hook, err := kernel.ReadExactFile(entryPath)
-	if err != nil || !hook.Exists || !bytes.Equal(hook.Body, []byte(piTrustHookSource)) {
+	if err != nil {
 		return false, err
+	}
+	// A repair cannot replace foreign bytes, so they are not a pending setup.
+	if hook.Exists && !bytes.HasPrefix(hook.Body, []byte(piTrustHookMarker)) {
+		return false, fmt.Errorf("pi trust hook path holds a foreign extension")
+	}
+	if !hook.Exists || !bytes.Equal(hook.Body, []byte(piTrustHookSource)) {
+		return false, nil
 	}
 	snapshot, err := kernel.ReadExactFile(projectsPath)
 	if err != nil {
