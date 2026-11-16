@@ -9,6 +9,12 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// cursorMCPApprovalPendingAction records a read-only observation in which
+// Cursor listed every selected server as awaiting approval and no policy or
+// profile refusal applied. It is the only state prepared-setup completion
+// admits, so a repeated add finishes an interrupted approval exactly once.
+const cursorMCPApprovalPendingAction = "Cursor MCP servers await approval; repeat this add to approve them"
+
 func completeCursorProjectMCP(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
 	observed, observationErr := observeCursorProjectMCP(ctx, env, request)
 	var effect *shared.NativeEffectError
@@ -21,6 +27,8 @@ func completeCursorProjectMCP(ctx context.Context, env clients.Env, request doma
 	}
 	if observationErr != nil {
 		outcome.UserActions = shared.AppendUnique(outcome.UserActions, observationErr.Error())
+	} else if observed.ApprovalPending {
+		outcome.UserActions = shared.AppendUnique(outcome.UserActions, cursorMCPApprovalPendingAction)
 	}
 	if observed.Initialized {
 		outcome.UserActions = cursorObservedMCPActions(outcome.UserActions)
