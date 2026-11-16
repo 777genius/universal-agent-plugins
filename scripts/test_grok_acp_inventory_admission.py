@@ -2794,6 +2794,95 @@ class ReadonlyInventoryContracts(unittest.TestCase):
             with self.subTest(change=repr(change)), self.assertRaises((ValueError, TypeError)):
                 case.validate_readonly_receipt(altered, request)
 
+    def repeated_namespace_receipt(self):
+        receipt, request, before = self.receipt()
+        control, native = receipt['result']['commands']
+        control_header = case.document(base64.b64decode(control['stderr_base64']).split(b'\n')[0]
+                                       [len(case.READONLY_HEADER):], 2048)
+        native_header = case.document(base64.b64decode(native['stderr_base64']).split(b'\n')[0]
+                                      [len(case.READONLY_HEADER):], 2048)
+        native_header['namespaces'] = dict(control_header['namespaces'])
+        raw = case.READONLY_HEADER + json.dumps(native_header, sort_keys=True, separators=(',', ':')).encode() + b'\n'
+        native.update(stderr_base64=base64.b64encode(raw).decode(), stderr_bytes=len(raw), stderr_sha256=case.digest(raw))
+        return receipt, request, before
+
+    def test_separately_settled_phases_can_report_repeated_namespace_numbers(self):
+        receipt, request, _ = self.repeated_namespace_receipt()
+        expected = receipt['result']
+        req, _ = self.request()
+        req['start_monotonic_ns'] = request['start_monotonic_ns']
+        original = expected['readonly']['original']
+        children = []
+        actual_popen = subprocess.Popen
+        with tempfile.TemporaryDirectory() as directory:
+            def launch(argv, **options):
+                index = len(children)
+                phase = ('control', 'native')[index]
+                row = expected['commands'][index]
+                self.assertEqual(argv, case.readonly_bwrap_argv(req, phase, original))
+                self.assertEqual(options, dict(cwd=Path(req['input_root']) / 'a', env=case.readonly_environment(Path(req['input_root'])),
+                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True, close_fds=True))
+                if children:
+                    self.assertEqual(children[0].returncode, 93)
+                    self.assertTrue(all(pipe.closed for pipe in (children[0].stdin, children[0].stdout, children[0].stderr)))
+                # Real, separate inert children exercise the existing PIPE/wait
+                # owner. Namespace observations are authored, not a local kernel proof.
+                script = 'import os,sys\nos.write(2,' + repr(base64.b64decode(row['stderr_base64'])) + ')\n'
+                if phase == 'control':
+                    script += 'raise SystemExit(93)\n'
+                else:
+                    frames = base64.b64decode(row['stdout_base64']).splitlines(keepends=True)
+                    script += ('sys.stdin.readline()\nos.write(1,' + repr(b''.join(frames[:2])) + ')\n'
+                               'sys.stdin.readline()\nos.write(1,' + repr(frames[2]) + ')\nsys.stdin.read()\n')
+                process = actual_popen([sys.executable, '-I', '-B', '-c', script], **dict(options, cwd=directory))
+                children.append(process)
+                return process
+
+            with (mock.patch.object(case, 'isolation', return_value=expected['isolation']),
+                  mock.patch.object(case, 'readonly_root_checks'),
+                  mock.patch.object(case, 'readonly_verify_files'),
+                  mock.patch.object(case, 'readonly_input'),
+                  mock.patch.object(case, 'readonly_parent_proof', return_value=original),
+                  mock.patch.object(case, 'readonly_runtime', return_value=original['runtime']),
+                  mock.patch.object(case, 'readonly_control_marker', return_value=expected['readonly']['control_marker']),
+                  mock.patch.object(case.os, 'stat', side_effect=lambda path:
+                      SimpleNamespace(st_ino=original['namespaces'][str(path).rsplit('/', 1)[-1]])),
+                  mock.patch.object(Path, 'iterdir', return_value=iter(())),
+                  mock.patch.object(case.subprocess, 'Popen', side_effect=launch)):
+                result = case.readonly_collector_result(req)
+        self.assertEqual(len(children), 2)
+        self.assertIsNot(children[0], children[1])
+        self.assertTrue(all(child.returncode is not None and all(pipe.closed for pipe in
+                            (child.stdin, child.stdout, child.stderr)) for child in children))
+        self.assertTrue(result['semantic_complete'])
+        self.assertEqual(result['readonly']['stage'], 'complete')
+        self.assertEqual(result['rpc'], expected['rpc'])
+        receipt['result'] = result
+        self.assertTrue(case.validate_readonly_receipt(receipt, request)['semantic_complete'])
+
+    def test_repeated_namespace_receipt_still_requires_live_parent_phase_and_wrapper_joins(self):
+        receipt, request, _ = self.repeated_namespace_receipt()
+        self.assertTrue(case.validate_readonly_receipt(copy.deepcopy(receipt), request)['semantic_complete'])
+        original = receipt['result']['readonly']['original']
+        mutations = [(name, 'namespace', original['namespaces'][name]) for name in case.READONLY_NAMESPACES]
+        mutations += [('net', 'namespace', receipt['result']['readonly']['authority']['namespaces']['net']),
+                      ('phase', 'header', 'control'), ('nonce', 'header', '0' * 32)]
+        for name, kind, value in mutations:
+            changed = copy.deepcopy(receipt)
+            native = changed['result']['commands'][1]
+            header = case.document(base64.b64decode(native['stderr_base64']).split(b'\n')[0]
+                                   [len(case.READONLY_HEADER):], 2048)
+            (header['namespaces'] if kind == 'namespace' else header)[name] = value
+            raw = case.READONLY_HEADER + json.dumps(header, sort_keys=True, separators=(',', ':')).encode() + b'\n'
+            native.update(stderr_base64=base64.b64encode(raw).decode(), stderr_bytes=len(raw), stderr_sha256=case.digest(raw))
+            with self.subTest(name=name, kind=kind), self.assertRaises(ValueError):
+                case.validate_readonly_receipt(changed, request)
+        for flag in ('--unshare-user', '--unshare-pid', '--unshare-net', '--unshare-ipc', '--unshare-uts'):
+            changed = copy.deepcopy(receipt)
+            changed['result']['commands'][1]['wrapper_argv'].remove(flag)
+            with self.subTest(flag=flag), self.assertRaisesRegex(ValueError, 'readonly-wrapper-argv'):
+                case.validate_readonly_receipt(changed, request)
+
     def test_old_source_expired_clock_is_diagnostic_only_and_cannot_renew_native_budget(self):
         receipt, request, _ = self.receipt()
         request['start_monotonic_ns'] = 1

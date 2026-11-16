@@ -18,8 +18,8 @@ import (
 func unclosedInstallErrors(cause error) map[string]error {
 	probe := &domain.UnclosedClientProbe{Operation: "client listing", Err: cause}
 	return map[string]error{
-		"bare":     probe,
-		"wrapped":  fmt.Errorf("native observation: %w", probe),
+		"bare":    probe,
+		"wrapped": fmt.Errorf("native observation: %w", probe),
 		"deadline": fmt.Errorf("native observation: %w", &domain.UnclosedClientProbe{
 			Operation: "client listing", Err: errors.Join(cause, context.DeadlineExceeded),
 		}),
@@ -70,7 +70,7 @@ func TestOrdinaryInstallerFailuresKeepTheirRetryBehavior(t *testing.T) {
 			t.Fatalf("ordinary failures must keep their existing retry classification: %+v", failure)
 		}
 		summary := errors.New("public group summary")
-		if got := retainUnclosedInstallCause(summary, cause); got != summary {
+		if got := retainUnclosedInstallCause(summary, cause); !errors.Is(got, summary) || !errors.Is(summary, got) {
 			t.Fatal("ordinary group errors must keep their existing public summary")
 		}
 	}
@@ -151,7 +151,7 @@ func TestUnclosedProbeBlocksRetryOfOtherRetryableFailures(t *testing.T) {
 				t.Fatal("a separate retryable failure must not restart work after uncertain cleanup")
 				return nil
 			})
-			if got != cause || len(offered) != 0 {
+			if !errors.Is(got, cause) || !errors.Is(cause, got) || len(offered) != 0 {
 				t.Fatalf("the run-wide cleanup refusal must survive without prompting: %v, offered=%v", got, offered)
 			}
 		})

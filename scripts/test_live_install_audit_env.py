@@ -5361,9 +5361,13 @@ module.exports = {
         run = workflow.split("      - name: Run real acquisitions and report every source and outcome\n", 1)[1]
         prefix = textwrap.dedent(run.split("        run: |\n", 1)[1].split("          python3 scripts/live-install-audit.py", 1)[0])
         fixed = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
-        self.assertEqual(prefix, 'if [[ "$AUDIT_TARGET" == kiro ]]; then\n'
+        self.assertEqual(prefix, 'acceptance=()\n'
+                         'if [[ "$AUDIT_TARGET" == kiro ]]; then\n'
                          '  test -n "$KIRO_NODE_BIN"\n'
                          '  export PATH="$KIRO_NODE_BIN:' + fixed + '"\n'
+                         '  if [[ "$AUDIT_KIND" == plugin ]]; then\n'
+                         '    acceptance=(--acceptance kiro-prepared-installation)\n'
+                         '  fi\n'
                          'else\n  export PATH="' + fixed + '"\nfi\n')
         self.assertNotIn("$PATH", prefix)
         audit = load_audit()

@@ -2769,8 +2769,9 @@ def readonly_collector_result(req):
             in_flight = False
             result['commands'].append(row)
             readonly_settled_readback(req, phase, row, original, host_original, result, headers)
-        require(all(headers[0]['namespaces'][name] != headers[1]['namespaces'][name] for name in READONLY_NAMESPACES),
-                'readonly-namespace-reuse')
+        # Each command has settled before the next fresh-clone invocation.
+        # Unheld namespace inode numbers may repeat after teardown; authority
+        # comes from each phase's live-parent and sealed-source header joins.
         readonly_input(req)
         readonly_verify_files(req)
         require(result['rpc']['notifications'] == [{'jsonrpc':'2.0', 'method':'_x.ai/mcp/servers_updated',
@@ -2933,8 +2934,9 @@ def validate_readonly_receipt(receipt, request):
     require(total <= LIMIT and len(json.dumps(result['rpc']).encode()) <= 128 << 10, 'readonly-aggregate')
     closed(result['rpc'], 'initialize plugins notifications')
     if result['semantic_complete']:
-        require(len(result['commands']) == 2 and selected['control_complete'] and selected['stage'] == 'complete'
-                and all(headers[0]['namespaces'][name] != headers[1]['namespaces'][name] for name in READONLY_NAMESPACES),
+        # Both phase headers were joined above, including the exact fresh-clone
+        # wrapper. Their integer namespace IDs are not cross-lifetime identities.
+        require(len(result['commands']) == len(headers) == 2 and selected['control_complete'] and selected['stage'] == 'complete',
                 'readonly-complete-proof')
         replay = rpc_state()
         native = readonly_streams(result['commands'][1])['stdout']

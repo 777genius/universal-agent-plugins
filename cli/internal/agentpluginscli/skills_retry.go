@@ -27,13 +27,7 @@ func applySkillsWithRecovery(cmd *cobra.Command, app App, opts *options, prepare
 	outstanding := map[string]string{}
 	for attempt := 1; ; attempt++ {
 		result, err := current.Apply(cmd.Context())
-		for _, report := range reportByAgent(skillsAgentItems(result.Items)) {
-			if report.Failed() {
-				outstanding[string(report.ClientID)] = report.Label
-			} else {
-				delete(outstanding, string(report.ClientID))
-			}
-		}
+		updateOutstandingSkills(outstanding, reportByAgent(skillsAgentItems(result.Items)))
 		logPath := app.recordInstallRun("skills add", attempt, agentLogEntries(skillsAgentItems(result.Items)))
 		if writeErr := renderSkillsResult(cmd, opts, result, logPath); writeErr != nil {
 			return writeErr
@@ -150,4 +144,14 @@ func sortedValues(values map[string]string) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+func updateOutstandingSkills(outstanding map[string]string, reports []agentReport) {
+	for _, report := range reports {
+		if report.Failed() {
+			outstanding[string(report.ClientID)] = report.Label
+		} else {
+			delete(outstanding, string(report.ClientID))
+		}
+	}
 }
