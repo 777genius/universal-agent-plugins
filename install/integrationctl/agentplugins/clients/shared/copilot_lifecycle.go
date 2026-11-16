@@ -157,7 +157,9 @@ func installCopilotPlugin(ctx context.Context, env clients.Env, request domain.A
 	pluginSpec := request.DeclaredName + "@" + marketplace
 	if err := runCopilot(ctx, env, request.BackendExecutable, "plugin", "install", pluginSpec); err != nil {
 		if !request.Replacing && !domain.IsUnclosedClientProbe(err) {
-			_ = runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "remove", marketplace)
+			if rollbackErr := runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "remove", marketplace); rollbackErr != nil {
+				return fmt.Errorf("install managed Copilot plugin: %w; rollback marketplace: %w", err, rollbackErr)
+			}
 		}
 		return err
 	}
