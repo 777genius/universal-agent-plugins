@@ -570,3 +570,69 @@ func TestIndependentActivationPreservesCleanupCollectedAfterSerialStop(t *testin
 		}
 	}
 }
+
+// An independent process can become unsafe after a serial effect has started.
+// The serial effect must receive that cancellation, not merely the parent one.
+type cancelSerialOnUnclosedActivator struct {
+	independentFixtureActivator
+	serialStarted chan struct{}
+	serialJoined  chan struct{}
+}
+
+func (a *cancelSerialOnUnclosedActivator) Activate(ctx context.Context, _ domain.ActivationRequest) (domain.ActivationOutcome, error) {
+	close(a.serialStarted)
+	<-ctx.Done()
+	close(a.serialJoined)
+	return domain.ActivationOutcome{}, ctx.Err()
+}
+func (a *cancelSerialOnUnclosedActivator) PrepareIndependentActivation(_ context.Context, request domain.ActivationRequest) (func(context.Context) (domain.ActivationOutcome, error), error) {
+	return func(ctx context.Context) (domain.ActivationOutcome, error) {
+		defer a.joined.Add(1)
+		if request.Client.ClientID == domain.ClientClaude {
+			select {
+			case <-a.serialStarted:
+			case <-ctx.Done():
+				return domain.ActivationOutcome{}, ctx.Err()
+			}
+			return domain.ActivationOutcome{}, &domain.UnclosedClientProbe{Operation: "Claude listing", Err: errors.New("containment close failed")}
+		}
+		<-ctx.Done()
+		return domain.ActivationOutcome{}, ctx.Err()
+	}, nil
+}
+func TestIndependentUnclosedProbeCancelsRunningSerialEffect(t *testing.T) {
+	service, _, _ := serviceFixture(t)
+	a := &cancelSerialOnUnclosedActivator{serialStarted: make(chan struct{}), serialJoined: make(chan struct{})}
+	service.Activator = a
+	claude, codex, cursor, _ := mixedClients(t)
+	inputs := []AddInput{addInput(t, claude, "https://example.com/cancel-running"), addInput(t, codex, "https://example.com/cancel-running"), addInput(t, cursor, "https://example.com/cancel-running")}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		_, err := service.AddGroup(ctx, GroupInput{Targets: inputs, OperationGroupID: "cancel-running-serial", Confirmed: true})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		var probe *domain.UnclosedClientProbe
+		if !errors.As(err, &probe) {
+			t.Fatalf("lost unclosed probe: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		cancel()
+		<-done
+		t.Fatal("independent unclosed probe did not cancel the running serial effect")
+	}
+	select {
+	case <-a.serialJoined:
+	default:
+		t.Fatal("serial effect was not joined")
+	}
+	if a.joined.Load() != 2 {
+		t.Fatalf("independent effects not joined: %d", a.joined.Load())
+	}
+	if ctx.Err() != nil {
+		t.Fatalf("test required parent cancellation: %v", ctx.Err())
+	}
+}
