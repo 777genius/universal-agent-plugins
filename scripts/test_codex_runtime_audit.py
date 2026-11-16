@@ -132,6 +132,61 @@ class CodexTemporaryGitStateTest(unittest.TestCase):
         self.assertFalse(audit._repeat_temporary_git_only(
             self.profile, before, self.snapshot([self.profile]), previous))
 
+    def test_pinned_sync_lock_stays_outside_the_allowed_repeat_delta(self):
+        lock = self.root / "plugins.sync.lock"
+        lock.touch()
+        self.repository()
+        previous = audit._temporary_git_state(self.profile)
+        before = self.snapshot([self.profile])
+        self.repository("git-Def456")
+        self.assertTrue(audit._repeat_temporary_git_only(
+            self.profile, before, self.snapshot([self.profile]), previous))
+        self.assertNotIn(f"{self.profile.name}/{lock.relative_to(self.profile)}", previous[0])
+
+        lock.rename(self.profile.parent / "retained-lock")
+        self.assertFalse(audit._repeat_temporary_git_only(
+            self.profile, before, self.snapshot([self.profile]), previous))
+        lock.touch()
+        after = self.snapshot([self.profile])
+        lock_key = f"{self.profile.name}/{lock.relative_to(self.profile)}"
+        self.assertEqual(before[lock_key], after[lock_key], "replacement retains the same raw bytes")
+        self.assertFalse(audit._repeat_temporary_git_only(
+            self.profile, before, after, previous))
+
+    def test_sync_lock_must_be_empty_regular_and_exclusively_linked(self):
+        lock = self.root / "plugins.sync.lock"
+        lock.write_bytes(b"unexpected native state")
+        with self.assertRaises(ValueError):
+            audit._temporary_git_state(self.profile)
+        lock.unlink()
+        lock.mkdir()
+        with self.assertRaises(ValueError):
+            audit._temporary_git_state(self.profile)
+        lock.rmdir()
+        foreign = self.profile / "foreign-lock"
+        foreign.touch()
+        os.link(foreign, lock)
+        with self.assertRaisesRegex(ValueError, "exclusively linked"):
+            audit._temporary_git_state(self.profile)
+        lock.unlink()
+        try:
+            lock.symlink_to(foreign)
+        except OSError as error:
+            if os.name == "nt":
+                self.skipTest(f"Windows symlink privilege unavailable: {error}")
+            raise
+        with self.assertRaises(ValueError):
+            audit._temporary_git_state(self.profile)
+
+    def test_new_sync_lock_is_not_a_qualified_repeat_addition(self):
+        self.repository()
+        previous = audit._temporary_git_state(self.profile)
+        before = self.snapshot([self.profile])
+        self.repository("git-Def456")
+        (self.root / "plugins.sync.lock").touch()
+        self.assertFalse(audit._repeat_temporary_git_only(
+            self.profile, before, self.snapshot([self.profile]), previous))
+
     def test_unrecognized_names_members_and_head_bytes_fail(self):
         for name in ("foreign", "git-abc", "git-1234567"):
             path = self.repository(name)

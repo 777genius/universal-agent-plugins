@@ -84,6 +84,8 @@ def _temporary_git_state(profile):
     Codex 0.153.4 core-plugins/src/git_policy.rs creates this exact skeleton
     under CODEX_HOME/.tmp. Windows can retain HEAD after native process exit;
     empty objects/refs may already have been removed by TempDir cleanup.
+    startup_sync.rs also retains an empty plugins.sync.lock in the same root.
+    Keep that file's identity, but never qualify it as an allowed repeat delta.
     """
     root = profile / ".tmp"
     try:
@@ -102,6 +104,11 @@ def _temporary_git_state(profile):
     names = _bounded_member_names(root, TEMPORARY_GIT_LIMIT)
     layouts = {}
     for name in names:
+        if name == "plugins.sync.lock":
+            lock = root / name
+            identities[lock] = _FILES["identity"](lock.lstat())
+            _regular_bytes(lock, 0)
+            continue
         if re.fullmatch(r"git-[A-Za-z0-9]{6}", name) is None:
             raise ValueError("Codex temporary Git directory name is not qualified")
         repository = root / name
@@ -129,7 +136,7 @@ def _temporary_git_state(profile):
         if _bounded_member_names(path, 3) != members:
             raise ValueError("Codex temporary Git members changed during inspection")
     for path, previous in identities.items():
-        if path.name == "HEAD":
+        if path.name in ("HEAD", "plugins.sync.lock"):
             current = _FILES["identity"](path.lstat())
         else:
             info = _real_directory(path)
