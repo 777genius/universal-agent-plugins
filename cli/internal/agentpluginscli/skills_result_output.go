@@ -98,7 +98,7 @@ func renderHumanSkillsItem(writer io.Writer, theme terminaltheme.Theme, item Ski
 	if _, err := fmt.Fprintf(writer, "  %s %s — %s\n", theme.Text(role, mark), prompt.SafeText(item.Alias), theme.Text(role, label)); err != nil {
 		return err
 	}
-	if item.Reason != "" {
+	if item.Reason != "" && item.failure == nil {
 		_, err := fmt.Fprintln(writer, "    "+prompt.SafeText(item.Reason))
 		return err
 	}

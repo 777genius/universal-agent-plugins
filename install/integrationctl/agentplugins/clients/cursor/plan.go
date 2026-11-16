@@ -2,7 +2,9 @@ package cursor
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -38,6 +40,9 @@ func (*Adapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *doma
 		shared.QualifyRawSkillInstallationAuthentication(in.Envelope, plan)
 		shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, shared.OnlyNativeComponents(plan.Components))
 		plan.Activation = domain.ActivationPrepared
+		if names, _ := cursorSelectedMCP(plan.Components); in.Intent == domain.InstallIntentAutomatic && len(names) > 0 {
+			plan.Warnings = shared.AppendUnique(plan.Warnings, fmt.Sprintf("Installation may approve the selected Cursor MCP servers %s for project %q. Existing disablement is preserved; these approvals remain after removal.", strings.Join(names, ", "), in.TargetContext.ProjectRoot))
+		}
 		plan.UserActions = shared.AppendUnique(plan.UserActions, "project skill directories and MCP entries can be configured automatically; discovery, enablement, approval and policy require observation in Cursor")
 		return nil
 	}

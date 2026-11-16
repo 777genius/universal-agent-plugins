@@ -25,11 +25,9 @@ func finishClaudeMarketplaceTrust(env clients.Env, request domain.ActivationRequ
 			return outcome, nil
 		}
 		changed, err := grantClaudeProjectTrust(env, request)
+		observeClaudeSetupEffect(&outcome.NativeEffect, changed, err)
 		if err != nil {
 			return shared.FailedActivation(outcome, "retry exact Claude Code project trust", err)
-		}
-		if changed {
-			outcome.NativeEffect = domain.NativeEffectCommitted
 		}
 	}
 	outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled

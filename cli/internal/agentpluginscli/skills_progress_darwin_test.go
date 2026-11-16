@@ -24,7 +24,7 @@ func TestSinglePluginUsesSharedLiveProgressPTY(t *testing.T) {
 	if err := unix.IoctlSetWinsize(int(slave.Fd()), unix.TIOCSWINSZ, &unix.Winsize{Col: 80, Row: 24}); err != nil {
 		t.Fatal(err)
 	}
-	board := startGroupProgressBoard(App{Terminal: true, ErrorOutput: slave}, &options{format: "human"}, []domain.DetectedClient{{ClientID: domain.ClientCodex, DisplayName: "Codex"}})
+	board := startGroupProgressBoard(App{Terminal: true, Input: slave, Output: slave, ErrorOutput: slave}, &options{format: "human"}, []domain.DetectedClient{{ClientID: domain.ClientCodex, DisplayName: "Codex"}})
 	if board == nil {
 		t.Fatal("single selected plugin agent lost the shared board")
 	}
@@ -95,7 +95,7 @@ func TestSkillsProgressPTYBindingCountsAndResize(t *testing.T) {
 		{Alias: "canvas-design", ClientID: "codex", Action: "install"}, {Alias: "trust-skill", ClientID: "codex", Action: "install"},
 		{Alias: "canvas-design", ClientID: "claude", Action: "install"}, {Alias: "trust-skill", ClientID: "claude", Action: "install"},
 	}
-	progress := startSkillsProgressBoard(App{Terminal: true, ErrorOutput: slave}, &options{format: "human"}, actions)
+	progress := startSkillsProgressBoard(App{Terminal: true, Input: slave, Output: slave, ErrorOutput: slave}, &options{format: "human"}, actions)
 	finished := false
 	t.Cleanup(func() {
 		if !finished {

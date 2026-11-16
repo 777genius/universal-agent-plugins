@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -116,7 +117,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		if adapter.previewPaths != nil {
 			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
-		adapter.recordDependencyComponents(action, plan)
+		adapter.recordDependencyReview(action, plan)
 
 		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
 			updates[action.Alias] = prepared
@@ -176,7 +177,19 @@ func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context
 	return ensureSelectedProjectVersions(ctx, adapter.app, adapter.opts, targets, adapter.detected)
 }
 
-func (adapter *dependencyInstaller) recordDependencyComponents(action dependencyAction, plan installer.Plan) {
+func (adapter *dependencyInstaller) recordDependencyReview(action dependencyAction, plan installer.Plan) {
+	if adapter.previewWarnings != nil {
+		for _, warning := range plan.Delivery.Warnings {
+			switch warning {
+			case catalogSchemaOnlyWarning, catalogNotTestedWarning, catalogRuntimeNotTestedWarning:
+				continue
+			}
+			message := reviewWarningText(warning)
+			if !slices.Contains(*adapter.previewWarnings, message) {
+				*adapter.previewWarnings = append(*adapter.previewWarnings, message)
+			}
+		}
+	}
 	opts := adapter.opts
 	if opts.dependencyComponents == nil {
 		opts.dependencyComponents = map[string][]domain.ComponentDecision{}
@@ -212,7 +225,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 	}
 	if adapter.beforeApply != nil {
 		if err := adapter.beforeApply(); err != nil {
-			return nil, err
+			return nil, environment.Stop(err)
 		}
 	}
 	if action.Authority != nil {
@@ -271,7 +284,7 @@ func dependencyNativeConfigRoot(app App, client domain.DetectedClient) string {
 func (adapter *dependencyInstaller) Apply(ctx context.Context, prepared *installer.PreparedOperation) (installer.Result, error) {
 	if adapter.beforeApply != nil {
 		if err := adapter.beforeApply(); err != nil {
-			return installer.Result{}, err
+			return installer.Result{}, environment.Stop(err)
 		}
 	}
 	if adapter.onApply != nil {

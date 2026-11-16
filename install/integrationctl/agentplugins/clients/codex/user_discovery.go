@@ -65,7 +65,8 @@ func exchangeCodexUserDiscovery(stdin io.Writer, stdout io.Reader, request domai
 	reader := bufio.NewScanner(io.LimitReader(stdout, (4<<20)+1))
 	reader.Buffer(make([]byte, 4096), 2<<20)
 	writer := json.NewEncoder(stdin)
-	if err := initializeCodexDiscovery(reader, writer, request.Client.ConfigRoot); err != nil {
+	nativeAgent, err := initializeCodexDiscovery(reader, writer, request.Client.ConfigRoot)
+	if err != nil {
 		return err
 	}
 	if err := writer.Encode(map[string]any{"id": 3, "method": "skills/list", "params": map[string]any{"cwds": []string{request.Delivery.ActivePath}, "forceReload": true}}); err != nil {
@@ -80,7 +81,7 @@ func exchangeCodexUserDiscovery(stdin io.Writer, stdout io.Reader, request domai
 	if err := verifyCodexUserSkills(listing, request, marketplace, pluginID, version); err != nil {
 		return err
 	}
-	return verifyCodexNativeMCP(reader, writer, request.Plan, pluginID)
+	return verifyCodexNativeMCP(reader, writer, request.Plan, pluginID, nativeAgent)
 }
 
 func verifyCodexUserSkills(listing map[string]any, request domain.ActivationRequest, marketplace, pluginID, version string) error {

@@ -36,7 +36,7 @@ func activateCodexProject(ctx context.Context, env clients.Env, request domain.A
 		return outcome, err
 	}
 	outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
-	if !request.VerifyOnly && request.Plan.InstallIntent == domain.InstallIntentAutomatic {
+	if !request.VerifyOnly && request.Plan.InstallIntent == domain.InstallIntentAutomatic && !codexProjectSkillsOnly(request.Plan) {
 		if err := grantCodexProjectTrust(env, request); err != nil {
 			return pendingCodexProjectTrust(outcome, err)
 		}

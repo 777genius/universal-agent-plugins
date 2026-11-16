@@ -68,6 +68,7 @@ func TestLocalMCPObservationRequiresExactConnectedServer(t *testing.T) {
 						warnings = append(warnings, "authentication_not_catalog_verified")
 					}
 					request := domain.ActivationRequest{Client: domain.DetectedClient{ExecutablePath: "/TEST/opencode", ConfigRoot: root}, Plan: domain.DeliveryPlan{Authentication: auth, Warnings: warnings, Scope: scope, TargetContext: target, NativeRegistryRoot: root, Components: []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "probe"}}}, Delivery: domain.StagedDelivery{ActivePath: active}}
+					qualifyOpenCodeObservation(&request, "1.18.34")
 					runner := skillObservationRunner(func(_ context.Context, c legacyports.Command) (legacyports.CommandResult, error) {
 						if c.Dir != root || len(c.Argv) != 3 || c.StdoutLimitBytes == 0 {
 							t.Fatalf("unbounded native probe: %+v", c)

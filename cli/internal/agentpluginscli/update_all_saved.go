@@ -199,7 +199,7 @@ func (session *updateAllSession) applySaved() error {
 	session.recordSavedBindings(applied)
 	if applyErr != nil {
 		session.result.Status = "partial_failure"
-		if !applied.Published && len(applied.Results) == 0 {
+		if !applied.Published && len(applied.Results()) == 0 {
 			session.result.Status = "apply_failed"
 		}
 		// Publication itself is a durable effect even if every binding was unattempted.
@@ -220,14 +220,13 @@ func (session *updateAllSession) applySaved() error {
 }
 
 func (session *updateAllSession) recordSavedBindings(applied dependencyApplicationResult) {
-	cursor := 0
-	for _, action := range session.saved.request.prepared {
+	for index, action := range session.saved.request.prepared {
 		row := session.saved.rows[action.Alias]
 		item := &session.result.Installations[row]
 		if action.Action == environment.ActionUnchanged {
 			continue
 		}
-		if cursor >= len(applied.Results) {
+		if index >= len(applied.Outcomes) || applied.Outcomes[index].Status == environment.BindingNotAttempted {
 			if item.Status == "updated" {
 				item.Status = "apply_failed"
 				item.Reason = "saved dependency was only partially materialized; inspect binding receipts and run deps sync or recovery"
@@ -237,9 +236,7 @@ func (session *updateAllSession) recordSavedBindings(applied dependencyApplicati
 			}
 			continue
 		}
-		result := applied.Results[cursor]
-		cursor++
-		if result.Outcome != installer.OutcomeCompleted && result.Outcome != installer.OutcomeUnchanged {
+		if !applied.Outcomes[index].Ok() {
 			item.Status = "apply_failed"
 			item.Reason = "saved intent may have been published; inspect binding receipts and run deps sync or recovery"
 		} else if item.Status != "apply_failed" {

@@ -34,6 +34,9 @@ func adapterError(err error) error {
 }
 
 func selectionRequest(r prompt.TargetSelectionRequest, title string) (installerui.MultiSelectRequest, error) {
+	if r.Title != "" {
+		title = r.Title
+	}
 	// The typed legacy port permits repeated defaults; the opt-in UI is strict.
 	seen := make(map[domain.ClientID]bool, len(r.DefaultIDs))
 	defaults := make([]domain.ClientID, 0, len(r.DefaultIDs))

@@ -208,35 +208,66 @@ func syncAction(pkg LockedPackage, observed BindingObservation) (DesiredAction, 
 	return ActionUpdate, "pinned package digest differs"
 }
 
-// ApplySync prepares each binding afresh after the previous commit. It stops
-// on nonterminal outcomes and retains the actual SDK result for partial retry.
-func (coordinator Coordinator) ApplySync(ctx context.Context, plan PreparedSync, confirmed bool) ([]installer.Result, error) {
+// ApplySync prepares each binding afresh after the previous commit and returns
+// one outcome per planned binding. A failure scoped to one binding (an agent
+// that is missing, refuses its destination or whose native command fails) does
+// not stop the others. Failures that make later work unsafe (see stopsSync) end
+// the sync and mark the remaining bindings not attempted. The error is a
+// *SyncError whenever any binding did not succeed.
+func (coordinator Coordinator) ApplySync(ctx context.Context, plan PreparedSync, confirmed bool) ([]BindingOutcome, error) {
 	if !confirmed {
 		return nil, errors.New("sync requires explicit confirmation")
 	}
-	var results []installer.Result
+	// A plan that lost its action cannot be applied partially.
 	for _, item := range plan.Bindings {
 		if item.Action == "" {
-			return results, ErrSourceChange
-		}
-		if item.Action == ActionUnchanged {
-			continue
-		}
-		prepared, err := coordinator.Mutator.Prepare(ctx, item)
-		if err != nil {
-			return results, fmt.Errorf("prepare %s/%s: %w", item.Alias, item.ClientID, err)
-		}
-		result, err := coordinator.Mutator.Apply(ctx, prepared)
-		_ = prepared.Close()
-		results = append(results, result)
-		if err != nil {
-			return results, err
-		}
-		if result.Outcome != installer.OutcomeCompleted && result.Outcome != installer.OutcomeUnchanged {
-			return results, fmt.Errorf("%s/%s: %s: %s", item.Alias, item.ClientID, result.Outcome, result.Reason)
+			return nil, ErrSourceChange
 		}
 	}
-	return results, nil
+	outcomes := make([]BindingOutcome, 0, len(plan.Bindings))
+	var stopped error
+	stoppedAt := -1
+	for _, item := range plan.Bindings {
+		switch {
+		case item.Action == ActionUnchanged:
+			outcomes = append(outcomes, BindingOutcome{Binding: item, Status: BindingUnchanged})
+		case stopped != nil:
+			outcomes = append(outcomes, BindingOutcome{Binding: item, Status: BindingNotAttempted, Err: stopped})
+		default:
+			outcome := coordinator.applyBinding(ctx, item)
+			if outcome.Status == BindingFailed && stopsSync(ctx, outcome.Err, outcome.Result) {
+				stopped, stoppedAt = outcome.Err, len(outcomes)
+			}
+			outcomes = append(outcomes, outcome)
+		}
+	}
+	for _, outcome := range outcomes {
+		if outcome.Status == BindingFailed || outcome.Status == BindingNotAttempted {
+			return outcomes, &SyncError{Outcomes: outcomes, Stopped: stopped, stoppedAt: stoppedAt}
+		}
+	}
+	return outcomes, nil
+}
+
+func (coordinator Coordinator) applyBinding(ctx context.Context, item PreparedBinding) BindingOutcome {
+	prepared, err := coordinator.Mutator.Prepare(ctx, item)
+	if err != nil {
+		return BindingOutcome{Binding: item, Status: BindingFailed, Err: fmt.Errorf("prepare %s/%s: %w", item.Alias, item.ClientID, err)}
+	}
+	result, err := coordinator.Mutator.Apply(ctx, prepared)
+	_ = prepared.Close()
+	outcome := BindingOutcome{Binding: item, Result: &result}
+	switch {
+	case err != nil:
+		outcome.Status, outcome.Err = BindingFailed, err
+	case result.Outcome == installer.OutcomeUnchanged:
+		outcome.Status = BindingUnchanged
+	case result.Outcome != installer.OutcomeCompleted:
+		outcome.Status, outcome.Err = BindingFailed, fmt.Errorf("%s/%s: %s: %s", item.Alias, item.ClientID, result.Outcome, result.Reason)
+	default:
+		outcome.Status = BindingApplied
+	}
+	return outcome
 }
 
 func bindingAuthority(environmentID, alias, target, source string, action DesiredAction, observed BindingObservation) *domain.EnvironmentAuthority {

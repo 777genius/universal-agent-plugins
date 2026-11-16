@@ -72,6 +72,7 @@ async function launchers(f) {
     };
     l.load(postinstall ? "lib/install.js" : `bin/${p}.js`, postinstall);
     await new Promise(resolve => setImmediate(resolve));
+    for (const signal of ["SIGINT", "SIGTERM"]) assert.equal(proc.listenerCount(signal), 0, "launcher retained an acquisition signal handler");
     assert.equal(calls.filter(c => c[0] === "runtime").length, 1);
     const spawned = calls.find(c => c[0] === "spawn");
     if (failed || postinstall) assert.equal(spawned, undefined);

@@ -41,7 +41,12 @@ func (app App) PrepareSkills(ctx context.Context, input SkillsBatchRequest) (pla
 		return nil, err
 	}
 	candidate.targets = targets
-	return candidate.prepare(ctx, app, preview, cleanup)
+	prepared, err := candidate.prepare(ctx, app, preview, cleanup)
+	if err != nil {
+		return nil, err
+	}
+	prepared.selections = append([]SkillsSelection(nil), input.Selections...)
+	return prepared, nil
 }
 
 type skillsBatchCandidate struct {

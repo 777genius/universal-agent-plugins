@@ -62,6 +62,15 @@ PINS = {
         "lintai": ("github", "777genius/lintai", "v0.1.3", "lintai-v0.1.3-x86_64-pc-windows-msvc.zip", "sha256:2f61f6a83a160afa3feed9ea1722b82d0d938ebff865a4e20d39b5f55270c911", "lintai.exe"),
     },
 }
+# Current-source Codex needs the selected-server MCP API qualified in 0.162.0.
+# Keep literal PINS above unchanged for released/draft evidence and its verifier.
+CODEX_SOURCE_PINS = {
+    "linux-amd64": ("github", "openai/codex", "rust-v0.162.0", "codex-x86_64-unknown-linux-musl.tar.gz", "sha256:8daf67f6261161aa5939d8d42a516032d760406216779d7ce6040f242140ff73", "codex-x86_64-unknown-linux-musl"),
+    "linux-arm64": ("github", "openai/codex", "rust-v0.162.0", "codex-aarch64-unknown-linux-musl.tar.gz", "sha256:15162a9b59edf8e512b27414ec0b7db22e6424a1262b0eee8666643e0d295c2f", "codex-aarch64-unknown-linux-musl"),
+    "darwin-arm64": ("github", "openai/codex", "rust-v0.162.0", "codex-aarch64-apple-darwin.tar.gz", "sha256:98e9413a1bd167ae573723939ff178e6d44f1bb21d5cda960dbeb2fa65f49104", "codex-aarch64-apple-darwin"),
+    "windows-amd64": ("github", "openai/codex", "rust-v0.162.0", "codex-x86_64-pc-windows-msvc.exe.zip", "sha256:46558d62bd36d0a87c8db11d440c05d2167e1b14e1d8525c6391ea78b50d8cfa", "codex-x86_64-pc-windows-msvc.exe"),
+}
+
 # Current-source V2 qualification uses official GitHub release assets. Retain
 # the independently pinned V1 PINS above as a separate regression lane.
 OPENCODE_V2_PINS = {
@@ -73,9 +82,22 @@ OPENCODE_V2_PINS = {
 
 
 def selected_pin(args, name):
+    if name == "codex" and not (getattr(args, "release_tag", None)
+            or getattr(args, "release_state", "public") != "public"
+            or getattr(args, "prepared_input", None) or getattr(args, "prepare_only", False)):
+        return CODEX_SOURCE_PINS[args.target]
     if name == "opencode" and getattr(args, "opencode_generation", "v1") == "v2":
         return OPENCODE_V2_PINS[args.target]
     return PINS[args.target][name]
+
+
+def expected_client_version(args):
+    version = selected_pin(args, args.client)[2]
+    if args.client == "codex":
+        return version.removeprefix("rust-v")
+    if args.client == "claude":
+        return version + " (Claude Code)"
+    return version.removeprefix("v")
 
 
 # Exact, anchored selections: every selected test is required and every
@@ -612,7 +634,7 @@ def main():
             env[prefix + "_PROJECT_NATIVE_E2E"] = "1"
         env[prefix + "_BIN"] = str(client)
         env[prefix + "_SHA256"] = client_evidence["binary_sha256"]
-        env[prefix + "_VERSION"] = "2.2.5" if args.client == "opencode" and args.opencode_generation == "v2" else {"codex": "0.153.4", "claude": "2.1.263 (Claude Code)", "opencode": "1.18.34"}[args.client]
+        env[prefix + "_VERSION"] = expected_client_version(args)
         if dual_peer is not None:
             env["AGENTPLUGINS_DUAL_CODEX_CLAUDE_NATIVE_E2E"] = "1"
             env["AGENTPLUGINS_CLAUDE_BIN"] = str(dual_peer[0])

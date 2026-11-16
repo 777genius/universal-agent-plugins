@@ -11,11 +11,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-// Cold native profiles can start a Git HTTPS marketplace lookup. Allow that
-// observed helper to finish naturally within the caller's required deadline;
-// the cap prevents an unusually large caller deadline extending settlement.
-const completionExitGrace = 30 * time.Second
-
 // RunDuplexToCompletion exchanges bounded input/output with a trusted native
 // command, then closes stdin and requires a successful natural exit within the
 // caller's deadline. The deadline covers both the exchange and native shutdown.
@@ -31,11 +26,18 @@ func (OS) RunDuplexToCompletion(ctx context.Context, command ports.Command, exch
 	pipes.exitGrace = time.Until(deadline)
 	var settlementErr error
 	pipes.containment = func(cmd *exec.Cmd) (duplexCommandContainment, error) {
-		containment, err := newCompletionCommandContainment(cmd, completionExitGrace)
+		// Linux settles owned helpers inside the supervisor after the native
+		// leader exits. Give that natural settlement the caller's remaining
+		// budget too; forced cleanup retains its separate processReapTimeout.
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, context.DeadlineExceeded
+		}
+		containment, err := newCompletionCommandContainment(cmd, remaining)
 		if err != nil {
 			return nil, err
 		}
-		return &completionContainment{commandContainment: containment, ctx: ctx, settlementErr: &settlementErr}, nil
+		return &completionContainment{commandContainment: containment, ctx: ctx, deadline: deadline, settlementErr: &settlementErr}, nil
 	}
 	err := runDuplexMode(ctx, command, exchange, pipes, false)
 	return errors.Join(err, settlementErr)
@@ -48,13 +50,19 @@ func (OS) RunDuplexToCompletion(ctx context.Context, command ports.Command, exch
 type completionContainment struct {
 	*commandContainment
 	ctx           context.Context
+	deadline      time.Time
 	settlementErr *error
 }
 
 func (containment *completionContainment) terminate() terminationResult {
 	var settleErr error
 	if stopped, err := containment.exited(); stopped && err == nil && containment.ctx.Err() == nil {
-		_, settleErr = containment.settleNaturalExit(containment.ctx, completionExitGrace)
+		remaining := time.Until(containment.deadline)
+		if remaining <= 0 {
+			settleErr = context.DeadlineExceeded
+		} else {
+			_, settleErr = containment.settleNaturalExit(containment.ctx, remaining)
+		}
 	}
 	termination := containment.commandContainment.terminate()
 	*containment.settlementErr = errors.Join(settleErr, containment.ctx.Err())

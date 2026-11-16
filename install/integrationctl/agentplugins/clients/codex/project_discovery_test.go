@@ -76,7 +76,7 @@ func projectDiscoveryFixture(t *testing.T) (clients.Env, domain.ActivationReques
 func projectDiscoveryResponses(t *testing.T, request domain.ActivationRequest, scenario string) string {
 	t.Helper()
 	root := request.Plan.NativeRegistryRoot
-	initialize := map[string]any{"id": 1, "result": map[string]any{"userAgent": "codex-cli/test", "codexHome": request.Client.ConfigRoot}}
+	initialize := map[string]any{"id": 1, "result": map[string]any{"userAgent": "agentplugins/0.153.4", "codexHome": request.Client.ConfigRoot}}
 	skills := []any{}
 	for _, component := range request.Plan.Components {
 		skills = append(skills, map[string]any{"name": component.Name, "path": filepath.Join(root, ".agents", "skills", component.Name, "SKILL.md"), "scope": "repo", "enabled": true, "pluginId": nil})
@@ -110,9 +110,6 @@ func projectDiscoveryResponses(t *testing.T, request domain.ActivationRequest, s
 	if err := encoder.Encode(initialize); err != nil {
 		t.Fatal(err)
 	}
-	if err := encoder.Encode(map[string]any{"id": 2, "result": map[string]any{"config": map[string]any{"projects": map[string]any{root: map[string]any{"trust_level": "trusted"}}}}}); err != nil {
-		t.Fatal(err)
-	}
 	if err := encoder.Encode(map[string]any{"id": 3, "result": map[string]any{"data": []any{group}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +141,7 @@ func TestCodexProjectSkillsBecomeActiveOnlyAfterNativeDiscovery(t *testing.T) {
 				if runner.command.Dir != request.Plan.NativeRegistryRoot || strings.Join(runner.command.Argv, " ") != request.BackendExecutable+" app-server" {
 					t.Fatalf("native observation used another context: %+v", runner.command)
 				}
-				if !strings.Contains(runner.written.String(), `"method":"skills/list"`) || strings.Contains(runner.written.String(), "thread/") || strings.Contains(runner.written.String(), "turn/") {
+				if !strings.Contains(runner.written.String(), `"method":"skills/list"`) || strings.Contains(runner.written.String(), "thread/") || strings.Contains(runner.written.String(), "turn/") || strings.Contains(runner.written.String(), "config/read") || strings.Contains(runner.written.String(), "mcpServerStatus/list") {
 					t.Fatalf("unexpected native protocol: %s", &runner.written)
 				}
 			} else if outcome.Activation != domain.ActivationPrepared || len(outcome.LocalActions) == 0 {
@@ -218,5 +215,32 @@ func TestCodexDiscoveryPathMatchesOnlySelectedNativeObjects(t *testing.T) {
 	missing := filepath.Join(root, "missing")
 	if codexDiscoveryPathMatches(strings.ToUpper(missing), missing) {
 		t.Fatal("a Windows spelling alias without an existing native object was accepted")
+	}
+}
+
+func TestCodexProjectSkillsDiscoverWithoutPersistentTrust(t *testing.T) {
+	for _, version := range []string{"0.153.4", "0.162.0"} {
+		t.Run(version, func(t *testing.T) {
+			env, request, runner := projectDiscoveryFixture(t)
+			runner.response = strings.Replace(runner.response, "agentplugins/0.153.4", "agentplugins/"+version, 1)
+			outcome, err := New().Activate(t.Context(), env, request)
+			if err != nil || outcome.Activation != domain.ActivationActive || outcome.ActivationAttested {
+				t.Fatalf("exact Skills discovery did not complete: %+v, %v", outcome, err)
+			}
+			if _, err := os.Lstat(filepath.Join(request.Client.ConfigRoot, "config.toml")); !os.IsNotExist(err) {
+				t.Fatalf("skills-only installation changed persistent project trust: %v", err)
+			}
+			decoder := json.NewDecoder(&runner.written)
+			for _, method := range []string{"initialize", "initialized", "skills/list"} {
+				var message struct{ Method string }
+				if err := decoder.Decode(&message); err != nil || message.Method != method {
+					t.Fatalf("unexpected skills-only protocol: %+v, %v", message, err)
+				}
+			}
+			var extra any
+			if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+				t.Fatalf("skills-only discovery requested unrelated native work: %v, %v", extra, err)
+			}
+		})
 	}
 }

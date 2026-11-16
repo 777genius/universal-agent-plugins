@@ -23,7 +23,7 @@ func TestManagementOutcomePreservesPublicManualInstructions(t *testing.T) {
 		Outcome: installer.OutcomeCompleted, Mutated: true, ManualActions: []string{restart, cleanup},
 		Reason: "private-provider-stderr", Delivery: &installer.DeliveryPlan{LocalActions: []string{"private-local-command"}},
 	}
-	out := prepared.outcome(dependencyApplicationResult{Results: []installer.Result{native}}, nil)
+	out := prepared.outcome(dependencyApplicationResult{Outcomes: []environment.BindingOutcome{{Status: environment.BindingApplied, Result: &native}}}, nil)
 	want := []management.NextAction{
 		{Kind: "manual", Reason: restart, Alias: "demo", TargetId: "profile-opencode"},
 		{Kind: "manual", Reason: cleanup, Alias: "demo", TargetId: "profile-opencode"},
@@ -35,7 +35,7 @@ func TestManagementOutcomePreservesPublicManualInstructions(t *testing.T) {
 	// Native errors, diagnostic reasons and operational commands remain private,
 	// including when an operation returns a known partial result.
 	native.NextActions = []installer.NextAction{{Kind: "activate", Reason: "private-native-next-reason"}}
-	partial := prepared.outcome(dependencyApplicationResult{Results: []installer.Result{native}}, errors.New("private-provider-error"))
+	partial := prepared.outcome(dependencyApplicationResult{Outcomes: []environment.BindingOutcome{{Status: environment.BindingApplied, Result: &native}}}, errors.New("private-provider-error"))
 	for _, result := range []management.Outcome{out, partial} {
 		body, err := json.Marshal(result)
 		if err != nil {

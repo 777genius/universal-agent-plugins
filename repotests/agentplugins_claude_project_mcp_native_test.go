@@ -343,8 +343,7 @@ func TestAgentpluginsClaudeNativeTrustedProjectMCPCall(t *testing.T) {
 	f.foreign[profilePath] = nativeSHA(t, profilePath)
 	evidence["native_profile_baseline_refreshed_before_remove"] = true
 
-	c.succeed(t, "trusted-foreign-mcp-remove", "remove", commandsPluginName)
-	f.requireForeign(t)
+	claudeTrustedRemoveWithProfileDiagnostic(t, f, c, profile)
 	claudeProjectRunScripted(t, f, f.project, true)
 	afterRemoval, err := os.ReadFile(events)
 	if err != nil || len(afterRemoval) > 3072 {

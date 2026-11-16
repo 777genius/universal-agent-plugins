@@ -9,7 +9,7 @@ const actionLabels: Record<Plan['actions'][number]['action'], string> = {
   install: 'Install', update: 'Update', unchanged: 'Unchanged', repair: 'Repair', refresh_projection: 'Refresh setup',
 };
 function Diagnostics({ items }: { items: Diagnostic[] }) {
-  return <>{items.map((item, index) => <div key={`${item.code}:${index}`} className={`notice ${item.severity === 'error' ? 'error' : ''}`}><strong>{item.code === 'NATIVE_SETUP_REQUIRED' ? 'Agent setup required' : item.code}</strong> {item.message}{item.path && <small>{item.path}</small>}</div>)}</>;
+  return <>{items.map((item, index) => <div key={`${item.code}:${index}`} className={`notice ${item.severity === 'error' ? 'error' : ''}`}><strong>{item.code === 'NATIVE_SETUP_REQUIRED' ? 'Agent setup required' : item.code === 'INSTALLER_WARNING' ? 'Installation note' : item.code}</strong> {item.message}{item.path && <small>{item.path}</small>}</div>)}</>;
 }
 export function Targets({ controller, selected, setSelected, locked }: {
   controller: InstallationController; selected: string[]; setSelected: (value: string[]) => void; locked: boolean;

@@ -2,6 +2,7 @@ package cursor
 
 import (
 	"context"
+	"errors"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -10,7 +11,8 @@ import (
 
 func completeCursorProjectMCP(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
 	observed, observationErr := observeCursorProjectMCP(ctx, env, request)
-	if domain.IsUnclosedClientProbe(observationErr) {
+	var effect *shared.NativeEffectError
+	if domain.IsUnclosedClientProbe(observationErr) || errors.As(observationErr, &effect) && effect.Effect == domain.NativeEffectUncertain {
 		outcome.NativeEffect = domain.NativeEffectUncertain
 		return outcome, observationErr
 	}

@@ -52,6 +52,7 @@ func nativeProbeFailureFixture(t *testing.T) (domain.ActivationRequest, clients.
 		{ObjectID: "opencode-mcp:local", Kind: OpenCodeMCPObjectKind, LogicalName: "local", Path: receipt.Path, ManagedDigest: receipt.Digest, ProtectionClass: "managed"},
 	}
 	request := domain.ActivationRequest{VerifyOnly: true, Client: domain.DetectedClient{ClientID: domain.ClientOpenCode, ExecutablePath: "/TEST/opencode", ConfigRoot: filepath.Join(root, "user")}, Plan: domain.DeliveryPlan{ClientID: domain.ClientOpenCode, Scope: domain.ScopeProject, InstallIntent: domain.InstallIntentAutomatic, NativeRegistryRoot: root, TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: root, UserConfigRoot: filepath.Join(root, "user")}, Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "probe"}, {Kind: domain.ComponentMCPServer, Name: "local"}}}, Delivery: domain.StagedDelivery{ClientID: domain.ClientOpenCode, ActivePath: active, NativeObjects: objects}, PreviousNativeObjects: objects}
+	qualifyOpenCodeObservation(&request, "1.18.34")
 	config, err := os.ReadFile(receipt.Path)
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +95,15 @@ func TestNativeProbeFailurePreservesProcessClosureEvidence(t *testing.T) {
 					}
 					return legacyports.CommandResult{Stdout: output}, nil
 				})
-				outcome, err := New().Activate(t.Context(), env, request)
+				var outcome domain.ActivationOutcome
+				var err error
+				if phase == "mcp list" {
+					// MCP health belongs to the already confirmed acting path.
+					request.VerifyOnly = false
+					outcome, err = observeOpenCodeNativeComponents(t.Context(), env, request, domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectUnchanged})
+				} else {
+					outcome, err = New().Activate(t.Context(), env, request)
+				}
 				if calls != index+1 {
 					t.Fatalf("probe continued past failure: calls=%d want=%d err=%v", calls, index+1, err)
 				}

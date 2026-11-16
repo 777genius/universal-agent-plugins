@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,12 +19,29 @@ import (
 
 func TestOSRunnerFiniteProtocolRequiresCleanEOFExit(t *testing.T) {
 	if mode := os.Getenv("UAP_FINITE_PROTOCOL_HELPER"); mode != "" {
+		if mode == "delayed-helper-child" {
+			time.Sleep(3 * time.Second)
+			if err := os.WriteFile(os.Getenv("UAP_FINITE_HELPER_MARKER"), []byte("natural exit"), 0600); err != nil {
+				os.Exit(18)
+			}
+			os.Exit(0)
+		}
 		reader := bufio.NewReader(os.Stdin)
 		if line, err := reader.ReadString('\n'); err != nil || line != "inspect\n" {
 			os.Exit(19)
 		}
 		_, _ = fmt.Fprintln(os.Stdout, "observed")
 		_, _ = io.Copy(io.Discard, reader)
+		if mode == "delayed-helper" {
+			// The native leader exits first. Linux must allow its owned helper
+			// to finish after the ordinary two-second grace, within this call.
+			child := exec.CommandContext(context.Background(), os.Args[0], "-test.run=^TestOSRunnerFiniteProtocolRequiresCleanEOFExit$")
+			child.Env = append(os.Environ(), "UAP_FINITE_PROTOCOL_HELPER=delayed-helper-child")
+			if err := child.Start(); err != nil {
+				os.Exit(18)
+			}
+			os.Exit(0)
+		}
 		if mode == "delayed" {
 			// A finite native server can flush its state after stdin closes.
 			// This exceeds the ordinary duplex grace but remains within the
@@ -39,17 +59,22 @@ func TestOSRunnerFiniteProtocolRequiresCleanEOFExit(t *testing.T) {
 		os.Exit(0)
 	}
 	requireOrdinaryPreflight(t)
-	for _, mode := range []string{"success", "delayed", "nonzero", "stalled"} {
+	modes := []string{"success", "delayed", "nonzero", "stalled"}
+	if runtime.GOOS == "linux" {
+		modes = append(modes, "delayed-helper")
+	}
+	for _, mode := range modes {
 		t.Run(mode, func(t *testing.T) {
 			timeout := 8 * time.Second
 			if mode == "stalled" {
 				timeout = time.Second
 			}
+			marker := filepath.Join(t.TempDir(), "helper-natural-exit")
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			defer cancel()
 			err := (OS{}).RunDuplexToCompletion(ctx, ports.Command{
 				Argv: []string{os.Args[0], "-test.run=^TestOSRunnerFiniteProtocolRequiresCleanEOFExit$"},
-				Env:  append(os.Environ(), "UAP_FINITE_PROTOCOL_HELPER="+mode),
+				Env:  append(os.Environ(), "UAP_FINITE_PROTOCOL_HELPER="+mode, "UAP_FINITE_HELPER_MARKER="+marker),
 			}, func(input io.Writer, output io.Reader) error {
 				if _, err := io.WriteString(input, "inspect\n"); err != nil {
 					return err
@@ -63,9 +88,15 @@ func TestOSRunnerFiniteProtocolRequiresCleanEOFExit(t *testing.T) {
 				}
 				return nil
 			})
-			success := mode == "success" || mode == "delayed"
+			success := mode == "success" || mode == "delayed" || mode == "delayed-helper"
 			if success && err != nil || !success && err == nil {
 				t.Fatalf("mode=%s result=%v", mode, err)
+			}
+			if mode == "delayed-helper" {
+				body, readErr := os.ReadFile(marker)
+				if readErr != nil || string(body) != "natural exit" {
+					t.Fatalf("returned before the owned helper naturally exited: %q %v", body, readErr)
+				}
 			}
 			if mode == "nonzero" && !strings.Contains(err.Error(), "17") {
 				t.Fatalf("native exit status was hidden: %v", err)

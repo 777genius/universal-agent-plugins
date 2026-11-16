@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // UpdateProjectTrustFile records a confirmed installation's exact-project trust
@@ -46,7 +47,19 @@ func UpdateProjectTrustFileWithInitial(kernel nativeconfig.Kernel, path string, 
 		return false, fmt.Errorf("project trust mutation exceeds document limits")
 	}
 	if err := file.Apply(next); err != nil {
-		return false, errors.Join(err, file.Rollback())
+		return rollbackProjectTrustFile(file, err)
 	}
 	return true, nil
+}
+
+func rollbackProjectTrustFile(file *nativeconfig.ExactFile, cause error) (bool, error) {
+	err := errors.Join(cause, file.Rollback())
+	effect := domain.NativeEffectUncertain
+	switch file.Effect() {
+	case nativeconfig.FileUnchanged:
+		effect = domain.NativeEffectUnchanged
+	case nativeconfig.FileCommitted:
+		effect = domain.NativeEffectCommitted
+	}
+	return effect == domain.NativeEffectCommitted, &NativeEffectError{Effect: effect, Err: err}
 }

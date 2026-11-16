@@ -80,7 +80,9 @@ and Recover do not invoke Assess. Coarse `Config.Progress` phases are
 observational. `Config.IndependentActivations` explicitly enables concurrent
 external activation for distinct Claude/Codex user targets without selected
 native delivery. Other targets and the default configuration retain sequential
-activation. Preparation, host callbacks, state writes and result publication
+activation. A group with at least two such clients runs them concurrently with
+its serial remainder; results keep the caller's order. The `agentplugins` CLI
+opts in with `providers.Activator.Concurrent`; the zero value stays serial. Preparation, host callbacks, state writes and result publication
 remain coordinated. Per-client `ProgressEvent.Client` checkpoints report
 `external_started`, `external_completed` or `external_failed`; failures expose
 their finite stage rather than raw provider diagnostics.

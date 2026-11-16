@@ -18,7 +18,7 @@ import (
 
 // Native inventory is observed from the selected project without a prompt.
 // Unsupported components or remote transports cannot inherit stdio readiness.
-func observeGeminiProjectComponents(ctx context.Context, env clients.Env, request domain.ActivationRequest) (bool, error) {
+func observeGeminiProjectComponents(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome *domain.ActivationOutcome) (bool, error) {
 	if env.Runner == nil || len(request.Plan.Components) == 0 {
 		return false, nil
 	}
@@ -54,7 +54,18 @@ func observeGeminiProjectComponents(ctx context.Context, env clients.Env, reques
 			return false, nil
 		}
 	}
-	if observed, probeErr := observeGeminiProjectMCP(ctx, env, request); probeErr != nil || !observed {
+	expected, local := geminiExpectedMCPConnections(env, request)
+	if !local {
+		return false, nil
+	}
+	if request.VerifyOnly && len(expected) > 0 {
+		if err := VerifyGeminiNativeObjects(request.Plan.NativeRegistryRoot, request.Delivery.NativeObjects, false, env.NativeConfig); err != nil {
+			return false, err
+		}
+		outcome.UserActions = shared.AppendUnique(outcome.UserActions, geminiMCPConfirmationAction)
+		return false, nil
+	}
+	if observed, probeErr := observeGeminiProjectMCP(ctx, env, request, expected); probeErr != nil || !observed {
 		return false, probeErr
 	}
 	return VerifyGeminiNativeObjects(request.Plan.NativeRegistryRoot, request.Delivery.NativeObjects, false, env.NativeConfig) == nil, nil

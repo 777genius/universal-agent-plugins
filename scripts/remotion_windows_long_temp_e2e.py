@@ -102,8 +102,12 @@ def main():
                 if not row.get("codex_runtime_proof"):
                     raise RuntimeError("strict native Codex runtime proof is missing")
                 if row.get("status") != "passed":
+                    print(json.dumps({"case": label, "status": row.get("status"),
+                                      **audit.failed_case_diagnostics(row)}), flush=True)
                     failures.append(f"{label}: native E2E case did not PASS")
             except Exception as error:
+                print(json.dumps({"case": label, "status": "harness-error",
+                                  **audit.failed_case_diagnostics({"error": str(error)})}), flush=True)
                 failures.append(f"{label}: {type(error).__name__}")
                 evidence["results"].setdefault(label, {
                     "root_chars": len(str(root / "skill-24")),

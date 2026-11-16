@@ -29,13 +29,7 @@ func TestAgentpluginsClaudeNativeProjectPreparedLifecycle(t *testing.T) {
 	nativeAttempt(stages, "install", "add-installer.json")
 	added := c.succeed(t, "add", "add", c.pkg)
 	requireClaudeProjectActive(t, added)
-	profile, err := readClaudeTrustedProfile(filepath.Join(f.base.ConfigDir, ".claude.json"))
-	content, parseErr := claudeUntrustedProfileContent(profile, filepath.ToSlash(f.project))
-	projects, _ := content["projects"].(map[string]any)
-	selected, _ := projects[filepath.ToSlash(f.project)].(map[string]any)
-	if err != nil || parseErr != nil || selected["hasTrustDialogAccepted"] != true {
-		t.Fatal("confirmed installation did not grant exact selected-project trust", err)
-	}
+	requireClaudeSelectedProjectTrust(t, f)
 	if err := commandsPlanSelection(claudePreparedEnvelope(added), "echo", "wizard"); err != nil {
 		t.Fatal(err)
 	}
@@ -110,8 +104,20 @@ func TestAgentpluginsClaudeNativeProjectPreparedLifecycle(t *testing.T) {
 	}
 	claudeProjectMarketplaceObservation(t, f, "after-remove", managed, "", false)
 	claudeProjectInitializedSkills(t, f, "after-remove", []string{commandsPluginName + ":" + commandsGuideSkill, commandsPluginName + ":" + commandsSkill("wizard")}, false)
+	requireClaudeSelectedProjectTrust(t, f)
 	stages["remove"] = nativeStage{Status: "passed", Reason: "production removal withdrew the exact project registration and owned directory; native A/B inventories no longer contain it"}
 	f.requireForeign(t)
 	stages["project_scope_preservation"] = nativeStage{Status: "passed", Reason: "foreign user/cache/B bytes and A settings keys preserved; B disabled the A registration and refused its details"}
 	claudeNativeProjectRawSkills(t, f, stages)
+}
+
+func requireClaudeSelectedProjectTrust(t *testing.T, f *claudeProjectNativeFixture) {
+	t.Helper()
+	profile, err := readClaudeTrustedProfile(filepath.Join(f.base.ConfigDir, ".claude.json"))
+	content, parseErr := claudeUntrustedProfileContent(profile, filepath.ToSlash(f.project))
+	projects, _ := content["projects"].(map[string]any)
+	selected, _ := projects[filepath.ToSlash(f.project)].(map[string]any)
+	if err != nil || parseErr != nil || selected["hasTrustDialogAccepted"] != true {
+		t.Fatal("confirmed installation's exact project trust was not preserved", err, parseErr)
+	}
 }

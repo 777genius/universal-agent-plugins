@@ -2,6 +2,7 @@ package pluginkitairepo_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -59,12 +60,18 @@ func (f *claudeProjectNativeFixture) requireForeign(t *testing.T) {
 	}
 	for path, want := range f.foreign {
 		if got := nativeSHA(t, path); got != want {
-			if path == filepath.Join(f.base.ConfigDir, ".claude.json") {
-				t.Logf("foreign Claude profile SHA mismatch: expected=%s observed=%s", want, got)
-			}
-			t.Fatalf("foreign user/project configuration changed: %s", path)
+			t.Fatal(claudeForeignSnapshotChange(f.base.Root, path, want, got))
 		}
 	}
+}
+
+// Diagnostic only: the existing whole-file equality remains the failure gate.
+func claudeForeignSnapshotChange(root, path, before, after string) string {
+	relative, err := filepath.Rel(root, path)
+	if err != nil {
+		relative = path
+	}
+	return fmt.Sprintf("foreign user/project configuration changed: path=%.256q before_sha256=%.64s after_sha256=%.64s", filepath.ToSlash(relative), before, after)
 }
 
 func (f *claudeProjectNativeFixture) run(t *testing.T, label string, args ...string) (map[string]any, error) {
