@@ -638,11 +638,6 @@ type dependencyClaudeListing struct {
 func (r *dependencyClaudeListing) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	r.calls++
 	for _, value := range command.Env {
-		if strings.HasPrefix(value, "OPENCODE_CONFIG_DIR=") {
-			return fixtureOpenCodeNative(command)
-		}
-	}
-	for _, value := range command.Env {
 		if strings.HasPrefix(value, "CODEX_HOME=") {
 			args := command.Argv[1:]
 			if len(args) == 5 && args[0] == "plugin" && args[1] == "marketplace" && args[2] == "add" && args[4] == "--json" {

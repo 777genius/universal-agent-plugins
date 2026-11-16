@@ -225,6 +225,21 @@ jobs:
             LANG="${LANG:-C.UTF-8}" CI=true DO_NOT_TRACK=1 \
             python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
             | tee "$RUNNER_TEMP/vendor-proof/version.txt"
+      - name: Install real Docker CLI for Kiro plugin sources
+        if: ${{ matrix.target == 'kiro' && matrix.kind == 'plugin' }}
+        id: kiro-docker
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Docker Hub is in the frozen positive source set. Qualify only the
+          # real CLI prerequisite; no daemon or authenticated MCP is started.
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          brew install docker
+          audit_docker="$(brew --prefix docker)/bin/docker"
+          [[ "$audit_docker" == /* && -f "$audit_docker" && -x "$audit_docker" ]]
+          printf 'executable=%s\n' "$audit_docker" | tee "$RUNNER_TEMP/vendor-proof/docker-cli.txt"
+          "$audit_docker" --version | tee -a "$RUNNER_TEMP/vendor-proof/docker-cli.txt"
+          printf 'executable=%s\n' "$audit_docker" >> "$GITHUB_OUTPUT"
       - name: Build CLI under test (not the already-published binary)
         run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Run real acquisitions and report every source and outcome
@@ -232,6 +247,7 @@ jobs:
           AUDIT_KIND: ${{ matrix.kind }}
           AUDIT_TARGET: ${{ matrix.target }}
           AUDIT_VENDOR_OUTCOME: ${{ steps.vendor-install.outcome }}
+          AUDIT_DOCKER_EXECUTABLE: ${{ steps.kiro-docker.outputs.executable }}
         shell: bash
         run: |
           audit_node_bin=""
@@ -241,7 +257,15 @@ jobs:
             [[ "$audit_node" == /* && -x "$audit_node" ]]
             audit_node_bin="${audit_node%/*}:"
           fi
-          export PATH="${audit_node_bin}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          audit_docker_bin=""
+          if [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == plugin ]]; then
+            [[ "$AUDIT_DOCKER_EXECUTABLE" == /* && -f "$AUDIT_DOCKER_EXECUTABLE" && -x "$AUDIT_DOCKER_EXECUTABLE" ]]
+            audit_docker_bin="${AUDIT_DOCKER_EXECUTABLE%/*}:"
+          fi
+          export PATH="${audit_node_bin}${audit_docker_bin}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          if [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == plugin ]]; then
+            [[ "$(command -v docker)" == "$AUDIT_DOCKER_EXECUTABLE" ]]
+          fi
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \
             --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \

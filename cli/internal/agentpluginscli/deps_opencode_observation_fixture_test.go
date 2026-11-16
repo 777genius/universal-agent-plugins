@@ -29,7 +29,7 @@ func dependencyOpenCodeOutput(command legacyports.Command) ([]byte, error) {
 			selected = value
 		}
 	}
-	if selected == "" || selected != command.Dir || command.StdoutLimitBytes == 0 || len(command.Argv) != 3 {
+	if !filepath.IsAbs(selected) || selected != command.Dir || command.StdoutLimitBytes == 0 || len(command.Argv) != 3 {
 		return nil, fmt.Errorf("unexpected selected OpenCode fixture context: %v", command.Argv)
 	}
 	config, err := dependencyOpenCodeConfig(selected)

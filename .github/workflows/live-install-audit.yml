@@ -4,6 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
+      - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/codex_runtime_audit.py'
@@ -38,6 +39,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.11'
@@ -47,11 +51,7 @@ jobs:
           node-version: '24'
       - name: Install native Codex sandbox prerequisite
         shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends bubblewrap
-          bwrap --version
+        run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Install genuine native Codex CLI without model subscription
         id: native-install-pilot
         run: |
@@ -99,16 +99,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
       - name: Install native Codex sandbox prerequisite
         shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends bubblewrap
-          bwrap --version
+        run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Install the actual public npm installer and Codex
         id: published-install
         run: |
@@ -151,6 +150,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
+        with:
+          python-version: '3.12'
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.11'
@@ -161,11 +163,7 @@ jobs:
       - name: Install native Codex sandbox prerequisite
         if: ${{ matrix.target == 'codex' }}
         shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends bubblewrap
-          bwrap --version
+        run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Install real native client binary, no login or model call
         id: native-install
         env:
