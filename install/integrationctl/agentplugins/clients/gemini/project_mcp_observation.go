@@ -37,6 +37,21 @@ func geminiExpectedMCPConnections(env clients.Env, request domain.ActivationRequ
 	return expected, true
 }
 
+func reviewGeminiMissingTrust(env clients.Env, request domain.ActivationRequest, expected map[string]string, outcome *domain.ActivationOutcome) (bool, error) {
+	if !request.VerifyOnly || len(expected) == 0 {
+		return false, nil
+	}
+	missing, err := geminiProjectTrustMissing(env, request)
+	if err != nil || !missing {
+		return false, err
+	}
+	if err := VerifyGeminiNativeObjects(request.Plan.NativeRegistryRoot, request.Delivery.NativeObjects, false, env.NativeConfig); err != nil {
+		return false, err
+	}
+	outcome.UserActions = shared.AppendUnique(outcome.UserActions, geminiMCPConfirmationAction)
+	return true, nil
+}
+
 func observeGeminiProjectMCP(ctx context.Context, env clients.Env, request domain.ActivationRequest, expected map[string]string) (bool, error) {
 	if len(expected) == 0 {
 		return true, nil
