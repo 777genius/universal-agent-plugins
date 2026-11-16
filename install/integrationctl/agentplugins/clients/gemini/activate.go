@@ -35,7 +35,11 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request d
 		return domain.ActivationOutcome{}, err
 	}
 	automatic := request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.HasNativeConfigRoot(request)
-	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
+	projection := request
+	if automatic && intactGeminiProjectProjection(env, request, root) {
+		projection.VerifyOnly = true
+	}
+	outcome, err := shared.CompleteNativeConfigActivation(ctx, projection, shared.NativeConfigActivation{
 		Automatic:         automatic,
 		UnavailableAction: "install Gemini CLI and rerun add with an isolated writable Gemini config root",
 		RepairAction:      "repair the managed Gemini CLI skills and MCP configuration",
