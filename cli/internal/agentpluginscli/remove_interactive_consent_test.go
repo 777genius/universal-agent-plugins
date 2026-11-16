@@ -10,7 +10,8 @@ import (
 
 // An interactive remove without --target once removed the only installed
 // target immediately: the inferred target was treated as an explicit command.
-// Only an explicit --target or --yes is consent; an inferred one needs a review.
+// Only an explicit --target is consent (--yes requires it); an inferred one
+// needs a review.
 func TestInteractiveRemoveWithInferredTargetRequiresConfirmation(t *testing.T) {
 	t.Parallel()
 	for _, clients := range [][]domain.ClientID{{domain.ClientCursor}, {domain.ClientCursor, domain.ClientGemini}} {

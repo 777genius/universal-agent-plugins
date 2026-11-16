@@ -14,19 +14,23 @@ import (
 const hangupChildEnv = "UAP_TEST_INSTALLER_HANGUP_CHILD_20261116"
 
 // runHangupChild reports how installer cancellation reacts to a real SIGHUP
-// delivered to this process: exit 0 when the context is cancelled, exit 4 when
+// delivered to this process: exit 0 when the context is canceled, exit 4 when
 // it keeps running. A hangup that is not handled terminates the child by signal.
 func runHangupChild() {
+	os.Exit(hangupChildExitCode())
+}
+
+func hangupChildExitCode() int {
 	ctx, stop := installerSignalContext(context.Background())
 	defer stop()
 	if err := syscall.Kill(os.Getpid(), syscall.SIGHUP); err != nil {
-		os.Exit(3)
+		return 3
 	}
 	select {
 	case <-ctx.Done():
-		os.Exit(0)
+		return 0
 	case <-time.After(2 * time.Second):
-		os.Exit(4)
+		return 4
 	}
 }
 
