@@ -81,6 +81,9 @@ func CompleteCopilotDeactivation(ctx context.Context, env clients.Env, request d
 		return outcome, nil
 	}
 	if err := DeactivateCopilotPlugin(ctx, env, request); err != nil {
+		if domain.IsUnclosedClientProbe(err) {
+			outcome.NativeEffect = domain.NativeEffectUncertain
+		}
 		return outcome, err
 	}
 	outcome.ExternalRemovalComplete = true
@@ -120,13 +123,23 @@ func activateCopilotPlugin(ctx context.Context, env clients.Env, request domain.
 func registerCopilotMarketplace(ctx context.Context, env clients.Env, request domain.ActivationRequest, marketplace string) (bool, error) {
 	if request.Replacing {
 		if err := runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "update", marketplace); err != nil {
+			if domain.IsUnclosedClientProbe(err) {
+				return false, err
+			}
 			if fallbackErr := runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "add", request.Delivery.ActivePath); fallbackErr != nil {
 				return false, fmt.Errorf("refresh managed Copilot marketplace: %w; fallback registration: %w", err, fallbackErr)
 			}
 		}
-		return runCopilot(ctx, env, request.BackendExecutable, "plugin", "update", request.DeclaredName+"@"+marketplace) == nil, nil
+		updateErr := runCopilot(ctx, env, request.BackendExecutable, "plugin", "update", request.DeclaredName+"@"+marketplace)
+		if domain.IsUnclosedClientProbe(updateErr) {
+			return false, updateErr
+		}
+		return updateErr == nil, nil
 	}
 	if err := runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "add", request.Delivery.ActivePath); err != nil {
+		if domain.IsUnclosedClientProbe(err) {
+			return false, err
+		}
 		if fallbackErr := runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "update", marketplace); fallbackErr != nil {
 			return false, fmt.Errorf("register managed Copilot marketplace: %w; fallback refresh: %w", err, fallbackErr)
 		}
@@ -140,7 +153,7 @@ func installCopilotPlugin(ctx context.Context, env clients.Env, request domain.A
 	}
 	pluginSpec := request.DeclaredName + "@" + marketplace
 	if err := runCopilot(ctx, env, request.BackendExecutable, "plugin", "install", pluginSpec); err != nil {
-		if !request.Replacing {
+		if !request.Replacing && !domain.IsUnclosedClientProbe(err) {
 			_ = runCopilot(ctx, env, request.BackendExecutable, "plugin", "marketplace", "remove", marketplace)
 		}
 		return err
@@ -186,11 +199,11 @@ func DeactivateCopilotPlugin(ctx context.Context, env clients.Env, request domai
 	}
 	marketplace := ManagedMarketplaceName(request.PhysicalArtifactID)
 	uninstall, err := runCopilotResult(ctx, env, request.BackendExecutable, "plugin", "uninstall", request.DeclaredName+"@"+marketplace)
-	if err != nil && !CommandOutputContains(uninstall, "is not installed") {
+	if err != nil && (domain.IsUnclosedClientProbe(err) || !CommandOutputContains(uninstall, "is not installed")) {
 		return err
 	}
 	remove, err := runCopilotResult(ctx, env, request.BackendExecutable, "plugin", "marketplace", "remove", marketplace)
-	if err != nil && !CommandOutputContains(remove, "is not registered") {
+	if err != nil && (domain.IsUnclosedClientProbe(err) || !CommandOutputContains(remove, "is not registered")) {
 		return err
 	}
 	return nil
@@ -214,5 +227,6 @@ func runCopilot(ctx context.Context, env clients.Env, executable string, args ..
 }
 
 func runCopilotResult(ctx context.Context, env clients.Env, executable string, args ...string) (legacyports.CommandResult, error) {
-	return RunClientCommand(ctx, env.Runner, CopilotCLIName, executable, args...)
+	result, err := RunClientCommand(ctx, env.Runner, CopilotCLIName, executable, args...)
+	return result, NativeProbeFailure(result, err)
 }
