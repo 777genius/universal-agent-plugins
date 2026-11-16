@@ -81,6 +81,9 @@ func recognizeCopilotUserRegistry(listed legacyports.CommandResult, plan domain.
 	if copilotUserEmptyWithBuiltins(listed.Stdout, plan) {
 		return clients.RegistryClear, true
 	}
+	if copilotOwnedInstalledRevision(listed, plan, managed) {
+		return clients.RegistryExpected, true
+	}
 	expectedPath := plan.ActivePath
 	if managed != nil && strings.TrimSpace(managed.TargetLocator) != "" {
 		expectedPath = managed.TargetLocator
