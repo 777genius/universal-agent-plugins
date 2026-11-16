@@ -15,24 +15,31 @@ import (
 // failing the same way is better served by the technical log than a fourth try.
 const maxSkillsRetries = 3
 
+// outstandingAgents tracks agents that failed in any attempt and were not fixed
+// since, so a successful last retry cannot hide an earlier unresolved agent.
+type outstandingAgents map[string]string
+
+func (outstanding outstandingAgents) record(reports []agentReport) {
+	for _, report := range reports {
+		if report.Failed() {
+			outstanding[string(report.ClientID)] = report.Label
+		} else {
+			delete(outstanding, string(report.ClientID))
+		}
+	}
+}
+
 // applySkillsWithRecovery applies a reviewed batch, explains agents that did not
 // succeed in plain words, records the technical detail in the install log and,
 // when a person is present, offers to retry only the agents that failed.
 func applySkillsWithRecovery(cmd *cobra.Command, app App, opts *options, prepared *PreparedSkillsBatch, canRetry bool) error {
 	reviewed := prepared.Actions()
 	current := prepared
-	// outstanding tracks agents that failed in any attempt and were not fixed
-	// since, so a successful last retry cannot hide an earlier unresolved agent.
-	outstanding := map[string]string{}
+	outstanding := outstandingAgents{}
 	for attempt := 1; ; attempt++ {
 		result, err := current.Apply(cmd.Context())
-		for _, report := range reportByAgent(skillsAgentItems(result.Items)) {
-			if report.Failed() {
-				outstanding[string(report.ClientID)] = report.Label
-			} else {
-				delete(outstanding, string(report.ClientID))
-			}
-		}
+		reports := reportByAgent(skillsAgentItems(result.Items))
+		outstanding.record(reports)
 		logPath := app.recordInstallRun("skills add", attempt, agentLogEntries(skillsAgentItems(result.Items)))
 		if writeErr := renderSkillsResult(cmd, opts, result, logPath); writeErr != nil {
 			return writeErr
@@ -46,30 +53,47 @@ func applySkillsWithRecovery(cmd *cobra.Command, app App, opts *options, prepare
 		if err == nil || !canRetry || attempt > maxSkillsRetries || cmd.Context().Err() != nil || result.Status == "succeeded" {
 			return err
 		}
-		targets, askErr := askRetryTargets(cmd, app, opts, reportByAgent(skillsAgentItems(result.Items)))
-		if askErr != nil || len(targets) == 0 {
+		next, retryErr := prepareSkillsRetry(cmd, app, opts, prepared, reviewed, reports)
+		if retryErr != nil {
+			return errors.Join(err, retryErr)
+		}
+		if next == nil {
 			return err
 		}
-		next, prepErr := app.PrepareSkills(cmd.Context(), SkillsBatchRequest{Selections: prepared.selections, TargetIDs: targets})
-		if prepErr != nil {
-			return errors.Join(err, fmt.Errorf("could not prepare the retry: %w", prepErr))
-		}
-		if !coveredByReview(reviewed, next.Actions()) {
-			// The retry would do something the person never reviewed: show and confirm it.
-			if confirmErr := confirmChangedRetry(cmd, app, opts, next); confirmErr != nil {
-				next.Close()
-				return errors.Join(err, confirmErr)
-			}
-		}
 		current = next
-		if _, werr := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(targets)); werr != nil {
-			return werr
-		}
 	}
 }
 
+// prepareSkillsRetry asks which failed agents to retry and prepares a plan for
+// them. It returns nil when the person declines. A retry that reaches beyond the
+// reviewed plan is shown and confirmed first.
+func prepareSkillsRetry(cmd *cobra.Command, app App, opts *options, original *PreparedSkillsBatch, reviewed []SkillsAction, reports []agentReport) (*PreparedSkillsBatch, error) {
+	targets, err := askRetryTargets(cmd, app, opts, reports)
+	if err != nil {
+		return nil, err
+	}
+	if len(targets) == 0 {
+		return nil, nil
+	}
+	next, err := app.PrepareSkills(cmd.Context(), SkillsBatchRequest{Selections: original.selections, TargetIDs: targets})
+	if err != nil {
+		return nil, fmt.Errorf("could not prepare the retry: %w", err)
+	}
+	if !coveredByReview(reviewed, next.Actions()) {
+		if err := confirmChangedRetry(cmd, app, opts, next); err != nil {
+			next.Close()
+			return nil, err
+		}
+	}
+	if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(targets)); err != nil {
+		next.Close()
+		return nil, err
+	}
+	return next, nil
+}
+
 // askRetryTargets lets the person pick which failed agents to try again. All
-// agents that a retry can help start selected; cancelling means no retry.
+// agents that a retry can help start selected; canceling means no retry.
 func askRetryTargets(cmd *cobra.Command, app App, opts *options, reports []agentReport) ([]string, error) {
 	retryable := retryableAgents(reports)
 	if len(retryable) == 0 {
@@ -142,7 +166,7 @@ func confirmChangedRetry(cmd *cobra.Command, app App, opts *options, prepared *P
 	return nil
 }
 
-func sortedValues(values map[string]string) []string {
+func sortedValues(values outstandingAgents) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		out = append(out, value)
