@@ -436,3 +436,19 @@ func pinRetryPackage(opts *options, loaded loadedPackage) error {
 	}
 	return nil
 }
+
+// repairOwnedDependencies repairs one owned installation and, in an interactive
+// terminal, offers to run the repair again when some agents failed. Each run
+// plans from current state, so a retry never replays stale actions.
+func repairOwnedDependencies(cmd *cobra.Command, app App, opts *options, selector string, targets []domain.ClientID) (bool, error) {
+	var handled bool
+	var run func() error
+	run = func() error {
+		opts.installResult = nil
+		var err error
+		handled, err = repairOwnedDependenciesOnce(cmd, app, opts, selector, targets)
+		return retryConverge(cmd, app, opts, err, run)
+	}
+	err := run()
+	return handled, err
+}
