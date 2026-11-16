@@ -25,7 +25,7 @@ func (session *repairSession) commitRepairDirectory(delivery domain.StagedDelive
 
 	if session.service.ClientPreparation != nil {
 		if err := session.service.ClientPreparation.RevalidateClient(session.ctx, session.input.Client, session.plan); err != nil {
-			return session.result, fmt.Errorf("prepared host changed before repair commit: %w", err)
+			return session.result, fmt.Errorf("revalidate the prepared host before repair commit: %w", err)
 		}
 	}
 	if err := session.verifyProjectRepairOwnership(); err != nil {

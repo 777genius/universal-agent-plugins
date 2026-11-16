@@ -283,6 +283,37 @@ func TestOpenCodeRevalidationRejectsRootRetargetDuringProbe(t *testing.T) {
 	}
 }
 
+// Regression: Ctrl+C during revalidation was reported as host_target_changed.
+// An interrupted or failed probe still refuses, but proves no change.
+func TestOpenCodeRevalidationInterruptionIsNotTargetChange(t *testing.T) {
+	registry, err := clients.NewRegistry(opencode.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	preparer := NewOpenCodeClientPreparation(registry)
+	evidence := clientdetect.ProbeEvidence{VersionEvidence: opencodehost.VersionEvidence{Version: "1.19.4", Source: "executable_version", ProbeStatus: "ok", ExecutableIdentity: "fixture"}}
+	preparer.probe = func(context.Context, clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+		return evidence, nil
+	}
+	root := t.TempDir()
+	client := domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: root, ExecutablePath: filepath.Join(root, "native")}
+	envelope := domain.PackageEnvelope{MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{"docs": {Type: "stdio"}}}}
+	host, err := preparer.PrepareClient(t.Context(), envelope, client, nil, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.OpenCodeHost = host
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	preparer.probe = func(ctx context.Context, _ clientdetect.ProbeTarget) (clientdetect.ProbeEvidence, error) {
+		return clientdetect.ProbeEvidence{}, ctx.Err()
+	}
+	err = preparer.RevalidateClient(ctx, client, domain.DeliveryPlan{OpenCodeHost: host})
+	if !errors.Is(err, context.Canceled) || errors.Is(err, clientdetect.ErrProbeTargetChanged) {
+		t.Fatalf("interrupted revalidation = %v, want cancellation without target change", err)
+	}
+}
+
 // Empty desired declarations must not erase old cleanup effects or bypass the
 // closed receipt-kind and codec fences. No host can authorize cleanup offline.
 func TestOpenCodeEmptyDesiredCleanupRetainsAuthorityAndCodecFences(t *testing.T) {
