@@ -22,8 +22,8 @@ import (
 func activateCopilotUserPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest) error {
 	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	run := func(args ...string) error {
-		_, err := shared.RunClientCommand(ctx, env.Runner, shared.CopilotCLIName, request.BackendExecutable, args...)
-		return err
+		result, err := shared.RunClientCommand(ctx, env.Runner, shared.CopilotCLIName, request.BackendExecutable, args...)
+		return shared.NativeProbeFailure(result, err)
 	}
 	register := []string{"plugin", "marketplace", "add", request.Delivery.ActivePath}
 	refresh := []string{"plugin", "marketplace", "update", marketplace}
@@ -32,12 +32,15 @@ func activateCopilotUserPlugin(ctx context.Context, env clients.Env, request dom
 		first, fallback = refresh, register
 	}
 	if err := run(first...); err != nil {
+		if domain.IsUnclosedClientProbe(err) {
+			return err
+		}
 		if fallbackErr := run(fallback...); fallbackErr != nil {
 			return fmt.Errorf("register managed Copilot marketplace: %w; fallback: %w", err, fallbackErr)
 		}
 	}
 	if err := run("plugin", "install", request.DeclaredName+"@"+marketplace); err != nil {
-		if !request.Replacing {
+		if !request.Replacing && !domain.IsUnclosedClientProbe(err) {
 			// A fresh registration is rolled back; a replacement keeps the
 			// previously working marketplace for repair.
 			_ = run("plugin", "marketplace", "remove", marketplace)
