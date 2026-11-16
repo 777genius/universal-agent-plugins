@@ -95,7 +95,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := installerSignalContext(context.Background())
 	defer stop()
 	// Preserve the real os.Stdout *os.File for native TTY detection. An
 	// io.Writer counter here silently downgrades rich prompts to plain input.
@@ -113,6 +113,19 @@ func run() error {
 		err = fmt.Errorf("%w\ninterrupted: run the same command again to resume", err)
 	}
 	return err
+}
+
+// installerSignalContext cancels an installer command on interrupt, termination
+// or terminal hangup. Closing the terminal or SSH session must take the same
+// cancellation path as Ctrl+C, so already made native effects get recorded
+// instead of leaving an unresolved native activation attempt. A hangup the
+// caller ignores (nohup) stays ignored: Notify would reinstall a handler.
+func installerSignalContext(parent context.Context) (context.Context, context.CancelFunc) {
+	signals := []os.Signal{os.Interrupt, syscall.SIGTERM}
+	if !signal.Ignored(syscall.SIGHUP) {
+		signals = append(signals, syscall.SIGHUP)
+	}
+	return signal.NotifyContext(parent, signals...)
 }
 
 func resolveAgentpluginsRoots() (string, string, error) {
