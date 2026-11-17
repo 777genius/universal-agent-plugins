@@ -426,6 +426,8 @@ a = sys.argv[1:]
 assert a == ['build', '-trimpath', '-ldflags=-s -w -X main.version=1.2.3', '-o', expected, './cmd/agentplugins']
 with open(os.environ['GO_LOG'], 'a') as log:
     log.write(f'{goos}/{goarch}\\n')
+if f'{goos}-{goarch}' in os.environ.get('FAIL_TARGETS', '').split():
+    sys.exit(2)
 if f'{goos}-{goarch}' != os.environ.get('SKIP_TARGET'):
     repo = pathlib.Path(os.environ['GITHUB_WORKSPACE'])
     pathlib.Path(expected).write_bytes((repo / 'npm/agentplugins/THIRD_PARTY_NOTICES.txt').read_bytes())
@@ -436,18 +438,25 @@ if f'{goos}-{goarch}' != os.environ.get('SKIP_TARGET'):
         build = shell_step('agentplugins-release.yml', 'Build exact-version binaries')
         expected_assets = sorted('agentplugins_1.2.3_' + target.replace('-', '_')
                                  + ('.exe' if target.startswith('windows') else '') for target in TARGETS)
-        for skip in ('', 'windows-arm64'):
-            with self.subTest(skip=skip or 'none'):
-                out = self.root / ('build-out-' + (skip or 'all'))
+        for case, skip, fail in (('all', '', ''), ('missing', 'windows-arm64', ''),
+                                  ('failed', '', 'linux-arm64 windows-amd64')):
+            with self.subTest(case=case):
+                out = self.root / ('build-out-' + case)
                 out.mkdir()
-                go_log = self.root / ('go-log-' + (skip or 'all'))
+                go_log = self.root / ('go-log-' + case)
                 result = self.run_command(['bash', '-e', '-o', 'pipefail', '-c', build], cwd=cli,
                     env={**env, 'TAG': TAG, 'RUNNER_TEMP': str(out), 'GITHUB_WORKSPACE': str(self.source),
-                         'EXPECTED_COMMIT': self.commit, 'GO_LOG': str(go_log), 'SKIP_TARGET': skip},
+                         'EXPECTED_COMMIT': self.commit, 'GO_LOG': str(go_log), 'SKIP_TARGET': skip,
+                         'FAIL_TARGETS': fail},
                     check=False)
-                # One job builds every target exactly once, in one shared checkout.
+                # One job builds every target exactly once, in one shared checkout,
+                # and keeps going after a failed target to report all of them.
                 self.assertEqual(sorted(go_log.read_text().split()),
                                  sorted(target.replace('-', '/') for target in TARGETS))
+                if fail:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('go build failed for: linux/arm64 windows/amd64', result.stderr.decode())
+                    continue
                 if skip:
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn('expected exactly 6 agentplugins binaries, found 5', result.stderr.decode())

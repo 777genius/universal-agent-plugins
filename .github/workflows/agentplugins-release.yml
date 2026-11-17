@@ -189,6 +189,7 @@ jobs:
     if: ${{ inputs.publish_release != true }}
     needs: validate
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     env:
       GOWORK: "off"
       GOTOOLCHAIN: local
@@ -222,15 +223,25 @@ jobs:
           # One job builds all six targets: the Skills picker bundle is
           # embedded once and the Go module cache is shared, instead of six
           # parallel runner allocations. GOOS/GOARCH are exported per target.
+          # A failed target does not stop the others, so one run reports every
+          # broken target; the job still fails below.
+          failed=""
           for GOOS in darwin linux windows; do
             for GOARCH in amd64 arm64; do
               SUFFIX=""
               if [ "${GOOS}" = windows ]; then SUFFIX=.exe; fi
               export GOOS GOARCH
               asset="agentplugins_${version}_${GOOS}_${GOARCH}${SUFFIX}"
-              CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${version}" -o "${RUNNER_TEMP}/${asset}" ./cmd/agentplugins
+              if ! CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${version}" -o "${RUNNER_TEMP}/${asset}" ./cmd/agentplugins; then
+                echo "::error::go build failed for ${GOOS}/${GOARCH}"
+                failed="${failed} ${GOOS}/${GOARCH}"
+              fi
             done
           done
+          if [ -n "${failed}" ]; then
+            echo "go build failed for:${failed}" >&2
+            exit 1
+          fi
           built="$(find "${RUNNER_TEMP}" -maxdepth 1 -type f -name 'agentplugins_*' | wc -l | tr -d ' ')"
           if [ "${built}" != 6 ]; then
             echo "expected exactly 6 agentplugins binaries, found ${built}" >&2

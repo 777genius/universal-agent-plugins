@@ -299,6 +299,8 @@ class WorkflowJobNameDriftTests(unittest.TestCase):
         self.assertEqual(len(derived), len(set(derived)))
         self.assertEqual(sorted(derived), sorted(required))
         self.assertIn("promote-release", jobs)
+        # The verifier requires the exact check name "promote-release" skipped.
+        self.assertIsNone(job_field(jobs["promote-release"], "name"))
         self.assertNotIn("\n    strategy:", jobs["promote-release"])
 
 

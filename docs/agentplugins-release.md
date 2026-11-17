@@ -72,8 +72,8 @@ the publishable version from the approved tag; do not manually bump it.
    the local proof source removed. Until the matrix aggregates successfully,
    no public GitHub Release may exist.
 6. Confirm the reusable Hermes and Antigravity native workflows succeed. They
-   start after `stage-draft`, in parallel with `platform-proof`. Each uses the same-run complete nine-asset artifact from
-   `stage-draft`, with the exact frozen checkout and `checksums.txt` SHA-256.
+   start after `stage-draft`, in parallel with `platform-proof`. Each uses the
+   same-run complete nine-asset artifact from `stage-draft`, with the exact frozen checkout and `checksums.txt` SHA-256.
    `release-assets.js` verifies the full bundle before the selected binary runs;
    source compilation is disabled for these release lanes. The existing real
    Hermes 0.23.0 and `agy` 1.5.3 lifecycle harnesses run on Linux amd64, macOS
@@ -113,10 +113,15 @@ the publishable version from the approved tag; do not manually bump it.
    repeats the same verification immediately before publishing by the verified
    numeric release ID, then confirms that the tag still resolves to that ID.
    It does not rebuild binaries or rerun native platform proofs.
-   If `verified-draft` fails in an `auto_publish=true` run, the already
-   dispatched promotion run fails closed on its own. Re-run failed jobs does not
-   dispatch promotion again, so cancel that doomed promotion run manually, fix
-   and requalify, then dispatch promotion by hand as described in this step.
+   If `verified-draft` fails in an `auto_publish=true` run, the promotion run
+   that was already dispatched cannot publish: it fails closed by itself once it
+   leaves the queue. Still cancel it manually before re-running qualification.
+   Otherwise the new attempt of the same qualification run queues behind it in
+   the tag concurrency group, and its `gh run watch` can wait until timeout.
+   Re-run failed jobs does not dispatch promotion again, so after fixing and
+   requalifying, dispatch promotion by hand as described in this step. The same
+   applies if you cancel qualification manually after the proofs passed: the
+   dispatched promotion run remains queued and must be cancelled too.
 9. After authorized promotion, verify the resulting public release contains six platform binaries,
    `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`, and
    verify GitHub attestations for every file, including the notices.
