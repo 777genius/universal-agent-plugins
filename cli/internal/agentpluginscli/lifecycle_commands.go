@@ -25,11 +25,8 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			operationApp := app
 			operationApp.Lifecycle.PrepareHostsForPreview = !opts.dryRun
 			if all {
-				if len(args) > 0 {
-					return fmt.Errorf("choose either one installation or --all")
-				}
-				if strings.TrimSpace(opts.target) != "" {
-					return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
+				if err := validateUpdateAll(args, opts); err != nil {
+					return err
 				}
 				return runUpdateAllRetryable(cmd, operationApp, opts)
 			}
@@ -57,6 +54,16 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 	command.Flags().BoolVar(&all, "all", false, "update saved dependencies and eligible tracked installations after one complete preflight")
 	command.Flags().BoolVar(&opts.yes, "yes", false, "accept the complete preflighted update plan")
 	return command
+}
+
+func validateUpdateAll(args []string, opts *options) error {
+	if len(args) > 0 {
+		return fmt.Errorf("choose either one installation or --all")
+	}
+	if strings.TrimSpace(opts.target) != "" {
+		return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
+	}
+	return nil
 }
 
 func newRepairCommand(app App, opts *options) *cobra.Command {
