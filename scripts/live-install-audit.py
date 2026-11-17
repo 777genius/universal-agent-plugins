@@ -162,6 +162,56 @@ def validate_fixtures(doc):
         raise ValueError("Insufficiently diverse publishers")
 
 
+def _windows_file_call(argv, *, cwd, env, stdout, stderr, stdin, timeout, check):
+    """Own the blocked bootstrap before it can start any command descendants."""
+    import time
+    started, child, job = time.monotonic(), None, None
+    helpers = run_path(str(ROOT / "scripts/e2e/hermes-noauth-tool-call.py"))
+    try:
+        child = subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), "--windows-owned-file-command",
+             json.dumps(argv)], cwd=cwd, env=env, stdin=subprocess.PIPE,
+            stdout=stdout, stderr=stderr,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        job = helpers["WindowsJob"](child)
+        remaining = timeout - (time.monotonic() - started)
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(argv, timeout)
+        child.stdin.write(b"!")
+        child.stdin.close()
+        try:
+            code = child.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            raise subprocess.TimeoutExpired(argv, timeout) from None
+        counts = job.Accounting()
+        job.check(job.api.QueryInformationJobObject(
+            job.handle, 1, job.C.byref(counts), job.C.sizeof(counts), None))
+        if counts.active:
+            raise OSError("owned Windows command descendants remained after launcher exit")
+        return subprocess.CompletedProcess(argv, code)
+    finally:
+        if child is not None:
+            try:
+                if child.stdin is not None and not child.stdin.closed:
+                    child.stdin.close()
+                if job is not None:
+                    job.close()
+                elif child.poll() is None:
+                    child.kill()  # The unreleased bootstrap cannot have descendants.
+            finally:
+                child.wait(timeout=5)
+
+
+def _windows_owned_file_command(argv):
+    if os.name != "nt" or sys.stdin.buffer.read(1) != b"!":
+        raise SystemExit("owned Windows command gate was not released")
+    command = json.loads(argv)
+    if (not isinstance(command, list) or not command
+            or not all(isinstance(value, str) and "\0" not in value for value in command)):
+        raise SystemExit("owned Windows command arguments are invalid")
+    return subprocess.call(command, stdin=subprocess.DEVNULL)
+
+
 def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
     try:
         if capture_files or capture_full:
@@ -174,9 +224,23 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
                 raise OSError("private output capture root unavailable")
             with (tempfile.TemporaryFile(mode="w+b", dir=scratch) as stdout_file,
                   tempfile.TemporaryFile(mode="w+b", dir=scratch) as stderr_file):
-                p = subprocess.run(argv, cwd=cwd, env=env, stdout=stdout_file,
-                                   stderr=stderr_file, stdin=subprocess.DEVNULL,
-                                   timeout=timeout, check=False)
+                runner = (_windows_file_call if sys.platform == "win32" and not capture_full
+                          else subprocess.run)
+                try:
+                    p = runner(argv, cwd=cwd, env=env, stdout=stdout_file,
+                               stderr=stderr_file, stdin=subprocess.DEVNULL,
+                               timeout=timeout, check=False)
+                except subprocess.TimeoutExpired:
+                    if capture_full or sys.platform != "win32":
+                        raise
+                    stdout_file.seek(0)
+                    stderr_file.seek(0)
+                    output, errors = stdout_file.read((1 << 20) + 1), stderr_file.read((1 << 20) + 1)
+                    if len(output) > 1 << 20 or len(errors) > 1 << 20:
+                        output, errors = b"", b"bounded native output capture exceeded"
+                    return {"exit_code": None, "stdout_tail": output.decode("utf-8", errors="replace")[-1800:],
+                            "stderr_tail": errors.decode("utf-8", errors="replace")[-1800:],
+                            "timeout": True, "_json": None}
                 stdout_file.seek(0)
                 stderr_file.seek(0)
                 limit = 1 << 20
@@ -2237,16 +2301,6 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         and preserved_regular_text(
             project_foreign, "---\nname: foreign-neighbor\ndescription: unrelated\n---\n", case_root)
     )
-    post_skill_tree_delta = []
-    if kind == "skill" and cleanup:
-        after_skill_tree = snapshot([project / name for name in project_skill_roots])
-        post_skill_tree_delta = sorted(
-            path for path in before_skill_tree.keys() | after_skill_tree.keys()
-            if before_skill_tree.get(path) != after_skill_tree.get(path))
-    post_removal_skill = skill_file_present(project, target, identity) if kind == "skill" and cleanup else None
-    post_removal_leftovers = (
-        skill_removal_leftovers(project, target, identity, skill_path)
-        if kind == "skill" and cleanup else [])
     post_list = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
@@ -2261,6 +2315,24 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         assert_case_unchanged()
     copilot_after_remove = (copilot_settings_sanitized_shape(home, case_root, identity)
                             if copilot_before is not None and cleanup else None)
+    post_skill_tree_delta = []
+    if kind == "skill" and cleanup:
+        after_skill_tree = snapshot([project / name for name in project_skill_roots])
+        post_skill_tree_delta = sorted(
+            path for path in before_skill_tree.keys() | after_skill_tree.keys()
+            if before_skill_tree.get(path) != after_skill_tree.get(path))
+    post_removal_skill = skill_file_present(project, target, identity) if kind == "skill" and cleanup else None
+    post_removal_leftovers = (
+        skill_removal_leftovers(project, target, identity, skill_path)
+        if kind == "skill" and cleanup else [])
+    if kind == "skill" and cleanup:
+        sentinels_preserved = sentinels_preserved and (
+            preserved_regular_text(sentinel, "foreign content never belongs to UAP\n", case_root)
+            and preserved_regular_text(user_sentinel, "foreign profile content never belongs to UAP\n", case_root)
+            and preserved_regular_text(native_foreign, "unmanaged native neighbor must survive\n", case_root)
+            and preserved_regular_text(
+                project_foreign, "---\nname: foreign-neighbor\ndescription: unrelated\n---\n", case_root)
+        )
     remaining_ids = set()
     post_list_schema_valid = False
     post_list_empty = False
@@ -2703,4 +2775,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--windows-owned-file-command":
+        sys.exit(_windows_owned_file_command(sys.argv[2]))
     sys.exit(main())

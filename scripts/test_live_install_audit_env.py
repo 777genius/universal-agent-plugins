@@ -6923,6 +6923,7 @@ module.exports = {
             self.assertEqual(list(foreign.iterdir()), [])
 
     def test_skill_removal_rejects_surviving_links_and_native_registration(self):
+        from types import SimpleNamespace
         audit = load_audit()
         identity = "demo-skill"
         item = {"name": identity, "folder": identity, "repo": "example/skills",
@@ -6936,9 +6937,23 @@ module.exports = {
             with TemporaryDirectory() as temporary:
                 runroot = Path(temporary)
                 project = runroot / "skill-00/project"
-                native = runroot / "skill-00/home/.claude"
-                skill = project / ".claude/skills/demo-skill/SKILL.md"
-                state = {"installed": False}
+                target = "codex" if residue == "post-native-recreated" else "claude"
+                native = runroot / "skill-00/home" / ("." + target)
+                skill_root = ".agents" if target == "codex" else ".claude"
+                skill = project / skill_root / "skills/demo-skill/SKILL.md"
+                selected_match = [dict(match[0], clients=[
+                    {"client_id": target, "verification": "installation_verified"}])]
+                state, phases = {"installed": False}, []
+                def native_checkpoint(phase, present):
+                    phases.append(phase)
+                    if phase == "removed" and residue == "post-native-recreated":
+                        skill.parent.mkdir(parents=True, exist_ok=True)
+                        skill.write_text("---\nname: demo-skill\n---\n")
+                observer = SimpleNamespace(
+                    guard=lambda: None, checkpoint=native_checkpoint,
+                    temporary_git_state=lambda: ({}, {}),
+                    repeat_runtime_only=lambda *args: False,
+                    evidence=lambda: {"phases": list(phases)})
                 def fake_call(argv, env, cwd, timeout=105):
                     if argv[1] == "skills":
                         skill.parent.mkdir(parents=True, exist_ok=True)
@@ -6957,23 +6972,41 @@ module.exports = {
                         elif residue == "native":
                             (native / "agent-registry.json").write_text(
                                 '{"skills":{"demo-skill":{}}}')
+                    elif argv[1] == "list" and not state["installed"]:
+                        state["post_list_empty"] = True
+                        if residue == "post-list-recreated":
+                            skill.parent.mkdir(parents=True, exist_ok=True)
+                            skill.write_text("---\nname: demo-skill\n---\n")
+                        elif residue == "post-list-foreign":
+                            (runroot / "skill-00/home/foreign-untouched.txt").write_text("changed by list")
                     return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
                             "timeout": False,
                             "_json": {"data": {"installations":
-                                               match if state["installed"] else []}}}
+                                               selected_match if state["installed"] else []}}}
                 with patch.object(audit, "call", side_effect=fake_call), \
-                     patch.object(audit, "matching_installations", return_value=match), \
+                     patch.object(audit, "matching_installations", return_value=selected_match), \
                      patch.object(audit, "locked_skill_is_pinned", return_value=True), \
-                     patch.object(audit, "matches_pinned_skill_bytes", return_value=True):
-                    evidence = audit.do_case("/unused/agentplugins", "claude", "skill",
+                     patch.object(audit, "matches_pinned_skill_bytes", return_value=True), \
+                     patch.dict(audit.AGENT_BINARIES, {"codex": "/inert/codex"}), \
+                     patch.dict(audit.CODEX_RUNTIME_AUDIT, {
+                         "CodexRuntimeAudit": lambda *args: observer,
+                         "public_skill_ready": lambda *args: True}):
+                    evidence = audit.do_case("/unused/agentplugins", target, "skill",
                                              item, 0, runroot, {})
                 self.assertTrue(evidence["installed"] if "installed" in evidence
                                 else evidence["listed_identity"])
                 self.assertTrue(evidence["repeat_verified"])
+                self.assertTrue(state.get("post_list_empty"))
+                self.assertTrue(evidence["post_list_schema_valid"])
+                self.assertFalse(evidence["post_remove_identity_registered"])
                 return evidence
         clean = check(None)
         self.assertTrue(clean["removal_verified"])
         self.assertEqual(clean["status"], "passed")
+        self.assertTrue(clean["sentinels_preserved"])
+        self.assertIsNone(clean["post_removal_skill"])
+        self.assertEqual(clean["post_removal_leftovers"], [])
+        self.assertEqual(clean["post_skill_tree_delta"], [])
         linked = check("symlink")
         self.assertFalse(linked["removal_verified"])
         self.assertEqual(linked["status"], "cleanup-failed")
@@ -6982,6 +7015,21 @@ module.exports = {
         self.assertFalse(native["removal_verified"])
         self.assertEqual(native["status"], "cleanup-failed")
         self.assertTrue(native["native_residuals"])
+
+
+        for mutation in ("post-list-recreated", "post-native-recreated"):
+            with self.subTest(mutation=mutation):
+                recreated = check(mutation)
+                self.assertFalse(recreated["removal_verified"])
+                self.assertEqual(recreated["status"], "cleanup-failed")
+                self.assertTrue(recreated["post_removal_skill"])
+                self.assertTrue(recreated["post_removal_leftovers"])
+                self.assertTrue(recreated["post_skill_tree_delta"])
+                if mutation == "post-native-recreated":
+                    self.assertIn("removed", recreated["codex_runtime_proof"]["phases"])
+        foreign = check("post-list-foreign")
+        self.assertFalse(foreign["sentinels_preserved"])
+        self.assertEqual(foreign["status"], "cleanup-failed")
 
 
     def test_copilot_settings_probe_redacts_values_and_keeps_refusals(self):
@@ -7808,6 +7856,8 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
 
     def test_scoped_file_capture_reads_native_json_without_pipe_wait(self):
         audit = load_audit()
+        runner_owner, runner_name = ((audit, "_windows_file_call") if sys.platform == "win32"
+                                     else (audit.subprocess, "run"))
         with TemporaryDirectory() as scratch:
             result_json = {"schema_version": 1, "result": "success"}
             def completed(*_args, **kwargs):
@@ -7818,7 +7868,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 kwargs["stdout"].write(json.dumps(result_json).encode("utf-8"))
                 kwargs["stderr"].write(b"native child stderr")
                 return subprocess.CompletedProcess(["agentplugins"], 0)
-            with patch.object(audit.subprocess, "run", side_effect=completed):
+            with patch.object(runner_owner, runner_name, side_effect=completed):
                 actual = audit.call(["agentplugins", "add", "firebase"],
                                     {"TEMP": scratch}, scratch, timeout=7,
                                     capture_files=True)
@@ -7826,7 +7876,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             self.assertFalse(actual["timeout"])
             self.assertEqual(actual["_json"], result_json)
             self.assertEqual(actual["stderr_tail"], "native child stderr")
-            with patch.object(audit.subprocess, "run", side_effect=subprocess.TimeoutExpired(
+            with patch.object(runner_owner, runner_name, side_effect=subprocess.TimeoutExpired(
                     ["agentplugins", "add", "firebase"], 7)):
                 actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
                                     timeout=7, capture_files=True)
@@ -7835,7 +7885,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             def oversized(*_args, **kwargs):
                 kwargs["stdout"].write(b"x" * ((1 << 20) + 1))
                 return subprocess.CompletedProcess(["agentplugins"], 0)
-            with patch.object(audit.subprocess, "run", side_effect=oversized):
+            with patch.object(runner_owner, runner_name, side_effect=oversized):
                 actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
                                     capture_files=True)
             self.assertIsNone(actual["exit_code"])
@@ -7845,7 +7895,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 def invalid(*_args, **kwargs):
                     kwargs["stdout"].write(payload)
                     return subprocess.CompletedProcess(["agentplugins"], 0)
-                with patch.object(audit.subprocess, "run", side_effect=invalid):
+                with patch.object(runner_owner, runner_name, side_effect=invalid):
                     actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
                                         capture_files=True)
                 self.assertIsNone(actual["exit_code"])
@@ -7855,7 +7905,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 kwargs["stdout"].write(b'{"result":"failed"}')
                 kwargs["stderr"].write(b"provider refused immutable source")
                 return subprocess.CompletedProcess(["agentplugins"], 1)
-            with patch.object(audit.subprocess, "run", side_effect=rejected):
+            with patch.object(runner_owner, runner_name, side_effect=rejected):
                 actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
                                     capture_files=True)
             self.assertEqual(actual["exit_code"], 1)
@@ -8268,6 +8318,84 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaisesRegex(
                     ValueError, "changed protected fixture authority"):
                 self.run_case(mutation)
+
+
+@unittest.skipUnless(sys.platform == "win32", "owned file capture requires Windows jobs")
+class WindowsOwnedFileCaptureContracts(unittest.TestCase):
+    def environment(self, root):
+        env = {key: value for key, value in os.environ.items()
+               if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR"}}
+        env.update(HOME=str(root), USERPROFILE=str(root), TEMP=str(root), TMP=str(root))
+        return env
+
+    def test_timeout_and_exited_launcher_reap_only_owned_descendants(self):
+        from scripts.test_codex_runtime_audit import process_running
+        for exit_leader in (False, True):
+            with self.subTest(exit_leader=exit_leader), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                audit = load_audit()
+                ambient = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"],
+                                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL)
+                child = "import time; time.sleep(120)"
+                body = ("import json,os,subprocess,sys,time; from pathlib import Path; "
+                        f"child=subprocess.Popen([sys.executable,'-c',{child!r}],stdin=subprocess.DEVNULL); "
+                        f"Path({str(root / 'owned-pids.json')!r}).write_text(json.dumps([os.getpid(),child.pid])); "
+                        "print('{\"result\":\"success\",\"private\":\"timeout-owned-bytes\"}',flush=True); "
+                        + ("os._exit(0)" if exit_leader else "time.sleep(120)"))
+                try:
+                    result = audit.call([sys.executable, "-c", body], self.environment(root), root,
+                                        timeout=3, capture_files=True)
+                    self.assertIsNone(result["exit_code"])
+                    self.assertIsNone(result.get("_json"))
+                    self.assertEqual(result["timeout"], not exit_leader)
+                    if not exit_leader:
+                        self.assertIn("timeout-owned-bytes", result["stdout_tail"])
+                    pids = json.loads((root / "owned-pids.json").read_text())
+                    self.assertEqual(len(pids), 2)
+                    self.assertTrue(all(not process_running(pid) for pid in pids))
+                    self.assertIsNone(ambient.poll())
+                finally:
+                    ambient.terminate()
+                    ambient.wait(timeout=5)
+
+    def test_assignment_refusal_does_not_release_command_gate(self):
+        from scripts.test_codex_runtime_audit import process_running
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            audit = load_audit()
+            attempted = []
+            def refused_job(process):
+                attempted.append(process.pid)
+                raise OSError("inert assignment refusal")
+            marker = root / "must-not-start"
+            command = [sys.executable, "-c",
+                       f"from pathlib import Path; Path({str(marker)!r}).write_text('started')"]
+            with patch.object(audit, "run_path", return_value={"WindowsJob": refused_job}):
+                result = audit.call(command, self.environment(root), root, timeout=3, capture_files=True)
+            self.assertEqual(len(attempted), 1)
+            self.assertFalse(marker.exists())
+            self.assertFalse(process_running(attempted[0]))
+            self.assertIsNone(result["exit_code"])
+            self.assertFalse(result["timeout"])
+
+    def test_closed_success_keeps_exact_json_and_full_capture_uses_old_runner(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            command = [sys.executable, "-c", "print('{\"result\":\"success\"}')"]
+            result = audit.call(command, self.environment(root), root, timeout=5, capture_files=True)
+            self.assertEqual(result["_json"], {"result": "success"})
+            self.assertEqual(result["exit_code"], 0)
+            self.assertFalse(result["timeout"])
+            def completed(*_args, **kwargs):
+                kwargs["stdout"].write(b'{"result":"success"}')
+                return subprocess.CompletedProcess(command, 0)
+            with patch.object(audit, "_windows_file_call", side_effect=AssertionError("wrong runner")), \
+                    patch.object(audit.subprocess, "run", side_effect=completed):
+                result = audit.call(command, self.environment(root), root, timeout=5, capture_full=True)
+            self.assertEqual(result["stdout_full"], '{"result":"success"}')
+            self.assertEqual(result["exit_code"], 0)
 
 
 if __name__ == "__main__":
