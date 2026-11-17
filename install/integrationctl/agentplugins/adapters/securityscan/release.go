@@ -43,11 +43,16 @@ var releaseAssets = map[string]releaseAsset{
 }
 
 type ReleaseScanner struct {
-	Root       string
-	HTTPClient *http.Client
-	Origin     string
-	GOOS       string
-	GOARCH     string
+	Root string
+	// ReadOnlyRoot is a persistent cache laid out like Root. It is only read: a
+	// scanner already installed there is reused, nothing is ever written to it,
+	// and a miss falls back to Root. A preview uses it to skip a repeated
+	// download without changing the user's persistent state before approval.
+	ReadOnlyRoot string
+	HTTPClient   *http.Client
+	Origin       string
+	GOOS         string
+	GOARCH       string
 }
 
 func (scanner ReleaseScanner) Scan(ctx context.Context, packageRoot string) ([]byte, error) {
@@ -85,6 +90,12 @@ func (scanner ReleaseScanner) resolve(ctx context.Context) (string, error) {
 	executable := filepath.Join(directory, binaryName)
 	if info, err := os.Lstat(executable); err == nil && info.Mode().IsRegular() {
 		return executable, nil
+	}
+	if scanner.ReadOnlyRoot != "" {
+		shared := filepath.Join(scanner.ReadOnlyRoot, domain.SecurityScannerVersion, strings.ReplaceAll(key, "/", "-"), binaryName)
+		if info, err := os.Lstat(shared); err == nil && info.Mode().IsRegular() {
+			return shared, nil
+		}
 	}
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return "", fmt.Errorf("create lintai cache: %w", err)
