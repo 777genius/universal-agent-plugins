@@ -85,6 +85,7 @@ func (session *removeSession) deactivateRemoveTarget() error {
 		NativeRegistryRoot:    nativeRegistryForBinding(session.client, session.input.Client),
 		LocalEntryObservation: session.client.LocalEntryObservation.Clone(),
 		RemoveOwnedEntry:      session.client.SelectedDelivery.OwnsProfileEntry(session.client.NativeObjects),
+		PurgeData:             session.input.PurgeData,
 		SelectedDelivery:      session.client.SelectedDelivery,
 		Client:                session.input.Client, DeclaredName: session.installation.DeclaredName,
 		CurrentActivation: session.client.Activation, Interactive: session.input.Interactive,

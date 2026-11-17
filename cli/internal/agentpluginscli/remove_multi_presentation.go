@@ -29,6 +29,9 @@ func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMul
 				return err
 			}
 		}
+		if err := renderRemovalUserActions(cmd, target); err != nil {
+			return err
+		}
 	}
 	if !result.DryRun && multiRemovalNeedsManualStep(result) {
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "  "+removalIncompleteNotice); err != nil {
@@ -60,4 +63,18 @@ func removeStatusText(status string) string {
 		return "failed"
 	}
 	return strings.ReplaceAll(status, "_", " ")
+}
+
+// renderRemovalUserActions shows the manual steps of a removal that finished
+// (for example a data directory a client kept), which are otherwise only in JSON.
+func renderRemovalUserActions(cmd *cobra.Command, target removeTargetResult) error {
+	if target.Status == "blocked" {
+		return nil
+	}
+	for _, action := range target.Output.Result.Deactivation.UserActions {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "    Next: %s\n", action); err != nil {
+			return err
+		}
+	}
+	return nil
 }

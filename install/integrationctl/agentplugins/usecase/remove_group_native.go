@@ -25,6 +25,7 @@ func (session *removeGroupSession) removeGroupNative() error {
 			NativeRegistryRoot:    nativeRegistryForBinding(item.client, item.input.Client),
 			LocalEntryObservation: item.client.LocalEntryObservation.Clone(),
 			RemoveOwnedEntry:      item.client.SelectedDelivery.OwnsProfileEntry(item.client.NativeObjects),
+			PurgeData:             session.input.PurgeData,
 			SelectedDelivery:      item.client.SelectedDelivery,
 			Client:                item.input.Client, DeclaredName: session.installation.DeclaredName,
 			CurrentActivation: item.client.Activation, Interactive: item.input.Interactive, ExternalUninstalled: item.input.ExternalUninstalled,
