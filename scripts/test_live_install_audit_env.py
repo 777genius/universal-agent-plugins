@@ -10219,9 +10219,15 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
             with self.subTest(label=label), self.fixture() as case:
                 path = self.record(case, 1, transform)
                 metadata = case["audit"].GEMINI_RUNTIME_AUDIT["_metadata"]
-                with patch.dict(metadata.__globals__, {
-                        "_json": lambda body: self.fail("rejected framing must not be parsed")}):
+                parsed_sizes = []
+                original_json = metadata.__globals__["_json"]
+                def diagnostic_json(body):
+                    parsed_sizes.append(len(body))
+                    return original_json(body)
+                with patch.dict(metadata.__globals__, {"_json": diagnostic_json}):
                     after = self.phase(case, "after-public-repeat-add")
+                self.assertEqual(len(parsed_sizes), 3 if label == "multiple" else 0)
+                self.assertTrue(all(size <= 4096 for size in parsed_sizes))
                 self.assertFalse(case["observer"].finish(after))
                 proof = case["observer"].evidence()
                 self.assertEqual(proof["status"], "unqualified")
@@ -10231,7 +10237,9 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                 self.assertEqual(facts, {
                     "phase": "after-public-repeat-add", "role": "new-chat",
                     "operation": "record-framing", "bytes": path.stat().st_size,
-                    "lf_count": count, "final_lf": final})
+                    "lf_count": count, "final_lf": final,
+                    **({"record_shapes": ["metadata-fields", "other", "other"]}
+                       if label == "multiple" else {})})
                 encoded = json.dumps(facts)
                 self.assertNotIn("private", encoded)
                 self.assertNotIn(str(case["project"]), encoded)
@@ -10244,6 +10252,50 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
             after = self.phase(case, "after-public-repeat-list")
             self.assertFalse(case["observer"].finish(after))
             self.assertNotIn("failure_facts", case["observer"].evidence())
+
+    def test_three_line_shape_facts_never_accept_private_history_or_swallow_cancellation(self):
+        def records(body):
+            return body + json.dumps({
+                "id": "PRIVATE-ID", "timestamp": "PRIVATE-TIME", "type": "user",
+                "content": [{"text": "PRIVATE startup context\nPRIVATE second line"}],
+            }).encode() + b"\n" + b'{"$set":{"lastUpdated":"PRIVATE-TIME"}}\n'
+        with self.fixture() as case:
+            path = self.record(case, 1, records)
+            after = self.phase(case, "after-public-repeat-add")
+            self.assertFalse(case["observer"].finish(after))
+            proof = case["observer"].evidence()
+            self.assertEqual(proof["status"], "unqualified")
+            self.assertEqual(proof["reason"], "Gemini runtime is not one complete initial record")
+            self.assertEqual(proof["files"], [])
+            self.assertEqual(proof["phases"], [])
+            facts = proof["failure_facts"]
+            self.assertEqual(facts["record_shapes"],
+                             ["metadata-fields", "user-text-fields", "last-updated-fields"])
+            self.assertNotIn("PRIVATE", json.dumps(facts))
+            self.assertNotIn(str(case["project"]), json.dumps(facts))
+            self.assertNotIn(path.name, json.dumps(facts))
+        with self.fixture() as case:
+            self.record(case, 1, lambda body: body + b"PRIVATE malformed\n[]\n")
+            after = self.phase(case, "after-public-repeat-add")
+            self.assertFalse(case["observer"].finish(after))
+            self.assertEqual(case["observer"].evidence()["failure_facts"]["record_shapes"],
+                             ["metadata-fields", "json-refused", "other"])
+        for failure in (ValueError, KeyboardInterrupt):
+            with self.subTest(failure=failure), self.fixture() as case:
+                self.record(case, 1, records)
+                metadata = case["audit"].GEMINI_RUNTIME_AUDIT["_metadata"]
+                def broken(body):
+                    raise failure("PRIVATE helper failure")
+                with patch.dict(metadata.__globals__, {"_refused_record_shapes": broken}):
+                    if failure is KeyboardInterrupt:
+                        with self.assertRaises(KeyboardInterrupt):
+                            self.phase(case, "after-public-repeat-add")
+                    else:
+                        after = self.phase(case, "after-public-repeat-add")
+                        self.assertFalse(case["observer"].finish(after))
+                        self.assertEqual(case["observer"].evidence()["reason"],
+                                         "Gemini runtime is not one complete initial record")
+                        self.assertNotIn("record_shapes", case["observer"].evidence()["failure_facts"])
 
     def test_file_admission_facts_distinguish_bounds_and_links_without_extra_open(self):
         for mutation in ("zero", "oversized", "hardlink", "symlink"):

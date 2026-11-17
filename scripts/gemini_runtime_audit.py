@@ -58,6 +58,39 @@ def pinned_version(version):
             and version["exit_code"] == 0 and version.get("value") == "0.66.0")
 
 
+def _refused_record_shapes(body):
+    """Fixed shapes only; rejected history never gains admission authority."""
+    if type(body) is not bytes or not 0 < len(body) <= 4096 or body.count(b"\n") != 3 or not body.endswith(b"\n"):
+        return None
+    shapes = []
+    for line in body.split(b"\n")[:-1]:
+        try:
+            value = _json(line)
+        except Exception:
+            shapes.append("json-refused")
+            continue
+        shape = "other"
+        if type(value) is dict:
+            keys = set(value)
+            metadata = {"sessionId", "projectHash", "startTime", "lastUpdated"}
+            if (keys in (metadata, metadata | {"kind"})
+                    and all(type(entry) is str for entry in value.values())):
+                shape = "metadata-fields"
+            elif (keys == {"id", "timestamp", "type", "content"}
+                    and type(value["id"]) is str and type(value["timestamp"]) is str
+                    and value["type"] == "user"
+                    and type(value["content"]) is list and len(value["content"]) == 1
+                    and type(value["content"][0]) is dict and set(value["content"][0]) == {"text"}
+                    and type(value["content"][0]["text"]) is str):
+                shape = "user-text-fields"
+            elif (keys == {"$set"} and type(value["$set"]) is dict
+                    and set(value["$set"]) == {"lastUpdated"}
+                    and type(value["$set"]["lastUpdated"]) is str):
+                shape = "last-updated-fields"
+        shapes.append(shape)
+    return shapes
+
+
 def _metadata(body, filename, project_hash, started, finished, diagnostic=None):
     final_lf, lf_count = body.endswith(b"\n"), body.count(b"\n")
     if not final_lf or lf_count != 1:
@@ -66,6 +99,12 @@ def _metadata(body, filename, project_hash, started, finished, diagnostic=None):
                               bytes=len(body) if len(body) <= 4096 else None,
                               lf_count=lf_count if len(body) <= 4096 else None,
                               final_lf=final_lf)
+            try:
+                shapes = _refused_record_shapes(body)
+            except Exception:
+                shapes = None
+            if shapes is not None:
+                diagnostic["record_shapes"] = shapes
         raise ValueError("Gemini runtime is not one complete initial record")
     record = _json(body)
     keys = {"sessionId", "projectHash", "startTime", "lastUpdated"}
