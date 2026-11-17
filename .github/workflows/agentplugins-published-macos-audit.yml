@@ -7,6 +7,8 @@ on:
       - '.github/workflows/agentplugins-published-macos-audit.yml'
       - '.github/workflows/agentplugins-published-version.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/gemini_runtime_audit.py'
+      - 'scripts/native_client_project_artifacts.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_live_install_audit_components.py'
       - 'scripts/run-native-client-matrix.py'
@@ -17,6 +19,8 @@ on:
       - '.github/workflows/agentplugins-published-macos-audit.yml'
       - '.github/workflows/agentplugins-published-version.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/gemini_runtime_audit.py'
+      - 'scripts/native_client_project_artifacts.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_live_install_audit_components.py'
       - 'scripts/run-native-client-matrix.py'
@@ -92,6 +96,14 @@ jobs:
             scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_genuine_project_git_init_uses_empty_hooks_inside_case \
             scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_codex_marketplace_containment_follows_physical_directory_identity -v
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
+
+      - name: Check Gemini repeat descriptor custody on genuine macOS
+        if: ${{ matrix.target == 'gemini' && matrix.kind == 'skill' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest \
+            scripts.test_live_install_audit_env.GeminiEmptySessionRuntimeContracts -v
 
       # Docker Hub is selected in every deep published plugin matrix. Its
       # actual MCP manifest requires a Docker CLI on PATH. Qualify that real

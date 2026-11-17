@@ -1,4 +1,4 @@
-"""Bounded Linux observation of empty Gemini 0.66.0 skills-list sessions.
+"""Bounded Linux/macOS observation of empty Gemini 0.66.0 skills-list sessions.
 
 Pinned upstream 970413207732f5d4d8c50540c7fc359c44fdaaf2 initializes the
 skills-list-session ID and appends one initial JSONL metadata record without a
@@ -18,6 +18,8 @@ import sys
 import time
 
 _FILES = run_path(str(Path(__file__).with_name("native_client_project_artifacts.py")))
+# Query platform capability independently of wrappers around individual syscalls.
+_OPEN_FOR_CAPABILITY = os.open
 _NAME = re.compile(r"session-([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2})-(?:[1-9][0-9]{0,5}-)?skills-l\.jsonl\Z")
 _TIME = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z\Z")
 
@@ -46,7 +48,11 @@ def _directory_identity(info):
 
 
 def pinned_version(version):
-    return (sys.platform == "linux" and isinstance(version, dict)
+    return (sys.platform in ("linux", "darwin") and os.name == "posix"
+            and _OPEN_FOR_CAPABILITY in getattr(os, "supports_dir_fd", ())
+            and all(type(getattr(os, flag, None)) is int and getattr(os, flag) > 0
+                    for flag in ("O_DIRECTORY", "O_NOFOLLOW", "O_CLOEXEC", "O_NONBLOCK"))
+            and isinstance(version, dict)
             and version.get("status") == "reported" and type(version.get("exit_code")) is int
             and version["exit_code"] == 0 and version.get("value") == "0.66.0")
 
@@ -91,7 +97,7 @@ class GeminiRepeatAudit:
         self.started = self.started.replace(microsecond=self.started.microsecond // 1000 * 1000)
         try:
             if not pinned_version(version):
-                raise ValueError("Gemini empty-session proof requires Linux native 0.66.0")
+                raise ValueError("Gemini empty-session proof requires POSIX descriptor custody and native 0.66.0")
             self.deadline = time.monotonic() + 5
             self._hold(self.project)
             self._hold(self.profile)
@@ -226,7 +232,7 @@ class GeminiRepeatAudit:
             self.complete and not self.reason) else "unqualified"
         return {"schema_version": 1, "status": status, "reason": self.reason,
                 "files": list(self.files.values()), "phases": self.phases,
-                "client_version": "0.66.0", "platform": "linux",
+                "client_version": "0.66.0", "platform": sys.platform,
                 "producer_attribution": False, "writer_closure": False,
                 "source_reference": "google-gemini/gemini-cli@970413207732f5d4d8c50540c7fc359c44fdaaf2"}
 

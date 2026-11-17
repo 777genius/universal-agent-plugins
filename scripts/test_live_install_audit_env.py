@@ -10085,7 +10085,7 @@ class CodexResidualDiagnosticsTest(unittest.TestCase):
                              {'metadata_status': 'unavailable'})
 
 
-@unittest.skipUnless(sys.platform == "linux", "Linux descriptor custody contract")
+@unittest.skipUnless(sys.platform in ("linux", "darwin"), "Linux/macOS descriptor custody contract")
 class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
     VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0"}
 
@@ -10146,6 +10146,9 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
             self.assertNotEqual(case['before'], after)
             evidence = case['observer'].evidence()
             self.assertEqual(evidence['status'], 'metadata-only-new-records')
+            self.assertEqual(evidence['platform'], sys.platform)
+            for fd, _ in (*case['observer'].parents.values(), *case['observer'].leaves.values()):
+                self.assertFalse(os.get_inheritable(fd))
             self.assertEqual(len(evidence['files']), 6)
             self.assertFalse(evidence['producer_attribution'])
             self.assertFalse(evidence['writer_closure'])
@@ -10222,6 +10225,11 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                             {**self.VERSION, 'exit_code': False},
                             {**self.VERSION, 'exit_code': 1}):
                 self.assertFalse(check(version))
+            with patch.object(os, 'supports_dir_fd', set()):
+                self.assertFalse(check(self.VERSION))
+            for flag in ('O_DIRECTORY', 'O_NOFOLLOW', 'O_CLOEXEC', 'O_NONBLOCK'):
+                with self.subTest(flag=flag), patch.object(os, flag, 0):
+                    self.assertFalse(check(self.VERSION))
         with self.fixture() as case:
             new = self.record(case, 1)
             original_read = os.read
@@ -10234,9 +10242,15 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                     new.write_bytes(original)
                     changed.append(True)
                 return body
-            with patch.object(os, 'read', side_effect=replace_during_read):
+            with (patch.object(os, 'open', wraps=os.open) as opened,
+                  patch.object(os, 'read', side_effect=replace_during_read)):
+                self.assertTrue(case['audit'].GEMINI_RUNTIME_AUDIT['pinned_version'](self.VERSION))
                 after = self.phase(case, 'after-public-repeat-add')
+            self.assertTrue(any(call.kwargs.get('dir_fd') is not None
+                                for call in opened.call_args_list))
             self.assertEqual(changed, [True])
+            self.assertEqual(case['observer'].reason,
+                             'Gemini runtime previous file changed or replaced')
             self.assertFalse(case['observer'].finish(after))
 
     def test_public_repeat_gate_preserves_raw_delta_and_refuses_same_byte_parent_replacement(self):
