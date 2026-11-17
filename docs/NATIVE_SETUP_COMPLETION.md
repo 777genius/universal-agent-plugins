@@ -30,7 +30,12 @@ Code project `plugin marketplace add`, `plugin install`, `plugin uninstall`,
 `plugin marketplace remove`): the adapter may read the client's own registry
 once, read-only, and report only an exactly recognized state. Unproven process
 cleanup, a failed read or an unrecognized state stay uncertain and keep blocking
-the next mutation. Cursor writes only the approval
+the next mutation. When agentplugins itself was killed during such a command,
+an explicit `repair` or `remove` with `--yes` (previewed with `--dry-run`) first
+confirms the attempt under the mutation lock: it refuses while any Claude Code
+`plugin` command or Claude process bound to the profile is still running, then
+performs the same single read and records only that ownership, leaving the
+binding failed for the ordinary command to finish. Cursor writes only the approval
 store and never invokes native `mcp enable`, which can clear explicit disablement.
 Existing deny settings are preserved and checked again before readiness is
 reported. Unknown schemas, foreign ownership and uncertain cleanup never become

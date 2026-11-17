@@ -15,11 +15,8 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 		Short: "Safely update a tracked Agent Plugin across selected or installed clients",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateCommonOptions(opts); err != nil {
+			app, err := lifecycleCommandApp(app, opts)
+			if err != nil {
 				return err
 			}
 			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
@@ -70,14 +67,14 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 			if err := validatePluginEnablementSelection(cmd, app, opts); err != nil {
 				return err
 			}
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateCommonOptions(opts); err != nil {
+			app, err := lifecycleCommandApp(app, opts)
+			if err != nil {
 				return err
 			}
 			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
+				return err
+			}
+			if handled, err := confirmInterruptedClientChanges(cmd, app, opts, args[0], "repair"); handled || err != nil {
 				return err
 			}
 			operationApp := app
@@ -119,15 +116,15 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 		Short: "Safely remove selected targets while retaining plugin data by default",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateCommonOptions(opts); err != nil {
+			app, err := lifecycleCommandApp(app, opts)
+			if err != nil {
 				return err
 			}
 			if opts.yes && strings.TrimSpace(opts.target) == "" && !opts.purgeData {
 				return CLIUsageError{Code: "TARGET_REQUIRED", Message: "remove --yes requires explicit --target"}
+			}
+			if handled, err := confirmInterruptedClientChanges(cmd, app, opts, args[0], "remove"); handled || err != nil {
+				return err
 			}
 			if handled, err := runSavedLifecycleRetryable(cmd, app, opts, args[0], "remove"); handled || err != nil {
 				return err
@@ -178,4 +175,14 @@ func dispatchSelectedRemoval(cmd *cobra.Command, app App, opts *options, selecto
 		return runRemove(cmd.Context(), cmd, app, opts, selector)
 	}
 	return runRemoveMany(cmd.Context(), cmd, app, opts, selector, targets)
+}
+
+// lifecycleCommandApp applies the scope options and the option checks every
+// lifecycle command starts with.
+func lifecycleCommandApp(app App, opts *options) (App, error) {
+	scoped, err := app.forOptions(opts)
+	if err != nil {
+		return app, err
+	}
+	return scoped, validateCommonOptions(opts)
 }

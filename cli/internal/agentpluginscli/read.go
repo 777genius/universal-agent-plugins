@@ -205,8 +205,8 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 				findings = append(findings, scopedFinding("degraded", "client_not_visible", installation, binding.ClientID, "the package is tracked but no current client visibility evidence was detected", "install or launch the client so its CLI, desktop application, or configuration directory is visible, then rerun doctor"))
 			}
 			if unresolved[binding.NativeActivationAttempt] {
-				// Every lifecycle command refuses this binding, so none is suggested.
-				findings = append(findings, unresolvedNativeAttemptFinding(installation, binding))
+				// Only the confirming repair or removal is suggested for this binding.
+				findings = append(findings, unresolvedNativeAttemptFinding(app, installation, binding))
 				continue
 			}
 			if requiresPersonalMapping(bindingClient) {
@@ -358,7 +358,13 @@ func unresolvedNativeAttempts(app App, state domain.StateFileV2) map[string]bool
 	return attempts
 }
 
-func unresolvedNativeAttemptFinding(installation domain.Installation, binding domain.ClientBinding) doctorFinding {
+func unresolvedNativeAttemptFinding(app App, installation domain.Installation, binding domain.ClientBinding) doctorFinding {
+	if app.Lifecycle.ConfirmsInterruptedAttempt(domain.ClientID(binding.ClientID), domain.InstallScope(binding.Scope)) {
+		command := fmt.Sprintf("%s --target %s%s", installation.InstallationID, publicCLITargetName(domain.ClientID(binding.ClientID)), doctorScopeFlag(binding))
+		return scopedFinding("degraded", "native_attempt_unresolved", installation, binding.ClientID,
+			fmt.Sprintf("an interrupted client change (native attempt %s) was not confirmed; add and update refuse this target until repair or remove confirms it", binding.NativeActivationAttempt),
+			fmt.Sprintf("run `agentplugins repair %s --yes` to confirm the change from the client's own plugin state and finish the installation, or `agentplugins remove %s --yes` to finish a removal; --dry-run instead of --yes previews the check, which refuses while a client command of the interrupted run is still running", command, command))
+	}
 	return scopedFinding("degraded", "native_attempt_unresolved", installation, binding.ClientID,
 		fmt.Sprintf("an interrupted client change (native attempt %s) was not confirmed; add, update, repair and remove refuse this target", binding.NativeActivationAttempt),
 		"make sure no client command from the interrupted run is still running, then compare the client's own plugin list with this target; agentplugins cannot confirm this attempt automatically, so keep state-v2.json for manual recovery")
