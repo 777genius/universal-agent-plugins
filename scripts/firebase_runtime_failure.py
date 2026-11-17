@@ -103,6 +103,25 @@ def collect(case):
             return False
         return True
 
+    def staged_backend(path, skills, data):
+        manifest = json.loads(read(path / ".claude-plugin/plugin.json", 16384), object_pairs_hook=_unique)
+        servers = json.loads(read(path / ".mcp.json", 65536), object_pairs_hook=_unique)
+        if (not isinstance(manifest, dict) or manifest.get("name") != "firebase"
+                or not isinstance(servers, dict) or len(servers) != 1):
+            raise ValueError("staged projection")
+        server = next(iter(servers.values()))
+        env = server.get("env") if isinstance(server, dict) else None
+        if not isinstance(env, dict) or not isinstance(env.get("PLUGIN_DATA"), str):
+            raise ValueError("staged data binding")
+        backend = Path(env["PLUGIN_DATA"])
+        if (not backend.is_absolute() or backend.parent != data
+                or not re.fullmatch(r"firebase-[a-f0-9]{12}", backend.name)
+                or env["PLUGIN_DATA"] != str(data / backend.name)
+                or env.get("PLUGIN_ROOT") != str(skills / backend.name / ".agentplugins-runtime")):
+            raise ValueError("staged source binding")
+        directory(backend)
+        return backend.name
+
     try:
         case = Path(case)
         if not case.is_absolute() or case.name != "plugin-06" or ".." in case.parts:
@@ -111,44 +130,57 @@ def collect(case):
         source_facts = []
         entrypoint = None
         source_configs = {}
+        sources = {}
         skills = case / "home/.claude/skills"
+        data = case / "uap-data/plugin-data"
         if dir_fact(skills):
             for skill in entries(skills):
                 if not re.fullmatch(r"firebase-[a-f0-9]{12}", skill.name):
                     raise ValueError("foreign projection")
-                source = skill / ".agentplugins-runtime/io.github.777genius.agentplugins/runtime"
-                config_body = read(source / "runtime.json", 16384)
-                config = json.loads(config_body, object_pairs_hook=_unique)
-                if not isinstance(config, dict):
-                    raise ValueError("config shape")
-                candidate = config.get("entrypoint")
-                if (set(config) != {"schema_version", "package", "version", "entrypoint",
-                                    "package_lock_sha256", "omit_optional"}
-                        or config.get("schema_version") != 1 or type(config.get("omit_optional")) is not bool
-                        or not isinstance(config.get("package"), str)
-                        or not re.fullmatch(r"(?:@[a-z0-9._-]+/)?[a-z0-9._-]+", config["package"])
-                        or not isinstance(config.get("version"), str)
-                        or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?", config["version"])
-                        or not isinstance(config.get("package_lock_sha256"), str)
-                        or not re.fullmatch(r"sha256:[a-f0-9]{64}", config["package_lock_sha256"])
-                        or not isinstance(candidate, str) or len(candidate) > 256
-                        or not re.fullmatch(r"node_modules/(?:[A-Za-z0-9_.@-]+/)+[A-Za-z0-9_.-]+", candidate)
-                        or ".." in Path(candidate).parts):
-                    raise ValueError("entrypoint")
-                if entrypoint is not None and entrypoint != candidate:
+                sources[skill.name] = (skill, "active")
+        if dir_fact(skills.parent):
+            for staged in entries(skills.parent):
+                if not staged.name.startswith(".agentplugins-staging-"):
+                    continue
+                if not re.fullmatch(r"\.agentplugins-staging-[a-f0-9]{16}", staged.name):
+                    raise ValueError("unknown staging path")
+                backend = staged_backend(staged, skills, data)
+                if backend in sources:
                     raise ValueError("ambiguous source")
-                entrypoint = candidate
-                source_configs[skill.name] = config
-                source_package = read(source / "package.json", 65536)
-                source_lock = file_fact(source / "package-lock.json")
-                source_doc = json.loads(source_package, object_pairs_hook=_unique)
-                if (not isinstance(source_doc, dict) or source_doc.get("dependencies") != {config["package"]: config["version"]}
-                        or "sha256:" + source_lock.get("sha256", "") != config["package_lock_sha256"]):
-                    raise ValueError("source identity")
-                source_facts.append({"config_sha256": hashlib.sha256(config_body).hexdigest(),
-                                     "package": {"bytes": len(source_package), "sha256": hashlib.sha256(source_package).hexdigest()},
-                                     "lock": source_lock})
-        data = case / "uap-data/plugin-data"
+                sources[backend] = (staged, "staging")
+        for backend, (skill, location) in sources.items():
+            source = skill / ".agentplugins-runtime/io.github.777genius.agentplugins/runtime"
+            config_body = read(source / "runtime.json", 16384)
+            config = json.loads(config_body, object_pairs_hook=_unique)
+            if not isinstance(config, dict):
+                raise ValueError("config shape")
+            candidate = config.get("entrypoint")
+            if (set(config) != {"schema_version", "package", "version", "entrypoint",
+                                "package_lock_sha256", "omit_optional"}
+                    or config.get("schema_version") != 1 or type(config.get("omit_optional")) is not bool
+                    or not isinstance(config.get("package"), str)
+                    or not re.fullmatch(r"(?:@[a-z0-9._-]+/)?[a-z0-9._-]+", config["package"])
+                    or not isinstance(config.get("version"), str)
+                    or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?", config["version"])
+                    or not isinstance(config.get("package_lock_sha256"), str)
+                    or not re.fullmatch(r"sha256:[a-f0-9]{64}", config["package_lock_sha256"])
+                    or not isinstance(candidate, str) or len(candidate) > 256
+                    or not re.fullmatch(r"node_modules/(?:[A-Za-z0-9_.@-]+/)+[A-Za-z0-9_.-]+", candidate)
+                    or ".." in Path(candidate).parts):
+                raise ValueError("entrypoint")
+            if entrypoint is not None and entrypoint != candidate:
+                raise ValueError("ambiguous source")
+            entrypoint = candidate
+            source_configs[backend] = config
+            source_package = read(source / "package.json", 65536)
+            source_lock = file_fact(source / "package-lock.json")
+            source_doc = json.loads(source_package, object_pairs_hook=_unique)
+            if (not isinstance(source_doc, dict) or source_doc.get("dependencies") != {config["package"]: config["version"]}
+                    or "sha256:" + source_lock.get("sha256", "") != config["package_lock_sha256"]):
+                raise ValueError("source identity")
+            source_facts.append({"location": location, "config_sha256": hashlib.sha256(config_body).hexdigest(),
+                                 "package": {"bytes": len(source_package), "sha256": hashlib.sha256(source_package).hexdigest()},
+                                 "lock": source_lock})
         facts = []
         if dir_fact(data):
             for backend in entries(data):
