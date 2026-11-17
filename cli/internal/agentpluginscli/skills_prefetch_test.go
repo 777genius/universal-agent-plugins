@@ -94,7 +94,7 @@ func (fake *prefetchSkillAcquirer) startedPaths() []string {
 }
 
 func prefetchKeys(n int) []rawSkillKey {
-	keys := []rawSkillKey{}
+	keys := make([]rawSkillKey, 0, n)
 	for i := range n {
 		keys = append(keys, rawSkillKey{repository: "owner/repo", commit: "c", path: fmt.Sprintf("skills/s%d", i)})
 	}
@@ -232,10 +232,10 @@ func TestRawSkillPrefetchRemovesSuccessArrivingAfterCancel(t *testing.T) {
 	keys := prefetchKeys(2)
 	prefetch := startRawSkillPrefetch(t.Context(), fake, keys)
 	waitFor(t, "fetches in flight", func() bool { return fake.active.Load() == 2 })
-	cancelled, cancel := context.WithCancel(t.Context())
+	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, ok := prefetch.take(cancelled, keys[0]); ok {
-		t.Fatal("cancelled take served a snapshot")
+	if _, ok := prefetch.take(canceled, keys[0]); ok {
+		t.Fatal("canceled take served a snapshot")
 	}
 	closed := make(chan struct{})
 	go func() { prefetch.close(); close(closed) }()
@@ -311,7 +311,7 @@ func multiSkillJourney(t *testing.T, names []string) (savedJourney, *countingSki
 }
 
 func skillSelections(repository, sha string, names ...string) []SkillsSelection {
-	selections := []SkillsSelection{}
+	selections := make([]SkillsSelection, 0, len(names))
 	for _, name := range names {
 		selections = append(selections, SkillsSelection{Repository: repository, Commit: sha, Path: "skills/" + name, Name: name})
 	}
@@ -349,7 +349,7 @@ func TestPrepareSkillsPrefetchFetchesEachSelectedSkillOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer plan.Close()
-	want := []rawSkillKey{}
+	want := make([]rawSkillKey, 0, len(names))
 	for _, name := range names[1:] {
 		want = append(want, rawSkillKey{"acme/tools", sha, "skills/" + name})
 	}
