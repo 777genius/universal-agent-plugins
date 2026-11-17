@@ -263,5 +263,92 @@ class FiniteReadTest(unittest.TestCase):
                 BASELINE.regular_bytes(link, 3)
 
 
+
+class HistoricalOrchestrationTest(unittest.TestCase):
+    def test_real_do_case_preserves_six_commands_four_checkpoints_and_negative_readiness(self):
+        path = Path(__file__).with_name("live-install-audit.py")
+        spec = importlib.util.spec_from_file_location("historical_live_audit", path)
+        live = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(live)
+        events, observations = [], []
+        class Runtime:
+            def __init__(self, *args):
+                self.checkpoint("before-install", False)
+            def guard(self):
+                pass
+            def checkpoint(self, phase, present):
+                events.append(("native", phase))
+                observations.append({"phase": phase, "selected_skill_present": present})
+            def temporary_git_state(self):
+                return {}
+            def evidence(self):
+                return {"native_version": "0.153.4", "observations": list(observations)}
+        class Observer:
+            def __init__(self, *args):
+                self.count, self.proof = 0, None
+            def after_command(self):
+                self.count += 1
+                events.append(("observe", self.count))
+                self.proof = {"commands_verified": self.count}
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "run"
+            selected = fixture()
+            selected["skill_md_git_blob_sha1"] = "a" * 40
+            add_count = 0
+            removed = False
+            def invoke(argv, env, project, *args, **kwargs):
+                nonlocal add_count, removed
+                command = "add" if argv[1:3] == ["skills", "add"] else argv[1]
+                events.append(("command", command))
+                skill = project / ".agents/skills/selected/SKILL.md"
+                if command == "add":
+                    add_count += 1
+                    if add_count == 1:
+                        skill.parent.mkdir()
+                        skill.write_text("---\\nname: selected\\n---\\n")
+                        (project / "uap.toml").write_text("selected")
+                        (project / "uap.lock").write_text("selected")
+                    document = dto(add_count == 2)
+                    document["items"][0]["destinationPath"] = str(skill.parent)
+                elif command == "remove":
+                    removed = True
+                    skill.unlink()
+                    skill.parent.rmdir()
+                    (project / "uap.toml").unlink()
+                    (project / "uap.lock").unlink()
+                    document = {"result": "success"}
+                else:
+                    self.assertEqual(command, "list")
+                    registered = {**installation(), "installation_id": "one"}
+                    document = {"schema_version": 1, "command": "list", "result": "success",
+                                "data": {"installations": [] if removed else [registered]}}
+                return {"exit_code": 0, "timeout": False, "stdout_tail": "", "stderr_tail": "",
+                        "_json": document}
+            with patch.object(live, "call", side_effect=invoke), patch.object(
+                    live, "locked_skill_is_pinned", return_value=True), patch.object(
+                    live, "matches_pinned_skill_bytes", return_value=True), patch.dict(
+                    live.AGENT_BINARIES, {"codex": "/inert/codex"}), patch.dict(
+                    live.CODEX_RUNTIME_AUDIT, {"CodexRuntimeAudit": Runtime}), patch.dict(
+                    live.HISTORICAL_CODEX, {"PublishedBaseline": Observer}):
+                row = live.do_case("/inert/npm-launcher", "codex", "skill", selected, 0,
+                                   root, {}, historical_baseline=True)
+            self.assertEqual(events, [
+                ("native", "before-install"), ("command", "add"), ("observe", 1),
+                ("command", "list"), ("observe", 2), ("native", "installed"),
+                ("command", "add"), ("observe", 3), ("command", "list"), ("observe", 4),
+                ("native", "repeat-installed"), ("command", "remove"), ("observe", 5),
+                ("command", "list"), ("observe", 6), ("native", "removed")])
+            self.assertEqual(row["status"], "incomplete-native-proof")
+            self.assertIs(row["codex_public_add_ready"], False)
+            self.assertIs(row["codex_public_repeat_ready"], False)
+            self.assertIs(row["repeat_verified"], False)
+            for key in ("historical_add_verified", "historical_repeat_add_verified",
+                        "historical_repeat_lifecycle_verified", "removal_verified", "sentinels_preserved"):
+                self.assertIs(row[key], True, key)
+            self.assertEqual(row["historical_npm_proof"]["commands_verified"], 6)
+            self.assertEqual([value["phase"] for value in row["codex_runtime_proof"]["observations"]],
+                             ["before-install", "installed", "repeat-installed", "removed"])
+
+
 if __name__ == "__main__":
     unittest.main()

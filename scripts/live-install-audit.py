@@ -3543,7 +3543,7 @@ def main():
                 result = do_case(cli, args.target, args.kind, item, i, runroot,
                                  doc["plugin_declared_names"],
                                  doc["signed_release_pins"], client_version=report["client_version"],
-                                 historical_baseline=historical_baseline)
+                                 **({"historical_baseline": True} if historical_baseline else {}))
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "source": item if args.kind == "plugin" else item["source"],
