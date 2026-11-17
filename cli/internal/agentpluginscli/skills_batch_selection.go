@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 
@@ -55,6 +56,10 @@ func (candidate *skillsBatchCandidate) prefetchRawSkills(ctx context.Context, ap
 	for _, selection := range selections {
 		req, err := skillSelectionRequirement(candidate.requirements, selection)
 		if err != nil || req.Git == nil {
+			continue
+		}
+		// resolveSkill rejects this selection before downloading; do not either.
+		if req.Git.Path != "" && path.Base(req.Git.Path) != req.Git.Skill {
 			continue
 		}
 		if old, ok := candidate.requirements.Dependencies[req.Alias]; ok && mustSourceKey(old) == mustSourceKey(req) {
