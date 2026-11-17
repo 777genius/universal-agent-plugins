@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import time
 
 ACCEPTANCE = "published-0.1.95-codex-skills"
 COMMIT = "ec85ee7d759944b9799e451c96bfc1859f9d5533"
@@ -26,27 +27,72 @@ const fs = require('node:fs'), path = require('node:path');
 const root = process.argv[1];
 const platform = require(path.join(root, 'lib/platform.js'));
 const bootstrap = require(path.join(root, 'lib/bootstrap.js'));
+const metadata = new Map([[path.join(root, "package.json"), process.argv[2]],
+                          [path.join(root, "assets.json"), process.argv[3]]]);
+const originalRead = fs.readFileSync;
+fs.readFileSync = function(file, ...args) {
+  if (metadata.has(String(file))) return metadata.get(String(file));
+  return originalRead.call(fs, file, ...args);
+};
 const info = platform.detectPlatform();
 const release = bootstrap.loadRelease(root, info);
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-console.log(JSON.stringify({name:pkg.name, version:pkg.version,
+const output = JSON.stringify({name:pkg.name, version:pkg.version,
   platform:info.key, tag:release.manifest.tag,
-  commit:release.manifest.producer.commit, asset:release.asset,
-  binary:path.join(platform.cacheRoot(), release.version, info.key, info.binaryName)}));
+  commit:release.manifest.producer.commit,
+  asset:{file:release.asset.file, sha256:release.asset.sha256, size:release.asset.size},
+  binary:path.join(platform.cacheRoot(), release.version, info.key, info.binaryName)});
+if (Buffer.byteLength(output) > 8192) throw new Error("baseline metadata output exceeds bound");
+process.stdout.write(output);
 """
 
 
-def regular_bytes(path):
+def identity(info):
+    return (info.st_dev, info.st_ino, info.st_mode, info.st_size,
+            info.st_mtime_ns, info.st_ctime_ns, info.st_nlink, info.st_uid, info.st_gid)
+
+
+def directory_chain(root, parent):
+    """Reject redirected case-cache ancestors; caller rechecks after held read."""
+    if not root.is_absolute() or not parent.is_relative_to(root):
+        raise ValueError("historical cache escapes disposable HOME")
+    result = {}
+    for path in (root, *(root / Path(*parent.relative_to(root).parts[:index])
+                         for index in range(1, len(parent.relative_to(root).parts) + 1))):
+        info = path.lstat()
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError("historical cache ancestor is not an ordinary directory")
+        result[path] = (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid)
+    return result
+
+
+def regular_bytes(path, limit=65536, *, exact_size=None):
+    """Finite no-follow read; final named comparison keeps the descriptor held."""
     before = path.lstat()
-    if not stat.S_ISREG(before.st_mode):
-        raise ValueError("historical baseline requires a regular file")
-    with path.open("rb") as stream:
-        if not os.path.samestat(before, os.fstat(stream.fileno())):
+    if (not stat.S_ISREG(before.st_mode) or before.st_size > limit
+            or (exact_size is not None and before.st_size != exact_size)):
+        raise ValueError("historical baseline regular file size mismatch")
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as stream:
+        if identity(before) != identity(os.fstat(stream.fileno())):
             raise ValueError("historical baseline file changed")
-        data = stream.read()
-    if not os.path.samestat(before, path.lstat()):
-        raise ValueError("historical baseline file changed")
-    return data
+        deadline, chunks, total = time.monotonic() + 5, [], 0
+        while True:
+            if time.monotonic() > deadline:
+                raise ValueError("historical baseline read budget exhausted")
+            body = stream.read(min(1 << 20, limit + 1 - total))
+            total += len(body)
+            if total > limit:
+                raise ValueError("historical baseline file exceeds read bound")
+            chunks.append(body)
+            if not body:
+                break
+        if (time.monotonic() > deadline
+                or identity(before) != identity(os.fstat(stream.fileno()))
+                or identity(before) != identity(path.lstat())
+                or total != before.st_size):
+            raise ValueError("historical baseline file changed")
+        return b"".join(chunks)
 
 
 class PublishedBaseline:
@@ -54,6 +100,13 @@ class PublishedBaseline:
         self.launcher = Path(launcher).resolve(strict=True)
         self.root = self.launcher.parent.parent
         self.environment, self.project = environment, project
+        self.home = Path(environment["HOME"])
+        if (not self.home.is_absolute() or self.home != Path(project).parent / "home"
+                or environment.get("XDG_CACHE_HOME") != str(self.home / ".cache")
+                or environment.get("AGENTPLUGINS_CACHE_DIR")):
+            raise ValueError("historical baseline requires the disposable case cache")
+        self.binary = self.home / ".cache/agentplugins/0.1.95/linux-amd64/agentplugins"
+        self.home_identity = directory_chain(self.home, self.home)
         self.commands = 0
         self.proof = None
         self.verify_sources()
@@ -76,9 +129,15 @@ class PublishedBaseline:
 
     def read_metadata(self):
         self.verify_sources()
+        metadata = {name: regular_bytes(self.root / name) for name in ("package.json", "assets.json")}
         process = subprocess.run(
-            ["node", "-e", NODE_METADATA, str(self.root)], cwd=self.project,
+            ["node", "-e", NODE_METADATA, str(self.root),
+             metadata["package.json"].decode("utf-8"), metadata["assets.json"].decode("utf-8")], cwd=self.project,
             env=self.environment, capture_output=True, text=True, timeout=30, check=True)
+        if len(process.stdout.encode("utf-8")) > 8192 or process.stderr:
+            raise ValueError("historical metadata output mismatch")
+        if any(regular_bytes(self.root / name) != body for name, body in metadata.items()):
+            raise ValueError("historical npm metadata changed")
         value = json.loads(process.stdout)
         asset = value.get("asset")
         if (value.get("name") != "universal-agent-plugins" or value.get("version") != "0.1.95"
@@ -86,7 +145,8 @@ class PublishedBaseline:
                 or value.get("tag") != "agentplugins-v0.1.95" or value.get("commit") != COMMIT
                 or type(asset) is not dict or asset.get("sha256") != DIGEST
                 or type(asset.get("size")) is not int or asset["size"] != SIZE
-                or asset.get("file") != "agentplugins_0.1.95_linux_amd64"):
+                or asset.get("file") != "agentplugins_0.1.95_linux_amd64"
+                or value.get("binary") != str(self.binary)):
             raise ValueError("historical npm baseline provenance mismatch")
         return value
 
@@ -94,7 +154,12 @@ class PublishedBaseline:
         value = self.read_metadata()
         if value != self.metadata:
             raise ValueError("historical npm resolution changed")
-        content = regular_bytes(Path(value["binary"]))
+        ancestors = directory_chain(self.home, self.binary.parent)
+        if any(ancestors[path] != previous for path, previous in self.home_identity.items()):
+            raise ValueError("historical case HOME changed")
+        content = regular_bytes(self.binary, SIZE, exact_size=SIZE)
+        if directory_chain(self.home, self.binary.parent) != ancestors:
+            raise ValueError("historical cache ancestors changed")
         if len(content) != SIZE or hashlib.sha256(content).hexdigest() != DIGEST:
             raise ValueError("historical release binary mismatch")
         self.commands += 1

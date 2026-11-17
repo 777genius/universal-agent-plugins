@@ -155,12 +155,15 @@ class PublishedProvenanceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "agentplugins"
             path.write_bytes(b"agentplugins 0.1.95")
+            (Path(temp) / "home").mkdir()
             with self.assertRaises(ValueError):
-                BASELINE.PublishedBaseline(path, {}, Path(temp))
+                BASELINE.PublishedBaseline(path, {"HOME": str(Path(temp) / "home"),
+                    "XDG_CACHE_HOME": str(Path(temp) / "home/.cache")}, Path(temp) / "project")
 
     def test_wrong_package_version_platform_and_asset_metadata_fail(self):
         observer = object.__new__(BASELINE.PublishedBaseline)
         observer.root, observer.project, observer.environment = Path("/package"), Path("/project"), {}
+        observer.binary = Path("/cache/binary")
         valid = {"name": "universal-agent-plugins", "version": "0.1.95",
                  "platform": "linux-amd64", "tag": "agentplugins-v0.1.95",
                  "commit": BASELINE.COMMIT,
@@ -172,7 +175,8 @@ class PublishedProvenanceTest(unittest.TestCase):
                            ("platform", "linux-arm64"), ("commit", "0" * 40), ("asset", None)):
             wrong = {**valid, key: value}
             with patch.object(observer, "verify_sources"), patch.object(
-                    BASELINE.subprocess, "run", return_value=SimpleNamespace(stdout=json.dumps(wrong))):
+                    BASELINE, "regular_bytes", return_value=b"{}"), patch.object(
+                    BASELINE.subprocess, "run", return_value=SimpleNamespace(stdout=json.dumps(wrong), stderr="")):
                 with self.assertRaisesRegex(ValueError, "provenance mismatch"):
                     observer.read_metadata()
 
@@ -181,10 +185,82 @@ class PublishedProvenanceTest(unittest.TestCase):
             binary = Path(temp) / "agentplugins"
             binary.write_bytes(b"source binary labeled 0.1.95")
             observer = object.__new__(BASELINE.PublishedBaseline)
+            observer.home = Path(temp)
+            observer.binary = binary
+            observer.home_identity = BASELINE.directory_chain(observer.home, observer.home)
             observer.metadata = {"binary": str(binary)}
             with patch.object(observer, "read_metadata", return_value=observer.metadata):
-                with self.assertRaisesRegex(ValueError, "release binary mismatch"):
+                with self.assertRaisesRegex(ValueError, "size mismatch"):
                     observer.after_command()
+
+
+
+class FiniteReadTest(unittest.TestCase):
+    def test_sparse_oversize_rejected_before_open(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "huge"
+            with path.open("wb") as stream:
+                stream.truncate(BASELINE.SIZE + 1)
+            with patch.object(BASELINE.os, "open", side_effect=AssertionError("must not open")):
+                with self.assertRaisesRegex(ValueError, "size mismatch"):
+                    BASELINE.regular_bytes(path, BASELINE.SIZE, exact_size=BASELINE.SIZE)
+
+    def test_exact_bounded_file_and_metadata_cap(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "file"
+            path.write_bytes(b"abc")
+            self.assertEqual(BASELINE.regular_bytes(path, 3, exact_size=3), b"abc")
+            with self.assertRaisesRegex(ValueError, "size mismatch"):
+                BASELINE.regular_bytes(path, 2)
+
+    def test_final_named_check_keeps_descriptor_held(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "file"
+            path.write_bytes(b"abc")
+            original_lstat = Path.lstat
+            calls = 0
+            descriptor = None
+            original_fstat = BASELINE.os.fstat
+            def held_stat(fd):
+                nonlocal descriptor
+                descriptor = fd
+                return original_fstat(fd)
+            def named_stat(value):
+                nonlocal calls
+                if value == path:
+                    calls += 1
+                    if calls == 2:
+                        self.assertIsNotNone(descriptor)
+                        original_fstat(descriptor)  # EBADF if the reader closed early.
+                return original_lstat(value)
+            with patch.object(BASELINE.os, "fstat", side_effect=held_stat), patch.object(
+                    Path, "lstat", named_stat):
+                self.assertEqual(BASELINE.regular_bytes(path, 3), b"abc")
+            self.assertEqual(calls, 2)
+
+    def test_symlink_cache_ancestor_refused_without_reading_external_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            home, external = root / "home", root / "external"
+            home.mkdir()
+            external.mkdir()
+            (home / ".cache").symlink_to(external, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "ordinary directory"):
+                BASELINE.directory_chain(home, home / ".cache/agentplugins")
+
+    def test_cache_path_outside_home_and_leaf_symlink_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            home = root / "home"
+            home.mkdir()
+            with self.assertRaisesRegex(ValueError, "escapes"):
+                BASELINE.directory_chain(home, root)
+            outside = root / "outside"
+            outside.write_bytes(b"abc")
+            link = home / "link"
+            link.symlink_to(outside)
+            with self.assertRaisesRegex(ValueError, "size mismatch"):
+                BASELINE.regular_bytes(link, 3)
 
 
 if __name__ == "__main__":
