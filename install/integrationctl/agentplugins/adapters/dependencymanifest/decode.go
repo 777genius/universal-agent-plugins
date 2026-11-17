@@ -176,14 +176,13 @@ func (doc Document) Package() (map[string]environment.Requirement, error) {
 		return nil, manifestError(doc.source, doc.body, errors.New("schema_version must be integer 1"), "schema_version")
 	}
 	reqs := doc.clone()
+	// Build-only dependencies must never be requirements of a consumer.
+	for alias := range reqs.Development { delete(reqs.Dependencies, alias) }
 	for _, alias := range sortedKeys(reqs.Dependencies) {
 		req := reqs.Dependencies[alias]
 		if req.Registry != nil && strings.Count(req.Registry.Distribution, "/") != 1 {
 			return nil, manifestError(doc.source, doc.body, fmt.Errorf("dependencies.%s: package registry distribution must be canonical owner/name", alias), "dependencies", alias)
 		}
-	}
-	for alias := range reqs.Development {
-		delete(reqs.Dependencies, alias)
 	}
 	return reqs.Dependencies, nil
 }

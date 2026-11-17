@@ -119,8 +119,15 @@ Both files still contribute to the immutable package tree digest when present.
 `plugin.json` remains authoritative for standard identity and components;
 `uap.toml` is a UAP manager contract, not an Agent Plugins 1.0 component.
 Project-scoped installation uses this same manifest and lock contract through
-the qualified project adapters. `[dev-dependencies]` remains unsupported and is
-rejected as an unknown field.
+the qualified project adapters. A root `[dev-dependencies]` section declares
+**local development-only roots**, with exactly the same source grammar and
+explicit `[targets]` assignments as normal roots. They are resolved and locked
+with ordinary roots but excluded from the transitive requirements exported to
+consumers of this package. Repeated aliases or source identities across the two
+sections are rejected before installation. Changing classification changes the
+normalized intent digest, invalidating a stale `--locked` restore; the lock
+format remains v1. A source package may list dev requirements for its own use,
+but consumers follow only its ordinary `[dependencies]` closure.
 
 `uap.lock` remains version 1 and is the sole dependency lock. Each node records
 its exact `version` and immediate `required_by` consumers/selectors, with no
