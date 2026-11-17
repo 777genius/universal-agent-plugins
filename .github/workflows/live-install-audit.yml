@@ -114,6 +114,8 @@ jobs:
       - name: Install native Codex sandbox prerequisite
         shell: bash
         run: bash scripts/prepare-codex-linux-sandbox.sh
+      - name: Verify historical observer negative controls
+        run: python3 -m unittest discover -s scripts -p test_published_codex_baseline.py
       - name: Install the actual public npm installer and Codex
         id: published-install
         run: |
@@ -127,8 +129,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/published-proof"
           result=0
           for kind in plugin skill; do
+            acceptance=native
+            if [ "$kind" = skill ]; then acceptance=published-0.1.95-codex-skills; fi
             python3 scripts/live-install-audit.py --cli "$(command -v agentplugins)" \
-              --target codex --kind "$kind" --limit 2 \
+              --target codex --kind "$kind" --limit 2 --acceptance "$acceptance" \
               --report-dir "$RUNNER_TEMP/published-proof" || result=1
           done
           exit "$result"
