@@ -26,8 +26,9 @@ func TestDevelopmentRootsInstallAndColdLockedRestore(t *testing.T) {
 		},
 	}}
 	source := newFreshRestoreEnvironment(t, repo, directory)
-	freshRestorePackage(t, source, repo, "normal", "1.0.0", "normal", "", 1, true)
-	freshRestorePackage(t, source, repo, "build", "1.0.0", "build", "", 1, true)
+	freshRestorePackage(t, source, repo, "c", "1.2.0", "c", "", 1, true)
+	freshRestorePackage(t, source, repo, "normal", "1.0.0", "normal", "^1.2", 1, true)
+	freshRestorePackage(t, source, repo, "build", "1.0.0", "build", "^1.2", 1, true)
 	manifest, lockPath := source.app.dependencyPaths()
 	dependencyWrite(t, manifest, `schema_version = 1
 [dependencies]
@@ -39,8 +40,12 @@ codex = ["normal", "build"]
 `)
 	dependencyRun(t, source.cliFixture, "install", "--yes", "--format", "json")
 	first := freshRestoreReadLock(t, source.cliFixture)
-	if len(first.Packages) != 2 {
-		t.Fatalf("development root not installed: %+v", first.Packages)
+	if len(first.Packages) != 3 {
+		t.Fatalf("development root or shared transitive dependency not installed: %+v", first.Packages)
+	}
+	shared, ok := first.Package("c")
+	if !ok || len(shared.RequiredBy) != 2 || shared.RequiredBy[0].Alias != "build" || shared.RequiredBy[1].Alias != "normal" {
+		t.Fatalf("shared dependency lost prod/dev consumer edges: %+v", shared)
 	}
 	for _, alias := range []string{"normal", "build"} {
 		pkg, ok := first.Package(alias)
@@ -55,8 +60,8 @@ codex = ["normal", "build"]
 	if got := freshRestoreReadLock(t, cold.cliFixture); !reflect.DeepEqual(first, got) {
 		t.Fatalf("cold locked restore changed immutable graph: %+v", got)
 	}
-	if cold.source.lookups != 0 || len(cold.source.verified) != 2 {
-		t.Fatalf("cold restore did not acquire exactly two immutable roots: lookups=%d fetches=%v",
+	if cold.source.lookups != 0 || len(cold.source.verified) != 3 {
+		t.Fatalf("cold restore did not acquire exactly three immutable nodes: lookups=%d fetches=%v",
 			cold.source.lookups, cold.source.verified)
 	}
 	if got := dependencyRead(t, manifest); got != manifestBytes {
