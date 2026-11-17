@@ -7894,7 +7894,9 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
         return audit.CLAUDE_RETIREMENT_AUDIT['CacheRetirement'](
             f['home'].parent, f['home'], f['project'], f['public'], f['added'],
             {'repo': 'example/skills', 'folder': 'owned-test'}, document,
-            audit.scoped_snapshot, f['before'])
+            audit.scoped_snapshot, f['before'],
+            lambda observed: audit.native_identity_residuals(
+                [f['profile']], 'owned-test', observed, 'claude'))
 
     def retire(self, f, marker=True):
         import shutil
@@ -7932,6 +7934,37 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
                 self.assertFalse(proof['writer_closure_claimed'])
                 self.assertEqual(subject.fds, [])
                 self.assertEqual(residuals, self.residuals(audit, f))
+
+    def test_fresh_snapshot_rescans_late_identity_and_unsafe_paths(self):
+        audit = load_audit()
+        for mutation in ('unrelated', 'identity-path', 'identity-content', 'symlink'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                subject = self.capture(audit, f)
+                self.retire(f)
+                residuals = self.residuals(audit, f)
+                self.assertTrue(residuals)
+                original = subject.snapshotter
+                def late_snapshot(roots):
+                    if mutation == 'identity-path':
+                        (f['profile'] / 'owned-test.json').write_text('{}')
+                    elif mutation == 'identity-content':
+                        (f['profile'] / 'late-config.json').write_text('{"name":"owned-test"}')
+                    elif mutation == 'symlink':
+                        (f['profile'] / 'late-link').symlink_to(f['state'])
+                    else:
+                        (f['profile'] / 'unrelated-new.txt').write_text('unrelated')
+                    return original(roots)
+                subject.snapshotter = late_snapshot
+                proof = subject.finish(residuals, f['cleanup'])
+                self.assertEqual(proof['status'],
+                                 'verified-cache-retirement-at-checkpoint' if mutation == 'unrelated'
+                                 else 'unresolved-cache-retirement')
+                if mutation == 'unrelated':
+                    self.assertFalse(proof['writer_closure_claimed'])
+                self.assertEqual(subject.fds, [])
+                self.assertTrue(all('late-' not in path and not path.endswith('/owned-test.json')
+                                    for path in residuals))
 
     def test_wrong_or_missing_receipt_never_creates_an_empty_authority(self):
         audit = load_audit()

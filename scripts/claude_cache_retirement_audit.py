@@ -132,11 +132,13 @@ def entries(fd):
 
 
 class CacheRetirement:
-    def __init__(self, case, home, project, public, added, source, read_document, snapshotter, before_native):
+    def __init__(self, case, home, project, public, added, source, read_document, snapshotter, before_native,
+                 residual_scanner):
         self.fds = []
         try:
             self.case, self.profile, self.project = case, home / '.claude', project
             self.read_document, self.snapshotter, self.before_native = read_document, snapshotter, before_native
+            self.residual_scanner = residual_scanner
             state = read_document(project / '.uap/state-v2.json')
             require(type(state.get('schema_version')) is int and state['schema_version'] == 5)
             records = [row for row in state['installations'] if row['installation_id'] == public['installation_id']]
@@ -279,6 +281,8 @@ class CacheRetirement:
             prefix = '.claude/' + moved.relative_to(self.profile).as_posix() + '/'
             exact_files = {prefix + path for path, row in after.items() if row[0] == 'file'}
             require(residuals and all(path in exact_files for path in residuals))
+            fresh_residuals = self.residual_scanner(current)
+            require(fresh_residuals and all(path in exact_files for path in fresh_residuals))
             # Recheck the complete retained tree after native-registry/foreign reads.
             stable, _, _ = tree(self.cache_fd)
             if marker is not None:
