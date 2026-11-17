@@ -126,11 +126,28 @@ manual dispatch.
 
 No branch protection or ruleset requires these checks today. If one is added,
 require only checks from unfiltered workflows: a check from a skipped workflow
-stays pending. If a newer merge cancelled the `main` push run of a release
-candidate that came from a documentation-only pull request, its pull request
-head has no Go checks to fall back on. Tag the newest `main` commit whose push
-checks completed, or re-run the cancelled workflows only while no newer `main`
-push run is in progress, because a re-run joins the same concurrency group.
+stays pending.
+
+Workflows that produce a check the release verifier requires (Required,
+Docs, Polyglot Smoke, CodeQL, Govulncheck, Dependency Review and Skills
+picker today) keep every push run on `main`. A newer push supersedes only
+runs of the same pull request, and each push to `main` gets a concurrency
+group of its own (`github.run_id`), so a later merge can neither cancel the
+release checks of an earlier merge commit while they run nor replace them
+while they are pending. A release candidate from a documentation-only pull
+request, whose head has no Go checks, therefore still gets the release checks
+on its own merge commit. `repotests/ci_main_push_evidence_test.go` derives
+this set from the verifier's `require_check` list, so a workflow joins it as
+soon as it produces a required check name. It also fails when a producing
+job, or a job it needs, declares job-level concurrency or has a condition
+that can skip it on a push to `main`.
+
+Other workflows that run on pushes to `main` keep their per-ref groups. Some
+cancel a running `main` push run when a newer merge arrives. Others only
+queue it, but GitHub still replaces a pending run in the same group with the
+newest one. None of them produces a release check, and keeping every one of
+those runs would add heavy E2E time on each merge. Pages keeps its serialized
+`github-pages` group.
 
 ## Run Pages on hosted runners at an exact source commit
 
