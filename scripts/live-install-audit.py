@@ -21,6 +21,7 @@ from urllib.parse import urlsplit, urlunsplit
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
+CODEX_RETENTION_AUDIT = run_path(str(ROOT / "scripts/codex_plugin_retention_audit.py"))
 GEMINI_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/gemini_runtime_audit.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
 
@@ -2065,6 +2066,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     codex_skill_case = target == "codex" and kind == "skill"
     codex_runtime = None
     codex_plugin_sqlite = None
+    codex_retention = None
+    codex_retention_proof = None
     codex_add_ready = False
     codex_repeat_ready = False
     def assert_case_unchanged():
@@ -2118,6 +2121,15 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if (any(initialized_home.get(path) != value for path, value in protected_home.items())
                 or scoped_snapshot((project, data)) != protected_delivery):
             raise ValueError("Codex preinstall initialization changed protected fixture authority")
+    if (codex_plugin_sqlite is not None and sys.platform == "linux"
+            and codex_plugin_sqlite.native_version == "0.162.0"):
+        try:
+            codex_retention = CODEX_RETENTION_AUDIT["CodexPluginRetention"](
+                home / ".codex", codex_plugin_sqlite.native_version)
+            audits.callback(codex_retention.close)
+        except (OSError, ValueError, TypeError):
+            codex_retention_proof = {"status": "unresolved-preinstall-custody",
+                                     **CODEX_RETENTION_AUDIT["CHECKPOINT_SCOPE"]}
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
                      if target == "claude" and kind == "skill"
@@ -2344,6 +2356,14 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             audits.callback(claude_retirement.close)
         except (OSError, ValueError, TypeError, KeyError, IndexError):
             claude_retirement_proof = {"status": "unresolved-cache-retirement"}
+    if codex_retention is not None and installed and repeat_verified:
+        try:
+            codex_retention.before_remove(
+                data, matching[0], identity, selector=item,
+                expected_pin=(signed_release_pins or {}).get(item))
+        except (OSError, ValueError, TypeError, KeyError, IndexError):
+            codex_retention_proof = {"status": "unresolved-plugin-retention-owner",
+                                     **CODEX_RETENTION_AUDIT["CHECKPOINT_SCOPE"]}
     cleanup = None
     native_uninstall = None
     vscode_user_manual = None
@@ -2503,6 +2523,18 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         claude_retirement_proof = claude_retirement.finish(native_residuals, cleanup_json)
         claude_retired_residuals_verified = (
             claude_retirement_proof["status"] == "verified-cache-retirement-at-checkpoint")
+    codex_retention_verified = False
+    if (codex_retention is not None and codex_retention_proof is None
+            and CODEX_RETENTION_AUDIT["lifecycle_ready"](
+                installed=installed, repeat_verified=repeat_verified,
+                sentinels_preserved=sentinels_preserved,
+                native_uninstall=native_uninstall, cleanup=cleanup, post_list=post_list,
+                post_list_schema_valid=post_list_schema_valid, post_list_empty=post_list_empty,
+                old_ids=old_ids, remaining_ids=remaining_ids,
+                post_remove_identity_registered=post_remove_identity_registered)):
+        codex_retention_proof = codex_retention.finish(native_residuals)
+        codex_retention_verified = (codex_retention_proof["status"]
+            == "verified-unchanged-or-preserved-at-checkpoint")
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
@@ -2517,7 +2549,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                  and copilot_native_after_remove["status"] == "absent"))
         and not post_remove_identity_registered
         and (not native_residuals or copilot_disabled_setting_retained
-             or claude_retired_residuals_verified)
+             or claude_retired_residuals_verified or codex_retention_verified)
         and (kind != "skill" or (post_removal_skill is None
                                   and not post_removal_leftovers and not post_lock_pinned
                                   and not post_skill_tree_delta))
@@ -2648,6 +2680,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
             "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
             "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
+            **({"codex_plugin_retention_proof": codex_retention_proof}
+               if codex_retention_proof is not None else {}),
             **({"codex_plugin_sqlite_proof": codex_plugin_sqlite.evidence()}
                if codex_plugin_sqlite is not None else {}),
             "copilot_disabled_setting_retained": copilot_disabled_setting_retained,

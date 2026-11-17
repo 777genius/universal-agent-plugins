@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/codex_plugin_retention_audit.py'
+      - 'scripts/test_codex_plugin_retention_audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/native_client_draft.py'
@@ -93,6 +95,9 @@ jobs:
           KIRO_NODE
       - name: Refuse inherited real client profile overrides before live cases
         run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+      - name: Check bounded Codex preserved-data custody
+        if: matrix.target == 'chatgpt' && matrix.kind == 'plugin'
+        run: python3 -m unittest discover -s scripts -p 'test_codex_plugin_retention_audit.py' -v
       - name: Acquire actual public vendor client where a headless Linux build exists
         id: vendor-install
         # Preserve a complete explicit client-unavailable record even when a
