@@ -153,11 +153,12 @@ those runs would add heavy E2E time on each merge. Pages keeps its serialized
 
 Draft pull requests keep the fast lane. Lanes that start native clients or
 wide GitHub-hosted matrices (Tier 1) skip a draft and run when the pull
-request is ready. Each such job, or the root job its matrix needs, uses
-exactly this condition, written once in `repotests/ci_pr_tiers_test.go`:
+request is ready, or on a draft that a maintainer labeled `ci:full`. Each
+such job, or the root job its matrix needs, uses exactly this condition,
+written once in `repotests/ci_pr_tiers_test.go`:
 
 ```yaml
-if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
 ```
 
 The test accepts exactly three condition forms: the gate alone,
@@ -165,27 +166,68 @@ The test accepts exactly three condition forms: the gate alone,
 skipped needs, and the published audits' `workflow_run` success check
 `&& (<gate>)`. A job that only needs a gated job and reads no status function
 (`always()`, `success()`, `failure()`, `cancelled()`) skips with it. The test
-also pins each workflow's exact triggers, its pull request types (no
-`labeled` or `edited`, so a label or title change cannot cancel and restart a
-running lane) and its concurrency group, with cancellation only for pull
-request events. Every Tier 1 workflow lists `ready_for_review` in its
-pull request types, so marking a pull request ready starts the full lane on
-the head that becomes mergeable, and each later push to the ready pull request
-runs it again. GitHub does not merge a draft, so the final head of a merged
-pull request has had a Tier 1 run whenever the lane's paths matched. Nothing
-requires that run to succeed before merging; that remains a review decision.
+also pins each workflow's exact triggers, its pull request types and its
+concurrency group and cancel rule. Every Tier 1 workflow lists
+`ready_for_review` in its pull request types, so marking a pull request ready
+starts the full lane on the head that becomes mergeable, and each later push
+to the ready pull request runs it again. GitHub does not merge a draft, so the
+final head of a merged pull request has had a Tier 1 run whenever the lane's
+paths matched. Nothing requires that run to succeed before merging; that
+remains a review decision.
 
-To get Tier 1 evidence while a pull request is still a draft, dispatch the
-workflow on its branch (`gh workflow run <file> --ref <branch>`). Pushes to
-`main`, schedules, workflow runs and dispatches never read the draft flag, so
-release and post-publish evidence is unchanged. None of these workflows
-produces a check that the release workflow requires.
+To get Tier 1 evidence while a pull request is still a draft, add the
+`ci:full` label. Only users with triage or write access can label, and there
+is no comment trigger. The label lifts only these Tier 1 workflows. Every
+other draft-gated lane, for example Required `test`, Coverage, CodeQL, Docs,
+Govulncheck, Polyglot Smoke, Skills picker, Terminal UI and Native Client
+Runtime, still skips on a draft. The repository label description ("Run the
+full PR CI for a draft PR") is broader than what the label does.
+
+- Adding the label to a draft starts the Tier 1 lanes for the current head.
+  Only workflows whose path filters match the pull request's changes run,
+  because GitHub applies path filters to label events too.
+- Every later push to the labeled draft runs them again, including their
+  macOS and Windows matrices. Remove the label when the evidence is no longer
+  needed.
+- Removing the label starts nothing (`unlabeled` is not a trigger) and does
+  not stop a run that is already in progress. The next draft push skips the
+  lanes again.
+- Marking the pull request ready runs the lanes once more, on the same head
+  if nothing was pushed since.
+- A ready pull request already runs the lanes on every push, so `ci:full`
+  there starts nothing.
+- A label added with the workflow `GITHUB_TOKEN` does not trigger workflow
+  runs. Labels added through a GitHub App or a personal access token follow
+  that token's own rules.
+
+The workflows list `labeled` only together with this handling. Only real runs
+(pushes, open, reopen, `ready_for_review`, `ci:full` on a draft) share the
+pull request's concurrency group and supersede each other. Every other label
+event, including `ci:full` on a ready pull request, skips every job and gets
+a group of its own (`github.run_id`). So a label can neither start a heavy run
+nor cancel a running lane or replace a pending one. `edited` and `unlabeled`
+are not triggers. Each such label event still creates a workflow run whose
+jobs are skipped. Jobs without a matrix therefore appear once more as
+"skipping" rows with the same names, for example Kiro no-auth acceptance,
+Pinned Kiro no-auth observations, Runtime admission contracts and exact
+selection, and resolve-release. GitHub lists those rows next to the real
+results in the pull request checks; a failed result is not hidden by them.
+
+Pushes to `main`, schedules, workflow runs and dispatches keep the group each
+workflow had before and never read the draft flag or labels, so release and
+post-publish evidence is unchanged. Dispatching the workflow on its branch
+(`gh workflow run <file> --ref <branch>`) still works too. None of these
+workflows produces a check that the release workflow requires.
 
 Tier 1 today: Hermes no-auth tools call, Kiro no-auth installation, Kimi 2.5.2
 no-auth call, Cline managed project session, Project Native Runtime, Published
 Marketing Kit Project E2E, both live installer audits, and the published npm
 catalog and additional clients audits. `repotests/ci_pr_tiers_test.go` keeps
-this list and fails when a job of one of them could start on a draft.
+this list, fails when a job of one of them could start on a draft without
+`ci:full`, and evaluates every gated condition, cancel rule and group in these
+workflows for open, reopen, push, label, removal and ready events on drafts
+and ready pull requests, and for push, dispatch, schedule and npm publish
+workflow runs.
 
 ## Run Pages on hosted runners at an exact source commit
 
