@@ -966,6 +966,88 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'pinned native version'):
             self.observed_exit(0, b'', native_version='0.162.1', versions=('0.153.4', '0.162.0'))
 
+
+    @unittest.skipIf(os.name == "nt", "POSIX process-group diagnostic")
+    def test_dual_failure_labels_preserve_errors_and_single_failure_type(self):
+        from types import SimpleNamespace
+
+        class Input:
+            def write(self, body):
+                pass
+
+            async def drain(self):
+                pass
+
+            def close(self):
+                pass
+
+            async def wait_closed(self):
+                pass
+
+        class Output:
+            def __init__(self):
+                self.replies = iter((
+                    {"id": 1, "result": {"codexHome": str(profile),
+                                         "userAgent": "agentplugins/0.153.4 (fixture)"}},
+                    {"id": 2, "result": {"data": []}},
+                ))
+
+            async def readline(self):
+                return (json.dumps(next(self.replies)) + "\n").encode()
+
+        async def exercise(cleanup_fails):
+            primary = PermissionError(errno.EPERM, "primary-group-probe")
+            cleanup = PermissionError(errno.EPERM, "cleanup-group-kill")
+            closed = []
+
+            async def wait():
+                return 0
+
+            process = SimpleNamespace(
+                pid=12345, returncode=0, stdin=Input(), stdout=Output(), stderr=object(),
+                wait=wait, _transport=SimpleNamespace(close=lambda: closed.append(True)))
+
+            async def start(*args):
+                return process, None
+
+            async def drain(*args):
+                return b""
+
+            signals = []
+
+            def killpg(pid, sig):
+                signals.append((pid, sig))
+                if sig == 0:
+                    raise primary
+                if cleanup_fails:
+                    raise cleanup
+
+            # Inert protocol/process objects isolate the genuine exchange and
+            # cleanup branches; no native process or signal is used.
+            with (patch.object(audit, "_start_native", side_effect=start),
+                  patch.object(audit, "_drain", side_effect=drain),
+                  patch.object(audit.os, "killpg", side_effect=killpg, create=True)):
+                if cleanup_fails:
+                    with self.assertRaises(RuntimeError) as raised:
+                        await audit._exchange(Path("/inert/codex"), Path("/inert/project"),
+                                              profile, {})
+                    self.assertIn("phase=group-check; " + str(primary), str(raised.exception))
+                    self.assertIn("phase=group-kill; " + str(cleanup), str(raised.exception))
+                    self.assertIs(raised.exception.__cause__, primary)
+                else:
+                    with self.assertRaises(PermissionError) as raised:
+                        await audit._exchange(Path("/inert/codex"), Path("/inert/project"),
+                                              profile, {})
+                    self.assertIs(raised.exception, primary)
+            self.assertEqual(signals, [(12345, 0), (12345, signal.SIGKILL)])
+            self.assertEqual(closed, [True])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = Path(temporary).resolve()
+            for cleanup_fails in (True, False):
+                with self.subTest(cleanup_fails=cleanup_fails):
+                    asyncio.run(exercise(cleanup_fails))
+
     def test_nonzero_exit_still_refuses_with_observed_diagnostic(self):
         self.assertEqual(self.observed_exit(0, b""), {"data": []})
         with self.assertRaises(ValueError) as raised:

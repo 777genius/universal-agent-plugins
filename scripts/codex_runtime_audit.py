@@ -7,6 +7,7 @@ schema and every table's contents still match the pre-install native baseline.
 """
 
 import asyncio
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -341,27 +342,42 @@ async def _close_native_transport(process):
     await asyncio.sleep(0)
 
 
-async def _finish_native(process, job, completed, readers):
+async def _finish_native(process, job, completed, readers, diagnostic=None):
+    @contextmanager
+    def operation(phase):
+        try:
+            yield
+        except BaseException:
+            if diagnostic is not None:
+                diagnostic["phase"] = phase
+            raise
+
     try:
         try:
-            process.stdin.close()
+            with operation("stdin-close"):
+                process.stdin.close()
         finally:
             if job is not None:
-                await asyncio.to_thread(job.close)
+                with operation("job-close"):
+                    await asyncio.to_thread(job.close)
             elif not completed:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            await asyncio.wait_for(process.wait(), 5)
+                with operation("group-kill"):
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+            with operation("process-wait"):
+                await asyncio.wait_for(process.wait(), 5)
     finally:
         try:
-            for reader in readers:
-                if not reader.done():
-                    reader.cancel()
-            await asyncio.gather(*readers, return_exceptions=True)
+            with operation("reader-drain"):
+                for reader in readers:
+                    if not reader.done():
+                        reader.cancel()
+                await asyncio.gather(*readers, return_exceptions=True)
         finally:
-            await _close_native_transport(process)
+            with operation("transport-close"):
+                await _close_native_transport(process)
 
 
 async def _exchange(binary, project, profile, environment, *,
@@ -392,45 +408,57 @@ async def _exchange(binary, project, profile, environment, *,
                 raise ValueError("Codex native discovery returned an unexpected response")
         raise ValueError("Codex native discovery notification bound exceeded")
 
+    phase = "initialize-send"
     try:
         async with asyncio.timeout(15):
             await send({"id": 1, "method": "initialize", "params": {
                 "clientInfo": {"name": "agentplugins", "version": "1"},
                 "capabilities": {"experimentalApi": True}}})
+            phase = "initialize-response"
             initialized = await response(1)
+            phase = "initialize-check"
             if not _path_equal(initialized.get("codexHome"), profile):
                 raise ValueError("Codex native discovery initialized another profile")
             native_version = next((version for version in versions
                 if str(initialized.get("userAgent", "")).startswith("agentplugins/" + version + " ")), None)
             if native_version is None:
                 raise ValueError("Codex runtime audit requires its pinned native version")
+            phase = "skills-send"
             await send({"method": "initialized"})
             await send({"id": 2, "method": "skills/list", "params": {
                 "cwds": [str(project)], "forceReload": True}})
+            phase = "skills-response"
             listing = await response(2)
+            phase = "stdin-close"
             process.stdin.close()
             await process.stdin.wait_closed()
             tail = asyncio.create_task(_drain(process.stdout, (4 << 20) - total))
             readers.append(tail)
+            phase = "process-wait"
             await process.wait()
+            phase = "reader-drain"
             await tail
             stderr = await errors
+            phase = "exit-check"
             if process.returncode != 0 or stderr:
                 raise ValueError(
                     "Codex native discovery did not exit cleanly: "
                     f"exit_code={process.returncode}, stderr_bytes={len(stderr)}, "
                     f"stderr_prefix={stderr[:2048]!r}")
+            phase = "group-check"
             while _windows_active(job) if job is not None else _posix_group_active(process.pid):
                 await asyncio.sleep(.02)  # Still inside the same finite 15-second budget.
             completed = True
             return (native_version, listing) if with_metadata else listing
     finally:
         failure = sys.exception()
+        diagnostic = {}
         try:
-            await _finish_native(process, job, completed, readers)
+            await _finish_native(process, job, completed, readers, diagnostic)
         except Exception as cleanup:
             if failure is not None:
-                raise RuntimeError(f"Codex discovery failed ({failure}); owned cleanup failed ({cleanup})") from failure
+                raise RuntimeError(f"Codex discovery failed (phase={phase}; {failure}); "
+                                   f"owned cleanup failed (phase={diagnostic.get('phase', 'unknown')}; {cleanup})") from failure
             raise
 
 
