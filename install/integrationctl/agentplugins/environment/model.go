@@ -98,6 +98,8 @@ type Requirement struct {
 type Requirements struct {
 	SchemaVersion int                    `json:"schema_version"`
 	Dependencies  map[string]Requirement `json:"dependencies"`
+	// Development marks local-only direct dependencies in the same graph.
+	Development   map[string]bool        `json:"development,omitempty"`
 	Targets       map[string][]string    `json:"targets"`
 }
 
@@ -313,6 +315,14 @@ func (requirements Requirements) Validate() error {
 		}
 		sources[key] = alias
 	}
+	for alias, present := range requirements.Development {
+		if !present {
+			return fmt.Errorf("development alias %q must be true", alias)
+		}
+		if _, declared := requirements.Dependencies[alias]; !declared {
+			return fmt.Errorf("development alias %q is not declared", alias)
+		}
+	}
 	assigned := map[string]bool{}
 	for target, aliases := range requirements.Targets {
 		if strings.TrimSpace(target) == "" {
@@ -363,6 +373,8 @@ func (requirement Requirement) SourceKey() (string, error) {
 type manifestIntent struct {
 	SchemaVersion int                  `json:"schema_version"`
 	Dependencies  []manifestDependency `json:"dependencies"`
+	// Omitted for historical locks: old fingerprint bytes remain unchanged.
+	Development   []string             `json:"development,omitempty"`
 	Targets       []manifestTarget     `json:"targets"`
 }
 
@@ -400,6 +412,9 @@ func ManifestDigest(requirements Requirements) (string, error) {
 			item.Selector = requirement.RequestedSelector()
 		}
 		intent.Dependencies = append(intent.Dependencies, item)
+	}
+	for _, alias := range sortedKeys(requirements.Development) {
+		intent.Development = append(intent.Development, alias)
 	}
 	for _, target := range sortedKeys(requirements.Targets) {
 		aliases := append([]string(nil), requirements.Targets[target]...)
