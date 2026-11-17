@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { hydrated } from './i18n-state.helpers';
 
 test('Hero alternatives open the installation-only page', async ({ page }) => {
   await page.goto('./');
@@ -25,6 +26,7 @@ for (const width of [1440, 390]) {
       });
     });
     await page.goto('./download/');
+    await hydrated(page);
     const tabs = page.locator('.download-section__install-tab');
     const command = page.locator('.download-section__command code');
     await expect(command).toHaveCount(1);
@@ -53,6 +55,7 @@ for (const width of [1440, 390]) {
 
 test('installation methods expose a keyboard-operable tabpanel', async ({ page }) => {
   await page.goto('./download/');
+  await hydrated(page);
   const tablist = page.getByRole('tablist');
   const tabs = tablist.getByRole('tab');
   const panel = page.getByRole('tabpanel');

@@ -9,6 +9,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
+from contextlib import contextmanager
+from datetime import datetime, timezone
+import hashlib
 
 
 def load_audit():
@@ -4767,7 +4770,43 @@ module.exports = {
             with patch.object(audit.sys, "platform", "darwin"):
                 with patch.dict(audit.os.environ, {
                         "GITHUB_ACTIONS": "true", "RUNNER_TEMP": scratch}):
-                    self.assertIsNone(audit.published_audit_temp_parent())
+                    self.assertEqual(audit.published_audit_temp_parent(),
+                                     str(Path(audit.tempfile.gettempdir()).resolve(strict=True)))
+
+    def test_published_macos_physical_parent_precedes_allocation_without_relaxing_guards(self):
+        audit = load_audit()
+        item = {"name": "owned-test", "repo": "example/skills", "folder": "owned-test",
+                "source": "unused", "skill_md_git_blob_sha1": "0" * 40}
+        with TemporaryDirectory() as temporary:
+            base = Path(temporary).resolve(strict=True)
+            physical = base / 'private-var/folders/session/tmp'
+            physical.mkdir(parents=True)
+            alias = base / 'var'
+            alias.symlink_to(base / 'private-var', target_is_directory=True)
+            spelled = alias / 'folders/session/tmp'
+            exchange_globals = audit.CODEX_RUNTIME_AUDIT['CodexRuntimeAudit'].__init__.__globals__
+            native_boundary = unittest.mock.Mock(side_effect=RuntimeError('inert native boundary'))
+            with (patch.dict(audit.AGENT_BINARIES, {'codex': '/inert/codex'}, clear=True),
+                  patch.dict(exchange_globals, {'_exchange': native_boundary}),
+                  patch.object(audit, 'call', side_effect=AssertionError('public install must not run')) as public):
+                # The old allocation spells an ancestor through the alias, just
+                # like /var/folders/... through macOS /var -> /private/var.
+                with TemporaryDirectory(dir=spelled) as old_root:
+                    with self.assertRaisesRegex(ValueError, 'Codex audit directory is redirected'):
+                        audit.do_case('/inert/uap', 'codex', 'skill', item, 0, Path(old_root), {})
+                native_boundary.assert_not_called()
+                with (patch.object(audit.sys, 'platform', 'darwin'),
+                      patch.object(audit.tempfile, 'gettempdir', return_value=str(spelled))):
+                    parent = audit.published_audit_temp_parent()
+                self.assertEqual(parent, str(physical))
+                with TemporaryDirectory(dir=parent) as new_root:
+                    with self.assertRaisesRegex(RuntimeError, 'inert native boundary'):
+                        audit.do_case('/inert/uap', 'codex', 'skill', item, 0, Path(new_root), {})
+                native_boundary.assert_called_once()
+                public.assert_not_called()
+            # Path guards themselves still reject a redirected directory.
+            with self.assertRaisesRegex(ValueError, 'Codex audit directory is redirected'):
+                exchange_globals['_real_directory'](spelled)
 
     def test_bootstrap_refusal_preserves_index_source_and_real_identity(self):
         # BUG-053: the original blocked ZIPs had 30 status placeholders but
@@ -7805,6 +7844,58 @@ module.exports = {
                     self.assertEqual(injected, {poisoned})
                     self.assertEqual(list(foreign.iterdir()), [])
 
+    def test_gemini_repeat_phase_diagnostics_keep_generated_logs_unqualified(self):
+        audit = load_audit()
+        item = {"name": "owned-test", "repo": "example/skills", "folder": "owned-test",
+                "source": "unused", "skill_md_git_blob_sha1": "0" * 40}
+        matched = [{"installation_id": "owned-id", "name": "owned-test",
+                    "clients": [{"client_id": "gemini"}]}]
+        operations = []
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            project = root / 'skill-00/project'
+            skill = project / '.gemini/skills/owned-test/SKILL.md'
+            logs = root / 'skill-00/home/.gemini/tmp/project/chats'
+            def fake_call(argv, env, cwd, timeout=105):
+                operation = argv[2] if argv[1] == 'skills' else argv[1]
+                operations.append(operation)
+                if operation == 'add':
+                    skill.parent.mkdir(parents=True, exist_ok=True)
+                    skill.write_text('---\nname: owned-test\n---\n')
+                    (project / 'uap.toml').write_text('owned-test')
+                    (project / 'uap.lock').write_text('owned-test')
+                    if operations.count('add') == 2:
+                        logs.mkdir(parents=True)
+                        (logs / 'session-add-skills-l.jsonl').write_text('{}\n')
+                elif operation == 'list' and operations.count('list') == 2:
+                    (logs / 'session-list-skills-l.jsonl').write_text('{}\n')
+                elif operation == 'remove':
+                    skill.unlink()
+                    skill.parent.rmdir()
+                    (project / 'uap.lock').unlink()
+                return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "", "timeout": False,
+                        "_json": {"data": {"installations": [] if 'remove' in operations else matched}}}
+            with (patch.object(audit, 'call', side_effect=fake_call),
+                  patch.object(audit, 'matching_installations', return_value=matched),
+                  patch.object(audit, 'locked_skill_is_pinned',
+                               side_effect=lambda *args: (project / 'uap.lock').exists()),
+                  patch.object(audit, 'matches_pinned_skill_bytes', return_value=True)):
+                row = audit.do_case('/unused/agentplugins', 'gemini', 'skill', item, 0, root, {})
+        self.assertEqual(operations, ['add', 'list', 'add', 'list', 'remove', 'list'])
+        phases = row['repeat_native_phases']
+        self.assertEqual([phase['phase'] for phase in phases],
+                         ['after-public-repeat-add', 'after-public-repeat-list'])
+        self.assertEqual([phase['total'] for phase in phases], [1, 2])
+        self.assertEqual([entry['path'].split('/')[-1] for entry in phases[0]['entries']],
+                         ['session-add-skills-l.jsonl'])
+        self.assertEqual({entry['path'].split('/')[-1] for entry in phases[1]['entries']},
+                         {'session-add-skills-l.jsonl', 'session-list-skills-l.jsonl'})
+        self.assertFalse(row['repeat_verified'])
+        self.assertFalse(row['repeat_native_runtime_only'])
+        self.assertEqual(row['status'], 'repeat-add-unqualified')
+        self.assertTrue(row['removal_verified'])
+        self.assertTrue(row['sentinels_preserved'])
+
     def test_failed_first_list_cannot_attest_plugin_lifecycle(self):
         # BUG-029: matching JSON from a failed list is not an attestation.
         audit = load_audit()
@@ -7832,6 +7923,7 @@ module.exports = {
         self.assertIsNone(result["cleanup"])
         self.assertEqual(operations, ["add", "list"])
         self.assertEqual(result["status"], "incomplete-native-proof")
+        self.assertNotIn("native_residual_diagnostics", result)
 
 
     def test_grok_prepared_skill_is_source_bound_and_never_native_pass(self):
@@ -8134,7 +8226,8 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                             "_json": {"data": {"installations":
                                               matched if installed["value"] else []}}}
 
-                with (patch.object(audit, "call", side_effect=simulate),
+                with (patch.dict(audit.AGENT_BINARIES, {}, clear=True),
+                      patch.object(audit, "call", side_effect=simulate),
                       patch.object(audit, "matching_installations", return_value=matched),
                       patch.object(audit, "uninstall_native_codex_plugin",
                                    return_value={"completed": native_removed})):
@@ -8493,7 +8586,7 @@ class ChatGPTDesktopAuditContracts(unittest.TestCase):
                 else:
                     self.assertFalse(receipt.exists())
 
-    def run_public_case(self, *, mutation=None):
+    def run_public_case(self, *, mutation=None, target="chatgpt"):
         import copy
         audit = load_audit()
         fixtures = json.loads(audit.FIXTURES.read_text())
@@ -8526,6 +8619,25 @@ class ChatGPTDesktopAuditContracts(unittest.TestCase):
             executable.write_text("inert selected executable; call port only")
             state = {"installed": False, "listed": 0}
             marketplace = "agentplugins-012345abcdef"
+            sqlite_pin = "sqlite_home = " + json.dumps(str(case / "home/.local/state/codex-sqlite")) + "\n"
+
+            async def discover(binary, project, profile, environment, **kwargs):
+                import sqlite3
+                from contextlib import closing
+                database = case / "home/.local/state/codex-sqlite/state_5.sqlite"
+                with closing(sqlite3.connect(database)) as connection:
+                    connection.execute("CREATE TABLE fixture_rows (value TEXT)")
+                    connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+                    connection.commit()
+                if mutation == "prebaseline-config":
+                    body = config.read_bytes()
+                    config.unlink()
+                    config.write_bytes(body)
+                if mutation == "prebaseline-foreign":
+                    (case / "home/.codex/foreign-neighbor.txt").write_text("altered before adoption")
+                if mutation == "prebaseline-managed":
+                    (project / 'unexpected-managed-root').mkdir()
+                return "0.162.0", {"data": [{"cwd": str(project), "skills": [], "errors": []}]}
 
             def reply(code=0, rows=None):
                 doc = {"schema_version": 1, "result": "success",
@@ -8544,22 +8656,22 @@ class ChatGPTDesktopAuditContracts(unittest.TestCase):
                         self.assertEqual(argv[3:], ["atlassian@" + marketplace, "--json"])
                         if mutation == "native-remove-failed":
                             return reply(1)
-                        config.write_text('[marketplaces.' + marketplace + ']\n'
+                        config.write_text(sqlite_pin + '[marketplaces.' + marketplace + ']\n'
                                           'source_type = "local"\nsource = '
                                           + json.dumps(str(market)) + '\n')
                     else:
                         self.assertEqual(argv[1:], ["plugin", "marketplace", "remove",
                                                    marketplace, "--json"])
-                        config.write_text("")
+                        config.write_text(sqlite_pin)
                     return reply()
                 self.assertEqual(argv[0], "/inert/uap")
-                self.assertEqual(argv[argv.index("--target") + 1], "chatgpt")
+                self.assertEqual(argv[argv.index("--target") + 1], target)
                 self.assertEqual(argv[argv.index("--scope") + 1], "user")
                 if argv[1] == "add":
                     if not state["installed"]:
                         config.parent.mkdir(parents=True, exist_ok=True)
                         market.mkdir()
-                        config.write_text('[plugins."atlassian@' + marketplace + '"]\n'
+                        config.write_text(sqlite_pin + '[plugins."atlassian@' + marketplace + '"]\n'
                                           'enabled = true\n[marketplaces.' + marketplace + ']\n'
                                           'source_type = "local"\nsource = '
                                           + json.dumps(str(market)) + '\n')
@@ -8583,11 +8695,21 @@ class ChatGPTDesktopAuditContracts(unittest.TestCase):
                     residue.write_text("name: atlassian\n")
                 if mutation == "foreign-changed":
                     (case / "home/.codex/foreign-neighbor.txt").write_text("changed")
+                if mutation == "sqlite-row":
+                    import sqlite3
+                    from contextlib import closing
+                    with closing(sqlite3.connect(case / "home/.local/state/codex-sqlite/state_5.sqlite")) as connection:
+                        connection.execute("UPDATE fixture_rows SET value='changed'")
+                        connection.commit()
+                if mutation == "profile-wal":
+                    (case / "home/.codex/state_5.sqlite-wal").write_bytes(b'x' * ((1 << 20) + 1))
                 return reply()
 
-            with (patch.dict(audit.AGENT_BINARIES, {"codex": str(executable)}, clear=True),
+            plugin_class = audit.CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"]
+            with (patch.dict(plugin_class.__init__.__globals__, {"_exchange": discover}),
+                  patch.dict(audit.AGENT_BINARIES, {"codex": str(executable)}, clear=True),
                   patch.object(audit, "call", side_effect=perform)):
-                row = audit.do_case("/inert/uap", "chatgpt", "plugin", "atlassian", 0,
+                row = audit.do_case("/inert/uap", target, "plugin", "atlassian", 0,
                                     root, {}, fixtures["signed_release_pins"])
             return row, commands
 
@@ -8630,6 +8752,28 @@ class ChatGPTDesktopAuditContracts(unittest.TestCase):
                     self.assertNotIn("--external-uninstalled", removal)
                 if mutation == "native-residue":
                     self.assertTrue(row["native_residuals"])
+
+    def test_plugin_sqlite_forward_measurement_keeps_alias_scope_and_scanner(self):
+        for target in ('codex', 'chatgpt'):
+            with self.subTest(target=target):
+                row, commands = self.run_public_case(target=target)
+                self.assertEqual(row['status'], 'passed')
+                proof = row['codex_plugin_sqlite_proof']
+                self.assertTrue(proof['runtime_semantics_unchanged'])
+                self.assertEqual(proof['observations'][0]['phase'], 'before-install')
+                self.assertIn('after-native-uninstall', [x['phase'] for x in proof['observations']])
+                self.assertTrue(all('--scope' not in argv or argv[argv.index('--scope')+1] == 'user'
+                                    for argv in commands))
+                row, _ = self.run_public_case(target=target, mutation='profile-wal')
+                self.assertEqual(row['status'], 'cleanup-failed')
+                self.assertIn('.codex/state_5.sqlite-wal: unscanned-too-large', row['native_residuals'])
+                with self.assertRaisesRegex(ValueError, 'table contents changed'):
+                    self.run_public_case(target=target, mutation='sqlite-row')
+                with self.assertRaisesRegex(ValueError, 'changed the authored config'):
+                    self.run_public_case(target=target, mutation='prebaseline-config')
+                for mutation in ('prebaseline-foreign', 'prebaseline-managed'):
+                    with self.assertRaisesRegex(ValueError, 'changed protected fixture authority'):
+                        self.run_public_case(target=target, mutation=mutation)
 
     def test_main_requires_codex_and_records_its_real_version_call(self):
         audit = load_audit()
@@ -9042,11 +9186,13 @@ class VSCodeUserManualObservationContracts(unittest.TestCase):
             record["_json"] = copy.deepcopy(document)
         return record
 
-    def _run_case(self, audit, base, source, index, *, attack=None, requirements=False):
+    def _run_case(self, audit, base, source, index, *, attack=None, requirements=False,
+                  authentication="not_checked", protect_data=False):
         import copy
 
         fixtures = self._fixtures(audit)
         binding = self._binding(fixtures, source, index)
+        binding["clients"][0]["authentication"] = authentication
         base.mkdir(parents=True, exist_ok=True)
         runroot = base / "run"
         calls = []
@@ -9070,6 +9216,8 @@ class VSCodeUserManualObservationContracts(unittest.TestCase):
             self.assertNotIn("--external-uninstalled", command)
             self.assertEqual(command[0], self.CLI)
             if stage == 1:
+                if protect_data:
+                    data.chmod(0o700)
                 self.assertEqual(command, [
                     self.CLI, "add", source, "--target", "vscode", "--scope",
                     "user", "--format", "json", "--no-save"])
@@ -9158,6 +9306,36 @@ class VSCodeUserManualObservationContracts(unittest.TestCase):
             row = audit.do_case(self.CLI, "vscode", "plugin", source, index, runroot,
                                 fixtures["plugin_declared_names"], fixtures["signed_release_pins"])
         return row, calls, binding, runroot / f"plugin-{index:02d}"
+
+    def test_manual_observation_keeps_declared_auth_and_private_data_baseline(self):
+        import copy
+
+        audit = load_audit()
+        fixtures = self._fixtures(audit)
+        source = fixtures["plugin_aliases"][0]
+        variants = (("not_checked", True), ("auth_pending", False),
+                    ("not_required", False), ("auth_pending", True))
+        with TemporaryDirectory() as temporary:
+            for index, (authentication, protect_data) in enumerate(variants):
+                with self.subTest(authentication=authentication, protect_data=protect_data):
+                    row, calls, binding, case = self._run_case(
+                        audit, Path(temporary).resolve() / str(index), source, 0,
+                        authentication=authentication, protect_data=protect_data)
+                    self.assertEqual(len(calls), 6)
+                    self.assertIs(audit.vscode_user_manual_positive(row, fixtures, self.CLI), True)
+                    self.assertEqual((case / "uap-data").stat().st_mode & 0o777, 0o700)
+                    for phase in ("original_binding", "repeat_binding", "post_refusal_binding"):
+                        self.assertEqual(row["vscode_user_manual"][phase], binding)
+                    self.assertIs(row["removal_verified"], False)
+                    self.assertIsNone(row["native_uninstall"])
+                    self.assertTrue(all("--external-uninstalled" not in command for command in calls))
+        for authentication in ("authenticated", "unknown", "", None, True, {}):
+            with self.subTest(rejected_authentication=authentication):
+                changed = copy.deepcopy(binding)
+                changed["clients"][0]["authentication"] = authentication
+                self.assertIsNone(audit.vscode_manual_binding(
+                    self._list_document(changed), row["identity"], source,
+                    fixtures["signed_release_pins"]))
 
     def test_real_do_case_retains_manual_binding_after_guarded_remove_refusal(self):
         audit = load_audit()
@@ -9820,6 +9998,547 @@ class WindsurfPreparedAcceptanceContracts(unittest.TestCase):
             with self.subTest(changed=changed):
                 self.assertEqual(self.invoke(original, 'windsurf-prepared-installation', **changed),
                                  (2, None, 0, 0))
+
+
+class CodexResidualDiagnosticsTest(unittest.TestCase):
+    def test_diagnostics_preserve_negative_scanner_and_bound_output(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / '.codex'
+            root.mkdir()
+            wal = root / 'state_5.sqlite-wal'
+            wal.write_bytes(bytes.fromhex('377f0682') + (3007000).to_bytes(4, 'big')
+                            + (4096).to_bytes(4, 'big') + b'x' * 20 + b'x' * (1 << 20))
+            paths = ['.codex/state_5.sqlite-wal']
+            for index in range(25):
+                relative = f'.tmp/plugins/plugins/foreign-{index}/SKILL.md'
+                path = root / relative
+                path.parent.mkdir(parents=True)
+                path.write_text('"owned-test"')
+                paths.append('.codex/' + relative)
+            data = 'plugins/data/agent-plugins/' + 'a' * 64 + '/npm-runtime/package.json'
+            (root / data).parent.mkdir(parents=True)
+            (root / data).write_text('"owned-test"')
+            paths.append('.codex/' + data)
+            original = audit.native_identity_residuals([root], 'owned-test', paths, 'codex')
+            diagnostic = audit.codex_residual_diagnostics([root], original)
+            self.assertEqual(original, audit.native_identity_residuals([root], 'owned-test', paths, 'codex'))
+            self.assertEqual(diagnostic['total'], 27)
+            self.assertEqual(len(diagnostic['entries']), 16)
+            self.assertEqual(diagnostic['omitted'], 11)
+            self.assertLessEqual(len(json.dumps(diagnostic).encode()), 8192)
+            entries = {entry['class']: entry for entry in diagnostic['entries']}
+            self.assertEqual(entries['wal']['wal_page_size'], 4096)
+            self.assertEqual(entries['wal']['wal_header_status'], 'recognized-magic')
+            self.assertEqual(entries['plugin-data']['data_reference_status'], 'not-supplied-to-diagnostic')
+            self.assertNotIn('path', entries['wal'])
+            with patch.object(audit, 'codex_residual_file_metadata', side_effect=OSError('private')):
+                self.assertEqual(audit.codex_residual_diagnostics([root], original),
+                                 {'diagnostic_status': 'unavailable'})
+            self.assertEqual(original, audit.native_identity_residuals([root], 'owned-test', paths, 'codex'))
+
+    def test_metadata_bounds_and_close_error_are_contained(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / '.codex'
+            root.mkdir()
+            with patch.object(audit.os, 'open', side_effect=AssertionError('must not open')):
+                for relative in ('x' * 2049, '/'.join(['x'] * 17)):
+                    self.assertEqual(audit.codex_residual_file_metadata(root, relative, True),
+                                     {'metadata_status': 'outside-bounds'})
+            wal = root / 'state_5.sqlite-wal'
+            wal.write_bytes(b'x' * 32)
+            close = audit.os.close
+            def close_then_fail(fd):
+                close(fd)
+                raise OSError('close error')
+            with patch.object(audit.os, 'close', side_effect=close_then_fail):
+                result = audit.codex_residual_file_metadata(root, wal.name, True)
+            self.assertEqual(result['metadata_status'], 'observed')
+            self.assertEqual(result['wal_header_status'], 'unrecognized-magic')
+
+    def test_wal_metadata_refuses_symlinks_and_identity_changes(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / '.codex'
+            root.mkdir()
+            real = root / 'real'
+            real.write_bytes(b'x' * 32)
+            link = root / 'state_5.sqlite-wal'
+            link.symlink_to(real)
+            with patch.object(audit.os, 'read', side_effect=AssertionError('must not read')):
+                self.assertFalse(audit.codex_residual_file_metadata(root, link.name, True)['ordinary_file'])
+            link.unlink()
+            link.write_bytes(b'x' * 32)
+            original_read = audit.os.read
+            def replace_after_read(fd, size):
+                result = original_read(fd, size)
+                link.unlink()
+                link.write_bytes(b'y' * 32)
+                return result
+            with patch.object(audit.os, 'read', side_effect=replace_after_read):
+                self.assertEqual(audit.codex_residual_file_metadata(root, link.name, True),
+                                 {'metadata_status': 'unstable'})
+            parent = root / 'redirect'
+            parent.symlink_to(root, target_is_directory=True)
+            self.assertEqual(audit.codex_residual_file_metadata(root, 'redirect/real', True),
+                             {'metadata_status': 'unavailable'})
+
+
+@unittest.skipUnless(sys.platform == "linux", "Linux descriptor custody contract")
+class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
+    VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0"}
+
+    @contextmanager
+    def fixture(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            home, project = root / 'home', root / 'project'
+            profile = home / '.gemini'
+            chats = profile / 'tmp/project/chats'
+            project.mkdir()
+            chats.mkdir(parents=True)
+            (profile / 'projects.json').write_text(json.dumps({'projects': {str(project): 'project'}}))
+            (chats.parent / '.project_root').write_text(str(project))
+            old = chats / 'foreign-session.jsonl'
+            old.write_bytes(b'pre-existing conversation must stay byte-for-byte\n')
+            before = audit.snapshot([profile])
+            observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit'](
+                home, project, before, self.VERSION)
+            self.assertIsNone(observer.reason)
+            case = dict(audit=audit, observer=observer, home=home, project=project,
+                        profile=profile, chats=chats, old=old, before=before)
+            try:
+                yield case
+            finally:
+                observer.close()
+
+    def record(self, case, index, transform=None):
+        now = datetime.now(timezone.utc)
+        timestamp = now.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        value = {'sessionId': 'skills-list-session',
+                 'projectHash': hashlib.sha256(str(case['project']).encode()).hexdigest(),
+                 'startTime': timestamp, 'lastUpdated': timestamp}
+        body = json.dumps(value, separators=(',', ':')).encode() + b'\n'
+        if transform:
+            body = transform(body)
+        name = f"session-{now:%Y-%m-%dT%H-%M}-{index}-skills-l.jsonl"
+        path = case['chats'] / name
+        path.write_bytes(body)
+        return path
+
+    def phase(self, case, label):
+        current = case['audit'].snapshot([case['profile']])
+        case['observer'].checkpoint(label, current)
+        return current
+
+    def test_six_empty_records_keep_raw_changes_and_exact_old_conversation(self):
+        with self.fixture() as case:
+            for index in range(1, 5):
+                self.record(case, index)
+            self.phase(case, 'after-public-repeat-add')
+            self.assertIsNone(case['observer'].reason)
+            for index in (5, 6):
+                self.record(case, index, lambda body: body[:-2] + b',"kind":"main"}\n')
+            after = self.phase(case, 'after-public-repeat-list')
+            self.assertTrue(case['observer'].finish(after))
+            self.assertNotEqual(case['before'], after)
+            evidence = case['observer'].evidence()
+            self.assertEqual(evidence['status'], 'metadata-only-new-records')
+            self.assertEqual(len(evidence['files']), 6)
+            self.assertFalse(evidence['producer_attribution'])
+            self.assertFalse(evidence['writer_closure'])
+            self.assertEqual(case['old'].read_bytes(), b'pre-existing conversation must stay byte-for-byte\n')
+
+    def test_conversation_foreign_duplicate_partial_and_unbounded_records_refuse(self):
+        changes = {
+            'message-record': lambda b: b + b'{"type":"user","content":"hello"}\n',
+            'messages-field': lambda b: b[:-2] + b',"messages":[]}\n',
+            'foreign-session': lambda b: b.replace(b'skills-list-session', b'conversation-session'),
+            'foreign-project': lambda b: b.replace(b'"projectHash":"', b'"projectHash":"foreign'),
+            'subagent': lambda b: b[:-2] + b',"kind":"subagent"}\n',
+            'null-kind': lambda b: b[:-2] + b',"kind":null}\n',
+            'nonfinite': lambda b: b[:-2] + b',"tokens":NaN}\n',
+            'duplicate': lambda b: b.replace(b'{', b'{"sessionId":"other",', 1),
+            'old-time': lambda b: json.dumps({**json.loads(b), 'startTime': '2000-01-01T00:00:00.000Z'}).encode() + b'\n',
+            'future-time': lambda b: json.dumps({**json.loads(b), 'lastUpdated': '2099-01-01T00:00:00.000Z'}).encode() + b'\n',
+            'partial': lambda b: b[:-1],
+            'blank-line': lambda b: b + b'\n',
+            'oversized': lambda b: b + b' ' * 4096,
+        }
+        for name, transform in changes.items():
+            with self.subTest(name=name), self.fixture() as case:
+                self.record(case, 1, transform)
+                after = self.phase(case, 'after-public-repeat-add')
+                self.assertFalse(case['observer'].finish(after))
+                self.assertEqual(case['observer'].evidence()['status'], 'unqualified')
+
+    def test_old_and_observed_leaf_replacement_parent_alias_and_foreign_delta_refuse(self):
+        for mutation in ('old-replaced', 'new-replaced', 'new-deleted', 'parent-replaced',
+                         'parent-alias', 'registry-replaced', 'foreign-delta', 'hardlink', 'symlink'):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                new = self.record(case, 1)
+                self.phase(case, 'after-public-repeat-add')
+                self.assertIsNone(case['observer'].reason)
+                if mutation in ('old-replaced', 'new-replaced', 'registry-replaced'):
+                    path = (case['old'] if mutation == 'old-replaced' else new if
+                            mutation == 'new-replaced' else case['profile'] / 'projects.json')
+                    body = path.read_bytes()
+                    path.unlink()
+                    path.write_bytes(body)
+                elif mutation == 'new-deleted':
+                    new.unlink()
+                elif mutation in ('parent-replaced', 'parent-alias'):
+                    moved = case['chats'].with_name('old-chats')
+                    case['chats'].rename(moved)
+                    if mutation == 'parent-alias':
+                        case['chats'].symlink_to(moved, target_is_directory=True)
+                    else:
+                        case['chats'].mkdir()
+                elif mutation == 'foreign-delta':
+                    (case['profile'] / 'foreign-settings.json').write_text('{}')
+                elif mutation == 'hardlink':
+                    os.link(new, case['chats'] / 'another-link')
+                else:
+                    new.unlink()
+                    new.symlink_to(case['old'])
+                after = self.phase(case, 'after-public-repeat-list')
+                self.assertFalse(case['observer'].finish(after))
+
+    def test_record_count_phase_order_version_and_during_read_swap_refuse(self):
+        with self.fixture() as case:
+            for index in range(1, 18):
+                self.record(case, index)
+            after = self.phase(case, 'after-public-repeat-add')
+            self.assertFalse(case['observer'].finish(after))
+        with self.fixture() as case:
+            self.record(case, 1)
+            after = self.phase(case, 'after-public-repeat-list')
+            self.assertFalse(case['observer'].finish(after))
+        with self.fixture() as case:
+            check = case['audit'].GEMINI_RUNTIME_AUDIT['pinned_version']
+            for version in (None, {}, {**self.VERSION, 'value': '0.67.0'},
+                            {**self.VERSION, 'exit_code': False},
+                            {**self.VERSION, 'exit_code': 1}):
+                self.assertFalse(check(version))
+        with self.fixture() as case:
+            new = self.record(case, 1)
+            original_read = os.read
+            changed = []
+            def replace_during_read(fd, count):
+                body = original_read(fd, count)
+                if not changed:
+                    original = new.read_bytes()
+                    new.unlink()
+                    new.write_bytes(original)
+                    changed.append(True)
+                return body
+            with patch.object(os, 'read', side_effect=replace_during_read):
+                after = self.phase(case, 'after-public-repeat-add')
+            self.assertEqual(changed, [True])
+            self.assertFalse(case['observer'].finish(after))
+
+    def test_public_repeat_gate_preserves_raw_delta_and_refuses_same_byte_parent_replacement(self):
+        for replaced in (False, True):
+            with self.subTest(replaced=replaced), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                root = Path(temporary).resolve()
+                project = root / 'skill-00/project'
+                profile = root / 'skill-00/home/.gemini'
+                chats = profile / 'tmp/project/chats'
+                skill = project / '.gemini/skills/owned-test/SKILL.md'
+                item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
+                        'source': 'unused', 'skill_md_git_blob_sha1': '0' * 40}
+                matched = [{'installation_id': 'owned-id', 'name': 'owned-test',
+                            'clients': [{'client_id': 'gemini'}]}]
+                operations, held = [], []
+                real_observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
+                def observe(*args):
+                    observer = real_observer(*args)
+                    held.extend(fd for fd, _ in (*observer.parents.values(), *observer.leaves.values()))
+                    return observer
+                def fake_call(argv, env, cwd, timeout=105):
+                    operation = argv[2] if argv[1] == 'skills' else argv[1]
+                    operations.append(operation)
+                    if operation == 'add':
+                        skill.parent.mkdir(parents=True, exist_ok=True)
+                        skill.write_text('---\nname: owned-test\n---\n')
+                        (project / 'uap.toml').write_text('owned-test')
+                        (project / 'uap.lock').write_text('owned-test')
+                        if operations.count('add') == 1:
+                            chats.mkdir(parents=True)
+                            (profile / 'projects.json').write_text(json.dumps({'projects': {str(project): 'project'}}))
+                            (chats.parent / '.project_root').write_text(str(project))
+                        elif replaced:
+                            chats.rmdir()
+                            chats.mkdir()
+                        else:
+                            self.record({'project': project, 'chats': chats}, 1)
+                    elif operation == 'list' and operations.count('list') == 2 and not replaced:
+                        self.record({'project': project, 'chats': chats}, 2)
+                    elif operation == 'remove':
+                        skill.unlink()
+                        skill.parent.rmdir()
+                        (project / 'uap.lock').unlink()
+                    return {'exit_code': 0, 'stdout_tail': '', 'stderr_tail': '', 'timeout': False,
+                            '_json': {'data': {'installations': [] if 'remove' in operations else matched}}}
+                with (patch.dict(audit.AGENT_BINARIES, {}, clear=True),
+                      patch.dict(audit.GEMINI_RUNTIME_AUDIT, {'GeminiRepeatAudit': observe}),
+                      patch.object(audit, 'call', side_effect=fake_call),
+                      patch.object(audit, 'matching_installations', return_value=matched),
+                      patch.object(audit, 'locked_skill_is_pinned',
+                                   side_effect=lambda *args: (project / 'uap.lock').exists()),
+                      patch.object(audit, 'matches_pinned_skill_bytes', return_value=True)):
+                    row = audit.do_case('/unused/agentplugins', 'gemini', 'skill', item, 0, root, {},
+                                        client_version=self.VERSION)
+                self.assertEqual(operations, ['add', 'list', 'add', 'list', 'remove', 'list'])
+                self.assertTrue(row['removal_verified'])
+                self.assertTrue(row['sentinels_preserved'])
+                self.assertEqual(row['repeat_native_unchanged'], replaced)
+                self.assertEqual(row['repeat_native_runtime_only'], not replaced)
+                self.assertEqual(row['repeat_verified'], not replaced)
+                self.assertEqual(row['status'], 'repeat-add-unqualified' if replaced else 'passed')
+                self.assertTrue(held)
+                for fd in held:
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+
+
+
+
+@unittest.skipUnless(sys.platform == "linux", "Linux cache retirement custody contract")
+class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
+    def fixture(self, root, audit):
+        import shutil
+        home, project = root / 'home', root / 'project'
+        profile = home / '.claude'
+        profile.mkdir(parents=True, exist_ok=True)
+        foreign = profile / 'foreign-neighbor.txt'
+        if not foreign.exists():
+            foreign.write_text('unmanaged native neighbor must survive\n')
+        before = audit.scoped_snapshot((profile,))
+        name, physical, market = 'skill-owned', 'skill-owned-physical', 'agentplugins-' + 'a' * 12
+        active = project / '.claude/skills' / physical
+        bundle = active / '.agentplugins-plugin'
+        payload = bundle / '.agentplugins-runtime/skills/owned-test/SKILL.md'
+        payload.parent.mkdir(parents=True)
+        payload.write_text('---\nname: owned-test\n---\n')
+        cache = profile / 'plugins/cache' / market / name / '0.0.0'
+        cache.parent.mkdir(parents=True)
+        shutil.copytree(bundle, cache)
+        revision = {'resolved_revision': 'a' * 40, 'tree_digest': 'sha256:' + 'b' * 64,
+                    'manifest_digest': 'sha256:' + 'c' * 64}
+        client = {'client_id': 'claude', 'scope': 'project', 'materialization': 'materialized',
+                  'activation': 'active', 'authentication': 'not_required', 'policy': 'allowed',
+                  'verification': 'installation_verified', 'package_revision': revision}
+        public = {'installation_id': 'owned-install', 'name': name, 'source': 'example/skills/skills/owned-test',
+                  'clients': [client]}
+        receipt = {'kind': 'claude_project_plugin_cache', 'object_id': 'claude-project-cache:' + name + '@' + market,
+                   'logical_name': name, 'path': str(bundle), 'source_relative': cache.relative_to(profile).as_posix(),
+                   'managed_digest': 'sha256:' + 'd' * 64, 'protection_class': 'managed'}
+        binding = dict(client, client_binding_id='owned-binding', target_locator=str(active),
+                       physical_artifact_id=physical, native_objects=[receipt])
+        record = {'installation_id': public['installation_id'], 'declared_name': name,
+                  'source': {'repository': 'example/skills', 'package_subpath': 'skills/owned-test',
+                             'resolved_revision': revision['resolved_revision'], 'tree_digest': revision['tree_digest']},
+                  'package': {'declared_name': name, 'manifest_digest': revision['manifest_digest']},
+                  'clients': {'owned-binding': binding}}
+        state = project / '.uap/state-v2.json'
+        state.parent.mkdir(parents=True)
+        state.write_text(json.dumps({'schema_version': 5, 'installations': [record]}))
+        key = name + '@' + market
+        installed = profile / 'plugins/installed_plugins.json'
+        installed.write_text(json.dumps({'version': 2, 'plugins': {key: [{'scope': 'project',
+            'projectPath': str(project), 'installPath': str(cache)}]}, 'retained': 'same'}))
+        markets = profile / 'plugins/known_marketplaces.json'
+        markets.write_text(json.dumps({market: {'source': {'source': 'directory', 'path': str(active)},
+                                               'installLocation': str(active)}, 'foreign': {'retained': True}}))
+        cleanup = {'schema_version': 1, 'result': 'success', 'outcome': 'completed', 'scope': 'project',
+                   'actions': [{'installation_id': public['installation_id'], 'binding_id': 'owned-binding',
+                                'client_id': 'claude', 'action': 'remove'}]}
+        added = {'items': [{'targetId': 'claude', 'alias': 'owned-test', 'destinationPath': str(active)}]}
+        return dict(cleanup=cleanup, home=home, project=project, profile=profile, before=before, public=public, added=added,
+                    active=active, cache=cache, state=state, installed=installed, markets=markets, market=market, key=key)
+
+    def capture(self, audit, f):
+        def document(path):
+            text, error = audit.copilot_settings_read(path, f['home'].parent)
+            self.assertIsNone(error)
+            return json.loads(text, object_pairs_hook=audit._unique_json_object)
+        return audit.CLAUDE_RETIREMENT_AUDIT['CacheRetirement'](
+            f['home'].parent, f['home'], f['project'], f['public'], f['added'],
+            {'repo': 'example/skills', 'folder': 'owned-test'}, document,
+            audit.scoped_snapshot, f['before'])
+
+    def retire(self, f, marker=True):
+        import shutil
+        quarantine = f['cache'].parent / ('.agentplugins-cache-retire-' + '1' * 32)
+        quarantine.mkdir(mode=0o700)
+        moved = quarantine / 'retired'
+        f['cache'].rename(moved)
+        if marker:
+            (moved / '.orphaned_at').write_text('1794880808341')
+        doc = json.loads(f['installed'].read_text()); del doc['plugins'][f['key']]
+        f['installed'].write_text(json.dumps(doc))
+        doc = json.loads(f['markets'].read_text()); del doc[f['market']]
+        f['markets'].write_text(json.dumps(doc))
+        shutil.rmtree(f['active'])
+        return moved
+
+    def residuals(self, audit, f):
+        return audit.native_identity_residuals([f['profile']], 'owned-test',
+                                               audit.snapshot((f['profile'],)), 'claude')
+
+    def test_exact_receipt_inode_bytes_and_optional_marker_are_checkpoint_only(self):
+        audit = load_audit()
+        for marker in (False, True):
+            with self.subTest(marker=marker), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                subject = self.capture(audit, f)
+                original_inode = f['cache'].stat().st_ino
+                self.retire(f, marker)
+                residuals = self.residuals(audit, f)
+                self.assertTrue(residuals)
+                proof = subject.finish(residuals, f['cleanup'])
+                self.assertEqual(proof['status'], 'verified-cache-retirement-at-checkpoint')
+                self.assertEqual(proof['cache_inode'], original_inode)
+                self.assertEqual(proof['orphaned_marker_present'], marker)
+                self.assertFalse(proof['writer_closure_claimed'])
+                self.assertEqual(subject.fds, [])
+                self.assertEqual(residuals, self.residuals(audit, f))
+
+    def test_wrong_or_missing_receipt_never_creates_an_empty_authority(self):
+        audit = load_audit()
+        for mutation in ('missing', 'duplicate', 'source', 'path', 'modified', 'logical-name', 'native-binding', 'preexisting'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                state = json.loads(f['state'].read_text()); record = state['installations'][0]
+                objects = record['clients']['owned-binding']['native_objects']
+                if mutation == 'missing': objects.clear()
+                elif mutation == 'duplicate': objects.append(dict(objects[0]))
+                elif mutation == 'source': record['source']['resolved_revision'] = 'e' * 40
+                elif mutation == 'path': objects[0]['path'] = str(f['project'] / 'foreign')
+                elif mutation == 'modified': objects[0]['user_modified'] = True
+                elif mutation == 'logical-name': objects[0]['logical_name'] = 'foreign'
+                elif mutation == 'native-binding':
+                    doc = json.loads(f['installed'].read_text());doc['plugins'][f['key']][0]['scope'] = 'user'
+                    f['installed'].write_text(json.dumps(doc))
+                else:
+                    f['before'] = audit.scoped_snapshot((f['profile'],))
+                f['state'].write_text(json.dumps(state))
+                with self.assertRaises((ValueError, KeyError)):
+                    self.capture(audit, f)
+
+    def test_ambiguous_unsafe_modified_or_extra_residue_keeps_negative(self):
+        audit = load_audit()
+        for mutation in ('ambiguous', 'private-mode', 'bytes', 'extra', 'symlink', 'marker',
+                         'registry', 'foreign', 'external-residual', 'cleanup-binding', 'new-marker-race'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                subject = self.capture(audit, f); moved = self.retire(f)
+                if mutation == 'ambiguous': (f['cache'].parent / ('.agentplugins-cache-retire-' + '2' * 32)).mkdir()
+                elif mutation == 'private-mode': moved.parent.chmod(0o755)
+                elif mutation == 'bytes': (moved / '.agentplugins-runtime/skills/owned-test/SKILL.md').write_text('changed')
+                elif mutation == 'extra': (moved / 'extra').write_text('unowned')
+                elif mutation == 'symlink': (moved / 'link').symlink_to(f['state'])
+                elif mutation == 'marker': (moved / '.orphaned_at').write_text('0000000000000')
+                elif mutation == 'registry': f['installed'].write_text('{"version":2,"plugins":{},"retained":"changed"}')
+                elif mutation == 'cleanup-binding': f['cleanup']['actions'][0]['binding_id'] = 'foreign'
+                elif mutation == 'foreign': (f['profile'] / 'foreign-neighbor.txt').write_text('changed')
+                residuals = self.residuals(audit, f)
+                if mutation == 'external-residual': residuals.append('.claude/other-owned-test.json')
+                if mutation == 'new-marker-race':
+                    # A post-read foreign mutation cannot be hidden by a matching inode.
+                    original = subject.snapshotter
+                    def mutate(roots):
+                        result = original(roots)
+                        (moved / 'late').write_text('unowned')
+                        return result
+                    subject.snapshotter = mutate
+                proof = subject.finish(residuals, f['cleanup'])
+                self.assertEqual(proof['status'], 'unresolved-cache-retirement')
+                self.assertEqual(subject.fds, [])
+
+    def test_retained_registry_boolean_to_integer_changes_are_not_preserved(self):
+        audit = load_audit()
+        for registry in ('installed', 'markets'):
+            with self.subTest(registry=registry), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                if registry == 'installed':
+                    document = json.loads(f['installed'].read_text())
+                    document['plugins']['foreign@other'] = [{'enabled': True}]
+                    f['installed'].write_text(json.dumps(document))
+                subject = self.capture(audit, f)
+                self.retire(f)
+                path = f[registry]
+                document = json.loads(path.read_text())
+                if registry == 'installed': document['plugins']['foreign@other'][0]['enabled'] = 1
+                else: document['foreign']['retained'] = 1
+                path.write_text(json.dumps(document))
+                proof = subject.finish(self.residuals(audit, f), f['cleanup'])
+                self.assertEqual(proof['status'], 'unresolved-cache-retirement')
+                self.assertEqual(subject.fds, [])
+
+    def test_snapshot_limits_and_hardlinks_are_refused(self):
+        audit = load_audit()
+        for mutation in ('file', 'total', 'count', 'depth', 'hardlink', 'git', 'lock', 'empty'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                globals_ = audit.CLAUDE_RETIREMENT_AUDIT['CacheRetirement'].__init__.__globals__
+                changes = {'MAX_FILE_BYTES': 1} if mutation == 'file' else {'MAX_TREE_BYTES': 1} if mutation == 'total' else {'MAX_FILES': 1} if mutation == 'count' else {'MAX_DEPTH': 1} if mutation == 'depth' else {}
+                if mutation == 'git': (f['cache'] / '.git').mkdir()
+                elif mutation == 'lock': (f['cache'] / '.uap-integrations.lock').write_text('unowned')
+                elif mutation == 'empty':
+                    import shutil
+                    shutil.rmtree(f['cache']);f['cache'].mkdir()
+                    bundle = f['active'] / '.agentplugins-plugin'
+                    shutil.rmtree(bundle);bundle.mkdir()
+                if mutation == 'hardlink':
+                    os.link(f['cache'] / '.agentplugins-runtime/skills/owned-test/SKILL.md',
+                            f['cache'] / 'hardlink')
+                with patch.dict(globals_, changes), self.assertRaises(ValueError):
+                    self.capture(audit, f)
+
+    def test_do_case_requires_every_old_gate_and_never_hides_raw_residuals(self):
+        audit = load_audit()
+        for mutation in (None, 'post-list', 'sentinel', 'outside'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); f = {}; operations = []
+                def perform(argv, env, cwd, timeout=105, **kwargs):
+                    self.assertEqual(argv[0], '/inert/uap')
+                    operation = argv[2] if argv[1] == 'skills' else argv[1]
+                    operations.append(operation)
+                    if operation == 'add' and not f:
+                        f.update(self.fixture(root / 'skill-00', audit))
+                        (f['project'] / 'uap.toml').write_text('owned-test')
+                        (f['project'] / 'uap.lock').write_text('owned-test')
+                    elif operation == 'remove':
+                        self.retire(f)
+                        (f['project'] / 'uap.lock').unlink()
+                        if mutation == 'sentinel': (f['project'] / 'foreign-untouched.txt').write_text('changed')
+                        if mutation == 'outside': (f['profile'] / 'owned-test.json').write_text('owned-test')
+                    removed = 'remove' in operations
+                    return {'exit_code': 1 if removed and operation == 'list' and mutation == 'post-list' else 0,
+                            'stdout_tail': '', 'stderr_tail': '', 'timeout': False,
+                            '_json': f['added'] if operation == 'add' else f['cleanup'] if operation == 'remove' else
+                                     {'data': {'installations': [] if removed else [f['public']]}}}
+                with (patch.dict(audit.AGENT_BINARIES, {}, clear=True),
+                      patch.object(audit, 'call', side_effect=perform),
+                      patch.object(audit, 'matching_installations', side_effect=lambda *a: [f['public']]),
+                      patch.object(audit, 'matches_pinned_skill_bytes', return_value=True),
+                      patch.object(audit, 'locked_skill_is_pinned', side_effect=lambda *a: (f['project'] / 'uap.lock').exists())):
+                    item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
+                            'source': 'unused', 'skill_md_git_blob_sha1': '0' * 40}
+                    row = audit.do_case('/inert/uap', 'claude', 'skill', item, 0, root, {})
+                self.assertEqual(operations, ['add', 'list', 'add', 'list', 'remove', 'list'])
+                self.assertTrue(row['native_residuals'])
+                self.assertEqual(row['status'], 'passed' if mutation is None else 'cleanup-failed')
+                if mutation is None:
+                    self.assertEqual(row['claude_cache_retirement']['status'],
+                                     'verified-cache-retirement-at-checkpoint')
+                else:
+                    self.assertFalse(row['removal_verified'])
 
 
 if __name__ == "__main__":

@@ -6,6 +6,10 @@ type ClientSurface struct {
 	Evidence string `json:"evidence,omitempty"`
 }
 
+// CursorAgentSurfaceID is the cursor-agent CLI surface. It selects Cursor for
+// project scope only: user scope installs the package for the Cursor editor.
+const CursorAgentSurfaceID = "cursor_agent"
+
 // OpenCodeHostAuthority is a read-only, immutable prepared-host port. It does
 // no probing. The client contract owns the closed parent profile snapshot.
 type OpenCodeHostAuthority interface {

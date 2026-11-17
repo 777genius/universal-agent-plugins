@@ -640,7 +640,9 @@ func TestOpenCodeMetadataUpdateFencesPriorNativeEffects(t *testing.T) {
 					t.Fatal(err)
 				}
 				var config map[string]any
-				if err := json.Unmarshal(body, &config); err != nil || config["mcp"].(map[string]any)["sample-notify"] != nil {
+				err = json.Unmarshal(body, &config)
+				// Removing the last owned entry also removes the collection it created.
+				if mcp, _ := config["mcp"].(map[string]any); err != nil || mcp["sample-notify"] != nil {
 					t.Fatalf("old MCP was not removed: %s %v", body, err)
 				}
 				if _, err := os.Stat(paths[1]); !os.IsNotExist(err) {

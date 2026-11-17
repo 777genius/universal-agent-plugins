@@ -9,6 +9,9 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -110,6 +113,59 @@ func TestGeminiCycleExactCurrentBindingIdentityRejectsRootsIDsIntentAndExtraAuth
 		})
 	}
 }
+func TestGeminiCycleBindingRefusalReportsBothObservedStatusDifferences(t *testing.T) {
+	c := geminiCycleInert(t)
+	geminiCycleStageActual(t, c, "a")
+	r := c.recipes["a"]
+	i := r.Installation
+	b := i.Clients[r.Binding.ClientBindingID]
+	b.Activation, b.Authentication = domain.ActivationActive, domain.AuthenticationNotRequired
+	i.Clients = map[string]domain.ClientBinding{b.ClientBindingID: b}
+	_, err := geminiCycleBindingIdentity(r, i)
+	if err == nil || err.Error() != "Gemini exact binding/materialization/revision authority (activation_match=false authentication_match=false)" {
+		t.Fatalf("both committed status mismatches must remain a bounded refusal: %v", err)
+	}
+}
+
+func TestGeminiCycleBindingRefusalRetainsBoundedStateTrustAndUnassignedEvents(t *testing.T) {
+	c := geminiCycleInert(t)
+	raw := geminiCycleStageActual(t, c, "a")
+	r := c.recipes["a"]
+	c.stage = "add-a"
+	events := []byte("{\"method\":\"initialize\",\"nonce\":\"inert-unassigned\"}\n")
+	if err := os.WriteFile(c.f.base.Events, events, 0600); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := json.Marshal(c.f.evidence)
+	c.bindingRefusalEvidence(r, raw)
+	diagnostic := c.f.evidence["cycle_binding_refusal"].(map[string]any)
+	trust := filepath.Join(c.f.base.Home, ".gemini", "trustedFolders.json")
+	trustBody, err := os.ReadFile(trust)
+	if err != nil || diagnostic["observation_only"] != true || diagnostic["stage"] != "add-a" || diagnostic["scope"] != "a" || diagnostic["trust_original_sha256"] != geminiCycleSHA(trustBody) || diagnostic["probe_accepted_sha256"] != geminiCycleSHA(nil) {
+		t.Fatal("failed observation lost its original authority or stage")
+	}
+	for name, want := range map[string][]byte{"state": raw, "trust": trustBody, "probe_events": events} {
+		part := diagnostic[name].(map[string]any)
+		stream, ok := part["stream"].(geminiCycleBytes)
+		if part["captured"] != true || !ok || stream.Bytes != len(want) || stream.SHA256 != geminiCycleSHA(want) || !bytes.Equal(stream.Body, want) {
+			t.Fatal("failed observation changed or omitted exact bounded bytes", name)
+		}
+	}
+	delete(c.f.evidence, "cycle_binding_refusal")
+	after, _ := json.Marshal(c.f.evidence)
+	if !bytes.Equal(before, after) || len(c.eventsAccepted) != 0 || c.observed {
+		t.Fatal("diagnostic advanced an accepted event, baseline or completion")
+	}
+	for _, rejected := range [][]byte{bytes.Repeat([]byte{'x'}, (64<<10)+1), []byte(c.f.secret), []byte(`{"secret":"uap-gemini-private-key"}`)} {
+		if !reflect.DeepEqual(c.bindingRefusalBytes(rejected, nil), map[string]any{"captured": false}) {
+			t.Fatal("private or oversized diagnostic body retained")
+		}
+	}
+	if !reflect.DeepEqual(c.bindingRefusalBytes(raw, errors.New("private path")), map[string]any{"captured": false}) {
+		t.Fatal("failed read exposed diagnostics or an error string")
+	}
+}
+
 func TestGeminiCycleRepeatedRemovalPreservesActualSupervisorNaturalExit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()

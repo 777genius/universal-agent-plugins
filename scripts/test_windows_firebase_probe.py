@@ -1,6 +1,8 @@
 """Owned process controls; portable fixtures do not qualify native Firebase."""
 from contextlib import ExitStack
+import ctypes
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -9,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -154,6 +157,235 @@ class FirebaseFamilyControls(unittest.TestCase):
                 self.assertEqual(receipt["retained_owned_temp"], not settled)
                 self.assertEqual(receipt["primary_report"],
                                  {"bytes": len(original), "sha256": hashlib.sha256(original).hexdigest()})
+
+
+class DiagnosticKernel:
+    """Inert Win32 responses; membership must precede any executable lookup."""
+
+    def __init__(self, pids=(41, 42), foreign=(42,), name="child.exe", failure=None):
+        self.pids, self.foreign, self.name = pids, foreign, name
+        self.failure, self.events = failure, []
+        self.C, self.handle = ctypes, 700
+        self.api = SimpleNamespace(**{
+            name: mock.Mock(side_effect=method) for name, method in (
+                ("QueryInformationJobObject", self.query),
+                ("OpenProcess", self.open), ("IsProcessInJob", self.member),
+                ("QueryFullProcessImageNameW", self.image), ("CloseHandle", self.close_handle))})
+
+    def query(self, handle, kind, pointer, length, unused):
+        if handle != self.handle or kind != 3 or length != ctypes.sizeof(pointer._obj):
+            raise AssertionError("wrong held Job query")
+        self.events.append("query")
+        if self.failure == "query":
+            return 0
+        out = pointer._obj
+        out.assigned = len(self.pids)
+        out.count = 17 if self.failure == "count" else len(self.pids)
+        for i, pid in enumerate(self.pids[:16]):
+            out.pids[i] = pid
+        return 1
+
+    def open(self, access, inherit, pid):
+        if access != 0x1000 or inherit:
+            raise AssertionError("excess process authority")
+        self.events.append(("open", pid))
+        return 0 if self.failure == "open" else pid + 1000
+
+    def member(self, handle, job, output):
+        if job != self.handle:
+            raise AssertionError("foreign Job")
+        pid = handle - 1000
+        self.events.append(("member", pid))
+        output._obj.value = pid not in self.foreign
+        return 0 if self.failure == "membership" else 1
+
+    def image(self, handle, flags, output, size):
+        pid = handle - 1000
+        if (pid in self.foreign or ("member", pid) not in self.events
+                or flags != 0 or size._obj.value != 4096):
+            raise AssertionError("unverified image read")
+        self.events.append(("image", pid))
+        if self.failure == "image":
+            return 0
+        value = "C:\\private-must-not-leak\\" + self.name
+        output.value = value
+        size._obj.value = len(value)
+        return 1
+
+    def close_handle(self, handle):
+        self.events.append(("close", handle - 1000))
+        return 1
+
+
+class FirebaseFailureDiagnosticControls(unittest.TestCase):
+    setUp = FirebaseFamilyControls.setUp
+
+    def test_cleanup_failure_keeps_primary_negative_and_only_owned_relative_metadata(self):
+        evidence = self.root / "evidence"
+        evidence.mkdir()
+        owned = self.root / "owned"
+        owned.mkdir()
+        member = owned / "staging" / "locked.txt"
+        member.parent.mkdir()
+        member.write_bytes(b"owned residue")
+        foreign = self.root / "foreign.txt"
+        foreign.write_bytes(b"unchanged")
+        primary = b'{"status":"failed-install-residue","inert_control":true}\n'
+        error = PermissionError(13, "private raw exception must not escape", str(member))
+        error.winerror = 32
+
+        def observe(*_args, **_kwargs):
+            (evidence / "published-firebase-claude.json").write_bytes(primary)
+            return {"child_exit": 1, "timeout": False, "gate_released": True,
+                    "counts_before": {"active": 4, "total": 60, "terminated": 0},
+                    "forced": True, "settled": True, "primary_error": None,
+                    "cleanup_error": None}
+
+        with mock.patch.object(probe.tempfile, "mkdtemp", return_value=str(owned)), \
+                mock.patch.object(probe, "supervise", side_effect=observe), \
+                mock.patch.object(probe.shutil, "rmtree", side_effect=error) as remove, \
+                mock.patch.object(probe.os, "chmod", side_effect=AssertionError("no chmod")):
+            self.assertEqual(probe.run_probe("inert-never-executed.cmd", evidence), 1)
+        remove.assert_called_once_with(owned)
+        doc = json.loads((evidence / "published-firebase-process-family.json").read_text())
+        self.assertIn("failure_diagnostics", doc)
+        self.assertEqual(doc["failure_diagnostics"]["temp_cleanup"],
+                         {"errno": 13, "winerror": 32, "relative_member": "staging/locked.txt"})
+        self.assertFalse(doc["temp_removed"])
+        self.assertTrue(doc["retained_owned_temp"])
+        self.assertEqual(doc["temp_cleanup_error"], "PermissionError")
+        self.assertTrue(doc["family"]["settled"])
+        self.assertTrue(doc["family"]["forced"])
+        self.assertEqual((evidence / "published-firebase-claude.json").read_bytes(), primary)
+        self.assertEqual(doc["primary_report"],
+                         {"bytes": len(primary), "sha256": hashlib.sha256(primary).hexdigest()})
+        self.assertEqual(foreign.read_bytes(), b"unchanged")
+        self.assertTrue(member.exists())
+        self.assertNotIn(str(owned), json.dumps(doc))
+        self.assertNotIn("private raw exception", json.dumps(doc))
+
+    def test_cleanup_attribution_refuses_foreign_alias_replacement_and_unbounded_members(self):
+        owned = self.root / "owned"
+        owned.mkdir()
+        member = owned / "member"
+        member.write_bytes(b"owned")
+        foreign = self.root / "foreign"
+        foreign.write_bytes(b"foreign")
+        original = owned.lstat()
+        for name, path in (("foreign", foreign), ("escape", owned / ".." / "foreign"),
+                           ("long", owned / ("x" * 513)),
+                           ("deep", owned.joinpath(*(["x"] * 17))),
+                           ("missing", owned / "absent")):
+            with self.subTest(name=name):
+                error = PermissionError(13, "hidden " + str(foreign), str(path))
+                error.winerror = 5
+                self.assertEqual(probe.temp_failure_diagnostic(error, owned, original),
+                                 {"errno": 13, "winerror": 5, "relative_member": None})
+        error = PermissionError(13, "hidden", str(member))
+        error.winerror = True
+        changed = SimpleNamespace(st_dev=original.st_dev, st_ino=original.st_ino + 1,
+                                  st_mode=original.st_mode)
+        self.assertIsNone(probe.temp_failure_diagnostic(error, owned, changed)["relative_member"])
+        real_lstat = Path.lstat
+
+        def reparse(path, *args, **kwargs):
+            value = real_lstat(path, *args, **kwargs)
+            if path == member:
+                return SimpleNamespace(st_dev=value.st_dev, st_ino=value.st_ino,
+                                       st_mode=value.st_mode, st_nlink=1, st_file_attributes=0x400)
+            return value
+
+        with mock.patch.object(Path, "lstat", reparse):
+            detail = probe.temp_failure_diagnostic(error, owned, original)
+        self.assertEqual(detail, {"errno": 13, "winerror": None, "relative_member": None})
+        self.assertEqual(foreign.read_bytes(), b"foreign")
+
+    def test_process_snapshot_requires_held_membership_and_bounds_every_query(self):
+        for failure in (None, "query", "count", "open", "membership", "image"):
+            with self.subTest(failure=failure):
+                job = DiagnosticKernel(failure=failure)
+                with mock.patch.object(probe.time, "monotonic", return_value=10.0):
+                    detail = probe.process_failure_diagnostic(job, 900.0)
+                self.assertNotIn("private-must-not-leak", json.dumps(detail))
+                self.assertNotIn(42, [p["pid"] for p in detail["processes"]])
+                self.assertNotIn(("image", 42), job.events)
+                if failure is None:
+                    self.assertEqual(detail["processes"], [{"pid": 41, "executable": "child.exe"}])
+                if failure in ("query", "count"):
+                    self.assertFalse(job.api.OpenProcess.called)
+                if failure == "membership":
+                    self.assertFalse(job.api.QueryFullProcessImageNameW.called)
+                opened = [e[1] for e in job.events if isinstance(e, tuple) and e[0] == "open"]
+                closed = [e[1] for e in job.events if isinstance(e, tuple) and e[0] == "close"]
+                self.assertEqual(closed, [] if failure == "open" else opened)
+        job = DiagnosticKernel(pids=tuple(range(1, 17)), foreign=(), name="x" * 128)
+        with mock.patch.object(probe.time, "monotonic", return_value=10.0):
+            detail = probe.process_failure_diagnostic(job, 900.0)
+        self.assertEqual(len(detail["processes"]), 16)
+        self.assertEqual(detail["status"], "complete")
+        job = DiagnosticKernel(pids=(41,), foreign=(), name="x" * 129)
+        with mock.patch.object(probe.time, "monotonic", return_value=10.0):
+            detail = probe.process_failure_diagnostic(job, 900.0)
+        self.assertEqual(detail["processes"], [{"pid": 41, "executable": None}])
+        with mock.patch.object(probe.time, "monotonic", return_value=10.0):
+            expired = DiagnosticKernel()
+            self.assertEqual(probe.process_failure_diagnostic(expired, 9.0)["status"], "deadline")
+        self.assertFalse(expired.api.QueryInformationJobObject.called)
+
+    def test_diagnostic_errors_and_budget_cannot_prevent_mandatory_family_close(self):
+        for scenario in ("success", "raises", "base-exception", "not-forced"):
+            with self.subTest(scenario=scenario):
+                events = []
+                process = SimpleNamespace(pid=111, stdin=io.BytesIO(),
+                                          poll=mock.Mock(return_value=1),
+                                          wait=mock.Mock(side_effect=lambda **kw: events.append("wait")))
+                job = SimpleNamespace(close=mock.Mock(side_effect=lambda: events.append("close")))
+
+                def diagnostic(_job, deadline):
+                    self.assertEqual(deadline, 910.0)
+                    events.append("diagnostic")
+                    if scenario == "raises":
+                        raise RuntimeError("hidden diagnostic failure")
+                    if scenario == "base-exception":
+                        raise KeyboardInterrupt("hidden interruption")
+                    return {"status": "complete", "processes": [{"pid": 55, "executable": "child.exe"}]}
+
+                with mock.patch.object(probe.subprocess, "Popen", return_value=process), \
+                        mock.patch.object(probe, "WindowsJob", return_value=job), \
+                        mock.patch.object(probe, "job_counts", return_value={"total": 4,
+                                          "active": int(scenario != "not-forced"), "terminated": 0}), \
+                        mock.patch.object(probe, "process_failure_diagnostic", side_effect=diagnostic), \
+                        mock.patch.object(probe.time, "monotonic", return_value=10.0):
+                    proof = probe.supervise(["inert"], cwd=self.root, env={},
+                                            stdout=io.BytesIO(), stderr=io.BytesIO(), timeout=900)
+                self.assertEqual(events, (["diagnostic"] if scenario != "not-forced" else []) + ["close", "wait"])
+                self.assertTrue(proof["settled"])
+                self.assertEqual(proof["child_exit"], 1)
+                self.assertIsNone(proof["primary_error"])
+                self.assertIsNone(proof["cleanup_error"])
+        job = DiagnosticKernel(pids=(41,), foreign=())
+        clock = [10.0]
+        original_open = job.api.OpenProcess.side_effect
+
+        def late_open(*args):
+            result = original_open(*args)
+            clock[0] = 11.01
+            return result
+
+        job.api.OpenProcess.side_effect = late_open
+        with mock.patch.object(probe.time, "monotonic", side_effect=lambda: clock[0]):
+            detail = probe.process_failure_diagnostic(job, 900.0)
+        self.assertEqual(detail["status"], "deadline")
+        self.assertFalse(job.api.IsProcessInJob.called)
+        self.assertFalse(job.api.QueryFullProcessImageNameW.called)
+        job.api.CloseHandle.assert_called_once_with(1041)
+        receipt = {"family": {"child_exit": 1, "settled": True}, "temp_removed": False}
+        before = json.dumps(receipt, indent=2).encode()
+        oversized = {"processes": [{"pid": i, "executable": "\U0001f600" * 128} for i in range(16)]}
+        probe.add_failure_diagnostics(receipt, oversized)
+        self.assertLessEqual(len(json.dumps(receipt, indent=2).encode()) - len(before), 8192)
+        self.assertEqual(receipt.pop("failure_diagnostics"), {"status": "diagnostic-bound-exceeded"})
+        self.assertEqual(json.dumps(receipt, indent=2).encode(), before)
 
 
 if __name__ == "__main__":

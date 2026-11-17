@@ -2188,7 +2188,7 @@ class RuntimeSetupDiagnosticTests(unittest.TestCase):
                 self.assertIn("          path: ${{ runner.temp }}/grok-runtime-setup-diagnostic.json", upload)
             if filename == "client-automation-native.yml":
                 setup_block = text.split("      - name: Provision the signature-verified readonly controller runtime\n")[1].split("\n      - ")[0]
-                self.assertIn("        timeout-minutes: 8\n", setup_block)
+                self.assertIn("        timeout-minutes: 10\n", setup_block)
             else:
                 self.assertIn("    timeout-minutes: " + ("18" if filename == "grok-enable-readonly.yml" else "20") + "\n", text)
         self.assertEqual(len(set(commands)), 1)

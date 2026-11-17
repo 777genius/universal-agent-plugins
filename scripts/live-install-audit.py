@@ -14,12 +14,15 @@ import sys
 import tempfile
 import tomllib
 from runpy import run_path
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from urllib.parse import urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
+GEMINI_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/gemini_runtime_audit.py"))
+CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -322,7 +325,7 @@ def failed_case_diagnostics(row):
     """Expose existing failed-case evidence in logs; never change qualification."""
     keys = ("codex_public_add_ready", "codex_public_repeat_ready",
             "repeat_native_unchanged", "repeat_native_runtime_only", "repeat_native_changes",
-            "repeat_native_phases", "repeat_verified",
+            "repeat_native_phases", "gemini_repeat_evidence", "repeat_verified",
             "removal_verified", "sentinels_preserved")
     evidence = {key: row[key] for key in keys if row.get(key) is not None}
     if "error" in row:
@@ -1089,6 +1092,104 @@ def native_identity_residuals(native_roots, identity, observed_paths, target,
             except OSError:
                 leftover.append(observed + ": unreadable")
     return sorted(set(leftover))
+
+
+
+def codex_residual_file_metadata(root, relative, wal=False):
+    """Bounded structural metadata only; never registration or ownership proof."""
+    descriptors = []
+    try:
+        parts = Path(relative).parts
+        if len(relative.encode("utf-8")) > 2048 or len(parts) > 16:
+            return {"metadata_status": "outside-bounds"}
+        if not hasattr(os, "O_NOFOLLOW") or not path_inside_case(root, root.parent):
+            return {"metadata_status": "unsafe-path"}
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        descriptors.append(os.open(root, directory_flags))
+        parts = Path(relative).parts
+        if not parts or any(part in ("..", ".") for part in parts) or Path(relative).is_absolute():
+            return {"metadata_status": "unsafe-path"}
+        for part in parts[:-1]:
+            descriptors.append(os.open(part, directory_flags, dir_fd=descriptors[-1]))
+        parent = descriptors[-1]
+        before = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
+        result = {"metadata_status": "observed", "size_bytes": before.st_size,
+                  "device": before.st_dev, "inode": before.st_ino,
+                  "mode": stat.S_IMODE(before.st_mode),
+                  "ordinary_file": stat.S_ISREG(before.st_mode)}
+        if wal and stat.S_ISREG(before.st_mode):
+            descriptors.append(os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                       dir_fd=parent))
+            opened = os.fstat(descriptors[-1])
+            signature = lambda value: (value.st_dev, value.st_ino, value.st_mode,
+                                       value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+            if signature(before) != signature(opened):
+                return {"metadata_status": "unstable"}
+            header = os.read(descriptors[-1], 32)
+            after = os.fstat(descriptors[-1])
+            named = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
+            if (signature(opened) != signature(after) or signature(after) != signature(named)
+                    or not path_inside_case(root, root.parent)
+                    or any((os.fstat(fd).st_dev, os.fstat(fd).st_ino) !=
+                            (os.stat(root.joinpath(*parts[:index]), follow_symlinks=False).st_dev,
+                             os.stat(root.joinpath(*parts[:index]), follow_symlinks=False).st_ino)
+                           for index, fd in enumerate(descriptors[:-1]))):
+                return {"metadata_status": "unstable"}
+            magic = int.from_bytes(header[:4], "big")
+            result["wal_header_status"] = ("short-header" if len(header) != 32 else
+                "recognized-magic" if magic in (0x377f0682, 0x377f0683) else "unrecognized-magic")
+            if len(header) == 32 and magic in (0x377f0682, 0x377f0683):
+                result["wal_format_version"] = int.from_bytes(header[4:8], "big")
+                result["wal_page_size"] = int.from_bytes(header[8:12], "big")
+        return result
+    except (OSError, ValueError, RuntimeError):
+        return {"metadata_status": "unavailable"}
+    finally:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+def codex_residual_diagnostics(native_roots, residuals):
+    """Describe unresolved residue without influencing the scanner or verdict."""
+    try:
+        counts, groups = {}, {}
+        for index, residual in enumerate(residuals):
+            path, separator, reason = residual.partition(": ")
+            relative = path.removeprefix(".codex/")
+            category = ("wal" if re.fullmatch(r"state_[0-9]+\.sqlite-wal", relative) else
+                "catalog" if re.match(r"^\.tmp/plugins(?:-clone-[A-Za-z0-9]+)?/", relative) else
+                "plugin-data" if re.match(r"^plugins/data/agent-plugins/[0-9a-f]{64}/", relative) else "other")
+            reason = reason if separator and reason in ("symlink", "non-regular", "unscanned-too-large",
+                "unreadable", "unreadable-walk") else "identity-match"
+            key = category + ":" + reason
+            counts[key] = counts.get(key, 0) + 1
+            groups.setdefault(category, []).append((index, relative, reason))
+        selected = []
+        # Include each class before filling the bounded representative sample.
+        while len(selected) < 16 and any(groups.values()):
+            for category, entries in groups.items():
+                if entries and len(selected) < 16:
+                    selected.append((category, *entries.pop(0)))
+        result = {"total": len(residuals), "omitted": len(residuals) - len(selected),
+                  "counts": counts, "entries": []}
+        root = next((root for root in native_roots if root.name == ".codex"), None)
+        for category, index, relative, reason in selected:
+            entry = {"residual_index": index, "class": category, "reason": reason}
+            if category == "plugin-data":
+                entry["data_reference_status"] = "not-supplied-to-diagnostic"
+            if root is not None and category != "other":
+                entry.update(codex_residual_file_metadata(root, relative, category == "wal"))
+            result["entries"].append(entry)
+        while len(json.dumps(result, indent=2).encode("utf-8")) > 8192:
+            result["entries"].pop()
+            result["omitted"] += 1
+        return result
+    except Exception:
+        # Diagnostic failure must never replace the original negative result.
+        return {"diagnostic_status": "unavailable"}
 
 
 def path_inside_case(path, case_root):
@@ -1883,7 +1984,14 @@ def audit_client_id(target, kind):
 
 
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-            signed_release_pins=None):
+            signed_release_pins=None, *, client_version=None):
+    with ExitStack() as audits:
+        return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
+                        signed_release_pins, audits, client_version)
+
+
+def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
+             signed_release_pins, audits, client_version):
     native_target = audit_client_id(target, kind)
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
@@ -1909,7 +2017,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if (path.is_symlink() or
                 not path.parent.resolve().is_relative_to(canonical_case)):
             raise ValueError("nested audit directory escapes disposable case")
-        path.mkdir(parents=True, exist_ok=True)
+        path.mkdir(parents=True, exist_ok=True, mode=0o700 if path == data else 0o777)
         if path.is_symlink() or not path.resolve().is_relative_to(canonical_case):
             raise ValueError("nested audit directory escapes disposable case")
     native_roots = [home / v for v in NATIVE_ROOTS[native_target]]
@@ -1953,6 +2061,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     env = isolated_client_env(home, case_root, data)
     codex_skill_case = target == "codex" and kind == "skill"
     codex_runtime = None
+    codex_plugin_sqlite = None
     codex_add_ready = False
     codex_repeat_ready = False
     def assert_case_unchanged():
@@ -1973,6 +2082,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     raise ValueError("audit case native/project ancestor was redirected")
             if codex_runtime is not None:
                 codex_runtime.guard()
+            if codex_plugin_sqlite is not None:
+                codex_plugin_sqlite.guard()
         except (OSError, RuntimeError) as error:
             raise ValueError("audit case root became unavailable") from error
 
@@ -1982,6 +2093,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             windsurf_commands.append(list(args[0]))
         outcome = call(*args, **kwargs)
         assert_case_unchanged()
+        if codex_plugin_sqlite is not None:
+            codex_plugin_sqlite.checkpoint("after-public-command")
         return outcome
 
     if kind == "skill" and target in ("kimi", "grok"):
@@ -1992,7 +2105,19 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         codex_runtime = CODEX_RUNTIME_AUDIT["CodexRuntimeAudit"](
             AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign)
         assert_case_unchanged()
+    if native_target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
+        protected_home = scoped_snapshot((home,))
+        protected_delivery = scoped_snapshot((project, data))
+        codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
+            AGENT_BINARIES["codex"], case_root, home, project, env)
+        assert_case_unchanged()
+        initialized_home = scoped_snapshot((home,))
+        if (any(initialized_home.get(path) != value for path, value in protected_home.items())
+                or scoped_snapshot((project, data)) != protected_delivery):
+            raise ValueError("Codex preinstall initialization changed protected fixture authority")
     before = snapshot(native_roots)
+    claude_before = (scoped_snapshot(native_roots)
+                     if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)
     vscode_user = target == "vscode" and kind == "plugin"
     vscode_roots = (runroot, case_root, home, data, project)
     vscode_native_before = scoped_snapshot(native_roots) if vscode_user else None
@@ -2095,11 +2220,20 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_native_runtime_only = False
     repeat_native_changes = None
     repeat_native_phases = None
+    gemini_repeat_evidence = None
+    gemini_runtime = None
+    gemini_repeat_observed = True
     repeat_lock_unchanged = None
     repeat_project_unchanged = None
     repeat_verified = False
     if installed:
+        gemini_repeat_phases = target == "gemini" and kind == "skill"
+        capture_repeat_phases = codex_runtime is not None or gemini_repeat_phases
         before_repeat_native = snapshot(native_roots)
+        if gemini_repeat_phases and GEMINI_RUNTIME_AUDIT["pinned_version"](client_version):
+            gemini_runtime = GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
+                home, project, before_repeat_native, client_version)
+            audits.callback(gemini_runtime.close)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
                                  if codex_runtime is not None else None)
         before_repeat_project = (snapshot([project / root for root in project_skill_roots])
@@ -2115,11 +2249,15 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         before_repeat_lock = lock_state()
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
                                   **capture_option)
-        after_repeat_add = snapshot(native_roots) if codex_runtime is not None else None
+        after_repeat_add = snapshot(native_roots) if capture_repeat_phases else None
+        if gemini_runtime is not None:
+            gemini_runtime.checkpoint("after-public-repeat-add", after_repeat_add)
         repeat_add_json = repeat_add.pop("_json", None)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
-        after_repeat_list = snapshot(native_roots) if codex_runtime is not None else None
+        after_repeat_list = snapshot(native_roots) if capture_repeat_phases else None
+        if gemini_runtime is not None:
+            gemini_runtime.checkpoint("after-public-repeat-list", after_repeat_list)
         repeat_list_json = repeat_list.pop("_json", None)
         if vscode_user:
             vscode_repeat = vscode_manual_binding(repeat_list_json, identity, item, signed_release_pins)
@@ -2134,9 +2272,15 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
                 repeat_add_json, repeat_matches, identity)
         after_repeat_native = snapshot(native_roots)
-        if codex_runtime is not None:
+        if gemini_runtime is not None:
+            gemini_repeat_observed = gemini_runtime.finish(after_repeat_native)
+            gemini_repeat_evidence = gemini_runtime.evidence()
+        if capture_repeat_phases:
             repeat_native_phases = repeat_native_phase_evidence(
                 before_repeat_native, after_repeat_add, after_repeat_list, after_repeat_native)
+            if gemini_repeat_phases:
+                # Only public-operation phases occurred; no native checkpoint was invoked.
+                repeat_native_phases = repeat_native_phases[:2]
         repeat_native_unchanged = after_repeat_native == before_repeat_native
         if not repeat_native_unchanged:
             repeat_native_changes = snapshot_change_evidence(
@@ -2144,6 +2288,9 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             if codex_runtime is not None:
                 repeat_native_runtime_only = codex_runtime.repeat_runtime_only(
                     before_repeat_native, after_repeat_native, before_repeat_runtime)
+            elif gemini_runtime is not None:
+                repeat_native_runtime_only = gemini_repeat_observed and (
+                    gemini_repeat_evidence["status"] == "metadata-only-new-records")
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
@@ -2152,6 +2299,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             and len(repeat_matches) == 1
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
+            and gemini_repeat_observed
             and (not grok_prepared or repeat_project_unchanged)
             and (not kiro_prepared or kiro_prepared_user_client(repeat_matches[0].get("clients"))
                  == kiro_prepared_user_client(matching[0].get("clients")))
@@ -2177,6 +2325,21 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 home, env, project, identity, matching[0].get("version"),
                 owners=kit_owners, owned_call=audited_call)
         assert_case_unchanged()
+    claude_retirement = None
+    claude_retirement_proof = None
+    if claude_before is not None and installed and repeat_verified:
+        def claude_document(path):
+            text, error = copilot_settings_read(path, case_root)
+            if error is not None:
+                raise ValueError("Claude retirement metadata unavailable")
+            return json.loads(text, object_pairs_hook=_unique_json_object)
+        try:
+            claude_retirement = CLAUDE_RETIREMENT_AUDIT["CacheRetirement"](
+                case_root, home, project, matching[0], repeat_add_json, item,
+                claude_document, scoped_snapshot, claude_before)
+            audits.callback(claude_retirement.close)
+        except (OSError, ValueError, TypeError, KeyError, IndexError):
+            claude_retirement_proof = {"status": "unresolved-cache-retirement"}
     cleanup = None
     native_uninstall = None
     vscode_user_manual = None
@@ -2188,6 +2351,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             native_uninstall = uninstall_native_codex_plugin(
                 identity, home, case_root, env, project)
             assert_case_unchanged()
+            if codex_plugin_sqlite is not None:
+                codex_plugin_sqlite.checkpoint("after-native-uninstall")
         attestation = (["--external-uninstalled"] if
                        native_uninstall and native_uninstall["completed"] else [])
         # Grok project Skills have generated bundle names; never select by raw alias.
@@ -2325,6 +2490,15 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             native_residuals)
         and (item != "marketing-kit" or copilot_signed_kit_settings(
             home, case_root, kit_owners, False)))
+    claude_retired_residuals_verified = False
+    if (claude_retirement is not None and cleanup and cleanup["exit_code"] == 0
+            and post_list and post_list["exit_code"] == 0 and post_list_schema_valid
+            and old_ids.isdisjoint(remaining_ids) and not post_remove_identity_registered
+            and post_removal_skill is None and not post_removal_leftovers
+            and not post_lock_pinned and not post_skill_tree_delta and sentinels_preserved):
+        claude_retirement_proof = claude_retirement.finish(native_residuals, cleanup_json)
+        claude_retired_residuals_verified = (
+            claude_retirement_proof["status"] == "verified-cache-retirement-at-checkpoint")
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
@@ -2338,7 +2512,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
              or (copilot_native_after_remove is not None
                  and copilot_native_after_remove["status"] == "absent"))
         and not post_remove_identity_registered
-        and (not native_residuals or copilot_disabled_setting_retained)
+        and (not native_residuals or copilot_disabled_setting_retained
+             or claude_retired_residuals_verified)
         and (kind != "skill" or (post_removal_skill is None
                                   and not post_removal_leftovers and not post_lock_pinned
                                   and not post_skill_tree_delta))
@@ -2438,6 +2613,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "repeat_native_runtime_only": repeat_native_runtime_only,
             "repeat_native_changes": repeat_native_changes,
             "repeat_native_phases": repeat_native_phases,
+            **({"gemini_repeat_evidence": gemini_repeat_evidence}
+               if gemini_repeat_evidence is not None else {}),
             "repeat_lock_unchanged": repeat_lock_unchanged,
             "repeat_project_unchanged": repeat_project_unchanged,
             "repeat_verified": repeat_verified,
@@ -2454,6 +2631,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "post_skill_tree_delta": post_skill_tree_delta,
             "post_lock_pinned": post_lock_pinned,
             "removal_verified": removal_verified, "native_residuals": native_residuals,
+            **({"claude_cache_retirement": claude_retirement_proof}
+               if claude_before is not None else {}),
+            **({"native_residual_diagnostics": codex_residual_diagnostics(native_roots, native_residuals)}
+               if native_target == "codex" and kind == "plugin" and native_residuals else {}),
             "retained_passive_native_files": sorted(set(passive_retained)),
             "qoder_passive_log_link_verified": qoder_passive_log_link_verified,
             "qoder_native_after_repeat": qoder_native_before_remove,
@@ -2463,6 +2644,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
             "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
             "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
+            **({"codex_plugin_sqlite_proof": codex_plugin_sqlite.evidence()}
+               if codex_plugin_sqlite is not None else {}),
             "copilot_disabled_setting_retained": copilot_disabled_setting_retained,
             "vscode_user_manual": vscode_user_manual, "vscode_user_refusal": vscode_user_refusal,
             "post_list_schema_valid": post_list_schema_valid,
@@ -2918,12 +3101,13 @@ def vscode_manual_binding(document, identity, source, pins):
     clients = binding.get("clients")
     expected = {"client_id": "vscode", "scope": "user", "materialization": "materialized",
                 "activation": "manual_activation_required", "verification": "package_validated",
-                "authentication": "not_checked", "policy": "allowed",
+                "policy": "allowed",
                 "affected_surfaces": ["copilot", "vscode"]}
     if (type(uid) is not str or re.fullmatch(
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", uid) is None
             or type(clients) is not list or len(clients) != 1 or type(clients[0]) is not dict
-            or any(clients[0].get(key) != value for key, value in expected.items())):
+            or any(clients[0].get(key) != value for key, value in expected.items())
+            or clients[0].get("authentication") not in ("not_checked", "auth_pending", "not_required")):
         return None
     return binding
 
@@ -3135,11 +3319,22 @@ def vendor_bootstrap_attested():
 
 
 def published_audit_temp_parent():
-    """Keep GitHub Windows deep fixtures inside the real short runner scratch.
+    """Choose an ordinary physical parent before allocating disposable roots.
+
+    Darwin system temporary paths may use the /var -> /private/var alias.
+    Keep GitHub Windows deep fixtures inside the real short runner scratch.
 
     The published 0.1.101 CLI has a separately documented long-path bug.
     This qualifies an ordinary bounded Windows project, not MAX_PATH support.
     """
+    if sys.platform == "darwin":
+        # Resolve the system temporary *parent* before allocating owned roots.
+        # macOS may spell that parent through /var -> /private/var; downstream
+        # ordinary-directory identity guards continue to require physical paths.
+        parent = Path(tempfile.gettempdir()).resolve(strict=True)
+        if parent.is_symlink() or not parent.is_dir():
+            raise RuntimeError("macOS physical temporary parent is unavailable")
+        return str(parent)
     if sys.platform != "win32" or os.environ.get("GITHUB_ACTIONS") != "true":
         return None
     candidate = os.environ.get("RUNNER_TEMP", "")
@@ -3262,7 +3457,8 @@ def main():
     # preview paths for deep immutable Skills (tracked separately in PR #780).
     # This does not convert a refused installation into native PASS.
     temp_parent = published_audit_temp_parent()
-    report["temp_parent_kind"] = ("github-windows-runner" if temp_parent else "python-default")
+    report["temp_parent_kind"] = ("physical-python-default" if sys.platform == "darwin"
+                                  else "github-windows-runner" if temp_parent else "python-default")
     with tempfile.TemporaryDirectory(prefix="uap-live-30x30-", dir=temp_parent) as temp:
         runroot = Path(temp)
         probe_case = runroot / "version-probe"
@@ -3281,7 +3477,7 @@ def main():
             try:
                 result = do_case(cli, args.target, args.kind, item, i, runroot,
                                  doc["plugin_declared_names"],
-                                 doc["signed_release_pins"])
+                                 doc["signed_release_pins"], client_version=report["client_version"])
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "source": item if args.kind == "plugin" else item["source"],

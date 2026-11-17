@@ -65,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        client: [cline, grok]
+        client: [cline]
     env:
       PYTHONDONTWRITEBYTECODE: '1'
       EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -268,7 +268,7 @@ jobs:
       - name: Provision the signature-verified readonly controller runtime
         id: grok_readonly_setup
         if: ${{ always() && !cancelled() && steps.grok_checkout.outcome == 'success' && steps.grok_setup.outcome == 'success' && steps.grok_contracts.outcome == 'success' }}
-        timeout-minutes: 8
+        timeout-minutes: 10
         run: |
           bash scripts/provision_grok_native_runtime.sh
           sudo -n /usr/bin/python3 -B scripts/grok_bwrap_policy_setup.py "$RUNNER_TEMP" \

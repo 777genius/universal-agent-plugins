@@ -8,6 +8,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "Only the exact UAP-owned Antigravity plugin directory may be removed"
       ]
@@ -22,6 +23,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "uninstall the plugin in ChatGPT Plugins, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
       ]
@@ -36,6 +38,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "agentplugins will verify and remove its managed Claude Code @skills-dir plugin"
       ]
@@ -50,6 +53,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "remove any Cline skills and MCP entries for this plugin, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
       ]
@@ -64,6 +68,7 @@
       "ExternalRemovalComplete": true,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -76,6 +81,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "agentplugins will uninstall the plugin from GitHub Copilot CLI and VS Code automatically"
       ]
@@ -90,6 +96,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -102,6 +109,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "agentplugins will remove its managed Gemini CLI skills and MCP entries automatically"
       ]
@@ -116,6 +124,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "agentplugins will uninstall the managed Grok Build plugin automatically"
       ]
@@ -130,6 +139,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -142,6 +152,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -154,6 +165,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "remove the legacy custom Power in Kiro, then rerun remove with `--external-uninstalled`"
       ]
@@ -168,6 +180,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "agentplugins will remove its managed OpenCode skills and MCP entries automatically"
       ]
@@ -182,6 +195,7 @@
       "ExternalRemovalComplete": true,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -194,6 +208,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "agentplugins will uninstall the managed Qoder plugin automatically"
       ]
@@ -208,6 +223,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "agentplugins will uninstall the plugin from GitHub Copilot CLI and VS Code automatically"
       ]
@@ -222,6 +238,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "remove the prepared package manually, then rerun remove with `--external-uninstalled`"
       ]

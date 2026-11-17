@@ -36,7 +36,7 @@ func TestCursorNativeApprovalPreservesDisablementAndMalformedPolicy(t *testing.T
 			}
 			runner := &cursorApprovalRunner{}
 			env := clients.Env{NativeConfig: nativeconfig.New(), Runner: runner, LookupExecutable: func(string) (string, error) { return "/fake/cursor-agent", nil }}
-			if err := approveCursorMCP(context.Background(), env, request, "audit"); err == nil {
+			if _, err := approveCursorMCP(context.Background(), env, request, "audit"); err == nil {
 				t.Fatal("approved despite existing policy")
 			}
 			after, err := os.ReadFile(path)
@@ -65,7 +65,7 @@ func TestCursorNativeApprovalPinsProjectProfileAndExactServer(t *testing.T) {
 	t.Setenv("CURSOR_DATA_DIR", root)
 	t.Setenv("CURSOR_CONFIG_DIR", root)
 	t.Setenv("XDG_CONFIG_HOME", "")
-	if err := approveCursorMCP(context.Background(), env, request, "audit"); err != nil {
+	if _, err := approveCursorMCP(context.Background(), env, request, "audit"); err != nil {
 		t.Fatal(err)
 	}
 	if len(runner.commands) != 1 {
@@ -143,7 +143,7 @@ func TestCursorReadOnlyObservationReportsPendingApprovalOnly(t *testing.T) {
 
 	request.VerifyOnly = true
 	observed, err := observeCursorProjectMCP(context.Background(), env, request)
-	if err != nil || !observed.ApprovalPending || observed.Initialized {
+	if err != nil || !observed.ApprovalPending || observed.Initialized || observed.Approved {
 		t.Fatalf("read-only pending approval: %+v %v", observed, err)
 	}
 	if _, err := os.Stat(approvals); !os.IsNotExist(err) || len(runner.commands) != 1 {
@@ -152,7 +152,8 @@ func TestCursorReadOnlyObservationReportsPendingApprovalOnly(t *testing.T) {
 
 	request.VerifyOnly = false
 	observed, err = observeCursorProjectMCP(context.Background(), env, request)
-	if err != nil || observed.ApprovalPending || !observed.Initialized {
+	// The written approval is a native effect; an intact setup reports no other.
+	if err != nil || observed.ApprovalPending || !observed.Initialized || !observed.Approved {
 		t.Fatalf("confirmed observation did not approve: %+v %v", observed, err)
 	}
 	if _, err := os.Stat(approvals); err != nil {

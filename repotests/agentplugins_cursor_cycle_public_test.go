@@ -145,6 +145,13 @@ func cursorCyclePublicOutcome(output map[string]any, step cursorCycleStep, r *cu
 	return nil
 }
 
+func cursorCycleProgress(stage string) string {
+	if stage == "repeat-add-a" {
+		return "Resolving and validating one Agent Plugin package for every selected target...\n"
+	}
+	return grokCycleProgress(stage, cursorCycleName)
+}
+
 func (c *cursorMCPProjectCycle) publicProof(t *testing.T, r *cursorCycleRecipe, step cursorCycleStep, result ports.CommandResult) {
 	t.Helper()
 	if step.label == "repeat-remove-a" {
@@ -155,7 +162,7 @@ func (c *cursorMCPProjectCycle) publicProof(t *testing.T, r *cursorCycleRecipe, 
 		return
 	}
 	document, err := cursorCyclePublicDocument(result.Stdout)
-	if err != nil || string(result.Stderr) != grokCycleProgress(step.label, cursorCycleName) {
+	if err != nil || string(result.Stderr) != cursorCycleProgress(step.label) {
 		t.Fatal("Cursor exact public JSON/progress differs", err)
 	}
 	if step.verb == "remove" {

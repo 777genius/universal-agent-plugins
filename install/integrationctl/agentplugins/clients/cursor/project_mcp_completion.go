@@ -17,6 +17,9 @@ const cursorMCPApprovalPendingAction = "Cursor MCP servers await approval; repea
 
 func completeCursorProjectMCP(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
 	observed, observationErr := observeCursorProjectMCP(ctx, env, request)
+	if observed.Approved {
+		outcome.NativeEffect = domain.NativeEffectCommitted
+	}
 	var effect *shared.NativeEffectError
 	if domain.IsUnclosedClientProbe(observationErr) || errors.As(observationErr, &effect) && effect.Effect == domain.NativeEffectUncertain {
 		outcome.NativeEffect = domain.NativeEffectUncertain

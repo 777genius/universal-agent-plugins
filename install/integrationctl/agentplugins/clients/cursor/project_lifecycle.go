@@ -45,15 +45,22 @@ func (adapter *Adapter) activateProject(ctx context.Context, env clients.Env, re
 		return domain.ActivationOutcome{}, err
 	}
 	layout := cursorComponents(root)
-	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
-		Automatic:         adapter.AutomaticallyActivates(env, request),
+	automatic := adapter.AutomaticallyActivates(env, request)
+	verify := func() error {
+		return layout.Verify(cursorNativeObjects(request.Delivery.NativeObjects), false, env.NativeConfig)
+	}
+	// Intact owned objects need only MCP completion below, not a rewrite.
+	projection := request
+	if automatic && shared.IntactNativeReplacement(request, cursorNativeObjects(request.PreviousNativeObjects), cursorNativeObjects(request.Delivery.NativeObjects), verify) {
+		projection.VerifyOnly = true
+	}
+	outcome, err := shared.CompleteNativeConfigActivation(ctx, projection, shared.NativeConfigActivation{
+		Automatic:         automatic,
 		UnavailableAction: "select only supported Cursor project skills and MCP servers",
 		RepairAction:      "repair managed Cursor project skills and MCP entries",
 		RetryAction:       "retry managed Cursor project component installation",
 		CompletedAction:   "open the selected project in Cursor and inspect skills and MCP servers",
-		Verify: func() error {
-			return layout.Verify(cursorNativeObjects(request.Delivery.NativeObjects), false, env.NativeConfig)
-		},
+		Verify:            verify,
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
 			servers, err := cursorDesiredServers(request.Delivery.ActivePath, cursorNativeObjects(request.Delivery.NativeObjects))
 			if err != nil {

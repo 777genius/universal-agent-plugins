@@ -37,7 +37,7 @@ func (adapter *Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	editor := host.LookPath("cursor")
 	surfaces := []domain.ClientSurface{
 		host.ResolvedBinarySurface("cursor_editor", editor),
-		host.BinarySurface("cursor_agent", "cursor-agent"),
+		host.BinarySurface(domain.CursorAgentSurfaceID, "cursor-agent"),
 		host.DirectorySurface("cursor_config", configRoot),
 	}
 	if host.GOOS() == "darwin" {
@@ -49,7 +49,7 @@ func (adapter *Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	}
 	selection := []string{"cursor_editor", "cursor_desktop"}
 	if adapter.projectComponents {
-		selection = append(selection, "cursor_agent")
+		selection = append(selection, domain.CursorAgentSurfaceID)
 	}
 	return clients.Detection{
 		ConfigRoot:          configRoot,

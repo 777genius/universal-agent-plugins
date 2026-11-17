@@ -3,6 +3,7 @@
 import hashlib
 import importlib.util
 import json
+import ntpath
 import os
 from pathlib import Path
 import secrets
@@ -20,6 +21,137 @@ from windows_owned_job import WindowsJob
 REPO = SCRIPTS.parent
 OUTPUT_LIMIT = 1 << 20
 PROBE_TIMEOUT = 900  # Outer custody bound; the existing add budget remains 180 s.
+DIAGNOSTIC_LIMIT = 8 * 1024
+
+
+def process_identity(job, pid, deadline):
+    """Read only a held, confirmed member; never retain its full image path."""
+    from ctypes import wintypes as W
+    if not 0 < pid <= 0xffffffff or time.monotonic() >= deadline:
+        return None
+    handle = job.api.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+    if not handle:
+        return None
+    try:
+        member = W.BOOL()
+        if (time.monotonic() >= deadline
+                or not job.api.IsProcessInJob(handle, job.handle, job.C.byref(member))
+                or not member.value):
+            return None
+        result = {"pid": pid, "executable": None}
+        if time.monotonic() >= deadline:
+            return result
+        size = W.DWORD(4096)
+        image = job.C.create_unicode_buffer(size.value)
+        if (job.api.QueryFullProcessImageNameW(handle, 0, image, job.C.byref(size))
+                and 0 < size.value < 4096 and len(image.value) == size.value):
+            name = ntpath.basename(image.value)
+            if (0 < len(name) <= 128 and name not in (".", "..")
+                    and not any(ord(c) < 32 or c in "/\\:" for c in name)):
+                result["executable"] = name
+        return result
+    finally:
+        # Failure here is diagnostic only; the caller still closes its Job.
+        if not job.api.CloseHandle(handle):
+            raise RuntimeError("diagnostic process handle close failed")
+
+
+def process_failure_diagnostic(job, deadline):
+    """One bounded query, no PID scan, retries, privilege changes or argv reads."""
+    from ctypes import wintypes as W
+    deadline = min(deadline, time.monotonic() + 1.0)
+    result = {"status": "deadline", "processes": []}
+    if time.monotonic() >= deadline:
+        return result
+    C, api = job.C, job.api
+    signatures = {
+        "OpenProcess": ([W.DWORD, W.BOOL, W.DWORD], W.HANDLE),
+        "IsProcessInJob": ([W.HANDLE, W.HANDLE, C.POINTER(W.BOOL)], W.BOOL),
+        "QueryFullProcessImageNameW":
+            ([W.HANDLE, W.DWORD, W.LPWSTR, C.POINTER(W.DWORD)], W.BOOL),
+    }
+    for name, (args, returns) in signatures.items():
+        getattr(api, name).argtypes, getattr(api, name).restype = args, returns
+
+    class ProcessIds(C.Structure):
+        _fields_ = [("assigned", W.DWORD), ("count", W.DWORD),
+                    ("pids", C.c_size_t * 16)]
+
+    ids = ProcessIds()
+    if time.monotonic() >= deadline:
+        return result
+    if not api.QueryInformationJobObject(job.handle, 3, C.byref(ids), C.sizeof(ids), None):
+        result["status"] = "query-unavailable"
+        return result
+    if not 0 <= ids.count <= min(ids.assigned, 16):
+        result["status"] = "invalid-count"
+        return result
+    result.update(status="partial", assigned=int(ids.assigned))
+    seen = set()
+    for pid in ids.pids[:ids.count]:
+        if time.monotonic() >= deadline:
+            result["status"] = "deadline"
+            break
+        if pid in seen:
+            continue
+        seen.add(pid)
+        identity = process_identity(job, int(pid), deadline)
+        if identity is not None:
+            result["processes"].append(identity)
+    else:
+        if (len(result["processes"]) == ids.assigned
+                and all(p["executable"] is not None for p in result["processes"])):
+            result["status"] = "complete"
+    if time.monotonic() >= deadline:
+        result["status"] = "deadline"
+    return result
+
+
+def temp_failure_diagnostic(error, root, original):
+    """Attribute a bounded ordinary member without exposing exception text."""
+    result = {key: value if type(value) is int and 0 <= value <= 0xffffffff else None
+              for key in ("errno", "winerror")
+              for value in (getattr(error, key, None),)}
+    result["relative_member"] = None
+    try:
+        if not isinstance(error.filename, str):
+            return result
+        member = Path(error.filename)
+        relative = member.relative_to(root)
+        label = relative.as_posix()
+        if (not member.is_absolute() or len(label) > 512 or len(relative.parts) > 16
+                or any(part == ".." or ":" in part for part in relative.parts)
+                or any(ord(c) < 32 for c in label)):
+            return result
+        identity = lambda s: (s.st_dev, s.st_ino, s.st_mode)
+        if identity(root.lstat()) != identity(original):
+            return result
+        observed = []
+        current = root
+        for part in (None, *relative.parts):
+            if part is not None:
+                current = current / part
+            info = current.lstat()
+            if (not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode))
+                    or getattr(info, "st_file_attributes", 0) & 0x400
+                    or (stat.S_ISREG(info.st_mode) and info.st_nlink != 1)):
+                return result
+            observed.append((current, identity(info)))
+        if all(identity(path.lstat()) == expected for path, expected in observed):
+            result["relative_member"] = label
+    except (OSError, ValueError, TypeError):
+        pass
+    return result
+
+
+def add_failure_diagnostics(receipt, diagnostics):
+    """The extra serialized field is bounded independently of the primary proof."""
+    if not diagnostics:
+        return
+    original_size = len(json.dumps(receipt, indent=2).encode("utf-8"))
+    receipt["failure_diagnostics"] = diagnostics
+    if len(json.dumps(receipt, indent=2).encode("utf-8")) - original_size > DIAGNOSTIC_LIMIT:
+        receipt["failure_diagnostics"] = {"status": "diagnostic-bound-exceeded"}
 
 
 def job_counts(job):
@@ -72,6 +204,11 @@ def supervise(command, *, cwd, env, stdout, stderr, timeout):
                 proof["forced"] = proof["counts_before"]["active"] != 0
             except (OSError, RuntimeError) as error:
                 proof["primary_error"] = proof["primary_error"] or type(error).__name__
+            if proof["forced"] is True:
+                try:
+                    proof["process_diagnostics"] = process_failure_diagnostic(job, deadline)
+                except BaseException:
+                    proof["process_diagnostics"] = {"status": "unavailable", "processes": []}
             try:
                 # This existing API returns only after active==0 and handle close.
                 # Closing a handle in a failing finally block is not settlement.
@@ -140,6 +277,7 @@ def run_probe(cli, evidence_dir):
              "child_exit": None, "timeout": False, "forced": None,
              "gate_released": False, "counts_before": None, "cleanup_error": None}
     temp_removed, temp_error = False, None
+    diagnostics = {}
     try:
         with stdout_path.open("xb") as stdout, stderr_path.open("xb") as stderr:
             proof["settled"] = False
@@ -163,15 +301,23 @@ def run_probe(cli, evidence_dir):
                 temp_removed = True
             except OSError as error:
                 temp_error = type(error).__name__
+                try:
+                    diagnostics["temp_cleanup"] = temp_failure_diagnostic(error, root, original_root)
+                except BaseException:
+                    diagnostics["temp_cleanup"] = {"status": "unavailable"}
         primary = None
         if report.is_file() and not report.is_symlink() and report.stat().st_size <= OUTPUT_LIMIT:
             data = report.read_bytes()
             primary = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        processes = proof.pop("process_diagnostics", None)
+        if processes is not None:
+            diagnostics["process_family"] = processes
         receipt = {"schema_version": 1, "source_sha": os.environ.get("GITHUB_SHA"),
                    "scope": "owned Firebase probe process family; not native qualification",
                    "command_label": "published Firebase/Claude probe", "family": proof,
                    "primary_report": primary, "temp_removed": temp_removed,
                    "temp_cleanup_error": temp_error, "retained_owned_temp": not temp_removed}
+        add_failure_diagnostics(receipt, diagnostics)
         with family_report.open("x", encoding="utf-8") as output:
             output.write(json.dumps(receipt, indent=2) + "\n")
     return 0 if (proof.get("child_exit") == 0 and proof.get("timeout") is False
