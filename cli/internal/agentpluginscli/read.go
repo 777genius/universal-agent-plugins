@@ -64,7 +64,7 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		ProjectReadiness   []projectReadinessRecord `json:"project_readiness"`
 		Findings           []doctorFinding          `json:"findings"`
 	}{ReadOnly: true, ToolVersion: normalizedToolVersion(app.Version), SupportedClients: doctorSupportedClients(), Clients: publicClients,
-		InstallationCount: len(publicInstallations(state, false)), OpenOperationCount: len(open) + len(unresolvedNativeAttempts(state))}
+		InstallationCount: len(publicInstallations(state, false)), OpenOperationCount: len(open) + len(unresolvedNativeAttempts(app, state))}
 	selected := (*domain.Installation)(nil)
 	if len(args) == 1 {
 		installation, err := selectInstallation(state, args[0])
@@ -176,6 +176,7 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 			findings = append(findings, doctorFinding{Status: "unknown", Code: "client_detection_failed", ClientID: string(client.ClientID), Message: "client configuration could not be inspected safely", RecoveryAction: "correct the client profile configuration and rerun doctor"})
 		}
 	}
+	unresolved := unresolvedNativeAttempts(app, state)
 	if len(open) > 0 {
 		findings = append(findings, degradedFinding("open_recovery_operations", "operations", "an interrupted managed-directory operation requires recovery", "rerun the intended add, update, or remove command to perform transactional recovery"))
 	}
@@ -203,7 +204,7 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 			if !plansWithoutHostPresence(bindingClient) && (!visible || (client.Status != domain.DetectionDetected && client.DetectionError == nil)) {
 				findings = append(findings, scopedFinding("degraded", "client_not_visible", installation, binding.ClientID, "the package is tracked but no current client visibility evidence was detected", "install or launch the client so its CLI, desktop application, or configuration directory is visible, then rerun doctor"))
 			}
-			if unresolvedNativeAttempt(binding) {
+			if unresolved[binding.NativeActivationAttempt] {
 				// Every lifecycle command refuses this binding, so none is suggested.
 				findings = append(findings, unresolvedNativeAttemptFinding(installation, binding))
 				continue
@@ -331,18 +332,26 @@ func doctorScopeFlag(binding domain.ClientBinding) string {
 	return ""
 }
 
-// unresolvedNativeAttempt reports a client change whose effect was never
-// confirmed and that has no persisted intent a recovery could reconcile.
-func unresolvedNativeAttempt(binding domain.ClientBinding) bool {
-	return binding.NativeActivationAttempt != "" && binding.PendingNativeIntent == nil
-}
-
-func unresolvedNativeAttempts(state domain.StateFileV2) []string {
-	var attempts []string
+// unresolvedNativeAttempts lists client changes whose effect was never
+// confirmed and that neither a persisted intent nor a native transition
+// journal (replayed by the next mutation) can reconcile. Every lifecycle
+// command refuses their bindings. A failed journal read reports them all.
+func unresolvedNativeAttempts(app App, state domain.StateFileV2) map[string]bool {
+	journaled := map[string]bool{}
+	if observer, ok := app.Lifecycle.Kernel.NativeRecovery.(ports.NativeTransitionObserver); ok {
+		pending, _ := observer.Pending()
+		for _, item := range pending {
+			if item.Root != "" {
+				journaled[item.OperationID] = true
+			}
+		}
+	}
+	attempts := map[string]bool{}
 	for _, installation := range state.Installations {
 		for _, binding := range installation.Clients {
-			if unresolvedNativeAttempt(binding) {
-				attempts = append(attempts, binding.NativeActivationAttempt)
+			attempt := binding.NativeActivationAttempt
+			if attempt != "" && binding.PendingNativeIntent == nil && !journaled[attempt] {
+				attempts[attempt] = true
 			}
 		}
 	}
