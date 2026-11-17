@@ -8,6 +8,7 @@
       "ExternalRemovalComplete": true,
       "LocalActions": null,
       "NativeEffect": "unchanged",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "Reload Antigravity to clear the plugin from a running session"
       ]
@@ -22,6 +23,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "uninstall the plugin in ChatGPT Plugins, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
       ]
@@ -43,6 +45,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -55,6 +58,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "remove any Cline skills and MCP entries for this plugin, then rerun remove with `--external-uninstalled` (also use the flag if it was never activated)"
       ]
@@ -83,6 +87,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -109,6 +114,7 @@
       "ExternalRemovalComplete": true,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -121,6 +127,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -133,6 +140,7 @@
       "ExternalRemovalComplete": true,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -152,6 +160,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -164,6 +173,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -176,6 +186,7 @@
       "ExternalRemovalComplete": true,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "Run /reload or /new in Kimi Code to load the installed plugin; runtime MCP connections and authentication have not been verified."
       ]
@@ -190,6 +201,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "remove the legacy custom Power in Kiro, then rerun remove with `--external-uninstalled`"
       ]
@@ -204,6 +216,7 @@
       "ExternalRemovalComplete": true,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -216,6 +229,7 @@
       "ExternalRemovalComplete": true,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -237,6 +251,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -263,6 +278,7 @@
       "ExternalRemovalComplete": true,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": null
     }
   },
@@ -275,6 +291,7 @@
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",
+      "SettledPartialRemoval": false,
       "UserActions": [
         "remove the prepared package manually, then rerun remove with `--external-uninstalled`"
       ]
