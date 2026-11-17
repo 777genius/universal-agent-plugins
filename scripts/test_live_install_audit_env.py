@@ -10491,6 +10491,26 @@ class ClaudeRetirementDiagnosticContracts(unittest.TestCase):
                 self.assertEqual(facts["module"], "claude-cache-retirement")
                 self.assertIs(type(facts["line"]), int)
                 self.assertNotIn(str(ROOT), json.dumps(facts))
+        # A same-class callback refusal must not inherit an ancestor check's authority.
+        native = object.__new__(cls)
+        released = []
+        native.init = lambda: 1
+        native.free = released.append
+        native.stat = lambda *_args: 0
+        def foreign_query(*_args):
+            raise darwin["PresenceRefusal"]((False, False, False))
+        native.query = foreign_query
+        darwin["check"].__globals__["_METADATA"] = native
+        with patch.object(os, "fstat", return_value=object()):
+            try:
+                metadata(123)
+            except ValueError as error:
+                self.assertIsNone(darwin["presence_diagnostic"](error))
+                self.assertFalse(any(key in diagnose(error) for key in
+                    ("uuid_present", "group_uuid_present", "acl_present")))
+            else:
+                self.fail("callback refusal was swallowed")
+        self.assertEqual(released, [1])
         # Matching class/attributes outside the authored check cannot export facts.
         for error in (darwin["PresenceRefusal"]((False, False, False)),
                       ValueError("private-path-uuid-acl")):

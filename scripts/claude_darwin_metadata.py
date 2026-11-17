@@ -28,16 +28,15 @@ def presence_diagnostic(error):
     """Project only the exact authored presence refusal, never foreign attributes."""
     if type(error) is not PresenceRefusal:
         return None
-    current, authored = error.__traceback__, False
+    current, terminal = error.__traceback__, None
     for _ in range(64):
         if current is None:
             break
-        if current.tb_frame.f_code is Metadata.check.__code__:
-            authored = True
+        terminal = current.tb_frame.f_code
         current = current.tb_next
     else:
         return None
-    if not authored:
+    if terminal is not Metadata.check.__code__:
         return None
     presence = error.presence
     if (type(presence) is not tuple or len(presence) != 3
