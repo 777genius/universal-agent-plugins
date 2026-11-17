@@ -27,22 +27,24 @@ type cursorApprovalServer struct {
 	CWD     *string         `json:"cwd,omitempty"`
 }
 
-func approveCursorMCP(ctx context.Context, env clients.Env, request domain.ActivationRequest, name string) error {
+// approveCursorMCP reports whether it wrote the approval, which is a native
+// effect even when the setup stays Prepared afterwards.
+func approveCursorMCP(ctx context.Context, env clients.Env, request domain.ActivationRequest, name string) (bool, error) {
 	if err := cursorMCPPolicyAvailable(env, request, []string{name}); err != nil {
-		return err
+		return false, err
 	}
 	version, err := runCursorNative(ctx, env, request, "--version")
 	if err != nil {
-		return err
+		return false, err
 	}
 	if strings.TrimSpace(string(version.Stdout)) != "2026.09.18-9a7762b" {
-		return fmt.Errorf("cursor MCP approval format is not qualified for this agent version")
+		return false, fmt.Errorf("cursor MCP approval format is not qualified for this agent version")
 	}
 	key, err := cursorOwnedApprovalKey(env, request, name)
 	if err != nil {
-		return err
+		return false, err
 	}
-	_, err = shared.UpdateProjectTrustFileWithInitial(env.NativeConfig, cursorMCPPolicyPath(request, "mcp-approvals.json"), []byte("[]"), func(body []byte) ([]byte, error) {
+	approved, err := shared.UpdateProjectTrustFileWithInitial(env.NativeConfig, cursorMCPPolicyPath(request, "mcp-approvals.json"), []byte("[]"), func(body []byte) ([]byte, error) {
 		if err := cursorMCPPolicyAvailable(env, request, []string{name}); err != nil {
 			return nil, err
 		}
@@ -58,9 +60,9 @@ func approveCursorMCP(ctx context.Context, env clients.Env, request domain.Activ
 		return cursorAppendApproval(body, key)
 	})
 	if err != nil {
-		return err
+		return approved, err
 	}
-	return cursorMCPPolicyAvailable(env, request, []string{name})
+	return approved, cursorMCPPolicyAvailable(env, request, []string{name})
 }
 
 func cursorAppendApproval(body []byte, key string) ([]byte, error) {

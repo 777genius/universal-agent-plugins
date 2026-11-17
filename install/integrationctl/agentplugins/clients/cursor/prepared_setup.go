@@ -30,7 +30,7 @@ func (*Adapter) CanCompletePreparedSetup(request domain.ActivationRequest, outco
 		return false
 	}
 	for _, surface := range request.Client.Surfaces {
-		if surface.ID == "cursor_agent" && surface.Detected {
+		if surface.ID == domain.CursorAgentSurfaceID && surface.Detected {
 			return true
 		}
 	}
