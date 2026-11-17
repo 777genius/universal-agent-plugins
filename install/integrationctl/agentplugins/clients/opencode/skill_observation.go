@@ -39,6 +39,12 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 		outcome.NativeEffect = domain.NativeEffectUncertain
 		return shared.FailedActivation(outcome, "confirm prior OpenCode discovery process cleanup before retrying", err)
 	}
+	// The command's cancellation closes a running query without proving
+	// anything, so report it like other clients do. Only failures of the query
+	// itself, including its own time budget, leave the installed setup pending.
+	if ctx.Err() != nil {
+		return outcome, ctx.Err()
+	}
 	if pendingConfirmation {
 		outcome.UserActions = shared.AppendUnique(outcome.UserActions, openCodeMCPConfirmationAction)
 		return outcome, nil
