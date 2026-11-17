@@ -297,11 +297,7 @@ func rawSelector(raw rawDependency) (environment.Selector, error) {
 		return environment.Selector{Kind: environment.SelectorDefault}, nil
 	}
 	if raw.Version != "" {
-		kind := environment.SelectorVersion
-		if strings.HasPrefix(raw.Version, "^") {
-			kind = environment.SelectorRange
-		}
-		return environment.Selector{Kind: kind, Value: raw.Version}, nil
+		return environment.ParseRegistryVersionSelector(raw.Version)
 	}
 	if raw.Archive != "" {
 		return environment.Selector{Kind: environment.SelectorArchive, Value: raw.SHA256}, nil

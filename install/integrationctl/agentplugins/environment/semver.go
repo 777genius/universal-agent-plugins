@@ -5,51 +5,75 @@ import (
 	"regexp"
 	"strings"
 
-	"golang.org/x/mod/semver"
+	semver "github.com/Masterminds/semver/v3"
+	modsemver "golang.org/x/mod/semver"
 )
 
+// Stable releases retain their existing exact version contract. Graph downgrade
+// checks use this strict expression even when a constraint explicitly includes
+// a prerelease.
 var stableVersion = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$`)
-var caretVersion = regexp.MustCompile(`^\^(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?$`)
+var forbiddenVersionPrefix = regexp.MustCompile(`(^|[[:space:],|<>=~^])v[0-9]`)
 
-func validateVersionSelector(selector Selector) error {
-	valid := selector.Kind == SelectorVersion && stableVersion.MatchString(selector.Value)
-	valid = valid || selector.Kind == SelectorRange && caretVersion.MatchString(selector.Value)
-	if !valid {
-		return fmt.Errorf("invalid stable version selector %q", selector.Value)
+// ParseRegistryVersionSelector is the single parser/classifier for registry
+// version requirements. Exact versions remain exact; partial versions and
+// comparators are ranges. Neither path silently coerces a leading "v".
+func ParseRegistryVersionSelector(value string) (Selector, error) {
+	selector := Selector{Kind: SelectorRange, Value: value}
+	if isCanonicalExactVersion(value) {
+		selector.Kind = SelectorVersion
 	}
-	return nil
+	return selector, selector.Validate()
 }
 
-// CompareVersions compares stable package versions numerically.
-func CompareVersions(a, b string) int { return semver.Compare("v"+a, "v"+b) }
+func isCanonicalExactVersion(value string) bool {
+	if value == "" || strings.TrimSpace(value) != value || strings.HasPrefix(value, "v") {
+		return false
+	}
+	version, err := semver.StrictNewVersion(value)
+	return err == nil && version.String() == value
+}
 
-// SelectorMatchesVersion applies the supported exact/caret stable syntax.
+func validateVersionSelector(selector Selector) error {
+	if selector.Value == "" || strings.TrimSpace(selector.Value) != selector.Value ||
+		forbiddenVersionPrefix.MatchString(selector.Value) {
+		return fmt.Errorf("invalid version selector %q", selector.Value)
+	}
+	switch selector.Kind {
+	case SelectorVersion:
+		if isCanonicalExactVersion(selector.Value) {
+			return nil
+		}
+	case SelectorRange:
+		if _, err := semver.NewConstraint(selector.Value); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid version selector %q", selector.Value)
+}
+
+// CompareVersions keeps stable numeric ordering and prerelease ordering
+// delegated to an existing vetted semver implementation.
+func CompareVersions(a, b string) int {
+	return modsemver.Compare("v"+a, "v"+b)
+}
+
+// SelectorMatchesVersion applies the same parsed constraint grammar to registry
+// candidate selection, pin reuse and lock replay. A candidate must be a strict,
+// canonical SemVer version even if the library permits input coercion.
 func SelectorMatchesVersion(selector Selector, version string) bool {
-	if !stableVersion.MatchString(version) || validateVersionSelector(selector) != nil {
+	if validateVersionSelector(selector) != nil || !isCanonicalExactVersion(version) {
 		return false
 	}
 	if selector.Kind == SelectorVersion {
 		return version == selector.Value
 	}
-	parts := strings.Split(strings.TrimPrefix(selector.Value, "^"), ".")
-	lower := strings.Join(parts, ".")
-	if len(parts) == 2 {
-		lower += ".0"
-	}
-	if CompareVersions(version, lower) < 0 {
+	constraint, err := semver.NewConstraint(selector.Value)
+	if err != nil {
 		return false
 	}
-	got := strings.Split(version, ".")
-	if parts[0] != "0" {
-		return got[0] == parts[0]
-	}
-	if got[0] != "0" || got[1] != parts[1] {
-		return false
-	}
-	if parts[1] == "0" && len(parts) == 3 {
-		return got[2] == parts[2]
-	}
-	return true
+	candidate, err := semver.StrictNewVersion(version)
+	return err == nil && constraint.Check(candidate)
 }
 
 func registrySelectorMatches(selector Selector, pkg LockedPackage) bool {
