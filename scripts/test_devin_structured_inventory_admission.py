@@ -458,6 +458,95 @@ class ClosedDevinReadoutContracts(unittest.TestCase):
         state = dict(phase='mcp-a', reason='bootstrap-path-refused', deadline=case.time.monotonic() + 5)
         return summary, state
 
+
+    def acquisition_fixture(self, diagnostic):
+        summary, state = self.fixture()
+        summary.update(metadata_recipe="private", commands=[], command_effects=[])
+        state.update(phase="acquisition", reason="unclassified-refusal",
+                     acquisition_refusal=diagnostic)
+        return summary, state
+
+    def test_real_owned_acquisition_sites_and_dynamic_refusal_keep_closed_categories(self):
+        import project_native_cursor_acquisition as publisher
+        budget = SimpleNamespace(check=lambda: 30)
+        with patch.object(publisher, "run_probe", return_value=(
+                {"exit": 0, "error": None}, b"PRIVATE not a curl version", b"PRIVATE")):
+            try:
+                publisher.download_devin(case.SPEC, budget)
+            except ValueError as error:
+                first = case.acquisition_refusal_site(error)
+            else:
+                self.fail("publisher version refusal required")
+        self.assertEqual(first, {"module": "publisher", "site": "download", "line": 45, "exception": "value"})
+        class ReviewedLength:
+            def __len__(self):
+                return case.SPEC["expected_bytes"]
+        # This real dynamically loaded refusal is not matched by importing
+        # another copy of its class; it retains the fixed category other.
+        refusal = case.shared.legacy.CollectorDeadline("PRIVATE dynamic refusal")
+        with patch.object(publisher, "download_devin", return_value=(ReviewedLength(), case.SPEC["url"])), \
+                patch.object(case.shared.native, "verify_digest", side_effect=refusal):
+            try:
+                case.acquire_publisher_archive(budget)
+            except Exception as error:
+                self.assertIs(error, refusal)
+                second = case.acquisition_refusal_site(error)
+            else:
+                self.fail("digest refusal required")
+        self.assertEqual(second, {"module": "collector", "site": "acquire", "line": 104, "exception": "other"})
+        for value in (first, second):
+            summary, state = self.acquisition_fixture(value)
+            projected = case.closed_readout(summary, state)
+            self.assertEqual(projected["acquisition_refusal"], value)
+            self.assertFalse(projected["collection_complete"])
+            self.assertNotIn("PRIVATE", json.dumps(projected))
+            self.assertNotIn(str(Path(__file__).parent), json.dumps(projected))
+
+    def test_unknown_overflow_and_helper_failure_omit_without_swallowing_interrupts(self):
+        def fail(depth):
+            if depth:
+                return fail(depth - 1)
+            case.admitted_archive({"members": [], "pin_verified": False})
+        try:
+            fail(34)
+        except ValueError as error:
+            self.assertIsNone(case.acquisition_refusal_site(error))
+        try:
+            raise ValueError("PRIVATE foreign source")
+        except ValueError as error:
+            self.assertIsNone(case.acquisition_refusal_site(error))
+            summary, state = self.fixture()
+            summary.update(metadata_recipe="ordinary")
+            state.update(phase="acquisition", reason="unclassified-refusal")
+            original = copy.deepcopy(summary)
+            with patch.object(case, "acquisition_refusal_site", side_effect=RuntimeError("PRIVATE")):
+                case.record_acquisition_refusal(error, summary, state)
+            self.assertEqual(summary, original)
+            self.assertNotIn("acquisition_refusal", state)
+            with patch.object(case, "acquisition_refusal_site", side_effect=KeyboardInterrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    case.record_acquisition_refusal(error, summary, state)
+
+    def test_acquisition_site_schema_and_global_scope_remain_closed(self):
+        valid = {"module": "publisher", "site": "download", "line": 60, "exception": "value"}
+        for changed in (
+                {**valid, "module": "PRIVATE"}, {**valid, "line": True},
+                {**valid, "line": 1 << 100}, {**valid, "line": 80},
+                {**valid, "exception": "PRIVATE"}, {**valid, "path": "PRIVATE"}):
+            summary, state = self.acquisition_fixture(changed)
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                case.closed_readout(summary, state)
+        for changed in ("recipe", "phase", "collection", "metadata", "cleanup", "qualification"):
+            summary, state = self.acquisition_fixture(valid)
+            if changed == "recipe": summary["metadata_recipe"] = "ordinary-global"
+            elif changed == "phase": state["phase"] = "materialization"
+            elif changed == "collection": summary["collection_complete"] = True
+            elif changed == "metadata": summary["metadata_capture_complete"] = True
+            elif changed == "cleanup": summary["cleanup_complete"] = False
+            else: summary["qualification"][case.shared.QUALIFICATION_CASES[0]] = True
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                case.closed_readout(summary, state)
+
     def test_fixed_projection_has_no_private_values_and_never_qualifies(self):
         summary, state = self.fixture()
         value = case.closed_readout(summary, state)
@@ -539,27 +628,37 @@ class ClosedDevinReadoutContracts(unittest.TestCase):
 
     def test_actual_publisher_commits_before_finite_output_and_preserves_negative(self):
         import zipfile
-        summary, state = self.fixture()
-        summary['commands'] = []
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary).resolve()
-            original = case.root_identity(root)
-            emitted = []
-            def write(fd, body):
-                self.assertEqual(fd, 1)
-                with zipfile.ZipFile(root / 'upload/research.zip') as archive:
-                    self.assertIsNone(archive.testzip())
-                    committed = json.loads(archive.read('research.json'))
-                    self.assertEqual(committed, summary)
-                    self.assertFalse(committed['collection_complete'])
-                emitted.append(body)
-                return len(body)
-            with patch.object(case.os, 'write', side_effect=write):
-                case.publish_with_readout(summary, None, root, original, state)
-            self.assertEqual(len(emitted), 1)
-            self.assertNotIn(b'PRIVATE', emitted[0])
-            self.assertEqual(json.loads(emitted[0].split(b'=', 1)[1])['phase'], 'mcp-a')
-            self.assertFalse(summary['collection_complete'])
+        for acquisition in (False, True):
+            with self.subTest(acquisition=acquisition), tempfile.TemporaryDirectory() as temporary:
+                summary, state = self.fixture()
+                summary['commands'] = []
+                if acquisition:
+                    summary["metadata_recipe"] = "private"
+                    state.update(phase="acquisition", reason="unclassified-refusal", acquisition_refusal={
+                        "module": "publisher", "site": "download", "line": 60, "exception": "value"})
+                root = Path(temporary).resolve()
+                original = case.root_identity(root)
+                emitted = []
+                def write(fd, body):
+                    self.assertEqual(fd, 1)
+                    with zipfile.ZipFile(root / 'upload/research.zip') as archive:
+                        self.assertIsNone(archive.testzip())
+                        committed = json.loads(archive.read('research.json'))
+                        self.assertEqual(committed, summary)
+                        self.assertFalse(committed['collection_complete'])
+                    emitted.append(body)
+                    return len(body)
+                with patch.object(case.os, 'write', side_effect=write):
+                    case.publish_with_readout(summary, None, root, original, state)
+                self.assertEqual(len(emitted), 1)
+                self.assertNotIn(b'PRIVATE', emitted[0])
+                value = json.loads(emitted[0].split(b'=', 1)[1])
+                self.assertEqual(value['phase'], state['phase'])
+                if acquisition:
+                    self.assertEqual(value['acquisition_refusal'], state['acquisition_refusal'])
+                else:
+                    self.assertNotIn('acquisition_refusal', value)
+                self.assertFalse(summary['collection_complete'])
 
     def test_readout_failure_or_stdout_error_preserves_actual_committed_archive(self):
         import zipfile

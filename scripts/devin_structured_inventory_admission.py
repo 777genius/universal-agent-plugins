@@ -804,6 +804,84 @@ def closed_definition_cache_refusal(summary, state):
     return dict(value)
 
 
+# Exact authored sites only; no traceback locals, messages, paths or causes leave.
+ACQUISITION_SITES = {
+    ("collector", "acquire"): (98, 109),
+    ("collector", "archive-admission"): (112, 121),
+    ("publisher", "transport"): (25, 32),
+    ("publisher", "download"): (34, 79),
+}
+ACQUISITION_EXCEPTIONS = frozenset(("value", "os", "timeout", "type", "key", "runtime", "other"))
+
+
+def acquisition_refusal_site(error):
+    publisher = sys.modules.get("project_native_cursor_acquisition")
+    sites = [
+        (acquire_publisher_archive, "collector", "acquire", str(Path(__file__))),
+        (admitted_archive, "collector", "archive-admission", str(Path(__file__))),
+    ]
+    if publisher is not None:
+        path = str(Path(__file__).with_name("project_native_cursor_acquisition.py"))
+        for name, label in (("download_devin", "transport"), ("_download", "download")):
+            function = getattr(publisher, name, None)
+            if function is not None:
+                sites.append((function, "publisher", label, path))
+    categories = {ValueError: "value", OSError: "os", PermissionError: "os",
+                  FileNotFoundError: "os", TimeoutError: "timeout",
+                  TypeError: "type", KeyError: "key", RuntimeError: "runtime"}
+    category = categories.get(type(error), "other")
+    current, found = error.__traceback__, None
+    for _ in range(32):
+        if current is None:
+            return found
+        code, line = current.tb_frame.f_code, current.tb_lineno
+        for function, module, site, path in sites:
+            first, last = ACQUISITION_SITES[(module, site)]
+            if (code is getattr(function, "__code__", None) and code.co_filename == path
+                    and type(line) is int and first <= line <= last):
+                found = dict(module=module, site=site, line=line, exception=category)
+        current = current.tb_next
+    return found if current is None else None
+
+
+def record_acquisition_refusal(error, summary, state):
+    if (summary.get("metadata_recipe") not in ("private", "ordinary")
+            or summary.get("collection_complete") is not False
+            or summary.get("metadata_capture_complete") is not False
+            or state.get("phase") != "acquisition"):
+        return
+    state.pop("acquisition_refusal", None)
+    try:
+        value = acquisition_refusal_site(error)
+    except Exception:
+        value = None
+    if value is not None:
+        state["acquisition_refusal"] = value
+
+
+def closed_acquisition_refusal(summary, state):
+    if "acquisition_refusal" not in state:
+        return None
+    require(summary.get("metadata_recipe") in ("private", "ordinary")
+            and summary.get("collection_complete") is False
+            and summary.get("metadata_capture_complete") is False
+            and summary.get("cleanup_complete") is True
+            and summary.get("admission_qualified") is False
+            and state.get("phase") == "acquisition"
+            and state.get("reason") != "metadata-complete", "readout acquisition diagnostic context")
+    value = state["acquisition_refusal"]
+    require(type(value) is dict and set(value) == {"module", "site", "line", "exception"},
+            "readout acquisition diagnostic shape")
+    pair = (value.get("module"), value.get("site"))
+    require(type(pair[0]) is str and type(pair[1]) is str and pair in ACQUISITION_SITES,
+            "readout acquisition diagnostic site")
+    first, last = ACQUISITION_SITES[pair]
+    require(type(value.get("line")) is int and first <= value["line"] <= last
+            and type(value.get("exception")) is str and value["exception"] in ACQUISITION_EXCEPTIONS,
+            "readout acquisition diagnostic bounds")
+    return dict(value)
+
+
 def closed_readout(summary, state):
     def budget():
         require(type(state['deadline']) is float and time.monotonic() < state['deadline'], 'readout deadline')
@@ -876,6 +954,8 @@ def closed_readout(summary, state):
     if native_skill_refusal is not None: value['native_skill_refusal'] = native_skill_refusal
     definition_cache_refusal = closed_definition_cache_refusal(summary, state)
     if definition_cache_refusal is not None: value['definition_cache_refusal'] = definition_cache_refusal
+    acquisition_refusal = closed_acquisition_refusal(summary, state)
+    if acquisition_refusal is not None: value["acquisition_refusal"] = acquisition_refusal
     budget()
     require(len(json.dumps(value).encode()) <= 16 << 10, 'readout output bound')
     return value
@@ -1051,6 +1131,7 @@ def run(output, *, collector=collect, recipe="private"):
         summary["collection_complete"] = False
         readout_state["reason"] = readout_reason(error)
         summary["error"] = type(error).__name__ + ": " + str(error)[:300]
+        record_acquisition_refusal(error, summary, readout_state)
     finally:
         require(root_identity(output) == identity, "outer root replaced")
         try:
