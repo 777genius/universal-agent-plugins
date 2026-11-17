@@ -237,10 +237,17 @@ installation changes native trust only where the client adapter owns that
 step: Claude Code, Codex, Gemini CLI and GitHub Copilot CLI record exact-project
 trust in their own configuration, Cursor approves only the selected project MCP
 servers, and Hermes asks its own CLI to trust the Git repository root on an
-explicit `add` only (see the [Hermes guide](HERMES_NATIVE_SKILLS.md)). Other
-clients keep their native trust prompts. Planning, dry runs and verification
-never change trust, and removal never revokes it. Inspect the client's
-effective project configuration and follow the reported next action. [OpenCode's project guide](OPENCODE_PROJECT_SCOPE.md)
+explicit `add` only (see the [Hermes guide](HERMES_NATIVE_SKILLS.md)). In CLI
+0.1.110, a confirmed Pi project installation can install UAP's user hook to trust
+the selected project while its `.pi` holds only unchanged UAP-managed resources
+and the hook's other conditions hold; Pi's saved decisions and
+`defaultProjectTrust` remain authoritative.
+Removing the last UAP installation in that project withdraws its hook record;
+it does not revoke Pi's saved decisions. See [readiness and Pi trust](PROJECT_READINESS_DOCTOR.md)
+for the hook's conditions and session limits. Other clients keep their native
+trust prompts. Planning, dry runs and verification never change trust. Removal
+preserves native saved trust decisions. Inspect the client's effective project
+configuration and follow the reported next action. [OpenCode's project guide](OPENCODE_PROJECT_SCOPE.md)
 illustrates the difference between installed configuration and observed native
 runtime. The [current project support table](PROJECT_CLIENT_SUPPORT.md) links
 client guidance and evidence. The [reviewed client plans](plans/project-install-e2e/client-plans.md)

@@ -290,9 +290,9 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> **Windsurf / Devin** | Skills, MCP | Skills, MCP | Guided | Open or restart Devin in the selected project; review access. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"></picture> **Kimi Code** | Skills, MCP | Skills, MCP | Automatic | Run /reload or /new and review MCP permissions. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> **Cline** | Skills, MCP | Skills, MCP | Guided | Select the project MCP settings path and reload Cline. |
-| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> **Kiro** | Skills, MCP | Skills, MCP | Guided | Sign in, approve access, and restart Kiro if prompted. |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> **Grok Build** | Skills, MCP | Skills, MCP (prepared) | Guided | Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP. |
-| <img src="landing/public/client-icons/hermes.webp" width="24" height="24" alt="" align="middle"> **Hermes Agent** | Skills, MCP | Skills only | Guided | Restart Hermes, trust the selected Git project, and verify Skills and User MCP; Project MCP is unsupported. |
+| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> **Kiro** | Skills, MCP | Skills, MCP | Guided | The CLI configures supported Skills and MCP automatically; sign in, approve access, and restart if prompted. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> **Grok Build** | Skills, MCP | Skills, MCP (prepared) | Guided | Open the selected project in Grok, review trust, and follow any remaining enablement or reload steps; verify Skills and MCP. |
+| <img src="landing/public/client-icons/hermes.webp" width="24" height="24" alt="" align="middle"> **Hermes Agent** | Skills, MCP | Skills, MCP (prepared) | Guided | Restart Hermes and trust the project; Project MCP requires a verified standalone Hermes bundle and an explicitly confirmed UAP project session. |
 | <img src="landing/public/client-icons/antigravity.svg" width="24" height="24" alt="" align="middle"> **Google Antigravity** | Plugins, Skills, MCP | Plugins, Skills, MCP | Prepared | Open or reload Antigravity; review trust and verify the prepared plugin is discovered and enabled in the selected scope. |
 | <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **ChatGPT** | Desktop local plugins; Web connected apps | Not supported | Guided | Desktop: local install via Codex CLI; Web: connect or install in ChatGPT. |
 
@@ -300,10 +300,10 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 
 **Setup terms:** Automatic = UAP installs supported components; Guided = follow
 client prompts; Prepared = files are ready but need activation; Manual = complete
-setup in the app. UAP never signs you in or grants workspace trust. This matrix
-describes the released installer capabilities of [native CLI 0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108). Hermes and Antigravity
-are included; signed Directory packages still need an eligible target. Native
-release qualification does not prove agent activation or npm publication.
+setup in the app. After confirmation, UAP completes supported native setup and
+reports remaining trust, sign-in or reload steps. This matrix
+describes the released installer capabilities of [native CLI 0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110). Hermes and Antigravity
+are included; signed Directory packages still need an eligible target. Installation does not prove native runtime activation or vendor authentication.
 
 See the [compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
 for tested versions, platforms, and setup steps.
@@ -319,14 +319,22 @@ activation and native E2E limits, see the
 [project compatibility matrix](docs/PROJECT_CLIENT_SUPPORT.md).
 
 Hermes supports User Skills and stdio/Streamable HTTP MCP, plus Project Skills
-at the selected Git root. Project MCP is unsupported. Antigravity prepares owned
+at the selected Git root. Project MCP is prepared only with a verified standalone
+Hermes host bundle and an explicitly confirmed UAP project session; ordinary
+startup does not select it. A Hermes host installed from source supports User MCP
+or Project Skills only; this does not restrict plugin Git sources.
+Antigravity prepares owned
 User/Project native plugins with Skills and supported MCP; verify discovery,
 trust and enablement in the IDE. Preparation does not prove IDE activation.
 For both clients, ordinary portable commands project to Skills; explicit-only
 commands are withheld because these hosts cannot enforce explicit invocation.
 
 Grok Build, Kimi Code, and Qoder support stdio and Streamable HTTP MCP in user
-scope. Qoder also preserves native hooks, commands, and bundled binaries.
+scope. Grok Project plugin enablement is opt-in on Linux with Grok 1.0.70 and
+preserves an existing disabled preference. Devin User delivery requires
+3000.11.205 or 3000.12.57; Project delivery requires 3000.11.205. Cline Project
+MCP requires an explicitly selected managed session/settings path. Qoder also
+preserves native hooks, commands, and bundled binaries.
 See [portable commands](docs/UAP_COMMANDS.md) for command delivery and limits.
 
 For guided Context7 setup in ChatGPT and Kiro:
