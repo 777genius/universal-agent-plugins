@@ -97,21 +97,34 @@ func TestProjectClaudeInterruptedNativeCommandResumesWithSameCommand(t *testing.
 }
 
 // A child whose cleanup is not proven may still be writing. Its attempt stays
-// unresolved and blocks blind retry, exactly as before.
+// unresolved and blocks blind retry, exactly as before, whether or not its
+// effect already landed; removal has no later verification to fall back on.
 func TestProjectClaudeUnclosedInterruptedCommandKeepsAttempt(t *testing.T) {
-	fixture, args := interruptedProjectClaudeCommand(t, "add", &claudeCLIInterrupt{args: []string{"plugin", "install"}, unclosed: true})
-	attempt, _ := fixture.nativeAttempt(t)
-	if attempt == "" {
-		t.Fatal("unclosed native command was resolved without proof")
-	}
-	out, err := fixture.runProject(context.Background(), args...)
-	if err == nil || !strings.Contains(out+err.Error(), attempt) {
-		t.Fatalf("retry ignored the unresolved attempt: %v\n%s", err, out)
-	}
-	// Doctor reports the open attempt and suggests no command that refuses it.
-	doctor, _, err := fixture.execute(false, "doctor", "--target", "claude", "--scope", "project", "--project-root", fixture.project, "--format", "json")
-	if err != nil || !strings.Contains(doctor, `"open_operation_count":1`) || !strings.Contains(doctor, "native_attempt_unresolved") || strings.Contains(doctor, "rerun the same") {
-		t.Fatalf("doctor misreported the unresolved attempt: %v\n%s", err, doctor)
+	for _, tc := range []struct {
+		name, command string
+		args          []string
+		landed        bool
+	}{
+		{"add/install", "add", []string{"plugin", "install"}, false},
+		{"remove/uninstall", "remove", []string{"plugin", "uninstall"}, false},
+		{"remove/uninstall-landed", "remove", []string{"plugin", "uninstall"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture, args := interruptedProjectClaudeCommand(t, tc.command, &claudeCLIInterrupt{args: tc.args, landed: tc.landed, unclosed: true})
+			attempt, _ := fixture.nativeAttempt(t)
+			if attempt == "" {
+				t.Fatal("unclosed native command was resolved without proof")
+			}
+			out, err := fixture.runProject(context.Background(), args...)
+			if err == nil || !strings.Contains(out+err.Error(), attempt) {
+				t.Fatalf("retry ignored the unresolved attempt: %v\n%s", err, out)
+			}
+			// Doctor reports the open attempt and suggests no command that refuses it.
+			doctor, _, err := fixture.execute(false, "doctor", "--target", "claude", "--scope", "project", "--project-root", fixture.project, "--format", "json")
+			if err != nil || !strings.Contains(doctor, `"open_operation_count":1`) || !strings.Contains(doctor, "native_attempt_unresolved") || strings.Contains(doctor, "rerun the same") {
+				t.Fatalf("doctor misreported the unresolved attempt: %v\n%s", err, doctor)
+			}
+		})
 	}
 }
 
