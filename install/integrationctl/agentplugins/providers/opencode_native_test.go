@@ -787,7 +787,8 @@ func assertOpenCodeEntry(t *testing.T, body string, present bool, command, arg s
 	if err := json.Unmarshal(standard, &document); err != nil {
 		t.Fatal(err)
 	}
-	mcp := document["mcp"].(map[string]any)
+	// Removing the last owned entry also removes the collection it created.
+	mcp, _ := document["mcp"].(map[string]any)
 	entry, exists := mcp["docs"].(map[string]any)
 	if exists != present {
 		t.Fatalf("docs presence = %v, want %v: %#v", exists, present, mcp)

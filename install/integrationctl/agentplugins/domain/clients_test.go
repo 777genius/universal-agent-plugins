@@ -170,3 +170,28 @@ func TestDirectoryPreparationPurposesAreDeclared(t *testing.T) {
 		t.Fatalf("%d clients declare a preparation purpose, but %d purposes exist", declared, len(known))
 	}
 }
+
+func TestDetectedClientSuggestsCursorAgentProjectScope(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		client   ClientID
+		scope    InstallScope
+		surfaces []ClientSurface
+		want     bool
+	}{
+		{"default scope", ClientCursor, "", []ClientSurface{{ID: CursorAgentSurfaceID, Detected: true}}, true},
+		{"user scope", ClientCursor, ScopeUser, []ClientSurface{{ID: CursorAgentSurfaceID, Detected: true}}, true},
+		{"project scope", ClientCursor, ScopeProject, []ClientSurface{{ID: CursorAgentSurfaceID, Detected: true}}, false},
+		{"other client copied surface", ClientGemini, ScopeUser, []ClientSurface{{ID: CursorAgentSurfaceID, Detected: true}}, false},
+		{"missing agent", ClientCursor, ScopeUser, nil, false},
+		{"undetected agent", ClientCursor, ScopeUser, []ClientSurface{{ID: CursorAgentSurfaceID}}, false},
+		{"editor present preserves selector", ClientCursor, ScopeUser, []ClientSurface{{ID: "cursor_editor", Detected: true}, {ID: CursorAgentSurfaceID, Detected: true}}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := DetectedClient{ClientID: tc.client, Surfaces: tc.surfaces}
+			if got := client.SuggestsCursorAgentProjectScope(tc.scope); got != tc.want {
+				t.Fatalf("scope suggestion=%v, want %v", got, tc.want)
+			}
+		})
+	}
+}

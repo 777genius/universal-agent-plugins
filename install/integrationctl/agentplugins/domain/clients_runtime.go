@@ -6,6 +6,10 @@ type ClientSurface struct {
 	Evidence string `json:"evidence,omitempty"`
 }
 
+// CursorAgentSurfaceID is the cursor-agent CLI surface. It selects Cursor for
+// project scope only: user scope installs the package for the Cursor editor.
+const CursorAgentSurfaceID = "cursor_agent"
+
 // OpenCodeHostAuthority is a read-only, immutable prepared-host port. It does
 // no probing. The client contract owns the closed parent profile snapshot.
 type OpenCodeHostAuthority interface {
@@ -31,6 +35,21 @@ type DetectedClient struct {
 	// DetectionError is private diagnostic evidence. A failed client must not
 	// contribute paths or become a lifecycle target.
 	DetectionError error `json:"-"`
+}
+
+// SuggestsCursorAgentProjectScope identifies the detected Agent surface that
+// can explain an unavailable non-project Cursor target. It does not infer
+// whether an editor surface is present or grant target eligibility.
+func (client DetectedClient) SuggestsCursorAgentProjectScope(scope InstallScope) bool {
+	if client.ClientID != ClientCursor || scope == ScopeProject {
+		return false
+	}
+	for _, surface := range client.Surfaces {
+		if surface.ID == CursorAgentSurfaceID && surface.Detected {
+			return true
+		}
+	}
+	return false
 }
 
 type ClientCapabilities struct {

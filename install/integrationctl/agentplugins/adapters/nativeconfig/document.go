@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/tailscale/hujson"
@@ -151,6 +152,43 @@ func removeEntry(obj *hujson.Object, name string) bool {
 	}
 	obj.Members = append(obj.Members[:index], obj.Members[index+1:]...)
 	return true
+}
+
+// pruneCreatedOpenCodeCollections removes the OpenCode MCP collection that
+// objectCollection created once a removal leaves it empty. For a document the
+// writer did not otherwise reformat, removing the last owned server then
+// returns it to its shape before the first add.
+func pruneCreatedOpenCodeCollections(doc *document, requests []Request) {
+	codec := requests[0].Codec
+	removes := slices.ContainsFunc(requests, func(req Request) bool { return req.Action == ActionRemove })
+	if !removes || (codec != CodecOpenCode && codec != CodecOpenCodeV2) {
+		return
+	}
+	key := codecCollectionKey(codec)
+	if parent, _ := objectCollection(doc.root, key, false); parent != nil && codec == CodecOpenCodeV2 {
+		removeCreatedEmptyCollection(parent, "servers")
+	}
+	removeCreatedEmptyCollection(doc.root, key)
+}
+
+// Ownership of a created collection is not recorded, but appendMember gives
+// it one exact layout: an indented key with no space before the value and a
+// newline before the closing brace. Only that layout, empty, is removed; any
+// other one is preserved. A user's own empty collection written in exactly
+// that layout is removed too, which is harmless: an empty collection
+// configures no server, just like an absent key.
+func removeCreatedEmptyCollection(parent *hujson.Object, key string) {
+	member, index := objectMember(parent, key)
+	if member == nil {
+		return
+	}
+	obj, ok := member.Value.Value.(*hujson.Object)
+	if !ok || len(obj.Members) != 0 || string(obj.AfterExtra) != "\n" ||
+		string(member.Name.BeforeExtra) != "\n  " || len(member.Name.AfterExtra) != 0 ||
+		len(member.Value.BeforeExtra) != 0 || len(member.Value.AfterExtra) != 0 {
+		return
+	}
+	parent.Members = append(parent.Members[:index], parent.Members[index+1:]...)
 }
 
 func (doc *document) render() ([]byte, error) {
