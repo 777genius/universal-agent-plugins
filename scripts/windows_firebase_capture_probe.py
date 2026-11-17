@@ -174,7 +174,7 @@ def console_flag(value):
     return value if type(value) is bool else None
 
 
-def selected_probe_summary(proof, temp_removed, temp_error, primary_bytes):
+def selected_probe_summary(proof, temp_removed, temp_error, primary_bytes, primary_unavailable="missing"):
     """Project fixed structured facts; no controller streams or arbitrary labels."""
     family = proof if type(proof) is dict else {}
     summary = {"diagnostic": "firebase-probe-summary-v1",
@@ -190,7 +190,8 @@ def selected_probe_summary(proof, temp_removed, temp_error, primary_bytes):
     if family.get("settled") is not True:
         summary["primary"] = "unsettled"
     elif type(primary_bytes) is not bytes:
-        pass
+        if primary_unavailable == "oversized":
+            summary["primary"] = "oversized"
     elif len(primary_bytes) > OUTPUT_LIMIT:
         summary["primary"] = "oversized"
     else:
@@ -228,10 +229,10 @@ def selected_probe_summary(proof, temp_removed, temp_error, primary_bytes):
     return line
 
 
-def emit_probe_summary(proof, temp_removed, temp_error, primary_bytes):
+def emit_probe_summary(proof, temp_removed, temp_error, primary_bytes, primary_unavailable="missing"):
     """Observability cannot override the unchanged native/custody verdict."""
     try:
-        line = selected_probe_summary(proof, temp_removed, temp_error, primary_bytes)
+        line = selected_probe_summary(proof, temp_removed, temp_error, primary_bytes, primary_unavailable)
     except BaseException:
         line = '{"diagnostic":"firebase-probe-summary-v1","primary":"diagnostic-unavailable"}'
     try:
@@ -393,9 +394,13 @@ def run_probe(cli, evidence_dir):
                     diagnostics["temp_cleanup"] = {"status": "unavailable"}
         primary = None
         data = None
-        if report.is_file() and not report.is_symlink() and report.stat().st_size <= OUTPUT_LIMIT:
-            data = report.read_bytes()
-            primary = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        primary_unavailable = "missing"
+        if report.is_file() and not report.is_symlink():
+            if report.stat().st_size <= OUTPUT_LIMIT:
+                data = report.read_bytes()
+                primary = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+            else:
+                primary_unavailable = "oversized"
         processes = proof.pop("process_diagnostics", None)
         if processes is not None:
             diagnostics["process_family"] = processes
@@ -407,7 +412,7 @@ def run_probe(cli, evidence_dir):
         add_failure_diagnostics(receipt, diagnostics)
         with family_report.open("x", encoding="utf-8") as output:
             output.write(json.dumps(receipt, indent=2) + "\n")
-        emit_probe_summary(proof, temp_removed, temp_error, data)
+        emit_probe_summary(proof, temp_removed, temp_error, data, primary_unavailable)
     return 0 if (proof.get("child_exit") == 0 and proof.get("timeout") is False
                  and proof.get("gate_released") is True and proof.get("forced") is False
                  and proof.get("settled") is True and proof.get("primary_error") is None

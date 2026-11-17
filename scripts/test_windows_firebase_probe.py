@@ -462,6 +462,38 @@ class FirebaseConsoleSummaryControls(unittest.TestCase):
         self.assertEqual(json.loads(line)["primary"], "diagnostic-bound")
         self.assertLessEqual(len(line.encode("utf-8")), 1800)
 
+
+    def test_run_probe_reports_skipped_oversized_body_distinct_from_missing(self):
+        for oversized in (False, True):
+            with self.subTest(oversized=oversized), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                evidence, owned = root / "evidence", root / "owned"
+                evidence.mkdir()
+                owned.mkdir()
+                report = evidence / "published-firebase-claude.json"
+                def observe(*args, **kwargs):
+                    if oversized:
+                        with report.open("wb") as stream:
+                            stream.truncate(probe.OUTPUT_LIMIT + 1)
+                    return self.proof()
+                original_read = Path.read_bytes
+                def guarded_read(path):
+                    if path == report:
+                        self.fail("unavailable primary must not be read")
+                    return original_read(path)
+                output = io.StringIO()
+                with mock.patch.object(probe.tempfile, "mkdtemp", return_value=str(owned)), \
+                        mock.patch.object(probe, "supervise", side_effect=observe), \
+                        mock.patch.object(Path, "read_bytes", guarded_read), \
+                        mock.patch("sys.stdout", output):
+                    self.assertEqual(probe.run_probe("inert-not-executed.cmd", evidence), 1)
+                summary = json.loads(output.getvalue())
+                self.assertEqual(summary["primary"], "oversized" if oversized else "missing")
+                receipt = json.loads((evidence / "published-firebase-process-family.json").read_text())
+                self.assertIsNone(receipt["primary_report"])
+                self.assertTrue(receipt["temp_removed"])
+                self.assertFalse(owned.exists())
+
     def test_formatter_failure_preserves_run_probe_verdict_and_receipt(self):
         for child_exit, expected in ((0, 0), (1, 1)):
             with self.subTest(child_exit=child_exit), tempfile.TemporaryDirectory() as temp:
