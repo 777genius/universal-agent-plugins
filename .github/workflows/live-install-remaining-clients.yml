@@ -10,6 +10,10 @@ on:
       - 'scripts/test_codex_plugin_retention_audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/run-native-client-matrix.py'
+      - 'scripts/project_native_cursor_acquisition.py'
+      - 'scripts/devin_structured_inventory_admission.py'
+      - 'scripts/test_devin_structured_inventory_admission.py'
+      - 'scripts/project_native_research.py'
       - 'scripts/native_client_draft.py'
       - 'tests/live-install/fixtures.json'
       - 'install/integrationctl/agentplugins/**'
@@ -98,6 +102,9 @@ jobs:
       - name: Check bounded Codex preserved-data custody
         if: matrix.target == 'chatgpt' && matrix.kind == 'plugin'
         run: python3 -m unittest discover -s scripts -p 'test_codex_plugin_retention_audit.py' -v
+      - name: Check reviewed Devin publisher admission before Plugin acquisition
+        if: matrix.target == 'windsurf' && matrix.kind == 'plugin'
+        run: python3 -m unittest discover -s scripts -p 'test_devin_structured_inventory_admission.py' -v
       - name: Acquire actual public vendor client where a headless Linux build exists
         id: vendor-install
         # Preserve a complete explicit client-unavailable record even when a
@@ -187,7 +194,49 @@ jobs:
               ln -s "$executable" "$HOME/.local/bin/codex"
               ;;
           esac
-          if [[ "$TARGET" != chatgpt ]]; then
+          if [[ "$TARGET" == windsurf && "$KIND" == plugin ]]; then
+            # Reuse the reviewed Devin transport and closed archive admission.
+            # A publisher HTTP refusal remains a failed vendor-install outcome.
+            python3 - "$RUNNER_TEMP" "$URL" <<'WINDSURF_PLUGIN'
+          import json, os, stat, sys
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / "scripts"))
+          import devin_structured_inventory_admission as admission
+
+          admission.shared.native.require_hosted("linux-amd64")
+          root = Path(sys.argv[1])
+          admission.root_identity(root)
+          if admission.SPEC["url"] != sys.argv[2]:
+              raise SystemExit("Windsurf Plugin publisher URL differs from reviewed Devin SPEC")
+          (root / "vendor-proof/source.txt").write_text(admission.SPEC["url"] + "\n")
+          directory = root / "vendor-root"
+          directory.mkdir(mode=0o700)
+          original = admission.root_identity(directory)
+          with admission.shared.Budget(360) as budget:
+              receipt, contents = admission.acquire_publisher_archive(budget)
+              admission.admitted_archive(receipt)
+              binary, identities = admission.shared.materialize(
+                  directory, admission.SPEC, receipt, contents)
+              admission.shared.verify_files(identities, budget)
+              if (admission.root_identity(directory) != original
+                      or binary != directory / "bin/devin"
+                      or not stat.S_ISREG(binary.lstat().st_mode)
+                      or not os.access(binary, os.X_OK)):
+                  raise SystemExit("Windsurf Plugin admitted executable custody differs")
+              proof = dict(receipt, version=admission.VERSION, executable=str(binary),
+                           acquisition_helper="project_native_cursor_acquisition.download_devin",
+                           archive_admission="devin_structured_inventory_admission.admitted_archive")
+              body = json.dumps(proof, sort_keys=True) + "\n"
+              if len(body.encode()) > 1 << 20:
+                  raise SystemExit("Windsurf Plugin acquisition receipt exceeds bound")
+              with (root / "vendor-proof/devin-runtime.json").open("x") as stream:
+                  stream.write(body)
+              budget.check()
+          WINDSURF_PLUGIN
+            executable="$RUNNER_TEMP/vendor-root/bin/devin"
+            ln -s "$executable" "$HOME/.local/bin/devin"
+          fi
+          if [[ "$TARGET" != chatgpt && ( "$TARGET" != windsurf || "$KIND" != plugin ) ]]; then
           printf '%s\n' "$URL" > "$RUNNER_TEMP/vendor-proof/source.txt"
           # BUG-012: download, fingerprint, and preserve proposed vendor bytes;
           # never execute without a separately reviewed immutable digest pin.
