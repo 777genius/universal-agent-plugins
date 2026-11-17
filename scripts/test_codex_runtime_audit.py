@@ -1077,7 +1077,7 @@ class CodexSystemSkillBaselineTest(unittest.TestCase):
         system = profile / "skills/.system/skill-creator/SKILL.md"
         for path, body in ((foreign, "foreign original\n"), (system, "inert System original\n")):
             path.parent.mkdir(parents=True)
-            path.write_text(body, encoding="utf-8")
+            path.write_bytes(body.encode("utf-8"))
         state = {"system": {"name": "skill-creator", "path": str(system),
                             "scope": "system", "enabled": True, "pluginId": None},
                  "shadow": False, "duplicate": False, "selected": {}}
