@@ -31,8 +31,12 @@ verifies them:
 
 - A failed or interrupted command whose whole process tree was proven closed:
   the adapter may read the client's own registry once, read-only, and report
-  only an exactly recognized state. Unproven process cleanup, a failed read or
-  an unrecognized state stay uncertain and keep blocking the next mutation.
+  only an exactly recognized state. This also covers a verifying `plugin list`
+  that completed but did not confirm the exact install, including after an
+  install that had no effect: it no longer blocks by itself. The binding is
+  marked failed, and the attempt is closed only when every owned receipt read
+  back is exact. Unproven process cleanup, a failed read or an unrecognized
+  state stay uncertain and keep blocking the next mutation.
 - An attempt left by a killed agentplugins process (SIGKILL, OOM, power loss),
   confirmed by an explicit `repair` or `remove` with `--yes` (`--dry-run`
   previews the same checks and writes nothing). Here the process tree is not
