@@ -413,9 +413,7 @@ func ManifestDigest(requirements Requirements) (string, error) {
 		}
 		intent.Dependencies = append(intent.Dependencies, item)
 	}
-	for _, alias := range sortedKeys(requirements.Development) {
-		intent.Development = append(intent.Development, alias)
-	}
+	intent.Development = append(intent.Development, sortedKeys(requirements.Development)...)
 	for _, target := range sortedKeys(requirements.Targets) {
 		aliases := append([]string(nil), requirements.Targets[target]...)
 		sort.Strings(aliases)

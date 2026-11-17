@@ -12,11 +12,27 @@ import (
 // Stable releases retain their existing exact version contract. Graph downgrade
 // checks use this strict expression even when a constraint explicitly includes
 // a prerelease.
-var stableVersion = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$`)
-var forbiddenVersionPrefix = regexp.MustCompile(`(^|[[:space:],|<>=~^])v[0-9]`)
-// Masterminds accepts coerced numeric operands such as 1.02.3; a package
-// selector must not silently resolve such a value to a different version.
-var nonCanonicalNumericPart = regexp.MustCompile(`(^|[.[:space:]<>=~^|,])0[0-9]+($|[.[:space:]|,+-])`)
+var (
+	stableVersion = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)package environment
+
+import (
+	"fmt"
+	"regexp"
+	"strings"
+
+	semver "github.com/Masterminds/semver/v3"
+	modsemver "golang.org/x/mod/semver"
+)
+
+// Stable releases retain their existing exact version contract. Graph downgrade
+// checks use this strict expression even when a constraint explicitly includes
+// a prerelease.
+)
+	forbiddenVersionPrefix = regexp.MustCompile(`(^|[[:space:],|<>=~^])v\d`)
+	// Masterminds accepts coerced numeric operands such as 1.02.3; a package
+	// selector must not silently resolve such a value to a different version.
+	nonCanonicalNumericPart = regexp.MustCompile(`(^|[.[:space:]<>=~^|,])0\d+($|[.[:space:]|,+-])`)
+)
 
 // ParseRegistryVersionSelector is the single parser/classifier for registry
 // version requirements. Exact versions remain exact; partial versions and
