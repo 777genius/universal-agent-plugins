@@ -1,9 +1,9 @@
-"""Bounded Linux/macOS/Windows observation of empty Gemini 0.66.0 skills-list sessions.
+"""Strict observation of candidate metadata-only Gemini 0.66.0 list sessions.
 
-Pinned upstream 970413207732f5d4d8c50540c7fc359c44fdaaf2 initializes the
-skills-list-session ID and appends one initial JSONL metadata record without a
-conversation. Classify only those new records at an unchanged registry binding;
-never exclude chats from snapshots or infer who wrote matching bytes.
+Pinned upstream 970413207732f5d4d8c50540c7fc359c44fdaaf2 can also persist
+startup environment history and metadata updates during skills-list initialization.
+Those multiple/conversation records remain outside this narrow accepted shape.
+Keep raw changes and custody; never infer who wrote matching bytes.
 """
 
 from datetime import datetime, timezone
@@ -58,8 +58,14 @@ def pinned_version(version):
             and version["exit_code"] == 0 and version.get("value") == "0.66.0")
 
 
-def _metadata(body, filename, project_hash, started, finished):
-    if not body.endswith(b"\n") or body.count(b"\n") != 1:
+def _metadata(body, filename, project_hash, started, finished, diagnostic=None):
+    final_lf, lf_count = body.endswith(b"\n"), body.count(b"\n")
+    if not final_lf or lf_count != 1:
+        if diagnostic is not None:
+            diagnostic.update(operation="record-framing",
+                              bytes=len(body) if len(body) <= 4096 else None,
+                              lf_count=lf_count if len(body) <= 4096 else None,
+                              final_lf=final_lf)
         raise ValueError("Gemini runtime is not one complete initial record")
     record = _json(body)
     keys = {"sessionId", "projectHash", "startTime", "lastUpdated"}
@@ -92,6 +98,8 @@ class GeminiRepeatAudit:
     def __init__(self, home, project, before, version):
         self.parents, self.leaves, self.files, self.phases = {}, {}, {}, []
         self.reason, self.complete = None, False
+        self.failure_facts = None
+        self.phase, self.role = "pre-repeat", "registry"
         self.windows = None
         self.before = self.previous = before
         self.profile, self.project = Path(home) / ".gemini", Path(project)
@@ -117,6 +125,7 @@ class GeminiRepeatAudit:
             directory = self.profile / "tmp" / slug
             self.chats = directory / "chats"
             self._hold(self.chats)
+            self.role = "marker"
             marker = self._read(directory / ".project_root", 4096, before)
             if marker != str(self.project).encode("utf-8"):
                 raise ValueError("Gemini runtime ownership marker differs")
@@ -124,6 +133,7 @@ class GeminiRepeatAudit:
             old = [key for key in before if key.startswith(self.prefix)]
             if len(old) > 64:
                 raise ValueError("Gemini pre-repeat chat count exceeds its bound")
+            self.role = "previous-chat"
             for key in old:
                 name = key[len(self.prefix):]
                 if (not name or "/" in name or name in (".", "..")
@@ -174,6 +184,13 @@ class GeminiRepeatAudit:
         before = path.lstat()
         if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
                 or not 0 < before.st_size <= limit or len(self.leaves) >= 82):
+            self.failure_facts = {
+                "phase": self.phase, "role": self.role, "operation": "file-admission",
+                "regular": stat.S_ISREG(before.st_mode), "single_link": before.st_nlink == 1,
+                "positive_size": before.st_size > 0, "within_limit": before.st_size <= limit,
+                "descriptor_capacity": len(self.leaves) < 82,
+                "bytes": before.st_size if 0 <= before.st_size <= limit else None,
+            }
             raise ValueError("Gemini runtime file is not bounded regular single-link data")
         fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
                      dir_fd=self.parents[path.parent][0])
@@ -206,6 +223,7 @@ class GeminiRepeatAudit:
             expected = ("after-public-repeat-add", "after-public-repeat-list")
             if len(self.phases) >= 2 or label != expected[len(self.phases)]:
                 raise ValueError("Gemini runtime phase sequence is invalid")
+            self.phase, self.role = label, "new-chat"
             if any(snapshot.get(path) != digest for path, digest in self.previous.items()):
                 raise ValueError("Gemini runtime repeat changed a previous entry")
             added = sorted(set(snapshot) - set(self.before))
@@ -218,8 +236,14 @@ class GeminiRepeatAudit:
                 if not _NAME.fullmatch(filename):
                     raise ValueError("Gemini runtime delta is outside exact list-session files")
                 body = self._read(self.chats / filename, 4096, snapshot)
-                _metadata(body, filename, hashlib.sha256(str(self.project).encode()).hexdigest(),
-                          self.started, datetime.now(timezone.utc))
+                framing = {}
+                try:
+                    _metadata(body, filename, hashlib.sha256(str(self.project).encode()).hexdigest(),
+                              self.started, datetime.now(timezone.utc), framing)
+                except ValueError:
+                    if framing:
+                        self.failure_facts = {"phase": self.phase, "role": self.role, **framing}
+                    raise
                 self.files[key] = {"path": key, "bytes": len(body),
                                    "sha256": hashlib.sha256(body).hexdigest(),
                                    "records": 1, "conversation_records": 0}
@@ -248,7 +272,9 @@ class GeminiRepeatAudit:
                 "files": list(self.files.values()), "phases": self.phases,
                 "client_version": "0.66.0", "platform": sys.platform,
                 "producer_attribution": False, "writer_closure": False,
-                "source_reference": "google-gemini/gemini-cli@970413207732f5d4d8c50540c7fc359c44fdaaf2"}
+                "source_reference": "google-gemini/gemini-cli@970413207732f5d4d8c50540c7fc359c44fdaaf2",
+                **({"failure_facts": dict(self.failure_facts)}
+                   if self.reason and self.failure_facts is not None else {})}
 
     def close(self):
         if self.windows is not None:

@@ -10182,6 +10182,78 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                 self.assertFalse(case['observer'].finish(after))
                 self.assertEqual(case['observer'].evidence()['status'], 'unqualified')
 
+
+    def test_failure_facts_keep_multirecord_and_partial_private_payloads_unqualified(self):
+        private = b'{"type":"user","content":"private startup context"}\n{"$set":{"private":"value"}}\n'
+        for label, transform, count, final in (
+                ("partial", lambda body: body[:-1], 0, False),
+                ("multiple", lambda body: body + private, 3, True)):
+            with self.subTest(label=label), self.fixture() as case:
+                path = self.record(case, 1, transform)
+                metadata = case["audit"].GEMINI_RUNTIME_AUDIT["_metadata"]
+                with patch.dict(metadata.__globals__, {
+                        "_json": lambda body: self.fail("rejected framing must not be parsed")}):
+                    after = self.phase(case, "after-public-repeat-add")
+                self.assertFalse(case["observer"].finish(after))
+                proof = case["observer"].evidence()
+                self.assertEqual(proof["status"], "unqualified")
+                self.assertEqual(proof["files"], [])
+                self.assertEqual(proof["phases"], [])
+                facts = proof["failure_facts"]
+                self.assertEqual(facts, {
+                    "phase": "after-public-repeat-add", "role": "new-chat",
+                    "operation": "record-framing", "bytes": path.stat().st_size,
+                    "lf_count": count, "final_lf": final})
+                encoded = json.dumps(facts)
+                self.assertNotIn("private", encoded)
+                self.assertNotIn(str(case["project"]), encoded)
+                self.assertNotIn(path.name, encoded)
+        with self.fixture() as case:
+            self.record(case, 1)
+            self.phase(case, "after-public-repeat-add")
+            self.assertNotIn("failure_facts", case["observer"].evidence())
+            case["old"].write_bytes(b"changed old private data")
+            after = self.phase(case, "after-public-repeat-list")
+            self.assertFalse(case["observer"].finish(after))
+            self.assertNotIn("failure_facts", case["observer"].evidence())
+
+    def test_file_admission_facts_distinguish_bounds_and_links_without_extra_open(self):
+        for mutation in ("zero", "oversized", "hardlink", "symlink"):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                path = self.record(case, 1)
+                if mutation == "zero":
+                    path.write_bytes(b"")
+                elif mutation == "oversized":
+                    path.write_bytes(b"private" * 600)
+                elif mutation == "hardlink":
+                    os.link(path, case["project"].parent / "private-linked-name")
+                else:
+                    path.unlink()
+                    path.symlink_to(case["old"].name)
+                after = case["audit"].snapshot([case["profile"]])
+                with patch.object(os, "open", side_effect=AssertionError("must refuse before open")) as opened:
+                    case["observer"].checkpoint("after-public-repeat-add", after)
+                opened.assert_not_called()
+                self.assertFalse(case["observer"].finish(after))
+                proof = case["observer"].evidence()
+                self.assertEqual(proof["status"], "unqualified")
+                self.assertEqual(proof["files"], [])
+                self.assertEqual(proof["phases"], [])
+                facts = proof["failure_facts"]
+                self.assertEqual(facts["phase"], "after-public-repeat-add")
+                self.assertEqual(facts["role"], "new-chat")
+                self.assertEqual(facts["operation"], "file-admission")
+                self.assertEqual(facts["regular"], mutation != "symlink")
+                self.assertEqual(facts["single_link"], mutation != "hardlink")
+                self.assertEqual(facts["positive_size"], mutation != "zero")
+                self.assertEqual(facts["within_limit"], mutation != "oversized")
+                self.assertTrue(facts["descriptor_capacity"])
+                self.assertEqual(facts["bytes"], None if mutation == "oversized" else path.lstat().st_size)
+                for key in ("regular", "single_link", "positive_size", "within_limit", "descriptor_capacity"):
+                    self.assertIs(type(facts[key]), bool)
+                self.assertNotIn("private", json.dumps(facts))
+                self.assertNotIn(str(case["project"]), json.dumps(facts))
+
     def test_old_and_observed_leaf_replacement_parent_alias_and_foreign_delta_refuse(self):
         for mutation in ('old-replaced', 'new-replaced', 'new-deleted', 'parent-replaced',
                          'parent-alias', 'registry-replaced', 'foreign-delta', 'hardlink', 'symlink'):
