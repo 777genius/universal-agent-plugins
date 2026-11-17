@@ -225,36 +225,37 @@ func TestGroupPreparedSetupIsReviewedAndCompletesWithoutRestaging(t *testing.T) 
 }
 
 // Regression: a completion that only re-verified the intact setup reported a
-// mutation, or neither a mutation nor no-change, and rewrote saved state.
-func TestGroupPreparedSetupWithoutEffectIsNoChange(t *testing.T) {
+// mutation, or neither a mutation nor no-change, and rewrote saved state. A
+// committed effect over the same lifecycle must still record both.
+func TestGroupPreparedSetupCompletionRecordsOnlyRealEffects(t *testing.T) {
 	for _, update := range []bool{false, true} {
-		t.Run(map[bool]string{false: "add", true: "update"}[update], func(t *testing.T) {
-			f := newGroupSetupFixture(t)
-			apply := f.service.AddGroup
-			if update {
-				apply = f.service.UpdateGroup
-			}
-			for _, binding := range f.before.Installations[0].Clients {
-				saved := lifecycleOutcome(binding)
-				f.actors[domain.ClientID(binding.ClientID)].settled = &saved
-			}
-			before, err := os.ReadFile(f.store.Path)
-			if err != nil {
-				t.Fatal(err)
-			}
-			result, err := apply(t.Context(), GroupInput{Targets: f.inputs, Confirmed: true})
-			if err != nil || result.Mutated {
-				t.Fatalf("unchanged completion reported a change: %+v %v", result, err)
-			}
-			for _, target := range result.Targets {
-				if !target.NoChange || target.Mutated || f.actors[target.Plan.ClientID].acts != 1 {
-					t.Fatalf("unchanged completion was not no-change: %+v", target)
+		for _, effect := range []domain.NativeEffectState{domain.NativeEffectUnchanged, domain.NativeEffectCommitted} {
+			t.Run(map[bool]string{false: "add ", true: "update "}[update]+string(effect), func(t *testing.T) {
+				f := newGroupSetupFixture(t)
+				f.service.Now = movingClock()
+				apply := f.service.AddGroup
+				if update {
+					apply = f.service.UpdateGroup
 				}
-			}
-			if after, err := os.ReadFile(f.store.Path); err != nil || string(after) != string(before) {
-				t.Fatalf("unchanged completion rewrote state: %v", err)
-			}
-		})
+				for _, binding := range f.before.Installations[0].Clients {
+					saved := lifecycleOutcome(binding)
+					saved.NativeEffect = effect
+					f.actors[domain.ClientID(binding.ClientID)].settled = &saved
+				}
+				result, err := apply(t.Context(), GroupInput{Targets: f.inputs, Confirmed: true})
+				after, loadErr := f.store.Load()
+				if err != nil || loadErr != nil {
+					t.Fatalf("completion: %v %v", err, loadErr)
+				}
+				committed := effect == domain.NativeEffectCommitted
+				for _, target := range result.Targets {
+					if target.NoChange == committed || target.Mutated != committed || f.actors[target.Plan.ClientID].acts != 1 {
+						t.Fatalf("effect %s completion result: %+v", effect, target)
+					}
+				}
+				assertCompletionRecord(t, f.before, after, result.Mutated, effect)
+			})
+		}
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -21,9 +22,20 @@ type existingSetupActor struct {
 	marker            string
 	reads, acts       int
 	onRead            func()
-	// settled, when set, is the saved lifecycle that an acting pass re-observes
-	// without any effect, like an intact native projection.
+	// settled, when set, is the saved lifecycle that an acting pass finds
+	// again. Its NativeEffect, Unchanged when empty, says whether the pass
+	// rewrote anything, unlike an intact native projection.
 	settled *domain.ActivationOutcome
+}
+
+// movingClock returns a later time on every call, so an unwanted or a
+// missing rewrite of updated_at is visible.
+func movingClock() func() time.Time {
+	tick := 0
+	return func() time.Time {
+		tick++
+		return time.Date(2026, 8, 8, 12, 0, tick, 0, time.UTC)
+	}
 }
 
 func (a *existingSetupActor) VerifierAvailable(domain.DetectedClient, domain.DeliveryPlan, string) bool {
@@ -51,7 +63,10 @@ func (a *existingSetupActor) Activate(_ context.Context, r domain.ActivationRequ
 		a.acts++
 		if a.settled != nil && a.needsSetup {
 			outcome := *a.settled
-			outcome.NativeEffect = domain.NativeEffectUnchanged
+			if outcome.NativeEffect == "" {
+				outcome.NativeEffect = domain.NativeEffectUnchanged
+			}
+			outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), r.Delivery.NativeObjects...)
 			return outcome, nil
 		}
 		effect = domain.NativeEffectCommitted
@@ -228,33 +243,85 @@ func TestExistingScopedVerifierCompletesPreparedSetupThroughNormalApply(t *testi
 }
 
 // Regression: closing the completion attempt's own marker reported a mutation
-// and rewrote updated_at although the repeated add changed nothing.
-func TestExistingPreparedSetupWithoutEffectIsNoChange(t *testing.T) {
-	service, store, input, observed := existingProjectSetupFixture(t, "https://example.invalid/unchanged-prepared-setup")
-	actor := &existingSetupActor{allow: true, observed: observed}
-	service.Activator = actor
-	if _, err := service.Add(t.Context(), input); err != nil {
-		t.Fatal(err)
+// and rewrote updated_at although the repeated add changed nothing. A
+// committed effect over the same lifecycle must still record both, also when
+// refresh re-activates an unchanged projection.
+func TestExistingPreparedSetupCompletionRecordsOnlyRealEffects(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		refresh bool
+		effect  domain.NativeEffectState
+	}{
+		{name: "add unchanged", effect: domain.NativeEffectUnchanged},
+		{name: "add committed", effect: domain.NativeEffectCommitted},
+		{name: "refresh unchanged", refresh: true, effect: domain.NativeEffectUnchanged},
+		{name: "refresh committed", refresh: true, effect: domain.NativeEffectCommitted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service, store, input, observed := existingProjectSetupFixture(t, "https://example.invalid/prepared-setup-effect")
+			service.Now = movingClock()
+			actor := &existingSetupActor{allow: true, observed: observed}
+			service.Activator = actor
+			if _, err := service.Add(t.Context(), input); err != nil {
+				t.Fatal(err)
+			}
+			if tc.refresh {
+				// A Prepared binding makes refresh re-activate its unchanged projection.
+				prepareOnlyBinding(t, store)
+			}
+			before, err := store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			saved := lifecycleOutcome(onlyBinding(before.Installations[0]))
+			saved.NativeEffect = tc.effect
+			actor.settled, actor.needsSetup, actor.acts = &saved, true, 0
+			var out AddResult
+			if tc.refresh {
+				out, err = service.RefreshProjection(t.Context(), input)
+			} else {
+				out, err = service.Add(t.Context(), input)
+			}
+			after, loadErr := store.Load()
+			if err != nil || loadErr != nil || actor.acts != 1 {
+				t.Fatalf("completion: acts=%d %v %v", actor.acts, err, loadErr)
+			}
+			assertCompletionRecord(t, before, after, out.Mutated, tc.effect)
+			if !tc.refresh && out.NoChange == (tc.effect == domain.NativeEffectCommitted) {
+				t.Fatalf("no_change=%v for effect %s", out.NoChange, tc.effect)
+			}
+		})
 	}
-	before, err := store.Load()
+}
+
+func prepareOnlyBinding(t *testing.T, store statev2.Store) {
+	t.Helper()
+	state, err := store.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved := lifecycleOutcome(onlyBinding(before.Installations[0]))
-	actor.settled, actor.needsSetup, actor.acts = &saved, true, 0
-	out, err := service.Add(t.Context(), input)
-	if err != nil {
+	for key, binding := range state.Installations[0].Clients {
+		binding.Activation = domain.ActivationPrepared
+		state.Installations[0].Clients[key] = binding
+	}
+	if err := store.Save(state); err != nil {
 		t.Fatal(err)
 	}
-	if actor.acts != 1 || out.Mutated || !out.NoChange || out.Activation.Activation != domain.ActivationActive {
-		t.Fatalf("unchanged completion reported a change: acts=%d %+v", actor.acts, out)
+}
+
+// assertCompletionRecord accepts a mutation and a new updated_at only for a
+// committed effect; otherwise saved state must stay byte for byte the same.
+func assertCompletionRecord(t *testing.T, before, after domain.StateFileV2, mutated bool, effect domain.NativeEffectState) {
+	t.Helper()
+	committed := effect == domain.NativeEffectCommitted
+	for key, previous := range before.Installations[0].Clients {
+		current := after.Installations[0].Clients[key]
+		if current.NativeActivationAttempt != "" || !sameLifecycleOutcome(lifecycleOutcome(current), lifecycleOutcome(previous)) || (current.UpdatedAt != previous.UpdatedAt) != committed {
+			t.Fatalf("effect %s recorded %+v over %+v", effect, current, previous)
+		}
 	}
-	after, err := store.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(before, after) {
-		t.Fatalf("unchanged completion rewrote state:\nbefore %+v\nafter  %+v", before.Installations[0], after.Installations[0])
+	if mutated != committed || !committed && !reflect.DeepEqual(before, after) {
+		t.Fatalf("effect %s: mutated=%v, state rewritten=%v", effect, mutated, !reflect.DeepEqual(before, after))
 	}
 }
 
