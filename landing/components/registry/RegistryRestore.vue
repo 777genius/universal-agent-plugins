@@ -258,6 +258,8 @@ async function copyCommand(which: 1 | 2 | 3) {
 }
 @media (max-width: 300px) {
   .registry-restore {
+    // Keep the final output inside the laptop glass when the command wraps to three lines.
+    &__machine--teammate &__screen { inset-block-end: 28%; }
     &__stage-label { gap: .8cqw; font-size: 9px; }
     &__step { font-size: 4.6cqw; }
     &__package { margin-block-start: 2cqw; }
