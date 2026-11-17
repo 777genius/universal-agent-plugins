@@ -2,7 +2,7 @@ name: Published npm stable additional native clients audit
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.github/workflows/agentplugins-published-other-clients-audit.yml'
       - '.github/workflows/agentplugins-published-version.yml'
@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   resolve-release:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}

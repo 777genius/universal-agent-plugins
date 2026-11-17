@@ -70,12 +70,13 @@ permissions:
   contents: read
 concurrency:
   group: hermes-noauth-call-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 env:
   PYTHONDONTWRITEBYTECODE: '1'
 jobs:
   native-call:
     name: Hermes 0.23 actual legacy driver tools/call (${{ matrix.os }})
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     strategy:
       fail-fast: false
       matrix:
@@ -291,6 +292,7 @@ jobs:
         retention-days: 14
   bundled-custom-root:
     name: Hermes 0.23 bundled custom-root admission (${{ matrix.os }})
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     strategy:
       fail-fast: false
       matrix:

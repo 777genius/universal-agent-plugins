@@ -126,11 +126,66 @@ manual dispatch.
 
 No branch protection or ruleset requires these checks today. If one is added,
 require only checks from unfiltered workflows: a check from a skipped workflow
-stays pending. If a newer merge cancelled the `main` push run of a release
-candidate that came from a documentation-only pull request, its pull request
-head has no Go checks to fall back on. Tag the newest `main` commit whose push
-checks completed, or re-run the cancelled workflows only while no newer `main`
-push run is in progress, because a re-run joins the same concurrency group.
+stays pending.
+
+Workflows that produce a check the release verifier requires (Required,
+Docs, Polyglot Smoke, CodeQL, Govulncheck, Dependency Review and Skills
+picker today) keep every push run on `main`. A newer push supersedes only
+runs of the same pull request, and each push to `main` gets a concurrency
+group of its own (`github.run_id`), so a later merge can neither cancel the
+release checks of an earlier merge commit while they run nor replace them
+while they are pending. A release candidate from a documentation-only pull
+request, whose head has no Go checks, therefore still gets the release checks
+on its own merge commit. `repotests/ci_main_push_evidence_test.go` derives
+this set from the verifier's `require_check` list, so a workflow joins it as
+soon as it produces a required check name. It also fails when a producing
+job, or a job it needs, declares job-level concurrency or has a condition
+that can skip it on a push to `main`.
+
+Other workflows that run on pushes to `main` keep their per-ref groups. Some
+cancel a running `main` push run when a newer merge arrives. Others only
+queue it, but GitHub still replaces a pending run in the same group with the
+newest one. None of them produces a release check, and keeping every one of
+those runs would add heavy E2E time on each merge. Pages keeps its serialized
+`github-pages` group.
+
+## Heavy pull request lanes wait for a ready pull request
+
+Draft pull requests keep the fast lane. Lanes that start native clients or
+wide GitHub-hosted matrices (Tier 1) skip a draft and run when the pull
+request is ready. Each such job, or the root job its matrix needs, uses
+exactly this condition, written once in `repotests/ci_pr_tiers_test.go`:
+
+```yaml
+if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+```
+
+The test accepts exactly three condition forms: the gate alone,
+`always() && (<gate>)` for an aggregate that would otherwise run after its
+skipped needs, and the published audits' `workflow_run` success check
+`&& (<gate>)`. A job that only needs a gated job and reads no status function
+(`always()`, `success()`, `failure()`, `cancelled()`) skips with it. The test
+also pins each workflow's exact triggers, its pull request types (no
+`labeled` or `edited`, so a label or title change cannot cancel and restart a
+running lane) and its concurrency group, with cancellation only for pull
+request events. Every Tier 1 workflow lists `ready_for_review` in its
+pull request types, so marking a pull request ready starts the full lane on
+the head that becomes mergeable, and each later push to the ready pull request
+runs it again. GitHub does not merge a draft, so the final head of a merged
+pull request has had a Tier 1 run whenever the lane's paths matched. Nothing
+requires that run to succeed before merging; that remains a review decision.
+
+To get Tier 1 evidence while a pull request is still a draft, dispatch the
+workflow on its branch (`gh workflow run <file> --ref <branch>`). Pushes to
+`main`, schedules, workflow runs and dispatches never read the draft flag, so
+release and post-publish evidence is unchanged. None of these workflows
+produces a check that the release workflow requires.
+
+Tier 1 today: Hermes no-auth tools call, Kiro no-auth installation, Kimi 2.5.2
+no-auth call, Cline managed project session, Project Native Runtime, Published
+Marketing Kit Project E2E, both live installer audits, and the published npm
+catalog and additional clients audits. `repotests/ci_pr_tiers_test.go` keeps
+this list and fails when a job of one of them could start on a draft.
 
 ## Run Pages on hosted runners at an exact source commit
 

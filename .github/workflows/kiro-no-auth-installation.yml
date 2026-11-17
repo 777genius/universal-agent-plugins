@@ -1,6 +1,7 @@
 name: Kiro no-auth installation E2E
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.github/workflows/kiro-no-auth-installation.yml'
       - 'scripts/project_native_kiro_no_auth.py'
@@ -33,6 +34,7 @@ on:
       - 'cli/**'
       - 'install/integrationctl/**'
       - 'go.work*'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -44,6 +46,7 @@ env:
 jobs:
   lifecycle:
     name: UAP composed lifecycle (${{ matrix.os }})
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     strategy:
       fail-fast: false
       matrix:
@@ -165,6 +168,7 @@ jobs:
           retention-days: 14
   native:
     name: Pinned Kiro no-auth observations
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -189,7 +193,7 @@ jobs:
   acceptance:
     name: Kiro no-auth acceptance
     needs: [lifecycle, native]
-    if: ${{ always() }}
+    if: ${{ always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     runs-on: ubuntu-24.04
     steps:
       - name: Require actual completed lifecycle and native contracts

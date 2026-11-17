@@ -2,7 +2,7 @@ name: Remaining client live installation audit
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
@@ -35,6 +35,7 @@ concurrency:
 jobs:
   remaining-client-install:
     name: ${{ (matrix.target == 'kiro' || matrix.target == 'windsurf') && matrix.kind == 'plugin' && 'Prepared installation 30' || matrix.target == 'vscode' && matrix.kind == 'plugin' && 'Manual preparation observation 30' || 'Full 30' }} ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     # Darwin refuses Kiro's automatic MCP duplex containment. This lane can
     # measure the real native CLI and owned Prepared lifecycle, while keeping
     # native activation incomplete until a contained host route is qualified.

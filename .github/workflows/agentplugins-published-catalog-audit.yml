@@ -2,7 +2,7 @@ name: Published npm stable catalog installation audit
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - '.github/workflows/agentplugins-published-catalog-audit.yml'
@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   resolve-release:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}

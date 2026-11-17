@@ -1,6 +1,7 @@
 name: Kimi 2.5.2 native MCP call without vendor auth
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.github/workflows/kimi252-noauth-call.yml'
       - 'scripts/kimi252_noauth_*.py'
@@ -46,6 +47,7 @@ concurrency:
 jobs:
   native-call:
     name: Genuine Kimi manual one-shot call and App lifecycle (${{ matrix.os }})
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
