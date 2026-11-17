@@ -39,7 +39,7 @@ for (const width of [1440, 390]) {
     const card = page.locator('[data-install-source="i18n-state-00"]').first();
     await expect(card.locator('.plugin-card__source-label')).toHaveCount(0);
     await card.locator('.plugin-card__install-toggle').click();
-    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(
+    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00',
     );
     // Switching from terminal detection selects only one initial agent.
@@ -51,7 +51,9 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.plugin-card__source-label')).toContainText(
       'Agents: 1 automatic setup · 1 need follow-up',
     );
-    await expect(card.locator('.plugin-card__install .command-snippet code')).toContainText('--target codex,cursor');
+    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toContainText('--target codex,cursor');
+
+    await page.keyboard.press('Escape');
 
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
@@ -84,6 +86,7 @@ test('expired Directory disables both catalog and standalone install promises', 
   const card = page.locator('[data-install-source="i18n-state-00"]').first();
   await expect(card.locator('.plugin-card__ribbon')).toHaveText('temporarily paused');
   await expect(card.locator('.plugin-card__install-toggle')).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await card.locator('.plugin-card__title-link').click();
   const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
   await expect(detail.locator('.plugin-detail__status')).toHaveText('temporarily paused');
@@ -102,8 +105,8 @@ for (const width of [1440, 390]) {
     const card = page.locator('[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
 
-    const trigger = card.locator('.app-multiselect__trigger');
-    const row = card.locator('.plugin-card__install');
+    const trigger = page.getByRole('dialog').locator('.app-multiselect__trigger');
+    const row = page.getByRole('dialog').locator('.plugin-card__install');
     const triggerBox = (await trigger.boundingBox())!;
     const rowBox = (await row.boundingBox())!;
     expect(triggerBox.width).toBeGreaterThanOrEqual(rowBox.width - 2);
@@ -122,7 +125,7 @@ for (const width of [1440, 390]) {
     await expect(chatgpt).toBeDisabled();
     await expect(chatgpt).toContainText('No verified ChatGPT Web app binding for this plugin.');
     await page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ }).click();
-    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toContainText('--target codex');
+    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toContainText('--target codex');
     await page.keyboard.press('Escape');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);

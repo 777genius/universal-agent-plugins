@@ -203,7 +203,7 @@ function waitForCatalogInteractionToFinish(): Promise<void> {
     document.activeElement instanceof Element &&
     Boolean(
       document.activeElement.closest(
-        '.catalog, .app-combobox__content, .app-select__content, .app-multiselect__content',
+        '.catalog, .install-dialog, .app-combobox__content, .app-select__content, .app-multiselect__content',
       ),
     );
   if (!isCatalogInteraction()) return Promise.resolve();

@@ -114,7 +114,8 @@ export function usePluginInstallSelection(
       // silently falls back to modifying the user's computer.
       scope.value = saved.scope;
       autoDetect.value = saved.autoDetect;
-      installExpanded.value = saved.expanded;
+      // Dialog visibility is transient; saved choices never open a modal on navigation.
+      installExpanded.value = false;
     },
     { immediate: true, flush: 'sync' },
   );

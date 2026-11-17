@@ -11,14 +11,14 @@ for (const [locale, width] of [['en', 1440], ['ru', 390]] as const) {
     await navigate(page, '/', locale, '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
-    await card.locator('.app-multiselect__trigger').click();
+    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     const codex = page.getByRole('checkbox', { name: /^Codex/ });
     await codex.click();
     await expect(codex).toBeChecked();
     await expect(page.locator('.app-multiselect__content > p')).toHaveText(
       wording(locale)('registryUi.multi.manualHelpWithAuto'),
     );
-    await expect(card.locator('.plugin-card__install .command-snippet code')).toContainText('--target codex');
+    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toContainText('--target codex');
     await testInfo.attach(`selection-help-${locale}.png`, {
       body: await page.screenshot({ animations: 'disabled' }), contentType: 'image/png',
     });
@@ -29,7 +29,8 @@ for (const [locale, width] of [['en', 1440], ['ru', 390]] as const) {
       wording(locale)('registryUi.multi.automaticHelp'),
     );
     await page.keyboard.press('Escape');
-    await expect(card.locator('.plugin-card__install .command-snippet code')).not.toContainText('--target');
+    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).not.toContainText('--target');
+    await page.keyboard.press('Escape');
     await card.locator('.plugin-card__title-link').click();
     await expect(page.locator('.install-panel .install-command-row .command-snippet code')).not.toContainText('--target');
     await page.locator('.install-panel .app-multiselect__trigger').click();

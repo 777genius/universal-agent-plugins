@@ -37,30 +37,29 @@ for (const width of [1440, 390]) {
     const source = plugin.distributions[0]!.releases[0]!.source;
     const manifestName = plugin.distributions[0]!.releases[0]!.manifest_name!;
     const selector = `github:${source.repository}@${source.revision}//${source.path}`;
-    const cli = 'npx -y universal-agent-plugins@0.1.108';
+    const cli = 'npx -y universal-agent-plugins@0.1.110';
     const notice = wording('en')('registryUi.install.pinnedCatalogSource');
-    const repairNotice = wording('en')('registryUi.install.antigravityRepairUnavailable', { version: '0.1.108' });
+    const repairNotice = wording('en')('registryUi.install.antigravityRepairUnavailable', { version: '0.1.110' });
     for (const [agent, client] of [['Hermes Agent', 'hermes'], ['Google Antigravity', 'antigravity'], ['Pi', 'pi']]) {
       await targets(page, hero, [agent!]);
       await expect(hero.locator('.command-snippet--add code')).toHaveText(`${cli} add ${selector} --target ${client}`);
       await expect(hero).toContainText(notice);
-      if (client === 'antigravity') await expect(hero).toContainText(repairNotice);
-      else await expect(hero).not.toContainText(repairNotice);
+      await expect(hero).not.toContainText(repairNotice);
     }
     await card.locator('.plugin-card__install-toggle').click();
     for (const [agent, client] of [['Hermes Agent', 'hermes'], ['Google Antigravity', 'antigravity'], ['Pi', 'pi']]) {
       await targets(page, card, [agent!]);
       const add = `${cli} add ${selector} --target ${client}`;
-      const snippet = card.locator('.plugin-card__install .command-snippet--add');
+      const snippet = page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add');
       await expect(snippet.locator('code')).toHaveText(add);
-      if (client === 'antigravity') await expect(card).toContainText(repairNotice);
-      else await expect(card).not.toContainText(repairNotice);
+      await expect(card).not.toContainText(repairNotice);
       await snippet.locator('button').click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(add);
     }
     await testInfo.attach(`explicit-source-card-${width}.png`, {
-      body: await card.screenshot({ animations: 'disabled' }), contentType: 'image/png',
+      body: await page.getByRole('dialog').screenshot({ animations: 'disabled' }), contentType: 'image/png',
     });
+    await page.keyboard.press('Escape');
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.install-panel');
     await expect(detail).toContainText(notice);
@@ -71,14 +70,19 @@ for (const width of [1440, 390]) {
     await expect(detail).not.toContainText(repairNotice);
     await detail.getByRole('button', { name: 'This project', exact: true }).click();
     await detail.locator('.app-multiselect__trigger').click();
-    await expect(page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ })).toBeDisabled();
+    await expect(page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ })).toBeEnabled();
+    await page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ }).click();
+    await page.keyboard.press('Escape');
+    await expect(detail.locator('.command-snippet--add code'))
+      .toHaveText(`${cli} add ${selector} --target hermes --scope project`);
+    await detail.locator('.app-multiselect__trigger').click();
     await page.getByRole('checkbox', { name: /^Google Antigravity(?:\s|$)/ }).click();
     await page.keyboard.press('Escape');
     await expect(detail.locator('.command-snippet--add code'))
       .toHaveText(`${cli} add ${selector} --target antigravity --scope project`);
-    await expect(detail).toContainText(repairNotice);
-    await expect(detail.locator('.command-snippet--repair')).toHaveCount(0);
-    for (const action of ['update', 'remove'])
+    await expect(detail).not.toContainText(repairNotice);
+    await expect(detail.locator('.command-snippet--repair')).toHaveCount(1);
+    for (const action of ['update', 'repair', 'remove'])
       await expect(detail.locator(`.command-snippet--${action} code`))
         .toHaveText(`${cli} ${action} ${manifestName} --target antigravity --scope project`);
     await testInfo.attach(`explicit-source-detail-${width}.png`, {
@@ -88,8 +92,8 @@ for (const width of [1440, 390]) {
     await targets(page, detail, ['Google Antigravity']);
     const userAdd = `${cli} add ${selector} --target antigravity`;
     await expect(detail.locator('.command-snippet--add code')).toHaveText(userAdd);
-    await expect(detail).toContainText(repairNotice);
-    await expect(detail.locator('.command-snippet--repair')).toHaveCount(0);
+    await expect(detail).not.toContainText(repairNotice);
+    await expect(detail.locator('.command-snippet--repair')).toHaveCount(1);
     await detail.locator('.command-snippet--add button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(userAdd);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -106,12 +110,13 @@ for (const width of [1440, 390]) {
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
-    for (const picker of [card, page.locator('.hero-shell')]) {
+    for (const picker of [page.getByRole('dialog'), page.locator('.hero-shell')]) {
       await picker.locator('.app-multiselect__trigger').click();
       for (const agent of ['Hermes Agent', 'Google Antigravity', 'Pi'])
         await expect(page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) })).toBeDisabled();
       await page.keyboard.press('Escape');
       await expect(picker.locator('.command-snippet--add code')).not.toContainText('github:');
+      if (await picker.getAttribute('role') === 'dialog') await page.keyboard.press('Escape');
     }
     expect(errors).toEqual([]);
   });
@@ -123,7 +128,7 @@ for (const width of [1440, 390]) {
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
-    await card.locator('.app-multiselect__trigger').click();
+    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     const web = page.getByRole('checkbox', { name: /^ChatGPT Web/ });
     for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
       const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
@@ -134,13 +139,15 @@ for (const width of [1440, 390]) {
     await expect(web).toContainText('No verified ChatGPT Web app binding for this plugin.');
     await expect(web).toContainText('Connect Web apps inside ChatGPT.');
     await page.keyboard.press('Escape');
-    await expect(card.locator('.plugin-card__install .command-snippet code')).not.toContainText('chatgptweb');
+    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).not.toContainText('chatgptweb');
+    await page.keyboard.press('Escape');
     await page.locator('.hero-shell .app-multiselect__trigger').click();
     for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
       const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
       await expect(option).toBeDisabled();
       await expect(option).toContainText(`This plugin has not been published for ${agent} yet.`);
     }
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Escape');
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
@@ -173,7 +180,7 @@ for (const width of [1440, 390]) {
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
     const hero = page.locator('.hero-shell');
-    for (const picker of [card, hero]) {
+    for (const picker of [page.getByRole('dialog'), hero]) {
       await picker.locator('.app-multiselect__trigger').click();
       for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
         const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
@@ -181,10 +188,12 @@ for (const width of [1440, 390]) {
         await expect(option).not.toContainText('has not been published');
       }
       await page.keyboard.press('Escape');
+      if (await picker.getAttribute('role') === 'dialog') await page.keyboard.press('Escape');
     }
     await targets(page, card, ['Hermes Agent']);
-    await expect(card.locator('.command-snippet--add code')).toContainText('--target hermes');
-    await expect(card.locator('.command-snippet--add code')).not.toContainText('--scope project');
+    await expect(page.getByRole('dialog').locator('.command-snippet--add code')).toContainText('--target hermes');
+    await expect(page.getByRole('dialog').locator('.command-snippet--add code')).not.toContainText('--scope project');
+    await page.keyboard.press('Escape');
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
     await expect(detail.locator('.command-snippet--add code')).toContainText('--target hermes');
@@ -232,7 +241,7 @@ test('Pi agent page describes extensions, Skills and MCP in user and project sco
   await expect(main).toContainText('user or project scope');
   await expect(main).toContainText('Packages with install or setup options for Pi: 1');
   await expect(main).toContainText('The CLI checks components, dependencies and the selected scope first');
-  await expect(main.locator('.command-snippet--add code')).toContainText('universal-agent-plugins@0.1.108 add github:');
+  await expect(main.locator('.command-snippet--add code')).toContainText('universal-agent-plugins@0.1.110 add github:');
   await expect(main).not.toContainText('Portable skills and MCP projection are outside');
   expect(errors).toEqual([]);
 });
@@ -253,7 +262,7 @@ test('automatic authentication uses the selected User or Project scope, not a po
   const indicator = card.locator('.authentication-indicator');
   await expect(indicator).toHaveAttribute('data-authentication', 'not_required');
   await card.locator('.plugin-card__install-toggle').click();
-  const project = card.locator('.install-scope').getByRole('button', { name: 'This project' });
+  const project = page.getByRole('dialog').locator('.install-scope').getByRole('button', { name: 'This project' });
   await expect(project).toBeEnabled();
   await project.click();
   await expect(indicator).toHaveAttribute('data-authentication', 'required');
@@ -288,7 +297,7 @@ test('a mounted plugin installer withdraws source commands on Directory expiry',
   const panel = page.locator('.install-panel');
   await targets(page, panel, ['Google Antigravity']);
   await expect(panel.locator('.command-snippet--add code'))
-    .toContainText('universal-agent-plugins@0.1.108 add github:');
+    .toContainText('universal-agent-plugins@0.1.110 add github:');
   await expect(panel.locator('.command-snippet--repair')).toHaveCount(0);
 
   // Commands must expire on an already-open detail page, without navigation.
@@ -313,24 +322,24 @@ for (const path of ['/', '/plugins/'] as const) {
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
     await targets(page, card, ['Google Antigravity']);
-    await expect(card.locator('.command-snippet--add code'))
-      .toContainText('universal-agent-plugins@0.1.108 add github:');
-    await expect(card.locator('.command-snippet--repair')).toHaveCount(0);
+    await expect(page.getByRole('dialog').locator('.command-snippet--add code'))
+      .toContainText('universal-agent-plugins@0.1.110 add github:');
+    await expect(page.getByRole('dialog').locator('.command-snippet--repair')).toHaveCount(0);
     if (path === '/') {
       const hero = page.locator('.hero-shell');
       await targets(page, hero, ['Google Antigravity']);
       await expect(hero.locator('.command-snippet--add code'))
-        .toContainText('universal-agent-plugins@0.1.108 add github:');
+        .toContainText('universal-agent-plugins@0.1.110 add github:');
     }
 
     await page.clock.fastForward(11 * 60_000);
-    await expect(card.locator('.command-snippet--add')).toHaveCount(0);
+    await expect(page.getByRole('dialog').locator('.command-snippet--add')).toHaveCount(0);
     if (path === '/') await expect(page.locator('.hero-shell .command-snippet--add')).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }
 
-test('an open Antigravity agent page withdraws pinned add on Directory expiry without hiding the repair warning', async ({ page }) => {
+test('an open Antigravity agent page withdraws pinned add on Directory expiry without a stale repair warning', async ({ page }) => {
   const errors = await offline(page);
   const index = pluginWithOnlyCodex();
   index.plugins[0]!.trust_state = 'reviewed';
@@ -341,14 +350,14 @@ test('an open Antigravity agent page withdraws pinned add on Directory expiry wi
   await navigate(page, '/agents/antigravity', 'en');
 
   const install = page.locator('.agent-page__install');
-  const repairNotice = wording('en')('registryUi.install.antigravityRepairUnavailable', { version: '0.1.108' });
+  const repairNotice = wording('en')('registryUi.install.antigravityRepairUnavailable', { version: '0.1.110' });
   await expect(install.locator('.command-snippet--add code'))
-    .toContainText('universal-agent-plugins@0.1.108 add github:');
-  await expect(install).toContainText(repairNotice);
+    .toContainText('universal-agent-plugins@0.1.110 add github:');
+  await expect(install).not.toContainText(repairNotice);
 
   // Without clock maintenance, a mounted page retains the stale add command.
   await page.clock.fastForward(11 * 60_000);
   await expect(install.locator('.command-snippet--add')).toHaveCount(0);
-  await expect(install).toContainText(repairNotice);
+  await expect(install).not.toContainText(repairNotice);
   expect(errors).toEqual([]);
 });

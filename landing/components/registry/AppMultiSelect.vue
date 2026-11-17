@@ -41,9 +41,22 @@ const selected = computed(() =>
 const summary = computed(() =>
   props.autoSelected && props.autoOption
     ? (props.autoOption.summary ?? props.autoOption.label)
-    : selected.value.length === 1
-      ? selected.value[0]!.label
-      : t('registryUi.multi.agents', { count: n(selected.value.length) }, selected.value.length),
+    : selected.value.map((option) => option.label).join(', '),
+);
+const visibleSummary = computed(() =>
+  props.autoSelected
+    ? summary.value
+    : [
+        selected.value
+          .slice(0, 3)
+          .map((option) => option.label)
+          .join(', '),
+        selected.value.length > 3
+          ? t('registryUi.multi.more', { count: n(selected.value.length - 3) })
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
 );
 
 watchEffect(() => {
@@ -121,7 +134,7 @@ function toggle(value: string) {
               d="m6.5 11 .65 2.35L9.5 14l-2.35.65L6.5 17l-.65-2.35L3.5 14l2.35-.65L6.5 11Z"
             /></svg
         ></span>
-        <span>{{ summary }}</span>
+        <span :title="summary">{{ visibleSummary }}</span>
       </span>
       <span class="app-multiselect__chevron" aria-hidden="true"
         ><svg viewBox="0 0 16 16" fill="none"><path d="m3.5 6 4.5 4 4.5-4" /></svg
@@ -205,7 +218,11 @@ function toggle(value: string) {
           {{
             autoSelected
               ? (automaticHelp ?? t('registryUi.multi.automaticHelp'))
-              : t(autoOption ? 'registryUi.multi.manualHelpWithAuto' : 'registryUi.multi.manualHelp')
+              : t(
+                  autoOption
+                    ? 'registryUi.multi.manualHelpWithAuto'
+                    : 'registryUi.multi.manualHelp',
+                )
           }}
         </p>
         <PopoverArrow v-if="!fullWidth" class="app-multiselect__arrow" />
