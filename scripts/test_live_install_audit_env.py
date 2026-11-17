@@ -5188,7 +5188,8 @@ module.exports = {
 
         def run_case(outputs, matches):
             with TemporaryDirectory() as temporary:
-                with patch.object(audit, "call", side_effect=outputs), \
+                with patch.dict(audit.AGENT_BINARIES, {}, clear=True), \
+                     patch.object(audit, "call", side_effect=outputs), \
                      patch.object(audit, "matching_installations", return_value=matches):
                     return audit.do_case(
                         "/unused/agentplugins", "chatgpt", "plugin", source, 0,
@@ -10825,8 +10826,11 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
                     row = audit.do_case('/inert/uap', 'claude', 'skill', item, 0, root, {})
                 self.assertEqual(operations, ['add', 'list', 'add', 'list', 'remove', 'list'])
                 self.assertTrue(row['native_residuals'])
+                retirement = row['claude_cache_retirement']
                 self.assertEqual(row['status'], 'passed' if mutation is None else 'cleanup-failed',
-                                 row.get('claude_cache_retirement', {}).get('diagnostic'))
+                                 retirement.get('diagnostic') if retirement is not None else None)
+                if mutation in ('post-list', 'sentinel'):
+                    self.assertIsNone(retirement)
                 if mutation is None:
                     self.assertEqual(row['claude_cache_retirement']['status'],
                                      'verified-cache-retirement-at-checkpoint')

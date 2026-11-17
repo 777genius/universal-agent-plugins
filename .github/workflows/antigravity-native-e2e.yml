@@ -82,7 +82,7 @@ permissions:
 
 concurrency:
   group: antigravity-native-e2e-${{ github.event.pull_request.number || github.ref }}-${{ inputs.release_tag || 'source' }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ inputs.release_tag == '' }}
 
 jobs:
   native-linux-x64:

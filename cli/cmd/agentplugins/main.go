@@ -37,6 +37,10 @@ var (
 	defaultDirectoryOrigin    = "https://777genius.github.io/universal-agent-plugins-registry/registry/schemas/1/"
 	defaultDirectoryKeyID     = "uap-directory-2026-01"
 	defaultDirectoryPublicKey = "HalXARjat+v3ylTPLMAnvuavRo4ZfrF+DbWwsjlp2bI="
+	// The next Directory signing key is trusted ahead of the signer switch so
+	// that this release can verify snapshots signed by either key.
+	nextDirectoryKeyID        = "uap-directory-2026-11"
+	nextDirectoryPublicKey    = "k0F0ZlRXsgUa3+OMOUle6GdpihXUUcHI+42wNeuGAMc="
 	defaultDiscoveryOrigin    = "https://777genius.github.io/universal-agent-plugins-registry/discovery/"
 	defaultDiscoveryKeyID     = "uap-discovery-2026-01"
 	defaultDiscoveryPublicKey = "IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc="
@@ -217,11 +221,15 @@ func (acquirer lazySourceAcquirer) AcquireGitHubVerified(ctx context.Context, re
 }
 
 func newDirectoryClient(dataRoot string) (*directoryv1.Client, error) {
-	publicKey, err := base64.StdEncoding.Strict().DecodeString(defaultDirectoryPublicKey)
-	if err != nil || len(publicKey) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("decode Directory public key")
+	currentKey, err := decodeDirectoryKey(defaultDirectoryKeyID, defaultDirectoryPublicKey, directoryv1.KeyCurrent)
+	if err != nil {
+		return nil, err
 	}
-	trust := directoryv1.TrustStore{Keys: []directoryv1.TrustedKey{{ID: defaultDirectoryKeyID, PublicKey: ed25519.PublicKey(publicKey), State: directoryv1.KeyCurrent}}}
+	nextKey, err := decodeDirectoryKey(nextDirectoryKeyID, nextDirectoryPublicKey, directoryv1.KeyNext)
+	if err != nil {
+		return nil, err
+	}
+	trust := directoryv1.TrustStore{Keys: []directoryv1.TrustedKey{currentKey, nextKey}}
 	embedded, _, err := directoryv1.DecodeReleaseBootstrap(generatedProductionDirectoryBootstrap, trust)
 	if err != nil {
 		return nil, fmt.Errorf("load generated production Directory bootstrap: %w", err)
@@ -239,6 +247,14 @@ func newDirectoryClient(dataRoot string) (*directoryv1.Client, error) {
 		Embedded: embedded, RequireEmbeddedBootstrap: true,
 		Cache: directoryv1.Cache{Path: filepath.Join(dataRoot, "directory-v1-cache.json")},
 	}, nil
+}
+
+func decodeDirectoryKey(id, encoded string, state directoryv1.KeyState) (directoryv1.TrustedKey, error) {
+	publicKey, err := base64.StdEncoding.Strict().DecodeString(encoded)
+	if err != nil || len(publicKey) != ed25519.PublicKeySize {
+		return directoryv1.TrustedKey{}, fmt.Errorf("decode Directory public key %s", id)
+	}
+	return directoryv1.TrustedKey{ID: id, PublicKey: ed25519.PublicKey(publicKey), State: state}, nil
 }
 
 func productionDirectoryOrigin(environmentValue string) (string, error) {
