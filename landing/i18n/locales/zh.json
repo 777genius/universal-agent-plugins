@@ -359,7 +359,7 @@
         "nextStep": "安装后操作"
       },
       "scrollHint": "横向滚动以查看所有列。",
-      "note": "自动：UAP 安装受支持的组件。引导：按智能体提示完成操作。已准备：激活准备好的文件。手动：在应用中完成设置。安装不会替您登录或授予信任权限。可用性取决于插件及智能体版本。 基准版本：原生 CLI 0.1.108。npm 单独发布，可能有所延迟。支持某个代理并不保证每个插件和安装范围都有兼容的已签名目录版本。",
+      "note": "自动：UAP 安装受支持的组件。引导：按智能体提示完成操作。已准备：激活准备好的文件。手动：在应用中完成设置。经确认后，UAP 会完成受支持的原生设置，并提示剩余的信任、登录或重新加载步骤。可用性取决于插件及智能体版本。 基准版本：原生 CLI 0.1.110。npm 单独发布，可能有所延迟。支持某个代理并不保证每个插件和安装范围都有兼容的已签名目录版本。",
       "details": "查看兼容性详情",
       "capabilities": {
         "pluginsSkillsMcp": "插件、技能、MCP",
@@ -391,11 +391,11 @@
         "windsurf": "在所选项目中打开或重启 Devin，并检查访问权限。",
         "kimi": "运行 /reload 或 /new，并检查 MCP 权限。",
         "cline": "选择项目 MCP 设置路径，然后重新加载 Cline。",
-        "kiro": "登录、批准访问，并在提示时重启 Kiro。",
-        "grok": "在 Grok 中打开所选项目，启用并信任插件，重新加载后验证技能和 MCP。",
+        "kiro": "CLI 会自动配置受支持的 Skills 和 MCP；请登录、批准访问，并在提示时重启。",
+        "grok": "在 Grok 中打开所选项目，检查信任设置，完成剩余的启用或重启步骤，并验证 Skills 和 MCP。",
         "vscode": "打开并信任文件夹；检查并启用 MCP 服务器。",
         "chatgpt": "桌面端：通过 Codex CLI 在本地安装；网页版：在 ChatGPT 中连接或安装应用。",
-        "hermes": "重启 Hermes，信任选定的 Git 项目，并验证 Skills 和用户 MCP；不支持项目 MCP。",
+        "hermes": "重启 Hermes 并信任项目；项目 MCP 需要经过验证的 Hermes 独立发行包，以及明确确认的 UAP 项目会话。",
         "antigravity": "打开或重新加载 Antigravity；检查信任设置，并确认已准备的插件在所选范围内被发现并启用。"
       }
     },
@@ -595,7 +595,8 @@
       "automaticHelp": "CLI 会检查已安装的本地智能体，并让你确认兼容的目标。ChatGPT Desktop 在本地运行；ChatGPT Web 的设置需在 ChatGPT 内完成。",
       "manualHelp": "选择要安装到的智能体。必须保留至少一个选项。",
       "summary": "{label}：{summary}",
-      "manualHelpWithAuto": "选择要安装到的智能体。清除最后一个选项，即可在终端中选择。"
+      "manualHelpWithAuto": "选择要安装到的智能体。清除最后一个选项，即可在终端中选择。",
+      "more": "另有 {count} 项"
     },
     "command": {
       "terminal": "终端",
@@ -837,7 +838,12 @@
       "guidedChatgptSetup": "引导式 ChatGPT Web 设置；请在 ChatGPT 内完成连接。",
       "catalogReleasePending": "此插件尚未发布适用于 {agent} 的版本。",
       "useComputerScope": "请为此插件选择“这台电脑”。",
-      "unsupportedPluginComponents": "{agent} 不支持此插件的所有组件。"
+      "unsupportedPluginComponents": "{agent} 不支持此插件的所有组件。",
+      "dialogDescription": "选择智能体和安装范围，然后在终端中运行命令。",
+      "closeDialog": "关闭安装",
+      "pinnedSourceShort": "固定的 Git 来源",
+      "desktopSourceShort": "本地桌面连接",
+      "webSetupShort": "引导式 Web 设置"
     },
     "authentication": {
       "not_required": "无需帐户",
@@ -915,8 +921,8 @@
         "note": "托管 Skills 与 MCP 配置",
         "status": "支持",
         "intro": "使用与其他 AI 客户端相同的可移植软件包，为 Kiro 安装 Agent Plugins 1.0。",
-        "delivery": "CLI 会安装其管理的 Kiro Skills 和 MCP 条目，同时保留其他全局配置。",
-        "activation": "按提示完成 OAuth 或重启步骤。在 macOS 和 Windows 上完成准备，不代表已自动验证运行结果。"
+        "delivery": "CLI 会为受支持的 Kiro CLI 版本自动安装其拥有的 Skills 和 MCP 配置，并保留其他设置。MCP 需要完整且受支持的 CLI 发行包和可写配置。",
+        "activation": "请登录、批准访问，并在提示时重启。显式准备仍为 Prepared 状态；安装文件不能证明原生加载、认证或实际 MCP 执行。"
       },
       "claude": {
         "note": "托管 MCP 配置",
@@ -944,13 +950,13 @@
         "status": "支持",
         "intro": "为 Cline 安装兼容的 Agent Plugins 1.0，无需为每个插件重新创建 MCP 配置。",
         "delivery": "CLI 准备并跟踪支持的 Cline MCP 配置。",
-        "activation": "根据请求重新加载 Cline，并在插件包外部完成提供者身份验证。"
+        "activation": "重新加载 Cline 并完成提供商认证。项目 MCP 需要明确选择的受管会话及其 CLINE_MCP_SETTINGS_PATH；普通启动不会选择该配置。"
       },
       "windsurf": {
         "note": "软件包已准备；需要手动激活",
         "status": "由 CLI 准备",
         "intro": "用一条 CLI 命令为 Windsurf 准备 Agent Plugins 1.0，然后明确完成客户端要求的激活步骤。",
-        "delivery": "CLI 会验证并准备兼容的 Windsurf 软件包，但不声称已自动激活。",
+        "delivery": "CLI 可为 Devin 用户版本 3000.11.205 或 3000.12.57，以及项目版本 3000.11.205 写入其拥有的 Skills 和 MCP 配置。准备不代表发现、信任、登录或实际执行已验证。",
         "activation": "按照准备后打印的确切手动激活路径进行操作。"
       },
       "grok": {
@@ -958,7 +964,7 @@
         "status": "支持",
         "intro": "使用与其他客户端相同的 CLI，为 Grok Build 安装可移植的 Agent Plugins 1.0 Skills 和 MCP 服务器。",
         "delivery": "CLI 会在 Grok 的用户插件目录写入原生 .grok-plugin 清单，并在 Grok CLI 可用时通过它管理注册。",
-        "activation": "安装后重新加载 Grok Build。如果 Grok CLI 不可用，请先安装它，再重新运行更新命令完成原生验证。"
+        "activation": "在 Linux 上使用 Grok Build 1.0.70 时，UAP 可以启用精确的项目插件，并保留现有信任和禁用偏好。请单独检查信任；其他平台和版本应按输出步骤操作，然后重新加载并验证。"
       },
       "kimi": {
         "note": "包含 Skills 和 MCP 的托管用户插件",
@@ -975,11 +981,11 @@
         "activation": "安装后重新加载 Qoder 插件或重启 Qoder。MCP 运行时连接和服务提供方的身份验证仍需在 Qoder 中确认。"
       },
       "hermes": {
-        "note": "用户级 Skills/MCP 和项目级 Skills；不支持项目级 MCP",
+        "note": "用户 Skills/MCP；项目 Skills 和已准备的 MCP",
         "status": "支持",
-        "intro": "为当前用户或选定的 Git 项目安装 Hermes Agent 原生 Skills，并配置用户级 MCP 服务器，同时保留其他设置。",
-        "delivery": "UAP 管理自身安装的 Skills 目录和用户 config.yaml 中的特定 MCP 条目。项目安装不会修改用户级 MCP 配置。",
-        "activation": "重启 Hermes 以重新加载集成。使用项目 Skills 前请确认仓库信任；运行时发现和身份认证仍需单独验证。"
+        "intro": "为用户或所选 Git 项目安装 Hermes Agent 原生 Skills 和 MCP 服务器。项目 MCP 需要经过验证的 Hermes 客户端独立发行包。",
+        "delivery": "UAP 管理其拥有的 Skills 和 config.yaml 中精确的用户 MCP 条目。项目 MCP 使用明确确认的受管项目会话。项目安装不会修改用户 MCP 配置。",
+        "activation": "启动新的 Hermes 会话并检查仓库信任。项目 MCP 通过已确认的 UAP 项目会话运行；普通 Hermes 启动不会选择该会话。仍需确认认证和实际 MCP 执行。"
       },
       "antigravity": {
         "note": "原生用户/项目插件；需验证激活状态",

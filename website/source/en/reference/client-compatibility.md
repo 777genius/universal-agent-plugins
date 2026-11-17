@@ -50,11 +50,15 @@ certification or a claim of universal production readiness.
 
 ## Hermes and Antigravity: released installer support {#hermes-antigravity-source}
 
-Native CLI **0.1.108** was published on 2026-11-13 and includes Hermes and Antigravity. Release qualification and promotion succeeded; signed Directory package eligibility remains separate. This does not assert npm 0.1.108 publication, vendor authentication or automatic activation.
+Native CLI **0.1.110** includes Hermes and Antigravity. UAP configures supported components automatically; follow the remaining actions printed for your client. Signed Directory package eligibility remains separate. Installation does not establish vendor authentication or runtime activation.
 
-[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+[0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) · source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`.
 
-**Historical lifecycle evidence (2026-11-10):**
+Hermes Project MCP is **Prepared** only with a standalone Hermes host distribution whose bundle manifest UAP verifies, followed by an explicitly confirmed UAP project session. Ordinary Hermes startup does not select this MCP configuration. A Hermes host installed from source cannot use Project MCP; use User MCP or Project Skills only. This host requirement does not restrict installing plugins from Git. Project Skills still require trust and a new session. The dated observations below retain their historical scope.
+
+**Historical lifecycle evidence (2026-11-10–13):**
+
+[0.1.108 (2026-11-13)](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
 
 **Hermes 0.23.0:** User Skills and owned stdio/Streamable HTTP MCP configuration; Project Skills only. Project MCP is refused without redirecting to User configuration. Linux x64, macOS arm64 and native Windows x64 passed first/repeated add, update, repair, removal, untrusted Project discovery and A/B isolation in [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862) at UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Four loopback HTTP `initialize`/`tools/list` exchanges per OS prove connection and tool discovery, not `tools/call`, model use, authentication or trusted Project execution. SSE and hooks are unsupported. Portable commands are projected as Skills; explicit-only commands are withheld when explicit invocation cannot be enforced.
 

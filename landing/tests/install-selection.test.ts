@@ -313,7 +313,7 @@ test('explicit source selection is exclusive, persists across navigation and nev
   state.updateAutoDetect(false);
   state.updateTargets(['cursor', 'hermes']);
   assert.deepEqual(state.targets.value, ['hermes']);
-  assert.match(state.pinnedSourceCommands.value?.add ?? '', /^npx -y universal-agent-plugins@0\.1\.108 add github:/);
+  assert.match(state.pinnedSourceCommands.value?.add ?? '', /^npx -y universal-agent-plugins@0\.1\.110 add github:/);
   assert.equal(state.resolution.value.distribution, undefined);
   state.toggleInstall();
   await nextTick();
@@ -329,7 +329,7 @@ test('explicit source selection is exclusive, persists across navigation and nev
   assert.equal(unref(state.pinnedSourceCommands), undefined);
   assert.ok(state.resolution.value.distribution);
   state.updateTargets(['codex', 'antigravity']);
-  assert.equal(state.pinnedRepairLimitation.value?.key, 'registryUi.install.antigravityRepairUnavailable');
+  assert.equal(state.pinnedRepairLimitation.value, undefined);
   state.updateAutoDetect(true);
   assert.equal(unref(state.pinnedSourceCommands), undefined);
   assert.equal(unref(state.pinnedRepairLimitation), undefined);
