@@ -2,6 +2,7 @@ name: Published Marketing Kit Project E2E
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'landing/**'
       - 'scripts/marketing-kit-project-release-e2e.py'
@@ -30,6 +31,7 @@ concurrency:
 jobs:
   marketing-kit-project:
     name: npm 0.1.104 / ${{ matrix.target }} / real Project lifecycle
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     strategy:

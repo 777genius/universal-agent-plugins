@@ -132,6 +132,38 @@ head has no Go checks to fall back on. Tag the newest `main` commit whose push
 checks completed, or re-run the cancelled workflows only while no newer `main`
 push run is in progress, because a re-run joins the same concurrency group.
 
+## Heavy pull request lanes wait for a ready pull request
+
+Draft pull requests keep the fast lane. Lanes that start native clients or
+wide GitHub-hosted matrices (Tier 1) skip a draft and run when the pull
+request is ready. Each such job, or the root job its matrix needs, uses
+exactly this condition, written once in `repotests/ci_pr_tiers_test.go`:
+
+```yaml
+if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+```
+
+A job that reads `always()`, `cancelled()` or `failure()` keeps its own
+condition and adds the gate in parentheses, because it would otherwise run
+after its skipped needs. Every Tier 1 workflow lists `ready_for_review` in its
+pull request types, so marking a pull request ready starts the full lane on
+the head that becomes mergeable, and each later push to the ready pull request
+runs it again. GitHub does not merge a draft, so the final head of a merged
+pull request has had a Tier 1 run whenever the lane's paths matched. Nothing
+requires that run to succeed before merging; that remains a review decision.
+
+To get Tier 1 evidence while a pull request is still a draft, dispatch the
+workflow on its branch (`gh workflow run <file> --ref <branch>`). Pushes to
+`main`, schedules, workflow runs and dispatches never read the draft flag, so
+release and post-publish evidence is unchanged. None of these workflows
+produces a check that the release workflow requires.
+
+Tier 1 today: Hermes no-auth tools call, Kiro no-auth installation, Kimi 2.5.2
+no-auth call, Cline managed project session, Project Native Runtime, Published
+Marketing Kit Project E2E, both live installer audits, and the published npm
+catalog and additional clients audits. `repotests/ci_pr_tiers_test.go` keeps
+this list and fails when a job of one of them could start on a draft.
+
 ## Run Pages on hosted runners at an exact source commit
 
 The existing Pages workflow accepts a manual boolean `github_hosted` input,
