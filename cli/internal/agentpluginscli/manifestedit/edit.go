@@ -26,6 +26,8 @@ type Dependency struct {
 
 type DependencyEdit struct {
 	Alias string
+	// Group selects dependencies or dev-dependencies. Empty is dependencies.
+	Group string
 	// Value nil removes the dependency table.
 	Value *Dependency
 }
@@ -86,14 +88,19 @@ func editDependency(doc *tomledit.Document, edit DependencyEdit) error {
 	if edit.Alias == "" {
 		return errors.New("dependency alias is empty")
 	}
-	name := parser.Key{"dependencies", edit.Alias}
-	stringsSection := sectionFor(doc, parser.Key{"dependencies"})
+	group := edit.Group
+	if group == "" { group = "dependencies" }
+	if group != "dependencies" && group != "dev-dependencies" {
+		return fmt.Errorf("%w: dependency group %q", ErrUnsupportedLayout, group)
+	}
+	name := parser.Key{group, edit.Alias}
+	stringsSection := sectionFor(doc, parser.Key{group})
 	if edit.Value != nil && edit.Value.Version != "" {
 		if old := sectionFor(doc, name); old != nil {
 			removeSection(doc, old)
 		}
 		if stringsSection == nil {
-			stringsSection = appendSection(doc, parser.Key{"dependencies"})
+			stringsSection = appendSection(doc, parser.Key{group})
 		}
 		value, err := stringValue(edit.Value.Version)
 		if err != nil {
@@ -171,7 +178,7 @@ func supported(doc *tomledit.Document) error {
 }
 
 func managedKey(name parser.Key) bool {
-	return len(name) > 0 && (name[0] == "dependencies" || name[0] == "targets")
+	return len(name) > 0 && (name[0] == "dependencies" || name[0] == "dev-dependencies" || name[0] == "targets")
 }
 
 func supportedSection(section *tomledit.Section) error {
@@ -204,7 +211,7 @@ func supportedAssignment(name parser.Key, kv *parser.KeyValue) error {
 	if len(kv.Name) != 1 {
 		return fmt.Errorf("%w: assignment in %s", ErrUnsupportedLayout, name)
 	}
-	if name[0] == "dependencies" {
+	if name[0] == "dependencies" || name[0] == "dev-dependencies" {
 		if _, ok := kv.Value.X.(parser.Token); !ok {
 			return fmt.Errorf("%w: dependency value in %s", ErrUnsupportedLayout, name)
 		}

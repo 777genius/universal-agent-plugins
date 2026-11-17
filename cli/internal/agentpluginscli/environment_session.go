@@ -269,10 +269,15 @@ func dependencyIntentEdits(previous, wanted environment.Requirements) []manifest
 	for _, alias := range names {
 		old, oldOK := previous.Dependencies[alias]
 		value, ok := wanted.Dependencies[alias]
-		if ok && oldOK && reflect.DeepEqual(old, value) {
-			continue
+		oldDev, newDev := previous.Development[alias], wanted.Development[alias]
+		if ok && oldOK && reflect.DeepEqual(old, value) && oldDev == newDev { continue }
+		group := func(dev bool) string { if dev { return "dev-dependencies" }; return "dependencies" }
+		if oldOK && ok && oldDev != newDev {
+			// A group move is remove+add, not a rewrite of unrelated data.
+			edits = append(edits, manifestedit.DependencyEdit{Alias: alias, Group: group(oldDev)})
 		}
-		edit := manifestedit.DependencyEdit{Alias: alias}
+		edit := manifestedit.DependencyEdit{Alias: alias, Group: group(newDev)}
+		if !ok { edit.Group = group(oldDev) }
 		if ok {
 			v := &manifestedit.Dependency{}
 			if value.Web != nil {
