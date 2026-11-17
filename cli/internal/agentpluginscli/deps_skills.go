@@ -52,9 +52,12 @@ func (resolver dependencyResolver) resolveSkill(ctx context.Context, requirement
 	if err != nil {
 		return environment.LockedPackage{}, err
 	}
-	raw, err := acquirer.AcquireGitHubSkill(ctx, source.Repository, commit, resolved)
-	if err != nil {
-		return environment.LockedPackage{}, err
+	raw, ok := resolver.rawSkills.take(ctx, rawSkillKey{repository: source.Repository, commit: commit, path: resolved})
+	if !ok {
+		raw, err = acquirer.AcquireGitHubSkill(ctx, source.Repository, commit, resolved)
+		if err != nil {
+			return environment.LockedPackage{}, err
+		}
 	}
 	defer func() { _ = packagedigest.Remove(raw) }()
 	key := mustSourceKey(requirement)
