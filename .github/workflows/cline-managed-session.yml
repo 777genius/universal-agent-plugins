@@ -1,7 +1,7 @@
 name: Cline managed project session
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - 'install/integrationctl/agentplugins/clients/cline/**'
       - 'install/integrationctl/agentplugins/clients/session.go'
@@ -44,15 +44,15 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cline-managed-session-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: cline-managed-session-${{ github.event_name }}-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 jobs:
   portable-session-contracts:
     # The Linux native journey exercises a genuine Cline binary. This job
     # separately exercises the session/process boundary on real macOS/Windows
     # hosts; it does not claim vendor activation on those platforms.
     name: Portable session contracts (${{ matrix.os }})
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 12
     strategy:
@@ -81,7 +81,7 @@ jobs:
           go test -p=2 -count=1 -timeout=7m ./install/integrationctl/agentplugins/managedstdio ./install/integrationctl/agentplugins/clients/cline ./cli/internal/agentpluginscli -run '^Test(Session|ClineProjectSession)'
   native-session:
     name: Native managed session (${{ matrix.os }})
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
