@@ -1,4 +1,4 @@
-"""Bounded Linux/macOS observation of empty Gemini 0.66.0 skills-list sessions.
+"""Bounded Linux/macOS/Windows observation of empty Gemini 0.66.0 skills-list sessions.
 
 Pinned upstream 970413207732f5d4d8c50540c7fc359c44fdaaf2 initializes the
 skills-list-session ID and appends one initial JSONL metadata record without a
@@ -48,11 +48,12 @@ def _directory_identity(info):
 
 
 def pinned_version(version):
-    return (sys.platform in ("linux", "darwin") and os.name == "posix"
-            and _OPEN_FOR_CAPABILITY in getattr(os, "supports_dir_fd", ())
-            and all(type(getattr(os, flag, None)) is int and getattr(os, flag) > 0
-                    for flag in ("O_DIRECTORY", "O_NOFOLLOW", "O_CLOEXEC", "O_NONBLOCK"))
-            and isinstance(version, dict)
+    posix = (sys.platform in ("linux", "darwin") and os.name == "posix"
+             and _OPEN_FOR_CAPABILITY in getattr(os, "supports_dir_fd", ())
+             and all(type(getattr(os, flag, None)) is int and getattr(os, flag) > 0
+                     for flag in ("O_DIRECTORY", "O_NOFOLLOW", "O_CLOEXEC", "O_NONBLOCK")))
+    windows = sys.platform == "win32" and os.name == "nt"
+    return ((posix or windows) and isinstance(version, dict)
             and version.get("status") == "reported" and type(version.get("exit_code")) is int
             and version["exit_code"] == 0 and version.get("value") == "0.66.0")
 
@@ -91,14 +92,18 @@ class GeminiRepeatAudit:
     def __init__(self, home, project, before, version):
         self.parents, self.leaves, self.files, self.phases = {}, {}, {}, []
         self.reason, self.complete = None, False
+        self.windows = None
         self.before = self.previous = before
         self.profile, self.project = Path(home) / ".gemini", Path(project)
         self.started = datetime.now(timezone.utc)
         self.started = self.started.replace(microsecond=self.started.microsecond // 1000 * 1000)
         try:
             if not pinned_version(version):
-                raise ValueError("Gemini empty-session proof requires POSIX descriptor custody and native 0.66.0")
+                raise ValueError("Gemini empty-session proof requires supported custody and native 0.66.0")
             self.deadline = time.monotonic() + 5
+            if sys.platform == "win32":
+                backend = run_path(str(Path(__file__).with_name("gemini_windows_custody.py")))
+                self.windows = backend["Custody"](lambda: self.deadline)
             self._hold(self.project)
             self._hold(self.profile)
             registry = _json(self._read(self.profile / "projects.json", 65536, before))
@@ -115,13 +120,14 @@ class GeminiRepeatAudit:
             marker = self._read(directory / ".project_root", 4096, before)
             if marker != str(self.project).encode("utf-8"):
                 raise ValueError("Gemini runtime ownership marker differs")
-            self.prefix = f"{self.profile.name}/{self.chats.relative_to(self.profile)}/"
+            self.prefix = f"{self.profile.name}/{self.chats.relative_to(self.profile)}{os.sep}"
             old = [key for key in before if key.startswith(self.prefix)]
             if len(old) > 64:
                 raise ValueError("Gemini pre-repeat chat count exceeds its bound")
             for key in old:
                 name = key[len(self.prefix):]
-                if not name or "/" in name or name in (".", ".."):
+                if (not name or "/" in name or name in (".", "..")
+                        or self.windows is not None and "\\" in name):
                     raise ValueError("Gemini pre-repeat chat layout is not flat")
                 self._open(self.chats / name, 1 << 20)
             self._guard()
@@ -130,6 +136,9 @@ class GeminiRepeatAudit:
             self.close()
 
     def _hold(self, path):
+        if self.windows is not None:
+            self.windows.hold(path)
+            return
         if not path.is_absolute() or len(path.parts) > 64:
             raise ValueError("Gemini runtime directory depth or root is invalid")
         for member in (*reversed(path.parents), path):
@@ -144,6 +153,9 @@ class GeminiRepeatAudit:
         self._guard()
 
     def _guard(self):
+        if self.windows is not None:
+            self.windows.guard()
+            return
         if time.monotonic() > self.deadline:
             raise ValueError("Gemini runtime checkpoint deadline")
         for path, (fd, identity) in self.parents.items():
@@ -156,6 +168,8 @@ class GeminiRepeatAudit:
                 raise ValueError("Gemini runtime previous file changed or replaced")
 
     def _open(self, path, limit):
+        if self.windows is not None:
+            return self.windows.open_file(path, limit)
         self._guard()
         before = path.lstat()
         if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
@@ -237,6 +251,8 @@ class GeminiRepeatAudit:
                 "source_reference": "google-gemini/gemini-cli@970413207732f5d4d8c50540c7fc359c44fdaaf2"}
 
     def close(self):
+        if self.windows is not None:
+            self.windows.close()
         for fd, _ in (*self.leaves.values(), *reversed(tuple(self.parents.values()))):
             os.close(fd)
         self.leaves.clear()

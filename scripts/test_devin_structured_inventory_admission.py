@@ -35,6 +35,51 @@ class DevinAdmissionContracts(unittest.TestCase):
             else: bad["members"].pop()
             with self.subTest(change=change), self.assertRaises(ValueError): case.admitted_archive(bad)
 
+    def test_publisher_acquisition_keeps_size_pin_then_inventory_order(self):
+        import project_native_cursor_acquisition as transport
+        body, budget, ordered = b"inert archive", object(), []
+        members, contents = [{"kind": "file", "name": "inert"}], {"inert": b"bytes"}
+        def verify(value, pin):
+            self.assertEqual(value, body)
+            self.assertEqual(pin, "sha256:" + case.ARCHIVE)
+            ordered.append("pin")
+        def inventory(value, spec, actual_budget):
+            self.assertEqual(ordered, ["pin"])
+            self.assertEqual((value, spec, actual_budget), (body, case.SPEC, budget))
+            ordered.append("inventory")
+            return members, contents
+        with (patch.dict(case.SPEC, {"expected_bytes": len(body)}),
+              patch.object(transport, "download_devin", return_value=(body, case.SPEC["url"])) as download,
+              patch.object(case.shared.native, "verify_digest", side_effect=verify),
+              patch.object(case.shared, "inventory_archive", side_effect=inventory),
+              patch.object(case.shared, "materialize", side_effect=AssertionError("materialization"))):
+            receipt, actual_contents = case.acquire_publisher_archive(budget)
+        download.assert_called_once_with(case.SPEC, budget)
+        self.assertEqual(ordered, ["pin", "inventory"])
+        self.assertIs(actual_contents, contents)
+        self.assertEqual(receipt, {"url": case.SPEC["url"], "resolved_origin": "https://static.devin.ai",
+            "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest(),
+            "integrity": "sha256:" + case.ARCHIVE, "pin_verified": True,
+            "members": members, "installer_executed": False})
+
+    def test_publisher_failures_and_partial_bytes_cannot_reach_inventory(self):
+        import project_native_cursor_acquisition as transport
+        body = b"partial"
+        for mutation in ("transport", "url", "size", "pin"):
+            with self.subTest(mutation=mutation):
+                result = (body, case.SPEC["url"] if mutation != "url" else "https://other.invalid")
+                with (patch.dict(case.SPEC, {"expected_bytes": len(body) if mutation != "size" else len(body) + 1}),
+                      patch.object(transport, "download_devin", return_value=result,
+                          side_effect=ValueError("acquisition failed") if mutation == "transport" else None),
+                      patch.object(case.shared.native, "verify_digest",
+                          side_effect=ValueError("pin differs") if mutation == "pin" else None) as verify,
+                      patch.object(case.shared, "inventory_archive", side_effect=AssertionError("inventory")) as inventory,
+                      patch.object(case.shared, "materialize", side_effect=AssertionError("materialization"))):
+                    with self.assertRaises(ValueError):
+                        case.acquire_publisher_archive(object())
+                    inventory.assert_not_called()
+                    self.assertEqual(verify.call_count, 1 if mutation == "pin" else 0)
+
     def test_connection_guard_includes_non_rpc_connections_and_stdio_start(self):
         probe = SimpleNamespace(methods=lambda: (), call_records=lambda: ([], 0), accepted_connections=[])
         with tempfile.TemporaryDirectory() as temporary:

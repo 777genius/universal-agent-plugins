@@ -46,6 +46,14 @@ type RemovalAttestationPolicy interface {
 	RequiresExternalUninstalled(env Env, req domain.DeactivationRequest) bool
 }
 
+// InterruptedAttemptConfirmer is the adapter side of
+// ports.InterruptedAttemptConfirmer: it confirms, read-only, the client effect
+// of a native attempt whose agentplugins process was killed.
+type InterruptedAttemptConfirmer interface {
+	ConfirmsInterruptedAttempt(domain.InstallScope) bool
+	ConfirmInterruptedAttempt(ctx context.Context, env Env, req domain.ActivationRequest) (domain.ActivationOutcome, error)
+}
+
 // AutomaticActivator reports whether Activate will drive a managed client CLI
 // for this exact request. Runtime preflight reads the same predicate so the two
 // cannot drift.

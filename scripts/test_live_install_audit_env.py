@@ -10321,7 +10321,7 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
 
 
 
-@unittest.skipUnless(sys.platform == "linux", "Linux cache retirement custody contract")
+@unittest.skipUnless(sys.platform in ("linux", "darwin"), "POSIX cache retirement custody contract")
 class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
     def fixture(self, root, audit):
         import shutil

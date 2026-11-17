@@ -95,6 +95,20 @@ def strict_json(body):
     return value
 
 
+def acquire_publisher_archive(budget):
+    # Same reviewed archive and gates, one supervised no-auth publisher curl.
+    from project_native_cursor_acquisition import download_devin
+    body, resolved_url = download_devin(SPEC, budget)
+    require(resolved_url == SPEC["url"], "publisher acquisition URL differs")
+    require(len(body) == SPEC["expected_bytes"], "archive size differs from reviewed pin")
+    shared.native.verify_digest(body, SPEC["integrity"])
+    entries, contents = shared.inventory_archive(body, SPEC, budget)
+    return {"url": SPEC["url"], "resolved_origin": "https://static.devin.ai",
+            "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest(),
+            "integrity": SPEC["integrity"], "pin_verified": True,
+            "members": entries, "installer_executed": False}, contents
+
+
 def admitted_archive(receipt):
     members = receipt["members"]
     require(receipt["pin_verified"] and receipt["sha256"] == ARCHIVE and receipt["bytes"] == SPEC["expected_bytes"], "archive pin differs")
@@ -1002,7 +1016,7 @@ def run(output, *, collector=collect, recipe="private"):
             readout_state["phase"] = "source"
             ctx.source_and_projects()
             readout_state["phase"] = "acquisition"
-            receipt, contents = shared.acquire(SPEC, budget)
+            receipt, contents = acquire_publisher_archive(budget)
             admitted_archive(receipt)
             summary["acquisition"] = receipt
             readout_state["phase"] = "materialization"

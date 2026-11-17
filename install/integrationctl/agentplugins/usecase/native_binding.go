@@ -19,7 +19,7 @@ func validateNativeBindingAt(client domain.ClientBinding, detected domain.Detect
 		return err
 	}
 	if client.NativeActivationAttempt != "" {
-		return fmt.Errorf("native activation attempt %s is unresolved; review client state before another mutation", client.NativeActivationAttempt)
+		return fmt.Errorf("native activation attempt %s is unresolved; review client state before another mutation (agentplugins doctor names the recovery step)", client.NativeActivationAttempt)
 	}
 	if err := client.SelectedDelivery.Validate(); err != nil {
 		return err

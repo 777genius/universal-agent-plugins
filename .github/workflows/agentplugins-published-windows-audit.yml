@@ -7,6 +7,10 @@ on:
       - '.github/workflows/agentplugins-published-windows-audit.yml'
       - '.github/workflows/agentplugins-published-version.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/gemini_runtime_audit.py'
+      - 'scripts/gemini_windows_custody.py'
+      - 'scripts/test_gemini_windows_runtime_audit.py'
+      - 'scripts/native_client_project_artifacts.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_live_install_audit_components.py'
       - 'scripts/run-native-client-matrix.py'
@@ -17,6 +21,10 @@ on:
       - '.github/workflows/agentplugins-published-windows-audit.yml'
       - '.github/workflows/agentplugins-published-version.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/gemini_runtime_audit.py'
+      - 'scripts/gemini_windows_custody.py'
+      - 'scripts/test_gemini_windows_runtime_audit.py'
+      - 'scripts/native_client_project_artifacts.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_live_install_audit_components.py'
       - 'scripts/run-native-client-matrix.py'
@@ -103,6 +111,13 @@ jobs:
           python -m unittest scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_genuine_project_git_init_uses_empty_hooks_inside_case scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_codex_marketplace_containment_follows_physical_directory_identity -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Require genuine Windows Gemini initial-record custody
+        if: matrix.target == 'gemini' && matrix.kind == 'skill'
+        shell: pwsh
+        run: |
+          python -m unittest scripts.test_gemini_windows_runtime_audit -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # No vendor login or paid API is used. These are exact published npm bytes,

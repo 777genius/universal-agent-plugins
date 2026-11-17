@@ -2117,7 +2117,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             raise ValueError("Codex preinstall initialization changed protected fixture authority")
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
-                     if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)
+                     if target == "claude" and kind == "skill"
+                     and sys.platform in ("linux", "darwin") else None)
     vscode_user = target == "vscode" and kind == "plugin"
     vscode_roots = (runroot, case_root, home, data, project)
     vscode_native_before = scoped_snapshot(native_roots) if vscode_user else None

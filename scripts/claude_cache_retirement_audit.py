@@ -1,4 +1,4 @@
-"""Exact Linux Claude cache custody at removal; never writer-closure evidence."""
+"""Exact POSIX Claude cache custody at removal; never writer-closure evidence."""
 import hashlib
 import json
 import os
@@ -6,10 +6,18 @@ from pathlib import Path
 import re
 from runpy import run_path
 import stat
+import sys
 import time
 
 _FILES = run_path(str(Path(__file__).with_name('native_client_project_artifacts.py')))
 MAX_FILES, MAX_FILE_BYTES, MAX_TREE_BYTES, MAX_DEPTH = 10000, 64 << 20, 256 << 20, 64
+_DARWIN = (run_path(str(Path(__file__).with_name('claude_darwin_metadata.py')))
+           if sys.platform == 'darwin' else None)
+
+
+def metadata(fd):
+    if _DARWIN is not None:
+        _DARWIN['check'](fd)
 
 
 def require(value):
@@ -28,6 +36,8 @@ def open_directory(path):
     fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         require(os.path.samestat(before, os.fstat(fd)))
+        metadata(fd)
+        require(os.path.samestat(before, os.fstat(fd)))
         return fd
     except BaseException:
         os.close(fd)
@@ -35,6 +45,8 @@ def open_directory(path):
 
 
 def named_directory(path, fd):
+    require(os.path.samestat(ordinary(path), os.fstat(fd)))
+    metadata(fd)
     require(os.path.samestat(ordinary(path), os.fstat(fd)))
 
 
@@ -57,6 +69,7 @@ def tree(fd):
         budget()
         require(depth <= MAX_DEPTH and len(result) <= MAX_FILES)
         info = os.fstat(directory)
+        metadata(directory)
         result[relative] = ('dir', info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid)
         before_names = names(directory)
         for name in before_names:
@@ -76,6 +89,7 @@ def tree(fd):
             try:
                 held = os.fstat(child_fd)
                 require(_FILES['same_opened'](before, held))
+                metadata(child_fd)
                 if stat.S_ISDIR(before.st_mode):
                     visit(child_fd, child, depth + 1)
                 else:
@@ -97,11 +111,13 @@ def tree(fd):
                     result[child] = ('file', before.st_mode, before.st_dev, before.st_ino,
                                      before.st_nlink, before.st_size, before.st_mtime_ns,
                                      before.st_uid, before.st_gid, digest.hexdigest())
+                metadata(child_fd)
                 require(_FILES['identity'](before) == _FILES['identity'](
                     os.stat(name, dir_fd=directory, follow_symlinks=False)))
             finally:
                 os.close(child_fd)
         require(names(directory) == before_names)
+        metadata(directory)
         budget()
     visit(fd, '', 0)
     return result, files, total
@@ -260,9 +276,11 @@ class CacheRetirement:
                              dir_fd=self.cache_fd)
                 try:
                     held = os.fstat(fd)
+                    metadata(fd)
                     require(stat.S_ISREG(held.st_mode) and held.st_nlink == 1
                             and (held.st_dev, held.st_ino, held.st_size) == (marker[2], marker[3], 13))
                     body = os.read(fd, 14)
+                    metadata(fd)
                     require(_FILES['identity'](held) == _FILES['identity'](os.fstat(fd))
                             == _FILES['identity'](os.stat('.orphaned_at', dir_fd=self.cache_fd, follow_symlinks=False)))
                     require(re.fullmatch(rb'[1-9][0-9]{12}', body)
