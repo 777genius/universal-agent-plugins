@@ -117,9 +117,7 @@ class ReleasePipelineE2E(unittest.TestCase):
         packed = self.run_command(['npm', 'pack', '--ignore-scripts', '--json'], cwd=self.package)
         self.tarball_file = json.loads(packed.stdout)[0]['filename']
         self.tarball = (self.package / self.tarball_file).read_bytes()
-        names = ['validate', *(f'build ({os_}, {arch}' + (', .exe)' if os_ == 'windows' else ')')
-                  for os_ in ('darwin', 'linux', 'windows') for arch in ('amd64', 'arm64')),
-                 'stage-draft', 'platform-proof / Verify release and pack exact npm tarball',
+        names = ['validate', 'build', 'stage-draft', 'platform-proof / Verify release and pack exact npm tarball',
                  *(f'platform-proof / native runtime E2E ({target})' for target in TARGETS),
                  'platform-proof / Aggregate all six native platform proofs',
                  'hermes-native-proof / Aggregate hermes release-native proofs',
@@ -421,21 +419,43 @@ pathlib.Path(os.environ['PUBLISH_HASH']).write_text(hashlib.sha256(pathlib.Path(
 import json, os, pathlib, subprocess, sys
 assert os.environ['CGO_ENABLED'] == '0'
 assert subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode().strip() == os.environ['EXPECTED_COMMIT']
+goos, goarch = os.environ['GOOS'], os.environ['GOARCH']
+suffix = '.exe' if goos == 'windows' else ''
+expected = os.path.join(os.environ['RUNNER_TEMP'], f'agentplugins_1.2.3_{goos}_{goarch}{suffix}')
 a = sys.argv[1:]
-assert a == ['build', '-trimpath', '-ldflags=-s -w -X main.version=1.2.3', '-o', os.environ['EXPECTED_ASSET'], './cmd/agentplugins']
-repo = pathlib.Path(os.environ['GITHUB_WORKSPACE'])
-pathlib.Path(a[a.index('-o') + 1]).write_bytes((repo / 'npm/agentplugins/THIRD_PARTY_NOTICES.txt').read_bytes())
+assert a == ['build', '-trimpath', '-ldflags=-s -w -X main.version=1.2.3', '-o', expected, './cmd/agentplugins']
+with open(os.environ['GO_LOG'], 'a') as log:
+    log.write(f'{goos}/{goarch}\\n')
+if f'{goos}-{goarch}' != os.environ.get('SKIP_TARGET'):
+    repo = pathlib.Path(os.environ['GITHUB_WORKSPACE'])
+    pathlib.Path(expected).write_bytes((repo / 'npm/agentplugins/THIRD_PARTY_NOTICES.txt').read_bytes())
 ''')
         (self.bin / 'go').chmod(0o755)
         cli = self.source / 'cli'
         cli.mkdir()
-        asset = self.root / 'agentplugins_1.2.3_linux_amd64'
-        self.run_command(['bash', '-e', '-o', 'pipefail', '-c', shell_step(
-            'agentplugins-release.yml', 'Build exact-version binary')], cwd=cli,
-            env={**env, 'TAG': TAG, 'GOOS': 'linux', 'GOARCH': 'amd64', 'SUFFIX': '',
-                 'RUNNER_TEMP': str(self.root), 'GITHUB_WORKSPACE': str(self.source),
-                 'EXPECTED_COMMIT': self.commit, 'EXPECTED_ASSET': str(asset)})
-        self.assertEqual(asset.read_bytes(), frozen_bytes)
+        build = shell_step('agentplugins-release.yml', 'Build exact-version binaries')
+        expected_assets = sorted('agentplugins_1.2.3_' + target.replace('-', '_')
+                                 + ('.exe' if target.startswith('windows') else '') for target in TARGETS)
+        for skip in ('', 'windows-arm64'):
+            with self.subTest(skip=skip or 'none'):
+                out = self.root / ('build-out-' + (skip or 'all'))
+                out.mkdir()
+                go_log = self.root / ('go-log-' + (skip or 'all'))
+                result = self.run_command(['bash', '-e', '-o', 'pipefail', '-c', build], cwd=cli,
+                    env={**env, 'TAG': TAG, 'RUNNER_TEMP': str(out), 'GITHUB_WORKSPACE': str(self.source),
+                         'EXPECTED_COMMIT': self.commit, 'GO_LOG': str(go_log), 'SKIP_TARGET': skip},
+                    check=False)
+                # One job builds every target exactly once, in one shared checkout.
+                self.assertEqual(sorted(go_log.read_text().split()),
+                                 sorted(target.replace('-', '/') for target in TARGETS))
+                if skip:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn('expected exactly 6 agentplugins binaries, found 5', result.stderr.decode())
+                    continue
+                self.assertEqual(result.returncode, 0, result.stderr.decode())
+                self.assertEqual(sorted(path.name for path in out.iterdir()), expected_assets)
+                for path in out.iterdir():
+                    self.assertEqual(path.read_bytes(), frozen_bytes)
 
 
 if __name__ == '__main__':

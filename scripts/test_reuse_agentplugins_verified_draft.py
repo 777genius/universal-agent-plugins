@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -43,10 +44,8 @@ class ReuseTests(unittest.TestCase):
                     "workflow_id": 7, "event": "workflow_dispatch", "status": "completed",
                     "conclusion": "success", "run_started_at": "2026-09-28T01:00:00Z",
                     "updated_at": "2026-09-28T03:00:00Z"}
-        names = ("validate", "build (darwin, amd64)", "build (darwin, arm64)",
-                 "build (linux, amd64)", "build (linux, arm64)",
-                 "build (windows, amd64, .exe)", "build (windows, arm64, .exe)",
-                 "stage-draft", "platform-proof / Verify release and pack exact npm tarball",
+        # Literal list on purpose: it pins the verifier constant independently.
+        names = ("validate", "build", "stage-draft", "platform-proof / Verify release and pack exact npm tarball",
                  *(f"platform-proof / native runtime E2E ({target})" for target in reuse.TARGETS),
                  "platform-proof / Aggregate all six native platform proofs", "verified-draft")
         self.jobs = [{"name": name, "run_id": 42, "status": "completed",
@@ -221,6 +220,86 @@ class ReuseTests(unittest.TestCase):
              patch.object(reuse.draft, "verify", return_value=changed):
             with self.assertRaisesRegex(ValueError, "draft changed since qualification"):
                 reuse.verify(self.args)
+
+
+WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+
+
+def workflow_jobs(path):
+    """Top-level jobs of a workflow file, parsed without third-party YAML."""
+    body = path.read_text().split("\njobs:\n", 1)[1]
+    parts = re.split(r"(?m)^  ([\w-]+):\n", body)
+    return dict(zip(parts[1::2], parts[2::2]))
+
+
+def job_field(body, field):
+    match = re.search(r"(?m)^    " + field + r": (.+)$", body)
+    return match.group(1).strip() if match else None
+
+
+def job_needs(body):
+    needs = job_field(body, "needs")
+    if needs is None:
+        return []
+    return [name.strip() for name in needs.strip("[]").split(",")]
+
+
+class WorkflowJobNameDriftTests(unittest.TestCase):
+    """The verifier authenticates job names; they must be the ones the workflow emits.
+
+    Without this, renaming or re-matrixing a producer job keeps every unit test
+    green and only fails closed at promotion time, hours after qualification.
+    """
+
+    def called_job_names(self, caller, workflow, aggregates_only):
+        names = []
+        for job_id, body in workflow_jobs(WORKFLOWS / Path(workflow).name).items():
+            if aggregates_only and not job_id.startswith("aggregate"):
+                continue
+            name = job_field(body, "name")
+            self.assertIsNotNone(name, f"{workflow} job {job_id} must have an explicit name")
+            if "${{ matrix.target }}" in name:
+                targets = re.findall(r"(?m)^          - target: (\S+)$", body)
+                self.assertTrue(targets, f"{workflow} job {job_id} has no matrix targets")
+                expanded = [name.replace("${{ matrix.target }}", target) for target in targets]
+            else:
+                self.assertNotIn("strategy:", body, f"{workflow} job {job_id} matrix is not authenticated")
+                expanded = [name]
+            for item in expanded:
+                self.assertNotIn("${{", item, f"unexpanded expression in {workflow} job {job_id}")
+                names.append(f"{caller} / {item}")
+        return names
+
+    def test_verifier_job_names_match_release_workflow(self):
+        jobs = workflow_jobs(WORKFLOWS / Path(reuse.WORKFLOW).name)
+        closure, pending = set(), ["verified-draft"]
+        while pending:
+            name = pending.pop()
+            if name not in closure:
+                self.assertIn(name, jobs)
+                closure.add(name)
+                pending.extend(job_needs(jobs[name]))
+        derived = []
+        for job_id in sorted(closure):
+            body = jobs[job_id]
+            uses = job_field(body, "uses")
+            if uses:
+                # The new native client workflows legitimately skip source-build
+                # steps in release mode, so only their aggregates are required.
+                derived += self.called_job_names(
+                    job_id, uses, job_id in ("hermes-native-proof", "antigravity-native-proof"))
+            else:
+                # A plain job is reported under its id only without name or matrix.
+                self.assertIsNone(job_field(body, "name"), job_id)
+                self.assertNotIn("\n    strategy:", body, f"{job_id} matrix renames its check runs")
+                derived.append(job_id)
+        required = [*reuse.REQUIRED_SUCCESS_JOBS, *reuse.NEW_CLIENT_GATES,
+                    *reuse.SCHEMA_TWO_QUALIFICATION_JOBS]
+        self.assertEqual(len(required), len(set(required)))
+        self.assertEqual(len(derived), len(set(derived)))
+        self.assertEqual(sorted(derived), sorted(required))
+        self.assertIn("promote-release", jobs)
+        self.assertNotIn("\n    strategy:", jobs["promote-release"])
 
 
 class SourceIdentityTests(unittest.TestCase):

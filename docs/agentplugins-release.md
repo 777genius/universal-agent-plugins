@@ -53,7 +53,9 @@ the publishable version from the approved tag; do not manually bump it.
    with `--ref <exact-tag>`, the exact tag and the optional final `release_notes`
    prefix. Leave the typed boolean `publish_release=false` (the default) for
    draft-only qualification. If the owner authorized public publication, set
-   `auto_publish=true` to chain promotion automatically after this run succeeds.
+   `auto_publish=true` to chain promotion automatically: once every draft proof
+   passes, the run dispatches promotion, which waits for and authenticates the
+   finished qualification run.
    All environment reviews still apply. Do not edit draft notes or assets after
    qualification: metadata changes deliberately invalidate the frozen receipt.
 3. Review the frozen commit and approve the `agentplugins-release`
@@ -69,8 +71,8 @@ the publishable version from the approved tag; do not manually bump it.
    launcher or released binary. It then proves a warm-cache invocation with
    the local proof source removed. Until the matrix aggregates successfully,
    no public GitHub Release may exist.
-6. Confirm the reusable Hermes and Antigravity native workflows succeed after
-   `platform-proof`. Each uses the same-run complete nine-asset artifact from
+6. Confirm the reusable Hermes and Antigravity native workflows succeed. They
+   start after `stage-draft`, in parallel with `platform-proof`. Each uses the same-run complete nine-asset artifact from
    `stage-draft`, with the exact frozen checkout and `checksums.txt` SHA-256.
    `release-assets.js` verifies the full bundle before the selected binary runs;
    source compilation is disabled for these release lanes. The existing real
@@ -97,8 +99,11 @@ the publishable version from the approved tag; do not manually bump it.
    dispatch the existing producer with `publish_release=true`, plus
    `qualified_run_id` and `qualified_run_attempt` from the successful
    `publish_release=false` run; use `--ref <exact-tag>`. With `auto_publish=true`,
-   the successful qualification dispatches this phase for you, and the promotion
-   waits for that exact producer run to complete successfully. The frozen
+   the qualification run dispatches this phase for you as soon as every
+   platform and native proof has passed, in parallel with `verified-draft`. The
+   promotion run waits in the tag-keyed concurrency group until the qualification
+   run finishes and refuses unless that run completed successfully with a
+   successful `verified-draft` and its receipt. The frozen
    tag/source-ref/`main` ancestry and required commit gates still run. Promotion authenticates the prior successful
    draft-only workflow attempt, all six native platform proofs, both successful
    Hermes/Antigravity aggregate jobs (including every aggregate step), its verified
@@ -108,6 +113,10 @@ the publishable version from the approved tag; do not manually bump it.
    repeats the same verification immediately before publishing by the verified
    numeric release ID, then confirms that the tag still resolves to that ID.
    It does not rebuild binaries or rerun native platform proofs.
+   If `verified-draft` fails in an `auto_publish=true` run, the already
+   dispatched promotion run fails closed on its own. Re-run failed jobs does not
+   dispatch promotion again, so cancel that doomed promotion run manually, fix
+   and requalify, then dispatch promotion by hand as described in this step.
 9. After authorized promotion, verify the resulting public release contains six platform binaries,
    `checksums.txt`, `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt`, and
    verify GitHub attestations for every file, including the notices.
@@ -131,8 +140,10 @@ proves that the candidate remains an ancestor of current `main`. Only descendant
 movement of `main` is allowed; candidate bytes and required checks never float.
 A workflow-dispatch ref of current `main` still has to equal the candidate SHA.
 
-Go and source npm qualification run in parallel with the six binary builds.
-Draft staging requires all three lanes. Go compilation/dependency caching is
+Go and source npm qualification run in parallel with the binary build. One
+`build` job embeds the Skills picker bundle once and cross-compiles all six
+binaries sequentially, then refuses unless exactly six were produced. Draft
+staging requires all three lanes. Go compilation/dependency caching is
 allowed, while `-count=1` forces the release's Go tests to execute. Staged npm
 contract tests, all six native platform proofs and both three-platform
 Hermes/Antigravity release-native aggregates remain mandatory. Publication
