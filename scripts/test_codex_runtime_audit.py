@@ -1176,6 +1176,22 @@ class CodexPluginSQLiteAuditTest(unittest.TestCase):
             return audit.CodexPluginSQLiteAudit(Path(sys.executable), self.case,
                                                self.home, self.project, {})
 
+    def test_non_bmp_parent_round_trips_native_sqlite_config(self):
+        self.case = self.case / 'unicode-\U0001f600'
+        self.case.mkdir()
+        self.home, self.project = self.case / 'home', self.case / 'project'
+        self.profile = self.home / '.codex'
+        for path in (self.home, self.project, self.case / 'tmp', self.profile):
+            path.mkdir()
+        self.database = self.home / '.local/state/codex-sqlite/state_5.sqlite'
+        observer = self.create()
+        self.assertEqual(audit.tomllib.loads(observer.config.read_text(encoding='utf-8')),
+                         {'sqlite_home': str(observer.runtime)})
+        observer.guard()
+        observer.checkpoint('unicode-pin')
+        self.assertEqual([row['phase'] for row in observer.evidence()['observations']],
+                         ['before-install', 'unicode-pin'])
+
     def test_wal_representation_preserves_semantics_but_changed_row_refuses(self):
         observer = self.create()
         # Public plugin configuration changes are admitted only with the exact pin intact.

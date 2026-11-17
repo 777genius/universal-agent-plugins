@@ -32,6 +32,12 @@ DATABASES = frozenset(("state_5.sqlite", "logs_2.sqlite", "goals_1.sqlite",
                       "memories_1.sqlite", "queue_1.sqlite", "thread_history_1.sqlite"))
 
 
+def _sqlite_config(runtime):
+    # Preserve Unicode scalar values; TOML forbids unescaped DEL.
+    pin = json.dumps(str(runtime), ensure_ascii=False).replace("\x7f", "\\u007f")
+    return ("sqlite_home = " + pin + "\n").encode("utf-8")
+
+
 def _regular_bytes(path, limit):
     before = path.lstat()
     if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
@@ -550,7 +556,7 @@ class CodexPluginSQLiteAudit:
         paths = {case, home, project, self.profile, self.temporary, self.runtime}
         paths.update(self.runtime.parents[:3])
         self.anchors = {path: _real_directory(path) for path in paths}
-        body = ("sqlite_home = " + json.dumps(self.pin) + "\n").encode()
+        body = _sqlite_config(self.pin)
         with self.config.open("xb") as stream:
             stream.write(body)
         initial_config = _FILES["identity"](self.config.lstat())
@@ -622,7 +628,7 @@ class CodexRuntimeAudit:
         paths = {case, home, self.profile, project, self.temporary, self.runtime}
         paths.update(self.runtime.parents[:3])
         self.anchors = {path: _real_directory(path) for path in paths}
-        self.config_bytes = ("sqlite_home = " + json.dumps(str(self.runtime)) + "\n").encode()
+        self.config_bytes = _sqlite_config(self.runtime)
         with self.config.open("xb") as stream:
             stream.write(self.config_bytes)
         self.foreign_bytes = _regular_bytes(foreign, FILE_LIMIT)
