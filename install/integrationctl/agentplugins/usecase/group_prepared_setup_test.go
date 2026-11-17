@@ -224,6 +224,40 @@ func TestGroupPreparedSetupIsReviewedAndCompletesWithoutRestaging(t *testing.T) 
 	}
 }
 
+// Regression: a completion that only re-verified the intact setup reported a
+// mutation, or neither a mutation nor no-change, and rewrote saved state.
+func TestGroupPreparedSetupWithoutEffectIsNoChange(t *testing.T) {
+	for _, update := range []bool{false, true} {
+		t.Run(map[bool]string{false: "add", true: "update"}[update], func(t *testing.T) {
+			f := newGroupSetupFixture(t)
+			apply := f.service.AddGroup
+			if update {
+				apply = f.service.UpdateGroup
+			}
+			for _, binding := range f.before.Installations[0].Clients {
+				saved := lifecycleOutcome(binding)
+				f.actors[domain.ClientID(binding.ClientID)].settled = &saved
+			}
+			before, err := os.ReadFile(f.store.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := apply(t.Context(), GroupInput{Targets: f.inputs, Confirmed: true})
+			if err != nil || result.Mutated {
+				t.Fatalf("unchanged completion reported a change: %+v %v", result, err)
+			}
+			for _, target := range result.Targets {
+				if !target.NoChange || target.Mutated || f.actors[target.Plan.ClientID].acts != 1 {
+					t.Fatalf("unchanged completion was not no-change: %+v", target)
+				}
+			}
+			if after, err := os.ReadFile(f.store.Path); err != nil || string(after) != string(before) {
+				t.Fatalf("unchanged completion rewrote state: %v", err)
+			}
+		})
+	}
+}
+
 func TestGroupPreparedSetupRefusesUnclosedCancelledAndChangedAuthority(t *testing.T) {
 	for _, scenario := range []string{"unclosed", "canceled", "foreign", "package-changed", "binding-changed"} {
 		t.Run(scenario, func(t *testing.T) {

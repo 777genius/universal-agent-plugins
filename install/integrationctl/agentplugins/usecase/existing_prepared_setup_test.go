@@ -5,8 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
@@ -19,6 +21,9 @@ type existingSetupActor struct {
 	marker            string
 	reads, acts       int
 	onRead            func()
+	// settled, when set, is the saved lifecycle that an acting pass re-observes
+	// without any effect, like an intact native projection.
+	settled *domain.ActivationOutcome
 }
 
 func (a *existingSetupActor) VerifierAvailable(domain.DetectedClient, domain.DeliveryPlan, string) bool {
@@ -44,6 +49,11 @@ func (a *existingSetupActor) Activate(_ context.Context, r domain.ActivationRequ
 		}
 	} else {
 		a.acts++
+		if a.settled != nil && a.needsSetup {
+			outcome := *a.settled
+			outcome.NativeEffect = domain.NativeEffectUnchanged
+			return outcome, nil
+		}
 		effect = domain.NativeEffectCommitted
 		objects = append([]domain.NativeObjectOwnership(nil), r.Delivery.NativeObjects...)
 		if a.needsSetup {
@@ -73,27 +83,37 @@ func (a existingLegacyVerifier) Deactivate(ctx context.Context, request domain.D
 	return a.inner.Deactivate(ctx, request)
 }
 
+// existingProjectSetupFixture returns a project-scoped service and confirmed
+// Claude add input whose fresh verifier observes a completable Prepared setup.
+func existingProjectSetupFixture(t *testing.T, source string) (Service, statev2.Store, AddInput, domain.ActivationOutcome) {
+	t.Helper()
+	service, store, _ := serviceFixture(t)
+	project := t.TempDir()
+	service.ProjectRoot = project
+	store.Path, store.ProjectRoot = filepath.Join(project, ".uap", "state-v2.json"), project
+	service.StateStore, service.Kernel.StateStore = store, store
+	service.CheckNamespace = func() error { return service.Paths.RequireContainedChild(project, store.Path) }
+	planner := plannertest.NewPlanner(clientplanner.Planner{ProjectRoot: project, ManagedRoot: filepath.Join(project, ".uap", "managed")})
+	service.Planner, service.Targets = planner, planner
+	client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "profile"), ExecutablePath: "/TEST/claude"}
+	input := addInput(t, client, source)
+	input.Scope = domain.ScopeProject
+	input.BackendExecutable = client.ExecutablePath
+	input.Confirmed = true
+	observed := domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Authentication: domain.AuthenticationNotChecked, Policy: domain.PolicyAllowed, NativeEffect: domain.NativeEffectUnchanged}
+	return service, store, input, observed
+}
+
 // Reproduces an older CLI's saved Active marketplace binding after exact setup
 // ceases to be ready. Only fresh scoped verification plus adapter opt-in may
 // authorize normal confirmed add/update to finish setup on the intact package.
 func TestExistingScopedVerifierCompletesPreparedSetupThroughNormalApply(t *testing.T) {
 	for _, mode := range []string{"confirmed-add", "confirmed-update", "prepared-binding", "preview", "dry-run", "online-preview", "declined", "denied", "unclosed", "no-opt-in", "binding-changed"} {
 		t.Run(mode, func(t *testing.T) {
-			service, store, _ := serviceFixture(t)
-			project := t.TempDir()
-			service.ProjectRoot = project
-			store.Path, store.ProjectRoot = filepath.Join(project, ".uap", "state-v2.json"), project
-			service.StateStore, service.Kernel.StateStore = store, store
-			service.CheckNamespace = func() error { return service.Paths.RequireContainedChild(project, store.Path) }
-			planner := plannertest.NewPlanner(clientplanner.Planner{ProjectRoot: project, ManagedRoot: filepath.Join(project, ".uap", "managed")})
-			service.Planner, service.Targets = planner, planner
-			client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "profile"), ExecutablePath: "/TEST/claude"}
-			actor := &existingSetupActor{allow: true, marker: filepath.Join(t.TempDir(), "setup-effect"), observed: domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Authentication: domain.AuthenticationNotChecked, Policy: domain.PolicyAllowed, NativeEffect: domain.NativeEffectUnchanged}}
+			service, store, input, observed := existingProjectSetupFixture(t, "https://example.invalid/existing-scoped-setup")
+			client := input.Client
+			actor := &existingSetupActor{allow: true, marker: filepath.Join(t.TempDir(), "setup-effect"), observed: observed}
 			service.Activator = actor
-			input := addInput(t, client, "https://example.invalid/existing-scoped-setup")
-			input.Scope = domain.ScopeProject
-			input.BackendExecutable = client.ExecutablePath
-			input.Confirmed = true
 			added, err := service.Add(t.Context(), input)
 			if err != nil {
 				t.Fatal(err)
@@ -206,6 +226,38 @@ func TestExistingScopedVerifierCompletesPreparedSetupThroughNormalApply(t *testi
 		})
 	}
 }
+
+// Regression: closing the completion attempt's own marker reported a mutation
+// and rewrote updated_at although the repeated add changed nothing.
+func TestExistingPreparedSetupWithoutEffectIsNoChange(t *testing.T) {
+	service, store, input, observed := existingProjectSetupFixture(t, "https://example.invalid/unchanged-prepared-setup")
+	actor := &existingSetupActor{allow: true, observed: observed}
+	service.Activator = actor
+	if _, err := service.Add(t.Context(), input); err != nil {
+		t.Fatal(err)
+	}
+	before, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := lifecycleOutcome(onlyBinding(before.Installations[0]))
+	actor.settled, actor.needsSetup, actor.acts = &saved, true, 0
+	out, err := service.Add(t.Context(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actor.acts != 1 || out.Mutated || !out.NoChange || out.Activation.Activation != domain.ActivationActive {
+		t.Fatalf("unchanged completion reported a change: acts=%d %+v", actor.acts, out)
+	}
+	after, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("unchanged completion rewrote state:\nbefore %+v\nafter  %+v", before.Installations[0], after.Installations[0])
+	}
+}
+
 func btoi(v bool) int {
 	if v {
 		return 1

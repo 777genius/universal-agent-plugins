@@ -117,8 +117,8 @@ func (service Service) updateLifecycleAndNativeObjectsWithAttempt(installationID
 			return false, err
 		}
 		materializationChanged := outcome.NativeEffect == domain.NativeEffectCommitted && client.Materialization != domain.MaterializationMaterialized
-		if lifecycleOutcomeUnchanged(client, outcome, nativeObjects) && (!clearAttempt || client.NativeActivationAttempt == "") && !materializationChanged {
-			return false, nil
+		if lifecycleOutcomeUnchanged(client, outcome, nativeObjects) && !materializationChanged && (!clearAttempt || client.NativeActivationAttempt == "" || client.PendingNativeIntent == nil) {
+			return false, service.closeBareNativeAttempt(state, installationIndex, clientBindingID, client, clearAttempt)
 		}
 		applyLifecycleOutcome(&client, outcome, nativeObjects, service.now())
 		if materializationChanged {
@@ -137,6 +137,19 @@ func (service Service) updateLifecycleAndNativeObjectsWithAttempt(installationID
 		return true, nil
 	}
 	return false, fmt.Errorf("installation disappeared during activation")
+}
+
+// An unchanged outcome persists nothing but the close of a bare attempt
+// marker, the only field beginNativeAttempt sets without a selected delivery.
+// Closing it restores the exact predecessor binding: that is not a lifecycle
+// change, so neither the result nor updated_at reports one.
+func (service Service) closeBareNativeAttempt(state domain.StateFileV2, installationIndex int, clientBindingID string, client domain.ClientBinding, clearAttempt bool) error {
+	if !clearAttempt || client.NativeActivationAttempt == "" {
+		return nil
+	}
+	client.NativeActivationAttempt = ""
+	state.Installations[installationIndex].Clients[clientBindingID] = client
+	return service.persistLifecycleState(state)
 }
 
 func reconcilePreservedNativeObjects(client domain.ClientBinding, nativeObjects *[]domain.NativeObjectOwnership, preserveCommittedPackage bool) (*[]domain.NativeObjectOwnership, error) {
