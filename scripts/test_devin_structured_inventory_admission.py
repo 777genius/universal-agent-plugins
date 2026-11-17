@@ -527,6 +527,91 @@ class ClosedDevinReadoutContracts(unittest.TestCase):
                 with self.assertRaises(KeyboardInterrupt):
                     case.record_acquisition_refusal(error, summary, state)
 
+    def test_exact_publisher_transport_guard_projects_only_finite_existing_facts(self):
+        import project_native_cursor_acquisition as publisher
+        budget = SimpleNamespace(check=lambda: 30)
+        expected_url = case.SPEC["url"].encode()
+        def refusal(record, body):
+            with patch.object(publisher, "run_probe", side_effect=[
+                    ({"exit": 0, "error": None}, b"curl 8.4.0 PRIVATE\n", b""),
+                    (record, body, b"PRIVATE stderr")]):
+                try:
+                    publisher.download_devin(case.SPEC, budget)
+                except ValueError as error:
+                    return error, case.acquisition_refusal_site(error)
+                self.fail("original transport guard must refuse")
+        controls = (
+            ({"exit": 22, "error": None}, b"403\n" + expected_url + b"\n",
+             dict(process_error=False, curl_exit=22, http_status="403",
+                  framing_valid=True, effective_url_matches=True)),
+            ({"exit": None, "error": "PRIVATE process error"}, b"000\nPRIVATE\n",
+             dict(process_error=True, curl_exit=None, http_status="000",
+                  framing_valid=True, effective_url_matches=False)),
+            ({"exit": 0, "error": None}, b"200\nPRIVATE wrong URL\n",
+             dict(process_error=False, curl_exit=0, http_status="200",
+                  framing_valid=True, effective_url_matches=False)),
+            ({"exit": 0, "error": None}, b"PRIVATE malformed response",
+             dict(process_error=False, curl_exit=0, http_status="unavailable",
+                  framing_valid=False, effective_url_matches=False)),
+        )
+        for record, body, expected in controls:
+            with self.subTest(expected=expected):
+                error, value = refusal(record, body)
+                self.assertIs(type(error), ValueError)
+                self.assertEqual(value, dict(module="publisher", site="download", line=60,
+                                             exception="value", transport=expected))
+                summary, state = self.acquisition_fixture(value)
+                projected = case.closed_readout(summary, state)
+                self.assertEqual(projected["acquisition_refusal"]["transport"], expected)
+                self.assertFalse(projected["collection_complete"])
+                self.assertNotIn("PRIVATE", json.dumps(projected))
+                self.assertNotIn(case.SPEC["url"], json.dumps(projected))
+                self.assertNotIn(str(Path(__file__).parent), json.dumps(projected))
+        for record, body in (
+                ({"exit": True, "error": None}, b"403\nPRIVATE\n"),
+                ({"exit": 1 << 100, "error": None}, b"403\nPRIVATE\n"),
+                ({"exit": 1.5, "error": None}, b"403\nPRIVATE\n"),
+                ({"exit": 22, "error": None}, b"403\n" + b"x" * 16384)):
+            with self.subTest(record=record):
+                _, value = refusal(record, body)
+                self.assertEqual(value, dict(module="publisher", site="download", line=60,
+                                            exception="value"))
+        error, _ = refusal({"exit": 22, "error": None}, b"403\nPRIVATE\n")
+        with patch.object(case, "acquisition_transport_facts", side_effect=ValueError("PRIVATE")):
+            value = case.acquisition_refusal_site(error)
+        self.assertEqual(value, dict(module="publisher", site="download", line=60, exception="value"))
+        summary, state = self.acquisition_fixture(value)
+        original_summary = copy.deepcopy(summary)
+        with patch.object(case, "acquisition_transport_facts", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                case.record_acquisition_refusal(error, summary, state)
+        self.assertEqual(summary, original_summary)
+        def foreign():
+            record, stdout, url, client = {"exit": 22, "error": None}, b"403\nPRIVATE\n", case.SPEC["url"], "devin"
+            raise ValueError("PRIVATE foreign frame")
+        try:
+            foreign()
+        except ValueError as foreign_error:
+            self.assertIsNone(case.acquisition_transport_facts(foreign_error.__traceback__))
+            self.assertIsNone(case.acquisition_refusal_site(foreign_error))
+        valid = dict(module="publisher", site="download", line=60, exception="value",
+                     transport=controls[0][2])
+        malformed = [
+            {**valid, "line": 45},
+            {**valid, "site": "transport"},
+            {**valid, "exception": "other"},
+        ]
+        for key, bad in (("curl_exit", True), ("curl_exit", 256),
+                         ("process_error", 1), ("framing_valid", 1),
+                         ("effective_url_matches", 0), ("http_status", "PRIVATE"),
+                         ("http_status", 403)):
+            malformed.append({**valid, "transport": {**valid["transport"], key: bad}})
+        malformed.append({**valid, "transport": {**valid["transport"], "raw": "PRIVATE"}})
+        for value in malformed:
+            summary, state = self.acquisition_fixture(value)
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                case.closed_readout(summary, state)
+
     def test_acquisition_site_schema_and_global_scope_remain_closed(self):
         valid = {"module": "publisher", "site": "download", "line": 60, "exception": "value"}
         for changed in (

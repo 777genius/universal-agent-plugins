@@ -804,7 +804,7 @@ def closed_definition_cache_refusal(summary, state):
     return dict(value)
 
 
-# Exact authored sites only; no traceback locals, messages, paths or causes leave.
+# Exact authored sites only; only fixed bounded projections leave, never raw locals/messages/paths/causes.
 ACQUISITION_SITES = {
     ("collector", "acquire"): (98, 109),
     ("collector", "archive-admission"): (112, 121),
@@ -812,6 +812,38 @@ ACQUISITION_SITES = {
     ("publisher", "download"): (34, 79),
 }
 ACQUISITION_EXCEPTIONS = frozenset(("value", "os", "timeout", "type", "key", "runtime", "other"))
+
+
+def acquisition_transport_facts(trace):
+    """Project only existing bounded locals from the exact Devin refusal frame."""
+    publisher = sys.modules.get("project_native_cursor_acquisition")
+    function = getattr(publisher, "_download", None)
+    code = trace.tb_frame.f_code
+    path = str(Path(__file__).with_name("project_native_cursor_acquisition.py"))
+    if (code is not getattr(function, "__code__", None) or code.co_filename != path
+            or trace.tb_lineno != 60):
+        return None
+    values = trace.tb_frame.f_locals
+    if type(values) is not dict:
+        return None
+    record, stdout = values.get("record"), values.get("stdout")
+    url, client = values.get("url"), values.get("client")
+    if (type(record) is not dict or "error" not in record or "exit" not in record
+            or type(stdout) is not bytes or len(stdout) > 16384
+            or type(url) is not str or not 0 < len(url) <= 2048 or url != SPEC["url"]
+            or type(client) is not str or client != "devin"):
+        return None
+    exit_code = record["exit"]
+    if exit_code is not None and (type(exit_code) is not int or not -255 <= exit_code <= 255):
+        return None
+    fields = stdout.split(b"\n")
+    status = (fields[0].decode("ascii") if re.fullmatch(rb"[0-9]{3}", fields[0])
+              else "unavailable")
+    framing = (len(fields) == 3 and fields[-1] == b"" and status != "unavailable"
+               and 0 < len(fields[1]) <= 2048)
+    return dict(process_error=record["error"] is not None, curl_exit=exit_code,
+                http_status=status, framing_valid=framing,
+                effective_url_matches=len(fields) == 3 and fields[1] == url.encode())
 
 
 def acquisition_refusal_site(error):
@@ -840,6 +872,13 @@ def acquisition_refusal_site(error):
             if (code is getattr(function, "__code__", None) and code.co_filename == path
                     and type(line) is int and first <= line <= last):
                 found = dict(module=module, site=site, line=line, exception=category)
+                if (module, site, line) == ("publisher", "download", 60) and type(error) is ValueError:
+                    try:
+                        transport = acquisition_transport_facts(current)
+                    except Exception:
+                        transport = None
+                    if transport is not None:
+                        found["transport"] = transport
         current = current.tb_next
     return found if current is None else None
 
@@ -870,7 +909,9 @@ def closed_acquisition_refusal(summary, state):
             and state.get("phase") == "acquisition"
             and state.get("reason") != "metadata-complete", "readout acquisition diagnostic context")
     value = state["acquisition_refusal"]
-    require(type(value) is dict and set(value) == {"module", "site", "line", "exception"},
+    require(type(value) is dict and set(value) in (
+                {"module", "site", "line", "exception"},
+                {"module", "site", "line", "exception", "transport"}),
             "readout acquisition diagnostic shape")
     pair = (value.get("module"), value.get("site"))
     require(type(pair[0]) is str and type(pair[1]) is str and pair in ACQUISITION_SITES,
@@ -879,7 +920,23 @@ def closed_acquisition_refusal(summary, state):
     require(type(value.get("line")) is int and first <= value["line"] <= last
             and type(value.get("exception")) is str and value["exception"] in ACQUISITION_EXCEPTIONS,
             "readout acquisition diagnostic bounds")
-    return dict(value)
+    result = dict(value)
+    if "transport" in value:
+        require(pair == ("publisher", "download") and value["line"] == 60
+                and value["exception"] == "value", "readout transport diagnostic context")
+        facts = value["transport"]
+        require(type(facts) is dict and set(facts) == {
+                    "process_error", "curl_exit", "http_status", "framing_valid", "effective_url_matches"}
+                and all(type(facts[key]) is bool for key in (
+                    "process_error", "framing_valid", "effective_url_matches"))
+                and (facts["curl_exit"] is None or (
+                    type(facts["curl_exit"]) is int and -255 <= facts["curl_exit"] <= 255))
+                and type(facts["http_status"]) is str
+                and (facts["http_status"] == "unavailable"
+                     or re.fullmatch(r"[0-9]{3}", facts["http_status"]) is not None),
+                "readout transport diagnostic shape")
+        result["transport"] = dict(facts)
+    return result
 
 
 def closed_readout(summary, state):
