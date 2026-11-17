@@ -502,28 +502,23 @@ img {
   border-radius: 50%;
   background: rgba(4, 7, 15, 0.82);
 }
-.hero-demo-video__launch svg,
-.hero-demo-video__launch span {
-  transition: transform 220ms ease;
-}
-.hero-demo-video:hover .hero-demo-video__launch svg,
-.hero-demo-video:focus-within .hero-demo-video__launch svg {
-  transform: scale(1.08);
-}
-.hero-demo-video:hover .hero-demo-video__launch span,
-.hero-demo-video:focus-within .hero-demo-video__launch span {
-  transform: translateY(3px);
+@media (prefers-reduced-motion: no-preference) {
+  .hero-demo-video__launch svg,
+  .hero-demo-video__launch span {
+    transition: transform 220ms ease;
+  }
+  .hero-demo-video:hover .hero-demo-video__launch svg,
+  .hero-demo-video:focus-within .hero-demo-video__launch svg {
+    transform: scale(1.08);
+  }
+  .hero-demo-video:hover .hero-demo-video__launch span,
+  .hero-demo-video:focus-within .hero-demo-video__launch span {
+    transform: translateY(3px);
+  }
 }
 .hero-demo-video__launch:focus-visible {
   outline: 3px solid var(--cyan);
   outline-offset: -5px;
-}
-@media (prefers-reduced-motion: reduce) {
-  .hero-demo-video .hero-demo-video__launch svg,
-  .hero-demo-video .hero-demo-video__launch span {
-    transition: none;
-    transform: none;
-  }
 }
 .hero-demo-video__close {
   position: absolute;

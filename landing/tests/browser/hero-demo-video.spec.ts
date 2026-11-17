@@ -257,5 +257,10 @@ test('whole demo poster hover and keyboard focus animate the invitation without 
   await expect(icon).not.toHaveCSS('transform', 'none');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(icon).toHaveCSS('transform', 'none');
-  await expect(icon).toHaveCSS('transition-duration', '0s');
+  // The shared reduced-motion rule caps transitions at 0.01ms.
+  const durations = await icon.evaluate((element) =>
+    getComputedStyle(element).transitionDuration.split(',').map((value) =>
+      parseFloat(value) / (value.trim().endsWith('ms') ? 1000 : 1)),
+  );
+  expect(durations.every((duration) => duration <= 0.00001)).toBe(true);
 });

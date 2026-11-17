@@ -12,7 +12,9 @@ for (const locale of ['en', 'ar'] as const) {
     const origin = page.url();
     const detailNav = page.locator('.plugin-detail .detail-navigation');
     await expect(detailNav.locator('[aria-current="page"]')).toHaveText('Playwright');
-    const cursor = page.locator('.plugin-detail__client').filter({ hasText: /^Cursor$/ });
+    const cursor = page
+      .locator('.plugin-detail__client-list')
+      .getByRole('link', { name: 'Cursor', exact: true });
     await expect(cursor).toHaveAttribute('href', /\/agents\/cursor\/\?plugin=playwright$/);
     await cursor.click();
     await expect(page).toHaveURL(/\/agents\/cursor\/\?plugin=playwright$/);

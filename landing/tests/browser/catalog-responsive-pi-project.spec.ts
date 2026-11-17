@@ -131,16 +131,41 @@ for (const width of [1440, 390]) {
     await expect(page.getByRole('dialog')).toContainText('The CLI checks components, dependencies and the selected scope first');
     await expect(page.getByRole('dialog').locator('.plugin-card__author').filter({ hasText: 'The CLI checks components, dependencies and the selected scope first' })).toHaveCount(1);
 
-    // Switching routes must not combine an unsigned Pi option with signed Codex.
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
-    await page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ }).click();
+    // Explicit choices stay selected; the shared Git route adds no signed Pi grant.
+    const dialog = page.getByRole('dialog');
+    const picker = dialog.locator('.app-multiselect__trigger');
+    const codex = page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ });
+    const commonAdd = `npx -y universal-agent-plugins@0.1.110 add ${direct} --target codex,pi --scope project`;
+    await picker.click();
+    await codex.click();
+    await expect(codex).toBeChecked();
+    await expect(pi).toBeChecked();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(
-      'npx -y universal-agent-plugins add sentry --target codex --scope project');
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
+    await expect(addSnippet.locator('code')).toHaveText(commonAdd);
+
+    // Removing Pi explicitly returns to Codex's signed Project route.
+    await picker.click();
     await pi.click();
+    await expect(pi).not.toBeChecked();
+    await expect(codex).toBeChecked();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
+    await expect(addSnippet.locator('code')).toHaveText(
+      'npx -y universal-agent-plugins add sentry --target codex --scope project');
+
+    await picker.click();
+    await pi.click();
+    await expect(pi).toBeChecked();
+    await expect(codex).toBeChecked();
+    await page.keyboard.press('Escape');
+    await expect(addSnippet.locator('code')).toHaveText(commonAdd);
+
+    // Removing Codex explicitly restores the Pi-only source and saved intent.
+    await picker.click();
+    await codex.click();
+    await expect(codex).not.toBeChecked();
+    await expect(pi).toBeChecked();
+    await page.keyboard.press('Escape');
+    await expect(addSnippet.locator('code')).toHaveText(add);
     await page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(add);
     await testInfo.attach(`pi-project-card-${width}.png`, {
