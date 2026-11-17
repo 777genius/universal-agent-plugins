@@ -65,9 +65,8 @@ func SelectorMatchesVersion(selector Selector, version string) bool {
 	if validateVersionSelector(selector) != nil || !isCanonicalExactVersion(version) {
 		return false
 	}
-	if selector.Kind == SelectorVersion {
-		return version == selector.Value
-	}
+	// SemVer build metadata does not participate in constraint equality.
+	// Exact bytes are still pinned by signed release identity and lock digests.
 	constraint, err := semver.NewConstraint(selector.Value)
 	if err != nil {
 		return false

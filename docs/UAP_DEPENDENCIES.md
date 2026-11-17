@@ -62,9 +62,13 @@ The standard `plugin.json` format is unchanged; raw skill files are not imported
 Git dependencies use exactly one of `commit` and `ref`; omitting both records
 the repository default branch intent. Registry tables retain exact directory
 `release` selection. A string under `[dependencies]` selects a Directory package
-by its key, using an exact stable version (`"1.2.3"`) or caret range (`"^1.2"`
-or `"^1.2.3"`). Short names resolve through the signed Directory. Prefix `v`,
-prereleases, build suffixes and other range operators are unsupported.
+by its key, using a canonical SemVer exact version (`"1.2.3"`), a caret range
+(`"^1.2"`), tilde (`"~1.2"`), comparators (`">=1.2 <2"`), wildcards/partial
+versions (`"1.2.x"`) or OR ranges (`"^1 || ^2"`). Short names resolve
+through the signed Directory. Package version candidates must use canonical
+SemVer without the prefix `v`. Prereleases require an explicit matching
+selector; build metadata is ignored for constraint equality, while exact
+release bytes remain pinned in `uap.lock` by digest.
 
 Caret lower bounds are inclusive and upper bounds exclusive: `^1.2` ends at
 `2.0.0`, `^0.2` / `^0.2.3` at `0.3.0`, `^0.0` at `0.1.0`, and `^0.0.3` at
