@@ -35,7 +35,7 @@ func selectClient(
 	}
 	target := normalizeTarget(opts.target)
 	if target != "" {
-		client, err := selectExplicitClient(target, opts.target, detectedMap, app.scope())
+		client, err := selectExplicitClient(target, opts.target, detectedMap)
 		return client, detectedMap, err
 	}
 	if len(detected) == 0 {
@@ -64,7 +64,7 @@ func selectClient(
 	return detected[choice-1], detectedMap, nil
 }
 
-func selectExplicitClient(target domain.ClientID, rawTarget string, detectedMap map[domain.ClientID]domain.DetectedClient, scope domain.InstallScope) (domain.DetectedClient, error) {
+func selectExplicitClient(target domain.ClientID, rawTarget string, detectedMap map[domain.ClientID]domain.DetectedClient) (domain.DetectedClient, error) {
 	if strings.EqualFold(strings.TrimSpace(rawTarget), "openai") {
 		return domain.DetectedClient{}, fmt.Errorf("target %q is ambiguous; use --target codex, chatgpt (Desktop), or chatgptweb (Web)", rawTarget)
 	}
