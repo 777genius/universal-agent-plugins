@@ -14,6 +14,9 @@ import (
 // a prerelease.
 var stableVersion = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$`)
 var forbiddenVersionPrefix = regexp.MustCompile(`(^|[[:space:],|<>=~^])v[0-9]`)
+// Masterminds accepts coerced numeric operands such as 1.02.3; a package
+// selector must not silently resolve such a value to a different version.
+var nonCanonicalNumericPart = regexp.MustCompile(`(^|[.[:space:]<>=~^|,])0[0-9]+($|[.[:space:]|,+-])`)
 
 // ParseRegistryVersionSelector is the single parser/classifier for registry
 // version requirements. Exact versions remain exact; partial versions and
@@ -36,7 +39,8 @@ func isCanonicalExactVersion(value string) bool {
 
 func validateVersionSelector(selector Selector) error {
 	if selector.Value == "" || strings.TrimSpace(selector.Value) != selector.Value ||
-		forbiddenVersionPrefix.MatchString(selector.Value) {
+		forbiddenVersionPrefix.MatchString(selector.Value) ||
+		nonCanonicalNumericPart.MatchString(selector.Value) {
 		return fmt.Errorf("invalid version selector %q", selector.Value)
 	}
 	switch selector.Kind {

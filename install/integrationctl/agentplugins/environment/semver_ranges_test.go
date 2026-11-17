@@ -49,7 +49,7 @@ func TestRegistrySemverConstraints(t *testing.T) {
 }
 
 func TestRegistryVersionSyntaxRejectsUnsafeInput(t *testing.T) {
-	for _, expression := range []string{"", "^", "v1.2.3", "^v1.2.3", ">=v1.2.3", " 1.2.3", "1.2.3 ", "1.02.3", ">=1.2.3 ||"} {
+	for _, expression := range []string{"", "^", "v1.2.3", "^v1.2.3", ">=v1.2.3", " 1.2.3", "1.2.3 ", "1.02.3", "^1.02.3", "1.2.03", "^01.2", ">=1.2.3 ||"} {
 		t.Run(expression, func(t *testing.T) {
 			_, err := ParseRegistryVersionSelector(expression)
 			if err == nil {
