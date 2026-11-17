@@ -205,6 +205,29 @@ class ClineWarmContinuityTests(unittest.TestCase):
         journey.marker_before = journey.marker_facts()
         return journey, state, save, revision
 
+    def test_bridge_exit_diagnostic_is_bounded_and_preserves_expected_statuses(self):
+        for value, label in ((7, "7"), (-9, "-9"), (True, "invalid"),
+                             ("password=private", "invalid"), (1 << 80, "invalid")):
+            with self.subTest(exit_type=type(value).__name__), tempfile.TemporaryDirectory() as tmp:
+                journey, _, _, _ = self.fixture(Path(tmp).resolve())
+                record = {"exit": value, "runtime_sha256": {key: "a"*64 for key in
+                          ("native", "installer", "probe", "git", "go", "fixture_source")}}
+                with mock.patch("cline_managed_session_e2e.invoke_bridge",
+                                return_value=(record, b"private native body", b"password=private")):
+                    with self.assertRaises(ValueError) as refused:
+                        journey.run("cold-create")
+                self.assertEqual(str(refused.exception), "command failed: cold-create (exit=" + label + ")")
+                self.assertNotIn("private", str(refused.exception))
+        for value, expected in ((0, (0,)), (1, (1,)), (2, (0, 1, 2))):
+            with self.subTest(accepted=value), tempfile.TemporaryDirectory() as tmp:
+                journey, _, _, _ = self.fixture(Path(tmp).resolve())
+                record = {"exit": value, "runtime_sha256": {key: "a"*64 for key in
+                          ("native", "installer", "probe", "git", "go", "fixture_source")}}
+                with mock.patch("cline_managed_session_e2e.invoke_bridge",
+                                return_value=(record, b"unchanged output", b"")), mock.patch("builtins.print") as printed:
+                    self.assertEqual(journey.run("cold-create", expected=expected), b"unchanged output")
+                printed.assert_not_called()
+
     def test_original_data_directory_refuses_before_and_after_first_native(self):
         for cold in (False, True):
             for during in (False, True):

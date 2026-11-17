@@ -285,8 +285,10 @@ class SessionJourney:
         self.evidence["commands"].append(dict(record, stdout_base64=base64.b64encode(out).decode(),
                                                stderr_base64=base64.b64encode(err).decode()))
         self.check()
-        require(type(record["exit"]) is int
-                and record["exit"] in expected, "command failed: " + action)
+        exit_code = record["exit"]
+        exit_label = str(exit_code) if type(exit_code) is int and -(1 << 31) <= exit_code < (1 << 31) else "invalid"
+        require(type(exit_code) is int
+                and exit_code in expected, "command failed: " + action + " (exit=" + exit_label + ")")
         return out
 
     def install(self, action):

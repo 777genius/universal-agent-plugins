@@ -2231,6 +2231,33 @@ def cline_service(ctx, tests, env, output):
     return result
 
 
+def failed_test_diagnostic(client, stdout, passed):
+    """Project only the selected test and bounded owned Go locations."""
+    case = CASES.get(client)
+    if passed or case is None:
+        return
+    test = case["test"]
+    filename = Path(case["file"]).name
+    if (not re.fullmatch(r"Test[A-Za-z0-9_]+", test)
+            or not re.fullmatch(r"agentplugins_[a-z0-9_]+_test\.go", filename)):
+        return
+    locations = []
+    if type(stdout) is bytes and len(stdout) <= 1 << 20:
+        pattern = rb"[ \t]+(" + re.escape(filename.encode("ascii")) + rb"):([1-9][0-9]{0,5}):[^\r\n]*"
+        for line in stdout.splitlines():
+            if len(line) > 1024 or any(byte < 32 and byte != 9 for byte in line):
+                continue
+            match = re.fullmatch(pattern, line)
+            if match is not None:
+                location = match[1].decode("ascii") + ":" + match[2].decode("ascii")
+                if location not in locations:
+                    locations.append(location)
+                if len(locations) == 4:
+                    break
+    print(test + " failed; owned Go locations: " + (", ".join(locations) if locations else "unavailable"),
+          file=sys.stderr, flush=True)
+
+
 def cursor_admission_refusal(error, client="cursor"):
     """Emit only a bounded owned-source callsite; never format error data."""
     if client not in ("cursor", "windsurf"):
@@ -2294,6 +2321,7 @@ def run(client, output):
             summary["test_passed"] = bool(summary["test_selected"] and record["exit"] == 0
                                           and ("--- PASS: " + case["test"] + " ").encode() in stdout
                                           and ("--- SKIP: " + case["test"]).encode() not in stdout)
+            failed_test_diagnostic(client, stdout, summary["test_passed"])
             if not summary["test_passed"]:
                 raise ValueError("selected native test failed or did not execute; inspect bounded evidence")
         if client == "cline":
