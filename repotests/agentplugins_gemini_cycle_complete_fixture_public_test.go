@@ -3,7 +3,10 @@
 package pluginkitairepo_test
 
 import (
+	"fmt"
+	"slices"
 	"strings"
+	"time"
 )
 
 // The public records are authored from the public command schemas, separately
@@ -156,7 +159,29 @@ func (f *geminiCompleteContractFixture) publicRecords() {
 				exit, stdout, stderr = 1, []byte{}, []byte("agentplugins: plugin is not installed for target \"gemini\" in project scope; no target was changed\n")
 			}
 		}
-		f.files[stage+".command.json"] = geminiCompleteContractEncode(f.t, map[string]any{"argv": argv, "cwd": r.Project, "exit": exit, "error": false, "context_error": false, "elapsed_ms": 1, "cleanup": "ordinary full-descendant supervision; forced cleanup is a failure"})
+		f.files[stage+".command.json"] = geminiCompleteContractEncode(f.t, map[string]any{"inventory": f.publicInventoryFixture(stage), "argv": argv, "cwd": r.Project, "exit": exit, "error": false, "context_error": false, "elapsed_ms": 1, "cleanup": "ordinary full-descendant supervision; forced cleanup is a failure"})
 		f.files[stage+".stdout.log"], f.files[stage+".stderr.log"] = stdout, stderr
 	}
+}
+
+func (f *geminiCompleteContractFixture) publicInventoryFixture(stage string) map[string]any {
+	scope := geminiCycleScope(stage)
+	start, end := f.started.Add(time.Second), f.started.Add(2*time.Second)
+	var segment []byte
+	for phase, methods := range geminiCyclePublicInventoryPhases(stage) {
+		for index, key := range []string{"user", scope} {
+			r := f.views[stage][key]
+			pid := 10000 + 10*slices.Index(geminiCyclePublic, stage) + phase*2 + index
+			for method := range methods {
+				name := "initialize"
+				if method == 1 {
+					name = "tools/list"
+				}
+				body := geminiCompleteContractEncode(f.t, map[string]any{"method": name, "nonce": r.Nonce, "pid": pid, "session": fmt.Sprint(pid), "timestamp": start.Add(time.Duration(phase*4+index*2+method+1) * time.Millisecond).Format(time.RFC3339Nano), "facts": nil})
+				segment = append(segment, body...)
+				segment = append(segment, '\n')
+			}
+		}
+	}
+	return map[string]any{"scope": scope, "started_at": start.Format(time.RFC3339Nano), "finished_at": end.Format(time.RFC3339Nano), "provider_requests": 0, "stream": f.stream(segment)}
 }

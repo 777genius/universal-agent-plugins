@@ -78,9 +78,19 @@ func (c *geminiProjectCycle) command(t *testing.T, label string) ports.CommandRe
 	c.check(t)
 	ctx, cancel := context.WithTimeout(c.f.ctx, 30*time.Second)
 	defer cancel()
+	eventBefore, eventErr := c.eventLog()
+	if eventErr != nil {
+		t.Fatal(eventErr)
+	}
+	c.owner.mu.Lock()
+	providerTotal := c.owner.total
+	c.owner.mu.Unlock()
+	c.openEvents = true
 	started := time.Now()
 	result, runErr := (process.OS{}).RunWithDescendantExitGrace(ctx, ports.Command{Argv: argv, Env: c.f.env(), Dir: cwd, StdoutLimitBytes: 1 << 20}, 5*time.Second)
-	record, _ := json.Marshal(map[string]any{"argv": argv, "cwd": cwd, "exit": result.ExitCode, "error": runErr != nil, "context_error": ctx.Err() != nil, "elapsed_ms": time.Since(started).Milliseconds(), "cleanup": "ordinary full-descendant supervision; forced cleanup is a failure"})
+	finished := time.Now()
+	inventory, inventoryErr := c.publicInventory(t, label, eventBefore, started, finished, providerTotal)
+	record, _ := json.Marshal(map[string]any{"inventory": inventory, "argv": argv, "cwd": cwd, "exit": result.ExitCode, "error": runErr != nil, "context_error": ctx.Err() != nil, "elapsed_ms": time.Since(started).Milliseconds(), "cleanup": "ordinary full-descendant supervision; forced cleanup is a failure"})
 	for name, body := range map[string][]byte{label + ".command.json": record, label + ".stdout.log": result.Stdout, label + ".stderr.log": result.Stderr} {
 		if geminiCyclePrivateCredential(body) {
 			t.Fatal("Gemini cycle public privacy refusal")
@@ -88,6 +98,9 @@ func (c *geminiProjectCycle) command(t *testing.T, label string) ports.CommandRe
 		c.f.keep(t, name, body)
 	}
 	c.public = append(c.public, label)
+	if inventoryErr != nil {
+		t.Fatal(inventoryErr)
+	}
 	if ctx.Err() != nil || len(result.Stdout) > 1<<20 || bytes.Contains(result.Stderr, []byte("stderr bytes omitted")) {
 		t.Fatal("Gemini public capture/deadline/cleanup")
 	}

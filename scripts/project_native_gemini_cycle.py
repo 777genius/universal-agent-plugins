@@ -115,7 +115,18 @@ def _members(bodies, source, result):
         allowed |= triple
         if not triple <= bodies.keys(): raise ValueError("Gemini cycle incomplete public triple")
         cwd, args = public_command(label, paths)
-        row = strict_json(bodies[label + ".command.json"]);receipt(row, args, cwd)
+        row = strict_json(bodies[label + ".command.json"])
+        if "inventory" in row:
+            # Failure-only capture may retain a bounded unaccepted phase. It
+            # grants no runtime qualification; success uses the strict reader.
+            inventory = closed(row.pop("inventory"), ("scope", "started_at", "finished_at", "provider_requests", "stream"))
+            if inventory["scope"] != scope(label) or type(inventory["provider_requests"]) is not int or inventory["provider_requests"] != 0:
+                raise ValueError("Gemini failed public inventory authority")
+            begin, finish = datetime.fromisoformat(inventory["started_at"].replace("Z", "+00:00")), datetime.fromisoformat(inventory["finished_at"].replace("Z", "+00:00"))
+            if finish < begin or (finish-begin).total_seconds() > 30:
+                raise ValueError("Gemini failed public inventory clock")
+            stream(inventory["stream"])
+        receipt(row, args, cwd)
         later = public.index(label) < len(public) - 1 or result["cycle_observed_complete"] or result.get("attempt_stage") != label
         if later:
             expected_exit = 1 if label == "repeat-remove-a" else 0

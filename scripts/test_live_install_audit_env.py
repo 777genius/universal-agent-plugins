@@ -8201,20 +8201,32 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
 
 
 class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
-    def run_case(self, mutation=None):
+    def run_case(self, mutation=None, system=False, kind="plugin"):
         import sqlite3
         from contextlib import closing
         audit = load_audit()
         source = "github:example/agent-plugin@" + "a" * 40
-        matched = [{"name": "atlassian", "installation_id": "one",
+        identity = "skill-creator" if kind == "skill" else "github" if system else "atlassian"
+        matched = [{"name": identity, "installation_id": "one",
                     "clients": [{"client_id": "codex",
+                                 "scope": "project" if kind == "skill" else "user",
+                                 "materialization": "materialized", "activation": "active",
+                                 "authentication": "not_required", "policy": "allowed",
                                  "verification": "installation_verified"}]}]
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
-            case = root / "plugin-00"
+            case = root / (kind + "-00")
             profile = case / "home/.codex"
             database = case / "home/.local/state/codex-sqlite/state_5.sqlite"
             commands, registered = [], [False]
+            system_relative = "skill-creator/scripts/generate_openai_yaml.py"
+            system_body = b'ACRONYMS = {\n    "github": "GitHub",\n}\n'
+            system_file = profile / "skills/.system" / system_relative
+            def write_system():
+                system_file.parent.mkdir(parents=True, exist_ok=True)
+                system_file.write_bytes(system_body)
+                (profile / "skills/.system/.codex-system-skills.marker").write_bytes(
+                    audit.CODEX_RUNTIME_AUDIT["SYSTEM_SKILL_MARKER"])
             ambient = root / "ambient-profile"
             ambient.mkdir()
             (ambient / "foreign.txt").write_text("ambient untouched")
@@ -8222,18 +8234,20 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
             async def discover(binary, project, native_profile, environment):
                 self.assertEqual(native_profile, profile)
                 self.assertEqual(environment["CODEX_HOME"], str(profile))
-                installation_id = (profile / "installation_id").read_bytes()
-                parsed = audit.uuid.UUID(installation_id.decode("ascii"))
-                self.assertEqual(installation_id, str(parsed).encode("ascii"))
-                self.assertEqual(parsed.version, 4)
-                self.assertEqual(list((profile / "tmp/arg0").iterdir()), [])
-                if os.name != "nt":
-                    self.assertEqual((profile / "installation_id").stat().st_mode & 0o777, 0o644)
-                    self.assertEqual((profile / "tmp/arg0").stat().st_mode & 0o777, 0o700)
-                with closing(sqlite3.connect(database)) as connection:
-                    connection.execute("CREATE TABLE fixture_rows (value TEXT)")
-                    connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
-                    connection.commit()
+                if kind == "plugin":
+                    installation_id = (profile / "installation_id").read_bytes()
+                    parsed = audit.uuid.UUID(installation_id.decode("ascii"))
+                    self.assertEqual(installation_id, str(parsed).encode("ascii"))
+                    self.assertEqual(parsed.version, 4)
+                    self.assertEqual(list((profile / "tmp/arg0").iterdir()), [])
+                    if os.name != "nt":
+                        self.assertEqual((profile / "installation_id").stat().st_mode & 0o777, 0o644)
+                        self.assertEqual((profile / "tmp/arg0").stat().st_mode & 0o777, 0o700)
+                if not database.exists():
+                    with closing(sqlite3.connect(database)) as connection:
+                        connection.execute("CREATE TABLE fixture_rows (value TEXT)")
+                        connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+                        connection.commit()
                 if mutation == "prebaseline-config":
                     (profile / "config.toml").write_text('sqlite_home = "/foreign"\n')
                 elif mutation == "prebaseline-foreign":
@@ -8258,15 +8272,36 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                     (profile / "installation_id").write_text(str(audit.uuid.uuid4()))
                 elif mutation == "prebaseline-arg0-child":
                     (profile / "tmp/arg0/foreign").write_text("unowned residue")
-                return {"data": [{"cwd": str(project), "errors": [], "skills": []}]}
+                if system and system != "absent" and not system_file.exists():
+                    write_system()
+                skills = []
+                if kind == "skill":
+                    for name in ("foreign-neighbor", identity):
+                        path = project / ".agents/skills" / name / "SKILL.md"
+                        if path.is_file():
+                            skills.append({"name": name, "path": str(path), "enabled": True,
+                                           "scope": "repo", "pluginId": None})
+                return {"data": [{"cwd": str(project), "errors": [], "skills": skills}]}
             def perform(argv, environment, cwd, timeout=105):
                 commands.append(list(argv))
                 command = argv[1]
                 config = profile / "config.toml"
+                if command == "skills":
+                    selected = case / "project/.agents/skills" / identity / "SKILL.md"
+                    selected.parent.mkdir(parents=True, exist_ok=True)
+                    selected.write_text("---\nname: " + identity + "\n---\n")
+                    (case / "project/uap.toml").write_text("saved")
+                    (case / "project/uap.lock").write_text("pinned")
+                    registered[0] = True
+                    return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "", "timeout": False,
+                            "_json": {"schema_version": 1, "command": "skills add", "result": "success",
+                                      "status": "succeeded", "scope": "project", "next_actions": [],
+                                      "readiness": "needs_action" if mutation == "system-needs-action" else "ready",
+                                      "items": [{"alias": identity, "targetId": "codex", "status": "succeeded"}]}}
                 if command == "add":
                     if not registered[0]:
                         with config.open("a") as stream:
-                            stream.write('\n[plugins."atlassian@agentplugins-aaaaaaaaaaaa"]\nenabled = true\n')
+                            stream.write(f'\n[plugins."{identity}@agentplugins-aaaaaaaaaaaa"]\nenabled = true\n')
                     registered[0] = True
                     if mutation == "sqlite-row":
                         with closing(sqlite3.connect(database)) as connection:
@@ -8274,6 +8309,23 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                             connection.commit()
                 elif command == "remove":
                     registered[0] = False
+                    if kind == "skill":
+                        selected = case / "project/.agents/skills" / identity / "SKILL.md"
+                        selected.unlink()
+                        selected.parent.rmdir()
+                        (case / "project/uap.lock").unlink()
+                    if mutation == "system-changed":
+                        system_file.write_bytes(system_body + b"# changed\n")
+                    elif mutation == "system-extra":
+                        (system_file.parent / "unknown.py").write_text("foreign")
+                    elif mutation == "system-swapped":
+                        replacement = system_file.with_suffix(".replacement")
+                        replacement.write_bytes(system_body)
+                        replacement.replace(system_file)
+                    elif mutation == "system-late-presence":
+                        write_system()
+                    elif mutation == "system-unrelated-identity":
+                        (profile / "foreign.json").write_text('{"name":"github"}')
                     if mutation == "profile-wal":
                         (profile / "state_5.sqlite-wal").write_bytes(b"x" * ((1 << 20) + 1))
                 return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
@@ -8283,17 +8335,37 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                 commands.append(["/inert/codex", "native-uninstall"])
                 config = profile / "config.toml"
                 config.write_text(config.read_text().split("\n[plugins.", 1)[0] + "\n")
-                return {"completed": True}
+                return {"completed": True, "native_plugin_absent": True,
+                        "native_marketplace_absent": True}
             exchange_globals = audit.CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"].__init__.__globals__
+            manifest = {system_relative: (len(system_body), audit.hashlib.sha256(system_body).hexdigest())}
+            original_scan = audit.native_identity_residuals
+            def scan(*args, **kwargs):
+                result = original_scan(*args, **kwargs)
+                if mutation == "system-scan-swap":
+                    replacement = system_file.with_suffix(".replacement")
+                    replacement.write_bytes(system_body)
+                    replacement.replace(system_file)
+                return result
             with (patch.dict(exchange_globals, {"_exchange": discover}),
+                  patch.dict(exchange_globals, {
+                      "SYSTEM_SKILL_FILES": manifest if system else exchange_globals["SYSTEM_SKILL_FILES"],
+                      "SYSTEM_SKILL_DIRECTORIES": frozenset(("skill-creator", "skill-creator/scripts"))
+                      if system else exchange_globals["SYSTEM_SKILL_DIRECTORIES"]}),
+                  patch.object(audit, "native_identity_residuals", side_effect=scan),
                   patch.dict(audit.AGENT_BINARIES, {"codex": "/inert/codex"}, clear=True),
                   patch.object(audit, "call", side_effect=perform),
                   patch.object(audit, "matching_installations", return_value=matched),
+                  patch.object(audit, "locked_skill_is_pinned", return_value=True),
+                  patch.object(audit, "matches_pinned_skill_bytes", return_value=True),
                   patch.object(audit, "uninstall_native_codex_plugin", side_effect=uninstall),
                   patch.dict(os.environ, {"HOME": str(ambient), "USERPROFILE": str(ambient)})):
                 try:
-                    return audit.do_case("/inert/uap", "codex", "plugin", source, 0, root,
-                                         {source: "atlassian"}), commands
+                    item = {"name": identity, "repo": "example/skills", "folder": identity,
+                            "source": source, "skill_md_git_blob_sha1": "b" * 40}
+                    return audit.do_case("/inert/uap", "codex", kind,
+                                         item if kind == "skill" else source, 0, root,
+                                         {source: identity}), commands
                 finally:
                     if mutation and mutation.startswith("prebaseline-"):
                         self.assertEqual(commands, [])
@@ -8331,6 +8403,44 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaisesRegex(
                     ValueError, "changed protected fixture authority"):
                 self.run_case(mutation)
+
+
+    def test_pinned_system_github_literal_is_retained_only_with_complete_unchanged_proof(self):
+        row, _ = self.run_case(system=True)
+        residual = ".codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py"
+        self.assertEqual(row["native_residuals"], [residual])
+        self.assertEqual(row["status"], "passed")
+        self.assertTrue(row["removal_verified"])
+        proof = row["codex_system_skill_retention"]
+        self.assertEqual(proof["status"], "verified-unchanged-pinned-system-files-at-checkpoint")
+        self.assertEqual(set(proof["residuals"]), {residual})
+        self.assertFalse(proof["writer_closure_claimed"])
+        self.assertFalse(proof["atomic_snapshot_claimed"])
+        for mutation in ("system-changed", "system-extra", "system-swapped", "system-scan-swap"):
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                self.run_case(mutation, system=True)
+        with self.assertRaisesRegex(ValueError, "authority changed"):
+            self.run_case("system-late-presence", system="absent")
+        row, _ = self.run_case("system-unrelated-identity", system=True)
+        self.assertEqual(row["status"], "cleanup-failed")
+        self.assertIn(".codex/foreign.json", row["native_residuals"])
+        self.assertNotIn("codex_system_skill_retention", row)
+
+
+    def test_skill_builtin_retention_never_upgrades_public_needs_action(self):
+        row, _ = self.run_case(system=True, kind="skill")
+        self.assertEqual(row["status"], "passed")
+        self.assertTrue(row["removal_verified"])
+        self.assertTrue(row["native_residuals"])
+        self.assertIn("codex_system_skill_retention", row)
+        self.assertTrue(row["codex_public_add_ready"])
+        self.assertTrue(row["codex_public_repeat_ready"])
+        row, _ = self.run_case("system-needs-action", system=True, kind="skill")
+        self.assertEqual(row["status"], "incomplete-native-proof")
+        self.assertFalse(row["codex_public_add_ready"])
+        self.assertFalse(row["codex_public_repeat_ready"])
+        self.assertTrue(row["removal_verified"])
+        self.assertIn("codex_system_skill_retention", row)
 
 
 @unittest.skipUnless(sys.platform == "win32", "owned file capture requires Windows jobs")
