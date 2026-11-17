@@ -10254,6 +10254,36 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                 self.assertNotIn("private", json.dumps(facts))
                 self.assertNotIn(str(case["project"]), json.dumps(facts))
 
+        for mutation in ("missing", "nonstring", "grammar", "duplicate"):
+            with self.subTest(registry=mutation), self.fixture() as case:
+                case["observer"].close()
+                project = str(case["project"])
+                projects = {project: "project"}
+                if mutation == "missing": projects = {"private-foreign-key": "project"}
+                elif mutation == "nonstring": projects[project] = False
+                elif mutation == "grammar": projects[project] = "PRIVATE/value"
+                else: projects.update({"private-other": "project", "private-third": "project"})
+                (case["profile"] / "projects.json").write_text(json.dumps({"projects": projects}))
+                before = case["audit"].snapshot([case["profile"]])
+                observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
+                    case["home"], case["project"], before, self.VERSION)
+                self.assertEqual(observer.reason, "Gemini runtime registry does not bind the exact project")
+                self.assertFalse(observer.finish(before))
+                proof = observer.evidence()
+                self.assertEqual((proof["status"], proof["files"], proof["phases"]), ("unqualified", [], []))
+                facts = proof["failure_facts"]
+                self.assertEqual(facts, {
+                    "phase": "pre-repeat", "role": "registry", "operation": "project-binding",
+                    "exact_key_present": mutation != "missing",
+                    "slug_is_string": mutation not in ("missing", "nonstring"),
+                    "slug_matches_pattern": mutation == "duplicate",
+                    "slug_binding_count": 2 if mutation == "duplicate" else None})
+                for key in ("exact_key_present", "slug_is_string", "slug_matches_pattern"):
+                    self.assertIs(type(facts[key]), bool)
+                self.assertNotIn("private", json.dumps(facts).lower())
+                self.assertNotIn(project, json.dumps(facts))
+                self.assertEqual((observer.parents, observer.leaves), ({}, {}))
+
     def test_old_and_observed_leaf_replacement_parent_alias_and_foreign_delta_refuse(self):
         for mutation in ('old-replaced', 'new-replaced', 'new-deleted', 'parent-replaced',
                          'parent-alias', 'registry-replaced', 'foreign-delta', 'hardlink', 'symlink'):

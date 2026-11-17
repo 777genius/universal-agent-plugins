@@ -121,6 +121,15 @@ class GeminiRepeatAudit:
             slug = registry["projects"].get(str(self.project))
             if (not isinstance(slug, str) or not re.fullmatch(r"[a-z0-9-]{1,128}", slug)
                     or sum(value == slug for value in registry["projects"].values()) != 1):
+                slug_is_string = isinstance(slug, str)
+                slug_matches_pattern = slug_is_string and bool(re.fullmatch(r"[a-z0-9-]{1,128}", slug))
+                self.failure_facts = {
+                    "phase": "pre-repeat", "role": "registry", "operation": "project-binding",
+                    "exact_key_present": str(self.project) in registry["projects"],
+                    "slug_is_string": slug_is_string, "slug_matches_pattern": slug_matches_pattern,
+                    "slug_binding_count": min(2, sum(value == slug for value in registry["projects"].values()))
+                    if slug_matches_pattern else None,
+                }
                 raise ValueError("Gemini runtime registry does not bind the exact project")
             directory = self.profile / "tmp" / slug
             self.chats = directory / "chats"
