@@ -1,0 +1,27 @@
+name: Label mask probe
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+permissions:
+  contents: read
+concurrency:
+  group: label-mask-probe-${{ github.event.action != 'labeled' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event.action != 'labeled' }}
+jobs:
+  probe:
+    name: Probe heavy lane
+    if: ${{ github.event.action != 'labeled' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - run: exit 1
+  probe-matrix:
+    name: Probe matrix (${{ matrix.os }})
+    if: ${{ github.event.action != 'labeled' }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 2
+    steps:
+      - run: exit 1
