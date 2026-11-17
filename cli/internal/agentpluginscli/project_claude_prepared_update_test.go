@@ -26,6 +26,8 @@ type preparedClaudeCLIRunner struct {
 	t                         *testing.T
 	project, user, executable string
 	calls, mutations          int
+	// interrupt, when set, fires once on the first matching native mutation.
+	interrupt *claudeCLIInterrupt
 }
 
 func (r *preparedClaudeCLIRunner) Run(_ context.Context, cmd legacyports.Command) (legacyports.CommandResult, error) {
@@ -44,6 +46,11 @@ func (r *preparedClaudeCLIRunner) Run(_ context.Context, cmd legacyports.Command
 	}
 	r.calls++
 	if !reflect.DeepEqual(cmd.Argv[1:], []string{"plugin", "list", "--json"}) {
+		if r.interrupt.matches(cmd.Argv[1:]) {
+			interrupt := r.interrupt
+			r.interrupt = nil
+			return interrupt.fire(r, cmd.Argv[1:])
+		}
 		return r.marketplaceCommand(cmd.Argv[1:])
 	}
 	if listed := r.marketplaceListing(); len(listed) != 0 {
@@ -71,10 +78,18 @@ func (r *preparedClaudeCLIRunner) Run(_ context.Context, cmd legacyports.Command
 	return legacyports.CommandResult{Stdout: []byte(`[{"id":"(suppressed)@skills-dir","version":"unknown","scope":"project","enabled":false,"installPath":"","notes":["1 project-scope directory under ./.claude/skills/ that may load as a plugin was skipped because this workspace was not trusted when plugins were scanned. After accepting the trust dialog, run /reload-plugins (or relaunch) to load what qualifies."]}]`)}, nil
 }
 
-// The public saved-binding update command uses grouped activation even for one
-// target. The runner models the observed native marketplace files and commands;
-// real executable evidence is retained separately.
-func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T) {
+// projectClaudeCLI is the public CLI composed for one Claude Code project
+// whose native marketplace commands are modeled by preparedClaudeCLIRunner.
+type projectClaudeCLI struct {
+	cliFixture
+	client    domain.DetectedClient
+	project   string
+	userState string
+	runner    *preparedClaudeCLIRunner
+}
+
+func newProjectClaudeCLI(t *testing.T) projectClaudeCLI {
+	t.Helper()
 	client := fixtureClient(t, domain.ClientClaude)
 	f := newCLIFixture(t, []domain.DetectedClient{client})
 	physicalRoot, resolveErr := filepath.EvalSymlinks(f.root)
@@ -83,8 +98,7 @@ func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T
 	}
 	f.root = physicalRoot
 	project := filepath.Join(f.root, "A")
-	other := filepath.Join(f.root, "B")
-	for _, p := range []string{project, other, client.ConfigRoot} {
+	for _, p := range []string{project, client.ConfigRoot} {
 		if err := os.MkdirAll(p, 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -95,21 +109,6 @@ func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T
 	}
 	f.app.Detector = staticDetector{clients: []domain.DetectedClient{client}}
 	userState := f.store.Path
-	projectForeign := filepath.Join(project, ".claude", "settings.local.json")
-	for _, p := range []string{filepath.Join(client.ConfigRoot, "foreign.json"), filepath.Join(other, ".claude", "settings.local.json"), filepath.Join(other, ".uap", "state-v2.json"), userState, projectForeign} {
-		if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte("preserve exact foreign bytes\n"), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	foreign := map[string]string{}
-	for _, p := range []string{client.ConfigRoot, other, userState, projectForeign} {
-		for name, body := range preparedClaudeCLIFiles(t, p) {
-			foreign[name] = body
-		}
-	}
 	stateRoot := filepath.Join(project, ".uap")
 	f.store = statev2.Store{Path: filepath.Join(stateRoot, "state-v2.json"), ProjectRoot: project}
 	f.app.Scope, f.app.ProjectRoot = domain.ScopeProject, project
@@ -125,6 +124,7 @@ func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T
 	f.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
 	f.app.Lifecycle.NativeObserver = providerstest.NewObserver(providers.NativeIdentityObserver{Runner: runner, Stager: f.app.Lifecycle.Stager})
 	f.app.Lifecycle.Lock = processlock.Lock{Path: filepath.Join(stateRoot, "mutation.lock")}
+	f.app.Lifecycle.PluginData = providers.PluginDataManager{Base: filepath.Join(stateRoot, "plugin-data")}
 	f.app.Lifecycle.Kernel = transaction.Kernel{StateStore: f.store, Directory: dirswap.Manager{JournalDir: filepath.Join(stateRoot, "operations-v2")}}
 	var err error
 	f.app.Installer, err = installer.New(installer.Config{ProjectRoot: project, StateRoot: stateRoot, Registry: f.app.ClientRegistry, Runner: runner, HelperExecutable: client.ExecutablePath, EnableNativeObserver: true, TrustedLocalPackages: true})
@@ -132,6 +132,34 @@ func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T
 		t.Fatal(err)
 	}
 	f.app.Lifecycle.CheckNamespace = f.app.Installer.CheckProjectNamespace
+	return projectClaudeCLI{cliFixture: f, client: client, project: project, userState: userState, runner: runner}
+}
+
+// The public saved-binding update command uses grouped activation even for one
+// target. The runner models the observed native marketplace files and commands;
+// real executable evidence is retained separately.
+func TestProjectClaudePreparedCLIGroupedUpdateReportsActualMutation(t *testing.T) {
+	fixture := newProjectClaudeCLI(t)
+	f, client, project, runner, userState := fixture.cliFixture, fixture.client, fixture.project, fixture.runner, fixture.userState
+	other := filepath.Join(f.root, "B")
+	if err := os.MkdirAll(other, 0700); err != nil {
+		t.Fatal(err)
+	}
+	projectForeign := filepath.Join(project, ".claude", "settings.local.json")
+	for _, p := range []string{filepath.Join(client.ConfigRoot, "foreign.json"), filepath.Join(other, ".claude", "settings.local.json"), filepath.Join(other, ".uap", "state-v2.json"), userState, projectForeign} {
+		if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("preserve exact foreign bytes\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	foreign := map[string]string{}
+	for _, p := range []string{client.ConfigRoot, other, userState, projectForeign} {
+		for name, body := range preparedClaudeCLIFiles(t, p) {
+			foreign[name] = body
+		}
+	}
 	pkg := writeCLIPlugin(t)
 	if err := os.MkdirAll(filepath.Join(pkg, "skills", "guide"), 0700); err != nil {
 		t.Fatal(err)

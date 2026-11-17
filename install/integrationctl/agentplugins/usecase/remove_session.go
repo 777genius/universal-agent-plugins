@@ -98,7 +98,7 @@ func (session *removeSession) deactivateRemoveTarget() error {
 	})
 	session.result.Deactivation = deactivation
 	if err != nil {
-		return session.service.acknowledgeUnchangedRemoval(attempt, deactivation, err)
+		return session.service.acknowledgeCertainRemoval(attempt, deactivation, err)
 	}
 	if err == nil && nativeAttempt {
 		if persistErr := session.service.completeNativeRemoval(session.ctx, session.installation.InstallationID, session.clientKey, deactivation.ExternalRemovalComplete); persistErr != nil {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -89,6 +90,7 @@ type removalNoEffectControl struct {
 	store    transaction.StateStore
 	t        *testing.T
 	effect   domain.NativeEffectState
+	settled  bool
 	change   string
 	cause    error
 	called   bool
@@ -137,7 +139,7 @@ func (a *removalNoEffectControl) Deactivate(ctx context.Context, req domain.Deac
 		a.t.Fatal(err)
 	}
 	a.called = true
-	return domain.DeactivationOutcome{NativeEffect: a.effect}, a.cause
+	return domain.DeactivationOutcome{NativeEffect: a.effect, SettledPartialRemoval: a.settled}, a.cause
 }
 
 type removalNoEffectFailStore struct {
@@ -271,5 +273,59 @@ func TestNativeRemovalAttemptRejectsChangedSourcePredecessor(t *testing.T) {
 	}
 	if !bytes.Equal(newerBytes, afterBytes) {
 		t.Fatal("pre-attempt refusal overwrote newer source authority or published a marker")
+	}
+}
+
+// A failed removal whose adapter proved settled partial progress closes its
+// attempt: the binding keeps its exact ownership and package and is marked
+// failed. Any weaker proof or a changed predecessor keeps the attempt.
+func TestNativeRemovalSettledPartialProgressClosesAttempt(t *testing.T) {
+	for _, grouped := range []bool{false, true} {
+		for _, mode := range []string{"settled", "settled-uncertain", "committed-unsettled", "settled-source-changed"} {
+			t.Run(fmt.Sprintf("grouped-%t/%s", grouped, mode), func(t *testing.T) {
+				service, _, id, client := removeNoEffectFixture(t)
+				before, err := service.StateStore.Load()
+				if err != nil {
+					t.Fatal(err)
+				}
+				cause := errors.New("injected interrupted removal")
+				control := &removalNoEffectControl{inner: service.Activator, store: service.StateStore, t: t, effect: domain.NativeEffectCommitted, settled: true, cause: cause}
+				switch mode {
+				case "settled-uncertain":
+					control.effect = domain.NativeEffectUncertain
+				case "committed-unsettled":
+					control.settled = false
+				case "settled-source-changed":
+					control.change = "source"
+				}
+				service.Activator = control
+				if err := removeNoEffectCall(t, service, id, client, grouped); !errors.Is(err, cause) || !control.called {
+					t.Fatalf("lost interrupted removal cause: %v", err)
+				}
+				after, err := service.StateStore.Load()
+				if err != nil {
+					t.Fatal(err)
+				}
+				assertSettledRemoval(t, mode == "settled", onlyBinding(before.Installations[0]), onlyBinding(after.Installations[0]))
+			})
+		}
+	}
+}
+
+func assertSettledRemoval(t *testing.T, settled bool, before, after domain.ClientBinding) {
+	t.Helper()
+	if _, err := os.Stat(after.TargetLocator); err != nil {
+		t.Fatalf("partial removal lost the managed package: %v", err)
+	}
+	if !settled {
+		if after.NativeActivationAttempt == "" {
+			t.Fatalf("attempt cleared without settled proof: %+v", after)
+		}
+		return
+	}
+	want := before
+	want.Activation, want.Verification, want.UpdatedAt = domain.ActivationFailed, domain.VerificationFailed, after.UpdatedAt
+	if after.NativeActivationAttempt != "" || !reflect.DeepEqual(after, want) {
+		t.Fatalf("settled partial removal changed more than its lifecycle:\nwant=%+v\ngot=%+v", want, after)
 	}
 }
