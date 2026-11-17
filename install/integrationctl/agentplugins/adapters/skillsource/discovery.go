@@ -240,6 +240,12 @@ func (s *Session) scanDocuments(ctx context.Context, scope string, c *Catalog) (
 	}
 	return documents, nil
 }
+
+// documentReadConcurrency bounds the object reads of one catalog scan. In a
+// blob-filtered repository each read may fetch a promised object over the
+// network, so serializing them dominates the scan; all of them are read-only.
+const documentReadConcurrency = 6
+
 func (s *Session) reserveDocuments(ctx context.Context, documents []sourceacquisition.TreeEntry, c *Catalog) []bool {
 	c.Candidates = make([]Candidate, len(documents))
 	readable := make([]bool, len(documents))
@@ -249,7 +255,7 @@ func (s *Session) reserveDocuments(ctx context.Context, documents []sourceacquis
 	}
 	metadata := make(map[string]*blobMetadata, len(documents))
 	var pending errgroup.Group
-	pending.SetLimit(2)
+	pending.SetLimit(documentReadConcurrency)
 	// In a blob-filtered repository even cat-file -s may fetch the promised
 	// object. Bound those network reads too, instead of serializing the entire
 	// catalog before the already-concurrent document decoding stage. Deduplicate
@@ -304,7 +310,7 @@ func (s *Session) reserveDocuments(ctx context.Context, documents []sourceacquis
 func (s *Session) decodeDocuments(ctx context.Context, documents []sourceacquisition.TreeEntry, readable []bool, c *Catalog) error {
 	readBytes := make([]int, len(documents))
 	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(2)
+	g.SetLimit(documentReadConcurrency)
 	for i, e := range documents {
 		if !readable[i] {
 			continue

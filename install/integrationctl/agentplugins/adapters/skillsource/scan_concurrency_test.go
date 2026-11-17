@@ -2,6 +2,7 @@ package skillsource
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -59,8 +60,9 @@ func TestScanMetadataConcurrencyPreservesCanonicalAggregateBudget(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if runner.peak.Load() != 2 || runner.reads.Load() != 3 {
-		t.Fatalf("metadata reads=%d peak=%d; want 3 reads with 2 concurrent", runner.reads.Load(), runner.peak.Load())
+	// Three objects fit under the read bound, so all of them are in flight at once.
+	if runner.peak.Load() != 3 || runner.reads.Load() != 3 {
+		t.Fatalf("metadata reads=%d peak=%d; want 3 reads, all concurrent", runner.reads.Load(), runner.peak.Load())
 	}
 	if catalog.Complete || len(catalog.Candidates) != 3 || catalog.Candidates[0].Name != "alpha" || catalog.Candidates[0].Status != "available" {
 		t.Fatalf("canonical first candidate did not retain the aggregate reservation: %+v", catalog)
@@ -69,5 +71,33 @@ func TestScanMetadataConcurrencyPreservesCanonicalAggregateBudget(t *testing.T) 
 		if len(candidate.Diagnostics) != 1 || candidate.Diagnostics[0] != "skill_aggregate_bytes_limit" {
 			t.Fatalf("later candidate consumed the first candidate's reservation: %+v", candidate)
 		}
+	}
+}
+
+// More objects than the bound never exceed it, so a huge repository cannot
+// open an unbounded number of network reads.
+func TestScanMetadataConcurrencyNeverExceedsBound(t *testing.T) {
+	root, acquirer := fixture(t)
+	for i := range documentReadConcurrency + 4 {
+		name := fmt.Sprintf("skill%02d", i)
+		put(t, root, name+"/SKILL.md", document(name), 0600)
+	}
+	sha := commitFixture(t, root)
+	runner := &sizeConcurrencyRunner{}
+	acquirer.Runner = runner
+	session, err := acquirer.Open(t.Context(), Source{Repository: "example/fixture", Commit: sha})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := session.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	if _, err := session.Scan(t.Context(), ""); err != nil {
+		t.Fatal(err)
+	}
+	if peak := int(runner.peak.Load()); peak > documentReadConcurrency || peak < 2 {
+		t.Fatalf("peak concurrent reads=%d, want between 2 and %d", peak, documentReadConcurrency)
 	}
 }
