@@ -91,7 +91,7 @@ func TestCursorApprovalCASNeverRemovesConcurrentDisable(t *testing.T) {
 	})
 	runner := &cursorApprovalRunner{}
 	env := clients.Env{NativeConfig: kernel, Runner: runner, LookupExecutable: func(string) (string, error) { return "/fake/cursor-agent", nil }}
-	if err := approveCursorMCP(context.Background(), env, request, "audit"); err == nil {
+	if _, err := approveCursorMCP(context.Background(), env, request, "audit"); err == nil {
 		t.Fatal("concurrent deny was not retained")
 	}
 	after, err := os.ReadFile(disabled)
@@ -154,7 +154,7 @@ func TestCursorApprovalRefusesPolicyDirectoryAlias(t *testing.T) {
 	}
 	runner := &cursorApprovalRunner{}
 	env := clients.Env{NativeConfig: kernel, Runner: runner, LookupExecutable: func(string) (string, error) { return "/fake/cursor-agent", nil }}
-	if err := approveCursorMCP(context.Background(), env, request, "audit"); err == nil {
+	if _, err := approveCursorMCP(context.Background(), env, request, "audit"); err == nil {
 		t.Fatal("approval followed a foreign policy directory alias")
 	}
 	entries, err := os.ReadDir(foreign)
