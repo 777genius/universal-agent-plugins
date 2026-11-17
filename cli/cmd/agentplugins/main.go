@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -97,6 +98,7 @@ func run() error {
 	}
 	ctx, stop := installerSignalContext(context.Background())
 	defer stop()
+	defer watchInterrupt(ctx, stop, os.Stderr)()
 	// Preserve the real os.Stdout *os.File for native TTY detection. An
 	// io.Writer counter here silently downgrades rich prompts to plain input.
 	root := agentpluginscli.NewRoot(app)
@@ -128,6 +130,27 @@ func installerSignalContext(parent context.Context) (context.Context, context.Ca
 		signals = append(signals, syscall.SIGHUP)
 	}
 	return signal.NotifyContext(parent, signals...)
+}
+
+// watchInterrupt says once that the interrupted command is still finishing
+// (recording or re-reading the client's state) and restores default signal
+// handling, so a second interrupt stops at once instead of being swallowed.
+// The returned release must run before stop: a normal exit prints nothing.
+func watchInterrupt(ctx context.Context, stop context.CancelFunc, out io.Writer) func() {
+	finished := make(chan struct{})
+	go func() {
+		select {
+		case <-finished:
+		case <-ctx.Done():
+			select {
+			case <-finished:
+			default:
+				stop()
+				_, _ = fmt.Fprintln(out, "agentplugins: interrupted; finishing the current client step safely (interrupt again to stop at once)")
+			}
+		}
+	}()
+	return func() { close(finished) }
 }
 
 func resolveAgentpluginsRoots() (string, string, error) {

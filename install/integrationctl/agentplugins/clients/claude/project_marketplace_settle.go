@@ -2,16 +2,11 @@ package claude
 
 import (
 	"context"
-	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
-
-// claudeSettleTimeout bounds the single read-only listing that settles a
-// failed or interrupted Claude command after cancellation.
-const claudeSettleTimeout = 15 * time.Second
 
 // claudeProjectState is the exact native project state one lifecycle step
 // observed before acting on it.
@@ -30,8 +25,9 @@ func settleClaudeProjectInstall(ctx context.Context, env clients.Env, request do
 	if outcome.NativeEffect != domain.NativeEffectUncertain || domain.IsUnclosedClientProbe(cause) {
 		return
 	}
-	observeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), claudeSettleTimeout)
-	defer cancel()
+	// The listing keeps the ordinary ClaudeProbeTimeout bound; only the
+	// caller's cancellation is detached for this one read.
+	observeCtx := context.WithoutCancel(ctx)
 	listed, err := runPreparedClaudeList(observeCtx, env, command)
 	if err != nil {
 		return
@@ -64,8 +60,7 @@ func settleClaudeProjectRemoval(ctx context.Context, env clients.Env, request do
 	if outcome.NativeEffect == domain.NativeEffectUnchanged || domain.IsUnclosedClientProbe(cause) {
 		return
 	}
-	observeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), claudeSettleTimeout)
-	defer cancel()
+	observeCtx := context.WithoutCancel(ctx)
 	listed, err := runPreparedClaudeList(observeCtx, env, command)
 	if err != nil {
 		return
