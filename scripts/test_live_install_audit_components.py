@@ -380,6 +380,45 @@ class KiroPreparedLifecycleTest(unittest.TestCase):
             observed = audit.case_observation({"install": {"exit_code": code, "timeout": True}})
             self.assertEqual(observed["install"], {"exit_code": code, "timeout": True})
 
+class CodexCleanupObservationTests(unittest.TestCase):
+    def test_finite_removal_projection_preserves_failure_and_private_data(self):
+        audit = load_audit()
+        fields = ("cleanup_succeeded", "post_list_succeeded", "post_list_schema_valid",
+                  "original_ids_absent", "kit_closure_empty_required", "post_list_empty",
+                  "identity_absent", "native_residuals_absent", "retention_verified",
+                  "native_uninstall_completed")
+        row = {"target": "codex", "kind": "plugin", "status": "cleanup-failed",
+               "codex_removal_gates": {**dict.fromkeys(fields, False), "private": "PRIVATE"},
+               "cleanup": {"exit_code": 1, "timeout": False, "stderr_tail": "PRIVATE"},
+               "post_remove_list": {"exit_code": 0, "timeout": False, "_json": {"PRIVATE": "value"}}}
+        original = copy.deepcopy(row)
+        evidence = audit.failed_case_diagnostics(row)
+        self.assertEqual(evidence, {"codex_removal_gates": dict.fromkeys(fields, False)})
+        observation = audit.case_observation(row)
+        self.assertEqual(observation["cleanup"], {"exit_code": 1, "timeout": False})
+        self.assertEqual(observation["post_remove_list"], {"exit_code": 0, "timeout": False})
+        self.assertNotIn("PRIVATE", json.dumps([evidence, observation]))
+        self.assertEqual(row, original)
+        self.assertFalse(audit.expected_negative_coverage(row))
+        for value in (True, False, 0, 1, None, "PRIVATE", [], {"PRIVATE": True}):
+            with self.subTest(value=value):
+                candidate = {**row, "codex_removal_gates": dict.fromkeys(fields, value)}
+                expected = value if type(value) is bool else None
+                self.assertEqual(audit.failed_case_diagnostics(candidate),
+                                 {"codex_removal_gates": dict.fromkeys(fields, expected)})
+        for target, kind in (("claude", "plugin"), ("codex", "skill"), ("vscode", "plugin")):
+            with self.subTest(target=target, kind=kind):
+                candidate = {**row, "target": target, "kind": kind}
+                self.assertNotIn("codex_removal_gates", audit.failed_case_diagnostics(candidate))
+                self.assertNotIn("cleanup", audit.case_observation(candidate))
+                self.assertNotIn("post_remove_list", audit.case_observation(candidate))
+        for command in ("cleanup", "post_remove_list"):
+            candidate = {**row, command: {"exit_code": True, "timeout": "PRIVATE"}}
+            self.assertEqual(audit.case_observation(candidate)[command],
+                             {"exit_code": None, "timeout": None})
+        self.assertNotIn("cleanup", audit.case_observation({**row, "status": "passed"}))
+
+
 class SnapshotChangeEvidenceTest(unittest.TestCase):
     def test_reports_created_changed_deleted_hashes_without_file_contents(self):
         audit = load_audit()

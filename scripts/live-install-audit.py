@@ -330,6 +330,14 @@ def failed_case_diagnostics(row):
             "repeat_native_phases", "gemini_repeat_evidence", "repeat_verified",
             "removal_verified", "sentinels_preserved")
     evidence = {key: row[key] for key in keys if row.get(key) is not None}
+    gates = row.get("codex_removal_gates")
+    if row.get("target") == "codex" and row.get("kind") == "plugin" and type(gates) is dict:
+        fields = ("cleanup_succeeded", "post_list_succeeded", "post_list_schema_valid",
+                  "original_ids_absent", "kit_closure_empty_required", "post_list_empty",
+                  "identity_absent", "native_residuals_absent", "retention_verified",
+                  "native_uninstall_completed")
+        evidence["codex_removal_gates"] = {
+            name: gates.get(name) if type(gates.get(name)) is bool else None for name in fields}
     if "error" in row:
         evidence["error"] = str(row["error"])[:8192]
     return evidence
@@ -2682,6 +2690,18 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "post_skill_tree_delta": post_skill_tree_delta,
             "post_lock_pinned": post_lock_pinned,
             "removal_verified": removal_verified, "native_residuals": native_residuals,
+            **({"codex_removal_gates": {
+                "cleanup_succeeded": bool(cleanup and cleanup["exit_code"] == 0),
+                "post_list_succeeded": bool(post_list and post_list["exit_code"] == 0),
+                "post_list_schema_valid": post_list_schema_valid,
+                "original_ids_absent": old_ids.isdisjoint(remaining_ids),
+                "kit_closure_empty_required": item == "marketing-kit",
+                "post_list_empty": post_list_empty,
+                "identity_absent": not post_remove_identity_registered,
+                "native_residuals_absent": not native_residuals,
+                "retention_verified": codex_retention_verified,
+                "native_uninstall_completed": bool(native_uninstall and native_uninstall.get("completed")),
+            }} if native_target == "codex" and kind == "plugin" else {}),
             **({"claude_cache_retirement": claude_retirement_proof}
                if claude_before is not None else {}),
             **({"native_residual_diagnostics": codex_residual_diagnostics(native_roots, native_residuals)}
@@ -3407,7 +3427,11 @@ def case_observation(result):
     fields = ("kiro_prepared_lifecycle_verified", "repeat_verified", "removal_verified",
               "sentinels_preserved", "failed_install_registered", "failed_install_residue")
     observation = {name: row.get(name) if type(row.get(name)) is bool else None for name in fields}
-    for label in ("install", "list"):
+    labels = ("install", "list")
+    if (row.get("target") == "codex" and row.get("kind") == "plugin"
+            and row.get("status") != "passed"):
+        labels += ("cleanup", "post_remove_list")
+    for label in labels:
         command = row.get(label)
         command = command if type(command) is dict else {}
         code, timeout = command.get("exit_code"), command.get("timeout")
