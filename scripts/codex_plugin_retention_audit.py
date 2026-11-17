@@ -591,7 +591,7 @@ def owned_namespace(profile, data, public, identity, quota, budget, *, selector,
     if (type(config.get("marketplaces")) is not dict
             or type(config.get("plugins")) is not dict):
         raise ValueError("retention native registration tables are malformed")
-    entry = config["marketplaces"][marketplace]
+    entry = config["marketplaces"].get(marketplace)
     plugin = config["plugins"].get(spec)
     if (type(plugin) is not dict or plugin.get("enabled") is not True
             or type(entry) is not dict or entry.get("source_type", "local") != "local"
