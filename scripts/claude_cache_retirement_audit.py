@@ -172,7 +172,7 @@ def retirement_diagnostic(error):
                 selected = {"module": module, "line": line}
             current = current.tb_next
         return selected if current is None else unavailable
-    except BaseException:
+    except Exception:
         return unavailable
 
 

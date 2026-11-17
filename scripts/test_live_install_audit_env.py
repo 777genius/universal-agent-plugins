@@ -10440,6 +10440,15 @@ class ClaudeRetirementDiagnosticContracts(unittest.TestCase):
 
         self.assertEqual(diagnose(Broken()), {"site": "unavailable"})
 
+        class Interrupted:
+            @property
+            def __traceback__(self):
+                raise KeyboardInterrupt
+
+        # Manual cancellation is not a diagnostic formatting failure.
+        with self.assertRaises(KeyboardInterrupt):
+            diagnose(Interrupted())
+
 
 @unittest.skipUnless(sys.platform in ("linux", "darwin"), "POSIX cache retirement custody contract")
 class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
