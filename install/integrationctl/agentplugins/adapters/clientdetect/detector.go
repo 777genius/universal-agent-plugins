@@ -173,6 +173,9 @@ func (detector Detector) detectClient(ctx context.Context, host clients.Host, ad
 	client.ConfigRoot = detection.ConfigRoot
 	client.NativeConfigRoot = detection.NativeConfigRoot
 	client.Status = detectionStatus(detection)
+	if client.Status != domain.DetectionDetected {
+		client.NotDetectedHint = detection.NotDetectedHint
+	}
 	if probeVersion && client.Status == domain.DetectionDetected && client.ExecutablePath != "" && (detector.ProbeVersion != nil || detector.ProbeVersionWithEnvironment != nil) {
 		timeout := detector.VersionTimeout
 		if timeout <= 0 {

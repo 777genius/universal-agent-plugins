@@ -35,6 +35,9 @@ type DetectedClient struct {
 	// DetectionError is private diagnostic evidence. A failed client must not
 	// contribute paths or become a lifecycle target.
 	DetectionError error `json:"-"`
+	// NotDetectedHint is the client's own advice for a client that is present
+	// in another form but not selectable in this scope. It is empty otherwise.
+	NotDetectedHint string `json:"-"`
 }
 
 type ClientCapabilities struct {

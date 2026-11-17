@@ -31,6 +31,10 @@ type Detection struct {
 	// detected surface counts. Claude is the only client that needs it today: a
 	// configuration directory stays evidence, but only the CLI selects it.
 	SelectionSurfaceIDs []string
+	// NotDetectedHint explains, for a client that has evidence but is not
+	// selectable in this scope, what the user can do instead. It is shown only
+	// when the client ends up not detected.
+	NotDetectedHint string
 }
 
 // Host is the probing environment handed to an adapter. The surface
