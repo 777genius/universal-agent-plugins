@@ -13,7 +13,7 @@ import (
 // checks use this strict expression even when a constraint explicitly includes
 // a prerelease.
 var (
-	stableVersion = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)package environment
+	stableVersion          = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)package environment
 
 import (
 	"fmt"
