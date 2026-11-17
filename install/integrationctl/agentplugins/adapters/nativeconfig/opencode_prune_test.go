@@ -7,7 +7,8 @@ import (
 
 // Regression: removing the last owned server left the "mcp" collection the
 // add had created, as an empty, reformatted object. A collection that existed
-// before the add, even an empty one, stays.
+// before the add stays, even an empty one, unless it has exactly the layout
+// the writer creates.
 func TestOpenCodeRemovePrunesOnlyTheCreatedCollection(t *testing.T) {
 	const schemaOnly = "{\n  \"$schema\": \"https://opencode.ai/config.json\"\n}\n"
 	for _, tc := range []struct {

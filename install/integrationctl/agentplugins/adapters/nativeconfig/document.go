@@ -155,8 +155,9 @@ func removeEntry(obj *hujson.Object, name string) bool {
 }
 
 // pruneCreatedOpenCodeCollections removes the OpenCode MCP collection that
-// objectCollection created once a removal leaves it empty, so removing the
-// last owned server restores the document that preceded the first add.
+// objectCollection created once a removal leaves it empty. For a document the
+// writer did not otherwise reformat, removing the last owned server then
+// returns it to its shape before the first add.
 func pruneCreatedOpenCodeCollections(doc *document, requests []Request) {
 	codec := requests[0].Codec
 	removes := slices.ContainsFunc(requests, func(req Request) bool { return req.Action == ActionRemove })
@@ -173,7 +174,9 @@ func pruneCreatedOpenCodeCollections(doc *document, requests []Request) {
 // Ownership of a created collection is not recorded, but appendMember gives
 // it one exact layout: an indented key with no space before the value and a
 // newline before the closing brace. Only that layout, empty, is removed; any
-// other one, including a user's own empty collection, is preserved.
+// other one is preserved. A user's own empty collection written in exactly
+// that layout is removed too, which is harmless: an empty collection
+// configures no server, just like an absent key.
 func removeCreatedEmptyCollection(parent *hujson.Object, key string) {
 	member, index := objectMember(parent, key)
 	if member == nil {
