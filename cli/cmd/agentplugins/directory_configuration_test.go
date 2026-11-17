@@ -46,7 +46,7 @@ func TestProductionDirectoryIgnoresCallerSuppliedConformanceData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if client.Origin != defaultDirectoryOrigin || client.Cache.Path != filepath.Join(productionRoot, "directory-v1-cache.json") || len(client.Trust.Keys) != 1 || client.Trust.Keys[0].ID != defaultDirectoryKeyID {
+	if client.Origin != defaultDirectoryOrigin || client.Cache.Path != filepath.Join(productionRoot, "directory-v1-cache.json") || len(client.Trust.Keys) != 2 || client.Trust.Keys[0].ID != defaultDirectoryKeyID {
 		t.Fatalf("conformance environment changed production Directory configuration: %+v", client)
 	}
 	if _, err := os.Lstat(fixture["AGENTPLUGINS_DIRECTORY_CACHE"]); !os.IsNotExist(err) {
@@ -115,7 +115,7 @@ func TestOrdinaryDirectoryOriginPreservesProductionTrustAndBootstrap(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if client.Origin != "https://mirror.example/registry/schemas/1/" || len(client.Trust.Keys) != 1 || client.Trust.Keys[0].ID != defaultDirectoryKeyID || !client.RequireEmbeddedBootstrap {
+	if client.Origin != "https://mirror.example/registry/schemas/1/" || len(client.Trust.Keys) != 2 || client.Trust.Keys[0].ID != defaultDirectoryKeyID || !client.RequireEmbeddedBootstrap {
 		t.Fatalf("ordinary origin changed production configuration: origin=%q keys=%d require_bootstrap=%v", client.Origin, len(client.Trust.Keys), client.RequireEmbeddedBootstrap)
 	}
 	bundle, err := client.Embedded.Verify(client.Trust)
