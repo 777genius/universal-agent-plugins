@@ -63,6 +63,19 @@ func (scanner ReleaseScanner) Scan(ctx context.Context, packageRoot string) ([]b
 	return (CommandScanner{Executable: executable}).Scan(ctx, packageRoot)
 }
 
+// scannerDirectory is the cache layout shared by every root, so a read-only
+// root and the private one can never disagree about where a scanner lives.
+func scannerDirectory(root, key string) string {
+	return filepath.Join(root, domain.SecurityScannerVersion, strings.ReplaceAll(key, "/", "-"))
+}
+
+// installedScanner accepts only an ordinary file: a symlink, directory or
+// device in a cache never counts as an installed scanner.
+func installedScanner(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.Mode().IsRegular()
+}
+
 func (scanner ReleaseScanner) resolve(ctx context.Context) (string, error) {
 	goos, goarch := scanner.GOOS, scanner.GOARCH
 	if goos == "" {
@@ -86,14 +99,13 @@ func (scanner ReleaseScanner) resolve(ctx context.Context) (string, error) {
 	if goos == "windows" {
 		binaryName += ".exe"
 	}
-	directory := filepath.Join(scanner.Root, domain.SecurityScannerVersion, strings.ReplaceAll(key, "/", "-"))
+	directory := scannerDirectory(scanner.Root, key)
 	executable := filepath.Join(directory, binaryName)
-	if info, err := os.Lstat(executable); err == nil && info.Mode().IsRegular() {
+	if installedScanner(executable) {
 		return executable, nil
 	}
 	if scanner.ReadOnlyRoot != "" {
-		shared := filepath.Join(scanner.ReadOnlyRoot, domain.SecurityScannerVersion, strings.ReplaceAll(key, "/", "-"), binaryName)
-		if info, err := os.Lstat(shared); err == nil && info.Mode().IsRegular() {
+		if shared := filepath.Join(scannerDirectory(scanner.ReadOnlyRoot, key), binaryName); installedScanner(shared) {
 			return shared, nil
 		}
 	}
