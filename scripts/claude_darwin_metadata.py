@@ -17,6 +17,36 @@ def require(value):
         raise ValueError('Darwin cache metadata authority is unresolved')
 
 
+
+class PresenceRefusal(ValueError):
+    def __init__(self, presence):
+        super().__init__('Darwin cache metadata authority is unresolved')
+        self.presence = presence
+
+
+def presence_diagnostic(error):
+    """Project only the exact authored presence refusal, never foreign attributes."""
+    if type(error) is not PresenceRefusal:
+        return None
+    current, authored = error.__traceback__, False
+    for _ in range(64):
+        if current is None:
+            break
+        if current.tb_frame.f_code is Metadata.check.__code__:
+            authored = True
+        current = current.tb_next
+    else:
+        return None
+    if not authored:
+        return None
+    presence = error.presence
+    if (type(presence) is not tuple or len(presence) != 3
+            or any(type(value) is not bool for value in presence)
+            or presence == (True, True, False)):
+        return None
+    return dict(zip(('uuid_present', 'group_uuid_present', 'acl_present'), presence))
+
+
 class Metadata:
     def __init__(self):
         require(sys.platform == 'darwin' and platform.machine() in ('arm64', 'x86_64'))
@@ -67,7 +97,8 @@ class Metadata:
                 present[property_id] = bool(valid.value)
             # Source statx1: both UUID properties require a full security header;
             # ACL absent then represents explicit KAUTH_FILESEC_NOACL.
-            require(present == {FILESEC_UUID: True, FILESEC_GRPUUID: True, FILESEC_ACL: False})
+            if present != {FILESEC_UUID: True, FILESEC_GRPUUID: True, FILESEC_ACL: False}:
+                raise PresenceRefusal(tuple(present[key] for key in (FILESEC_UUID, FILESEC_GRPUUID, FILESEC_ACL)))
             require(self.list(fd, None, 0, 0) == 0)
             ctypes.set_errno(0)
             size = self.get(fd, b'com.apple.ResourceFork', None, 0, 0, 0)

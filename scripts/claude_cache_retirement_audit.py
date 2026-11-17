@@ -160,10 +160,11 @@ def retirement_diagnostic(error):
             str(directory / "claude_windows_cache_custody.py"): "claude-windows-cache-custody",
             str(directory / "gemini_windows_custody.py"): "gemini-windows-custody",
         }
+        presence = (_DARWIN["presence_diagnostic"](error) if _DARWIN is not None else None)
         current, selected = error.__traceback__, unavailable
         for _ in range(64):
             if current is None:
-                return selected
+                return dict(selected, **presence) if presence is not None else selected
             code = current.tb_frame.f_code
             module = authored.get(code.co_filename)
             line = current.tb_lineno

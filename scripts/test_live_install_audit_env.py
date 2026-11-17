@@ -10456,6 +10456,57 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
 
 
 class ClaudeRetirementDiagnosticContracts(unittest.TestCase):
+    def test_darwin_presence_refusal_projects_only_authored_boolean_facts(self):
+        darwin = runpy.run_path(str(ROOT / "scripts/claude_darwin_metadata.py"))
+        projection = runpy.run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
+        diagnose = projection["retirement_diagnostic"]
+        metadata = projection["metadata"]
+        diagnose.__globals__["_DARWIN"] = darwin
+        cls = darwin["Metadata"]
+        for presence in ((False, False, False), (True, True, True)):
+            with self.subTest(presence=presence):
+                native = object.__new__(cls)
+                released = []
+                native.init = lambda: 1
+                native.free = released.append
+                native.stat = lambda *_args: 0
+                def query(_section, key, output):
+                    output._obj.value = dict(zip((3, 6, 5), presence))[key]
+                    return 0
+                native.query = query
+                darwin["check"].__globals__["_METADATA"] = native
+                with patch.object(os, "fstat", return_value=object()):
+                    try:
+                        metadata(123)
+                    except ValueError as error:
+                        self.assertIs(type(error), darwin["PresenceRefusal"])
+                        self.assertEqual(str(error), "Darwin cache metadata authority is unresolved")
+                        facts = diagnose(error)
+                    else:
+                        self.fail("presence mismatch was admitted")
+                self.assertEqual(released, [1])
+                self.assertEqual({key: facts[key] for key in
+                    ("uuid_present", "group_uuid_present", "acl_present")},
+                    dict(zip(("uuid_present", "group_uuid_present", "acl_present"), presence)))
+                self.assertEqual(facts["module"], "claude-cache-retirement")
+                self.assertIs(type(facts["line"]), int)
+                self.assertNotIn(str(ROOT), json.dumps(facts))
+        # Matching class/attributes outside the authored check cannot export facts.
+        for error in (darwin["PresenceRefusal"]((False, False, False)),
+                      ValueError("private-path-uuid-acl")):
+            error.presence = (False, False, False)
+            try:
+                raise error
+            except ValueError as caught:
+                self.assertEqual(diagnose(caught), {"site": "unavailable"})
+        with patch.dict(darwin, {"presence_diagnostic": lambda _error:
+                                (_ for _ in ()).throw(RuntimeError("private"))}):
+            self.assertEqual(diagnose(ValueError("private")), {"site": "unavailable"})
+        with patch.dict(darwin, {"presence_diagnostic": lambda _error:
+                                (_ for _ in ()).throw(KeyboardInterrupt())}):
+            with self.assertRaises(KeyboardInterrupt):
+                diagnose(ValueError("private"))
+
     def test_authored_site_is_bounded_private_and_unavailable_on_unknown(self):
         module = runpy.run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
         diagnose = module["retirement_diagnostic"]
