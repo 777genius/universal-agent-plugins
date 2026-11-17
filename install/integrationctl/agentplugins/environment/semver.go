@@ -72,7 +72,39 @@ func SelectorMatchesVersion(selector Selector, version string) bool {
 		return false
 	}
 	candidate, err := semver.StrictNewVersion(version)
-	return err == nil && constraint.Check(candidate)
+	if err != nil || !constraint.Check(candidate) {
+		return false
+	}
+	// Masterminds permits *any* prerelease in a comparator group containing a
+	// prerelease. npm semver permits only prereleases of the explicitly named
+	// major.minor.patch tuple. The extra guard prevents unrequested upgrades.
+	if candidate.Prerelease() != "" {
+		return prereleaseMatchesNamedTuple(selector.Value, candidate)
+	}
+	return true
+}
+
+// Keep this compatibility rule narrow: the library still parses and evaluates
+// every constraint. Only the npm prerelease eligibility rule is enforced here.
+func prereleaseMatchesNamedTuple(expression string, candidate *semver.Version) bool {
+	needle := fmt.Sprintf("%d.%d.%d-", candidate.Major(), candidate.Minor(), candidate.Patch())
+	for _, group := range strings.Split(expression, "||") {
+		for at := 0; at < len(group); {
+			i := strings.Index(group[at:], needle)
+			if i < 0 {
+				break
+			}
+			i += at
+			if i == 0 || (group[i-1] != '.' && (group[i-1] < '0' || group[i-1] > '9')) {
+				selected, err := semver.NewConstraint(group)
+				if err == nil && selected.Check(candidate) {
+					return true
+				}
+			}
+			at = i + len(needle)
+		}
+	}
+	return false
 }
 
 func registrySelectorMatches(selector Selector, pkg LockedPackage) bool {
