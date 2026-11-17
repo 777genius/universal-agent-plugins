@@ -138,9 +138,12 @@ func TestClaudeProjectMarketplaceFailureEffectsAndReadOnlyVerification(t *testin
 				return legacyports.CommandResult{NoChildStarted: condition != "unknown-child"}, fmt.Errorf("inert native failure")
 			})
 			out, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request)
-			want := domain.NativeEffectUnchanged
-			if condition == "unknown-child" || condition == "after-marketplace" {
-				want = domain.NativeEffectUncertain
+			// A started child without proven cleanup stays uncertain. A closed
+			// failed install is re-read: the registered, uninstalled marketplace
+			// is a certain committed state that a later installation continues.
+			want := map[string]domain.NativeEffectState{"unknown-child": domain.NativeEffectUncertain, "after-marketplace": domain.NativeEffectCommitted}[condition]
+			if want == "" {
+				want = domain.NativeEffectUnchanged
 			}
 			if err == nil || out.NativeEffect != want || len(out.NativeObjects) != 0 {
 				t.Fatalf("failure effect=%+v error=%v", out, err)

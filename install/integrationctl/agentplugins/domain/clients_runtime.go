@@ -188,33 +188,40 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
-	NativeAttempt         NativeAttemptIdentity   `json:"-"`
-	TargetContext         TargetContext           `json:"-"`
-	NativeRegistryRoot    string                  `json:"-"`
-	LocalEntryObservation *LocalEntryObservation  `json:"-"`
-	RemoveOwnedEntry      bool                    `json:"-"`
-	SelectedDelivery      SelectedDelivery        `json:"-"`
-	Client                DetectedClient          `json:"client"`
-	DeclaredName          string                  `json:"declared_name"`
-	CurrentActivation     ActivationState         `json:"current_activation"`
-	Interactive           bool                    `json:"interactive"`
-	ExternalUninstalled   bool                    `json:"external_uninstalled"`
-	Confirmed             bool                    `json:"confirmed"`
-	PhysicalArtifactID    string                  `json:"physical_artifact_id"`
-	BackendExecutable     string                  `json:"-"`
-	ManagedArtifactPath   string                  `json:"-"`
-	NativeObjects         []NativeObjectOwnership `json:"-"`
+	NativeAttempt         NativeAttemptIdentity  `json:"-"`
+	TargetContext         TargetContext          `json:"-"`
+	NativeRegistryRoot    string                 `json:"-"`
+	LocalEntryObservation *LocalEntryObservation `json:"-"`
+	RemoveOwnedEntry      bool                   `json:"-"`
+	// PurgeData asks a client that keeps plugin data outside the installer's
+	// owned PLUGIN_DATA to delete it with the native removal.
+	PurgeData           bool                    `json:"-"`
+	SelectedDelivery    SelectedDelivery        `json:"-"`
+	Client              DetectedClient          `json:"client"`
+	DeclaredName        string                  `json:"declared_name"`
+	CurrentActivation   ActivationState         `json:"current_activation"`
+	Interactive         bool                    `json:"interactive"`
+	ExternalUninstalled bool                    `json:"external_uninstalled"`
+	Confirmed           bool                    `json:"confirmed"`
+	PhysicalArtifactID  string                  `json:"physical_artifact_id"`
+	BackendExecutable   string                  `json:"-"`
+	ManagedArtifactPath string                  `json:"-"`
+	NativeObjects       []NativeObjectOwnership `json:"-"`
 }
 
 type DeactivationOutcome struct {
 	// NativeEffect is transient evidence of a native transaction's actual
 	// effects. An ordinary error never establishes that removal was unchanged.
-	NativeEffect            NativeEffectState `json:"-"`
-	Activation              ActivationState   `json:"activation"`
-	ArtifactRemovalAllowed  bool              `json:"artifact_removal_allowed"`
-	ExternalRemovalComplete bool              `json:"external_removal_complete"`
-	UserActions             []string          `json:"user_actions,omitempty"`
-	LocalActions            []string          `json:"-"`
+	NativeEffect NativeEffectState `json:"-"`
+	// SettledPartialRemoval qualifies a committed effect of a failed removal:
+	// the adapter re-read the client after its processes closed and every
+	// recorded native object is still exactly owned, so no attempt stays open.
+	SettledPartialRemoval   bool            `json:"-"`
+	Activation              ActivationState `json:"activation"`
+	ArtifactRemovalAllowed  bool            `json:"artifact_removal_allowed"`
+	ExternalRemovalComplete bool            `json:"external_removal_complete"`
+	UserActions             []string        `json:"user_actions,omitempty"`
+	LocalActions            []string        `json:"-"`
 }
 
 func supportsLocalDelivery(id ClientID) bool { return id == ClientVSCode }

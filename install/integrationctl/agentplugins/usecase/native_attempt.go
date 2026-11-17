@@ -158,7 +158,8 @@ func (service Service) activateWithNativeAttempt(ctx context.Context, installati
 
 // completeNativeRemoval records a known deactivation before a later managed
 // directory transaction. A failed Deactivate leaves the attempt marker in
-// place, because a partial native write cannot safely be inferred away.
+// place, because a partial native write cannot safely be inferred away; only
+// an adapter-proven effect is closed by acknowledgeCertainRemoval.
 func (service Service) completeNativeRemoval(ctx context.Context, installationID, bindingID string, removed bool) error {
 	state, err := service.StateStore.Load()
 	if err != nil {

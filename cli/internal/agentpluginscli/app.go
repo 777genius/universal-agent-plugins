@@ -132,6 +132,9 @@ type options struct {
 	// firstTreeDigest is the package digest of the first attempt; a retry must
 	// install exactly that package or ask for a new review.
 	firstTreeDigest string
+	// finishedInterrupted records that this command completed an earlier
+	// run's interrupted transaction before planning its own change.
+	finishedInterrupted bool
 }
 
 func (app App) input() io.Reader {

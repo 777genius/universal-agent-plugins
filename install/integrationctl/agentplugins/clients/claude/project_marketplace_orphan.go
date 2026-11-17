@@ -18,17 +18,23 @@ import (
 const claudeOrphanedMarker = ".orphaned_at"
 
 func verifyClaudeProjectRemovalCache(ctx context.Context, request domain.DeactivationRequest, cache string, allowOrphan bool) error {
-	if err := pathpolicy.RequireContainedChild(request.Client.ConfigRoot, cache); err != nil {
+	return verifyClaudeOwnedCache(ctx, request.Client.ConfigRoot, request.DeclaredName, request.PhysicalArtifactID, request.TargetContext.ProjectRoot, cache, request.NativeObjects, allowOrphan)
+}
+
+// verifyClaudeOwnedCache accepts an absent cache, the exact owned cache, or,
+// after native absence, the same owned cache marked orphaned by Claude itself.
+func verifyClaudeOwnedCache(ctx context.Context, configRoot, name, physical, project, cache string, objects []domain.NativeObjectOwnership, allowOrphan bool) error {
+	if err := pathpolicy.RequireContainedChild(configRoot, cache); err != nil {
 		return err
 	}
 	if err := rejectClaudeCacheExcludedEntries(ctx, cache); err != nil {
 		return err
 	}
-	err := verifyClaudeProjectCache(ctx, request.Client.ConfigRoot, request.DeclaredName, request.PhysicalArtifactID, request.TargetContext.ProjectRoot, cache, request.NativeObjects, true)
+	err := verifyClaudeProjectCache(ctx, configRoot, name, physical, project, cache, objects, true)
 	if err == nil || !allowOrphan {
 		return err
 	}
-	receipt, receiptErr := claudeProjectCacheReceipt(request.DeclaredName, request.PhysicalArtifactID, request.TargetContext.ProjectRoot, cache, request.NativeObjects)
+	receipt, receiptErr := claudeProjectCacheReceipt(name, physical, project, cache, objects)
 	if receiptErr != nil {
 		return receiptErr
 	}

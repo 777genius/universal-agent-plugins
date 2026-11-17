@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"os/signal"
 	"syscall"
 	"testing"
 	"time"
@@ -53,6 +54,10 @@ func TestInstallerSignalContextHandlesTerminalHangup(t *testing.T) {
 		{"ignored hangup is preserved", []string{"/bin/sh", "-c", `trap "" HUP; exec "$0" "$@"`, os.Args[0]}, 4},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			// A test runner started under nohup passes ignored SIGHUP to the child.
+			if test.wantExit == 0 && signal.Ignored(syscall.SIGHUP) {
+				t.Skip("SIGHUP is ignored by the test process, as under nohup")
+			}
 			argv := append(append([]string{}, test.argv...), "-test.run=^TestInstallerSignalContextHandlesTerminalHangup$", "-test.count=1")
 			child := exec.CommandContext(t.Context(), argv[0], argv[1:]...)
 			child.Env = append(os.Environ(), hangupChildEnv+"=1")
