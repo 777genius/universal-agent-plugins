@@ -24,6 +24,8 @@ type claudeCLIInterrupt struct {
 	// unclosed reports a child whose process-tree cleanup was not proven.
 	unclosed bool
 	cancel   context.CancelFunc
+	// firedAt is the runner call count when the interrupt fired.
+	firedAt int
 }
 
 func (i *claudeCLIInterrupt) matches(args []string) bool {
@@ -48,6 +50,7 @@ func (i *claudeCLIInterrupt) fire(r *preparedClaudeCLIRunner, args []string) (le
 		}
 	}
 	i.cancel()
+	i.firedAt = r.calls
 	return legacyports.CommandResult{CleanupComplete: !i.unclosed}, context.Canceled
 }
 
@@ -158,6 +161,10 @@ func TestProjectClaudeInterruptedInstallVerificationResumesWithSameCommand(t *te
 			if (attempt != "") != unclosed {
 				t.Fatalf("interrupted install verification left attempt %q", attempt)
 			}
+			// An unclosed child may still be writing: no native probe may follow it.
+			if unclosed && fixture.runner.calls != interrupt.firedAt {
+				t.Fatalf("unclosed listing was followed by %d native calls", fixture.runner.calls-interrupt.firedAt)
+			}
 			out, err := fixture.runProject(context.Background(), args...)
 			if unclosed {
 				if err == nil || !strings.Contains(out+err.Error(), attempt) {
@@ -169,8 +176,8 @@ func TestProjectClaudeInterruptedInstallVerificationResumesWithSameCommand(t *te
 				t.Fatalf("same command did not resume: %v\n%s", err, out)
 			}
 			state, err := fixture.store.Load()
-			if err != nil {
-				t.Fatal(err)
+			if err != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+				t.Fatalf("resumed add did not keep exactly one binding: %v %+v", err, state.Installations)
 			}
 			for _, binding := range state.Installations[0].Clients {
 				if binding.NativeActivationAttempt != "" || binding.Activation != domain.ActivationActive || len(fixture.runner.marketplaceListing()) != 1 {
