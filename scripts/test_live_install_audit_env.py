@@ -8222,6 +8222,14 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
             async def discover(binary, project, native_profile, environment):
                 self.assertEqual(native_profile, profile)
                 self.assertEqual(environment["CODEX_HOME"], str(profile))
+                installation_id = (profile / "installation_id").read_bytes()
+                parsed = audit.uuid.UUID(installation_id.decode("ascii"))
+                self.assertEqual(installation_id, str(parsed).encode("ascii"))
+                self.assertEqual(parsed.version, 4)
+                self.assertEqual(list((profile / "tmp/arg0").iterdir()), [])
+                if os.name != "nt":
+                    self.assertEqual((profile / "installation_id").stat().st_mode & 0o777, 0o644)
+                    self.assertEqual((profile / "tmp/arg0").stat().st_mode & 0o777, 0o700)
                 with closing(sqlite3.connect(database)) as connection:
                     connection.execute("CREATE TABLE fixture_rows (value TEXT)")
                     connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
@@ -8246,6 +8254,10 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                     (case / "home/foreign-prebaseline-new.txt").write_text("new foreign bytes")
                 elif mutation == "prebaseline-managed":
                     (case / "uap-data/foreign-managed.txt").write_text("changed")
+                elif mutation == "prebaseline-installation-id":
+                    (profile / "installation_id").write_text(str(audit.uuid.uuid4()))
+                elif mutation == "prebaseline-arg0-child":
+                    (profile / "tmp/arg0/foreign").write_text("unowned residue")
                 return {"data": [{"cwd": str(project), "errors": [], "skills": []}]}
             def perform(argv, environment, cwd, timeout=105):
                 commands.append(list(argv))
@@ -8314,7 +8326,8 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unexpected member"):
             self.run_case("prebaseline-runtime-foreign")
         for mutation in ("prebaseline-foreign", "prebaseline-foreign-new",
-                         "prebaseline-foreign-nested", "prebaseline-home-new", "prebaseline-managed"):
+                         "prebaseline-foreign-nested", "prebaseline-home-new", "prebaseline-managed",
+                         "prebaseline-installation-id", "prebaseline-arg0-child"):
             with self.subTest(mutation=mutation), self.assertRaisesRegex(
                     ValueError, "changed protected fixture authority"):
                 self.run_case(mutation)

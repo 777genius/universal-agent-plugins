@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+import uuid
 from runpy import run_path
 from datetime import datetime, timezone
 from urllib.parse import urlsplit, urlunsplit
@@ -2129,6 +2130,16 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign)
         assert_case_unchanged()
     if target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
+        # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
+        # Author these fixture objects before protecting every byte and identity.
+        assert_case_unchanged()
+        profile = home / ".codex"
+        for directory in (profile / "tmp", profile / "tmp/arg0"):
+            directory.mkdir(mode=0o700)
+        with (profile / "installation_id").open("xb") as stream:
+            if os.name != "nt":
+                os.fchmod(stream.fileno(), 0o644)
+            stream.write(str(uuid.uuid4()).encode("ascii"))
         protected_home = scoped_snapshot((home,))
         protected_delivery = scoped_snapshot((project, data))
         codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
