@@ -54,11 +54,15 @@ npm/нативний інсталятор не містить `agentplugins auth
 
 ## Hermes і Antigravity: підтримка у випущеному CLI {#hermes-antigravity-source}
 
-Нативний CLI **0.1.108** опубліковано 2026-11-13; він включає Hermes та Antigravity. Перевірка випуску й просування успішні; придатність пакетів підписаного Directory перевіряється окремо. Це не означає публікацію npm 0.1.108, автентифікацію провайдера чи автоматичну активацію.
+Нативний CLI **0.1.110** включає Hermes та Antigravity. UAP автоматично налаштовує підтримувані компоненти; виконайте решту дій із результату для вашого клієнта. Придатність пакетів підписаного Directory перевіряється окремо. Встановлення не підтверджує автентифікацію провайдера чи активацію виконання.
 
-[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+[0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) · source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`.
 
-**Історичні дані життєвого циклу (2026-11-10):**
+Project MCP Hermes має стан **Prepared** лише для окремого дистрибутива Hermes, маніфест збірки якого перевіряє UAP, із явно підтвердженим проєктним сеансом UAP. Звичайний запуск Hermes не обирає цю конфігурацію MCP. Hermes, встановлений із вихідного коду, не підтримує Project MCP: використовуйте User MCP або лише Project Skills. Ця вимога до самого Hermes не обмежує встановлення плагінів із Git. Project Skills і далі потребують довіри та нового сеансу. Датовані спостереження нижче зберігають історичні межі.
+
+**Історичні дані життєвого циклу (2026-11-10–13):**
+
+[0.1.108 (2026-11-13)](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
 
 **Hermes 0.23.0:** Skills користувача та належні UAP налаштування MCP stdio/Streamable HTTP; у проєкті — лише Skills. Project MCP відхиляється без перенаправлення до налаштувань користувача. Linux x64, macOS arm64 і нативна Windows x64 пройшли перше й повторне додавання, оновлення, відновлення, видалення, виявлення в недовіреному проєкті та ізоляцію A/B: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Чотири локальні HTTP-обміни `initialize`/`tools/list` на кожній ОС підтверджують з’єднання та виявлення інструментів, але не `tools/call`, роботу моделі, автентифікацію чи довірене виконання в проєкті. SSE та хуки не підтримуються. Переносні команди проєктуються у Skills; команди лише для явного виклику не передаються, якщо клієнт не може забезпечити це обмеження.
 

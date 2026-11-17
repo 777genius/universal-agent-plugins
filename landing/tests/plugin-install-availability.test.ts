@@ -74,7 +74,7 @@ test('explicit saved source routes use generated agent and scope capabilities', 
     assert.equal(pluginInstallAvailability(plugin, [client])?.kind, 'pinned_git');
     assert.equal(hasPluginInstallTarget(plugin, client), true);
     assert.equal(pluginInstallAvailability(plugin, [client], 'project')?.kind,
-      client === 'hermes' ? undefined : 'pinned_git');
+      'pinned_git');
   }
   assert.equal(pluginInstallAvailability(plugin, []), undefined);
   assert.equal(pluginInstallAvailability(plugin, ['pi', 'codex'], 'project'), undefined);

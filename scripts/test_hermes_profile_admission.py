@@ -7415,7 +7415,16 @@ class WorkflowScopeContracts(unittest.TestCase):
             self.assertIn("        " + field + "\n", dispatch)
         self.assertEqual(rest.split("concurrency:\n", 1)[0], "  contents: read\n")
         native, bundled = workflow.split("  native-call:\n", 1)[1].split("  bundled-custom-root:\n", 1)
-        self.assertNotRegex(native.split("    steps:\n", 1)[0], re.compile(r"^    if:", re.MULTILINE))
+        heavy_gate = (
+            "${{ github.event_name != 'pull_request' || "
+            "(github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && "
+            "(github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}"
+        )
+        for job in (native, bundled):
+            self.assertEqual(
+                re.findall(r"^    if: (.+)$", job.split("    steps:\n", 1)[0], re.MULTILINE),
+                [heavy_gate],
+            )
         self.assertNotIn("source_custom_root_research", bundled)
         self.assertNotIn("continue-on-error:", workflow)
         steps = {block.splitlines()[0]: block for block in native.split("    - name: ")[1:]}

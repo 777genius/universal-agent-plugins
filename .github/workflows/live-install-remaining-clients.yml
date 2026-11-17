@@ -2,7 +2,7 @@ name: Remaining client live installation audit
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
@@ -29,13 +29,13 @@ env:
   AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
 
 concurrency:
-  group: remaining-client-audit-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: remaining-client-audit-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.event_name == 'pull_request' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 
 jobs:
   remaining-client-install:
     name: ${{ (matrix.target == 'kiro' || matrix.target == 'windsurf') && matrix.kind == 'plugin' && 'Prepared installation 30' || matrix.target == 'vscode' && matrix.kind == 'plugin' && 'Manual preparation observation 30' || 'Full 30' }} ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     # Darwin refuses Kiro's automatic MCP duplex containment. This lane can
     # measure the real native CLI and owned Prepared lifecycle, while keeping
     # native activation incomplete until a contained host route is qualified.

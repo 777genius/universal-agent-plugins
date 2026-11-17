@@ -33,11 +33,15 @@ CLI 0.1.94 से, स्रोत आर्ग्युमेंट के ब�
 
 ## Hermes और Antigravity: जारी CLI में समर्थन {#hermes-antigravity-source}
 
-नेटिव CLI **0.1.108** 2026-11-13 को प्रकाशित हुआ और इसमें Hermes तथा Antigravity शामिल हैं। रिलीज़ सत्यापन और प्रमोशन सफल रहे; हस्ताक्षरित Directory में पैकेज की पात्रता अलग से जाँची जाती है। यह npm 0.1.108 के प्रकाशन, प्रदाता प्रमाणीकरण या स्वचालित सक्रियण का दावा नहीं है।
+नेटिव CLI **0.1.110** में Hermes और Antigravity शामिल हैं। UAP समर्थित घटकों को स्वचालित रूप से कॉन्फ़िगर करता है; अपने क्लाइंट के परिणाम में बताई गई बाकी कार्रवाइयाँ पूरी करें। हस्ताक्षरित Directory में पैकेज की पात्रता अलग से जाँची जाती है। स्थापना प्रदाता प्रमाणीकरण या रनटाइम सक्रियण सिद्ध नहीं करती।
 
-[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+[0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) · source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`.
 
-**ऐतिहासिक जीवनचक्र प्रमाण (2026-11-10):**
+Hermes Project MCP केवल स्वतंत्र Hermes होस्ट वितरण के साथ **Prepared** होता है, जिसके बंडल मैनिफ़ेस्ट को UAP सत्यापित करता है, और जिसके लिए UAP प्रोजेक्ट सत्र की स्पष्ट पुष्टि की गई हो। सामान्य Hermes स्टार्टअप यह MCP कॉन्फ़िगरेशन नहीं चुनता। स्रोत कोड से स्थापित Hermes होस्ट Project MCP नहीं चला सकता; User MCP या केवल Project Skills उपयोग करें। होस्ट की यह शर्त Git से प्लगइन स्थापित करने पर रोक नहीं लगाती। Project Skills के लिए अब भी ट्रस्ट और नया सत्र चाहिए। नीचे दिए गए दिनांकित अवलोकनों का ऐतिहासिक दायरा बरकरार है।
+
+**ऐतिहासिक जीवनचक्र प्रमाण (2026-11-10–13):**
+
+[0.1.108 (2026-11-13)](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
 
 **Hermes 0.23.0:** उपयोगकर्ता Skills और UAP के स्वामित्व वाले stdio/Streamable HTTP MCP कॉन्फ़िगरेशन; प्रोजेक्ट में केवल Skills। Project MCP अस्वीकार होता है और उपयोगकर्ता कॉन्फ़िगरेशन में नहीं भेजा जाता। Linux x64, macOS arm64 और नेटिव Windows x64 पर पहली तथा दोबारा जोड़ने की क्रिया, अपडेट, रिपेयर, हटाना, बिना ट्रस्ट वाले प्रोजेक्ट में पहचान और A/B अलगाव पास हुए: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`। हर OS पर चार लूपबैक HTTP `initialize`/`tools/list` आदान-प्रदान कनेक्शन और टूल पहचान सिद्ध करते हैं; `tools/call`, मॉडल उपयोग, प्रमाणीकरण या विश्वसनीय प्रोजेक्ट निष्पादन नहीं। SSE और hooks समर्थित नहीं हैं। पोर्टेबल कमांड Skills के रूप में तैयार होते हैं; केवल स्पष्ट आह्वान वाले कमांड रोक दिए जाते हैं यदि क्लाइंट यह नियम लागू नहीं कर सकता।
 

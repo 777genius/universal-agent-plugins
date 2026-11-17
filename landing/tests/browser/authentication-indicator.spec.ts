@@ -115,6 +115,8 @@ for (const mobile of [false, true]) {
         await targets(page, card, ['Codex']);
         await expect(indicator).toHaveAttribute('data-authentication', 'not_required');
         await expect(indicator).toHaveAttribute('data-icon', 'lock-open');
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).toHaveCount(0);
         await indicator.click();
         await expect(dialog).toContainText('No authentication required');
         await expect(dialog.locator('.authentication-indicator__clients')).toHaveText('codex');
@@ -126,6 +128,8 @@ for (const mobile of [false, true]) {
         await targets(page, card, ['Codex']);
         await expect(indicator).toHaveAttribute('data-authentication', 'required');
         await expect(indicator).toHaveAttribute('data-icon', 'lock');
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).toHaveCount(0);
         await indicator.click();
         await expect(dialog).toContainText('Authentication required');
         await expect(dialog.locator('.authentication-indicator__clients')).toHaveText('cursor');
@@ -174,7 +178,7 @@ for (const mobile of [false, true]) {
         await card.getByRole('button', { name: `Install ${plugin.display_name}`, exact: true }).click();
         await targets(page, card, ['Codex']);
         await expect(indicator).toHaveAttribute('data-authentication', 'not_required');
-        await automatic(page, card, 'en');
+        await automatic(page, page.getByRole('dialog'), 'en');
         await expect(indicator).toHaveAttribute('data-authentication', 'unknown');
         expect(errors).toEqual([]);
       });

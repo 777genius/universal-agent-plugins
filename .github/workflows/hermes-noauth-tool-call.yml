@@ -6,6 +6,7 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
     - synchronize
     - reopened
     - ready_for_review
+    - labeled
     paths:
     - .github/workflows/hermes-noauth-tool-call.yml
     - scripts/e2e/hermes-noauth-tool-call.py
@@ -69,14 +70,14 @@ name: Hermes native User tools call - scripted localhost provider, no vendor aut
 permissions:
   contents: read
 concurrency:
-  group: hermes-noauth-call-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: hermes-noauth-call-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.event_name == 'pull_request' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 env:
   PYTHONDONTWRITEBYTECODE: '1'
 jobs:
   native-call:
     name: Hermes 0.23 actual legacy driver tools/call (${{ matrix.os }})
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     strategy:
       fail-fast: false
       matrix:
@@ -292,7 +293,7 @@ jobs:
         retention-days: 14
   bundled-custom-root:
     name: Hermes 0.23 bundled custom-root admission (${{ matrix.os }})
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     strategy:
       fail-fast: false
       matrix:

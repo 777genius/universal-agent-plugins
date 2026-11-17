@@ -70,19 +70,20 @@ test('Skills search reveals install choices, copies the exact command and surviv
     'https://github.com/anthropics/skills',
   );
   await card.getByRole('button', { name: 'Install frontend-design', exact: true }).click();
-  await card
+  await page.getByRole('dialog')
     .getByRole('button', { name: 'Choose agents: Choose agents in terminal', exact: true })
     .click();
   await expect(page.getByRole('checkbox', { name: /ChatGPT|VS Code/ })).toHaveCount(0);
   await page.getByRole('checkbox', { name: /Codex/ }).click();
   await page.keyboard.press('Escape');
-  await expect(card.locator('.plugin-card__install-panel pre')).toContainText('--target codex');
-  await card.getByRole('button', { name: 'Copy command', exact: true }).click();
+  await expect(page.getByRole('dialog').locator('.plugin-card__install-panel pre')).toContainText('--target codex');
+  await page.getByRole('dialog').getByRole('button', { name: 'Copy command', exact: true }).click();
   await expect
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toBe(
       'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --target codex',
     );
+  await page.keyboard.press('Escape');
   await page.locator('.catalog-modes').getByRole('link', { name: 'Plugins', exact: true }).click();
   await expect(page.locator('.skills-catalog')).toHaveCount(0);
   await expect(
@@ -95,9 +96,10 @@ test('Skills search reveals install choices, copies the exact command and surviv
   await expect(catalog.getByRole('searchbox', { name: 'Search Skills', exact: true })).toHaveValue(
     'frontend',
   );
-  await expect(
-    catalog.locator('.skill-card').first().locator('.plugin-card__install-panel pre'),
-  ).toContainText('--target codex');
+  await expect(page.locator('.install-dialog')).toHaveCount(0);
+  await card.getByRole('button', { name: 'Install frontend-design', exact: true }).click();
+  await expect(page.getByRole('dialog').locator('.plugin-card__install-panel pre')).toContainText('--target codex');
+  await page.keyboard.press('Escape');
   await page.goto('./?tab=skills&skillScan=all');
   await expect(
     page.getByRole('heading', { level: 2, name: 'Find your Skills', exact: true }),
@@ -119,15 +121,16 @@ test('Skills catalog and detail reuse the plugin scope choice and copy the proje
   await page.goto('plugins/?tab=skills&skillScan=all');
   const card = page.locator('.skills-catalog .skill-card').first();
   await card.getByRole('button', { name: 'Install frontend-design' }).click();
-  const scope = card.locator('.install-scope');
+  const scope = page.getByRole('dialog').locator('.install-scope');
   await expect(scope.getByRole('button', { name: 'This computer' })).toHaveAttribute('aria-pressed', 'true');
   await scope.getByRole('button', { name: 'This project' }).click();
   await expect(scope.getByRole('button', { name: 'This project' })).toHaveAttribute('aria-pressed', 'true');
   const scopedCommand = 'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
-  await expect(card.locator('.command-snippet code')).toHaveText(scopedCommand);
-  await card.screenshot({ path: testInfo.outputPath('skills-card-project-mobile.png'), animations: 'disabled' });
-  await card.getByRole('button', { name: 'Copy command' }).click();
+  await expect(page.getByRole('dialog').locator('.command-snippet code')).toHaveText(scopedCommand);
+  await page.getByRole('dialog').screenshot({ path: testInfo.outputPath('skills-card-project-mobile.png'), animations: 'disabled' });
+  await page.getByRole('dialog').getByRole('button', { name: 'Copy command' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(scopedCommand);
+  await page.keyboard.press('Escape');
   await card.getByRole('link', { name: 'frontend-design' }).click();
   const detail = page.locator('#skill-install');
   await expect(detail.locator('.install-scope').getByRole('button', { name: 'This project' })).toHaveAttribute('aria-pressed', 'true');
@@ -264,10 +267,11 @@ test('legacy API website publisher offers safe Install while malformed sources r
     'href', 'https://uizze.com',
   );
   await recovered.getByRole('button', { name: 'Install ui-radar' }).click();
-  await expect(recovered.locator('.command-snippet code')).toHaveText(
+  await expect(page.getByRole('dialog').locator('.command-snippet code')).toHaveText(
     'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar',
   );
-  await expect(recovered.locator('.command-snippet code')).not.toContainText('skills.sh');
+  await expect(page.getByRole('dialog').locator('.command-snippet code')).not.toContainText('skills.sh');
+  await page.keyboard.press('Escape');
   await recovered.getByRole('link', { name: 'ui-radar', exact: true }).click();
   await expect(page).toHaveURL(/\/skills\/\?id=skills-sh/);
   await expect(page.getByRole('heading', { level: 1, name: 'ui-radar' })).toBeVisible();
@@ -337,13 +341,13 @@ test('unverified GitHub Skill names open the installer picker without guessing a
   await page.goto('plugins/?tab=skills&skillScan=all');
   const card = page.locator('.skills-catalog .skill-card').first();
   await card.getByRole('button', { name: 'Install Unverified listing', exact: true }).click();
-  await expect(card.locator('.command-snippet code')).toHaveText(
+  await expect(page.getByRole('dialog').locator('.command-snippet code')).toHaveText(
     'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills',
   );
-  await expect(card).toContainText(
+  await expect(page.getByRole('dialog')).toContainText(
     'Select the exact Skill in the installer; this catalog name is not verified.',
   );
-  await expect(card.locator('.command-snippet')).not.toContainText('BAD$(echo injected)');
+  await expect(page.getByRole('dialog').locator('.command-snippet')).not.toContainText('BAD$(echo injected)');
 });
 
 
@@ -398,9 +402,10 @@ test('Website publisher Skills install with UAP and open their own detail page',
     'https://uizze.com',
   );
   await card.getByRole('button', { name: 'Install ui-radar' }).click();
-  await expect(card.locator('.command-snippet code')).toContainText(
+  await expect(page.getByRole('dialog').locator('.command-snippet code')).toContainText(
     'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar',
   );
+  await page.keyboard.press('Escape');
   await card.getByRole('link', { name: 'ui-radar', exact: true }).click();
   await expect(page).toHaveURL(/\/skills\/\?id=skills-sh/);
   await expect(page.getByRole('heading', { level: 1, name: 'ui-radar' })).toBeVisible();
@@ -537,9 +542,10 @@ test('explicit legacy GitHub URL sources display a safe install command', async 
   const card = page.locator('.skills-catalog .skill-card').first();
   await expect(card).toHaveCount(1);
   await card.getByRole('button', { name: 'Install frontend-design' }).click();
-  await expect(card.locator('.command-snippet code')).toHaveText(
+  await expect(page.getByRole('dialog').locator('.command-snippet code')).toHaveText(
     'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design',
   );
+  await page.keyboard.press('Escape');
   await expect(card.getByRole('link', { name: 'GitHub source' })).toHaveAttribute(
     'href', 'https://github.com/anthropics/skills',
   );

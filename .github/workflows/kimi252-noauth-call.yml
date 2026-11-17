@@ -1,7 +1,7 @@
 name: Kimi 2.5.2 native MCP call without vendor auth
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - '.github/workflows/kimi252-noauth-call.yml'
       - 'scripts/kimi252_noauth_*.py'
@@ -42,12 +42,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: kimi252-noauth-call-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: kimi252-noauth-call-${{ github.event_name }}-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.event_name == 'pull_request' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 jobs:
   native-call:
     name: Genuine Kimi manual one-shot call and App lifecycle (${{ matrix.os }})
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

@@ -2,7 +2,7 @@
 
 The project-scoped agentplugins doctor command is a read-only observer. It reports what UAP recorded or safely verifies selected project-owned files. It cannot prove that a native client accepted a workspace, loaded a Skill, started an MCP server, used a tool or authenticated a vendor account.
 
-This document describes the **source implementation in this PR**. A merged source revision is not proof that a published npm CLI release already contains the diagnostics.
+These diagnostics and the confirmed-installation trust behavior below are included in [CLI 0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) (source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`). Readiness observations remain distinct from native runtime proof.
 
 ## Scope and commands
 
@@ -61,8 +61,8 @@ respected. Tool permissions and other settings are preserved. A later ordinary
 `copilot` launch can use that remembered trust without a separate folder prompt.
 Removing a plugin retains this user choice. Doctor remains read-only; revoked
 trust or an older installation can be restored by a confirmed installation.
-This describes the source change in [#935](https://github.com/777genius/universal-agent-plugins/pull/935),
-not availability in an already published CLI release.
+This behavior from [#935](https://github.com/777genius/universal-agent-plugins/pull/935)
+is included in CLI 0.1.110.
 
 Pi project installation discloses its trust hook in the same review. Pi has
 no trust-file API, so confirmation (or `--yes`) does not write Pi's
@@ -83,9 +83,8 @@ reports the hook path.
 The check does not cover the whole folder. A running Pi session keeps a trust
 decision across `/reload`, and code the trusted extension imports from the
 project's `node_modules`, MCP working directories outside the package and
-data under `.uap` are not part of the digest. Doctor remains read-only. This
-describes a source change, not availability in an already published CLI
-release.
+data under `.uap` are not part of the digest. Doctor remains read-only. This confirmed-installation trust hook is included
+in CLI 0.1.110; update, repair and dependency sync do not grant new trust.
 
 ## Bounded Codex file audit
 
