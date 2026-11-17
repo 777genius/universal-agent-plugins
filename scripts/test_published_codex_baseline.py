@@ -305,7 +305,7 @@ class HistoricalOrchestrationTest(unittest.TestCase):
                     add_count += 1
                     if add_count == 1:
                         skill.parent.mkdir()
-                        skill.write_text("---\\nname: selected\\n---\\n")
+                        skill.write_text("---\nname: selected\n---\n")
                         (project / "uap.toml").write_text("selected")
                         (project / "uap.lock").write_text("selected")
                     document = dto(add_count == 2)
