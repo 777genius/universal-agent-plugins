@@ -97,7 +97,15 @@ class Metadata:
             # Source statx1: both UUID properties require a full security header;
             # ACL absent then represents explicit KAUTH_FILESEC_NOACL.
             if present != {FILESEC_UUID: True, FILESEC_GRPUUID: True, FILESEC_ACL: False}:
-                raise PresenceRefusal(tuple(present[key] for key in (FILESEC_UUID, FILESEC_GRPUUID, FILESEC_ACL)))
+                presence = tuple(present[key] for key in (FILESEC_UUID, FILESEC_GRPUUID, FILESEC_ACL))
+                try:
+                    print('DARWIN_CACHE_PRESENCE=' + '{"uuid_present":'
+                          + str(presence[0]).lower() + ',"group_uuid_present":'
+                          + str(presence[1]).lower() + ',"acl_present":'
+                          + str(presence[2]).lower() + '}', file=sys.stderr, flush=True)
+                except Exception:
+                    pass
+                raise PresenceRefusal(presence)
             require(self.list(fd, None, 0, 0) == 0)
             ctypes.set_errno(0)
             size = self.get(fd, b'com.apple.ResourceFork', None, 0, 0, 0)

@@ -10475,7 +10475,8 @@ class ClaudeRetirementDiagnosticContracts(unittest.TestCase):
                     return 0
                 native.query = query
                 darwin["check"].__globals__["_METADATA"] = native
-                with patch.object(os, "fstat", return_value=object()):
+                with (patch.object(os, "fstat", return_value=object()),
+                      patch("builtins.print") as printed):
                     try:
                         metadata(123)
                     except ValueError as error:
@@ -10485,6 +10486,26 @@ class ClaudeRetirementDiagnosticContracts(unittest.TestCase):
                     else:
                         self.fail("presence mismatch was admitted")
                 self.assertEqual(released, [1])
+                printed.assert_called_once()
+                args, kwargs = printed.call_args
+                self.assertEqual(kwargs, {"file": sys.stderr, "flush": True})
+                self.assertEqual(len(args), 1)
+                prefix = "DARWIN_CACHE_PRESENCE="
+                self.assertTrue(args[0].startswith(prefix))
+                self.assertEqual(json.loads(args[0][len(prefix):]),
+                    dict(zip(("uuid_present", "group_uuid_present", "acl_present"), presence)))
+                self.assertLess(len(args[0].encode("utf-8")), 128)
+                for failure in (RuntimeError("private-print-failure"), KeyboardInterrupt()):
+                    with (patch.object(os, "fstat", return_value=object()),
+                          patch("builtins.print", side_effect=failure)):
+                        if isinstance(failure, Exception):
+                            with self.assertRaisesRegex(darwin["PresenceRefusal"],
+                                    "^Darwin cache metadata authority is unresolved$"):
+                                metadata(123)
+                        else:
+                            with self.assertRaises(KeyboardInterrupt):
+                                metadata(123)
+                self.assertEqual(released, [1, 1, 1])
                 self.assertEqual({key: facts[key] for key in
                     ("uuid_present", "group_uuid_present", "acl_present")},
                     dict(zip(("uuid_present", "group_uuid_present", "acl_present"), presence)))
