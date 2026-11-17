@@ -210,11 +210,14 @@ def public_data(view, label, operation, paths):
     return data
 
 
-def public(bodies, paths, context):
+def public(bodies, paths, context, start, end):
+    context["public_probe_sessions"], context["public_probe_pids"] = set(), set()
     operations = set()
     for label in cycle.PUBLIC:
         cwd, argv = cycle.public_command(label, paths)
-        receipt(load(bodies[label + ".command.json"]), argv, cwd, 30000, 1 if label == "repeat-remove-a" else 0)
+        command = load(bodies[label + ".command.json"])
+        public_inventory(command.pop("inventory"), label, paths, context, start, end)
+        receipt(command, argv, cwd, 30000, 1 if label == "repeat-remove-a" else 0)
         stdout, stderr = bodies[label + ".stdout.log"], bodies[label + ".stderr.log"]
         if label.startswith("git-"):
             require(stdout == stderr == b"", "empty Git streams")
@@ -241,5 +244,33 @@ def public(bodies, paths, context):
 
 def verify(bodies, paths, start, end):
     context = source_states(bodies["cycle-proof.jsonl"], paths, start, end)
-    public(bodies, paths, context)
+    public(bodies, paths, context, start, end)
     return context
+
+
+def public_inventory(value, label, paths, context, start, end):
+    from project_native_gemini_complete_protocol import probes
+    row = closed(value, ("scope", "started_at", "finished_at", "provider_requests", "stream"))
+    require(row["scope"] == cycle.scope(label) and type(row["provider_requests"]) is int and row["provider_requests"] == 0, "public inventory scope/no model")
+    begin = window(row["started_at"], start, end)
+    finish = window(row["finished_at"], begin, end)
+    require(finish-begin <= 30_000_000_000, "public inventory bounded window")
+    body = stream(row["stream"])
+    phases = [2, 1] if label in ("add-a", "add-b", "update-a", "missing-repair-a") else [2, 2, 1] if label in ("repeat-add-a", "unchanged-update-a", "intact-repair-a") else []
+    if not phases:
+        require(not body, "unexpected public inventory")
+        return
+    view = context["views"][label]
+    advertised = [view[key]["recipe"] for key in ("user", cycle.scope(label))]
+    require(len({r["nonce"] for r in advertised}) == 2, "distinct public inventory nonces")
+    rows = body.splitlines(keepends=True)
+    require(body.endswith(b"\n") and len(rows) == sum(phases)*len(advertised), "exact public inventory phase count")
+    sessions, pids = set(context["public_probe_sessions"]), set(context["public_probe_pids"])
+    q = {"advertised": advertised, "operation": "none"}
+    offset, phase_start = 0, begin
+    for count in phases:
+        limit = offset + count*len(advertised)
+        probes(b"".join(rows[offset:limit]), q, False, paths["home"], phase_start, finish, sessions, pids, initialize_only=count==1, complete=True)
+        phase_start = max(window(load(raw)["timestamp"], phase_start, finish) for raw in rows[offset:limit])
+        offset = limit
+    context["public_probe_sessions"], context["public_probe_pids"] = sessions, pids

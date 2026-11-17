@@ -40,9 +40,18 @@ def _sqlite_config(runtime):
 
 def _regular_bytes(path, limit):
     before = path.lstat()
-    if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
-            or not 0 <= before.st_size <= limit or path.resolve(strict=True) != path):
-        raise ValueError("Codex audit file is not bounded, regular and exclusively linked")
+    regular, canonical = stat.S_ISREG(before.st_mode), None
+    reason = ("nonregular" if not regular else "multiple-links" if before.st_nlink != 1
+              else "out-of-bound" if not 0 <= before.st_size <= limit else None)
+    if reason is None:
+        canonical = path.resolve(strict=True) == path
+        if not canonical:
+            reason = "noncanonical"
+    if reason is not None:
+        facts = {"reason": reason, "size": before.st_size, "bound": limit,
+                 "nlink": before.st_nlink, "regular": regular, "canonical": canonical}
+        raise ValueError("Codex audit file is not bounded, regular and exclusively linked; "
+                         + json.dumps(facts, sort_keys=True))
     descriptor = _FILES["open_member"](path)
     try:
         held = os.fstat(descriptor)
@@ -157,6 +166,79 @@ SYSTEM_SKILL_FILES = {
     "skill-installer/scripts/install-skill-from-github.py": (11917, "38f311b75664bb063808f982c600271ebc4b560830f491705190f88a94e3e781"),
     "skill-installer/scripts/list-skills.py": (2948, "9d6dfb2abf3afeee7f027a89fb1626b918a973da18f4eb6c25681286301beb41"),
 }
+# Exact Windows rust-v0.153.4 distribution payload, verified in official asset
+# 545043433: ZIP SHA-256 c016b0e6968b78586919c720d2685a03712f6d5f11bcd9d6f92c91eb8c41ba16,
+# executable SHA-256 444a3f0008050605cae73cd9b7a2dcac61294062dfaab56dd20430fd6498518b.
+# Every complete embedded member was matched to its pinned source path/body;
+# these are exact platform bytes, never a runtime newline normalization rule.
+SYSTEM_SKILL_FILES_LF = SYSTEM_SKILL_FILES
+SYSTEM_SKILL_MARKER_LF = SYSTEM_SKILL_MARKER
+SYSTEM_SKILL_MARKER_WINDOWS = b"9ba055b801325a\n"
+SYSTEM_SKILL_FILES_WINDOWS = {
+    "imagegen/LICENSE.txt": (10977, "44e03f7e263eb3ad256440c1eeab5e49168baff5a78ecef9a5447261cf3a91bc"),
+    "imagegen/SKILL.md": (19516, "706d4d96e1d5c9e6023fe3ccabba1bb34b364024d344fd25b8515ec7d28fe3c4"),
+    "imagegen/agents/openai.yaml": (281, "1797be4076717806df54aa9331c07ac8eebe32c69f32132d5858712b05406146"),
+    "imagegen/assets/imagegen-small.svg": (2894, "087c1632a3b8a2ed4d6218952e7ba7ae2221a979f84233667ed2c587998784da"),
+    "imagegen/assets/imagegen.png": (1711, "95952f644064eb9e890f98d8db07216347186526e4c41ad66d3420629eb86e20"),
+    "imagegen/references/cli.md": (9897, "29dc8c1e3e5d9a20aee587fedb46a464552b6ec118d93bbd90c8d86e30502c8c"),
+    "imagegen/references/codex-network.md": (1812, "cba3b4d24d30f38adf8021b6e9b49ec5261a9e45e7df31047ec451c916c99b0a"),
+    "imagegen/references/image-api.md": (6162, "695909437b792aff171477dba127476a11235c220beb06533cce7c1495a042c8"),
+    "imagegen/references/prompting.md": (8394, "d957a45cb24fe2cf1a85858674fc533f15a5f4621355f559a13a93168999c2dd"),
+    "imagegen/references/sample-prompts.md": (18039, "76cc8a2988efb6e844a99ff9908b2b11cc07467510fc909002abcc0ee3f0701b"),
+    "imagegen/scripts/image_gen.py": (35697, "3666b807de3f0a1d0a4a767b886d612c0b8f71025c500bba6693d1c6995a0873"),
+    "imagegen/scripts/remove_chroma_key.py": (14354, "fa2989807052b857bed08f7fee0caa2502b54c46afc0a6f28cd706c25f636630"),
+    "openai-docs/LICENSE.txt": (10977, "44e03f7e263eb3ad256440c1eeab5e49168baff5a78ecef9a5447261cf3a91bc"),
+    "openai-docs/SKILL.md": (5484, "4371fcc6652d78309ccf5e7710a4fd22314ad7f1f4928a6c172ddae80c87cc87"),
+    "openai-docs/agents/openai.yaml": (376, "0dd6c5ffa81a09782fd24cfa9fe1ec5c9633c90500b166ae18a462e613e876be"),
+    "openai-docs/assets/openai-small.svg": (1094, "85ef0a2cde497872edec1525f1d538ccc42b33ff47acdbb88499a1631a4bdb21"),
+    "openai-docs/assets/openai.png": (1429, "156cc84d7332bfe95b310350bd470b690d22aa33d65340cc6c2e06022946194c"),
+    "openai-docs/references/codex-self-knowledge.md": (7488, "f945bf2a7cea6892d7a11ac38fb18b744fefd6d273654a8410c4c79e9f647fbe"),
+    "openai-docs/references/latest-model.md": (2119, "8be54126ee4deec66d8257ae191ae0ecbd2c1022b2a47c6e959b11ae34aa5c97"),
+    "openai-docs/references/mcp-diagnostics.md": (2345, "e9df2b2f8faa28930db4a2937cdb3665b4548ac958e80a8601a5dd0da1e6fad0"),
+    "openai-docs/references/model-migration.md": (5099, "c3cc7848bf52e9ed2f03cb3a1466bd0406d7965b7782452b7d946376084fc91d"),
+    "openai-docs/references/model-selection.md": (1356, "ce020100a28004500c927abcd57cff154c5c360eb72d918ef7d72492e2484cce"),
+    "openai-docs/references/official-docs.md": (3362, "b2301d72b8092be5f5727d8d1cbc75740887d836f4f13b469f40c1db16b39fe3"),
+    "openai-docs/references/prompting-guide.md": (16034, "31743be488f243b3fa59f8b73e4aaf6c2359e224ac642f93f9719a931acf16d5"),
+    "openai-docs/references/upgrade-guide.md": (1072, "f1962dd5947041fb5344b095e639fe90c3e9ecfbb00c20d2394c912d1feec7c7"),
+    "openai-docs/references/upgrading-to-gpt-5p6-sol.md": (23541, "1f77377c26c5754a0bfeaad72c9ac16ffcf25684aa51e220987a0a873aab9ca0"),
+    "openai-docs/scripts/fetch-codex-manual.mjs": (16683, "1b9a36d3e59ddff3317d1faa182e5cd4967db14ff993593a5f98d5682dbffbe4"),
+    "openai-docs/scripts/resolve-latest-model-info": (1077, "8f5006efa15c034ede29821b627d7b86c43f7dfaab422d335f45b9be8d04e2d5"),
+    "openai-docs/scripts/resolve-latest-model-info.cjs": (4102, "91eb045abbf96ffb361e6ec2d3606540570fb32383edb22061f5549381ce0ee5"),
+    "plugin-creator/SKILL.md": (11716, "9dba03c079abfbc680e8fca146069f054c1b0c5e9bcb5e5a9effcf86a95f67c6"),
+    "plugin-creator/agents/openai.yaml": (345, "693e1667acc879a7b966cf073fee6cf1f268974983c00b6b779dab031d79185e"),
+    "plugin-creator/assets/plugin-creator-small.svg": (1322, "edb19a0c59f9a1b5253b9af6d2f9f03cac27b2fe6a0275ebccbbdbff07891a1a"),
+    "plugin-creator/assets/plugin-creator.png": (1563, "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"),
+    "plugin-creator/references/installing-and-updating.md": (6144, "476850a165cd63f8f3def5968b302c77e3cd5250af4df2dec1575a2eb4b51467"),
+    "plugin-creator/references/plugin-json-spec.md": (9397, "254f18eb2cf9390c0b85f0b885db3b1facf90e060257cde70b6e55e21797382e"),
+    "plugin-creator/scripts/create_basic_plugin.py": (12100, "a0dfca09c7ecc8f30012cb2111acfdf733eac7c5bd73e4edb154a45487de303f"),
+    "plugin-creator/scripts/identifier_validation.py": (804, "680ce5b775ee5410ecf808fad40350dc4df2cc4a7003363f4c4c7f9d7c0be918"),
+    "plugin-creator/scripts/read_marketplace_name.py": (1697, "0be0d7e327688b70300baa4fff448a8e24f4c00ce71340f9c6299d21c333cc65"),
+    "plugin-creator/scripts/update_plugin_cachebuster.py": (3134, "d37acec7cfc34fb44db35bce437bf5ee8eb6da3484aece565e3a6e70e2bf121b"),
+    "plugin-creator/scripts/validate_plugin.py": (22396, "1e6cb914505b458856c2cfab7d18a224731c743ef47e0c9d78afe64f35b67f7c"),
+    "review-agent/SKILL.md": (2718, "bb46315f6bc4b7051c05f807d19b1689b20418ac6c42590406d805c10fa2fd1a"),
+    "review-agent/agents/openai.yaml": (258, "579774dde24f21ee57d5cb63f69c2fce0da04b81538c636a0e0dd37dc836c811"),
+    "skill-creator/SKILL.md": (15540, "cccd291077ec57c6f50ca6529f0f3fb93212da09473effb2fcec808e81b21288"),
+    "skill-creator/agents/openai.yaml": (188, "b750627cdd588fdbb5b46e854d3384d1a504fad3b8ed73ca5d7ead3804df78b6"),
+    "skill-creator/assets/skill-creator-small.svg": (1322, "edb19a0c59f9a1b5253b9af6d2f9f03cac27b2fe6a0275ebccbbdbff07891a1a"),
+    "skill-creator/assets/skill-creator.png": (1563, "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"),
+    "skill-creator/license.txt": (11560, "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"),
+    "skill-creator/references/openai_yaml.md": (2405, "7039d465b05342cbacf861f08d20192ab1eeee112bc5d8ff0fb66234756887a9"),
+    "skill-creator/scripts/generate_openai_yaml.py": (6900, "30c73f1ea7d47dbab2b231bb92c5bf9026f1ad14ba8e3b3a4a544092c4d24ebe"),
+    "skill-creator/scripts/init_skill.py": (10622, "74dfa9361a93bee6932d6cbb332ed19ac26a27ba3800e69fb07ba7512c1025f9"),
+    "skill-creator/scripts/quick_validate.py": (4376, "6068513d924ed3559e186dfcdead7439129828dcf402167fd925c06dffbf2806"),
+    "skill-installer/LICENSE.txt": (11560, "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"),
+    "skill-installer/SKILL.md": (3425, "2892d8b2fb11631132118f340aed80ae17e59d5a571fc2c4f4a4a7e73f139d52"),
+    "skill-installer/agents/openai.yaml": (226, "bd64b4d6893138706b3e3540f266ab809ccdcd08375652ae9f9d1e029fe50d02"),
+    "skill-installer/assets/skill-installer-small.svg": (926, "099e5a4b5e5f0f918a8de0d2059f0a86211da623dbb75f86f13dc9f7c08c778d"),
+    "skill-installer/assets/skill-installer.png": (1086, "d0a230b1a79b71b858b7c215a0fbb0768d6459c14ea4ef80c61592629bf0e605"),
+    "skill-installer/scripts/github_utils.py": (680, "2f9702afb9f0da740181fa4a3214f663e460f80cd5cea2e7dcaab00ad269082e"),
+    "skill-installer/scripts/install-skill-from-github.py": (12272, "110cc7e4e395c2c9ba070d47db7d21be5164591c35015ae364fc9c9905b08de8"),
+    "skill-installer/scripts/list-skills.py": (3054, "2cd6eecbaf9be7c86e80a14d7042f95d6abb83b6baee5f17dd075fa7a71c83de"),
+}
+if os.name == "nt":
+    SYSTEM_SKILL_FILES = SYSTEM_SKILL_FILES_WINDOWS
+    SYSTEM_SKILL_MARKER = SYSTEM_SKILL_MARKER_WINDOWS
+
 SYSTEM_SKILL_DIRECTORIES = frozenset(
     parent.as_posix() for name in SYSTEM_SKILL_FILES for parent in Path(name).parents
     if parent != Path("."))

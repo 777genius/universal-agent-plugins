@@ -219,7 +219,18 @@ def fixture(nonces=None, omit_user_a=False):
         elif not label.startswith("git-"):
             verb = {"repeat-add-a": "add", "unchanged-update-a": "update", "intact-repair-a": "repair", "missing-repair-a": "repair"}.get(label, label.split("-")[0])
             stdout = raw({"schema_version": 1, "command": verb, "result": "success", "data": public_data(*by_stage[label], label, paths)})
-        bodies[label + ".command.json"] = raw({"argv": argv, "cwd": cwd, "exit": 1 if label == "repeat-remove-a" else 0, "error": False, "context_error": False, "elapsed_ms": 1, "cleanup": cycle.CLEANUP})
+        phases = [2, 1] if label in ("add-a", "add-b", "update-a", "missing-repair-a") else [2, 2, 1] if label in ("repeat-add-a", "unchanged-update-a", "intact-repair-a") else []
+        inventory_rows = []
+        for phase_index, method_count in enumerate(phases):
+            for selected_index, key in enumerate(("user", cycle.scope(label))):
+                r = recipes["user"]["U-one"] if key == "user" else by_stage[label][1]
+                pid = 10000 + cycle.PUBLIC.index(label)*10 + phase_index*2 + selected_index
+                for method in range(method_count):
+                    inventory_rows.append({"method": "initialize" if method == 0 else "tools/list", "nonce": r["nonce"], "pid": pid,
+                                           "session": str(pid), "timestamp": stamp(1), "facts": None})
+        inventory = {"scope": cycle.scope(label), "started_at": stamp(1), "finished_at": stamp(2), "provider_requests": 0,
+                     "stream": stream(b"".join(raw(row) + b"\n" for row in inventory_rows))}
+        bodies[label + ".command.json"] = raw({"inventory": inventory, "argv": argv, "cwd": cwd, "exit": 1 if label == "repeat-remove-a" else 0, "error": False, "context_error": False, "elapsed_ms": 1, "cleanup": cycle.CLEANUP})
         bodies[label + ".stdout.log"], bodies[label + ".stderr.log"] = stdout, stderr
     aggregates = {name: [] for name in cycle.AGGREGATES}
     aggregates["cycle-proof.jsonl"] = proof_rows
@@ -348,6 +359,34 @@ class GeminiCompleteTests(unittest.TestCase):
         change(bodies, source)
         with self.assertRaises(ValueError):
             self.admit(bodies, source)
+
+    def test_public_completion_inventory_is_exact_and_cannot_claim_model_authority(self):
+        for mutation in ("missing-field", "empty", "missing", "extra", "reordered", "foreign", "call", "provider", "phase-pid", "phase-clock", "comma-clock", "overprecision-clock"):
+            with self.subTest(mutation=mutation):
+                def change(bodies, _source):
+                    key = "add-a.command.json"
+                    command = runtime.strict_json(bodies[key])
+                    if mutation == "missing-field":
+                        del command["inventory"]
+                    else:
+                        inventory = command["inventory"]
+                        events = [runtime.strict_json(line) for line in complete.stream(inventory["stream"]).splitlines()]
+                        if mutation == "empty": events = []
+                        elif mutation == "missing": events.pop()
+                        elif mutation == "extra": events.append(copy.deepcopy(events[-1]))
+                        elif mutation == "reordered": events[0]["method"], events[1]["method"] = events[1]["method"], events[0]["method"]
+                        elif mutation == "foreign": events[-1]["nonce"] = "0"*32
+                        elif mutation == "call": events[-1]["method"] = "tools/call"
+                        elif mutation == "provider": inventory["provider_requests"] = 1
+                        elif mutation == "phase-pid": events[-2]["pid"] = events[0]["pid"]
+                        elif mutation == "phase-clock": events[-1]["timestamp"] = stamp(0)
+                        elif mutation == "comma-clock":
+                            for row in events: row["timestamp"] = "2026-10-27T00:00:01,123Z"
+                        elif mutation == "overprecision-clock":
+                            for row in events: row["timestamp"] = "2026-10-27T00:00:01.0000000001Z"
+                        inventory["stream"] = stream(b"".join(raw(row)+b"\n" for row in events))
+                    bodies[key] = raw(command)
+                self.refuses(change)
 
     def test_full_coherent_independent57_member_fixture_and_read_only_result(self):
         bodies, source = fixture()

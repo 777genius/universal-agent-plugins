@@ -1169,6 +1169,24 @@ def copilot_disabled_preference_only(before, after_add, after_remove,
             and after_remove.get("match_counts") == expected_after)
 
 
+def _codex_system_skill_checkpoint(home, original):
+    """Join the full pinned bundle proof to the original objects and fresh bytes."""
+    profile = home / ".codex"
+    files, _, metadata = CODEX_RUNTIME_AUDIT["system_skill_initialization"](profile)
+    if metadata != original:
+        raise ValueError("Codex pinned system Skill authority changed")
+    observed = scoped_snapshot((home,))
+    for path, held in metadata.items():
+        key = "metadata:0:" + path.relative_to(home).as_posix()
+        if observed.get(key) != held:
+            raise ValueError("Codex pinned system Skill snapshot identity changed")
+    for path, digest in files.items():
+        if observed.get(home.name + "/" + str(path.relative_to(home))) != digest:
+            raise ValueError("Codex pinned system Skill snapshot bytes changed")
+    return {profile.name + "/" + str(path.relative_to(profile)): digest
+            for path, digest in files.items()}
+
+
 def native_identity_residuals(native_roots, identity, observed_paths, target,
                               component_names=()):
     """After remove, reject any remaining named native file/config entry.
@@ -2088,6 +2106,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     codex_skill_case = target == "codex" and kind == "skill"
     codex_runtime = None
     codex_plugin_sqlite = None
+    codex_system_metadata = None
+    codex_system_skill_proof = None
     codex_add_ready = False
     codex_repeat_ready = False
     def assert_case_unchanged():
@@ -2129,6 +2149,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         codex_runtime = CODEX_RUNTIME_AUDIT["CodexRuntimeAudit"](
             AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign)
         assert_case_unchanged()
+        _, _, codex_system_metadata = CODEX_RUNTIME_AUDIT["system_skill_initialization"](
+            home / ".codex")
+        _codex_system_skill_checkpoint(home, codex_system_metadata)
     if target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
         # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
         # Author these fixture objects before protecting every byte and identity.
@@ -2147,6 +2170,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         assert_case_unchanged()
         bundle_files, bundle_directories, bundle_metadata = (
             CODEX_RUNTIME_AUDIT["plugin_initialization"](home / ".codex"))
+        system_root = home / ".codex/skills/.system"
+        codex_system_metadata = {
+            path: fact for path, fact in bundle_metadata.items()
+            if path == system_root.parent or path.is_relative_to(system_root)}
         initialized_home = scoped_snapshot((home,))
         # Admit only exact artifacts validated by the bounded Codex initialization
         # proofs. Every other old or newly created key is protected.
@@ -2457,6 +2484,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     if digest in ("symlink", "unreadable", "non-regular")]
     # The remove step may create new native registrations after the add snapshot.
     # Rescan the disposable roots; preserve earlier observed unsafe paths too.
+    codex_system_files = None
+    if codex_system_metadata is not None and cleanup and cleanup["exit_code"] == 0:
+        assert_case_unchanged()
+        codex_system_files = _codex_system_skill_checkpoint(home, codex_system_metadata)
     native_residuals = (
         native_identity_residuals(
             native_roots, identity,
@@ -2464,6 +2495,23 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             target, native_components)
         if cleanup and cleanup["exit_code"] == 0 else []
     )
+    codex_system_residuals_verified = False
+    if codex_system_files is not None:
+        if _codex_system_skill_checkpoint(home, codex_system_metadata) != codex_system_files:
+            raise ValueError("Codex pinned system Skill inventory changed during residual scan")
+        assert_case_unchanged()
+        codex_system_residuals_verified = bool(
+            native_residuals and all(path in codex_system_files for path in native_residuals)
+            and (codex_skill_case or (native_uninstall
+                 and native_uninstall.get("completed") is True
+                 and native_uninstall.get("native_plugin_absent") is True
+                 and native_uninstall.get("native_marketplace_absent") is True)))
+        if codex_system_residuals_verified:
+            codex_system_skill_proof = {
+                "status": "verified-unchanged-pinned-system-files-at-checkpoint",
+                "native_version": "0.153.4",
+                "residuals": {path: codex_system_files[path] for path in native_residuals},
+                "atomic_snapshot_claimed": False, "writer_closure_claimed": False}
     # Preserve truthful disk-state evidence without equating passive cached
     # source/log files to an active Qoder/Codex plugin registration.
     passive_retained = []
@@ -2512,7 +2560,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                  and copilot_native_after_remove["status"] == "absent"))
         and not post_remove_identity_registered
         and (not native_residuals or copilot_disabled_setting_retained
-             or claude_retired_residuals_verified)
+             or claude_retired_residuals_verified or codex_system_residuals_verified)
         and (kind != "skill" or (post_removal_skill is None
                                   and not post_removal_leftovers and not post_lock_pinned
                                   and not post_skill_tree_delta))
@@ -2626,6 +2674,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "removal_verified": removal_verified, "native_residuals": native_residuals,
             **({"claude_cache_retirement": claude_retirement_proof}
                if claude_retirement_proof is not None else {}),
+            **({"codex_system_skill_retention": codex_system_skill_proof}
+               if codex_system_skill_proof is not None else {}),
             "retained_passive_native_files": sorted(set(passive_retained)),
             "qoder_passive_log_link_verified": qoder_passive_log_link_verified,
             "qoder_native_after_repeat": qoder_native_before_remove,

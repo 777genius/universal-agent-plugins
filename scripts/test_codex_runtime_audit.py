@@ -525,6 +525,39 @@ class CodexRuntimeStateTest(unittest.TestCase):
     def check(self):
         return audit.runtime_state(self.runtime, self.scratch, self.baseline)
 
+    def test_file_refusal_facts_are_fixed_and_never_read_rejected_bodies(self):
+        private = self.root / "private-path-never-print"
+        private.write_bytes(b"private-body-never-print")
+        alias_parent = self.root / "alias"
+        alias_parent.mkdir()
+        linked = self.root / "linked"
+        os.link(private, linked)
+        cases = [(self.scratch, 0, "nonregular", False),
+                 (linked, 64, "multiple-links", True)]
+        single = self.root / "single"
+        single.write_bytes(private.read_bytes())
+        cases.extend([(single, 0, "out-of-bound", True),
+                      (alias_parent / ".." / single.name, 64, "noncanonical", True)])
+        for path, bound, reason, regular in cases:
+            with (self.subTest(reason=reason),
+                  patch.dict(audit._FILES, {"open_member": unittest.mock.Mock()}),
+                  patch.object(Path, "resolve", autospec=True, side_effect=Path.resolve) as resolve):
+                with self.assertRaises(ValueError) as caught:
+                    audit._regular_bytes(path, bound)
+                audit._FILES["open_member"].assert_not_called()
+                if reason != "noncanonical":
+                    resolve.assert_not_called()
+                prefix, raw = str(caught.exception).split("; ", 1)
+                self.assertEqual(prefix, "Codex audit file is not bounded, regular and exclusively linked")
+                facts = json.loads(raw)
+                self.assertEqual(set(facts), {"reason", "size", "bound", "nlink", "regular", "canonical"})
+                self.assertEqual(facts, {"reason": reason, "size": path.lstat().st_size,
+                                        "bound": bound, "nlink": path.lstat().st_nlink,
+                                        "regular": regular,
+                                        "canonical": False if reason == "noncanonical" else None})
+                self.assertNotIn(str(self.root), raw)
+                self.assertNotIn("private", raw)
+
     def test_wal_representation_changes_require_identical_full_logical_state(self):
         connection = sqlite3.connect(self.database)
         self.addCleanup(connection.close)
@@ -1290,6 +1323,40 @@ class CodexSystemSkillInitializationTest(unittest.TestCase):
             self.assertEqual(set(metadata), set(files) | set(directories))
             self.assertNotIn(foreign, metadata)
             self.assertEqual(foreign.read_bytes(), b"foreign untouched")
+
+    def test_platform_bundle_pins_accept_only_exact_embedded_line_endings_and_marker(self):
+        name = "imagegen/agents/openai.yaml"
+        lf = b'interface:\n  display_name: "Image Gen"\n  short_description: "Generate or edit images for websites, games, and more"\n  icon_small: "./assets/imagegen-small.svg"\n  icon_large: "./assets/imagegen.png"\n  default_prompt: "Use $imagegen to make or edit an image for this project."\n'
+        selected = (audit.SYSTEM_SKILL_FILES_WINDOWS, audit.SYSTEM_SKILL_MARKER_WINDOWS) if os.name == "nt" else (
+            audit.SYSTEM_SKILL_FILES_LF, audit.SYSTEM_SKILL_MARKER_LF)
+        self.assertEqual((audit.SYSTEM_SKILL_FILES, audit.SYSTEM_SKILL_MARKER), selected)
+        self.assertEqual(set(audit.SYSTEM_SKILL_FILES_WINDOWS), set(audit.SYSTEM_SKILL_FILES_LF))
+        self.assertEqual(len(audit.SYSTEM_SKILL_FILES_WINDOWS), 59)
+        for windows in (False, True):
+            files = audit.SYSTEM_SKILL_FILES_WINDOWS if windows else audit.SYSTEM_SKILL_FILES_LF
+            marker = audit.SYSTEM_SKILL_MARKER_WINDOWS if windows else audit.SYSTEM_SKILL_MARKER_LF
+            body = lf.replace(b"\n", b"\r\n") if windows else lf
+            self.assertEqual(files[name], (len(body), audit.hashlib.sha256(body).hexdigest()))
+            for mutation in (None, "other-line-endings", "other-marker"):
+                with self.subTest(windows=windows, mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                    profile = Path(temporary).resolve() / ".codex"
+                    root = profile / "skills/.system"
+                    path = root / name
+                    path.parent.mkdir(parents=True)
+                    path.write_bytes((lf if windows else lf.replace(b"\n", b"\r\n"))
+                                     if mutation == "other-line-endings" else body)
+                    alternate = audit.SYSTEM_SKILL_MARKER_LF if windows else audit.SYSTEM_SKILL_MARKER_WINDOWS
+                    (root / ".codex-system-skills.marker").write_bytes(
+                        alternate if mutation == "other-marker" else marker)
+                    with patch.object(audit, "SYSTEM_SKILL_FILES", {name: files[name]}), patch.object(
+                            audit, "SYSTEM_SKILL_DIRECTORIES", {"imagegen", "imagegen/agents"}), patch.object(
+                            audit, "SYSTEM_SKILL_MARKER", marker):
+                        if mutation is None:
+                            verified, _, _ = audit.system_skill_initialization(profile)
+                            self.assertEqual(verified[path], files[name][1])
+                        else:
+                            with self.assertRaises(ValueError):
+                                audit.system_skill_initialization(profile)
 
     def test_partial_extra_changed_marker_and_file_aliases_refuse(self):
         mutations = ("partial", "extra", "bytes", "marker", "symlink", "hardlink", "directory-link")

@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 )
 
 const geminiCompleteReload = "in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI"
@@ -37,6 +38,12 @@ func (c *geminiCompleteCapture) public() error {
 			cwd = c.Paths["outside"]
 		}
 		row, readErr := geminiCompleteJSON(c.Files[label+".command.json"])
+		if readErr == nil {
+			if err := c.publicInventoryReceipt(label, row); err != nil {
+				return err
+			}
+			delete(row, "inventory")
+		}
 		exit := 0
 		if label == "repeat-remove-a" {
 			exit = 1
@@ -213,4 +220,39 @@ func geminiCompletePublicData(r *geminiCycleRecipe, label, operation string) map
 		data["retained_data_action"] = "run `" + action + "` to delete retained plugin data"
 	}
 	return data
+}
+
+func (c *geminiCompleteCapture) publicInventoryReceipt(label string, command map[string]any) error {
+	row, err := geminiCompleteObject(command["inventory"], "scope started_at finished_at provider_requests stream")
+	if err != nil || row["scope"] != geminiCycleScope(label) || row["provider_requests"] != json.Number("0") {
+		return geminiCompleteRefusal()
+	}
+	start, err := geminiCompleteTime(row["started_at"])
+	if err != nil {
+		return err
+	}
+	end, err := geminiCompleteTime(row["finished_at"])
+	if err != nil || start.Before(c.Started) || end.Before(start) || end.After(c.Finished) || end.Sub(start) > 30*time.Second {
+		return geminiCompleteRefusal()
+	}
+	segment, err := geminiCompleteStream(row["stream"])
+	if err != nil {
+		return err
+	}
+	allowed := map[string]*geminiCycleRecipe{}
+	if len(geminiCyclePublicInventoryPhases(label)) > 0 {
+		for _, scope := range []string{"user", geminiCycleScope(label)} {
+			r := c.Proof.Views[label][scope]
+			if r == nil || r.Removed || r.Binding.ClientBindingID == "" {
+				return geminiCompleteRefusal()
+			}
+			allowed[r.Nonce] = r
+		}
+	}
+	sessions, pids, err := geminiCyclePublicInventory(segment, label, allowed, c.Paths["home"], start, end, c.PublicProbeSessions, c.PublicProbePIDs)
+	if err != nil {
+		return err
+	}
+	c.PublicProbeSessions, c.PublicProbePIDs = sessions, pids
+	return nil
 }

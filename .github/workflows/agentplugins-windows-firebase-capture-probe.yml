@@ -112,6 +112,8 @@ jobs:
         run: |
           # Match the source catalog's release-semver fixture for Directory policy.
           # The report binds this source build to its actual checkout and binary.
+          python -B -m unittest discover -s scripts -p test_firebase_runtime_failure.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           go build -trimpath -ldflags='-X main.version=0.1.95' -o "$env:RUNNER_TEMP\agentplugins-source.exe" ./cli/cmd/agentplugins
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Genuine current-source Firebase add, repeat, native attribution and remove
@@ -155,6 +157,10 @@ jobs:
               row = audit.do_case(str(Path(cli).resolve()), 'claude', 'plugin', 'firebase',
                                   6, Path(root), doc['plugin_declared_names'],
                                   doc['signed_release_pins'])
+              if row.get('status') != 'passed':
+                  from runpy import run_path
+                  row['runtime_failure_facts'] = run_path(
+                      'scripts/firebase_runtime_failure.py')['collect'](Path(root) / 'plugin-06')
               report.write_text(json.dumps({
                   'source_sha': actual_head, 'source_tree': actual_tree,
                   'clean_worktree': clean_worktree, 'cli_provenance': 'built-exact-checkout',

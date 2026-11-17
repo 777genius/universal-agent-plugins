@@ -91,7 +91,10 @@ try {
   await cards.nth(firstInstall).getByRole('button', {
     name: `Install ${selected.title}`, exact: true,
   }).click();
-  await expect(cards.nth(firstInstall).locator('.command-snippet code')).toHaveText(
+  await expect(
+    page.getByRole('dialog', { name: `Install ${selected.title}`, exact: true })
+      .locator('.command-snippet code'),
+  ).toHaveText(
     skillInstallCommand(selected)!,
   );
   // Verify default all-Skills discovery, then opt into current inspected evidence.
