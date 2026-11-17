@@ -43,8 +43,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: cline-managed-session-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: false
+  group: cline-managed-session-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   portable-session-contracts:
     # The Linux native journey exercises a genuine Cline binary. This job

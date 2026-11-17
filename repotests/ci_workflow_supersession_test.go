@@ -34,10 +34,12 @@ func readCancellationWorkflow(t *testing.T, name string) cancellationWorkflow {
 func TestCISupersession_RegularPRChecksOnly(t *testing.T) {
 	for name, prefix := range map[string]string{
 		"agentplugins-windows-firebase-capture-probe.yml": "firebase-capture-",
-		"docs-canary.yml":                          "docs-canary-",
-		"remotion-windows-source-diagnostic.yml":   "remotion-win-diagnostic-",
-		"remotion-windows-source-longtemp-e2e.yml": "remotion-win-longtemp-",
-		"scaffold-node-lock-e2e.yml":               "scaffold-node-lock-",
+		"cline-managed-session.yml":                       "cline-managed-session-",
+		"docs-canary.yml":                                 "docs-canary-",
+		"grok-enable-readonly.yml":                        "grok-enable-readonly-",
+		"remotion-windows-source-diagnostic.yml":          "remotion-win-diagnostic-",
+		"remotion-windows-source-longtemp-e2e.yml":        "remotion-win-longtemp-",
+		"scaffold-node-lock-e2e.yml":                      "scaffold-node-lock-",
 	} {
 		t.Run(name, func(t *testing.T) {
 			w := readCancellationWorkflow(t, name)

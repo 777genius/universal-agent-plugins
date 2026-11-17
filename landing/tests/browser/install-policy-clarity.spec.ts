@@ -284,6 +284,66 @@ test('detail distinguishes a signed Project-only route from an exact Git alterna
   expect(errors).toEqual([]);
 });
 
+test('a mounted agent page withdraws its signed Directory example on expiry', async ({ page }) => {
+  const errors = await offline(page);
+  const index = pluginWithOnlyCodex();
+  index.plugins[0]!.trust_state = 'reviewed';
+  const start = new Date();
+  index.expires_at = new Date(start.getTime() + 10 * 60_000).toISOString();
+  await page.clock.install({ time: start });
+  await projections(page, index);
+  await navigate(page, '/agents/codex', 'en');
+
+  const install = page.locator('.agent-page__install');
+  await expect(install.locator('.command-snippet--add code'))
+    .toHaveText('npx -y universal-agent-plugins add i18n-state-00 --target codex');
+  await page.clock.fastForward(11 * 60_000);
+  await expect(install.locator('.command-snippet')).toHaveCount(0);
+  await expect(install.locator('p[role="status"]')).toContainText(
+    wording('en')('registryUi.install.commandsUnavailableStaleDirectory'));
+  await expect(install.locator('p[role="status"]')).toContainText(
+    wording('en')('registryUi.install.thisSignedSnapshotHasExpiredBrowseItsHistoryThenReturnAfterAFreshSnapshotIsPublished'));
+  await expect(install).not.toContainText(wording('en')('registryUi.agentPage.packageExampleSourceHint'));
+  expect(errors).toEqual([]);
+});
+
+test('an agent page never offers a Directory command from a nonpublished review preview', async ({ page }) => {
+  const errors = await offline(page);
+  const index = pluginWithOnlyCodex();
+  index.plugins[0]!.trust_state = 'reviewed';
+  index.data_source = 'review_preview';
+  await projections(page, index);
+  await navigate(page, '/agents/codex', 'en');
+
+  const install = page.locator('.agent-page__install');
+  await expect(install.locator('.command-snippet')).toHaveCount(0);
+  await expect(install.locator('p[role="status"]')).toContainText(
+    wording('en')('registryUi.install.commandsUnavailableInReviewPreview'));
+  await expect(install.locator('p[role="status"]')).toContainText(
+    wording('en')('registryUi.install.unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot'));
+  await expect(install).not.toContainText(wording('en')('registryUi.agentPage.packageExampleSourceHint'));
+  expect(errors).toEqual([]);
+});
+
+for (const authority of ['expired', 'preview'] as const) {
+  test(`the independent local agent example remains available with ${authority} Directory data`, async ({ page }) => {
+    const errors = await offline(page);
+    const index = pluginWithOnlyCodex();
+    index.plugins = [];
+    if (authority === 'preview') index.data_source = 'review_preview';
+    else index.expires_at = new Date(Date.now() - 60_000).toISOString();
+    await projections(page, index);
+    await navigate(page, '/agents/codex', 'en');
+
+    const install = page.locator('.agent-page__install');
+    await expect(install.locator('.command-snippet--add code'))
+      .toHaveText('npx -y universal-agent-plugins add ./my-plugin --target codex');
+    await expect(install).toContainText(wording('en')('registryUi.agentPage.packageExampleSourceHint'));
+    await expect(install.locator('p[role="status"]')).toHaveCount(0);
+    expect(errors).toEqual([]);
+  });
+}
+
 test('a mounted plugin installer withdraws source commands on Directory expiry', async ({ page }) => {
   const errors = await offline(page);
   const index = pluginWithOnlyCodex();

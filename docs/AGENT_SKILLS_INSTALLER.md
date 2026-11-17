@@ -1,9 +1,10 @@
 # Installing Agent Skills
 
 The released `agentplugins` CLI includes `skills add` for public GitHub sources
-and compatible HTTPS publishers. This guide uses the verified CLI 0.1.94
-baseline; newer source-only behavior is labelled separately. The historical
-`plugin-kit-ai` Skills commands remain documented in [SKILLS.md](./SKILLS.md).
+and compatible HTTPS publishers. This guide is verified against
+[CLI 0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110).
+Check `agentplugins version` before following release-specific guidance. The
+historical `plugin-kit-ai` Skills commands remain documented in [SKILLS.md](./SKILLS.md).
 
 A Skill can be installed from a public GitHub repository, a folder URL, or a
 `SKILL.md` URL. The installer keeps its original document, scripts and resources,
@@ -46,11 +47,15 @@ targets; applying also requires `--yes`. `--dry-run` prepares a review without
 applying it. Use `--ref` to disambiguate a GitHub URL whose branch name contains
 slashes. Browser and terminal operate on the same resolved commit.
 
-In the interactive `--no-ui` catalog, enter numbers to toggle selections.
-Use `/query` to search names, paths and descriptions; your basket stays selected
-between searches. `/` clears the filter, `clear` empties the basket, and `done`
+In the interactive `--no-ui` catalog, use the arrow keys to move, Space to
+select Skills, `/` to search, and Enter to review. While searching, Enter applies
+the filter. Escape or Ctrl+C cancels.
+
+For the line-oriented catalog, add `--plain --no-ui`. Enter numbers to toggle
+selections. Use `/query` to search names, paths and descriptions; your basket
+stays selected between searches. `/` clears the filter, `clear` empties the basket, and `done`
 continues to target selection and review. `q`, Escape or an empty line cancels.
-The terminal shows at most 50 matches at once; narrow the query to find more.
+The plain catalog shows at most 50 matches at once; narrow the query to find more.
 
 Keep the CLI running while using its temporary local page. The capability URL
 is private to this session. The page renders safe Markdown and offers the raw
