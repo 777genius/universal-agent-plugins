@@ -5450,6 +5450,55 @@ module.exports = {
             response, "atlassian", "grok"), [])
 
 
+    def test_public_target_states_select_only_owned_target_and_project_finite_enums(self):
+        audit = load_audit()
+        selected = {"client_id": "kiro", "materialization": "materialized",
+                    "activation": "prepared", "authentication": "auth_pending",
+                    "policy": "allowed", "verification": "package_validated",
+                    "path": "/private/account", "credential": "password=private"}
+        response = {"data": {"installations": [
+            {"name": "foreign-private", "clients": [dict(selected, activation="failed")]},
+            {"name": "owned-private", "installation_id": "private-id", "clients": [
+                dict(selected, client_id="claude", activation="failed"), selected]},
+        ]}}
+        original = json.dumps(response, sort_keys=True)
+        observed = audit.public_target_state_observation(response, "owned-private", "kiro")
+        expected = {key: selected[key] for key in
+                    ("materialization", "activation", "authentication", "policy", "verification")}
+        self.assertEqual(observed, {"status": "observed", "selected_installations": 1,
+                                   "selected_bindings": 1, "invalid_rows": 0,
+                                   "states": [expected], "truncated": False})
+        self.assertNotIn("private", json.dumps(observed))
+        self.assertNotIn("credential", json.dumps(observed))
+        self.assertEqual(json.dumps(response, sort_keys=True), original)
+        self.assertEqual(audit.failed_case_diagnostics(
+            {"public_target_states": {"after-add": observed}}),
+            {"public_target_states": {"after-add": observed}})
+
+    def test_public_target_states_bound_rows_and_redact_invalid_values(self):
+        audit = load_audit()
+        for value in (None, {}, {"data": {"installations": "private"}}):
+            self.assertEqual(audit.public_target_state_observation(value, "owned", "kiro"),
+                             {"status": "unobserved" if value is None else "invalid"})
+        client = {"client_id": "kiro", "materialization": ["private"],
+                  "activation": "private", "authentication": True, "policy": None,
+                  "verification": {"private": "secret"}}
+        response = {"data": {"installations": [
+            {"name": "owned", "clients": [client] * 33}] * 33}}
+        observed = audit.public_target_state_observation(response, "owned", "kiro")
+        self.assertEqual(observed["selected_installations"], 32)
+        self.assertEqual(observed["selected_bindings"], 32)
+        self.assertTrue(observed["truncated"])
+        self.assertEqual(observed["states"], [dict.fromkeys(
+            ("materialization", "activation", "authentication", "policy", "verification"), "invalid")])
+        self.assertNotIn("private", json.dumps(observed))
+        variants = [dict(client, activation=value) for value in
+                    ("not_required", "prepared", "manual_activation_required", "active", "failed")]
+        observed = audit.public_target_state_observation(
+            {"data": {"installations": [{"name": "owned", "clients": variants}]}}, "owned", "kiro")
+        self.assertEqual(len(observed["states"]), 4)
+        self.assertTrue(observed["truncated"])
+
     def test_signed_release_requires_same_verified_target_and_immutable_metadata(self):
         audit = load_audit()
         directory = {

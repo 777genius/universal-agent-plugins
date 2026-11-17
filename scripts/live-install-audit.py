@@ -310,7 +310,7 @@ def failed_case_diagnostics(row):
     keys = ("codex_public_add_ready", "codex_public_repeat_ready",
             "repeat_native_unchanged", "repeat_native_runtime_only", "repeat_native_changes",
             "repeat_native_phases", "repeat_verified",
-            "removal_verified", "sentinels_preserved")
+            "removal_verified", "sentinels_preserved", "public_target_states")
     evidence = {key: row[key] for key in keys if row.get(key) is not None}
     if "error" in row:
         evidence["error"] = str(row["error"])[:8192]
@@ -1249,6 +1249,58 @@ def signed_release_public_observation(response, identity, target):
     return evidence[:3]
 
 
+def public_target_state_observation(response, identity, target):
+    """Bounded public enum projection; never installation acceptance evidence."""
+    if response is None:
+        return {"status": "unobserved"}
+    data = response.get("data") if isinstance(response, dict) else None
+    nodes = data.get("installations") if isinstance(data, dict) else None
+    if not isinstance(nodes, list):
+        return {"status": "invalid"}
+    enums = {
+        "materialization": ("absent", "staged", "materialized", "degraded"),
+        "activation": ("not_required", "prepared", "manual_activation_required", "active", "failed"),
+        "authentication": ("not_required", "not_checked", "auth_pending", "authenticated", "failed"),
+        "policy": ("allowed", "blocked", "approval_required"),
+        "verification": ("not_run", "package_validated", "installation_verified", "runtime_verified", "failed"),
+    }
+    selected_nodes = selected_clients = invalid_rows = 0
+    truncated = len(nodes) > 32
+    states = []
+    for node in nodes[:32]:
+        if not isinstance(node, dict):
+            invalid_rows += 1
+            continue
+        if node.get("name") != identity:
+            continue
+        selected_nodes += 1
+        clients = node.get("clients")
+        if not isinstance(clients, list):
+            invalid_rows += 1
+            continue
+        truncated = truncated or len(clients) > 32
+        for client in clients[:32]:
+            if not isinstance(client, dict):
+                invalid_rows += 1
+                continue
+            if client.get("client_id") != target:
+                continue
+            if selected_clients == 32:
+                truncated = True
+                continue
+            selected_clients += 1
+            state = {key: value if isinstance(value := client.get(key), str) and value in allowed
+                     else "invalid" for key, allowed in enums.items()}
+            if state not in states:
+                if len(states) < 4:
+                    states.append(state)
+                else:
+                    truncated = True
+    return {"status": "observed", "selected_installations": selected_nodes,
+            "selected_bindings": selected_clients, "invalid_rows": min(invalid_rows, 32),
+            "states": states, "truncated": truncated}
+
+
 def matching_installations(response, identity, target, kind, item, signed_release_pins=None):
     """Verify the frozen Registry release, never only live self-consistency."""
     signed_release_pins = signed_release_pins or {}
@@ -2014,6 +2066,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # keep native, managed and foreign state inside the same disposable case.
     repeat_add = None
     repeat_list = None
+    repeat_list_json = None
     repeat_identity_ids = []
     repeat_native_unchanged = None
     repeat_native_runtime_only = False
@@ -2336,6 +2389,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
             "listed_identity": listed_identity, "prepared_binding": prepared_binding,
             "signed_release_observation": signed_observation,
+            "public_target_states": {
+                "after-add": public_target_state_observation(listed_json, identity, target),
+                "repeat-add": public_target_state_observation(repeat_list_json, identity, target),
+                "after-remove": public_target_state_observation(post_list_json, identity, target)},
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
