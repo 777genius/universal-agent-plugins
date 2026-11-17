@@ -52,13 +52,13 @@ const { t } = useI18n();
 .install-dialog__overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 1100;
   background: rgb(0 0 0 / 65%);
   backdrop-filter: blur(5px);
 }
 .install-dialog {
   position: fixed;
-  z-index: 101;
+  z-index: 1101;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -72,6 +72,10 @@ const { t } = useI18n();
   background: var(--surface-solid);
   color: var(--text);
   box-shadow: 0 30px 100px rgb(0 0 0 / 40%);
+}
+/* The picker is portaled beside the dialog and must share its modal layer. */
+:global(body:has(.install-dialog) .app-multiselect__content) {
+  z-index: 1110;
 }
 .install-dialog__header {
   display: flex;

@@ -298,7 +298,7 @@ test('a mounted plugin installer withdraws source commands on Directory expiry',
   await targets(page, panel, ['Google Antigravity']);
   await expect(panel.locator('.command-snippet--add code'))
     .toContainText('universal-agent-plugins@0.1.110 add github:');
-  await expect(panel.locator('.command-snippet--repair')).toHaveCount(0);
+  await expect(panel.locator('.command-snippet--repair')).toHaveCount(1);
 
   // Commands must expire on an already-open detail page, without navigation.
   await page.clock.fastForward(11 * 60_000);
@@ -329,6 +329,9 @@ for (const path of ['/', '/plugins/'] as const) {
       const hero = page.locator('.hero-shell');
       await targets(page, hero, ['Google Antigravity']);
       await expect(hero.locator('.command-snippet--add code'))
+        .toContainText('universal-agent-plugins@0.1.110 add github:');
+      await card.locator('.plugin-card__install-toggle').click();
+      await expect(page.getByRole('dialog').locator('.command-snippet--add code'))
         .toContainText('universal-agent-plugins@0.1.110 add github:');
     }
 

@@ -267,10 +267,11 @@ test('legacy API website publisher offers safe Install while malformed sources r
     'href', 'https://uizze.com',
   );
   await recovered.getByRole('button', { name: 'Install ui-radar' }).click();
-  await expect(recovered.locator('.command-snippet code')).toHaveText(
+  await expect(page.getByRole('dialog').locator('.command-snippet code')).toHaveText(
     'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar',
   );
-  await expect(recovered.locator('.command-snippet code')).not.toContainText('skills.sh');
+  await expect(page.getByRole('dialog').locator('.command-snippet code')).not.toContainText('skills.sh');
+  await page.keyboard.press('Escape');
   await recovered.getByRole('link', { name: 'ui-radar', exact: true }).click();
   await expect(page).toHaveURL(/\/skills\/\?id=skills-sh/);
   await expect(page.getByRole('heading', { level: 1, name: 'ui-radar' })).toBeVisible();
@@ -343,7 +344,7 @@ test('unverified GitHub Skill names open the installer picker without guessing a
   await expect(page.getByRole('dialog').locator('.command-snippet code')).toHaveText(
     'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills',
   );
-  await expect(card).toContainText(
+  await expect(page.getByRole('dialog')).toContainText(
     'Select the exact Skill in the installer; this catalog name is not verified.',
   );
   await expect(page.getByRole('dialog').locator('.command-snippet')).not.toContainText('BAD$(echo injected)');

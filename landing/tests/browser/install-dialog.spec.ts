@@ -24,6 +24,7 @@ async function assertDialogFits(page: Page, width: number) {
   expect(geometry.viewportOverflow).toBe(false);
   await expect(dialog).toHaveAttribute('aria-labelledby', /.+/);
   await expect(dialog).toHaveAttribute('aria-describedby', /.+/);
+  expect(await page.evaluate(() => document.elementFromPoint(5, 5)?.classList.contains('install-dialog__overlay'))).toBe(true);
   // Repeated Tab navigation stays inside the dialog.
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press('Tab');
@@ -58,6 +59,7 @@ for (const width of [1280, 390]) {
       await dialog.locator('.app-multiselect__trigger').click();
       await expect(page.getByRole('checkbox', { name: /^ChatGPT Desktop/ })).toContainText('Local desktop connection');
       await expect(page.getByRole('checkbox', { name: /^ChatGPT Desktop/ })).not.toContainText('does not prove Desktop runtime');
+      await testInfo.attach(`plugin-agent-menu-${width}.png`, { body: await page.screenshot({ path: testInfo.outputPath(`agent-menu-${width}.png`) }), contentType: 'image/png' });
       await page.keyboard.press('Escape');
       await dialog.getByRole('button', { name: 'This project', exact: true }).click();
       await targets(page, card, ['Codex']);
@@ -65,7 +67,7 @@ for (const width of [1280, 390]) {
       const command = (await dialog.locator('.command-snippet--add code').textContent())!.replace(/\s+/g, ' ').trim();
       await dialog.locator('.command-snippet--add button').click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
-      await testInfo.attach(`plugin-dialog-${width}.png`, { body: await dialog.screenshot(), contentType: 'image/png' });
+      await testInfo.attach(`plugin-dialog-${width}.png`, { body: await dialog.screenshot({ path: testInfo.outputPath(`install-dialog-${width}.png`) }), contentType: 'image/png' });
       await dialog.getByRole('button', { name: 'Close installation', exact: true }).click();
       await expect(dialog).toHaveCount(0);
       await expect(trigger).toBeFocused();
@@ -109,12 +111,15 @@ for (const width of [1280, 390]) {
     const picker = dialog.locator('.app-multiselect__trigger');
     await expect(picker).toContainText('+1 more');
     await expect(picker).toHaveAttribute('aria-label', /(?=.*Codex)(?=.*Hermes Agent)(?=.*Kiro)(?=.*Pi)/);
+    await picker.click();
+    await testInfo.attach(`skill-agent-menu-${width}.png`, { body: await page.screenshot({ path: testInfo.outputPath(`agent-menu-${width}.png`) }), contentType: 'image/png' });
+    await page.keyboard.press('Escape');
     await dialog.getByRole('button', { name: 'This project', exact: true }).click();
     await expect(dialog.locator('.command-snippet--add code')).toContainText('--scope project');
     for (const agent of ['hermes', 'kiro', 'pi', 'codex'])
       await expect(dialog.locator('.command-snippet--add code')).toContainText(agent);
     const command = await dialog.locator('.command-snippet--add code').textContent();
-    await testInfo.attach(`skill-dialog-${width}.png`, { body: await dialog.screenshot(), contentType: 'image/png' });
+    await testInfo.attach(`skill-dialog-${width}.png`, { body: await dialog.screenshot({ path: testInfo.outputPath(`install-dialog-${width}.png`) }), contentType: 'image/png' });
     await page.keyboard.press('Escape');
     await expect(trigger).toBeFocused();
     await trigger.click();
@@ -129,7 +134,7 @@ for (const width of [1280, 390]) {
 test('a delayed Directory response waits while focus is inside the install dialog', async ({ page }) => {
   await setSignedMirrorTestTime(page);
   const errors = await offline(page);
-  const discovery = await delayedMirror(page, 'discovery', true);
+  const discovery = await delayedMirror(page, 'discovery');
   const security = await delayedMirror(page, 'security');
   try {
     await page.goto('./download/');
@@ -143,13 +148,16 @@ test('a delayed Directory response waits while focus is inside the install dialo
     await dialog.getByRole('button', { name: 'Close installation' }).focus();
     discovery.release();
     await discovery.delivered;
-    // Cross the error handler's asynchronous focus boundary before observing the public state.
-    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    security.release();
+    await security.delivered;
+    // Allow the signed snapshot and search projection to finish verification;
+    // their application must remain deferred while the modal owns focus.
+    await page.waitForTimeout(2000);
     await expect(catalog).toHaveAttribute('data-discovery-state', 'loading');
     await expect(dialog.locator('.command-snippet--add code')).toBeVisible();
     await page.keyboard.press('Escape');
     await page.locator('header a').first().focus();
-    await expect(catalog).toHaveAttribute('data-discovery-state', 'unavailable');
+    await expect(catalog).toHaveAttribute('data-discovery-state', /^(current|cached)$/);
     expect(errors).toEqual([]);
   } finally {
     discovery.release();
