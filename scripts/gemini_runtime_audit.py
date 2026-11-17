@@ -118,14 +118,16 @@ class GeminiRepeatAudit:
             if (not isinstance(registry, dict) or set(registry) != {"projects"}
                     or not isinstance(registry["projects"], dict)):
                 raise ValueError("Gemini runtime registry shape is invalid")
-            slug = registry["projects"].get(str(self.project))
+            # Pinned ProjectRegistry serializes resolved Windows paths in lowercase.
+            registry_project = str(self.project).lower() if sys.platform == "win32" else str(self.project)
+            slug = registry["projects"].get(registry_project)
             if (not isinstance(slug, str) or not re.fullmatch(r"[a-z0-9-]{1,128}", slug)
                     or sum(value == slug for value in registry["projects"].values()) != 1):
                 slug_is_string = isinstance(slug, str)
                 slug_matches_pattern = slug_is_string and bool(re.fullmatch(r"[a-z0-9-]{1,128}", slug))
                 self.failure_facts = {
                     "phase": "pre-repeat", "role": "registry", "operation": "project-binding",
-                    "exact_key_present": str(self.project) in registry["projects"],
+                    "exact_key_present": registry_project in registry["projects"],
                     "slug_is_string": slug_is_string, "slug_matches_pattern": slug_matches_pattern,
                     "slug_binding_count": min(2, sum(value == slug for value in registry["projects"].values()))
                     if slug_matches_pattern else None,
@@ -136,7 +138,7 @@ class GeminiRepeatAudit:
             self._hold(self.chats)
             self.role = "marker"
             marker = self._read(directory / ".project_root", 4096, before)
-            if marker != str(self.project).encode("utf-8"):
+            if marker != registry_project.encode("utf-8"):
                 raise ValueError("Gemini runtime ownership marker differs")
             self.prefix = f"{self.profile.name}/{self.chats.relative_to(self.profile)}{os.sep}"
             old = [key for key in before if key.startswith(self.prefix)]

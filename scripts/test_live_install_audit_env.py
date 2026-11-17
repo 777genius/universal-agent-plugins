@@ -10099,13 +10099,14 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
         audit = load_audit()
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
-            home, project = root / 'home', root / 'project'
+            home, project = root / 'home', root / 'Project'
             profile = home / '.gemini'
             chats = profile / 'tmp/project/chats'
             project.mkdir()
             chats.mkdir(parents=True)
-            (profile / 'projects.json').write_text(json.dumps({'projects': {str(project): 'project'}}))
-            (chats.parent / '.project_root').write_text(str(project))
+            registry_project = str(project).lower() if sys.platform == 'win32' else str(project)
+            (profile / 'projects.json').write_text(json.dumps({'projects': {registry_project: 'project'}}))
+            (chats.parent / '.project_root').write_text(registry_project)
             old = chats / 'foreign-session.jsonl'
             old.write_bytes(b'pre-existing conversation must stay byte-for-byte\n')
             before = audit.snapshot([profile])
@@ -10137,6 +10138,32 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
         current = case['audit'].snapshot([case['profile']])
         case['observer'].checkpoint(label, current)
         return current
+
+    def test_windows_registry_and_marker_require_exact_producer_spelling(self):
+        if sys.platform != "win32":
+            self.skipTest("Windows producer serialization contract")
+        for mutation in ("registry", "marker"):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                project = str(case["project"])
+                self.assertNotEqual(project, project.lower())
+                case["observer"].close()
+                if mutation == "registry":
+                    (case["profile"] / "projects.json").write_text(
+                        json.dumps({"projects": {project: "project"}}))
+                else:
+                    (case["chats"].parent / ".project_root").write_text(project)
+                before = case["audit"].snapshot([case["profile"]])
+                observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
+                    case["home"], case["project"], before, self.VERSION)
+                try:
+                    self.assertEqual(observer.reason,
+                        "Gemini runtime registry does not bind the exact project"
+                        if mutation == "registry" else "Gemini runtime ownership marker differs")
+                    self.assertFalse(observer.finish(before))
+                    if mutation == "registry":
+                        self.assertIs(observer.evidence()["failure_facts"]["exact_key_present"], False)
+                finally:
+                    observer.close()
 
     def test_six_empty_records_keep_raw_changes_and_exact_old_conversation(self):
         with self.fixture() as case:

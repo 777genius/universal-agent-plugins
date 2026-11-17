@@ -123,6 +123,9 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
     VERSION = _contracts.GeminiEmptySessionRuntimeContracts.VERSION
     fixture = _contracts.GeminiEmptySessionRuntimeContracts.fixture
     record = _contracts.GeminiEmptySessionRuntimeContracts.record
+    test_windows_registry_and_marker_require_exact_producer_spelling = (
+        _contracts.GeminiEmptySessionRuntimeContracts
+        .test_windows_registry_and_marker_require_exact_producer_spelling)
     phase = _contracts.GeminiEmptySessionRuntimeContracts.phase
     test_strict_existing_metadata_negatives = getattr(
         _contracts.GeminiEmptySessionRuntimeContracts,
