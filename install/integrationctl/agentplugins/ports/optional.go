@@ -25,6 +25,18 @@ type ActivationPreflighter interface {
 	PreflightActivation(domain.ActivationRequest) error
 }
 
+// InterruptedAttemptConfirmer settles a native attempt whose agentplugins
+// process ended without recording the client effect (a killed CLI). The
+// request is the exact installed delivery with its recorded ownership. The
+// confirmer proves that no client command that could still change the client
+// is running and reads the client's own state once, read-only. A certain
+// effect is returned only for an exactly recognized state; client
+// configuration is never changed.
+type InterruptedAttemptConfirmer interface {
+	ConfirmsInterruptedAttempt(domain.ClientID, domain.InstallScope) bool
+	ConfirmInterruptedAttempt(context.Context, domain.ActivationRequest) (domain.ActivationOutcome, error)
+}
+
 // AutomaticActivationClassifier reports that activation completes without a
 // user step, so no manual follow-up action is recorded.
 type AutomaticActivationClassifier interface {
