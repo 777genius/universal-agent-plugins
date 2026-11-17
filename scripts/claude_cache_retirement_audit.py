@@ -150,6 +150,32 @@ def entries(fd):
     return result
 
 
+def retirement_diagnostic(error):
+    """Locate an authored refusal without exporting traceback contents."""
+    unavailable = {"site": "unavailable"}
+    try:
+        directory = Path(__file__).parent
+        authored = {
+            str(directory / "claude_cache_retirement_audit.py"): "claude-cache-retirement",
+            str(directory / "claude_windows_cache_custody.py"): "claude-windows-cache-custody",
+            str(directory / "gemini_windows_custody.py"): "gemini-windows-custody",
+        }
+        current, selected = error.__traceback__, unavailable
+        for _ in range(64):
+            if current is None:
+                return selected
+            code = current.tb_frame.f_code
+            module = authored.get(code.co_filename)
+            line = current.tb_lineno
+            if (module is not None and code.co_name not in ("require", "_refuse")
+                    and type(line) is int and line > 0):
+                selected = {"module": module, "line": line}
+            current = current.tb_next
+        return selected if current is None else unavailable
+    except BaseException:
+        return unavailable
+
+
 class CacheRetirement:
     def __init__(self, case, home, project, public, added, source, read_document, snapshotter, before_native):
         self.fds = []
@@ -342,7 +368,8 @@ class CacheRetirement:
                         'cache_inode': os.fstat(self.cache_fd).st_ino}),
                     'orphaned_marker_present': marker is not None, 'writer_closure_claimed': False,
                     'matched_residual_count': len(residuals)}
-        except (OSError, ValueError, TypeError, KeyError):
-            return {'status': 'unresolved-cache-retirement'}
+        except (OSError, ValueError, TypeError, KeyError) as error:
+            return {'status': 'unresolved-cache-retirement',
+                    'diagnostic': retirement_diagnostic(error)}
         finally:
             self.close()

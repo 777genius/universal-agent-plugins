@@ -10398,6 +10398,49 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
 
 
 
+class ClaudeRetirementDiagnosticContracts(unittest.TestCase):
+    def test_authored_site_is_bounded_private_and_unavailable_on_unknown(self):
+        module = runpy.run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
+        diagnose = module["retirement_diagnostic"]
+        for leaf, label in (
+                ("claude_cache_retirement_audit.py", "claude-cache-retirement"),
+                ("claude_windows_cache_custody.py", "claude-windows-cache-custody"),
+                ("gemini_windows_custody.py", "gemini-windows-custody")):
+            with self.subTest(module=label):
+                namespace = {}
+                # Authored filenames are a diagnostic allowlist, not proof that
+                # synthetic test execution is native custody evidence.
+                exec(compile("def require():\n    raise ValueError('private-path-and-data')\n"
+                             "def caller():\n    require()\n",
+                             str(ROOT / "scripts" / leaf), "exec"), namespace)
+                try:
+                    namespace["caller"]()
+                except ValueError as error:
+                    diagnostic = diagnose(error)
+                self.assertEqual(diagnostic, {"module": label, "line": 4})
+                self.assertNotIn("private", json.dumps(diagnostic))
+                self.assertNotIn(str(ROOT), json.dumps(diagnostic))
+        try:
+            raise ValueError("private-unknown")
+        except ValueError as error:
+            self.assertEqual(diagnose(error), {"site": "unavailable"})
+        namespace = {}
+        exec(compile("def recurse(n):\n    if n: return recurse(n - 1)\n"
+                     "    raise ValueError('private-overflow')\n",
+                     str(ROOT / "scripts/claude_cache_retirement_audit.py"), "exec"), namespace)
+        try:
+            namespace["recurse"](70)
+        except ValueError as error:
+            self.assertEqual(diagnose(error), {"site": "unavailable"})
+
+        class Broken:
+            @property
+            def __traceback__(self):
+                raise ValueError("private-diagnostic-failure")
+
+        self.assertEqual(diagnose(Broken()), {"site": "unavailable"})
+
+
 @unittest.skipUnless(sys.platform in ("linux", "darwin"), "POSIX cache retirement custody contract")
 class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
     def fixture(self, root, audit):
@@ -10624,7 +10667,8 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
                     row = audit.do_case('/inert/uap', 'claude', 'skill', item, 0, root, {})
                 self.assertEqual(operations, ['add', 'list', 'add', 'list', 'remove', 'list'])
                 self.assertTrue(row['native_residuals'])
-                self.assertEqual(row['status'], 'passed' if mutation is None else 'cleanup-failed')
+                self.assertEqual(row['status'], 'passed' if mutation is None else 'cleanup-failed',
+                                 row.get('claude_cache_retirement', {}).get('diagnostic'))
                 if mutation is None:
                     self.assertEqual(row['claude_cache_retirement']['status'],
                                      'verified-cache-retirement-at-checkpoint')
@@ -10712,7 +10756,8 @@ class ClaudeWindowsCacheRetirementContracts(unittest.TestCase):
                     backend.native._noninherit(handle)
                 moved = self.retire(f, marker)
                 proof = subject.finish(self.residuals(audit, f), f["cleanup"])
-                self.assertEqual(proof["status"], "verified-cache-retirement-at-checkpoint")
+                self.assertEqual(proof["status"], "verified-cache-retirement-at-checkpoint",
+                                 proof.get("diagnostic"))
                 self.assertEqual(proof["cache_volume_serial"], original.volume)
                 self.assertEqual(proof["cache_file_id_128"], original.file_id.hex())
                 self.assertEqual(proof["cache_ntfs_selector_64"], original.file_index)
