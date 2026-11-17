@@ -7831,5 +7831,240 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             self.assertEqual(audit.install_case_timeout("claude", "plugin", "firebase"), 105)
 
 
+
+@unittest.skipUnless(sys.platform == "linux", "Linux cache retirement custody contract")
+class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
+    def fixture(self, root, audit):
+        import shutil
+        home, project = root / 'home', root / 'project'
+        profile = home / '.claude'
+        profile.mkdir(parents=True, exist_ok=True)
+        foreign = profile / 'foreign-neighbor.txt'
+        if not foreign.exists():
+            foreign.write_text('unmanaged native neighbor must survive\n')
+        before = audit.scoped_snapshot((profile,))
+        name, physical, market = 'skill-owned', 'skill-owned-physical', 'agentplugins-' + 'a' * 12
+        active = project / '.claude/skills' / physical
+        bundle = active / '.agentplugins-plugin'
+        payload = bundle / '.agentplugins-runtime/skills/owned-test/SKILL.md'
+        payload.parent.mkdir(parents=True)
+        payload.write_text('---\nname: owned-test\n---\n')
+        cache = profile / 'plugins/cache' / market / name / '0.0.0'
+        cache.parent.mkdir(parents=True)
+        shutil.copytree(bundle, cache)
+        revision = {'resolved_revision': 'a' * 40, 'tree_digest': 'sha256:' + 'b' * 64,
+                    'manifest_digest': 'sha256:' + 'c' * 64}
+        client = {'client_id': 'claude', 'scope': 'project', 'materialization': 'materialized',
+                  'activation': 'active', 'authentication': 'not_required', 'policy': 'allowed',
+                  'verification': 'installation_verified', 'package_revision': revision}
+        public = {'installation_id': 'owned-install', 'name': name, 'source': 'example/skills/skills/owned-test',
+                  'clients': [client]}
+        receipt = {'kind': 'claude_project_plugin_cache', 'object_id': 'claude-project-cache:' + name + '@' + market,
+                   'logical_name': name, 'path': str(bundle), 'source_relative': cache.relative_to(profile).as_posix(),
+                   'managed_digest': 'sha256:' + 'd' * 64, 'protection_class': 'managed'}
+        binding = dict(client, client_binding_id='owned-binding', target_locator=str(active),
+                       physical_artifact_id=physical, native_objects=[receipt])
+        record = {'installation_id': public['installation_id'], 'declared_name': name,
+                  'source': {'repository': 'example/skills', 'package_subpath': 'skills/owned-test',
+                             'resolved_revision': revision['resolved_revision'], 'tree_digest': revision['tree_digest']},
+                  'package': {'declared_name': name, 'manifest_digest': revision['manifest_digest']},
+                  'clients': {'owned-binding': binding}}
+        state = project / '.uap/state-v2.json'
+        state.parent.mkdir(parents=True)
+        state.write_text(json.dumps({'schema_version': 5, 'installations': [record]}))
+        key = name + '@' + market
+        installed = profile / 'plugins/installed_plugins.json'
+        installed.write_text(json.dumps({'version': 2, 'plugins': {key: [{'scope': 'project',
+            'projectPath': str(project), 'installPath': str(cache)}]}, 'retained': 'same'}))
+        markets = profile / 'plugins/known_marketplaces.json'
+        markets.write_text(json.dumps({market: {'source': {'source': 'directory', 'path': str(active)},
+                                               'installLocation': str(active)}, 'foreign': {'retained': True}}))
+        cleanup = {'schema_version': 1, 'result': 'success', 'outcome': 'completed', 'scope': 'project',
+                   'actions': [{'installation_id': public['installation_id'], 'binding_id': 'owned-binding',
+                                'client_id': 'claude', 'action': 'remove'}]}
+        added = {'items': [{'targetId': 'claude', 'alias': 'owned-test', 'destinationPath': str(active)}]}
+        return dict(cleanup=cleanup, home=home, project=project, profile=profile, before=before, public=public, added=added,
+                    active=active, cache=cache, state=state, installed=installed, markets=markets, market=market, key=key)
+
+    def capture(self, audit, f):
+        def document(path):
+            text, error = audit.copilot_settings_read(path, f['home'].parent)
+            self.assertIsNone(error)
+            return json.loads(text, object_pairs_hook=audit._unique_json_object)
+        return audit.CLAUDE_RETIREMENT_AUDIT['CacheRetirement'](
+            f['home'].parent, f['home'], f['project'], f['public'], f['added'],
+            {'repo': 'example/skills', 'folder': 'owned-test'}, document,
+            audit.scoped_snapshot, f['before'])
+
+    def retire(self, f, marker=True):
+        import shutil
+        quarantine = f['cache'].parent / ('.agentplugins-cache-retire-' + '1' * 32)
+        quarantine.mkdir(mode=0o700)
+        moved = quarantine / 'retired'
+        f['cache'].rename(moved)
+        if marker:
+            (moved / '.orphaned_at').write_text('1794880808341')
+        doc = json.loads(f['installed'].read_text()); del doc['plugins'][f['key']]
+        f['installed'].write_text(json.dumps(doc))
+        doc = json.loads(f['markets'].read_text()); del doc[f['market']]
+        f['markets'].write_text(json.dumps(doc))
+        shutil.rmtree(f['active'])
+        return moved
+
+    def residuals(self, audit, f):
+        return audit.native_identity_residuals([f['profile']], 'owned-test',
+                                               audit.snapshot((f['profile'],)), 'claude')
+
+    def test_exact_receipt_inode_bytes_and_optional_marker_are_checkpoint_only(self):
+        audit = load_audit()
+        for marker in (False, True):
+            with self.subTest(marker=marker), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                subject = self.capture(audit, f)
+                original_inode = f['cache'].stat().st_ino
+                self.retire(f, marker)
+                residuals = self.residuals(audit, f)
+                self.assertTrue(residuals)
+                proof = subject.finish(residuals, f['cleanup'])
+                self.assertEqual(proof['status'], 'verified-cache-retirement-at-checkpoint')
+                self.assertEqual(proof['cache_inode'], original_inode)
+                self.assertEqual(proof['orphaned_marker_present'], marker)
+                self.assertFalse(proof['writer_closure_claimed'])
+                self.assertEqual(subject.fds, [])
+                self.assertEqual(residuals, self.residuals(audit, f))
+
+    def test_wrong_or_missing_receipt_never_creates_an_empty_authority(self):
+        audit = load_audit()
+        for mutation in ('missing', 'duplicate', 'source', 'path', 'modified', 'logical-name', 'native-binding', 'preexisting'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                state = json.loads(f['state'].read_text()); record = state['installations'][0]
+                objects = record['clients']['owned-binding']['native_objects']
+                if mutation == 'missing': objects.clear()
+                elif mutation == 'duplicate': objects.append(dict(objects[0]))
+                elif mutation == 'source': record['source']['resolved_revision'] = 'e' * 40
+                elif mutation == 'path': objects[0]['path'] = str(f['project'] / 'foreign')
+                elif mutation == 'modified': objects[0]['user_modified'] = True
+                elif mutation == 'logical-name': objects[0]['logical_name'] = 'foreign'
+                elif mutation == 'native-binding':
+                    doc = json.loads(f['installed'].read_text());doc['plugins'][f['key']][0]['scope'] = 'user'
+                    f['installed'].write_text(json.dumps(doc))
+                else:
+                    f['before'] = audit.scoped_snapshot((f['profile'],))
+                f['state'].write_text(json.dumps(state))
+                with self.assertRaises((ValueError, KeyError)):
+                    self.capture(audit, f)
+
+    def test_ambiguous_unsafe_modified_or_extra_residue_keeps_negative(self):
+        audit = load_audit()
+        for mutation in ('ambiguous', 'private-mode', 'bytes', 'extra', 'symlink', 'marker',
+                         'registry', 'foreign', 'external-residual', 'cleanup-binding', 'new-marker-race'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                subject = self.capture(audit, f); moved = self.retire(f)
+                if mutation == 'ambiguous': (f['cache'].parent / ('.agentplugins-cache-retire-' + '2' * 32)).mkdir()
+                elif mutation == 'private-mode': moved.parent.chmod(0o755)
+                elif mutation == 'bytes': (moved / '.agentplugins-runtime/skills/owned-test/SKILL.md').write_text('changed')
+                elif mutation == 'extra': (moved / 'extra').write_text('unowned')
+                elif mutation == 'symlink': (moved / 'link').symlink_to(f['state'])
+                elif mutation == 'marker': (moved / '.orphaned_at').write_text('0000000000000')
+                elif mutation == 'registry': f['installed'].write_text('{"version":2,"plugins":{},"retained":"changed"}')
+                elif mutation == 'cleanup-binding': f['cleanup']['actions'][0]['binding_id'] = 'foreign'
+                elif mutation == 'foreign': (f['profile'] / 'foreign-neighbor.txt').write_text('changed')
+                residuals = self.residuals(audit, f)
+                if mutation == 'external-residual': residuals.append('.claude/other-owned-test.json')
+                if mutation == 'new-marker-race':
+                    # A post-read foreign mutation cannot be hidden by a matching inode.
+                    original = subject.snapshotter
+                    def mutate(roots):
+                        result = original(roots)
+                        (moved / 'late').write_text('unowned')
+                        return result
+                    subject.snapshotter = mutate
+                proof = subject.finish(residuals, f['cleanup'])
+                self.assertEqual(proof['status'], 'unresolved-cache-retirement')
+                self.assertEqual(subject.fds, [])
+
+    def test_retained_registry_boolean_to_integer_changes_are_not_preserved(self):
+        audit = load_audit()
+        for registry in ('installed', 'markets'):
+            with self.subTest(registry=registry), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                if registry == 'installed':
+                    document = json.loads(f['installed'].read_text())
+                    document['plugins']['foreign@other'] = [{'enabled': True}]
+                    f['installed'].write_text(json.dumps(document))
+                subject = self.capture(audit, f)
+                self.retire(f)
+                path = f[registry]
+                document = json.loads(path.read_text())
+                if registry == 'installed': document['plugins']['foreign@other'][0]['enabled'] = 1
+                else: document['foreign']['retained'] = 1
+                path.write_text(json.dumps(document))
+                proof = subject.finish(self.residuals(audit, f), f['cleanup'])
+                self.assertEqual(proof['status'], 'unresolved-cache-retirement')
+                self.assertEqual(subject.fds, [])
+
+    def test_snapshot_limits_and_hardlinks_are_refused(self):
+        audit = load_audit()
+        for mutation in ('file', 'total', 'count', 'depth', 'hardlink', 'git', 'lock', 'empty'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                globals_ = audit.CLAUDE_RETIREMENT_AUDIT['CacheRetirement'].__init__.__globals__
+                changes = {'MAX_FILE_BYTES': 1} if mutation == 'file' else {'MAX_TREE_BYTES': 1} if mutation == 'total' else {'MAX_FILES': 1} if mutation == 'count' else {'MAX_DEPTH': 1} if mutation == 'depth' else {}
+                if mutation == 'git': (f['cache'] / '.git').mkdir()
+                elif mutation == 'lock': (f['cache'] / '.uap-integrations.lock').write_text('unowned')
+                elif mutation == 'empty':
+                    import shutil
+                    shutil.rmtree(f['cache']);f['cache'].mkdir()
+                    bundle = f['active'] / '.agentplugins-plugin'
+                    shutil.rmtree(bundle);bundle.mkdir()
+                if mutation == 'hardlink':
+                    os.link(f['cache'] / '.agentplugins-runtime/skills/owned-test/SKILL.md',
+                            f['cache'] / 'hardlink')
+                with patch.dict(globals_, changes), self.assertRaises(ValueError):
+                    self.capture(audit, f)
+
+    def test_do_case_requires_every_old_gate_and_never_hides_raw_residuals(self):
+        audit = load_audit()
+        for mutation in (None, 'post-list', 'sentinel', 'outside'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); f = {}; operations = []
+                def perform(argv, env, cwd, timeout=105, **kwargs):
+                    self.assertEqual(argv[0], '/inert/uap')
+                    operation = argv[2] if argv[1] == 'skills' else argv[1]
+                    operations.append(operation)
+                    if operation == 'add' and not f:
+                        f.update(self.fixture(root / 'skill-00', audit))
+                        (f['project'] / 'uap.toml').write_text('owned-test')
+                        (f['project'] / 'uap.lock').write_text('owned-test')
+                    elif operation == 'remove':
+                        self.retire(f)
+                        (f['project'] / 'uap.lock').unlink()
+                        if mutation == 'sentinel': (f['project'] / 'foreign-untouched.txt').write_text('changed')
+                        if mutation == 'outside': (f['profile'] / 'owned-test.json').write_text('owned-test')
+                    removed = 'remove' in operations
+                    return {'exit_code': 1 if removed and operation == 'list' and mutation == 'post-list' else 0,
+                            'stdout_tail': '', 'stderr_tail': '', 'timeout': False,
+                            '_json': f['added'] if operation == 'add' else f['cleanup'] if operation == 'remove' else
+                                     {'data': {'installations': [] if removed else [f['public']]}}}
+                with (patch.dict(audit.AGENT_BINARIES, {}, clear=True),
+                      patch.object(audit, 'call', side_effect=perform),
+                      patch.object(audit, 'matching_installations', side_effect=lambda *a: [f['public']]),
+                      patch.object(audit, 'matches_pinned_skill_bytes', return_value=True),
+                      patch.object(audit, 'locked_skill_is_pinned', side_effect=lambda *a: (f['project'] / 'uap.lock').exists())):
+                    item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
+                            'source': 'unused', 'skill_md_git_blob_sha1': '0' * 40}
+                    row = audit.do_case('/inert/uap', 'claude', 'skill', item, 0, root, {})
+                self.assertEqual(operations, ['add', 'list', 'add', 'list', 'remove', 'list'])
+                self.assertTrue(row['native_residuals'])
+                self.assertEqual(row['status'], 'passed' if mutation is None else 'cleanup-failed')
+                if mutation is None:
+                    self.assertEqual(row['claude_cache_retirement']['status'],
+                                     'verified-cache-retirement-at-checkpoint')
+                else:
+                    self.assertFalse(row['removal_verified'])
+
+
 if __name__ == "__main__":
     unittest.main()

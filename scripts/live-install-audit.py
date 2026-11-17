@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Live, non-mocked UAP install/remove evidence. Runs only on disposable profiles."""
 import argparse
+from contextlib import ExitStack
 import hashlib
 import json
 import os
@@ -20,6 +21,7 @@ from urllib.parse import urlsplit, urlunsplit
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
+CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -1808,6 +1810,13 @@ def initialize_project_skill_git_root(project, env, case_root):
 
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             signed_release_pins=None):
+    with ExitStack() as audits:
+        return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
+                        signed_release_pins, audits)
+
+
+def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
+             signed_release_pins, audits):
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
     project = case_root / "project"
@@ -1911,6 +1920,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign)
         assert_case_unchanged()
     before = snapshot(native_roots)
+    claude_before = (scoped_snapshot(native_roots)
+                     if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)
         args = ["add", item, "--target", target, "--scope", "user", "--format", "json"]
@@ -2071,7 +2082,23 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 home, env, project, identity, matching[0].get("version"),
                 owners=kit_owners, owned_call=audited_call)
         assert_case_unchanged()
+    claude_retirement = None
+    claude_retirement_proof = None
+    if claude_before is not None and installed and repeat_verified:
+        def claude_document(path):
+            text, error = copilot_settings_read(path, case_root)
+            if error is not None:
+                raise ValueError("Claude retirement metadata unavailable")
+            return json.loads(text, object_pairs_hook=_unique_json_object)
+        try:
+            claude_retirement = CLAUDE_RETIREMENT_AUDIT["CacheRetirement"](
+                case_root, home, project, matching[0], repeat_add_json, item,
+                claude_document, scoped_snapshot, claude_before)
+            audits.callback(claude_retirement.close)
+        except (OSError, ValueError, TypeError, KeyError, IndexError):
+            claude_retirement_proof = {"status": "unresolved-cache-retirement"}
     cleanup = None
+    cleanup_json = None
     native_uninstall = None
     if installed:
         # Codex explicitly requires external uninstall before UAP can settle a
@@ -2087,7 +2114,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         selector = matching[0]["installation_id"] if grok_prepared else identity
         cleanup = audited_call([cli, "remove", selector, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
-        cleanup.pop("_json", None)
+        cleanup_json = cleanup.pop("_json", None)
     qoder_native_after_remove = None
     if target == "qoder" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
         qoder_native_after_remove = qoder_native_plugin_state(
@@ -2181,6 +2208,15 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             native_residuals)
         and (item != "marketing-kit" or copilot_signed_kit_settings(
             home, case_root, kit_owners, False)))
+    claude_retired_residuals_verified = False
+    if (claude_retirement is not None and cleanup and cleanup["exit_code"] == 0
+            and post_list and post_list["exit_code"] == 0 and post_list_schema_valid
+            and old_ids.isdisjoint(remaining_ids) and not post_remove_identity_registered
+            and post_removal_skill is None and not post_removal_leftovers
+            and not post_lock_pinned and not post_skill_tree_delta and sentinels_preserved):
+        claude_retirement_proof = claude_retirement.finish(native_residuals, cleanup_json)
+        claude_retired_residuals_verified = (
+            claude_retirement_proof["status"] == "verified-cache-retirement-at-checkpoint")
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
@@ -2194,7 +2230,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
              or (copilot_native_after_remove is not None
                  and copilot_native_after_remove["status"] == "absent"))
         and not post_remove_identity_registered
-        and (not native_residuals or copilot_disabled_setting_retained)
+        and (not native_residuals or copilot_disabled_setting_retained
+             or claude_retired_residuals_verified)
         and (kind != "skill" or (post_removal_skill is None
                                   and not post_removal_leftovers and not post_lock_pinned
                                   and not post_skill_tree_delta))
@@ -2302,6 +2339,8 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "post_skill_tree_delta": post_skill_tree_delta,
             "post_lock_pinned": post_lock_pinned,
             "removal_verified": removal_verified, "native_residuals": native_residuals,
+            **({"claude_cache_retirement": claude_retirement_proof}
+               if claude_retirement_proof is not None else {}),
             "retained_passive_native_files": sorted(set(passive_retained)),
             "qoder_passive_log_link_verified": qoder_passive_log_link_verified,
             "qoder_native_after_repeat": qoder_native_before_remove,
