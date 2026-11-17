@@ -28,7 +28,10 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			operationApp := app
 			operationApp.Lifecycle.PrepareHostsForPreview = !opts.dryRun
 			if all {
-				return dispatchUpdateAll(cmd, operationApp, opts, args)
+				if err := validateUpdateAll(args, opts); err != nil {
+					return err
+				}
+				return runUpdateAllRetryable(cmd, operationApp, opts)
 			}
 			if len(args) != 1 {
 				return fmt.Errorf("provide one installation or use --all")
@@ -56,14 +59,14 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 	return command
 }
 
-func dispatchUpdateAll(cmd *cobra.Command, app App, opts *options, args []string) error {
+func validateUpdateAll(args []string, opts *options) error {
 	if len(args) > 0 {
 		return fmt.Errorf("choose either one installation or --all")
 	}
 	if strings.TrimSpace(opts.target) != "" {
 		return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
 	}
-	return runUpdateAllRetryable(cmd, app, opts)
+	return nil
 }
 
 func newRepairCommand(app App, opts *options) *cobra.Command {
