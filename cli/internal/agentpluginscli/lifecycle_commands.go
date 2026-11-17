@@ -22,6 +22,9 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
+				return err
+			}
 			operationApp := app
 			operationApp.Lifecycle.PrepareHostsForPreview = !opts.dryRun
 			if all {
@@ -72,6 +75,9 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 				return scopeErr
 			}
 			if err := validateCommonOptions(opts); err != nil {
+				return err
+			}
+			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
 				return err
 			}
 			operationApp := app
@@ -133,6 +139,10 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 				if err := requireNonInteractiveMutation(app, opts, "removal"); err != nil {
 					return err
 				}
+			}
+			// Before target selection: a committed removal no longer lists its target.
+			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
+				return err
 			}
 			if strings.TrimSpace(opts.target) == "" && app.Terminal && !opts.purgeData {
 				selection, err := promptBoundTargets(cmd, app, args[0], opts.scope)
