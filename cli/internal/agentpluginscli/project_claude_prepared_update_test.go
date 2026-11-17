@@ -26,7 +26,7 @@ type preparedClaudeCLIRunner struct {
 	t                         *testing.T
 	project, user, executable string
 	calls, mutations          int
-	// interrupt, when set, fires once on the first matching native mutation.
+	// interrupt, when set, fires once on the first matching native command.
 	interrupt *claudeCLIInterrupt
 	// surviving models processes a killed earlier run left behind.
 	surviving []legacyports.LiveProcess
@@ -48,13 +48,15 @@ func (r *preparedClaudeCLIRunner) Run(_ context.Context, cmd legacyports.Command
 		r.t.Fatal("original user profile was replaced")
 	}
 	r.calls++
+	if r.interrupt.matches(cmd.Argv[1:]) {
+		interrupt := r.interrupt
+		r.interrupt = nil
+		return interrupt.fire(r, cmd.Argv[1:])
+	}
 	if !reflect.DeepEqual(cmd.Argv[1:], []string{"plugin", "list", "--json"}) {
-		if r.interrupt.matches(cmd.Argv[1:]) {
-			interrupt := r.interrupt
-			r.interrupt = nil
-			return interrupt.fire(r, cmd.Argv[1:])
-		}
-		return r.marketplaceCommand(cmd.Argv[1:])
+		result, err := r.marketplaceCommand(cmd.Argv[1:])
+		r.interrupt.ran(cmd.Argv[1:])
+		return result, err
 	}
 	if listed := r.marketplaceListing(); len(listed) != 0 {
 		body, err := json.Marshal(listed)
