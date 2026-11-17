@@ -388,5 +388,109 @@ class FirebaseFailureDiagnosticControls(unittest.TestCase):
         self.assertEqual(json.dumps(receipt, indent=2).encode(), before)
 
 
+
+class FirebaseConsoleSummaryControls(unittest.TestCase):
+    def proof(self, **changes):
+        return {"child_exit": 0, "timeout": False, "gate_released": True,
+                "forced": False, "settled": True, "primary_error": None,
+                "cleanup_error": None, **changes}
+
+    def primary(self, **changes):
+        row = {"status": "passed", "repeat_verified": True, "removal_verified": True,
+               "sentinels_preserved": True, "native_residuals": []}
+        for label in ("install", "list", "repeat_add", "repeat_list", "cleanup", "post_remove_list"):
+            row[label] = {"exit_code": 0, "timeout": False}
+        row.update(changes)
+        return json.dumps({"case": row}).encode()
+
+    def summary(self, primary, proof=None, removed=True, error=None):
+        line = probe.selected_probe_summary(self.proof() if proof is None else proof,
+                                            removed, error, primary)
+        self.assertLessEqual(len(line.encode("utf-8")), 1800)
+        return json.loads(line)
+
+    def test_lifecycle_negative_and_family_temp_negative_are_distinct(self):
+        lifecycle = self.summary(self.primary(status="cleanup-failed", removal_verified=False,
+                                              cleanup={"exit_code": 1, "timeout": False}),
+                                 self.proof(child_exit=1))
+        self.assertEqual(lifecycle["status"], "cleanup-failed")
+        self.assertIn("removal_verified", lifecycle["failed_gates"])
+        self.assertEqual(lifecycle["commands"]["cleanup"]["exit_code"], 1)
+        custody = self.summary(self.primary(), self.proof(forced=True), False, "private error")
+        self.assertEqual(custody["status"], "passed")
+        self.assertEqual(custody["failed_gates"], [])
+        self.assertTrue(custody["family"]["forced"])
+        self.assertFalse(custody["temp_removed"])
+        self.assertTrue(custody["temp_cleanup_error_present"])
+
+    def test_unsettled_missing_oversized_and_malformed_have_fixed_codes(self):
+        with mock.patch.object(probe.json, "loads", side_effect=AssertionError("must not parse")):
+            line = probe.selected_probe_summary(self.proof(settled=False), False, None, b"secret")
+            self.assertIn('"primary":"unsettled"', line)
+            self.assertNotIn("secret", line)
+            self.assertIn('"primary":"missing"',
+                          probe.selected_probe_summary(self.proof(), True, None, None))
+            self.assertIn('"primary":"oversized"', probe.selected_probe_summary(
+                self.proof(), True, None, b"x" * (probe.OUTPUT_LIMIT + 1)))
+        for data in (b"private malformed", b"null", b'{"case":[]}', b"\xff"):
+            self.assertEqual(self.summary(data)["primary"], "malformed")
+
+    def test_unrestricted_strings_containers_and_exit_integers_never_escape(self):
+        secret = "DO-NOT-PRINT/private/path/token"
+        primary = self.primary(status=secret, repeat_verified=secret,
+            native_residuals=[secret], install={"exit_code": True, "timeout": secret},
+            cleanup={"exit_code": 10 ** 300, "timeout": [secret]},
+            post_remove_list={"exit_code": -(1 << 31) - 1, "timeout": False},
+            stdout_tail=secret, stderr_tail=secret, environment={"secret": secret})
+        line = probe.selected_probe_summary(self.proof(child_exit=10 ** 300,
+            primary_error=secret, cleanup_error=secret), True, secret, primary)
+        self.assertNotIn(secret, line)
+        self.assertLessEqual(len(line.encode("utf-8")), 1800)
+        value = json.loads(line)
+        self.assertEqual(value["status"], "unrecognized")
+        self.assertIsNone(value["family"]["child_exit"])
+        for label in ("install", "cleanup", "post_remove_list"):
+            self.assertIsNone(value["commands"][label]["exit_code"])
+        for status in probe.SUMMARY_STATUSES:
+            self.summary(self.primary(status=status, repeat_verified=False,
+                                      removal_verified=False, sentinels_preserved=False,
+                                      native_residuals=["private"]))
+
+    def test_diagnostic_byte_cap_has_fixed_fallback(self):
+        with mock.patch.object(probe, "CONSOLE_LIMIT", 1):
+            line = probe.selected_probe_summary(self.proof(), True, None, self.primary())
+        self.assertEqual(json.loads(line)["primary"], "diagnostic-bound")
+        self.assertLessEqual(len(line.encode("utf-8")), 1800)
+
+    def test_formatter_failure_preserves_run_probe_verdict_and_receipt(self):
+        for child_exit, expected in ((0, 0), (1, 1)):
+            with self.subTest(child_exit=child_exit), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                evidence, owned = root / "evidence", root / "owned"
+                evidence.mkdir()
+                owned.mkdir()
+                primary = self.primary()
+                proof = self.proof(child_exit=child_exit)
+                def observe(*args, **kwargs):
+                    (evidence / "published-firebase-claude.json").write_bytes(primary)
+                    return dict(proof)
+                output = io.StringIO()
+                with mock.patch.object(probe.tempfile, "mkdtemp", return_value=str(owned)), \
+                        mock.patch.object(probe, "supervise", side_effect=observe), \
+                        mock.patch.object(probe, "selected_probe_summary", side_effect=ValueError("private")), \
+                        mock.patch("sys.stdout", output):
+                    verdict = probe.run_probe("inert-not-executed.cmd", evidence)
+                self.assertEqual(verdict, expected)
+                self.assertFalse(owned.exists())
+                receipt = json.loads((evidence / "published-firebase-process-family.json").read_text())
+                self.assertEqual(receipt["family"], proof)
+                self.assertEqual(receipt["primary_report"], {
+                    "bytes": len(primary), "sha256": hashlib.sha256(primary).hexdigest()})
+                self.assertTrue(receipt["temp_removed"])
+                self.assertEqual((evidence / "published-firebase-claude.json").read_bytes(), primary)
+                self.assertEqual(json.loads(output.getvalue())["primary"], "diagnostic-unavailable")
+                self.assertNotIn("private", output.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

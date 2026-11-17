@@ -154,6 +154,92 @@ def add_failure_diagnostics(receipt, diagnostics):
         receipt["failure_diagnostics"] = {"status": "diagnostic-bound-exceeded"}
 
 
+CONSOLE_LIMIT = 1800
+SUMMARY_STATUSES = frozenset((
+    "passed", "repeat-add-unqualified", "incomplete-native-proof", "cleanup-failed",
+    "failed-install-residue", "install-failed", "documented-or-source-unsupported",
+    "target-unavailable", "host-containment-unavailable", "test-build-version-policy",
+    "expected-suspended-policy", "prepared-lifecycle-passed",
+    "package-installed-native-unqualified", "external-native-uninstall-required",
+    "native-ownership-unverified",
+))
+
+
+def console_exit(value):
+    # bool is an int subclass, but never an exit code. Bound before serialization.
+    return value if type(value) is int and -(1 << 31) <= value < (1 << 32) else None
+
+
+def console_flag(value):
+    return value if type(value) is bool else None
+
+
+def selected_probe_summary(proof, temp_removed, temp_error, primary_bytes):
+    """Project fixed structured facts; no controller streams or arbitrary labels."""
+    family = proof if type(proof) is dict else {}
+    summary = {"diagnostic": "firebase-probe-summary-v1",
+               "family": {key: console_flag(family.get(key)) for key in (
+                   "timeout", "gate_released", "forced", "settled")},
+               "temp_removed": console_flag(temp_removed),
+               "temp_cleanup_error_present": temp_error is not None,
+               "primary": "missing"}
+    summary["family"].update(
+        child_exit=console_exit(family.get("child_exit")),
+        primary_error_present=family.get("primary_error") is not None,
+        cleanup_error_present=family.get("cleanup_error") is not None)
+    if family.get("settled") is not True:
+        summary["primary"] = "unsettled"
+    elif type(primary_bytes) is not bytes:
+        pass
+    elif len(primary_bytes) > OUTPUT_LIMIT:
+        summary["primary"] = "oversized"
+    else:
+        try:
+            document = json.loads(primary_bytes)
+            row = document.get("case") if type(document) is dict else None
+            if type(row) is not dict:
+                raise ValueError("not a lifecycle row")
+            summary["primary"] = "available"
+            status = row.get("status")
+            summary["status"] = (status if type(status) is str and len(status) <= 64
+                                 and status in SUMMARY_STATUSES else "unrecognized")
+            summary["failed_gates"] = [
+                key for key in ("repeat_verified", "removal_verified", "sentinels_preserved")
+                if row.get(key) is not True]
+            if row.get("status") != "passed":
+                summary["failed_gates"].append("status_passed")
+            if type(row.get("native_residuals")) is not list or row["native_residuals"] != []:
+                summary["failed_gates"].append("native_residuals_empty")
+            summary["commands"] = {}
+            for label in ("install", "list", "repeat_add", "repeat_list", "cleanup", "post_remove_list"):
+                command = row.get(label)
+                command = command if type(command) is dict else {}
+                summary["commands"][label] = {
+                    "exit_code": console_exit(command.get("exit_code")),
+                    "timeout": console_flag(command.get("timeout"))}
+        except (ValueError, TypeError, RecursionError, UnicodeError):
+            # No exception text or partially projected lifecycle object escapes.
+            summary["primary"] = "malformed"
+            for key in ("status", "failed_gates", "commands"):
+                summary.pop(key, None)
+    line = json.dumps(summary, separators=(",", ":"), ensure_ascii=True)
+    if len(line.encode("utf-8")) > CONSOLE_LIMIT:
+        return '{"diagnostic":"firebase-probe-summary-v1","primary":"diagnostic-bound"}'
+    return line
+
+
+def emit_probe_summary(proof, temp_removed, temp_error, primary_bytes):
+    """Observability cannot override the unchanged native/custody verdict."""
+    try:
+        line = selected_probe_summary(proof, temp_removed, temp_error, primary_bytes)
+    except BaseException:
+        line = '{"diagnostic":"firebase-probe-summary-v1","primary":"diagnostic-unavailable"}'
+    try:
+        print(line, flush=True)
+    except BaseException:
+        pass
+
+
 def job_counts(job):
     counts = job.Accounting()
     job.check(job.api.QueryInformationJobObject(
@@ -306,6 +392,7 @@ def run_probe(cli, evidence_dir):
                 except BaseException:
                     diagnostics["temp_cleanup"] = {"status": "unavailable"}
         primary = None
+        data = None
         if report.is_file() and not report.is_symlink() and report.stat().st_size <= OUTPUT_LIMIT:
             data = report.read_bytes()
             primary = {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
@@ -320,6 +407,7 @@ def run_probe(cli, evidence_dir):
         add_failure_diagnostics(receipt, diagnostics)
         with family_report.open("x", encoding="utf-8") as output:
             output.write(json.dumps(receipt, indent=2) + "\n")
+        emit_probe_summary(proof, temp_removed, temp_error, data)
     return 0 if (proof.get("child_exit") == 0 and proof.get("timeout") is False
                  and proof.get("gate_released") is True and proof.get("forced") is False
                  and proof.get("settled") is True and proof.get("primary_error") is None
