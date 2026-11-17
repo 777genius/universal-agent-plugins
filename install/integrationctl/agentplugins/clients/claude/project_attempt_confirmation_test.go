@@ -15,6 +15,7 @@ func TestSurvivingClaudeCommandRecognizesPluginAndProfileProcesses(t *testing.T)
 	executable, profile := filepath.Join(root, "bin", "claude"), filepath.Join(root, "profile")
 	node := filepath.Join(root, "bin", "node.exe")
 	script := filepath.Join(root, "node_modules", "@anthropic-ai", "claude-code", "cli.js")
+	relativeScript := filepath.Join("node_modules", "@anthropic-ai", "claude-code", "cli.js")
 	foreignScript := filepath.Join(root, "node_modules", "other", "cli.js")
 	for _, tc := range []struct {
 		name    string
@@ -23,6 +24,9 @@ func TestSurvivingClaudeCommandRecognizesPluginAndProfileProcesses(t *testing.T)
 	}{
 		{"native plugin command", legacyports.LiveProcess{Executable: "/opt/claude/versions/2.1.325", Argv: []string{executable, "plugin", "install", "demo@m"}}, true},
 		{"node plugin command", legacyports.LiveProcess{Executable: node, Argv: []string{node, script, "plugin", "install", "demo@m"}}, true},
+		{"relative node plugin command", legacyports.LiveProcess{Executable: node, Argv: []string{node, "." + string(filepath.Separator) + relativeScript, "plugin", "install", "demo@m"}}, true},
+		{"relative node script on this profile", legacyports.LiveProcess{Executable: node, Argv: []string{node, relativeScript}, Env: []string{"CLAUDE_CONFIG_DIR=" + profile}}, true},
+		{"foreign relative node script on this profile", legacyports.LiveProcess{Executable: node, Argv: []string{node, filepath.Join("node_modules", "other", "cli.js"), "plugin"}, Env: []string{"CLAUDE_CONFIG_DIR=" + profile}}, false},
 		{"node rewritten arguments on this profile", legacyports.LiveProcess{Executable: node, Argv: []string{node, script}, Env: []string{"CLAUDE_CONFIG_DIR=" + profile}}, true},
 		{"node session on another profile", legacyports.LiveProcess{Executable: node, Argv: []string{node, script, "--resume"}, Env: []string{"CLAUDE_CONFIG_DIR=/elsewhere"}}, false},
 		{"foreign node script on this profile", legacyports.LiveProcess{Executable: node, Argv: []string{node, foreignScript, "plugin", "install"}, Env: []string{"CLAUDE_CONFIG_DIR=" + profile}}, false},

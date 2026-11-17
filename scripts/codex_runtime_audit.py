@@ -20,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 
 _FILES = run_path(str(Path(__file__).with_name("native_client_project_artifacts.py")))
 FILE_LIMIT = 32 << 20
@@ -527,6 +528,78 @@ def public_skill_ready(added, matches, identity):
         "scope": "project", "materialization": "materialized", "activation": "active",
         "verification": "installation_verified", "authentication": "not_required", "policy": "allowed",
     }.items())
+
+
+class CodexPluginSQLiteAudit:
+    """Forward plugin measurement: owned SQLite root, unchanged semantic state.
+
+    Plugin registration and removal remain independently checked by the caller.
+    Native-profile paths are never excluded from its generic scanner.
+    """
+    def __init__(self, binary, case, home, project, environment):
+        self.case, self.project = case, project
+        self.profile, self.temporary = home / ".codex", case / "tmp"
+        self.runtime = home / ".local/state/codex-sqlite"
+        self.config = self.profile / "config.toml"
+        self.pin = str(self.runtime)
+        for directory in (home / ".local", home / ".local/state", self.runtime):
+            _real_directory(directory.parent)
+            if directory == self.runtime or not directory.exists():
+                directory.mkdir(mode=0o700, exist_ok=False)
+            _real_directory(directory)
+        paths = {case, home, project, self.profile, self.temporary, self.runtime}
+        paths.update(self.runtime.parents[:3])
+        self.anchors = {path: _real_directory(path) for path in paths}
+        body = ("sqlite_home = " + json.dumps(self.pin) + "\n").encode()
+        with self.config.open("xb") as stream:
+            stream.write(body)
+        initial_config = _FILES["identity"](self.config.lstat())
+        self.guard()
+        native_env = {key: value for key, value in environment.items()
+                      if key.upper() in {"PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR",
+                                         "TEMP", "TMP", "TMPDIR"}}
+        native_env["CODEX_HOME"] = str(self.profile)
+        listing = asyncio.run(_exchange(
+            Path(binary), project, self.profile, native_env))
+        self.native_version = "0.153.4"
+        self.guard()
+        rows = listing.get("data")
+        if (not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict)
+                or not _path_equal(rows[0].get("cwd"), project)
+                or rows[0].get("errors") not in (None, [])
+                or not isinstance(rows[0].get("skills"), list)):
+            raise ValueError("Codex preinstall inventory is not the selected context")
+        # The preinstall profile must still contain only the authored pin.
+        if (_regular_bytes(self.config, 65536) != body
+                or _FILES["identity"](self.config.lstat()) != initial_config):
+            raise ValueError("Codex preinstall changed the authored config")
+        self.baseline, files = runtime_state(self.runtime, self.temporary)
+        self.primary_anchors = {name: (self.runtime / name).lstat() for name in self.baseline}
+        self.guard()
+        self.observations = [{"phase": "before-install", "runtime_files_fully_read": files}]
+
+    def guard(self):
+        for path, original in self.anchors.items():
+            if not os.path.samestat(original, _real_directory(path)):
+                raise ValueError("Codex plugin SQLite authority root changed")
+        for name, original in getattr(self, "primary_anchors", {}).items():
+            if not os.path.samestat(original, (self.runtime / name).lstat()):
+                raise ValueError("Codex plugin SQLite primary database identity changed")
+        config = tomllib.loads(_regular_bytes(self.config, 65536).decode("utf-8"))
+        if config.get("sqlite_home") != self.pin:
+            raise ValueError("Codex plugin SQLite config authority changed")
+
+    def checkpoint(self, phase):
+        self.guard()
+        _, files = runtime_state(self.runtime, self.temporary, self.baseline)
+        self.guard()
+        self.observations.append({"phase": phase, "runtime_files_fully_read": files})
+
+    def evidence(self):
+        return {"native_version": self.native_version,
+                "runtime_root": str(self.runtime.relative_to(self.case)),
+                "runtime_semantics_unchanged": True, "runtime_baseline": self.baseline,
+                "observations": self.observations}
 
 
 class CodexRuntimeAudit:

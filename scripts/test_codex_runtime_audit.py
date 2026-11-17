@@ -1151,5 +1151,89 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
                         os.kill(child_pid, signal.SIGKILL)
 
 
+class CodexPluginSQLiteAuditTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.case = Path(temporary.name).resolve()
+        self.home, self.project = self.case / 'home', self.case / 'project'
+        self.profile = self.home / '.codex'
+        for path in (self.home, self.project, self.case / 'tmp', self.profile):
+            path.mkdir()
+        self.database = self.home / '.local/state/codex-sqlite/state_5.sqlite'
+
+    async def discover(self, binary, project, profile, environment, **kwargs):
+        self.assertEqual(kwargs, {})
+        self.assertEqual(environment['CODEX_HOME'], str(self.profile))
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute('CREATE TABLE fixture_rows (value TEXT)')
+            connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+            connection.commit()
+        return {'data': [{'cwd': str(project), 'errors': [], 'skills': []}]}
+
+    def create(self):
+        with patch.object(audit, '_exchange', side_effect=self.discover):
+            return audit.CodexPluginSQLiteAudit(Path(sys.executable), self.case,
+                                               self.home, self.project, {})
+
+    def test_wal_representation_preserves_semantics_but_changed_row_refuses(self):
+        observer = self.create()
+        # Public plugin configuration changes are admitted only with the exact pin intact.
+        with observer.config.open('a') as stream:
+            stream.write('\n[plugins."owned@agentplugins-aaaaaaaaaaaa"]\nenabled = true\n')
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute('PRAGMA journal_mode=WAL')
+            connection.execute('PRAGMA wal_autocheckpoint=0')
+            for _ in range(300):
+                connection.execute("UPDATE fixture_rows SET value='temporary'")
+                connection.execute("UPDATE fixture_rows SET value='stable'")
+                connection.commit()
+            self.assertGreater(Path(str(self.database) + '-wal').stat().st_size, 1 << 20)
+            observer.checkpoint('after-public-repeat')
+            connection.execute("UPDATE fixture_rows SET value='changed'")
+            connection.commit()
+            with self.assertRaisesRegex(ValueError, 'table contents changed'):
+                observer.checkpoint('changed-row')
+        self.assertEqual(len(observer.observations), 2)
+        self.assertEqual(observer.evidence()['native_version'], '0.153.4')
+
+    def test_missing_baseline_pin_redirection_and_unexpected_runtime_member_refuse(self):
+        with patch.object(audit, '_exchange', return_value=
+                {'data': [{'cwd': str(self.project), 'skills': []}]}):
+            with self.assertRaisesRegex(ValueError, 'member count'):
+                audit.CodexPluginSQLiteAudit(Path(sys.executable), self.case,
+                                             self.home, self.project, {})
+        # A failed prebaseline constructor is not reusable or silently reset.
+        with self.assertRaises(FileExistsError):
+            self.create()
+
+    def test_primary_database_identity_cannot_be_replaced_with_identical_bytes(self):
+        observer = self.create()
+        body = self.database.read_bytes()
+        held = self.database.with_name('held-primary')
+        self.database.rename(held)
+        self.database.write_bytes(body)
+        with self.assertRaisesRegex(ValueError, 'primary database identity changed'):
+            observer.checkpoint('identical-primary-replacement')
+
+    def test_config_and_runtime_authority_changes_refuse(self):
+        observer = self.create()
+        original = observer.config.read_bytes()
+        observer.config.write_text('sqlite_home = "/foreign"\n')
+        with self.assertRaisesRegex(ValueError, 'config authority changed'):
+            observer.checkpoint('redirected-pin')
+        observer.config.write_bytes(original)
+        foreign = observer.runtime / 'foreign.sqlite'
+        foreign.write_text('not a runtime member')
+        with self.assertRaisesRegex(ValueError, 'unexpected member'):
+            observer.checkpoint('foreign-member')
+        foreign.unlink()
+        held = observer.runtime.with_name('held-runtime')
+        observer.runtime.rename(held)
+        observer.runtime.mkdir()
+        with self.assertRaisesRegex(ValueError, 'authority root changed'):
+            observer.checkpoint('replaced-root')
+
+
 if __name__ == "__main__":
     unittest.main()

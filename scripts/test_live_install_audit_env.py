@@ -16,6 +16,8 @@ def load_audit():
     spec = importlib.util.spec_from_file_location("live_install_audit", file)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    # Unit fixtures inject native executables explicitly, never from the host.
+    module.AGENT_BINARIES.clear()
     return module
 
 
@@ -8097,6 +8099,99 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
                                      'verified-cache-retirement-at-checkpoint')
                 else:
                     self.assertFalse(row['removal_verified'])
+
+
+class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
+    def run_case(self, mutation=None):
+        import sqlite3
+        from contextlib import closing
+        audit = load_audit()
+        source = "github:example/agent-plugin@" + "a" * 40
+        matched = [{"name": "atlassian", "installation_id": "one",
+                    "clients": [{"client_id": "codex",
+                                 "verification": "installation_verified"}]}]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            case = root / "plugin-00"
+            profile = case / "home/.codex"
+            database = case / "home/.local/state/codex-sqlite/state_5.sqlite"
+            commands, registered = [], [False]
+            async def discover(binary, project, native_profile, environment):
+                self.assertEqual(native_profile, profile)
+                self.assertEqual(environment["CODEX_HOME"], str(profile))
+                with closing(sqlite3.connect(database)) as connection:
+                    connection.execute("CREATE TABLE fixture_rows (value TEXT)")
+                    connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+                    connection.commit()
+                if mutation == "prebaseline-config":
+                    (profile / "config.toml").write_text('sqlite_home = "/foreign"\n')
+                elif mutation == "prebaseline-foreign":
+                    (profile / "foreign-neighbor.txt").write_text("changed")
+                elif mutation == "prebaseline-managed":
+                    (case / "uap-data/foreign-managed.txt").write_text("changed")
+                return {"data": [{"cwd": str(project), "errors": [], "skills": []}]}
+            def perform(argv, environment, cwd, timeout=105):
+                commands.append(list(argv))
+                command = argv[1]
+                config = profile / "config.toml"
+                if command == "add":
+                    if not registered[0]:
+                        with config.open("a") as stream:
+                            stream.write('\n[plugins."atlassian@agentplugins-aaaaaaaaaaaa"]\nenabled = true\n')
+                    registered[0] = True
+                    if mutation == "sqlite-row":
+                        with closing(sqlite3.connect(database)) as connection:
+                            connection.execute("UPDATE fixture_rows SET value='changed'")
+                            connection.commit()
+                elif command == "remove":
+                    registered[0] = False
+                    if mutation == "profile-wal":
+                        (profile / "state_5.sqlite-wal").write_bytes(b"x" * ((1 << 20) + 1))
+                return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                        "timeout": False, "_json": {"data": {"installations":
+                            matched if registered[0] else []}}}
+            def uninstall(*args):
+                commands.append(["/inert/codex", "native-uninstall"])
+                config = profile / "config.toml"
+                config.write_text(config.read_text().split("\n[plugins.", 1)[0] + "\n")
+                return {"completed": True}
+            exchange_globals = audit.CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"].__init__.__globals__
+            with (patch.dict(exchange_globals, {"_exchange": discover}),
+                  patch.dict(audit.AGENT_BINARIES, {"codex": "/inert/codex"}, clear=True),
+                  patch.object(audit, "call", side_effect=perform),
+                  patch.object(audit, "matching_installations", return_value=matched),
+                  patch.object(audit, "uninstall_native_codex_plugin", side_effect=uninstall)):
+                return audit.do_case("/inert/uap", "codex", "plugin", source, 0, root,
+                                     {source: "atlassian"}), commands
+
+    def test_plugin_baseline_and_every_command_checkpoint_preserve_raw_scanner(self):
+        row, commands = self.run_case()
+        self.assertEqual(row["status"], "passed")
+        proof = row["codex_plugin_sqlite_proof"]
+        self.assertEqual(proof["native_version"], "0.153.4")
+        self.assertTrue(proof["runtime_semantics_unchanged"])
+        self.assertEqual([observation["phase"] for observation in proof["observations"]],
+                         ["before-install"] + ["after-public-command"] * 4
+                         + ["after-native-uninstall"] + ["after-public-command"] * 2)
+        self.assertEqual([argv[1] for argv in commands],
+                         ["add", "list", "add", "list", "native-uninstall", "remove", "list"])
+        self.assertTrue(row["native_uninstall"]["completed"])
+        self.assertTrue(row["repeat_verified"])
+        self.assertTrue(row["removal_verified"])
+        self.assertTrue(row["sentinels_preserved"])
+        row, _ = self.run_case("profile-wal")
+        self.assertEqual(row["status"], "cleanup-failed")
+        self.assertIn(".codex/state_5.sqlite-wal: unscanned-too-large", row["native_residuals"])
+
+    def test_changed_rows_pin_and_prebaseline_foreign_authority_refuse(self):
+        with self.assertRaisesRegex(ValueError, "table contents changed"):
+            self.run_case("sqlite-row")
+        with self.assertRaisesRegex(ValueError, "config authority changed"):
+            self.run_case("prebaseline-config")
+        for mutation in ("prebaseline-foreign", "prebaseline-managed"):
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(
+                    ValueError, "changed protected fixture authority"):
+                self.run_case(mutation)
 
 
 if __name__ == "__main__":

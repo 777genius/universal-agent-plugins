@@ -1882,6 +1882,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     env = isolated_client_env(home, case_root, data)
     codex_skill_case = target == "codex" and kind == "skill"
     codex_runtime = None
+    codex_plugin_sqlite = None
     codex_add_ready = False
     codex_repeat_ready = False
     def assert_case_unchanged():
@@ -1902,6 +1903,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     raise ValueError("audit case native/project ancestor was redirected")
             if codex_runtime is not None:
                 codex_runtime.guard()
+            if codex_plugin_sqlite is not None:
+                codex_plugin_sqlite.guard()
         except (OSError, RuntimeError) as error:
             raise ValueError("audit case root became unavailable") from error
 
@@ -1909,6 +1912,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         assert_case_unchanged()
         outcome = call(*args, **kwargs)
         assert_case_unchanged()
+        if codex_plugin_sqlite is not None:
+            codex_plugin_sqlite.checkpoint("after-public-command")
         return outcome
 
     if kind == "skill" and target in ("kimi", "grok"):
@@ -1919,6 +1924,16 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         codex_runtime = CODEX_RUNTIME_AUDIT["CodexRuntimeAudit"](
             AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign)
         assert_case_unchanged()
+    if target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
+        protected_home = scoped_snapshot((home,))
+        protected_delivery = scoped_snapshot((project, data))
+        codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
+            AGENT_BINARIES["codex"], case_root, home, project, env)
+        assert_case_unchanged()
+        initialized_home = scoped_snapshot((home,))
+        if (any(initialized_home.get(path) != value for path, value in protected_home.items())
+                or scoped_snapshot((project, data)) != protected_delivery):
+            raise ValueError("Codex preinstall initialization changed protected fixture authority")
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
                      if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)
@@ -2110,6 +2125,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             native_uninstall = uninstall_native_codex_plugin(
                 identity, home, case_root, env, project)
             assert_case_unchanged()
+            if codex_plugin_sqlite is not None:
+                codex_plugin_sqlite.checkpoint("after-native-uninstall")
         attestation = (["--external-uninstalled"] if
                        native_uninstall and native_uninstall["completed"] else [])
         # Grok project Skills have generated bundle names; never select by raw alias.
@@ -2352,6 +2369,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
             "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
             "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
+            **({"codex_plugin_sqlite_proof": codex_plugin_sqlite.evidence()}
+               if codex_plugin_sqlite is not None else {}),
             "copilot_disabled_setting_retained": copilot_disabled_setting_retained,
             "post_list_schema_valid": post_list_schema_valid,
             "post_remove_identity_registered": post_remove_identity_registered,

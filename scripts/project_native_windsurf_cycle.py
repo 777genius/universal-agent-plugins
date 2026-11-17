@@ -581,7 +581,7 @@ def pins(result,paths):
 
 def progress(stage):
     if stage.startswith("add-"):return ("Resolving and validating one Agent Plugin package for every selected target...\nInstalling "+NAME+" for 1 selected clients...\n").encode()
-    if stage=="repeat-add-a":return b"Resolving and validating one Agent Plugin package for every selected target...\n"
+    if stage=="repeat-add-a":return b"Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
     if "update" in stage:return b"Resolving and validating one updated Agent Plugin package for every selected target...\n"
     if "repair" in stage:return b"Resolving and validating each unique exact installed package revision once...\n"
     return b""
