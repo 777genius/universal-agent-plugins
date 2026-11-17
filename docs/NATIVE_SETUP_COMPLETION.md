@@ -24,14 +24,30 @@ their existing behavior. An unclosed probe stops subsequent client mutations.
 Trust and approval preferences survive plugin removal. Updates preserve unrelated
 settings through locked conditional file transactions. A failed write or rollback
 retains its observed native effect; an uncertain effect cannot be reported as
-unchanged or followed by another native probe. The one exception is a failed or
-interrupted client command whose whole process tree was proven closed (Claude
-Code project `plugin marketplace add`, `plugin install`, `plugin uninstall`,
-`plugin marketplace remove`): the adapter may read the client's own registry
-once, read-only, and report only an exactly recognized state. Unproven process
-cleanup, a failed read or an unrecognized state stay uncertain and keep blocking
-the next mutation. Cursor writes only the approval
-store and never invokes native `mcp enable`, which can clear explicit disablement.
+unchanged or followed by another native probe. There are two exceptions, both
+for the Claude Code project commands (`plugin marketplace add`, `plugin install`,
+`plugin uninstall`, `plugin marketplace remove`):
+
+- A failed or interrupted command whose whole process tree was proven closed:
+  the adapter may read the client's own registry once, read-only, and report
+  only an exactly recognized state. Unproven process cleanup, a failed read or
+  an unrecognized state stay uncertain and keep blocking the next mutation.
+- An attempt left by a killed agentplugins process (SIGKILL, OOM, power loss),
+  confirmed by an explicit `repair` or `remove` with `--yes` (`--dry-run`
+  previews the same checks and writes nothing). Here the process tree is not
+  proven closed. Under the mutation lock the confirmation runs one more
+  read-only probe after a process census that is a heuristic, not a proof: on
+  macOS and Linux it refuses while a live process of the user looks like Claude
+  Code and runs a `plugin` command, is bound to the same `CLAUDE_CONFIG_DIR`, or
+  hides both its arguments and environment; it recognizes no other process. On
+  Windows it relies on the kill-on-close job that ends every command with its
+  invocation and lists no processes. Only an exactly recognized state is
+  accepted, and it is never recorded as unchanged: the effect is committed with
+  the recognized ownership, the binding is marked failed, and the ordinary
+  command then finishes. An unrecognized state needs manual recovery.
+
+Cursor writes only the approval store and never invokes native `mcp enable`,
+which can clear explicit disablement.
 Existing deny settings are preserved and checked again before readiness is
 reported. Unknown schemas, foreign ownership and uncertain cleanup never become
 successful activation.

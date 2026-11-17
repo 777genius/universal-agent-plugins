@@ -28,6 +28,9 @@ type preparedClaudeCLIRunner struct {
 	calls, mutations          int
 	// interrupt, when set, fires once on the first matching native mutation.
 	interrupt *claudeCLIInterrupt
+	// surviving models processes a killed earlier run left behind.
+	surviving []legacyports.LiveProcess
+	censusErr error
 }
 
 func (r *preparedClaudeCLIRunner) Run(_ context.Context, cmd legacyports.Command) (legacyports.CommandResult, error) {

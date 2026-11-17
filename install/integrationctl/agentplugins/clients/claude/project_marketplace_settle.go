@@ -27,29 +27,43 @@ func settleClaudeProjectInstall(ctx context.Context, env clients.Env, request do
 	}
 	// The listing keeps the ordinary ClaudeProbeTimeout bound; only the
 	// caller's cancellation is detached for this one read.
-	observeCtx := context.WithoutCancel(ctx)
-	listed, err := runPreparedClaudeList(observeCtx, env, command)
+	exact, after, err := readSettledClaudeProjectInstall(context.WithoutCancel(ctx), env, request, command)
 	if err != nil {
 		return
 	}
-	if verifyClaudeProjectInstalled(observeCtx, request, listed.Stdout) == nil {
-		outcome.NativeEffect = domain.NativeEffectCommitted
+	outcome.NativeEffect = domain.NativeEffectCommitted
+	if exact {
 		outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
 		return
 	}
-	registered, err := claudeProjectMarketplaceRegistered(request.Client.ConfigRoot, request.Plan.ActivePath, request.Plan.PhysicalArtifactID)
-	if err != nil {
-		return
-	}
-	observation, err := inspectClaudeProjectInstall(observeCtx, request, listed.Stdout, registered)
-	if err != nil {
-		return
-	}
 	// Recorded ownership (the previous cache receipt) still matches the client.
-	outcome.NativeEffect = domain.NativeEffectCommitted
-	if registered == before.registered && observation.state == before.state {
+	if after == before {
 		outcome.NativeEffect = domain.NativeEffectUnchanged
 	}
+}
+
+// readSettledClaudeProjectInstall is the one read-only re-read of Claude's own
+// registry once no command that could change it is running. It reports an
+// exact install of the requested delivery, or else the observed state when a
+// later installation accepts it: registration, installation index and every
+// recorded cache verified. Any other state is an error.
+func readSettledClaudeProjectInstall(ctx context.Context, env clients.Env, request domain.ActivationRequest, command legacyports.Command) (bool, claudeProjectState, error) {
+	listed, err := runPreparedClaudeList(ctx, env, command)
+	if err != nil {
+		return false, claudeProjectState{}, err
+	}
+	if verifyClaudeProjectInstalled(ctx, request, listed.Stdout) == nil {
+		return true, claudeProjectState{}, nil
+	}
+	registered, err := claudeProjectMarketplaceRegistered(request.Client.ConfigRoot, request.Plan.ActivePath, request.Plan.PhysicalArtifactID)
+	if err != nil {
+		return false, claudeProjectState{}, err
+	}
+	observation, err := inspectClaudeProjectInstall(ctx, request, listed.Stdout, registered)
+	if err != nil {
+		return false, claudeProjectState{}, err
+	}
+	return false, claudeProjectState{state: observation.state, registered: registered}, nil
 }
 
 // settleClaudeProjectRemoval is the removal counterpart. A state identical to

@@ -65,6 +65,15 @@ type ProcessRunner interface {
 	Run(context.Context, Command) (CommandResult, error)
 }
 
+// LiveProcess is a running process as the operating system reports it.
+// Executable, Argv and Env stay empty when the system does not expose them.
+type LiveProcess struct {
+	PID        int
+	Executable string
+	Argv       []string
+	Env        []string
+}
+
 type Clock interface {
 	Now() time.Time
 }
