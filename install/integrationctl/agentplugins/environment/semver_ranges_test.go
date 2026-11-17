@@ -58,7 +58,7 @@ func TestRegistryVersionSyntaxRejectsUnsafeInput(t *testing.T) {
 func TestRegistryVersionSelectorClassification(t *testing.T) {
 	for _, tc := range []struct {
 		expression string
-		kind SelectorKind
+		kind       SelectorKind
 	}{
 		{"1.2.3", SelectorVersion},
 		{"1.2.3-rc.1", SelectorVersion},
