@@ -35,11 +35,20 @@ func TestMainUsesProductionDirectoryTrustAndReleaseBootstrap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(client.Trust.Keys) != 1 || client.Trust.Keys[0].ID != "uap-directory-2026-01" || client.Trust.Keys[0].State != directoryv1.KeyCurrent {
+	if len(client.Trust.Keys) != 2 {
 		t.Fatalf("production Directory trust = %+v", client.Trust.Keys)
 	}
-	if encoded := base64.StdEncoding.EncodeToString(client.Trust.Keys[0].PublicKey); encoded != "HalXARjat+v3ylTPLMAnvuavRo4ZfrF+DbWwsjlp2bI=" {
-		t.Fatalf("unexpected production Directory public key: %x", client.Trust.Keys[0].PublicKey)
+	for index, want := range []struct {
+		id, key string
+		state   directoryv1.KeyState
+	}{
+		{"uap-directory-2026-01", "HalXARjat+v3ylTPLMAnvuavRo4ZfrF+DbWwsjlp2bI=", directoryv1.KeyCurrent},
+		{"uap-directory-2026-11", "k0F0ZlRXsgUa3+OMOUle6GdpihXUUcHI+42wNeuGAMc=", directoryv1.KeyNext},
+	} {
+		got := client.Trust.Keys[index]
+		if got.ID != want.id || got.State != want.state || base64.StdEncoding.EncodeToString(got.PublicKey) != want.key {
+			t.Fatalf("production Directory trust key %d = %+v", index, got)
+		}
 	}
 	if !client.RequireEmbeddedBootstrap {
 		t.Fatal("production Directory client did not require a release-bound bootstrap")
