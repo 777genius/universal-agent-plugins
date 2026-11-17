@@ -149,6 +149,44 @@ newest one. None of them produces a release check, and keeping every one of
 those runs would add heavy E2E time on each merge. Pages keeps its serialized
 `github-pages` group.
 
+## Heavy pull request lanes wait for a ready pull request
+
+Draft pull requests keep the fast lane. Lanes that start native clients or
+wide GitHub-hosted matrices (Tier 1) skip a draft and run when the pull
+request is ready. Each such job, or the root job its matrix needs, uses
+exactly this condition, written once in `repotests/ci_pr_tiers_test.go`:
+
+```yaml
+if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+```
+
+The test accepts exactly three condition forms: the gate alone,
+`always() && (<gate>)` for an aggregate that would otherwise run after its
+skipped needs, and the published audits' `workflow_run` success check
+`&& (<gate>)`. A job that only needs a gated job and reads no status function
+(`always()`, `success()`, `failure()`, `cancelled()`) skips with it. The test
+also pins each workflow's exact triggers, its pull request types (no
+`labeled` or `edited`, so a label or title change cannot cancel and restart a
+running lane) and its concurrency group, with cancellation only for pull
+request events. Every Tier 1 workflow lists `ready_for_review` in its
+pull request types, so marking a pull request ready starts the full lane on
+the head that becomes mergeable, and each later push to the ready pull request
+runs it again. GitHub does not merge a draft, so the final head of a merged
+pull request has had a Tier 1 run whenever the lane's paths matched. Nothing
+requires that run to succeed before merging; that remains a review decision.
+
+To get Tier 1 evidence while a pull request is still a draft, dispatch the
+workflow on its branch (`gh workflow run <file> --ref <branch>`). Pushes to
+`main`, schedules, workflow runs and dispatches never read the draft flag, so
+release and post-publish evidence is unchanged. None of these workflows
+produces a check that the release workflow requires.
+
+Tier 1 today: Hermes no-auth tools call, Kiro no-auth installation, Kimi 2.5.2
+no-auth call, Cline managed project session, Project Native Runtime, Published
+Marketing Kit Project E2E, both live installer audits, and the published npm
+catalog and additional clients audits. `repotests/ci_pr_tiers_test.go` keeps
+this list and fails when a job of one of them could start on a draft.
+
 ## Run Pages on hosted runners at an exact source commit
 
 The existing Pages workflow accepts a manual boolean `github_hosted` input,
