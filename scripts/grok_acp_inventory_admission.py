@@ -200,6 +200,22 @@ def session_rpc_frame(value, state, req, send):
             for item in state['notifications']:
                 if item['method'] == '_x.ai/session/setup':
                     require(item['params']['sessionId'] in (None, sid), 'session-notification-identity')
+        elif value['method'] == '_x.ai/session_notification':
+            # Grok 1.0.70 emits a single model_changed metadata notice between
+            # the two verified catalogs and the session/new response.
+            catalogs = [row for row in state['notifications'] if row['method'] == 'session/update']
+            require(req.get('mode') == SESSION_MODE and state['initialize'] is not None
+                    and state['session'] is None and state['plugins'] is None
+                    and len(catalogs) == 2
+                    and not any(row['method'] == '_x.ai/session_notification' for row in state['notifications']),
+                    'notification-refused')
+            params = closed(value['params'], 'sessionId update')
+            update = closed(params['update'], 'sessionUpdate model_id')
+            require(update == {'sessionUpdate':'model_changed','model_id':'uap-local-driver'},
+                    'model-changed-notification')
+            require(type(params['sessionId']) is str
+                    and params['sessionId'] == catalogs[0]['params']['sessionId'] == catalogs[1]['params']['sessionId'],
+                    'session-notification-identity')
         elif value['method'] == 'session/update':
             session_available_commands(value['params'], state, req)
         else:
@@ -211,7 +227,7 @@ def session_rpc_frame(value, state, req, send):
             require(params['sessionId'] is None or type(params['sessionId']) is str
                     and 0 < len(params['sessionId']) <= 256 and params['sessionId'].isascii()
                     and all(32 <= ord(x) <= 126 for x in params['sessionId']), 'session-id')
-        if value['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized', 'session/update'):
+        if value['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized', 'session/update', '_x.ai/session_notification'):
             if state['session'] is not None:
                 require(value['params']['sessionId'] in (None, state['session']['result']['sessionId']), 'session-notification-identity')
             for item in state['notifications']:
@@ -234,7 +250,7 @@ def session_rpc_frame(value, state, req, send):
         require(type(sid) is str and 0 < len(sid) <= 256 and sid.isascii()
                 and all(32 <= ord(x) <= 126 for x in sid), 'session-id')
         for item in state['notifications']:
-            if item['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized', 'session/update'):
+            if item['method'] in ('_x.ai/session/setup', '_x.ai/mcp_initialized', 'session/update', '_x.ai/session_notification'):
                 require(item['params']['sessionId'] in (None, sid), 'session-notification-identity')
         if '_meta' in result:
             require(type(result['_meta']) is dict, 'session-meta')

@@ -1474,6 +1474,57 @@ class SessionOnlyContracts(unittest.TestCase):
             self.assertEqual(case.digest(json.dumps(frame,separators=(',',':')).encode()),expected)
         return state,req,first,second
 
+    def model_change_notice(self, sid):
+        return {'jsonrpc':'2.0','method':'_x.ai/session_notification','params':{
+            'sessionId':sid,'update':{'sessionUpdate':'model_changed','model_id':'uap-local-driver'}}}
+
+    def test_measured_model_change_requires_real_session_and_inventory_replies(self):
+        prefix,req,first,second=self.repeated_catalog_fixture()
+        sid=first['params']['sessionId'];notice=self.model_change_notice(sid)
+        reply={'jsonrpc':'2.0','id':2,'result':{'sessionId':sid}}
+        listing={'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}}
+        record,state=self.repeated_catalog_command(prefix,req,(first,second,notice),(reply,listing))
+        self.assertIsNone(record['error'])
+        self.assertEqual(state['notifications'],prefix['notifications']+[first,second,notice])
+        self.assertEqual(state['session'],reply);self.assertEqual(state['plugins'],listing)
+        record,state=self.repeated_catalog_command(prefix,req,(first,second,notice),())
+        self.assertEqual(record['error'],'protocol-refused')
+        self.assertEqual(state['notifications'],prefix['notifications']+[first,second,notice])
+        self.assertIsNone(state['session']);self.assertIsNone(state['plugins'])
+
+    def test_measured_model_change_refuses_foreign_replay_unknown_and_out_of_order_frames(self):
+        changes=('foreign-session','boolean-session','foreign-model','model-case','additional-update',
+                 'missing-model','additional-params','method','duplicate','before-second-catalog',
+                 'after-session','after-inventory','wrong-mode','wrong-reply-session')
+        for change in changes:
+            state,req,first,second=self.repeated_catalog_fixture();sent=[];sid=first['params']['sessionId']
+            case.session_rpc_frame(first,state,req,sent.append)
+            if change!='before-second-catalog':case.session_rpc_frame(second,state,req,sent.append)
+            notice=self.model_change_notice(sid)
+            if change=='foreign-session':notice['params']['sessionId']='foreign'
+            elif change=='boolean-session':notice['params']['sessionId']=True
+            elif change=='foreign-model':notice['params']['update']['model_id']='foreign'
+            elif change=='model-case':notice['params']['update']['sessionUpdate']='ModelChanged'
+            elif change=='additional-update':notice['params']['update']['private']='no'
+            elif change=='missing-model':notice['params']['update'].pop('model_id')
+            elif change=='additional-params':notice['params']['private']='no'
+            elif change=='method':notice['method']='_x.ai/session_notification_unknown'
+            elif change=='duplicate':case.session_rpc_frame(copy.deepcopy(notice),state,req,sent.append)
+            elif change in ('after-session','after-inventory'):
+                case.session_rpc_frame({'jsonrpc':'2.0','id':2,'result':{'sessionId':sid}},
+                                       state,req,sent.append)
+                if change=='after-inventory':
+                    case.session_rpc_frame({'jsonrpc':'2.0','id':3,'result':{'result':{'plugins':[]}}},
+                                           state,req,sent.append)
+            elif change=='wrong-mode':req['mode']='not-session-only'
+            elif change=='wrong-reply-session':
+                case.session_rpc_frame(notice,state,req,sent.append)
+                notice={'jsonrpc':'2.0','id':2,'result':{'sessionId':'foreign'}}
+            previous,sent_before=copy.deepcopy(state),copy.deepcopy(sent)
+            with self.subTest(change=change),self.assertRaises(ValueError):
+                case.session_rpc_frame(notice,state,req,sent.append)
+            self.assertEqual(state,previous);self.assertEqual(sent,sent_before)
+
     def repeated_catalog_command(self, prefix, req, notices, replies):
         init=prefix['initialize'];frames=prefix['notifications']+list(notices)+list(replies)
         first=json.dumps(init,separators=(',',':')).encode()+b'\n'
@@ -3681,6 +3732,7 @@ class SessionMeasurementCompletionContracts(unittest.TestCase):
         prefix, _, first, second = SessionOnlyContracts().repeated_catalog_fixture()
         sid = first['params']['sessionId']
         frames = [prefix['initialize'], *prefix['notifications'], first, second,
+                  SessionOnlyContracts().model_change_notice(sid),
                   dict(jsonrpc='2.0', id=2, result=dict(sessionId=sid)),
                   dict(jsonrpc='2.0', id=3, result=dict(result=dict(plugins=[])))]
         rpc = dict(initialize=None, session=None, plugins=None, notifications=[])
