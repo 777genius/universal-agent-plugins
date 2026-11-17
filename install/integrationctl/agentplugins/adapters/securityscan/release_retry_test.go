@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func pinRetryTestRelease(t *testing.T, archive []byte) {
@@ -181,5 +183,102 @@ func TestDownloadReleaseArchiveDoesNotRetryPermanentNetError(t *testing.T) {
 	_, err := downloadReleaseArchive(context.Background(), client, "https://github.com/immutable/lintai")
 	if err == nil || requests.Load() != 1 {
 		t.Fatalf("permanent network error must fail on first attempt: err=%v requests=%d", err, requests.Load())
+	}
+}
+
+func TestReleaseScannerReusesReadOnlyCacheWithoutDownloadingOrWriting(t *testing.T) {
+	archive := tarArchive(t, "lintai", []byte("pinned-scanner"))
+	pinRetryTestRelease(t, archive)
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write(archive)
+	}))
+	defer server.Close()
+	shared := t.TempDir()
+	installed := filepath.Join(shared, domain.SecurityScannerVersion, "test-test", "lintai")
+	if err := os.MkdirAll(filepath.Dir(installed), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installed, []byte("already-installed"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	private := t.TempDir()
+	scanner := ReleaseScanner{Root: private, ReadOnlyRoot: shared, HTTPClient: server.Client(), Origin: server.URL + "/", GOOS: "test", GOARCH: "test"}
+	got, err := scanner.resolve(context.Background())
+	if err != nil || got != installed {
+		t.Fatalf("path=%q err=%v, want the shared scanner %q", got, err, installed)
+	}
+	if requests.Load() != 0 {
+		t.Fatalf("a scanner already in the shared cache must not be downloaded, requests=%d", requests.Load())
+	}
+	if entries, _ := os.ReadDir(private); len(entries) != 0 {
+		t.Fatalf("reusing the shared scanner must not write the private root: %v", entries)
+	}
+	if body, err := os.ReadFile(installed); err != nil || string(body) != "already-installed" {
+		t.Fatalf("the shared scanner must stay untouched: %q %v", body, err)
+	}
+}
+
+// Only an ordinary file counts as an installed scanner; anything else in the
+// shared cache is ignored and the verified download goes to the private root.
+func TestReleaseScannerIgnoresNonRegularEntriesInReadOnlyCache(t *testing.T) {
+	archive := tarArchive(t, "lintai", []byte("pinned-scanner"))
+	pinRetryTestRelease(t, archive)
+	for name, place := range map[string]func(t *testing.T, path string){
+		"directory": func(t *testing.T, path string) {
+			if err := os.MkdirAll(path, 0o700); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"symlink": func(t *testing.T, path string) {
+			target := filepath.Join(filepath.Dir(path), "elsewhere")
+			if err := os.WriteFile(target, []byte("planted"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, path); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				requests.Add(1)
+				_, _ = w.Write(archive)
+			}))
+			defer server.Close()
+			shared, private := t.TempDir(), t.TempDir()
+			slot := filepath.Join(scannerDirectory(shared, "test/test"), "lintai")
+			if err := os.MkdirAll(filepath.Dir(slot), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			place(t, slot)
+			scanner := ReleaseScanner{Root: private, ReadOnlyRoot: shared, HTTPClient: server.Client(), Origin: server.URL + "/", GOOS: "test", GOARCH: "test"}
+			got, err := scanner.resolve(context.Background())
+			if err != nil || !strings.HasPrefix(got, private) || requests.Load() != 1 {
+				t.Fatalf("path=%q err=%v requests=%d, want one verified download into the private root", got, err, requests.Load())
+			}
+		})
+	}
+}
+
+func TestReleaseScannerFallsBackToPrivateRootWhenSharedCacheIsEmpty(t *testing.T) {
+	archive := tarArchive(t, "lintai", []byte("pinned-scanner"))
+	pinRetryTestRelease(t, archive)
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		_, _ = w.Write(archive)
+	}))
+	defer server.Close()
+	shared, private := t.TempDir(), t.TempDir()
+	scanner := ReleaseScanner{Root: private, ReadOnlyRoot: shared, HTTPClient: server.Client(), Origin: server.URL + "/", GOOS: "test", GOARCH: "test"}
+	got, err := scanner.resolve(context.Background())
+	if err != nil || !strings.HasPrefix(got, private) || requests.Load() != 1 {
+		t.Fatalf("path=%q err=%v requests=%d, want one download into the private root", got, err, requests.Load())
+	}
+	if entries, _ := os.ReadDir(shared); len(entries) != 0 {
+		t.Fatalf("the shared cache must never be written: %v", entries)
 	}
 }

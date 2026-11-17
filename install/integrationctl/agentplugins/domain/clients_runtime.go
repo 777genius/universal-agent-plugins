@@ -35,21 +35,9 @@ type DetectedClient struct {
 	// DetectionError is private diagnostic evidence. A failed client must not
 	// contribute paths or become a lifecycle target.
 	DetectionError error `json:"-"`
-}
-
-// SuggestsCursorAgentProjectScope identifies the detected Agent surface that
-// can explain an unavailable non-project Cursor target. It does not infer
-// whether an editor surface is present or grant target eligibility.
-func (client DetectedClient) SuggestsCursorAgentProjectScope(scope InstallScope) bool {
-	if client.ClientID != ClientCursor || scope == ScopeProject {
-		return false
-	}
-	for _, surface := range client.Surfaces {
-		if surface.ID == CursorAgentSurfaceID && surface.Detected {
-			return true
-		}
-	}
-	return false
+	// NotDetectedHint is the client's own advice for a client that is present
+	// in another form but not selectable in this scope. It is empty otherwise.
+	NotDetectedHint string `json:"-"`
 }
 
 type ClientCapabilities struct {

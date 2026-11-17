@@ -42,6 +42,11 @@ func TestCursorProjectRegistrySelectionPreservesUserAuthority(t *testing.T) {
 			project := cursorSelectionClient(t, cursorSelectionDetector(home, all.Project(), binaries), false)
 			assertCursorSelection(t, user, row.editor && !row.invalid, row.invalid, home, binaries["cursor"])
 			assertCursorSelection(t, project, (row.editor || row.agent) && !row.invalid, row.invalid, home, binaries["cursor"])
+			// Only the user-scope adapter explains an agent-only host, and only
+			// while Cursor is not selectable there.
+			if wantHint := row.agent && !row.editor && !row.invalid; (user.NotDetectedHint != "") != wantHint || project.NotDetectedHint != "" {
+				t.Fatalf("hints user=%q project=%q, want user hint %v and none for project", user.NotDetectedHint, project.NotDetectedHint, wantHint)
+			}
 			if !reflect.DeepEqual(user.Surfaces, project.Surfaces) {
 				t.Fatal("project selection changed raw editor/Agent/profile evidence")
 			}
