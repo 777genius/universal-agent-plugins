@@ -8,12 +8,13 @@ import (
 )
 
 // finishInterruptedOperations performs the transactional recovery that doctor
-// promises for a rerun of the intended add or remove. A run interrupted after
-// its state commit leaves an open directory journal and a hidden backup. Planning
-// against that leftover cannot reach the mutation path's own recovery: removal
-// reports the committed binding as not installed, and add reads the backup as a
-// foreign native identity or is refused as pending recovery. Dry runs never
-// recover; the installer recovers the complete recorded scope or refuses it.
+// promises for a rerun of the intended add, update, repair or remove. A run
+// interrupted after its state commit leaves an open directory journal and a
+// hidden backup. Planning against that leftover cannot reach the mutation
+// path's own recovery: removal reports the committed binding as not installed,
+// and the backup reads as a foreign native identity or pending recovery. Dry
+// runs never recover; the installer recovers the complete recorded scope or
+// refuses it, so environment-owned journals stay with deps recovery.
 func finishInterruptedOperations(ctx context.Context, app App, opts *options) error {
 	if app.Installer == nil || opts.dryRun {
 		return nil
@@ -22,9 +23,13 @@ func finishInterruptedOperations(ctx context.Context, app App, opts *options) er
 	if !pending {
 		return nil
 	}
-	writeProgress(app, opts.format, "Finishing an operation interrupted in an earlier run...")
-	if _, err := app.Installer.Recover(ctx, view); err != nil {
+	result, err := app.Installer.Recover(ctx, view)
+	if err != nil {
 		return fmt.Errorf("finish interrupted operation: %w", err)
+	}
+	if result.Outcome == installer.OutcomeCompleted {
+		opts.finishedInterrupted = true
+		writeProgress(app, opts.format, "Finished the interrupted operation.")
 	}
 	return nil
 }
