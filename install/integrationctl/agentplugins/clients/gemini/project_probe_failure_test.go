@@ -75,7 +75,7 @@ func TestGeminiInventoryForwardsOnlyExplicitProfileContextEnvironment(t *testing
 		"TEMP": filepath.Join(root, "temp"), "TMP": filepath.Join(root, "tmp"),
 		"TMPDIR": filepath.Join(root, "tmpdir"), "GEMINI_RESTRICTED_MODE": "false",
 		"GEMINI_CLI_TRUST_WORKSPACE": "false", "LANG": "en_US.UTF-8", "LC_ALL": "en_US.UTF-8",
-		"TZ": "UTC",
+		"TZ":                              "UTC",
 		"GEMINI_CLI_SYSTEM_SETTINGS_PATH": filepath.Join(request.Client.ConfigRoot, "inventory-system.json"),
 		"GEMINI_CLI_SYSTEM_DEFAULTS_PATH": filepath.Join(request.Client.ConfigRoot, "inventory-defaults.json"),
 	}
