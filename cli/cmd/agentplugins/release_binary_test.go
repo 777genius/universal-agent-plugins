@@ -24,7 +24,7 @@ func TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride(t *testing.T) {
 		binary += ".exe"
 	}
 	goExecutable := filepath.Join(runtime.GOROOT(), "bin", "go")
-	build := exec.Command(goExecutable, "build", "-trimpath", "-ldflags=-s -w -X main.version=release-binary-test", "-o", binary, "./cmd/agentplugins")
+	build := exec.Command(goExecutable, "build", "-trimpath", "-ldflags=-s -w -X main.version=release-binary-test -X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Enabled=release-cli-contract-v1 -X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Revision=1111111111111111111111111111111111111111", "-o", binary, "./cmd/agentplugins")
 	build.Dir = moduleRoot
 	build.Env = replaceEnvironment(os.Environ(), map[string]string{
 		"CGO_ENABLED": "0", "GOWORK": "off", "GOTOOLCHAIN": "local", "GOFLAGS": "-buildvcs=false -p=1",
@@ -59,6 +59,12 @@ func TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride(t *testing.T) {
 	}
 	if strings.TrimSpace(string(output)) != "agentplugins release-binary-test" {
 		t.Fatalf("release-built binary output = %q", output)
+	}
+	author := exec.Command(binary, "author", "--help")
+	author.Env = replaceEnvironment(os.Environ(), malicious)
+	authorOut, authorErr := author.CombinedOutput()
+	if authorErr != nil || !bytes.Contains(authorOut, []byte("init")) || !bytes.Contains(authorOut, []byte("validate")) {
+		t.Fatalf("release-built author help missing: %v\n%s", authorErr, authorOut)
 	}
 	if _, err := os.Lstat(home); !os.IsNotExist(err) {
 		t.Fatalf("release-built binary mutated AGENTPLUGINS_HOME while rejecting caller conformance data: %v", err)

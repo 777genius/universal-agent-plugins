@@ -79,7 +79,7 @@ func TestStableReleaseRequiresVerifiedReproducibleBootstrapBeforeBuild(t *testin
 		"-expected-key-id " + defaultDirectoryKeyID,
 		"-expected-public-key " + defaultDirectoryPublicKey,
 		"-release-at \"${release_at}\"",
-		"CGO_ENABLED=0 go build -trimpath -ldflags=\"-s -w -X main.version=${version}\" -o \"${RUNNER_TEMP}/${asset}\" ./cmd/agentplugins",
+		"CGO_ENABLED=0 go build -trimpath -ldflags=\"-s -w -X main.version=${version} -X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Enabled=release-cli-contract-v1 -X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Revision=${SOURCE_COMMIT}\" -o \"${RUNNER_TEMP}/${asset}\" ./cmd/agentplugins",
 	} {
 		if !strings.Contains(workflow, required) {
 			t.Fatalf("agentplugins stable release lacks %q", required)
