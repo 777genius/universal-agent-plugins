@@ -8329,44 +8329,97 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
         return env
 
     def test_timeout_and_exited_launcher_reap_only_owned_descendants(self):
-        from scripts.test_codex_runtime_audit import process_running
+        import ctypes as C
+        from ctypes import wintypes as W
+        from concurrent.futures import ThreadPoolExecutor
+        import time
+
+        api = C.WinDLL("kernel32", use_last_error=True)
+        api.OpenProcess.argtypes, api.OpenProcess.restype = [W.DWORD, W.BOOL, W.DWORD], W.HANDLE
+        api.WaitForSingleObject.argtypes, api.WaitForSingleObject.restype = [W.HANDLE, W.DWORD], W.DWORD
+        api.CloseHandle.argtypes, api.CloseHandle.restype = [W.HANDLE], W.BOOL
         for exit_leader in (False, True):
             with self.subTest(exit_leader=exit_leader), TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve()
                 audit = load_audit()
+                gate, ready = root / "release-owned", root / "owned-ready"
                 ambient = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"],
                                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                                            stderr=subprocess.DEVNULL)
                 child = "import time; time.sleep(120)"
                 body = ("import json,os,subprocess,sys,time; from pathlib import Path; "
                         f"child=subprocess.Popen([sys.executable,'-c',{child!r}],stdin=subprocess.DEVNULL); "
-                        f"Path({str(root / 'owned-pids.json')!r}).write_text(json.dumps([os.getpid(),child.pid])); "
-                        "print('{\"result\":\"success\",\"private\":\"timeout-owned-bytes\"}',flush=True); "
-                        + ("os._exit(0)" if exit_leader else "time.sleep(120)"))
+                        f"pending=Path({str(root / 'owned-pids.pending')!r}); "
+                        "pending.write_text(json.dumps([os.getpid(),child.pid])); "
+                        f"pending.replace({str(root / 'owned-pids.json')!r}); "
+                        f"Path({str(ready)!r}).write_text('ready'); "
+                        "print('{\"result\":\"success\",\"private\":\"timeout-owned-bytes\"}',flush=True)\n"
+                        f"deadline=time.monotonic()+3\n"
+                        f"while not Path({str(gate)!r}).exists():\n"
+                        "    if time.monotonic() >= deadline: raise RuntimeError('inert owner gate expired')\n"
+                        "    time.sleep(.01)\n"
+                        + ("os._exit(0)\n" if exit_leader else "time.sleep(120)\n"))
+                handles = {}
                 try:
-                    result = audit.call([sys.executable, "-c", body], self.environment(root), root,
-                                        timeout=3, capture_files=True)
-                    self.assertIsNone(result["exit_code"])
-                    self.assertIsNone(result.get("_json"))
-                    self.assertEqual(result["timeout"], not exit_leader)
-                    if not exit_leader:
+                    with ThreadPoolExecutor(max_workers=1) as worker:
+                        future = worker.submit(audit.call, [sys.executable, "-c", body],
+                                               self.environment(root), root, timeout=3, capture_files=True)
+                        try:
+                            deadline = time.monotonic() + 3
+                            while not ready.exists():
+                                self.assertLess(time.monotonic(), deadline, "owned fixture startup deadline")
+                                self.assertFalse(future.done(), "owned fixture exited before its startup gate")
+                                time.sleep(.01)
+                            pids = json.loads((root / "owned-pids.json").read_text())
+                            self.assertEqual(len(pids), 2)
+                            for role, pid in zip(("launcher", "descendant"), pids):
+                                handle = api.OpenProcess(0x00100000, False, pid)
+                                self.assertTrue(handle, {"role": role, "winerror": C.get_last_error()})
+                                handles[role] = handle
+                                self.assertEqual(api.WaitForSingleObject(handle, 0), 258, {"role": role})
+                        finally:
+                            gate.write_text("release")
+                        result = future.result(timeout=13)
+                    waits = {role: int(api.WaitForSingleObject(handle, 0))
+                             for role, handle in handles.items()}
+                    refusal = result.get("stderr_tail") == "owned Windows command descendants remained after launcher exit"
+                    error = result.get("stderr_tail", "")
+                    token = error[10:].partition("]")[0] if error.startswith("[WinError ") else ""
+                    winerror = int(token) if token.isascii() and token.isdigit() and len(token) <= 10 else None
+                    winerror = winerror if winerror is None or winerror <= 0xffffffff else None
+                    facts = {"owned_waits": waits, "intended_refusal": refusal,
+                             "timeout": result["timeout"], "exit_code": result["exit_code"],
+                             "winerror": winerror}
+                    self.assertIsNone(result["exit_code"], facts)
+                    self.assertIsNone(result.get("_json"), facts)
+                    self.assertEqual(result["timeout"], not exit_leader, facts)
+                    if exit_leader:
+                        self.assertTrue(refusal, facts)
+                    else:
                         self.assertIn("timeout-owned-bytes", result["stdout_tail"])
-                    pids = json.loads((root / "owned-pids.json").read_text())
-                    self.assertEqual(len(pids), 2)
-                    self.assertTrue(all(not process_running(pid) for pid in pids))
+                    self.assertEqual(waits, {"launcher": 0, "descendant": 0}, facts)
                     self.assertIsNone(ambient.poll())
                 finally:
-                    ambient.terminate()
-                    ambient.wait(timeout=5)
+                    try:
+                        gate.write_text("release")
+                    finally:
+                        failures = []
+                        for role, handle in handles.items():
+                            if not api.CloseHandle(handle):
+                                failures.append({"role": role, "winerror": C.get_last_error()})
+                        try:
+                            self.assertEqual(failures, [])
+                        finally:
+                            ambient.terminate()
+                            ambient.wait(timeout=5)
 
     def test_assignment_refusal_does_not_release_command_gate(self):
-        from scripts.test_codex_runtime_audit import process_running
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             audit = load_audit()
             attempted = []
             def refused_job(process):
-                attempted.append(process.pid)
+                attempted.append(process)
                 raise OSError("inert assignment refusal")
             marker = root / "must-not-start"
             command = [sys.executable, "-c",
@@ -8375,7 +8428,7 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
                 result = audit.call(command, self.environment(root), root, timeout=3, capture_files=True)
             self.assertEqual(len(attempted), 1)
             self.assertFalse(marker.exists())
-            self.assertFalse(process_running(attempted[0]))
+            self.assertIsNotNone(attempted[0].poll())
             self.assertIsNone(result["exit_code"])
             self.assertFalse(result["timeout"])
 
