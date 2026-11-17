@@ -8432,6 +8432,78 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
             self.assertIsNone(result["exit_code"])
             self.assertFalse(result["timeout"])
 
+    def test_owned_job_closer_refuses_unknown_members_generation_and_unsignaled_handles(self):
+        import ctypes as C
+        import time
+        from types import SimpleNamespace
+
+        class Accounting(C.Structure):
+            _fields_ = [("times", C.c_int64 * 4), ("faults", C.c_uint32),
+                        ("total", C.c_uint32), ("active", C.c_uint32), ("terminated", C.c_uint32)]
+        for mutation in ("clean", "capture-generation", "termination-generation", "after-wait-generation",
+                         "wait", "foreign", "open", "partial-open", "short-list", "oversized-list",
+                         "deadline", "terminate"):
+            with self.subTest(mutation=mutation):
+                audit = load_audit()
+                queries, terminated, closed, waited = [], [], [], []
+                def query(_job, kind, output, _size, _result):
+                    info = output._obj
+                    if kind == 1:
+                        queries.append(kind)
+                        threshold = {"capture-generation": 2, "termination-generation": 3,
+                                     "after-wait-generation": 4}.get(mutation, 100)
+                        info.total, info.active = (3 if len(queries) >= threshold else 2), 0
+                    else:
+                        self.assertEqual(kind, 3)
+                        info.assigned = 65 if mutation == "oversized-list" else 2 if mutation in (
+                            "short-list", "partial-open") else 1
+                        info.listed = 65 if mutation == "oversized-list" else 2 if mutation == "partial-open" else 1
+                        info.pids[0], info.pids[1] = 101, 102
+                    return 1
+                def opened(_rights, inherit, pid):
+                    self.assertEqual(_rights, 0x00101000)
+                    self.assertFalse(inherit)
+                    return 0 if mutation == "open" or mutation == "partial-open" and pid == 102 else pid + 100
+                def membership(handle, job, result):
+                    self.assertEqual((handle, job), (201, 100))
+                    result._obj.value = mutation != "foreign"
+                    return 1
+                def wait(handle, milliseconds):
+                    waited.append((handle, milliseconds))
+                    return 258 if mutation == "wait" else 0
+                def close(handle):
+                    closed.append(handle)
+                    return 1
+                def terminate(handle, code):
+                    terminated.append((handle, code))
+                    return 0 if mutation == "terminate" else 1
+                def check(value):
+                    if not value:
+                        raise OSError("inert API refusal")
+                api = SimpleNamespace(QueryInformationJobObject=query, OpenProcess=opened,
+                                      IsProcessInJob=membership, WaitForSingleObject=wait,
+                                      TerminateJobObject=terminate, CloseHandle=close)
+                job = SimpleNamespace(C=C, api=api, Accounting=Accounting, handle=100, check=check)
+                if mutation == "clean":
+                    self.assertTrue(audit._windows_file_close(job, time.monotonic() + 5))
+                else:
+                    expected_error = ("membership changed during capture" if mutation == "capture-generation"
+                                      else "membership changed during termination" if mutation in (
+                                          "termination-generation", "after-wait-generation")
+                                      else "did not signal exit" if mutation == "wait"
+                                      else "not in the owned Windows job" if mutation == "foreign"
+                                      else "member list is incomplete" if mutation in ("short-list", "oversized-list")
+                                      else "cleanup deadline" if mutation == "deadline"
+                                      else "inert API refusal")
+                    with self.assertRaisesRegex(OSError, expected_error):
+                        audit._windows_file_close(job, time.monotonic() + (-1 if mutation == "deadline" else 5))
+                self.assertEqual(terminated, [(100, 97)])
+                self.assertEqual(closed[-1], 100)
+                self.assertEqual(len(closed), len(set(closed)))
+                expected = [100] if mutation in ("open", "short-list", "oversized-list", "deadline") else [201, 100]
+                self.assertEqual(closed, expected)
+                self.assertTrue(all(0 <= milliseconds <= 5000 for _, milliseconds in waited))
+
     def test_closed_success_keeps_exact_json_and_full_capture_uses_old_runner(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:

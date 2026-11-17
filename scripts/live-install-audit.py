@@ -162,6 +162,90 @@ def validate_fixtures(doc):
         raise ValueError("Insufficiently diverse publishers")
 
 
+def _windows_file_close(job, deadline):
+    """Wait original current-member handles; a job count alone is not exit."""
+    import time
+    C, api = job.C, job.api
+    handles, failure, generation = [], None, None
+    def accounting():
+        info = job.Accounting()
+        job.check(api.QueryInformationJobObject(
+            job.handle, 1, C.byref(info), C.sizeof(info), None))
+        return info
+    try:
+        class Members(C.Structure):
+            _fields_ = [("assigned", C.c_uint32), ("listed", C.c_uint32),
+                        ("pids", C.c_size_t * 64)]
+        for name, args, result in (
+                ("OpenProcess", [C.c_uint32, C.c_int, C.c_uint32], C.c_void_p),
+                ("IsProcessInJob", [C.c_void_p, C.c_void_p, C.POINTER(C.c_int)], C.c_int),
+                ("WaitForSingleObject", [C.c_void_p, C.c_uint32], C.c_uint32)):
+            getattr(api, name).argtypes, getattr(api, name).restype = args, result
+        generation = accounting().total
+        members = Members()
+        job.check(api.QueryInformationJobObject(
+            job.handle, 3, C.byref(members), C.sizeof(members), None))
+        if members.assigned != members.listed or members.listed > 64:
+            raise OSError("owned Windows job member list is incomplete")
+        pids = list(members.pids[:members.listed])
+        if len(set(pids)) != len(pids) or any(not 0 < pid <= 0xffffffff for pid in pids):
+            raise OSError("owned Windows job member identities are invalid")
+        for pid in pids:
+            if time.monotonic() >= deadline:
+                raise OSError("owned Windows job cleanup deadline")
+            handle = api.OpenProcess(0x00101000, False, pid)
+            job.check(handle)
+            handles.append(handle)
+            belongs = C.c_int()
+            job.check(api.IsProcessInJob(handle, job.handle, C.byref(belongs)))
+            if not belongs.value:
+                raise OSError("opened process is not in the owned Windows job")
+        if accounting().total != generation:
+            raise OSError("owned Windows job membership changed during capture")
+    except BaseException as error:
+        failure = error
+    try:
+        # Even an incomplete observation must terminate only this owned job.
+        try:
+            job.check(api.TerminateJobObject(job.handle, 97))
+        except BaseException as error:
+            failure = failure or error
+        try:
+            if generation is None or accounting().total != generation:
+                raise OSError("owned Windows job membership changed during termination")
+        except BaseException as error:
+            failure = failure or error
+        for handle in handles:
+            try:
+                remaining = max(0, int((deadline - time.monotonic()) * 1000))
+                if api.WaitForSingleObject(handle, remaining) != 0:
+                    raise OSError("owned Windows job process did not signal exit")
+            except BaseException as error:
+                failure = failure or error
+        try:
+            final = accounting()
+            while final.active:
+                if time.monotonic() >= deadline:
+                    raise OSError("owned Windows job cleanup deadline")
+                time.sleep(min(.05, max(0, deadline - time.monotonic())))
+                final = accounting()
+            if generation is None or final.total != generation:
+                raise OSError("owned Windows job membership changed during termination")
+            if time.monotonic() > deadline:
+                raise OSError("owned Windows job cleanup deadline")
+        except BaseException as error:
+            failure = failure or error
+    finally:
+        for handle in (*handles, job.handle):
+            try:
+                job.check(api.CloseHandle(handle))
+            except BaseException as error:
+                failure = failure or error
+    if failure is not None:
+        raise failure
+    return bool(pids)
+
+
 def _windows_file_call(argv, *, cwd, env, stdout, stderr, stdin, timeout, check):
     """Own the blocked bootstrap before it can start any command descendants."""
     import time
@@ -191,15 +275,19 @@ def _windows_file_call(argv, *, cwd, env, stdout, stderr, stdin, timeout, check)
         return subprocess.CompletedProcess(argv, code)
     finally:
         if child is not None:
+            deadline = time.monotonic() + 5
             try:
-                if child.stdin is not None and not child.stdin.closed:
-                    child.stdin.close()
-                if job is not None:
-                    job.close()
-                elif child.poll() is None:
-                    child.kill()  # The unreleased bootstrap cannot have descendants.
+                try:
+                    if child.stdin is not None and not child.stdin.closed:
+                        child.stdin.close()
+                finally:
+                    if job is not None:
+                        if _windows_file_close(job, deadline) and child.returncode is not None:
+                            raise OSError("owned Windows command descendants remained after launcher exit")
+                    elif child.poll() is None:
+                        child.kill()  # The unreleased bootstrap cannot have descendants.
             finally:
-                child.wait(timeout=5)
+                child.wait(timeout=max(0, deadline - time.monotonic()))
 
 
 def _windows_owned_file_command(argv):
