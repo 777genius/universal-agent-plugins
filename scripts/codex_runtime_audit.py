@@ -446,6 +446,42 @@ def _path_equal(value, expected):
         return False
 
 
+def _references_skill_path(value, expected):
+    """Compare owned identity even when its final path components are absent."""
+    def anchor(value):
+        if not isinstance(value, str) or not Path(value).is_absolute():
+            raise ValueError("Codex native Skill path is ambiguous")
+        path, missing = Path(value), []
+        if ".." in path.parts:
+            raise ValueError("Codex native Skill path is redirected")
+        while True:
+            try:
+                info = path.lstat()
+                break
+            except FileNotFoundError:
+                missing.append(os.path.normcase(path.name))
+                parent = path.parent
+                if parent == path:
+                    raise ValueError("Codex native Skill path has no existing anchor")
+                path = parent
+        for member in (path, *path.parents):
+            observed = member.lstat()
+            if member == path and not os.path.samestat(info, observed):
+                raise ValueError("Codex native Skill anchor identity changed")
+            if (stat.S_ISLNK(observed.st_mode)
+                    or getattr(observed, "st_file_attributes", 0) & 0x400):
+                raise ValueError("Codex native Skill path is redirected")
+            if member != path and not stat.S_ISDIR(observed.st_mode):
+                raise ValueError("Codex native Skill ancestor is not a directory")
+        if not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
+            raise ValueError("Codex native Skill anchor is not regular")
+        return info, tuple(reversed(missing))
+
+    observed, tail = anchor(value)
+    owned, owned_tail = anchor(str(expected))
+    return tail == owned_tail and os.path.samestat(observed, owned)
+
+
 def verify_skill_inventory(listing, project, identity, selected, foreign, present):
     rows = listing.get("data")
     if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
@@ -457,12 +493,14 @@ def verify_skill_inventory(listing, project, identity, selected, foreign, presen
     if not isinstance(skills, list) or any(not isinstance(skill, dict) for skill in skills):
         raise ValueError("Codex native Skill inventory is malformed")
     for name, expected, required in (("foreign-neighbor", foreign, True), (identity, selected, present)):
-        matched = [skill for skill in skills if skill.get("name") == name]
+        matched = [skill for skill in skills
+                   if _references_skill_path(skill.get("path"), expected)]
         if not required:
             if matched:
                 raise ValueError("removed Codex Skill is still natively discoverable")
             continue
-        if (len(matched) != 1 or not _path_equal(matched[0].get("path"), expected)
+        if (len(matched) != 1 or matched[0].get("name") != name
+                or not _path_equal(matched[0].get("path"), expected)
                 or matched[0].get("enabled") is not True or matched[0].get("scope") != "repo"
                 or matched[0].get("pluginId") is not None):
             raise ValueError("Codex native Skill identity, path or enablement is unqualified")

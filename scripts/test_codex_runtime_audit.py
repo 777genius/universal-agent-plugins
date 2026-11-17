@@ -687,8 +687,111 @@ class CodexNativeQualificationTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.verify(no_foreign)
 
+    def test_same_name_unowned_skills_do_not_replace_owned_absence(self):
+        absent = copy.deepcopy(self.listing)
+        absent["data"][0]["skills"].pop(0)
+        snapshots = {}
+        for scope, root in (("system", self.project / "system/.system"),
+                            ("user", self.project / "other-user/skills"),
+                            ("repo", self.project / "other-project/.agents/skills")):
+            path = root / "selected/SKILL.md"
+            path.parent.mkdir(parents=True)
+            path.write_text("unchanged unowned Skill\n")
+            snapshots[path] = path.read_bytes()
+            absent["data"][0]["skills"].append({
+                "name": "selected", "path": str(path), "scope": scope,
+                "enabled": True, "pluginId": None})
+        self.selected.unlink()
+        self.selected.parent.rmdir()
+        for phase in ("before-install", "removed"):
+            with self.subTest(phase=phase):
+                if phase == "removed":
+                    self.selected.parent.mkdir()
+                    self.selected.write_text("owned Skill installed between observations\n")
+                    self.selected.unlink()
+                    self.selected.parent.rmdir()
+                self.verify(absent, False)
+                self.assertEqual({path: path.read_bytes() for path in snapshots}, snapshots)
+        # Distinct same-name rows do not replace or duplicate the owned identity.
+        with self.assertRaises(ValueError):
+            self.verify(absent, True)
+        self.selected.parent.mkdir()
+        self.selected.write_text("owned Skill installed beside unowned namesakes\n")
+        present = copy.deepcopy(absent)
+        present["data"][0]["skills"].append(copy.deepcopy(self.listing["data"][0]["skills"][0]))
+        self.verify(present, True)
+        self.assertEqual({path: path.read_bytes() for path in snapshots}, snapshots)
+        present["data"][0]["skills"].append(copy.deepcopy(present["data"][0]["skills"][-1]))
+        with self.assertRaises(ValueError):
+            self.verify(present, True)
+
+    def test_absence_rejects_owned_path_even_under_another_name_or_missing_file(self):
+        for exists in (True, False):
+            if not exists:
+                self.selected.unlink()
+                self.selected.parent.rmdir()
+            for name in ("selected", "renamed-owned"):
+                with self.subTest(exists=exists, name=name):
+                    listing = copy.deepcopy(self.listing)
+                    listing["data"][0]["skills"][0]["name"] = name
+                    with self.assertRaisesRegex(ValueError, "still natively discoverable"):
+                        self.verify(listing, False)
+
+    def test_absence_rejects_ambiguous_or_redirected_inventory_paths(self):
+        for value in (None, "relative/SKILL.md",
+                      str(self.selected.parent / ".." / self.selected.parent.name / "SKILL.md")):
+            with self.subTest(path=value):
+                listing = copy.deepcopy(self.listing)
+                listing["data"][0]["skills"][0]["path"] = value
+                with self.assertRaises(ValueError):
+                    self.verify(listing, False)
+        # Exercise both redirect kinds without requiring OS symlink privileges.
+        for method in ("is_symlink", "is_junction"):
+            with self.subTest(method=method):
+                original = Path.lstat
+                def redirected(path):
+                    info = original(path)
+                    if path != self.selected.parent:
+                        return info
+                    return SimpleNamespace(
+                        st_mode=(stat.S_IFLNK if method == "is_symlink" else info.st_mode),
+                        st_file_attributes=0 if method == "is_symlink" else 0x400)
+                with patch.object(Path, "lstat", redirected):
+                    with self.assertRaisesRegex(ValueError, "path is redirected"):
+                        self.verify(self.listing, False)
+
+    def test_absent_owned_windows_prefix_uses_anchor_identity_not_spelling(self):
+        # Model only filesystem lookup; use real Windows path parsing on every OS.
+        from pathlib import PureWindowsPath
+        project_info, root_info = self.project.lstat(), self.project.parent.lstat()
+        class InventoryPath(PureWindowsPath):
+            def lstat(path):
+                spelling = str(path).removeprefix("\\\\?\\")
+                if spelling == "C:\\project":
+                    return project_info
+                if spelling == "C:\\":
+                    return root_info
+                raise FileNotFoundError(spelling)
+        owned = "C:\\project\\.agents\\skills\\selected\\SKILL.md"
+        with patch.object(audit, "Path", InventoryPath):
+            self.assertTrue(audit._references_skill_path("\\\\?\\" + owned, owned))
+            self.assertTrue(audit._references_skill_path(owned, "\\\\?\\" + owned))
+            self.assertFalse(audit._references_skill_path(
+                "C:\\project\\other\\selected\\SKILL.md", owned))
+
+    @unittest.skipUnless(os.name == "nt", "Windows extended-length spelling")
+    def test_absent_owned_extended_length_path_is_still_rejected(self):
+        listing = copy.deepcopy(self.listing)
+        value = str(self.selected)
+        listing["data"][0]["skills"][0]["path"] = (
+            value if value.startswith("\\\\?\\") else "\\\\?\\" + value)
+        self.selected.unlink()
+        self.selected.parent.rmdir()
+        with self.assertRaisesRegex(ValueError, "still natively discoverable"):
+            self.verify(listing, False)
+
     def test_wrong_path_scope_enablement_and_duplicate_rows_fail(self):
-        for key, value in (("path", str(self.foreign)), ("scope", "user"), ("enabled", False), ("pluginId", "other@market")):
+        for key, value in (("name", "renamed-owned"), ("path", str(self.foreign)), ("scope", "user"), ("enabled", False), ("pluginId", "other@market")):
             with self.subTest(key=key):
                 listing = copy.deepcopy(self.listing)
                 listing["data"][0]["skills"][0][key] = value
