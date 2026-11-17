@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestEditorLauncherDoesNotProveAgentCLI(t *testing.T) {
@@ -22,7 +23,8 @@ func TestEditorLauncherDoesNotProveAgentCLI(t *testing.T) {
 				}
 				return "", fmt.Errorf("TEST absent")
 			}})
-		client := New().DetectSurfaces(host)
+		userAdapter := New()
+		client := userAdapter.DetectSurfaces(host)
 		if client.Err != nil || client.ExecutablePath != binaries["cursor"] {
 			t.Fatalf("editor selection: %+v", client)
 		}
@@ -40,12 +42,13 @@ func TestEditorLauncherDoesNotProveAgentCLI(t *testing.T) {
 			t.Errorf("separate binary presence: %+v", client.Surfaces)
 		}
 		wantHint := binaries["cursor-agent"] != "" && binaries["cursor"] == ""
-		if gotHint := client.Surfaces[1].Hint != ""; gotHint != wantHint {
+		if gotHint := userAdapter.UndetectedTargetHint(domain.DetectedClient{Surfaces: client.Surfaces}) != ""; gotHint != wantHint {
 			t.Errorf("user-scope agent-only hint = %t, want %t", gotHint, wantHint)
 		}
-		project := NewProject().DetectSurfaces(host)
-		if project.Surfaces[1].Hint != "" {
-			t.Errorf("project scope received user-only hint: %+v", project.Surfaces[1])
+		projectAdapter := NewProject()
+		project := projectAdapter.DetectSurfaces(host)
+		if hint := projectAdapter.UndetectedTargetHint(domain.DetectedClient{Surfaces: project.Surfaces}); hint != "" {
+			t.Errorf("project scope received user-only hint: %q", hint)
 		}
 	}
 }

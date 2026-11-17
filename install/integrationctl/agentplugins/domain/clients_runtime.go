@@ -4,9 +4,6 @@ type ClientSurface struct {
 	ID       string `json:"id"`
 	Detected bool   `json:"detected"`
 	Evidence string `json:"evidence,omitempty"`
-	// Hint is adapter-provided guidance when an observed surface cannot select
-	// the client. It grants no detection authority and is never public JSON.
-	Hint string `json:"-"`
 }
 
 // CursorAgentSurfaceID is the cursor-agent CLI surface. It selects Cursor for

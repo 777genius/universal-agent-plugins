@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	clientregistry "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -49,7 +50,7 @@ func preflightSelectedTargets(ctx context.Context, app App, targets []domain.Cli
 			ok = true
 		}
 		if !ok || (client.Status != domain.DetectionDetected && !plansWithoutHostPresence(target)) {
-			return nil, nil, fmt.Errorf("target %q was not detected; no target was changed%s", target, undetectedTargetHint(client))
+			return nil, nil, fmt.Errorf("target %q was not detected; no target was changed%s", target, undetectedTargetHint(app, client))
 		}
 		detected[target] = client
 		selected = append(selected, client)
@@ -89,15 +90,20 @@ func preflightInstalledBindings(bindingTargets []domain.ClientID, detected map[d
 	return selected, nil
 }
 
-// undetectedTargetHint renders adapter-owned surface guidance without
-// introducing client-specific branches or granting mutation authority.
-func undetectedTargetHint(client domain.DetectedClient) string {
-	for _, surface := range client.Surfaces {
-		if surface.Detected && surface.Hint != "" {
-			return surface.Hint
-		}
+// undetectedTargetAdvisor is implemented by adapters with contextual guidance
+// for an observed but non-selecting host surface.
+type undetectedTargetAdvisor interface {
+	UndetectedTargetHint(domain.DetectedClient) string
+}
+
+// undetectedTargetHint is advisory only: no detection, authorization, or
+// lifecycle decision depends on an adapter's human-readable guidance.
+func undetectedTargetHint(app App, client domain.DetectedClient) string {
+	advisor, ok := clientregistry.As[undetectedTargetAdvisor](app.ClientRegistry, client.ClientID)
+	if !ok {
+		return ""
 	}
-	return ""
+	return advisor.UndetectedTargetHint(client)
 }
 
 func selectedDetectionError(target domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) error {

@@ -37,10 +37,6 @@ func (adapter *Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	editor := host.LookPath("cursor")
 	editorSurface := host.ResolvedBinarySurface("cursor_editor", editor)
 	agentSurface := host.BinarySurface(domain.CursorAgentSurfaceID, "cursor-agent")
-	// An agent-only host is a project target, not a user-scope editor.
-	if !adapter.projectComponents && agentSurface.Detected && !editorSurface.Detected {
-		agentSurface.Hint = "; Cursor user scope installs for the Cursor editor, but only cursor-agent was found. Use --scope project to install project skills and MCP servers for cursor-agent"
-	}
 	surfaces := []domain.ClientSurface{
 		editorSurface,
 		agentSurface,
@@ -63,4 +59,25 @@ func (adapter *Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 		Surfaces:            surfaces,
 		SelectionSurfaceIDs: selection,
 	}
+}
+
+// UndetectedTargetHint explains an agent-only user-scope host without
+// changing the detector's frozen raw evidence or project selection.
+func (adapter *Adapter) UndetectedTargetHint(client domain.DetectedClient) string {
+	if adapter.projectComponents {
+		return ""
+	}
+	var editor, agent bool
+	for _, surface := range client.Surfaces {
+		switch surface.ID {
+		case "cursor_editor":
+			editor = surface.Detected
+		case domain.CursorAgentSurfaceID:
+			agent = surface.Detected
+		}
+	}
+	if agent && !editor {
+		return "; Cursor user scope installs for the Cursor editor, but only cursor-agent was found. Use --scope project to install project skills and MCP servers for cursor-agent"
+	}
+	return ""
 }
