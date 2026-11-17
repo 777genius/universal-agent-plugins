@@ -44,7 +44,7 @@ test('expired authenticated mirror keeps community catalog interactive with exac
   expect(record).toBeDefined();
   const expectedAdd = `npx -y universal-agent-plugins add github:${record!.repository}@${record!.revision}${record!.package_path ? `//${record!.package_path}` : ''}`;
   await community.locator('.plugin-card__install-toggle').click();
-  await expect(community.locator('.command-snippet--add code')).toHaveText(expectedAdd);
+  await expect(page.getByRole('dialog').locator('.command-snippet--add code')).toHaveText(expectedAdd);
   await expect(community.locator('.plugin-card__security')).toHaveCount(0);
 
   await navigate(page, '/plugins/community/', 'en', `?source=${encodeURIComponent(source!)}`);
@@ -67,7 +67,7 @@ test('expired authenticated mirror keeps community catalog interactive with exac
     `.plugin-card[data-install-source="${source}"]`,
   );
   await cachedCommunity.locator('.plugin-card__install-toggle').click();
-  await expect(cachedCommunity.locator('.command-snippet--add code')).toHaveText(expectedAdd);
+  await expect(page.getByRole('dialog').locator('.command-snippet--add code')).toHaveText(expectedAdd);
   await expect(cachedCommunity.locator('.plugin-card__security')).toHaveCount(0);
   await expect(page.locator('.hero__plugin-count')).toHaveText(
     new Intl.NumberFormat('en').format(total),

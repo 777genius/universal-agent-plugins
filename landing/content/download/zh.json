@@ -9,7 +9,7 @@
         "brew": {
           "title": "自制",
           "description": "适用于 macOS 和 Linux 的本机 Go CLI。不需要 Node.js。",
-          "note": "建议永久安装并自动 Homebrew 升级。"
+          "note": "建议用于长期安装，通过 Homebrew 管理升级。"
         },
         "npm": {
           "title": "npx · Node.js 22+",

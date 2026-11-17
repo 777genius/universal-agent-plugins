@@ -225,7 +225,7 @@ test('project invalidation and remount preserve requested scope and invalid agen
   assert.equal(state.autoDetect.value, false);
   assert.deepEqual(state.targets.value, ['codex']);
   assert.equal(state.resolution.value.distribution, undefined);
-  assert.equal(state.installExpanded.value, true);
+  assert.equal(state.installExpanded.value, false);
   state.updateScope('user');
   state.updateTargets(['cursor']);
   assert.equal(state.autoDetect.value, false);
@@ -276,7 +276,7 @@ test('project auto selection survives remount and remains separate from user sco
   assert.equal(state.scope.value, 'project');
   assert.equal(state.autoDetect.value, true);
   assert.equal(state.projectAvailable.value, true);
-  assert.equal(state.installExpanded.value, true);
+  assert.equal(state.installExpanded.value, false);
   state.updateAutoDetect(false);
   state.updateTargets(['codex']);
   await nextTick();
@@ -313,7 +313,7 @@ test('explicit source selection is exclusive, persists across navigation and nev
   state.updateAutoDetect(false);
   state.updateTargets(['cursor', 'hermes']);
   assert.deepEqual(state.targets.value, ['hermes']);
-  assert.match(state.pinnedSourceCommands.value?.add ?? '', /^npx -y universal-agent-plugins@0\.1\.108 add github:/);
+  assert.match(state.pinnedSourceCommands.value?.add ?? '', /^npx -y universal-agent-plugins@0\.1\.110 add github:/);
   assert.equal(state.resolution.value.distribution, undefined);
   state.toggleInstall();
   await nextTick();
@@ -329,7 +329,7 @@ test('explicit source selection is exclusive, persists across navigation and nev
   assert.equal(unref(state.pinnedSourceCommands), undefined);
   assert.ok(state.resolution.value.distribution);
   state.updateTargets(['codex', 'antigravity']);
-  assert.equal(state.pinnedRepairLimitation.value?.key, 'registryUi.install.antigravityRepairUnavailable');
+  assert.equal(state.pinnedRepairLimitation.value, undefined);
   state.updateAutoDetect(true);
   assert.equal(unref(state.pinnedSourceCommands), undefined);
   assert.equal(unref(state.pinnedRepairLimitation), undefined);
@@ -368,7 +368,7 @@ for (const [scope, client] of [['user', 'hermes'], ['project', 'pi']] as const) 
     assert.equal(state.scope.value, scope);
     assert.equal(state.autoDetect.value, false);
     assert.deepEqual(state.targets.value, [client]);
-    assert.equal(state.installExpanded.value, true);
+    assert.equal(state.installExpanded.value, false);
     assert.equal(state.availability.value, undefined);
     assert.equal(state.resolution.value.distribution, undefined);
     assert.equal(unref(state.pinnedSourceCommands), undefined);

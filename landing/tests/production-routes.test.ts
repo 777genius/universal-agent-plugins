@@ -83,7 +83,7 @@ async function catalogFixture(root: string, empty = false) {
   assert.equal(release.source.path, 'plugins/agent-plugins/context7');
   assert.match(release.source.revision!, /^[a-f0-9]{40}$/);
   const selector = `github:${release.source.repository}@${release.source.revision}//${release.source.path}`;
-  return (id: string) => `npx -y universal-agent-plugins@0.1.108 add ${selector} --target ${id}`;
+  return (id: string) => `npx -y universal-agent-plugins@0.1.110 add ${selector} --target ${id}`;
 }
 
 test('selected public source binds homepage and download with 16-client or 14-client routes', () => {

@@ -2,7 +2,7 @@ name: Live installer audit (30 plugins + 30 Skills)
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/live-install-audit.py'
@@ -23,12 +23,13 @@ env:
   AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
 
 concurrency:
-  group: live-install-audit-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: live-install-audit-${{ github.event_name }}-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 
 jobs:
   native-pilot:
     name: Real ${{ matrix.target }} / ${{ matrix.kind }} source install (pilot)
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:

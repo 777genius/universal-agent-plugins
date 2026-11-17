@@ -20,21 +20,21 @@ function hint(plugin: RegistryPlugin, id: InstallTargetID, context = current) {
 test('explicit source, native scope limitation and revoked policy have distinct explanations', () => {
   const plugin = fixture();
   for (const id of ['hermes', 'antigravity', 'pi'] as const) {
-    assert.equal(hint(plugin, id).key, 'registryUi.install.pinnedCatalogSource');
+    assert.equal(hint(plugin, id).key, 'registryUi.install.pinnedSourceShort');
     assert.equal(pluginInstallAvailability(plugin, [id])?.kind, 'pinned_git');
   }
   assert.equal(hint(plugin, 'hermes', { ...current, scope: 'project' }).key,
-    'registryUi.install.useComputerScope');
+    'registryUi.install.pinnedSourceShort');
   const release = plugin.distributions[0]!.releases[0]!;
   plugin.distributions[0]!.kind = 'community';
   release.targets.push({ client: 'hermes', scopes: ['user'], delivery: 'managed', authentication: 'required' });
   assert.equal(hint(plugin, 'hermes', { ...current, scope: 'project' }).key,
-    'registryUi.install.useComputerScope');
+    'registryUi.delivery.prepared');
   release.release_status = 'revoked';
   assert.equal(hint(plugin, 'hermes').key, 'registryUi.install.noCompatibleSignedRelease');
   assert.equal(pluginInstallAvailability(plugin, ['hermes']), undefined);
   assert.equal(hint(plugin, 'hermes', { ...current, scope: 'project' }).key,
-    'registryUi.install.unsupportedPluginComponents');
+    'registryUi.install.noCompatibleSignedRelease');
 });
 
 test('known negative evidence cannot be explained as merely an unpublished target', () => {
@@ -60,7 +60,7 @@ test('an eligible User route is explained when explicit policy excludes Project'
 test('exact Pi Project source remains explicit and expires with its reviewed source', () => {
   const plugin = fixture();
   const project = { ...current, scope: 'project' as const };
-  assert.equal(hint(plugin, 'pi', project).key, 'registryUi.install.pinnedCatalogSource');
+  assert.equal(hint(plugin, 'pi', project).key, 'registryUi.install.pinnedSourceShort');
   assert.equal(hint(plugin, 'pi', { ...project, expired: true, current: false }).key,
     'registryUi.install.unavailableSignedDirectorySnapshotExpired');
   assert.equal(hint(plugin, 'pi', { ...project, published: false, current: false }).key,
@@ -76,13 +76,13 @@ test('declared eligible delivery is shared without modifying signed input or aut
   });
   const before = structuredClone(plugin);
   assert.equal(hint(plugin, 'antigravity').key, 'registryUi.delivery.prepared');
-  assert.equal(hint(plugin, 'hermes').key, 'registryUi.install.pinnedCatalogSource');
+  assert.equal(hint(plugin, 'hermes').key, 'registryUi.install.pinnedSourceShort');
   assert.deepEqual(plugin, before);
 });
 
 test('Desktop retains its local scope and Web retains binding-specific instructions', () => {
   const plugin = fixture();
-  assert.equal(hint(plugin, 'chatgpt').key, 'registryUi.desktopGuide.description');
+  assert.equal(hint(plugin, 'chatgpt').key, 'registryUi.install.desktopSourceShort');
   assert.equal(hint(plugin, 'chatgpt', { ...current, scope: 'project' }).key,
     'registryUi.install.useComputerScope');
   assert.equal(hint(plugin, 'chatgptweb').key, 'registryUi.install.notAvailableForChatgpt');

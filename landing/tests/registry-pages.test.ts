@@ -142,13 +142,13 @@ test('agent pages use the exact source command and stop offering it when the Dir
       'agents/[client].vue', { slug: 'gitlab', client }, registry,
     );
     assert.equal(toValue(installCommand), pinnedCatalogCommands(registry.plugins[0], client, 'user').add);
-    assert.ok(toValue(installCommand).includes('@0.1.108 add github:'));
+    assert.ok(toValue(installCommand).includes('@0.1.110 add github:'));
     assert.equal(toValue(pinnedRepairLimitation)?.key,
-      client === 'antigravity' ? 'registryUi.install.antigravityRepairUnavailable' : undefined);
+      undefined);
     directoryCurrent.value = false;
     assert.equal(toValue(installCommand), '', 'Expired source must never become a short-name command');
     assert.equal(toValue(pinnedRepairLimitation)?.key,
-      client === 'antigravity' ? 'registryUi.install.antigravityRepairUnavailable' : undefined,
-      'Expired Directory must not resurrect a broken public repair claim');
+      undefined,
+      'Released repair is available without a stale warning');
   }
 });

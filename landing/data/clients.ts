@@ -96,9 +96,9 @@ const allClientLandingPages: ClientLandingPage[] = [
     intro:
       'Install Agent Plugins 1.0 for Kiro from the same portable package used by other AI agents.',
     delivery:
-      'The CLI installs its owned Kiro skills and MCP entries while preserving unrelated global configuration.',
+      'The CLI automatically installs owned Skills and MCP configuration for supported Kiro CLI versions, preserving unrelated settings. MCP requires the complete supported CLI distribution and writable configuration.',
     activation:
-      'Complete the printed OAuth or restart step. macOS and Windows preparation does not claim automatic runtime verification.',
+      'Sign in, approve access, and restart if prompted. Explicit preparation remains Prepared; installed files do not prove native loading, authentication, or live MCP execution.',
   },
   {
     id: 'claude',
@@ -155,7 +155,7 @@ const allClientLandingPages: ClientLandingPage[] = [
       'Install compatible Agent Plugins 1.0 for Cline without rebuilding the MCP configuration for every plugin.',
     delivery: 'The CLI prepares and tracks the supported Cline MCP configuration.',
     activation:
-      'Reload Cline when requested and complete provider authentication outside the plugin package.',
+      'Reload Cline and complete provider authentication. Project MCP requires the explicitly selected managed session and its CLINE_MCP_SETTINGS_PATH; ordinary startup does not select that configuration.',
   },
   {
     id: 'windsurf',
@@ -167,7 +167,7 @@ const allClientLandingPages: ClientLandingPage[] = [
     intro:
       'Prepare Agent Plugins 1.0 for Windsurf with one CLI command, then finish the client-specific activation step explicitly.',
     delivery:
-      'The CLI validates and prepares the compatible Windsurf package without claiming automatic activation.',
+      'The CLI writes owned Skills and MCP configuration for Devin User versions 3000.11.205 or 3000.12.57 and Project version 3000.11.205. Preparation does not prove discovery, trust, sign-in, or live execution.',
     activation: 'Follow the exact manual activation path printed after preparation.',
   },
   {
@@ -182,7 +182,7 @@ const allClientLandingPages: ClientLandingPage[] = [
     delivery:
       "The CLI writes a native .grok-plugin manifest in Grok's user plugin directory and manages registration with the Grok CLI when available.",
     activation:
-      'Reload Grok Build after installation. If the Grok CLI is unavailable, install it and rerun the update command for native verification.',
+      'On Linux with Grok Build 1.0.70, UAP can enable the exact Project plugin while preserving existing trust and disabled preferences. Review trust separately; other hosts and versions follow the printed setup steps, then reload and verify.',
     vendorDocsUrl: 'https://docs.x.ai/build/features/skills-plugins-marketplaces',
   },
   {
@@ -219,14 +219,14 @@ const allClientLandingPages: ClientLandingPage[] = [
     slug: 'hermes',
     name: 'Hermes Agent',
     icon: 'hermes.webp',
-    note: 'User Skills/MCP and Project Skills; Project MCP is unsupported',
+    note: 'User Skills/MCP; Project Skills and prepared MCP',
     status: 'Supported',
     intro:
-      'Install native Hermes Agent Skills for your user or a selected Git project, plus user-scoped MCP servers, without changing unrelated settings.',
+      'Install native Hermes Agent Skills and MCP servers for your user or a selected Git project. Project MCP requires a verified standalone Hermes host bundle.',
     delivery:
-      'UAP manages owned Skills directories and exact User MCP entries in config.yaml. Project installation never modifies User MCP configuration.',
+      'UAP manages owned Skills and exact User MCP entries in config.yaml. Project MCP uses an explicitly confirmed managed project session. Project installation never modifies User MCP configuration.',
     activation:
-      'Restart Hermes to reload the integration. Review project trust before using Project Skills; runtime discovery and authentication still need confirmation.',
+      'Start a fresh Hermes session and review repository trust. Project MCP runs through the confirmed UAP project session; ordinary Hermes startup does not select it. Authentication and live MCP execution still need confirmation.',
     vendorDocsUrl: 'https://github.com/NousResearch/hermes-agent',
   },
   {
@@ -255,9 +255,9 @@ const allClientLandingPages: ClientLandingPage[] = [
       'Install compatible Pi extensions, Skills, and stdio/Streamable HTTP MCP servers in user or project scope. Catalog packages require a compatible signed release; direct sources are validated by the CLI.',
     delivery:
       'The CLI installs eligible components in the selected Pi profile or project and tracks updates, repair, and removal.',
-    activation: 'Reload resources or restart Pi; trust the project and review MCP permissions if prompted.',
-    vendorDocsUrl:
-      'https://pi.dev/docs/latest',
+    activation:
+      'Reload resources or restart Pi; trust the project and review MCP permissions if prompted.',
+    vendorDocsUrl: 'https://pi.dev/docs/latest',
   },
 ];
 
