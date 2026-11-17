@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiCheck, mdiContentCopy } from '@mdi/js';
 import monitorImage from '~/assets/images/restore-monitor.webp';
 import { marketingKitName, marketingKitVersion } from '~/data/marketingKitDemo';
 import { restoreDemoCommands, type RestoreDemoMode } from '~/data/restoreDemo';
@@ -101,7 +102,7 @@ async function copyCommand(which: 1 | 2 | 3) {
             <div class="registry-restore__stepbar">
               <p class="registry-restore__stage-label"><span class="registry-restore__step" aria-hidden="true">01</span>{{ t('shell.restore.from') }}</p>
               <button type="button" class="registry-restore__copy" :aria-label="copyLabel(1)"
-                @click="copyCommand(1)">{{ copyText(1) }}</button>
+                @click="copyCommand(1)"><svg viewBox="0 0 24 24" aria-hidden="true"><path :d="copied === 1 ? mdiCheck : mdiContentCopy" /></svg><span>{{ copyText(1) }}</span></button>
             </div>
             <div class="registry-restore__terminal" dir="ltr" :data-command="commands.install">
               <span class="registry-restore__prompt" aria-hidden="true">$</span>
@@ -123,7 +124,7 @@ async function copyCommand(which: 1 | 2 | 3) {
           </div>
           <div v-if="commands.export" class="registry-restore__export">
             <code dir="ltr">{{ commands.export }}</code>
-            <button type="button" class="registry-restore__copy" :aria-label="copyLabel(3)" @click="copyCommand(3)">{{ copyText(3) }}</button>
+            <button type="button" class="registry-restore__copy" :aria-label="copyLabel(3)" @click="copyCommand(3)"><svg viewBox="0 0 24 24" aria-hidden="true"><path :d="copied === 3 ? mdiCheck : mdiContentCopy" /></svg><span>{{ copyText(3) }}</span></button>
           </div>
           <p class="registry-restore__handoff-note">{{ t(`shell.restoreDemo.${mode}Handoff`) }}</p>
           <svg class="registry-restore__arrow" viewBox="0 0 160 36" fill="none" aria-hidden="true">
@@ -143,7 +144,7 @@ async function copyCommand(which: 1 | 2 | 3) {
             <div class="registry-restore__stepbar">
               <p class="registry-restore__stage-label"><span class="registry-restore__step" aria-hidden="true">02</span>{{ t('shell.restore.to') }}</p>
               <button type="button" class="registry-restore__copy" :aria-label="copyLabel(2)"
-                @click="copyCommand(2)">{{ copyText(2) }}</button>
+                @click="copyCommand(2)"><svg viewBox="0 0 24 24" aria-hidden="true"><path :d="copied === 2 ? mdiCheck : mdiContentCopy" /></svg><span>{{ copyText(2) }}</span></button>
             </div>
             <div class="registry-restore__terminal" dir="ltr" :data-command="commands.restore">
               <span class="registry-restore__prompt" aria-hidden="true">$</span>
@@ -177,7 +178,7 @@ async function copyCommand(which: 1 | 2 | 3) {
   &__qualification { max-width: 760px; margin: 0 0 16px; color: var(--muted); line-height: 1.6; overflow-wrap: anywhere; }
   &__header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 14px 24px; }
   h2 {
-    margin: 0; font-size: clamp(1.5rem, 3vw, 2.5rem); line-height: 1.2; letter-spacing: -.035em; text-wrap: balance;
+    white-space: pre-line; margin: 0; font-size: clamp(1.5rem, 3vw, 2.5rem); line-height: 1.2; letter-spacing: -.035em; text-wrap: balance;
     background: linear-gradient(100deg, var(--text) 42%, var(--primary-bright) 85%); background-clip: text; color: transparent;
   }
   &__guide { color: var(--primary-bright); font-size: .9rem; text-decoration: underline; text-underline-offset: 4px; }
@@ -208,16 +209,17 @@ async function copyCommand(which: 1 | 2 | 3) {
   &__stage-label { display: flex; align-items: center; gap: 2cqw; min-width: 0; margin: 0; color: #acb9ed;
     font-size: clamp(10px, 2.5cqw, 17px); font-weight: 650; line-height: 1.25; text-transform: uppercase; overflow-wrap: anywhere; }
   &__step { flex: none; color: #7885ba; font-size: 5.5cqw; font-weight: 400; line-height: 1; }
-  &__copy { display: inline-grid; place-items: center; flex: none; padding: 3px 4px; min-width: 24px; min-height: 24px;
+  &__copy { display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: none; padding: 3px 4px; min-width: 24px; min-height: 24px;
     border: 0; border-radius: 4px; background: transparent; color: #b8b8f1; cursor: pointer;
     font-size: clamp(8px, 1.75cqw, 12px); font-weight: 700; text-transform: uppercase; }
+  &__copy svg { width: 14px; height: 14px; fill: currentColor; flex: none; }
   &__copy:hover, &__copy:focus-visible { color: white; outline-color: #00f0ff; }
   &__package { display: flex; flex-wrap: wrap; gap: 1.4cqw; align-items: baseline; margin: 3cqw 0 0; color: #a4a6ad;
     font-family: 'JetBrains Mono', monospace; font-size: clamp(8px, 1.9cqw, 13px); line-height: 1.35; overflow-wrap: anywhere;
     > span, > strong { color: inherit; font-size: inherit; font-weight: 400; } }
   &__screen:has(.typed-command[data-typing='true']) &__package { visibility: hidden; }
   &__terminal { display: flex; gap: 1.5cqw; min-width: 0; margin-block-start: 3cqw; font-family: 'JetBrains Mono', monospace;
-    font-size: clamp(9px, 2.35cqw, 16px); line-height: 1.4; color: #e0e6ff; letter-spacing: -.025em; }
+    font-size: clamp(11px, 3.15cqw, 21px); line-height: 1.4; color: #e0e6ff; letter-spacing: -.025em; }
   &__prompt { color: #00f0ff; flex: none; }
   &__handoff { position: relative; display: grid; justify-items: center; min-width: 0; gap: 12px; padding-block-end: 14%; animation: restore-arrive .8s .2s ease both; }
   &__files { display: flex; align-items: end; justify-content: center; gap: clamp(6px, 1.2vw, 24px); }
@@ -226,7 +228,7 @@ async function copyCommand(which: 1 | 2 | 3) {
       stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
     code { color: var(--text); } }
   &__export { display: grid; justify-items: center; gap: 4px; width: 100%; min-width: 0; max-width: 260px;
-    code { max-width: 100%; color: var(--text); font-size: clamp(10px, .85vw, 12px); overflow-wrap: anywhere; text-align: center; }
+    code { max-width: 100%; color: var(--text); font-size: clamp(12px, 1vw, 15px); overflow-wrap: anywhere; text-align: center; }
     button { font-size: 10px; color: var(--primary-bright); } }
   &__handoff-note { max-width: 230px; margin: 0; color: var(--muted); font-size: clamp(10px, .85vw, 12px); font-weight: 400; line-height: 1.5; text-align: center; text-wrap: pretty; }
   &__arrow { width: 100%; height: 36px; color: var(--cyan); stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -259,7 +261,7 @@ async function copyCommand(which: 1 | 2 | 3) {
     &__stage-label { gap: .8cqw; font-size: 9px; }
     &__step { font-size: 4.6cqw; }
     &__package { margin-block-start: 2cqw; }
-    &__terminal { font-size: 9px; margin-block-start: 1cqw; }
+    &__terminal { font-size: 10px; margin-block-start: 1cqw; }
     &__copy { font-size: 8px; padding: 1px; }
   }
 }

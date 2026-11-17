@@ -160,7 +160,7 @@ test('plugin detail uses readable theme tokens and aligned mobile breadcrumbs', 
     await page.setViewportSize({ width, height: 900 });
     const breadcrumbs = detail.locator('.plugin-detail__hero-topbar .breadcrumbs');
     const centerDelta = await detail.locator('.plugin-detail__hero-topbar').evaluate((bar) => {
-      const back = bar.querySelector('.plugin-detail__back-cta')!.getBoundingClientRect();
+      const back = bar.querySelector('.detail-navigation__back')!.getBoundingClientRect();
       const crumb = bar.querySelector('.breadcrumbs')!.getBoundingClientRect();
       return Math.abs(back.top + back.height / 2 - (crumb.top + crumb.height / 2));
     });

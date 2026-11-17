@@ -401,17 +401,18 @@
     },
     "dependencies": {
       "eyebrow": "जुड़ी हुई निर्भरताएँ",
-      "title": "दो प्लगइन। एक साझा निर्भरता।",
+      "title": "दो प्लगइन\nएक साझा निर्भरता",
       "description": "प्लगइन को उसकी निर्भरताओं के साथ इंस्टॉल करें। एक ही संगत संस्करण वाली साझा निर्भरताएँ केवल एक बार इंस्टॉल होती हैं।",
       "demoPackage": "प्रदर्शन पैकेज",
       "installed": "इंस्टॉल है",
       "alreadyInstalled": "पहले से इंस्टॉल है",
-      "shared": "साझा",
+      "shared": "दोनों प्लगइन में साझा",
       "caption": "पैकेज और निर्भरता ग्राफ उदाहरण के लिए हैं। दोनों पैकेज Playwright साझा करते हैं; Context7 पहले से इंस्टॉल है।",
-      "graphDescription": "marketing-kit की निर्भरताएँ Playwright, HubSpot और Notion हैं। Web Design Kit की निर्भरताएँ वही Playwright पैकेज, Figma और Context7 हैं। सभी पैकेज इंस्टॉल हैं; Context7 पहले से इंस्टॉल था।"
+      "graphDescription": "उदाहरण के संस्करण: marketing-kit v{marketingVersion} और Web Design Kit v{designVersion}, Playwright ब्रिज की एक ही निर्भरता v{playwrightVersion} का दोबारा उपयोग करते हैं। Marketing Kit में HubSpot और Notion भी हैं; Web Design Kit में Figma और Context7 हैं।",
+      "exampleVersions": "उदाहरण के संस्करण"
     },
     "restore": {
-      "title": "प्लगइन के एक जैसे संस्करण। पूरी टीम के लिए।",
+      "title": "प्लगइन के एक जैसे संस्करण\nपूरी टीम के लिए",
       "guide": "गाइड",
       "from": "मेरा कंप्यूटर",
       "to": "टीममेट का कंप्यूटर",
@@ -599,7 +600,7 @@
       "more": "+{count} और"
     },
     "command": {
-      "terminal": "टर्मिनल",
+      "terminal": "आपका टर्मिनल",
       "copiedLabel": "कमांड कॉपी हो गई",
       "copyLabel": "कमांड कॉपी करें",
       "copied": "कॉपी हो गया",
@@ -841,9 +842,10 @@
       "unsupportedPluginComponents": "{agent} इस प्लगइन के सभी घटकों का समर्थन नहीं करता।",
       "dialogDescription": "एजेंट और इंस्टॉलेशन का दायरा चुनें, फिर अपने टर्मिनल में कमांड चलाएँ।",
       "closeDialog": "इंस्टॉलेशन बंद करें",
-      "pinnedSourceShort": "पिन किया गया Git स्रोत",
+      "pinnedSourceShort": "Git से इंस्टॉल करें",
       "desktopSourceShort": "स्थानीय Desktop कनेक्शन",
-      "webSetupShort": "निर्देशित Web सेटअप"
+      "webSetupShort": "निर्देशित Web सेटअप",
+      "selectionRoutesUnavailable": "आपके चुने हुए एजेंट बने रहते हैं। चुने गए दायरे में इस संयोजन के लिए कोई साझा इंस्टॉलेशन स्रोत नहीं है। इंस्टॉलेशन कमांड पाने के लिए एजेंट या दायरा बदलें।"
     },
     "authentication": {
       "not_required": "किसी खाते की आवश्यकता नहीं",

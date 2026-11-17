@@ -10,7 +10,7 @@ import {
 } from '~/utils/pluginInstallAvailability';
 import { catalogVisiblePlugins } from '~/utils/filter';
 import type { KnownLocale } from '~/data/i18n';
-import { mdiArrowLeft, mdiOpenInNew } from '@mdi/js';
+import { mdiOpenInNew } from '@mdi/js';
 import { clientLandingBySlug } from '~/data/clients';
 const { t, n, locale } = useI18n();
 const localePath = useLocalePath();
@@ -44,25 +44,67 @@ const pageUrl = computed(() => localizedUrl(`/agents/${client.slug}/`));
 const breadcrumbId = computed(() => `${pageUrl.value}#breadcrumb`);
 const listId = computed(() => `${pageUrl.value}#plugin-list`);
 const title = computed(() => t('registryUi.agentPage.title', { name: client.name }));
-// Match the aggregate ChatGPT page to an eligible Desktop or Web surface.
-const example = agentInstallExample(reviewedPlugins, client.id);
-const needsLocalExample = !example;
-const exampleAvailability = example && pluginInstallAvailability(example.plugin, [example.target]);
-const pinnedExample = exampleAvailability?.kind === 'pinned_git' ? exampleAvailability.selection : undefined;
-// The public CLI limitation is not a Directory grant and must stay visible
-// after a snapshot expires, even though new source commands are withheld.
-const pinnedRepairLimitation = computed(() => pinnedCatalogRepairLimitation(pinnedExample));
-const exampleSource = pinnedExample?.selector ?? example?.plugin.install_source ?? './my-plugin';
-const installCommand = computed(() => {
-  if (!example) return `npx -y universal-agent-plugins add ./my-plugin --target ${client.id}`;
-  if (!current.value) return '';
-  return pinnedExample
-    ? pinnedCatalogCommands(example.plugin, pinnedExample.client, 'user').add
-    : pluginCommands(example.plugin, [example.target]).add;
+// Only a single exact name from this agent's reviewed projection can supply
+// navigation context. This never writes the user's persistent install choices.
+// Prerendered HTML has no request query. Apply context after mount so the
+// initial client tree matches that HTML on direct query links and reloads.
+const contextReady = ref(false);
+onMounted(() => {
+  contextReady.value = true;
 });
-const hasPinnedSource = reviewedPlugins.some(plugin =>
-  pluginInstallAvailability(plugin, [client.id], 'user')?.kind === 'pinned_git' ||
-  pluginInstallAvailability(plugin, [client.id], 'project')?.kind === 'pinned_git');
+const originExample = computed(() => {
+  if (!contextReady.value) return undefined;
+  const name = route.query.plugin;
+  if (typeof name !== 'string') return undefined;
+  const plugin = reviewedPlugins.find((item) => item.name === name);
+  if (!plugin) return undefined;
+  const user = agentInstallExample([plugin], client.id);
+  if (user) return { ...user, scope: 'user' as const };
+  const project = agentInstallExample([plugin], client.id, 'project');
+  return project ? { ...project, scope: 'project' as const } : undefined;
+});
+const example = computed(
+  () => originExample.value ?? agentInstallExample(reviewedPlugins, client.id),
+);
+const originPlugin = computed(() => originExample.value?.plugin);
+const exampleScope = computed(() => originExample.value?.scope ?? 'user');
+const navigationParents = computed(() => [
+  { label: t('registryUi.agentPage.home'), to: localePath('/') },
+  ...(originPlugin.value
+    ? [
+        {
+          label: originPlugin.value.display_name,
+          to: localePath(`/plugins/${originPlugin.value.name}/`),
+        },
+      ]
+    : []),
+]);
+const needsLocalExample = computed(() => !example.value);
+const exampleAvailability = computed(
+  () => example.value && pluginInstallAvailability(example.value.plugin, [example.value.target], exampleScope.value),
+);
+const pinnedExample = computed(() =>
+  exampleAvailability.value?.kind === 'pinned_git'
+    ? exampleAvailability.value.selection
+    : undefined,
+);
+// The CLI limitation stays visible after expiry even while source commands are withheld.
+const pinnedRepairLimitation = computed(() => pinnedCatalogRepairLimitation(pinnedExample.value));
+const exampleSource = computed(
+  () => pinnedExample.value?.selector ?? example.value?.plugin.install_source ?? './my-plugin',
+);
+const installCommand = computed(() => {
+  if (!example.value) return `npx -y universal-agent-plugins add ./my-plugin --target ${client.id}`;
+  if (!current.value) return '';
+  return pinnedExample.value
+    ? pinnedCatalogCommands(example.value.plugin, pinnedExample.value.client, exampleScope.value).add
+    : pluginCommands(example.value.plugin, [example.value.target], undefined, exampleScope.value).add;
+});
+const hasPinnedSource = reviewedPlugins.some(
+  (plugin) =>
+    pluginInstallAvailability(plugin, [client.id], 'user')?.kind === 'pinned_git' ||
+    pluginInstallAvailability(plugin, [client.id], 'project')?.kind === 'pinned_git',
+);
 
 usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
   translate: false,
@@ -88,15 +130,15 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
       '@type': 'BreadcrumbList',
       '@id': breadcrumbId.value,
       itemListElement: [
+        ...navigationParents.value.map((parent, index) => ({
+          '@type': 'ListItem',
+          position: index + 1,
+          name: index === 0 ? 'Universal Agent Plugins' : parent.label,
+          item: `${siteUrl}${parent.to}`,
+        })),
         {
           '@type': 'ListItem',
-          position: 1,
-          name: 'Universal Agent Plugins',
-          item: localizedUrl('/'),
-        },
-        {
-          '@type': 'ListItem',
-          position: 2,
+          position: navigationParents.value.length + 1,
           name: client.name,
           item: pageUrl.value,
         },
@@ -112,16 +154,17 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
       <PageBackground />
       <section class="agent-page__hero section">
         <v-container>
-          <nav class="agent-page__breadcrumbs" :aria-label="t('registryUi.agentPage.breadcrumb')">
-            <NuxtLink
-              :to="localePath('/')"
-              :aria-label="t('registryUi.agentPage.backToUniversalAgentPlugins')"
-            >
-              <v-icon :icon="mdiArrowLeft" size="18" /> {{ t('registryUi.agentPage.home') }}
-            </NuxtLink>
-            <span aria-hidden="true">/</span>
-            <span>{{ client.name }}</span>
-          </nav>
+          <DetailBreadcrumbs
+            :back-to="originPlugin ? localePath(`/plugins/${originPlugin.name}/`) : localePath('/')"
+            :back-label="
+              originPlugin
+                ? originPlugin.display_name
+                : t('registryUi.agentPage.backToUniversalAgentPlugins')
+            "
+            :label="t('registryUi.agentPage.breadcrumb')"
+            :parents="navigationParents"
+            :current="client.name"
+          />
 
           <div class="agent-page__hero-grid">
             <div class="agent-page__copy">
@@ -245,7 +288,12 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
               {{ t('registryUi.agentPage.availableFor', { name: client.name }) }}
             </h2>
             <p v-if="hasPinnedSource">
-              {{ t('registryUi.agentPage.sourceOptionsCount', { agent: client.name, count: n(reviewedPlugins.length) }) }}
+              {{
+                t('registryUi.agentPage.sourceOptionsCount', {
+                  agent: client.name,
+                  count: n(reviewedPlugins.length),
+                })
+              }}
             </p>
             <p v-else>
               {{
@@ -307,23 +355,6 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
 
 .agent-page__hero {
   padding-top: 24px;
-}
-
-.agent-page__breadcrumbs {
-  margin-bottom: 22px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--subtle);
-  font-size: 0.82rem;
-}
-
-.agent-page__breadcrumbs a {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--muted);
-  text-decoration: none;
 }
 
 .agent-page__hero-grid {
