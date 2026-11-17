@@ -24,6 +24,8 @@ func TestSurvivingClaudeCommandRecognizesPluginAndProfileProcesses(t *testing.T)
 		{"session on another profile", legacyports.LiveProcess{Argv: []string{"claude", "--resume"}, Env: []string{"CLAUDE_CONFIG_DIR=/elsewhere"}}, false},
 		{"other program on this profile", legacyports.LiveProcess{Executable: "/bin/sleep", Argv: []string{"sleep", "30"}, Env: []string{"CLAUDE_CONFIG_DIR=" + profile}}, false},
 		{"other program naming claude", legacyports.LiveProcess{Argv: []string{"npm", "plugin", "claude"}}, false},
+		{"unreadable claude process", legacyports.LiveProcess{Executable: "claude"}, true},
+		{"unreadable other process", legacyports.LiveProcess{Executable: "sleep"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, found := survivingClaudeCommand([]legacyports.LiveProcess{tc.process}, executable, profile); found != tc.want {

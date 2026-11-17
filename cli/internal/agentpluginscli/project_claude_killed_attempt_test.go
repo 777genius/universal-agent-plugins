@@ -2,16 +2,29 @@ package agentpluginscli
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 func (r *preparedClaudeCLIRunner) SurvivingCommands(context.Context) ([]legacyports.LiveProcess, error) {
-	return r.surviving, nil
+	return r.surviving, r.censusErr
+}
+
+// commandOnlyRunner runs commands but cannot list the processes that survive.
+type commandOnlyRunner struct{ runner *preparedClaudeCLIRunner }
+
+func (r commandOnlyRunner) Run(ctx context.Context, cmd legacyports.Command) (legacyports.CommandResult, error) {
+	return r.runner.Run(ctx, cmd)
 }
 
 // killedProjectClaudeCommand leaves the binding as a CLI killed during a native
@@ -78,32 +91,39 @@ func TestProjectClaudeKilledCommandIsConfirmedByRepairOrRemove(t *testing.T) {
 }
 
 // The confirmation must never close an attempt whose effect may still change:
-// a surviving Claude command, an unrecognized client state or a missing --yes
-// keep it, and doctor names the confirming commands.
+// a surviving Claude command, a process listing that failed or is missing, an
+// unrecognized client state or a missing --yes keep it, and doctor names the
+// confirming commands.
 func TestProjectClaudeKilledCommandConfirmationKeepsUncertainAttempt(t *testing.T) {
 	for _, tc := range []struct {
 		name, want string
-		prepare    func(*testing.T, projectClaudeCLI)
+		prepare    func(*testing.T, *projectClaudeCLI)
 		args       []string
 	}{
-		{"surviving-plugin-command", "pid 4242", func(_ *testing.T, f projectClaudeCLI) {
+		{"surviving-plugin-command", "pid 4242", func(_ *testing.T, f *projectClaudeCLI) {
 			f.runner.surviving = []legacyports.LiveProcess{{PID: 4242, Argv: []string{"/bin/sh", f.client.ExecutablePath, "plugin", "install", "demo@x", "--scope", "project"}}}
 		}, []string{"repair", "demo", "--yes"}},
-		{"surviving-profile-process", "pid 4243", func(_ *testing.T, f projectClaudeCLI) {
+		{"surviving-profile-process", "pid 4243", func(_ *testing.T, f *projectClaudeCLI) {
 			f.runner.surviving = []legacyports.LiveProcess{{PID: 4243, Executable: "claude", Argv: []string{"claude"}, Env: []string{"CLAUDE_CONFIG_DIR=" + f.client.ConfigRoot}}}
 		}, []string{"remove", "demo", "--dry-run"}},
-		{"unrecognized-cache", "does not match the recorded ownership", func(t *testing.T, f projectClaudeCLI) {
+		{"unrecognized-cache", "does not match the recorded ownership", func(t *testing.T, f *projectClaudeCLI) {
 			caches, err := filepath.Glob(filepath.Join(f.client.ConfigRoot, "plugins", "cache", "*", "demo", "*"))
 			if err != nil || len(caches) != 1 {
 				t.Fatalf("fixture cache: %v %v", caches, err)
 			}
 			dependencyWrite(t, filepath.Join(caches[0], "foreign.txt"), "foreign\n")
 		}, []string{"repair", "demo", "--yes"}},
-		{"confirmation-required", "must be confirmed first; rerun with --yes", func(*testing.T, projectClaudeCLI) {}, []string{"repair", "demo"}},
+		{"confirmation-required", "must be confirmed first; rerun with --yes", func(*testing.T, *projectClaudeCLI) {}, []string{"repair", "demo"}},
+		{"process-listing-failed", "cannot verify that no Claude Code command", func(_ *testing.T, f *projectClaudeCLI) {
+			f.runner.censusErr = errors.New("process table unavailable")
+		}, []string{"repair", "demo", "--yes"}},
+		{"runner-without-process-listing", "cannot verify that no Claude Code command", func(_ *testing.T, f *projectClaudeCLI) {
+			f.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: commandOnlyRunner{f.runner}})
+		}, []string{"remove", "demo", "--yes"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fixture, attempt := killedProjectClaudeCommand(t, "add", []string{"plugin", "install"}, true)
-			tc.prepare(t, fixture)
+			tc.prepare(t, &fixture)
 			out, err := fixture.runProjectWithout(tc.args...)
 			if err == nil || !strings.Contains(out+err.Error(), tc.want) {
 				t.Fatalf("uncertain attempt was not refused with %q: %v\n%s", tc.want, err, out)
@@ -116,5 +136,43 @@ func TestProjectClaudeKilledCommandConfirmationKeepsUncertainAttempt(t *testing.
 				t.Fatalf("doctor does not name the confirming commands:\n%s", doctor)
 			}
 		})
+	}
+}
+
+// The confirmation writes only under the mutation lock, and it records the
+// attempt closed with the binding failed: it never claims activation.
+func TestProjectClaudeKilledCommandConfirmationHoldsLockAndLeavesBindingFailed(t *testing.T) {
+	fixture, attempt := killedProjectClaudeCommand(t, "add", []string{"plugin", "install"}, true)
+	state, err := fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := lifecycleService(fixture.app, map[domain.ClientID]domain.DetectedClient{domain.ClientClaude: fixture.client})
+	input := usecase.InterruptedAttemptInput{InstallationID: state.Installations[0].InstallationID, Client: fixture.client, Scope: domain.ScopeProject,
+		BackendExecutable: fixture.client.ExecutablePath, Confirmed: true}
+	release, err := fixture.app.Lifecycle.Lock.Acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ConfirmInterruptedNativeAttempt(context.Background(), input); !errors.Is(err, processlock.ErrActive) {
+		t.Fatalf("confirmation ignored the held mutation lock: %v", err)
+	}
+	if current, _ := fixture.nativeAttempt(t); current != attempt {
+		t.Fatalf("confirmation under a held lock changed the attempt %q to %q", attempt, current)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ConfirmInterruptedNativeAttempt(context.Background(), input); err != nil {
+		t.Fatal(err)
+	}
+	state, err = fixture.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.NativeActivationAttempt != "" || binding.Activation != domain.ActivationFailed || binding.Verification != domain.VerificationFailed {
+			t.Fatalf("confirmed binding = attempt %q activation %q verification %q, want closed and failed", binding.NativeActivationAttempt, binding.Activation, binding.Verification)
+		}
 	}
 }

@@ -32,7 +32,8 @@ type interruptedClientChangePreview struct {
 // --yes closes the attempt and the command continues. A dry run performs the
 // same check and stops: nothing can be planned while the attempt is open.
 func confirmInterruptedClientChanges(cmd *cobra.Command, app App, opts *options, selector, command string) (bool, error) {
-	// Automated calls must name their targets; the command rejects them first.
+	// Automated calls confirm only explicitly named targets; without one the
+	// command keeps its own target checks and refusal.
 	if automatedMutation(app, opts) && strings.TrimSpace(opts.target) == "" {
 		return false, nil
 	}

@@ -30,6 +30,7 @@ type preparedClaudeCLIRunner struct {
 	interrupt *claudeCLIInterrupt
 	// surviving models processes a killed earlier run left behind.
 	surviving []legacyports.LiveProcess
+	censusErr error
 }
 
 func (r *preparedClaudeCLIRunner) Run(_ context.Context, cmd legacyports.Command) (legacyports.CommandResult, error) {

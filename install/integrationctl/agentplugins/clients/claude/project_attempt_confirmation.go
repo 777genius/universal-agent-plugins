@@ -55,7 +55,7 @@ func (*Adapter) ConfirmInterruptedAttempt(ctx context.Context, env clients.Env, 
 	}
 	exact, _, err := readSettledClaudeProjectInstall(ctx, env, request, probe.Command)
 	if err != nil {
-		return outcome, fmt.Errorf("the Claude Code plugin state does not match the recorded ownership: %w", err)
+		return outcome, fmt.Errorf("the Claude Code plugin state does not match the recorded ownership: %w; this needs manual recovery: check the plugin with `claude plugin list --json`, then clear the binding's native_activation_attempt in the agentplugins state file", err)
 	}
 	outcome.NativeEffect = domain.NativeEffectCommitted
 	if exact {
@@ -101,11 +101,11 @@ func requireNoSurvivingClaudeCommand(ctx context.Context, env clients.Env, execu
 		return fmt.Errorf("cannot verify that no Claude Code command from the interrupted run is still running: %w", err)
 	}
 	if process, found := survivingClaudeCommand(processes, executable, configRoot); found {
-		command := strings.Join(process.Argv, " ")
+		command := []rune(strings.Join(process.Argv, " "))
 		if len(command) > 200 {
-			command = command[:200] + "..."
+			command = append(command[:200], []rune("...")...)
 		}
-		return fmt.Errorf("a Claude Code process that can still change its plugins is running (pid %d: %s); wait for it to finish or stop it, then retry", process.PID, command)
+		return fmt.Errorf("a Claude Code process that can still change its plugins is running (pid %d: %s); wait for it to finish or stop it, then retry", process.PID, string(command))
 	}
 	return nil
 }
@@ -113,7 +113,9 @@ func requireNoSurvivingClaudeCommand(ctx context.Context, env clients.Env, execu
 // survivingClaudeCommand finds a Claude Code process running a `plugin`
 // command, or one bound to this profile through CLAUDE_CONFIG_DIR, which every
 // native command of this adapter carries even if it rewrote its arguments.
-// A wrapper script counts as Claude Code through its own name.
+// A wrapper script counts as Claude Code through its own name. A Claude
+// process that hides both its arguments and its environment cannot be
+// cleared, so it counts as well.
 func survivingClaudeCommand(processes []legacyports.LiveProcess, executable, configRoot string) (legacyports.LiveProcess, bool) {
 	names := map[string]bool{"claude": true, claudeCommandName(executable): true}
 	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
@@ -129,7 +131,8 @@ func survivingClaudeCommand(processes []legacyports.LiveProcess, executable, con
 				plugin = plugin || i+1 < len(process.Argv) && process.Argv[i+1] == "plugin"
 			}
 		}
-		if claude && (plugin || slices.Contains(process.Env, profile)) {
+		hidden := len(process.Argv) == 0 && len(process.Env) == 0
+		if claude && (plugin || hidden || slices.Contains(process.Env, profile)) {
 			return process, true
 		}
 	}

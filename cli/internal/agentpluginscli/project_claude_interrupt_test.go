@@ -121,7 +121,8 @@ func TestProjectClaudeUnclosedInterruptedCommandKeepsAttempt(t *testing.T) {
 			if err == nil || !strings.Contains(out+err.Error(), attempt) {
 				t.Fatalf("retry ignored the unresolved attempt: %v\n%s", err, out)
 			}
-			// Doctor reports the open attempt and suggests no command that refuses it.
+			// Doctor reports the open attempt and names only the confirming repair
+			// and removal, never a blind rerun of the same command.
 			doctor, _, err := fixture.execute(false, "doctor", "--target", "claude", "--scope", "project", "--project-root", fixture.project, "--format", "json")
 			if err != nil || !strings.Contains(doctor, `"open_operation_count":1`) || !strings.Contains(doctor, "native_attempt_unresolved") || strings.Contains(doctor, "rerun the same") {
 				t.Fatalf("doctor misreported the unresolved attempt: %v\n%s", err, doctor)
