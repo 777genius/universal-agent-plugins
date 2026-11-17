@@ -143,9 +143,15 @@ exactly this condition, written once in `repotests/ci_pr_tiers_test.go`:
 if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
 ```
 
-A job that reads `always()`, `cancelled()` or `failure()` keeps its own
-condition and adds the gate in parentheses, because it would otherwise run
-after its skipped needs. Every Tier 1 workflow lists `ready_for_review` in its
+The test accepts exactly three condition forms: the gate alone,
+`always() && (<gate>)` for an aggregate that would otherwise run after its
+skipped needs, and the published audits' `workflow_run` success check
+`&& (<gate>)`. A job that only needs a gated job and reads no status function
+(`always()`, `success()`, `failure()`, `cancelled()`) skips with it. The test
+also pins each workflow's exact triggers, its pull request types (no
+`labeled` or `edited`, so a label or title change cannot cancel and restart a
+running lane) and its concurrency group, with cancellation only for pull
+request events. Every Tier 1 workflow lists `ready_for_review` in its
 pull request types, so marking a pull request ready starts the full lane on
 the head that becomes mergeable, and each later push to the ready pull request
 runs it again. GitHub does not merge a draft, so the final head of a merged
