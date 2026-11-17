@@ -56,7 +56,7 @@ func deactivateConfirmedCodex(ctx context.Context, env clients.Env, request doma
 		return outcome, err
 	}
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
-		return deactivateCodexWithoutCLI(outcome, request, marketplace, registered, pluginEntryPresent)
+		return deactivateCodexWithoutCLI(ctx, outcome, request, marketplace, registered, pluginEntryPresent)
 	}
 	profileRoot := request.Client.ConfigRoot
 	if err := validateProfile(profileRoot, ""); err != nil {
@@ -75,13 +75,8 @@ func deactivateConfirmedCodex(ctx context.Context, env clients.Env, request doma
 		outcome.ArtifactRemovalAllowed = false
 		return outcome, err
 	}
-	if request.PurgeData {
-		if err := purgeCodexNativeData(profileRoot, marketplace, request.DeclaredName); err != nil {
-			return outcome, err
-		}
-	}
 	outcome.ExternalRemovalComplete = true
-	return outcome, nil
+	return purgeRequestedNativeData(ctx, outcome, request, marketplace), nil
 }
 
 func verifyCodexNativeRemoval(ctx context.Context, env clients.Env, request domain.DeactivationRequest, marketplace string) error {
@@ -109,10 +104,10 @@ func verifyCodexNativeRemoval(ctx context.Context, env clients.Env, request doma
 	return nil
 }
 
-func deactivateCodexWithoutCLI(outcome domain.DeactivationOutcome, request domain.DeactivationRequest, marketplace string, registered, pluginEntryPresent bool) (domain.DeactivationOutcome, error) {
+func deactivateCodexWithoutCLI(ctx context.Context, outcome domain.DeactivationOutcome, request domain.DeactivationRequest, marketplace string, registered, pluginEntryPresent bool) (domain.DeactivationOutcome, error) {
 	if !registered && !pluginEntryPresent {
 		outcome.ExternalRemovalComplete = true
-		return outcome, nil
+		return purgeRequestedNativeData(ctx, outcome, request, marketplace), nil
 	}
 	outcome.Activation = domain.ActivationManual
 	outcome.ArtifactRemovalAllowed = false
