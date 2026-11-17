@@ -372,8 +372,9 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                         (project / 'uap.lock').write_text('owned-test')
                         if operations.count('add') == 1:
                             chats.mkdir(parents=True)
-                            (profile / 'projects.json').write_text(json.dumps({'projects': {str(project): 'project'}}))
-                            (chats.parent / '.project_root').write_text(str(project))
+                            registry_project = str(project).lower()
+                            (profile / 'projects.json').write_text(json.dumps({'projects': {registry_project: 'project'}}))
+                            (chats.parent / '.project_root').write_text(registry_project)
                         elif replaced:
                             chats.rename(chats.with_name("held-chats"))
                             chats.mkdir()
