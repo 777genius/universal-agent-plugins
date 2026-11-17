@@ -65,14 +65,6 @@ func activateClaudeProjectMarketplace(ctx context.Context, env clients.Env, requ
 		settleClaudeProjectInstall(ctx, env, request, command, claudeProjectState{state: observation.state, registered: registered}, &outcome, err)
 		return fail(err)
 	}
-	listed, err := runPreparedClaudeList(ctx, env, command)
-	if err == nil {
-		err = verifyClaudeProjectInstalled(ctx, request, listed.Stdout)
-	}
-	if err != nil {
-		outcome.NativeEffect = domain.NativeEffectUncertain
-		return fail(err)
-	}
 	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
 	return finishClaudeMarketplaceTrust(env, request, outcome)
 }
@@ -132,6 +124,10 @@ func verifyClaudeProjectInstalled(ctx context.Context, request domain.Activation
 	return verifyClaudeProjectCache(ctx, request.Client.ConfigRoot, request.DeclaredName, request.Plan.PhysicalArtifactID, request.Plan.TargetContext.ProjectRoot, observed.cache, request.Delivery.NativeObjects, false)
 }
 
+// installClaudeProjectMarketplace runs Claude's own commands and the listing
+// that verifies them. Until that listing confirms the exact install, a landed
+// install is an uncertain effect, so an interrupted or failed verification is
+// settled like an interrupted command.
 func installClaudeProjectMarketplace(ctx context.Context, env clients.Env, request domain.ActivationRequest, command legacyports.Command, registered bool, state projectListState, effect *domain.NativeEffectState) error {
 	marketplace := ProjectMarketplaceName(request.Plan.PhysicalArtifactID, request.Plan.TargetContext.ProjectRoot)
 	id := request.DeclaredName + "@" + marketplace
@@ -148,7 +144,17 @@ func installClaudeProjectMarketplace(ctx context.Context, env clients.Env, reque
 			return err
 		}
 	}
-	return mutateClaudeProject(ctx, env, command, effect, "plugin", "install", id, "--scope", "project")
+	if err := mutateClaudeProject(ctx, env, command, effect, "plugin", "install", id, "--scope", "project"); err != nil {
+		return err
+	}
+	listed, err := runPreparedClaudeList(ctx, env, command)
+	if err == nil {
+		err = verifyClaudeProjectInstalled(ctx, request, listed.Stdout)
+	}
+	if err != nil {
+		*effect = domain.NativeEffectUncertain
+	}
+	return err
 }
 
 func deactivateClaudeProjectMarketplace(ctx context.Context, env clients.Env, request domain.DeactivationRequest, body []byte) (domain.DeactivationOutcome, error) {

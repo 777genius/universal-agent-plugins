@@ -26,7 +26,8 @@ settings through locked conditional file transactions. A failed write or rollbac
 retains its observed native effect; an uncertain effect cannot be reported as
 unchanged or followed by another native probe. There are two exceptions, both
 for the Claude Code project commands (`plugin marketplace add`, `plugin install`,
-`plugin uninstall`, `plugin marketplace remove`):
+`plugin uninstall`, `plugin marketplace remove`) and the `plugin list` that
+verifies them:
 
 - A failed or interrupted command whose whole process tree was proven closed:
   the adapter may read the client's own registry once, read-only, and report

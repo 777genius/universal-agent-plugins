@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -15,7 +16,10 @@ import (
 // command runs: the command context is canceled and the child is stopped
 // either before its effect or just after the effect already landed.
 type claudeCLIInterrupt struct {
-	args   []string
+	args []string
+	// after, when set, arms the interrupt only once a command with this
+	// prefix ran, for example the listing that verifies a native install.
+	after  []string
 	landed bool
 	// unclosed reports a child whose process-tree cleanup was not proven.
 	unclosed bool
@@ -23,7 +27,18 @@ type claudeCLIInterrupt struct {
 }
 
 func (i *claudeCLIInterrupt) matches(args []string) bool {
-	return i != nil && len(args) >= len(i.args) && reflect.DeepEqual(args[:len(i.args)], i.args)
+	return i != nil && len(i.after) == 0 && hasArgsPrefix(args, i.args)
+}
+
+// ran arms an interrupt that waits for the command args.
+func (i *claudeCLIInterrupt) ran(args []string) {
+	if i != nil && len(i.after) != 0 && hasArgsPrefix(args, i.after) {
+		i.after = nil
+	}
+}
+
+func hasArgsPrefix(args, prefix []string) bool {
+	return len(args) >= len(prefix) && reflect.DeepEqual(args[:len(prefix)], prefix)
 }
 
 func (i *claudeCLIInterrupt) fire(r *preparedClaudeCLIRunner, args []string) (legacyports.CommandResult, error) {
@@ -126,6 +141,41 @@ func TestProjectClaudeUnclosedInterruptedCommandKeepsAttempt(t *testing.T) {
 			doctor, _, err := fixture.execute(false, "doctor", "--target", "claude", "--scope", "project", "--project-root", fixture.project, "--format", "json")
 			if err != nil || !strings.Contains(doctor, `"open_operation_count":1`) || !strings.Contains(doctor, "native_attempt_unresolved") || strings.Contains(doctor, "rerun the same") {
 				t.Fatalf("doctor misreported the unresolved attempt: %v\n%s", err, doctor)
+			}
+		})
+	}
+}
+
+// The listing that verifies a landed install belongs to that install: an
+// interrupt there is settled the same way, so the same add finishes the
+// activation, while a listing whose cleanup is not proven keeps the attempt.
+func TestProjectClaudeInterruptedInstallVerificationResumesWithSameCommand(t *testing.T) {
+	for _, unclosed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "closed", true: "unclosed"}[unclosed], func(t *testing.T) {
+			interrupt := &claudeCLIInterrupt{args: []string{"plugin", "list", "--json"}, after: []string{"plugin", "install"}, unclosed: unclosed}
+			fixture, args := interruptedProjectClaudeCommand(t, "add", interrupt)
+			attempt, _ := fixture.nativeAttempt(t)
+			if (attempt != "") != unclosed {
+				t.Fatalf("interrupted install verification left attempt %q", attempt)
+			}
+			out, err := fixture.runProject(context.Background(), args...)
+			if unclosed {
+				if err == nil || !strings.Contains(out+err.Error(), attempt) {
+					t.Fatalf("retry ignored the unresolved attempt: %v\n%s", err, out)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("same command did not resume: %v\n%s", err, out)
+			}
+			state, err := fixture.store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, binding := range state.Installations[0].Clients {
+				if binding.NativeActivationAttempt != "" || binding.Activation != domain.ActivationActive || len(fixture.runner.marketplaceListing()) != 1 {
+					t.Fatalf("resumed add did not converge: %+v", binding)
+				}
 			}
 		})
 	}
