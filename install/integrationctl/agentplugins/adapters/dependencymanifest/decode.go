@@ -177,7 +177,9 @@ func (doc Document) Package() (map[string]environment.Requirement, error) {
 	}
 	reqs := doc.clone()
 	// Build-only dependencies must never be requirements of a consumer.
-	for alias := range reqs.Development { delete(reqs.Dependencies, alias) }
+	for alias := range reqs.Development {
+		delete(reqs.Dependencies, alias)
+	}
 	for _, alias := range sortedKeys(reqs.Dependencies) {
 		req := reqs.Dependencies[alias]
 		if req.Registry != nil && strings.Count(req.Registry.Distribution, "/") != 1 {

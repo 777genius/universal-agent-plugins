@@ -89,7 +89,9 @@ func editDependency(doc *tomledit.Document, edit DependencyEdit) error {
 		return errors.New("dependency alias is empty")
 	}
 	group := edit.Group
-	if group == "" { group = "dependencies" }
+	if group == "" {
+		group = "dependencies"
+	}
 	if group != "dependencies" && group != "dev-dependencies" {
 		return fmt.Errorf("%w: dependency group %q", ErrUnsupportedLayout, group)
 	}

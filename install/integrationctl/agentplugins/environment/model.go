@@ -99,8 +99,8 @@ type Requirements struct {
 	SchemaVersion int                    `json:"schema_version"`
 	Dependencies  map[string]Requirement `json:"dependencies"`
 	// Development marks local-only direct dependencies in the same graph.
-	Development   map[string]bool        `json:"development,omitempty"`
-	Targets       map[string][]string    `json:"targets"`
+	Development map[string]bool     `json:"development,omitempty"`
+	Targets     map[string][]string `json:"targets"`
 }
 
 type LockedSource struct {
@@ -374,8 +374,8 @@ type manifestIntent struct {
 	SchemaVersion int                  `json:"schema_version"`
 	Dependencies  []manifestDependency `json:"dependencies"`
 	// Omitted for historical locks: old fingerprint bytes remain unchanged.
-	Development   []string             `json:"development,omitempty"`
-	Targets       []manifestTarget     `json:"targets"`
+	Development []string         `json:"development,omitempty"`
+	Targets     []manifestTarget `json:"targets"`
 }
 
 type manifestDependency struct {

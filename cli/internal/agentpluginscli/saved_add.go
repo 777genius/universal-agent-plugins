@@ -63,7 +63,9 @@ func cloneSavedRequirements(value environment.Requirements) environment.Requirem
 	}
 	if len(value.Development) > 0 {
 		cloned.Development = make(map[string]bool, len(value.Development))
-		for alias := range value.Development { cloned.Development[alias] = true }
+		for alias := range value.Development {
+			cloned.Development[alias] = true
+		}
 	}
 	for target, aliases := range value.Targets {
 		cloned.Targets[target] = append([]string(nil), aliases...)
