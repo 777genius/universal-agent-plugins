@@ -8165,6 +8165,10 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
             profile = case / "home/.codex"
             database = case / "home/.local/state/codex-sqlite/state_5.sqlite"
             commands, registered = [], [False]
+            ambient = root / "ambient-profile"
+            ambient.mkdir()
+            (ambient / "foreign.txt").write_text("ambient untouched")
+            ambient_before = audit.scoped_snapshot((ambient,))
             async def discover(binary, project, native_profile, environment):
                 self.assertEqual(native_profile, profile)
                 self.assertEqual(environment["CODEX_HOME"], str(profile))
@@ -8175,7 +8179,21 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                 if mutation == "prebaseline-config":
                     (profile / "config.toml").write_text('sqlite_home = "/foreign"\n')
                 elif mutation == "prebaseline-foreign":
+                    self.assertTrue((profile / "foreign-neighbor.txt").is_file())
                     (profile / "foreign-neighbor.txt").write_text("changed")
+                elif mutation == "prebaseline-foreign-new":
+                    foreign = profile / "foreign-prebaseline-new.txt"
+                    self.assertFalse(foreign.exists())
+                    foreign.write_text("new foreign bytes")
+                elif mutation == "prebaseline-foreign-nested":
+                    foreign = profile / "foreign-prebaseline-directory"
+                    self.assertFalse(foreign.exists())
+                    foreign.mkdir()
+                    (foreign / "nested.txt").write_text("new foreign bytes")
+                elif mutation == "prebaseline-runtime-foreign":
+                    (database.parent / "foreign-prebaseline-new.txt").write_text("foreign SQLite neighbor")
+                elif mutation == "prebaseline-home-new":
+                    (case / "home/foreign-prebaseline-new.txt").write_text("new foreign bytes")
                 elif mutation == "prebaseline-managed":
                     (case / "uap-data/foreign-managed.txt").write_text("changed")
                 return {"data": [{"cwd": str(project), "errors": [], "skills": []}]}
@@ -8209,9 +8227,15 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                   patch.dict(audit.AGENT_BINARIES, {"codex": "/inert/codex"}, clear=True),
                   patch.object(audit, "call", side_effect=perform),
                   patch.object(audit, "matching_installations", return_value=matched),
-                  patch.object(audit, "uninstall_native_codex_plugin", side_effect=uninstall)):
-                return audit.do_case("/inert/uap", "codex", "plugin", source, 0, root,
-                                     {source: "atlassian"}), commands
+                  patch.object(audit, "uninstall_native_codex_plugin", side_effect=uninstall),
+                  patch.dict(os.environ, {"HOME": str(ambient), "USERPROFILE": str(ambient)})):
+                try:
+                    return audit.do_case("/inert/uap", "codex", "plugin", source, 0, root,
+                                         {source: "atlassian"}), commands
+                finally:
+                    if mutation and mutation.startswith("prebaseline-"):
+                        self.assertEqual(commands, [])
+                    self.assertEqual(audit.scoped_snapshot((ambient,)), ambient_before)
 
     def test_plugin_baseline_and_every_command_checkpoint_preserve_raw_scanner(self):
         row, commands = self.run_case()
@@ -8237,7 +8261,10 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
             self.run_case("sqlite-row")
         with self.assertRaisesRegex(ValueError, "config authority changed"):
             self.run_case("prebaseline-config")
-        for mutation in ("prebaseline-foreign", "prebaseline-managed"):
+        with self.assertRaisesRegex(ValueError, "unexpected member"):
+            self.run_case("prebaseline-runtime-foreign")
+        for mutation in ("prebaseline-foreign", "prebaseline-foreign-new",
+                         "prebaseline-foreign-nested", "prebaseline-home-new", "prebaseline-managed"):
             with self.subTest(mutation=mutation), self.assertRaisesRegex(
                     ValueError, "changed protected fixture authority"):
                 self.run_case(mutation)

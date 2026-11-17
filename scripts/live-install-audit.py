@@ -1983,7 +1983,40 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             AGENT_BINARIES["codex"], case_root, home, project, env)
         assert_case_unchanged()
         initialized_home = scoped_snapshot((home,))
-        if (any(initialized_home.get(path) != value for path, value in protected_home.items())
+        # Admit only the exact artifacts authored/measured by the bounded
+        # SQLite initializer. Every other old or newly created key is protected.
+        initializer = codex_plugin_sqlite
+        sqlite_root = home / ".local/state/codex-sqlite"
+        config_path = home / ".codex/config.toml"
+        if initializer.runtime != sqlite_root or initializer.config != config_path:
+            raise ValueError("Codex preinstall initialization changed protected fixture authority")
+        owned_files = {
+            config_path: hashlib.sha256(
+                CODEX_RUNTIME_AUDIT["_sqlite_config"](initializer.pin)).hexdigest(),
+            **{sqlite_root / name: fact["sha256"] for name, fact in
+               initializer.observations[0]["runtime_files_fully_read"].items()},
+        }
+        expected_home = dict(protected_home)
+        owned_directories = (home / ".local", home / ".local/state", sqlite_root)
+        for path in (*owned_directories, *owned_files):
+            directory = path in owned_directories
+            relative = path.relative_to(home)
+            metadata_key = "metadata:0:" + relative.as_posix()
+            metadata = initialized_home.get(metadata_key)
+            if (not isinstance(metadata, tuple) or not metadata
+                    or not (stat.S_ISDIR(metadata[0]) if directory
+                            else stat.S_ISREG(metadata[0]))):
+                raise ValueError("Codex preinstall initialization changed protected fixture authority")
+            entries = {metadata_key: metadata}
+            if directory:
+                entries["directory:0:" + relative.as_posix()] = "present"
+            else:
+                entries[home.name + "/" + str(relative)] = owned_files[path]
+            for key, value in entries.items():
+                if key not in protected_home:
+                    expected_home[key] = value
+        initializer.guard()
+        if (initialized_home != expected_home
                 or scoped_snapshot((project, data)) != protected_delivery):
             raise ValueError("Codex preinstall initialization changed protected fixture authority")
     before = snapshot(native_roots)
