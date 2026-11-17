@@ -2491,7 +2491,10 @@ def main():
     # This does not convert a refused installation into native PASS.
     temp_parent = published_audit_temp_parent()
     report["temp_parent_kind"] = ("github-windows-runner" if temp_parent else "python-default")
-    with tempfile.TemporaryDirectory(prefix="uap-live-30x30-", dir=temp_parent) as temp:
+    # Resolve only the selected parent before creating any owned case; strict
+    # profile/foreign-path checks still reject redirected existing directories.
+    physical_parent = Path(temp_parent or tempfile.gettempdir()).resolve(strict=True)
+    with tempfile.TemporaryDirectory(prefix="uap-live-30x30-", dir=physical_parent) as temp:
         runroot = Path(temp)
         probe_case = runroot / "version-probe"
         probe_home, probe_data = probe_case / "home", probe_case / "uap-data"

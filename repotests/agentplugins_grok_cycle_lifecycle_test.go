@@ -113,7 +113,7 @@ func grokCycleProgress(stage, name string) string {
 	case "add-a", "add-b":
 		return "Resolving and validating one Agent Plugin package for every selected target...\nInstalling " + name + " for 1 selected clients...\n"
 	case "repeat-add-a":
-		return "Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+		return "Resolving and validating one Agent Plugin package for every selected target...\n"
 	case "update-a", "unchanged-update-a":
 		return "Resolving and validating one updated Agent Plugin package for every selected target...\n"
 	case "intact-repair-a", "missing-repair-a":

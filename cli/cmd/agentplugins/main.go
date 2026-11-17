@@ -110,7 +110,9 @@ func run() error {
 		}
 	}
 	if err != nil && ctx.Err() != nil {
-		err = fmt.Errorf("%w\ninterrupted: run the same command again to resume", err)
+		// A client change the installer could not confirm is never resumed blindly;
+		// doctor reports it as an open recovery operation instead.
+		err = fmt.Errorf("%w\ninterrupted: run the same command again to resume; `agentplugins doctor` lists anything it cannot resume", err)
 	}
 	return err
 }

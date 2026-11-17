@@ -125,3 +125,31 @@ func TestNativeProbeFailurePreservesProcessClosureEvidence(t *testing.T) {
 		}
 	}
 }
+
+// Interrupting the command while OpenCode runs a discovery query closes the
+// query cleanly, but proves nothing. The interruption must reach the caller
+// instead of ending as a successful prepared install.
+func TestNativeProbeCancellationReportsInterruption(t *testing.T) {
+	for _, phase := range []string{"debug config", "debug skill", "mcp list"} {
+		t.Run(phase, func(t *testing.T) {
+			request, env, config, skills := nativeProbeFailureFixture(t)
+			request.VerifyOnly = false
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			env.Runner = skillObservationRunner(func(_ context.Context, c legacyports.Command) (legacyports.CommandResult, error) {
+				if c.Argv[1]+" "+c.Argv[2] == phase {
+					cancel()
+					return legacyports.CommandResult{CleanupComplete: true}, context.Canceled
+				}
+				if c.Argv[2] == "config" {
+					return legacyports.CommandResult{Stdout: config}, nil
+				}
+				return legacyports.CommandResult{Stdout: skills}, nil
+			})
+			outcome, err := observeOpenCodeNativeComponents(ctx, env, request, domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectCommitted})
+			if !errors.Is(err, context.Canceled) || outcome.Activation != domain.ActivationPrepared || outcome.NativeEffect != domain.NativeEffectCommitted {
+				t.Fatalf("interruption reported as completed discovery: outcome=%+v err=%v", outcome, err)
+			}
+		})
+	}
+}

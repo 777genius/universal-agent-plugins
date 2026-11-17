@@ -72,18 +72,25 @@ def public_data(value, r, label, paths):
                 "physical_artifact_id": b["physical_artifact_id"],
                 "components": [{"kind": "skill", "name": r["name"], "support": "native"}, {"kind": "mcp_server", "name": r["name"], "support": "native"}],
                 "user_actions": ["verify the plugin's authentication requirements before using it", action], "warnings": ["authentication_not_catalog_verified"]}
-        actions = [RELOAD]
         if not user:
-            actions.append("Gemini project configuration is installed; native discovery, workspace trust, system policy and MCP initialization remain unobserved; start Gemini CLI in the selected project and inspect skills list and mcp list")
-        result.update(plan=plan, activation={"activation": "active" if user else "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "installation_verified", "user_actions": actions})
+            plan["warnings"] += ['Installation may trust the selected project "' + paths[r["scope"]] + '" in Gemini CLI. Existing distrust is preserved; this preference remains after removal.', "Gemini CLI verification starts or connects to all enabled MCP servers from this project, your profile and extensions under their current policy. Readiness is checked for the selected plugin."]
+        activation = {"activation": "active", "authentication": "not_required", "policy": "allowed", "verification": "installation_verified"}
+        if user:
+            activation.update(authentication="not_checked", user_actions=[RELOAD])
+        result.update(plan=plan, activation=activation)
         if label != "repeat-add-a":
             result["group_phase"] = "external_completed"
         if label in ("repeat-add-a", "unchanged-update-a"):
             result["no_change"] = True
-        output["next_action"] = NEXT
+        if user:
+            output["next_action"] = NEXT
     if label.startswith("add-") or label in ("repeat-add-a", "update-a", "unchanged-update-a"):
         output.update(scope="user" if user else "project", readiness="needs_action",
                       next_actions=[{"code": "verify_native", "actor": "native_client", "message": NEXT}])
+    if r["scope"] != "user":
+        if "readiness" in output:
+            output["readiness"] = "ready"
+        output.pop("next_actions", None)
     security = {"schema_version": 1, "subject": {"tree_digest": r["digest"], "manifest_digest": output["manifest_digest"]},
                 "scanner": {"id": "lintai", "version": "0.1.3"},
                 "policy": {"id": "agent-plugin-install", "version": 2, "digest": "sha256:9cf869e299d847d7078aeca01f5a182fcdb0144bbf513c83290459991c79e037"},
@@ -95,7 +102,7 @@ def public_data(value, r, label, paths):
     op = "op-" + f"{100:032x}" if label == "unchanged-update-a" else operation(label)
     output["operation_id"] = op
     target = {"target": "gemini", "status": "external_completed", "output": output}
-    if not label.startswith("remove-"):
+    if r["scope"] == "user" and not label.startswith("remove-"):
         target["next_action"] = NEXT
     if label in ("unchanged-update-a", "update-a"):
         target["selected"] = True
@@ -103,7 +110,9 @@ def public_data(value, r, label, paths):
     if label.startswith("add-") or label in ("unchanged-update-a", "update-a"):
         data.update(version="1.0.0", source=local, tree_digest=r["digest"])
     if label.startswith("add-"):
-        data.update(action_required=1, manifest_digest=output["manifest_digest"], security=security, environment={"reason": "no_save_requested", "saved": False, "scope": "user" if user else "project", "scope_selection_reason": "explicit"})
+        data.update(manifest_digest=output["manifest_digest"], security=security, environment={"reason": "no_save_requested", "saved": False, "scope": "user" if user else "project", "scope_selection_reason": "explicit"})
+    if label.startswith("add-") and r["scope"] == "user":
+        data["action_required"] = 1
     if label.startswith("remove-"):
         data.update(status="data_retained", plugin_data_preserved=True, data_retained=True,
                     retained_data=[{"data_receipt_id": b["data_receipt_id"], "physical_backend_id": b["physical_artifact_id"], "scope": b["scope"], "state": "owned"}])
@@ -437,7 +446,7 @@ class GeminiCompleteTests(unittest.TestCase):
         bodies, source = fixture()
         self.assertTrue(self.admit(bodies, source)["runtime_attempt_complete"])
         for stage in ("add-user", "add-a", "add-b", "repeat-add-a", "unchanged-update-a", "update-a"):
-            for key in ("scope", "readiness", "next_actions"):
+            for key in (("scope", "readiness", "next_actions") if stage == "add-user" else ("scope", "readiness")):
                 with self.subTest(stage=stage, missing=key):
                     changed = copy.deepcopy(bodies)
                     row = runtime.strict_json(changed[stage + ".stdout.log"])
@@ -485,7 +494,8 @@ class GeminiCompleteTests(unittest.TestCase):
             "dormant-env": lambda d, v: d.update(environment_receipts=[]),
             "dormant-retention": lambda d, v: d["installations"][0].update(data_retained=False),
             "inventory-type": lambda d, v: d["installations"][0]["package"]["inventory"].update(mcp_enabled=1),
-            "binding": lambda d, v: v["binding"].update(activation="active"),
+            "binding": lambda d, v: v["binding"].update(activation="prepared"),
+            "authentication": lambda d, v: v["binding"].update(authentication="not_checked"),
             "object": lambda d, v: v["binding"]["native_objects"][0].update(managed_digest="sha256:" + "0" * 64),
             "receipt-type": lambda d, v: v["binding"]["receipts"][0].update(sequence=True),
             "receipt-empty": lambda d, v: v["binding"]["receipts"][0].update(before_digest=""),

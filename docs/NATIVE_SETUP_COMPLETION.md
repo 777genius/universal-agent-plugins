@@ -24,7 +24,13 @@ their existing behavior. An unclosed probe stops subsequent client mutations.
 Trust and approval preferences survive plugin removal. Updates preserve unrelated
 settings through locked conditional file transactions. A failed write or rollback
 retains its observed native effect; an uncertain effect cannot be reported as
-unchanged or followed by another native probe. Cursor writes only the approval
+unchanged or followed by another native probe. The one exception is a failed or
+interrupted client command whose whole process tree was proven closed (Claude
+Code project `plugin marketplace add`, `plugin install`, `plugin uninstall`,
+`plugin marketplace remove`): the adapter may read the client's own registry
+once, read-only, and report only an exactly recognized state. Unproven process
+cleanup, a failed read or an unrecognized state stay uncertain and keep blocking
+the next mutation. Cursor writes only the approval
 store and never invokes native `mcp enable`, which can clear explicit disablement.
 Existing deny settings are preserved and checked again before readiness is
 reported. Unknown schemas, foreign ownership and uncertain cleanup never become

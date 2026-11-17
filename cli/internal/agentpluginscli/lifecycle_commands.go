@@ -22,16 +22,13 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
 			}
+			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
+				return err
+			}
 			operationApp := app
 			operationApp.Lifecycle.PrepareHostsForPreview = !opts.dryRun
 			if all {
-				if len(args) > 0 {
-					return fmt.Errorf("choose either one installation or --all")
-				}
-				if strings.TrimSpace(opts.target) != "" {
-					return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
-				}
-				return runUpdateAllRetryable(cmd, operationApp, opts)
+				return dispatchUpdateAll(cmd, operationApp, opts, args)
 			}
 			if len(args) != 1 {
 				return fmt.Errorf("provide one installation or use --all")
@@ -59,6 +56,16 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 	return command
 }
 
+func dispatchUpdateAll(cmd *cobra.Command, app App, opts *options, args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("choose either one installation or --all")
+	}
+	if strings.TrimSpace(opts.target) != "" {
+		return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
+	}
+	return runUpdateAllRetryable(cmd, app, opts)
+}
+
 func newRepairCommand(app App, opts *options) *cobra.Command {
 	command := &cobra.Command{
 		Use: "repair <name-or-installation-id>", Short: "Explicitly restore a missing or modified managed package",
@@ -72,6 +79,9 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 				return scopeErr
 			}
 			if err := validateCommonOptions(opts); err != nil {
+				return err
+			}
+			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
 				return err
 			}
 			operationApp := app
@@ -133,6 +143,10 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 				if err := requireNonInteractiveMutation(app, opts, "removal"); err != nil {
 					return err
 				}
+			}
+			// Before target selection: a committed removal no longer lists its target.
+			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
+				return err
 			}
 			if strings.TrimSpace(opts.target) == "" && app.Terminal && !opts.purgeData {
 				selection, err := promptBoundTargets(cmd, app, args[0], opts.scope)

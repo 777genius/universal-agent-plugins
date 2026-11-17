@@ -135,6 +135,10 @@ func (session *removeManySession) buildInputs() error {
 	selected := make([]domain.DetectedClient, 0, len(session.targets))
 	for _, target := range session.targets {
 		if !installationHasTarget(session.installation, target, session.opts.scope) {
+			if session.opts.finishedInterrupted {
+				// The rerun did change files: it completed the earlier removal.
+				return fmt.Errorf("plugin is not installed for target %q in %s scope", target, session.opts.scope)
+			}
 			return fmt.Errorf("plugin is not installed for target %q in %s scope; no target was changed", target, session.opts.scope)
 		}
 		if err := selectedDetectionError(target, session.detected); err != nil {

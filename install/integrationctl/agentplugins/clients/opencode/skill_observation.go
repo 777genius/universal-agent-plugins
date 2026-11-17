@@ -43,6 +43,12 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 		outcome.NativeEffect = domain.NativeEffectUncertain
 		return shared.FailedActivation(outcome, "confirm prior OpenCode discovery process cleanup before retrying", err)
 	}
+	// The command's cancellation closes a running query without proving
+	// anything, so report it like other clients do. Only failures of the query
+	// itself, including its own time budget, leave the installed setup pending.
+	if ctx.Err() != nil {
+		return outcome, ctx.Err()
+	}
 	if pendingConfirmation {
 		outcome.UserActions = shared.AppendUnique(outcome.UserActions, openCodeMCPConfirmationAction)
 		return outcome, nil
@@ -52,12 +58,7 @@ func observeOpenCodeNativeComponents(ctx context.Context, env clients.Env, reque
 	}
 	outcome.Activation = domain.ActivationActive
 	outcome.ActivationAttested = false
-	// Successful local initialization qualifies native setup only, not future
-	// model access or authentication used inside a server's tools.
-	if len(servers) > 0 && outcome.Authentication == domain.AuthenticationNotChecked && request.Plan.Authentication == domain.AuthenticationNotChecked && slices.Contains(request.Plan.Warnings, "authentication_not_catalog_verified") {
-		outcome.Authentication = domain.AuthenticationNotRequired
-	}
-	outcome.Authentication = openCodeObservedSkillAuthentication(request, servers, incoming, outcome)
+	outcome.Authentication = openCodeObservedAuthentication(request, servers, incoming, outcome)
 	outcome.UserActions = removeOpenCodeDiscoveryActions(outcome.UserActions)
 	return outcome, nil
 }
@@ -72,7 +73,12 @@ func openCodeObservationStillOwned(env clients.Env, request domain.ActivationReq
 
 // Ownership is established before Active, independently of saved authentication.
 // This qualifier only supplies the authentication fact for eligible catalogs.
-func openCodeObservedSkillAuthentication(request domain.ActivationRequest, servers []string, incoming, outcome domain.ActivationOutcome) domain.AuthenticationState {
+func openCodeObservedAuthentication(request domain.ActivationRequest, servers []string, incoming, outcome domain.ActivationOutcome) domain.AuthenticationState {
+	// Successful local initialization qualifies native setup only, not future
+	// model access or authentication used inside a server's tools.
+	if len(servers) > 0 && outcome.Authentication == domain.AuthenticationNotChecked && request.Plan.Authentication == domain.AuthenticationNotChecked && slices.Contains(request.Plan.Warnings, "authentication_not_catalog_verified") {
+		return domain.AuthenticationNotRequired
+	}
 	if request.ActivationComplete || incoming.ActivationAttested || incoming.AuthenticationAttested ||
 		len(servers) != 0 || outcome.Activation != domain.ActivationActive ||
 		outcome.Verification != domain.VerificationInstalled || outcome.Policy != domain.PolicyAllowed || request.Plan.Policy != domain.PolicyAllowed {

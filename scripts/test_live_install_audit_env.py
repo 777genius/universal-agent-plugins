@@ -7491,6 +7491,43 @@ module.exports = {
             self.assertFalse(audit.codex_marketplace_source_in_case(
                 case / "home/.codex/plugins/missing", case))
             self.assertFalse(audit.codex_marketplace_source_in_case(Path("relative"), case))
+            # Reach main's actual creation seam with an owned lexical parent.
+            (root / "spelling").mkdir()
+            alias_parent = root / "spelling" / ".."
+            cli = root / "inert-cli"
+            cli.write_text("no native execution")
+            observed = []
+
+            def create_owned_root(*args, **kwargs):
+                parent = Path(kwargs["dir"])
+                self.assertEqual(parent, parent.resolve(strict=True),
+                                 "main selected a noncanonical TEMP parent")
+                return TemporaryDirectory(*args, **kwargs)
+
+            def capture_case(*args):
+                runroot = args[5]
+                self.assertEqual(runroot, runroot.resolve(strict=True),
+                                 "main handed a noncanonical root to the case")
+                self.assertEqual(runroot.parent, root)
+                before = runroot.lstat()
+                held = audit.CODEX_RUNTIME_AUDIT["_real_directory"](runroot)
+                self.assertTrue(os.path.samestat(before, held))
+                lexical = alias_parent / runroot.name
+                with self.assertRaisesRegex(ValueError, "audit directory is redirected"):
+                    audit.CODEX_RUNTIME_AUDIT["_real_directory"](lexical)
+                observed.append(runroot)
+                return {"status": "passed"}
+
+            with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
+                                       "--target", "chatgpt", "--kind", "plugin",
+                                       "--limit", "1", "--report-dir", str(root)]), \
+                    patch.object(audit, "published_audit_temp_parent", return_value=str(alias_parent)), \
+                    patch.object(audit, "version_evidence", return_value={"status": "reported"}), \
+                    patch.object(audit, "do_case", side_effect=capture_case), \
+                    patch.object(audit.tempfile, "TemporaryDirectory", side_effect=create_owned_root):
+                self.assertEqual(audit.main(), 0)
+            self.assertEqual(len(observed), 1)
             if os.name == "nt":
                 # Same on-disk directory; Go may use the Windows extended prefix.
                 extended = Path("\\\\?\\" + str(source))
