@@ -33,6 +33,8 @@ func TestRegistrySemverConstraints(t *testing.T) {
 		{"*", "1.3.0", true},
 		{"1.2.3+build.2", "1.2.3+build.2", true},
 		{"1.2.3+build.2", "1.2.3+build.1", true},
+		{"1.2.3+build.001", "1.2.3+build.002", true},
+		{"^1.2.3+build.001", "1.2.4", true},
 		{">=1.2.3", "v1.3.0", false},
 		{"^1.2", "01.2.3", false},
 	} {

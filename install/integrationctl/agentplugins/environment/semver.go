@@ -31,7 +31,7 @@ import (
 	forbiddenVersionPrefix = regexp.MustCompile(`(^|[[:space:],|<>=~^])v\d`)
 	// Masterminds accepts coerced numeric operands such as 1.02.3; a package
 	// selector must not silently resolve such a value to a different version.
-	nonCanonicalNumericPart = regexp.MustCompile(`(^|[.[:space:]<>=~^|,])0\d+($|[.[:space:]|,+-])`)
+	versionOperand = regexp.MustCompile(`(^|[[:space:],|<>=~^])(\d+(?:\.\d+){0,2})`)
 )
 
 // ParseRegistryVersionSelector is the single parser/classifier for registry
@@ -53,10 +53,23 @@ func isCanonicalExactVersion(value string) bool {
 	return err == nil && version.String() == value
 }
 
+// Masterminds accepts coerced numeric operands such as 1.02.3. Restrict
+// that guard to SemVer's core numbers; build metadata like +build.001 is valid.
+func hasCoercedCoreNumerics(expression string) bool {
+	for _, operand := range versionOperand.FindAllStringSubmatch(expression, -1) {
+		for _, part := range strings.Split(operand[2], ".") {
+			if len(part) > 1 && part[0] == '0' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func validateVersionSelector(selector Selector) error {
 	if selector.Value == "" || strings.TrimSpace(selector.Value) != selector.Value ||
 		forbiddenVersionPrefix.MatchString(selector.Value) ||
-		nonCanonicalNumericPart.MatchString(selector.Value) {
+		hasCoercedCoreNumerics(selector.Value) {
 		return fmt.Errorf("invalid version selector %q", selector.Value)
 	}
 	switch selector.Kind {
