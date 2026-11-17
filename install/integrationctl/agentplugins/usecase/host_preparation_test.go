@@ -290,7 +290,8 @@ func TestOpenCodeHostBridgeOfflineAndStoredCleanup(t *testing.T) {
 	if err := json.Unmarshal(body, &config); err != nil {
 		t.Fatal(err)
 	}
-	if config["mcp"].(map[string]any)["docs"] != nil {
+	// Removing the last owned entry also removes the collection it created.
+	if mcp, _ := config["mcp"].(map[string]any); mcp["docs"] != nil {
 		t.Fatal("old MCP retained")
 	}
 	state, err := store.Load()
@@ -365,7 +366,7 @@ func TestOpenCodeHostBridgeStoredRemoveNoLookup(t *testing.T) {
 	if err := json.Unmarshal(body, &config); err != nil {
 		t.Fatal(err)
 	}
-	if config["mcp"].(map[string]any)["docs"] != nil {
+	if mcp, _ := config["mcp"].(map[string]any); mcp["docs"] != nil {
 		t.Fatal("stored MCP remains")
 	}
 }
@@ -409,7 +410,7 @@ func TestOpenCodeHostBridgeGroupStoredCleanup(t *testing.T) {
 	if err := json.Unmarshal(body, &config); err != nil {
 		t.Fatal(err)
 	}
-	if config["mcp"].(map[string]any)["docs"] != nil {
+	if mcp, _ := config["mcp"].(map[string]any); mcp["docs"] != nil {
 		t.Fatal("group old MCP retained")
 	}
 }

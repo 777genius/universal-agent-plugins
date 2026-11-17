@@ -166,6 +166,7 @@ func (kernel Kernel) ApplyBatch(requests []Request) (receipts []Receipt, err err
 			removeEntry(entries, req.Name)
 		}
 	}
+	pruneCreatedOpenCodeCollections(doc, requests)
 	if requests[0].Codec == CodecOpenCode || requests[0].Codec == CodecOpenCodeV2 {
 		proposed := make([]string, 0, len(requests))
 		for _, req := range requests {

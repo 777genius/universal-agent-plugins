@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/tailscale/hujson"
@@ -151,6 +152,40 @@ func removeEntry(obj *hujson.Object, name string) bool {
 	}
 	obj.Members = append(obj.Members[:index], obj.Members[index+1:]...)
 	return true
+}
+
+// pruneCreatedOpenCodeCollections removes the OpenCode MCP collection that
+// objectCollection created once a removal leaves it empty, so removing the
+// last owned server restores the document that preceded the first add.
+func pruneCreatedOpenCodeCollections(doc *document, requests []Request) {
+	codec := requests[0].Codec
+	removes := slices.ContainsFunc(requests, func(req Request) bool { return req.Action == ActionRemove })
+	if !removes || (codec != CodecOpenCode && codec != CodecOpenCodeV2) {
+		return
+	}
+	key := codecCollectionKey(codec)
+	if parent, _ := objectCollection(doc.root, key, false); parent != nil && codec == CodecOpenCodeV2 {
+		removeCreatedEmptyCollection(parent, "servers")
+	}
+	removeCreatedEmptyCollection(doc.root, key)
+}
+
+// Ownership of a created collection is not recorded, but appendMember gives
+// it one exact layout: an indented key with no space before the value and a
+// newline before the closing brace. Only that layout, empty, is removed; any
+// other one, including a user's own empty collection, is preserved.
+func removeCreatedEmptyCollection(parent *hujson.Object, key string) {
+	member, index := objectMember(parent, key)
+	if member == nil {
+		return
+	}
+	obj, ok := member.Value.Value.(*hujson.Object)
+	if !ok || len(obj.Members) != 0 || string(obj.AfterExtra) != "\n" ||
+		string(member.Name.BeforeExtra) != "\n  " || len(member.Name.AfterExtra) != 0 ||
+		len(member.Value.BeforeExtra) != 0 || len(member.Value.AfterExtra) != 0 {
+		return
+	}
+	parent.Members = append(parent.Members[:index], parent.Members[index+1:]...)
 }
 
 func (doc *document) render() ([]byte, error) {
