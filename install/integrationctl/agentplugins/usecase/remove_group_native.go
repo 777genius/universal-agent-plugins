@@ -38,7 +38,7 @@ func (session *removeGroupSession) removeGroupNative() error {
 		}
 		if err != nil {
 			session.markNativeDeactivationFailed(item, externalCompleted)
-			err = session.service.acknowledgeUnchangedRemoval(attempt, outcome, err)
+			err = session.service.acknowledgeCertainRemoval(attempt, outcome, err)
 			return fmt.Errorf("external deactivation failed; managed materialization was retained for repair: %w", err)
 		}
 		if nativeAttempt {

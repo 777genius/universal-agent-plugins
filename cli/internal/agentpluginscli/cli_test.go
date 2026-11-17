@@ -3195,6 +3195,10 @@ func (fixture cliFixture) execute(terminal bool, args ...string) (string, string
 }
 
 func (fixture cliFixture) executeInput(terminal bool, input string, args ...string) (string, string, error) {
+	return fixture.executeContext(context.Background(), terminal, input, args...)
+}
+
+func (fixture cliFixture) executeContext(ctx context.Context, terminal bool, input string, args ...string) (string, string, error) {
 	var stdout, stderr bytes.Buffer
 	app := fixture.app
 	app.Input = strings.NewReader(input)
@@ -3203,7 +3207,7 @@ func (fixture cliFixture) executeInput(terminal bool, input string, args ...stri
 	app.Terminal = terminal
 	command := NewRoot(app)
 	command.SetArgs(args)
-	err := command.ExecuteContext(context.Background())
+	err := command.ExecuteContext(ctx)
 	return stdout.String(), stderr.String(), err
 }
 

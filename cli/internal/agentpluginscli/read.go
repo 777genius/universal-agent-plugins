@@ -64,7 +64,7 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		ProjectReadiness   []projectReadinessRecord `json:"project_readiness"`
 		Findings           []doctorFinding          `json:"findings"`
 	}{ReadOnly: true, ToolVersion: normalizedToolVersion(app.Version), SupportedClients: doctorSupportedClients(), Clients: publicClients,
-		InstallationCount: len(publicInstallations(state, false)), OpenOperationCount: len(open)}
+		InstallationCount: len(publicInstallations(state, false)), OpenOperationCount: len(open) + len(unresolvedNativeAttempts(state))}
 	selected := (*domain.Installation)(nil)
 	if len(args) == 1 {
 		installation, err := selectInstallation(state, args[0])
@@ -203,6 +203,11 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 			if !plansWithoutHostPresence(bindingClient) && (!visible || (client.Status != domain.DetectionDetected && client.DetectionError == nil)) {
 				findings = append(findings, scopedFinding("degraded", "client_not_visible", installation, binding.ClientID, "the package is tracked but no current client visibility evidence was detected", "install or launch the client so its CLI, desktop application, or configuration directory is visible, then rerun doctor"))
 			}
+			if unresolvedNativeAttempt(binding) {
+				// Every lifecycle command refuses this binding, so none is suggested.
+				findings = append(findings, unresolvedNativeAttemptFinding(installation, binding))
+				continue
+			}
 			if requiresPersonalMapping(bindingClient) {
 				inventoryCurrent := packageInventoryAppliesToBinding(installation, binding)
 				if inventoryCurrent && installation.Package.Inventory.MCPPresent && (!installation.Package.Inventory.AppPresent || len(installation.Package.Inventory.AppBindings) == 0) {
@@ -324,6 +329,30 @@ func doctorScopeFlag(binding domain.ClientBinding) string {
 		return " --scope project --project-root \"<PROJECT_ROOT>\""
 	}
 	return ""
+}
+
+// unresolvedNativeAttempt reports a client change whose effect was never
+// confirmed and that has no persisted intent a recovery could reconcile.
+func unresolvedNativeAttempt(binding domain.ClientBinding) bool {
+	return binding.NativeActivationAttempt != "" && binding.PendingNativeIntent == nil
+}
+
+func unresolvedNativeAttempts(state domain.StateFileV2) []string {
+	var attempts []string
+	for _, installation := range state.Installations {
+		for _, binding := range installation.Clients {
+			if unresolvedNativeAttempt(binding) {
+				attempts = append(attempts, binding.NativeActivationAttempt)
+			}
+		}
+	}
+	return attempts
+}
+
+func unresolvedNativeAttemptFinding(installation domain.Installation, binding domain.ClientBinding) doctorFinding {
+	return scopedFinding("degraded", "native_attempt_unresolved", installation, binding.ClientID,
+		fmt.Sprintf("an interrupted client change (native attempt %s) was not confirmed; add, update, repair and remove refuse this target", binding.NativeActivationAttempt),
+		"make sure no client command from the interrupted run is still running, then compare the client's own plugin list with this target; agentplugins cannot confirm this attempt automatically, so keep state-v2.json for manual recovery")
 }
 
 func degradedFinding(code, subject, message, action string) doctorFinding {
