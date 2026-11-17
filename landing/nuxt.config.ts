@@ -75,6 +75,9 @@ export default defineNuxtConfig({
     inlineStyles: (id) => {
       const moduleId = id?.replaceAll('\\', '/');
       return ![
+        '/components/layout/AppHeader.vue',
+        '/components/layout/AppFooter.vue',
+        '/components/registry/DetailBreadcrumbs.vue',
         '/components/registry/SkillSpectorAssessment.vue',
         '/components/PageBackground.vue',
         '/components/registry/InstallPanel.vue',
