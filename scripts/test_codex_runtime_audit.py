@@ -1251,5 +1251,174 @@ class CodexPluginSQLiteAuditTest(unittest.TestCase):
             observer.checkpoint('replaced-root')
 
 
+class CodexSystemSkillInitializationTest(unittest.TestCase):
+    def fixture(self, home):
+        profile = home / ".codex"
+        root = profile / "skills/.system"
+        root.mkdir(parents=True)
+        bodies = {"skill-creator/SKILL.md": b"owned inert builtin\n",
+                  "skill-creator/references/example.txt": b"owned resource\n"}
+        manifest = {"files": [
+            {"path": path, "size": len(body), "sha256": audit.hashlib.sha256(body).hexdigest()}
+            for path, body in bodies.items()],
+            "directories": [{"path": "skill-creator"}, {"path": "skill-creator/references"}]}
+        marker = b"123abc\n"
+        for name, body in {**bodies, ".codex-system-skills.marker": marker}.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(body)
+        return profile, root, manifest, marker
+
+    def test_absent_cache_admits_nothing_and_complete_cache_has_exact_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary).resolve()
+            profile = home / ".codex"
+            profile.mkdir()
+            self.assertEqual(audit.system_skill_initialization(profile), ({}, (), {}))
+            profile, root, manifest, marker = self.fixture(home)
+            foreign = profile / "skills/foreign-neighbor.txt"
+            foreign.write_bytes(b"foreign untouched")
+            with patch.object(audit, "SYSTEM_SKILL_FILES", {
+                    row["path"]: (row["size"], row["sha256"]) for row in manifest["files"]}), patch.object(
+                    audit, "SYSTEM_SKILL_DIRECTORIES", {row["path"] for row in manifest["directories"]}), patch.object(
+                    audit, "SYSTEM_SKILL_MARKER", marker):
+                files, directories, metadata = audit.system_skill_initialization(profile)
+            self.assertEqual(set(files), {root / row["path"] for row in manifest["files"]}
+                             | {root / ".codex-system-skills.marker"})
+            self.assertEqual(set(directories), {profile / "skills", root}
+                             | {root / row["path"] for row in manifest["directories"]})
+            self.assertEqual(set(metadata), set(files) | set(directories))
+            self.assertNotIn(foreign, metadata)
+            self.assertEqual(foreign.read_bytes(), b"foreign untouched")
+
+    def test_partial_extra_changed_marker_and_file_aliases_refuse(self):
+        mutations = ("partial", "extra", "bytes", "marker", "symlink", "hardlink", "directory-link")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary).resolve()
+                profile, root, manifest, marker = self.fixture(home)
+                selected = root / "skill-creator/SKILL.md"
+                if mutation == "partial":
+                    selected.unlink()
+                elif mutation == "extra":
+                    (root / "foreign.txt").write_bytes(b"foreign")
+                elif mutation == "bytes":
+                    selected.write_bytes(b"changed")
+                elif mutation == "marker":
+                    (root / ".codex-system-skills.marker").write_bytes(b"wrong\n")
+                elif mutation == "hardlink":
+                    os.link(selected, home / "foreign-link")
+                elif mutation == "symlink":
+                    selected.unlink()
+                    try:
+                        selected.symlink_to(home / "foreign")
+                    except OSError as error:
+                        if os.name == "nt":
+                            self.skipTest(f"Windows symlink privilege unavailable: {error}")
+                        raise
+                    (home / "foreign").write_bytes(b"owned inert builtin\n")
+                else:
+                    directory = root / "skill-creator/references"
+                    directory.rename(home / "foreign-directory")
+                    try:
+                        directory.symlink_to(home / "foreign-directory", target_is_directory=True)
+                    except OSError as error:
+                        if os.name == "nt":
+                            self.skipTest(f"Windows symlink privilege unavailable: {error}")
+                        raise
+                with patch.object(audit, "SYSTEM_SKILL_FILES", {
+                    row["path"]: (row["size"], row["sha256"]) for row in manifest["files"]}), patch.object(
+                    audit, "SYSTEM_SKILL_DIRECTORIES", {row["path"] for row in manifest["directories"]}), patch.object(
+                        audit, "SYSTEM_SKILL_MARKER", marker), self.assertRaises((OSError, ValueError)):
+                    audit.system_skill_initialization(profile)
+
+    def test_member_and_total_byte_budgets_refuse(self):
+        for count, size in ((1, 65537), (9, 65536)):
+            with self.subTest(count=count, size=size), tempfile.TemporaryDirectory() as temporary:
+                profile = Path(temporary).resolve() / ".codex"
+                root = profile / "skills/.system"
+                (root / "builtin").mkdir(parents=True)
+                body = b"x" * size
+                digest = audit.hashlib.sha256(body).hexdigest()
+                files = {f"builtin/file-{index}": (size, digest) for index in range(count)}
+                for name in files:
+                    (root / name).write_bytes(body)
+                (root / ".codex-system-skills.marker").write_bytes(audit.SYSTEM_SKILL_MARKER)
+                with patch.object(audit, "SYSTEM_SKILL_FILES", files), patch.object(
+                        audit, "SYSTEM_SKILL_DIRECTORIES", {"builtin"}), self.assertRaises(ValueError):
+                    audit.system_skill_initialization(profile)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            profile, root, manifest, marker = self.fixture(Path(temporary).resolve())
+            clock = [0.0]
+            original = audit._regular_bytes
+            def late_final_read(path, limit):
+                body = original(path, limit)
+                if path.name == ".codex-system-skills.marker":
+                    clock[0] = 6.0
+                return body
+            with patch.object(audit, "SYSTEM_SKILL_FILES", {
+                    row["path"]: (row["size"], row["sha256"]) for row in manifest["files"]}), patch.object(
+                    audit, "SYSTEM_SKILL_DIRECTORIES", {row["path"] for row in manifest["directories"]}), patch.object(
+                    audit, "SYSTEM_SKILL_MARKER", marker), patch.object(
+                    audit.time, "monotonic", side_effect=lambda: clock[0]), patch.object(
+                    audit, "_regular_bytes", side_effect=late_final_read), self.assertRaisesRegex(
+                        ValueError, "exceeded its deadline"):
+                audit.system_skill_initialization(profile)
+
+    def test_mixed_builtin_and_temporary_initialization_refuses_curated_cache(self):
+        for mutation in (None, "plugins-clone-Ab12Cd", "plugins", "plugins.sha", "nonempty-lock"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                profile, root, manifest, marker = self.fixture(Path(temporary).resolve())
+                staging = profile / ".tmp"
+                git = staging / "git-Ab12Cd"
+                (git / "objects").mkdir(parents=True)
+                (git / "refs").mkdir()
+                (git / "HEAD").write_bytes(audit.TEMPORARY_GIT_HEAD)
+                lock = staging / "plugins.sync.lock"
+                lock.write_bytes(b"")
+                if mutation == "nonempty-lock":
+                    lock.write_bytes(b"foreign")
+                elif mutation:
+                    (staging / mutation).mkdir()
+                with patch.object(audit, "SYSTEM_SKILL_FILES", {
+                    row["path"]: (row["size"], row["sha256"]) for row in manifest["files"]}), patch.object(
+                    audit, "SYSTEM_SKILL_DIRECTORIES", {row["path"] for row in manifest["directories"]}), patch.object(
+                    audit, "SYSTEM_SKILL_MARKER", marker):
+                    if mutation:
+                        with self.assertRaises(ValueError):
+                            audit.plugin_initialization(profile)
+                    else:
+                        files, directories, metadata = audit.plugin_initialization(profile)
+                        self.assertEqual(files[git / "HEAD"],
+                                         audit.hashlib.sha256(audit.TEMPORARY_GIT_HEAD).hexdigest())
+                        self.assertEqual(files[lock], audit.hashlib.sha256(b"").hexdigest())
+                        self.assertIn(root / "skill-creator/SKILL.md", files)
+                        self.assertTrue({staging, git, git / "objects", git / "refs"} <= set(directories))
+                        self.assertEqual(set(metadata), set(files) | set(directories))
+
+    def test_same_bytes_replacement_after_read_refuses(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary).resolve()
+            profile, root, manifest, marker = self.fixture(home)
+            selected = root / "skill-creator/SKILL.md"
+            original = audit._regular_bytes
+            replaced = False
+            def replace_after_read(path, limit):
+                nonlocal replaced
+                body = original(path, limit)
+                if path == selected and not replaced:
+                    replaced = True
+                    path.rename(home / "held-original")
+                    path.write_bytes(body)
+                return body
+            with patch.object(audit, "SYSTEM_SKILL_FILES", {
+                    row["path"]: (row["size"], row["sha256"]) for row in manifest["files"]}), patch.object(
+                    audit, "SYSTEM_SKILL_DIRECTORIES", {row["path"] for row in manifest["directories"]}), patch.object(
+                    audit, "SYSTEM_SKILL_MARKER", marker), patch.object(
+                        audit, "_regular_bytes", side_effect=replace_after_read), self.assertRaises(ValueError):
+                audit.system_skill_initialization(profile)
+
+
 if __name__ == "__main__":
     unittest.main()

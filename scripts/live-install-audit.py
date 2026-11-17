@@ -1982,9 +1982,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
             AGENT_BINARIES["codex"], case_root, home, project, env)
         assert_case_unchanged()
+        bundle_files, bundle_directories, bundle_metadata = (
+            CODEX_RUNTIME_AUDIT["plugin_initialization"](home / ".codex"))
         initialized_home = scoped_snapshot((home,))
-        # Admit only the exact artifacts authored/measured by the bounded
-        # SQLite initializer. Every other old or newly created key is protected.
+        # Admit only exact artifacts validated by the bounded Codex initialization
+        # proofs. Every other old or newly created key is protected.
         initializer = codex_plugin_sqlite
         sqlite_root = home / ".local/state/codex-sqlite"
         config_path = home / ".codex/config.toml"
@@ -1995,9 +1997,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 CODEX_RUNTIME_AUDIT["_sqlite_config"](initializer.pin)).hexdigest(),
             **{sqlite_root / name: fact["sha256"] for name, fact in
                initializer.observations[0]["runtime_files_fully_read"].items()},
+            **bundle_files,
         }
         expected_home = dict(protected_home)
-        owned_directories = (home / ".local", home / ".local/state", sqlite_root)
+        owned_directories = (home / ".local", home / ".local/state", sqlite_root,
+                             *bundle_directories)
         for path in (*owned_directories, *owned_files):
             directory = path in owned_directories
             relative = path.relative_to(home)
@@ -2005,7 +2009,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             metadata = initialized_home.get(metadata_key)
             if (not isinstance(metadata, tuple) or not metadata
                     or not (stat.S_ISDIR(metadata[0]) if directory
-                            else stat.S_ISREG(metadata[0]))):
+                            else stat.S_ISREG(metadata[0]))
+                    or (path in bundle_metadata and metadata != bundle_metadata[path])):
                 raise ValueError("Codex preinstall initialization changed protected fixture authority")
             entries = {metadata_key: metadata}
             if directory:
