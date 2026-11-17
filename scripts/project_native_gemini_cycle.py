@@ -123,7 +123,7 @@ def _members(bodies, source, result):
             if inventory["scope"] != scope(label) or type(inventory["provider_requests"]) is not int or inventory["provider_requests"] != 0:
                 raise ValueError("Gemini failed public inventory authority")
             begin, finish = datetime.fromisoformat(inventory["started_at"].replace("Z", "+00:00")), datetime.fromisoformat(inventory["finished_at"].replace("Z", "+00:00"))
-            if finish < begin or (finish-begin).total_seconds() > 30:
+            if finish < begin or (finish-begin).total_seconds() > 35:
                 raise ValueError("Gemini failed public inventory clock")
             stream(inventory["stream"])
         receipt(row, args, cwd)

@@ -100,6 +100,40 @@ def fixture():
 
 
 class GeminiCycleTests(unittest.TestCase):
+    def test_failed_inventory_retains_command_cleanup_window_without_qualification(self):
+        for start, finish, accepted in (("00Z", "30Z", True), ("00Z", "35Z", True),
+                                        ("00Z", "35.000001Z", False), ("00.000001Z", "00Z", False)):
+            with self.subTest(finish=finish):
+                bodies, source = fixture()
+                command = runtime.strict_json(bodies["git-a.command.json"])
+                command["inventory"] = {"scope": "a", "started_at": "2026-10-27T00:00:" + start,
+                                        "finished_at": "2026-10-27T00:00:" + finish,
+                                        "provider_requests": 0, "stream": stream(b"")}
+                bodies["git-a.command.json"] = raw(command)
+                if not accepted:
+                    with self.assertRaisesRegex(ValueError, "failed public inventory clock"):
+                        runtime.attempt_members(bodies, source, "gemini")
+                    continue
+                result = runtime.attempt_members(bodies, source, "gemini")
+                self.assertTrue(result["test_failed"])
+                self.assertFalse(result["runtime_attempt_complete"])
+                self.assertFalse(any(result["qualification"].values()))
+
+    def test_success_inventory_keeps_strict_thirty_second_work_window(self):
+        from project_native_gemini_complete import instant
+        from project_native_gemini_complete_proof import public_inventory
+        for finish, accepted in (("30Z", True), ("30.000000001Z", False), ("35Z", False)):
+            with self.subTest(finish=finish):
+                row = {"scope": "a", "started_at": "2026-10-27T00:00:00Z",
+                       "finished_at": "2026-10-27T00:00:" + finish,
+                       "provider_requests": 0, "stream": stream(b"")}
+                args = (row, "git-a", {}, {}, instant(row["started_at"]), instant(row["finished_at"]))
+                if accepted:
+                    public_inventory(*args)
+                else:
+                    with self.assertRaisesRegex(ValueError, "public inventory bounded window"):
+                        public_inventory(*args)
+
     def test_every_public_boundary_retains_truthful_closed_failed_prefix(self):
         timeline=[("proof",v) for v in cycle.PROOFS[:3]]
         timeline += [("public",v) for v in cycle.PUBLIC[:4]]
