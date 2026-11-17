@@ -35,9 +35,15 @@ func (adapter *Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 		return clients.Detection{Err: err}
 	}
 	editor := host.LookPath("cursor")
+	editorSurface := host.ResolvedBinarySurface("cursor_editor", editor)
+	agentSurface := host.BinarySurface(domain.CursorAgentSurfaceID, "cursor-agent")
+	// An agent-only host is a project target, not a user-scope editor.
+	if !adapter.projectComponents && agentSurface.Detected && !editorSurface.Detected {
+		agentSurface.Hint = "; Cursor user scope installs for the Cursor editor, but only cursor-agent was found. Use --scope project to install project skills and MCP servers for cursor-agent"
+	}
 	surfaces := []domain.ClientSurface{
-		host.ResolvedBinarySurface("cursor_editor", editor),
-		host.BinarySurface(domain.CursorAgentSurfaceID, "cursor-agent"),
+		editorSurface,
+		agentSurface,
 		host.DirectorySurface("cursor_config", configRoot),
 	}
 	if host.GOOS() == "darwin" {

@@ -49,7 +49,7 @@ func preflightSelectedTargets(ctx context.Context, app App, targets []domain.Cli
 			ok = true
 		}
 		if !ok || (client.Status != domain.DetectionDetected && !plansWithoutHostPresence(target)) {
-			return nil, nil, fmt.Errorf("target %q was not detected; no target was changed%s", target, undetectedTargetHint(client, app.scope()))
+			return nil, nil, fmt.Errorf("target %q was not detected; no target was changed%s", target, undetectedTargetHint(client))
 		}
 		detected[target] = client
 		selected = append(selected, client)
@@ -89,16 +89,12 @@ func preflightInstalledBindings(bindingTargets []domain.ClientID, detected map[d
 	return selected, nil
 }
 
-// undetectedTargetHint explains a target that only another scope can select.
-// cursor-agent alone selects Cursor for project scope, while user scope
-// installs the package for the Cursor editor.
-func undetectedTargetHint(client domain.DetectedClient, scope domain.InstallScope) string {
-	if client.ClientID != domain.ClientCursor || scope == domain.ScopeProject {
-		return ""
-	}
+// undetectedTargetHint renders adapter-owned surface guidance without
+// introducing client-specific branches or granting mutation authority.
+func undetectedTargetHint(client domain.DetectedClient) string {
 	for _, surface := range client.Surfaces {
-		if surface.ID == domain.CursorAgentSurfaceID && surface.Detected {
-			return "; Cursor user scope installs for the Cursor editor, but only cursor-agent was found. Use --scope project to install project skills and MCP servers for cursor-agent"
+		if surface.Detected && surface.Hint != "" {
+			return surface.Hint
 		}
 	}
 	return ""

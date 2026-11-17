@@ -39,5 +39,13 @@ func TestEditorLauncherDoesNotProveAgentCLI(t *testing.T) {
 		if found["cursor_editor"] != (binaries["cursor"] != "") || found["cursor_agent"] != (binaries["cursor-agent"] != "") {
 			t.Errorf("separate binary presence: %+v", client.Surfaces)
 		}
+		wantHint := binaries["cursor-agent"] != "" && binaries["cursor"] == ""
+		if gotHint := client.Surfaces[1].Hint != ""; gotHint != wantHint {
+			t.Errorf("user-scope agent-only hint = %t, want %t", gotHint, wantHint)
+		}
+		project := NewProject().DetectSurfaces(host)
+		if project.Surfaces[1].Hint != "" {
+			t.Errorf("project scope received user-only hint: %+v", project.Surfaces[1])
+		}
 	}
 }

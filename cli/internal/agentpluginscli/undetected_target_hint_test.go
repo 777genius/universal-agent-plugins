@@ -13,7 +13,7 @@ func TestCursorAgentOnlyUserTargetSuggestsProjectScope(t *testing.T) {
 	t.Parallel()
 	agentOnly := fixtureClient(t, domain.ClientCursor)
 	agentOnly.Status = domain.DetectionNotDetected
-	agentOnly.Surfaces = []domain.ClientSurface{{ID: domain.CursorAgentSurfaceID, Detected: true}}
+	agentOnly.Surfaces = []domain.ClientSurface{{ID: domain.CursorAgentSurfaceID, Detected: true, Hint: "; only cursor-agent was found. Use --scope project"}}
 	fixture := newCLIFixture(t, []domain.DetectedClient{agentOnly})
 	_, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "cursor")
 	if err == nil || !strings.Contains(err.Error(), `target "cursor" was not detected`) || !strings.Contains(err.Error(), "--scope project") {
