@@ -6935,7 +6935,7 @@ module.exports = {
 
         def check(residue):
             with TemporaryDirectory() as temporary:
-                runroot = Path(temporary)
+                runroot = Path(temporary).resolve()
                 project = runroot / "skill-00/project"
                 target = "codex" if residue == "post-native-recreated" else "claude"
                 native = runroot / "skill-00/home" / ("." + target)

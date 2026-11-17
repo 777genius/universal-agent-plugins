@@ -24,6 +24,8 @@ type dependencyResolver struct {
 	requirements environment.Requirements
 	app          App
 	dryRun       bool
+	// rawSkills optionally supplies raw Skill fetches started ahead of selection.
+	rawSkills *rawSkillPrefetch
 }
 
 func readDependencyLock(path string, requirements environment.Requirements) (environment.Lock, error) {
