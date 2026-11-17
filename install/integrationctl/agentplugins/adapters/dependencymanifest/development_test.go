@@ -10,14 +10,14 @@ import (
 func TestDevelopmentDependenciesRootAndConsumer(t *testing.T) {
 	body := []byte(`schema_version = 1
 [dependencies]
-ordinary = "^1.2"
+"acme/ordinary" = "^1.2"
 [dev-dependencies]
 build = "~2.1.0"
 [dev-dependencies.tool]
 git = "acme/build"
 ref = "main"
 [targets]
-codex = ["ordinary", "build", "tool"]
+codex = ["acme/ordinary", "build", "tool"]
 `)
 	doc, err := Decode(body, "uap.toml")
 	if err != nil {
@@ -32,7 +32,7 @@ codex = ["ordinary", "build", "tool"]
 		t.Fatalf("local classification: %+v", root)
 	}
 	consumer, err := doc.Package()
-	if err != nil || len(consumer) != 1 || consumer["ordinary"].Registry == nil {
+	if err != nil || len(consumer) != 1 || consumer["acme/ordinary"].Registry == nil {
 		t.Fatalf("build-only dependency leaked to consumer: %+v %v", consumer, err)
 	}
 	previous, err := environment.ManifestDigest(root)
