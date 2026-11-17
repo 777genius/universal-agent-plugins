@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -192,6 +193,35 @@ func TestCodexPluginQueryClosedFailuresStayOrdinary(t *testing.T) {
 						t.Fatalf("closed failure lost its ordinary cause: calls=%d outcome=%+v err=%v", runner.calls, outcome, err)
 					}
 				})
+			}
+		})
+	}
+}
+
+func TestCodexPluginQueryPreExecutionFailuresStayOrdinary(t *testing.T) {
+	for _, scenario := range []string{"invalid executable", "invalid environment", "missing runner"} {
+		t.Run(scenario, func(t *testing.T) {
+			request, _ := codexQueryDeadlineFixture(t)
+			runner := &codexQueryDeadlineRunner{t: t}
+			env := clients.Env{Runner: runner}
+			var want string
+			switch scenario {
+			case "invalid executable":
+				request.BackendExecutable = "relative-codex"
+				want = "codex executable must be an explicit clean absolute path"
+			case "invalid environment":
+				t.Setenv("UAP-CODEX-PREFLIGHT-PROBE", "invalid")
+				want = "malformed Codex environment name"
+			case "missing runner":
+				env.Runner = nil
+				want = "runner is unavailable"
+			}
+			result, err := runCodexPluginList(context.Background(), env, request.Client.ConfigRoot, request.BackendExecutable)
+			if err == nil || !strings.Contains(err.Error(), want) || domain.IsUnclosedClientProbe(err) {
+				t.Fatalf("pre-execution refusal lost its ordinary cause: result=%+v err=%v", result, err)
+			}
+			if runner.calls != 0 || !result.NoChildStarted || result.CleanupComplete {
+				t.Fatalf("pre-execution refusal reported a started process: calls=%d result=%+v", runner.calls, result)
 			}
 		})
 	}

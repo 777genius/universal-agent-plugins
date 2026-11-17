@@ -34,12 +34,14 @@ type fakeHermesCLI struct {
 	noSave, dropPrior        bool
 	unclosedTrust            bool
 	calls                    [][]string
+	environments             [][]string
 }
 
 func (cli *fakeHermesCLI) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	cli.mu.Lock()
 	defer cli.mu.Unlock()
 	cli.calls = append(cli.calls, slices.Clone(command.Argv))
+	cli.environments = append(cli.environments, slices.Clone(command.Env))
 	result := legacyports.CommandResult{CleanupComplete: true}
 	reply := func(value any) {
 		body, _ := json.Marshal(value)
@@ -150,7 +152,7 @@ func newHermesTrustFixture(t *testing.T) *hermesTrustFixture {
 			}
 			return f.cli.git, nil
 		},
-		environ: []string{"HOME=" + f.home, "USERPROFILE=" + f.home, "PATH=/usr/bin", "HERMES_MANAGED_DIR=" + f.managed, "FORCE_COLOR=1"},
+		environ: []string{"HOME=" + f.home, "USERPROFILE=" + f.home, "HERMES_HOME=" + f.profile, "PATH=/usr/bin", "HERMES_MANAGED_DIR=" + f.managed, "FORCE_COLOR=1"},
 	}
 	return f
 }
@@ -371,6 +373,11 @@ func TestHermesProjectTrustCanonicalizesSymlinkedProject(t *testing.T) {
 	if err := os.Symlink(f.project, alias); err != nil {
 		t.Skip("symlinks unavailable:", err)
 	}
+	profileAlias := filepath.Join(filepath.Dir(f.profile), "profile-alias")
+	if err := os.Symlink(f.profile, profileAlias); err != nil {
+		t.Fatal(err)
+	}
+	f.grant.environ = append(f.grant.environ, "HERMES_HOME="+profileAlias)
 	f.grant.project = alias
 	report, err := f.grant.run(context.Background())
 	if err != nil || !report.granted || report.root != f.project || !slices.Contains(f.cli.entries(), f.project) || slices.Contains(f.cli.entries(), alias) {
@@ -397,6 +404,7 @@ func TestHermesProjectTrustCaseInsensitiveProjectSelection(t *testing.T) {
 
 func hermesTrustActivation(t *testing.T, root string, cli *fakeHermesCLI, profile string) (domain.ActivationRequest, clients.Env) {
 	t.Helper()
+	t.Setenv("HERMES_HOME", profile)
 	fixture := newHermesSkillFixture(t, root, domain.ScopeProject)
 	plan := fixture.plan
 	plan.InstallIntent = domain.InstallIntentAutomatic

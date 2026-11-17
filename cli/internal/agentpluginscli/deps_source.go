@@ -10,19 +10,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
-func dependencySourceHint(locked environment.LockedPackage) string {
-	if locked.Source.Web != nil {
-		return "uap-dependency-web-skill"
-	}
-	if locked.Source.Git != nil && locked.Source.Git.Kind == environment.SkillKind {
-		return "uap-dependency-skill"
-	}
-	if locked.Source.Registry != nil {
-		return "uap-dependency-registry"
-	}
-	return "uap-dependency-git"
-}
-
 func (app App) directAcquirer() (sourceacquisition.DirectAcquirer, error) {
 	acquirer, ok := app.SourceAcquirer.(sourceacquisition.DirectAcquirer)
 	if !ok {

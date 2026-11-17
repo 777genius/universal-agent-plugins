@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -245,6 +246,49 @@ class SessionTests(unittest.TestCase):
         events = json.loads((self.evidence / 'events.json').read_text())
         self.assertTrue(events['forced_cleanup'])
         self.assertIsNone(events['restoration'])
+
+    def test_kill_job_terminates_descendant_with_live_or_exited_leader(self):
+        for leader_exits in (False, True):
+            with self.subTest(leader_exits=leader_exits):
+                identity = Path(self.tmp.name) / ('descendant-' + str(leader_exits))
+                descendant = (
+                    "import os,time; from pathlib import Path; "
+                    f"ready=Path({str(identity)!r}); pending=ready.with_suffix('.pending'); "
+                    "pending.write_text(str(os.getpid())+':'+str(os.getpgrp())); pending.replace(ready); "
+                    "time.sleep(30)")
+                code = (
+                    "import subprocess,sys,time; "
+                    f"subprocess.Popen([sys.executable,'-I','-c',{descendant!r}]); "
+                    + ("" if leader_exits else "time.sleep(30)"))
+                s = self.session(code)
+                pid = None
+                try:
+                    deadline = time.monotonic() + 3
+                    while not identity.exists() and time.monotonic() < deadline:
+                        time.sleep(0.01)
+                    self.assertTrue(identity.exists(), 'descendant never reached readiness')
+                    pid, group = map(int, identity.read_text().split(':'))
+                    self.assertNotEqual(pid, s.process.pid)
+                    self.assertEqual(group, s.process.pid, 'descendant escaped the owned group')
+                    os.kill(pid, 0)
+                    if leader_exits:
+                        self.assertEqual(s.process.wait(timeout=3), 0)
+                    else:
+                        self.assertIsNone(s.process.poll())
+                    s.process.kill()  # Real RPC reaches pty_owner.kill_job.
+                    deadline = time.monotonic() + 3
+                    while time.monotonic() < deadline:
+                        try:
+                            os.killpg(group, 0)
+                        except ProcessLookupError:
+                            break
+                        time.sleep(0.01)
+                    with self.assertRaises(ProcessLookupError):
+                        os.killpg(group, 0)
+                    with self.assertRaises(ProcessLookupError):
+                        os.kill(pid, 0)
+                finally:
+                    s.close()
 
     def test_raw_to_plain_lifecycle_and_nonzero_status(self):
         s = self.session("import sys,tty,termios; before=termios.tcgetattr(0); "

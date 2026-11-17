@@ -101,10 +101,10 @@ func validCodexEnvironmentName(key string) bool {
 func runCodex(ctx context.Context, env clients.Env, root, executable string, args ...string) (legacyports.CommandResult, error) {
 	command, err := codexCommand(root, executable, os.Environ(), args...)
 	if err != nil {
-		return legacyports.CommandResult{}, err
+		return legacyports.CommandResult{NoChildStarted: true}, err
 	}
 	if env.Runner == nil {
-		return legacyports.CommandResult{}, fmt.Errorf("%s runner is unavailable", codexCLIName)
+		return legacyports.CommandResult{NoChildStarted: true}, fmt.Errorf("%s runner is unavailable", codexCLIName)
 	}
 	result, err := env.Runner.Run(ctx, command)
 	if err != nil {
