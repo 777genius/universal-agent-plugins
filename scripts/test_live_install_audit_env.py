@@ -12,6 +12,11 @@ from unittest.mock import patch
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
+import runpy
+import struct
+import time
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def load_audit():
@@ -10553,6 +10558,220 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
                                      'verified-cache-retirement-at-checkpoint')
                 else:
                     self.assertFalse(row['removal_verified'])
+
+
+
+class ClaudeWindowsStreamParserContracts(unittest.TestCase):
+    def module(self):
+        return runpy.run_path(str(ROOT / "scripts/claude_windows_cache_custody.py"))
+
+    def test_documented_stream_layout_and_strict_record_bounds(self):
+        module = self.module()
+        def record(name="::$DATA", size=3, allocated=4096, following=0):
+            name = name.encode("utf-16-le")
+            return struct.pack("<IIqq", following, len(name), size, allocated) + name
+        self.assertEqual(module["parse_streams"](record()), (("::$DATA", 3, 4096),))
+        for body in (b"", record()[:25], record(following=25), record(size=-1),
+                     record(allocated=-1), record(name="\x00")):
+            with self.subTest(body=repr(body)), self.assertRaises((ValueError, UnicodeError)):
+                module["parse_streams"](body)
+
+
+class ClaudeWindowsCacheRetirementContracts(unittest.TestCase):
+    __unittest_skip__ = sys.platform != "win32"
+    __unittest_skip_why__ = "actual 64-bit Windows NTFS custody contract"
+
+    def module(self):
+        return runpy.run_path(str(ROOT / "scripts/claude_windows_cache_custody.py"))
+
+    def fixture(self, root, audit):
+        module = self.module()
+        if not root.exists():
+            module["fresh_case"](root)
+        else:
+            native = module["Native"](lambda: time.monotonic() + 5)
+            try:
+                native.hold(root)
+                native.acl(native.parents[str(root)][0], True, True)
+            finally:
+                native.close()
+        return ClaudeCacheRetirementAuditContracts.fixture(self, root, audit)
+
+    capture = ClaudeCacheRetirementAuditContracts.capture
+    retire = ClaudeCacheRetirementAuditContracts.retire
+    residuals = ClaudeCacheRetirementAuditContracts.residuals
+
+    def change_dacl(self, subject, path, broad):
+        native, c = subject.windows.native, subject.windows.native.ctypes
+        descriptor, dacl = c.c_void_p(), c.c_void_p()
+        present, defaulted = c.c_int(), c.c_int()
+        get = native.security.GetSecurityDescriptorDacl
+        get.restype, get.argtypes = c.c_int, [c.c_void_p, c.POINTER(c.c_int),
+                                             c.POINTER(c.c_void_p), c.POINTER(c.c_int)]
+        change = native.security.SetSecurityInfo
+        change.restype, change.argtypes = c.c_uint32, [c.c_void_p, c.c_int, c.c_uint32,
+            c.c_void_p, c.c_void_p, c.c_void_p, c.c_void_p]
+        sid = "S-1-1-0" if broad else native.user
+        text = "D:P(A;OICI;FA;;;" + sid + ")"
+        self.assertTrue(native.security.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            text, 1, c.byref(descriptor), None))
+        handle = None
+        try:
+            self.assertTrue(get(descriptor, c.byref(present), c.byref(dacl), c.byref(defaulted)))
+            handle = native._handle(native.kernel.CreateFileW(
+                str(path), 0x40000, 7, None, 3, 0x02200000, None), "test ACL mutation")
+            self.assertEqual(change(handle, 1, 0x80000004, None, None, dacl, None), 0)
+        finally:
+            if handle is not None:
+                native._close_handle(handle)
+            self.assertFalse(native.kernel.LocalFree(descriptor))
+
+    def test_real_windows_exact_held_retirement_and_optional_marker(self):
+        audit = load_audit()
+        for marker in (False, True):
+            with self.subTest(marker=marker), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve() / "owned-case", audit)
+                subject = self.capture(audit, f)
+                backend = subject.windows
+                original = backend.nodes[""][1]
+                handles = [handle for handle, _facts in backend.nodes.values()]
+                handles += [handle for handle, _facts in backend.native.parents.values()]
+                for handle in handles:
+                    backend.native._noninherit(handle)
+                moved = self.retire(f, marker)
+                proof = subject.finish(self.residuals(audit, f), f["cleanup"])
+                self.assertEqual(proof["status"], "verified-cache-retirement-at-checkpoint")
+                self.assertEqual(proof["cache_volume_serial"], original.volume)
+                self.assertEqual(proof["cache_file_id_128"], original.file_id.hex())
+                self.assertEqual(proof["cache_ntfs_selector_64"], original.file_index)
+                self.assertEqual(proof["orphaned_marker_present"], marker)
+                self.assertFalse(proof["writer_closure_claimed"])
+                self.assertTrue(moved.exists())
+                self.assertEqual(backend.nodes, {})
+                self.assertEqual(backend.native.parents, {})
+                flags = backend.native.ctypes.c_uint32()
+                for handle in handles:
+                    self.assertFalse(backend.native.kernel.GetHandleInformation(
+                        handle, backend.native.ctypes.byref(flags)))
+
+    def test_rename_old_then_create_new_reaches_share_delete_and_refuses_replacements(self):
+        audit = load_audit()
+        for replacement in ("file", "parent", "cache"):
+            with self.subTest(replacement=replacement), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                f = self.fixture(root / "owned-case", audit)
+                subject = self.capture(audit, f)
+                moved = self.retire(f)
+                target = (moved / ".agentplugins-runtime/skills/owned-test/SKILL.md"
+                          if replacement == "file" else
+                          f["cache"].parent if replacement == "parent" else moved)
+                # Rename succeeds with our original HANDLEs still held. A fresh
+                # pathname with equal bytes must never acquire their identity.
+                old = root / "owned-case" / ("displaced-" + replacement)
+                body = target.read_bytes() if replacement == "file" else None
+                target.rename(old)
+                if body is not None:
+                    target.write_bytes(body)
+                else:
+                    target.mkdir()
+                proof = subject.finish(self.residuals(audit, f), f["cleanup"])
+                self.assertEqual(proof["status"], "unresolved-cache-retirement")
+                self.assertEqual(subject.windows.nodes, {})
+                self.assertEqual(subject.windows.native.parents, {})
+
+    def test_real_ads_and_acl_mutations_fail_closed_at_checkpoint(self):
+        audit = load_audit()
+        for mutation in ("file-stream", "directory-stream", "case-dacl", "parent-dacl",
+                         "container-dacl", "cache-dacl", "file-dacl", "late-stream"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve() / "owned-case", audit)
+                subject = self.capture(audit, f)
+                moved = self.retire(f)
+                payload = moved / ".agentplugins-runtime/skills/owned-test/SKILL.md"
+                if mutation in ("file-stream", "directory-stream"):
+                    target = payload if mutation == "file-stream" else moved
+                    Path(str(target) + ":unowned").write_bytes(b"foreign stream")
+                elif mutation == "late-stream":
+                    original = subject.snapshotter
+                    def change(roots):
+                        result = original(roots)
+                        Path(str(payload) + ":late").write_bytes(b"late")
+                        return result
+                    subject.snapshotter = change
+                else:
+                    target = {"case-dacl": f["home"].parent, "parent-dacl": f["cache"].parent,
+                              "container-dacl": moved.parent, "cache-dacl": moved,
+                              "file-dacl": payload}[mutation]
+                    self.change_dacl(subject, target, mutation != "file-dacl")
+                proof = subject.finish(self.residuals(audit, f), f["cleanup"])
+                self.assertEqual(proof["status"], "unresolved-cache-retirement")
+                self.assertEqual(subject.windows.nodes, {})
+
+    def test_complete_volume_and_128_bit_identity_are_independent_authorities(self):
+        audit = load_audit()
+        for mutation in ("volume", "id-high-half", "directory-id"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve() / "owned-case", audit)
+                subject = self.capture(audit, f)
+                self.retire(f)
+                native = subject.windows.native
+                original = native._facts
+                target = subject.windows.nodes[""][1]
+                def changed(handle, directory):
+                    facts = original(handle, directory)
+                    if facts.file_id == target.file_id:
+                        if mutation == "volume":
+                            return facts._replace(volume=facts.volume ^ (1 << 40))
+                        if mutation == "id-high-half":
+                            body = bytearray(facts.file_id); body[15] ^= 1
+                            return facts._replace(file_id=bytes(body))
+                        return facts._replace(file_index=facts.file_index ^ (1 << 40))
+                    return facts
+                with patch.object(native, "_facts", side_effect=changed):
+                    proof = subject.finish(self.residuals(audit, f), f["cleanup"])
+                self.assertEqual(proof["status"], "unresolved-cache-retirement")
+                self.assertEqual(subject.windows.nodes, {})
+
+    def test_windows_bounds_hardlinks_and_unknown_metadata_refuse(self):
+        audit = load_audit()
+        for mutation in ("file", "total", "count", "depth", "hardlink", "git", "lock"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve() / "owned-case", audit)
+                if mutation == "hardlink":
+                    os.link(f["cache"] / ".agentplugins-runtime/skills/owned-test/SKILL.md",
+                            f["cache"] / "linked")
+                elif mutation == "git":
+                    (f["cache"] / ".git").mkdir()
+                elif mutation == "lock":
+                    (f["cache"] / ".uap-integrations.lock").write_text("foreign")
+                backend = audit.CLAUDE_RETIREMENT_AUDIT["_WINDOWS"]["Backend"]
+                changes = ({"MAX_FILE_BYTES": 1} if mutation == "file" else
+                           {"MAX_TREE_BYTES": 1} if mutation == "total" else
+                           {"MAX_FILES": 1} if mutation == "count" else
+                           {"MAX_DEPTH": 1} if mutation == "depth" else {})
+                with patch.dict(backend.__init__.__globals__, changes), self.assertRaises(ValueError):
+                    self.capture(audit, f)
+
+    def test_existing_case_is_never_repermissioned(self):
+        module = self.module()
+        with TemporaryDirectory() as temporary:
+            existing = Path(temporary).resolve() / "existing"
+            existing.mkdir()
+            native = module["Native"](lambda: time.monotonic() + 5)
+            try:
+                native.hold(existing)
+                handle, _facts = native.parents[str(existing)]
+                original = native.acl(handle)
+                with self.assertRaises(ValueError):
+                    module["fresh_case"](existing)
+                self.assertEqual(native.acl(handle), original)
+            finally:
+                native.close()
+
+    # The real Windows backend also runs the original common public/verdict gate
+    # control. Its fake public command executor does not count as native E2E.
+    test_do_case_requires_every_old_gate_and_never_hides_raw_residuals = (
+        ClaudeCacheRetirementAuditContracts.test_do_case_requires_every_old_gate_and_never_hides_raw_residuals)
 
 
 if __name__ == "__main__":

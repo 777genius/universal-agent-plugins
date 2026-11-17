@@ -12,6 +12,8 @@ on:
       - 'scripts/test_gemini_windows_runtime_audit.py'
       - 'scripts/native_client_project_artifacts.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/claude_windows_cache_custody.py'
       - 'scripts/test_live_install_audit_components.py'
       - 'scripts/run-native-client-matrix.py'
       - 'tests/live-install/fixtures.json'
@@ -26,6 +28,8 @@ on:
       - 'scripts/test_gemini_windows_runtime_audit.py'
       - 'scripts/native_client_project_artifacts.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/claude_windows_cache_custody.py'
       - 'scripts/test_live_install_audit_components.py'
       - 'scripts/run-native-client-matrix.py'
       - 'tests/live-install/fixtures.json'
@@ -118,6 +122,13 @@ jobs:
         shell: pwsh
         run: |
           python -m unittest scripts.test_gemini_windows_runtime_audit -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Require actual Windows Claude cache retirement custody before vendor execution
+        if: ${{ matrix.target == 'claude' && matrix.kind == 'skill' }}
+        shell: pwsh
+        run: |
+          python -m unittest scripts.test_live_install_audit_env.ClaudeWindowsStreamParserContracts scripts.test_live_install_audit_env.ClaudeWindowsCacheRetirementContracts -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # No vendor login or paid API is used. These are exact published npm bytes,

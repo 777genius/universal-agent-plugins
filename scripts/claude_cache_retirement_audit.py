@@ -1,4 +1,4 @@
-"""Exact POSIX Claude cache custody at removal; never writer-closure evidence."""
+"""Exact native Claude cache custody at removal; never writer-closure evidence."""
 import hashlib
 import json
 import os
@@ -13,6 +13,9 @@ _FILES = run_path(str(Path(__file__).with_name('native_client_project_artifacts.
 MAX_FILES, MAX_FILE_BYTES, MAX_TREE_BYTES, MAX_DEPTH = 10000, 64 << 20, 256 << 20, 64
 _DARWIN = (run_path(str(Path(__file__).with_name('claude_darwin_metadata.py')))
            if sys.platform == 'darwin' else None)
+
+_WINDOWS = (run_path(str(Path(__file__).with_name('claude_windows_cache_custody.py')))
+            if sys.platform == 'win32' else None)
 
 
 def metadata(fd):
@@ -150,6 +153,7 @@ def entries(fd):
 class CacheRetirement:
     def __init__(self, case, home, project, public, added, source, read_document, snapshotter, before_native):
         self.fds = []
+        self.windows = None
         try:
             self.case, self.profile, self.project = case, home / '.claude', project
             self.read_document, self.snapshotter, self.before_native = read_document, snapshotter, before_native
@@ -201,23 +205,29 @@ class CacheRetirement:
             self.cache = self.profile.joinpath(*parts)
             require('metadata:0:' + '/'.join(parts) not in before_native)
             self.parent = self.cache.parent
-            self.anchors = {}
-            for path in (self.profile, *list(self.parent.parents)[:3], self.parent):
-                require(path == self.profile or path.is_relative_to(self.profile))
-                info = ordinary(path)
-                self.anchors[path] = (info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid)
-            self.parent_fd = open_directory(self.parent); self.fds.append(self.parent_fd)
-            self.cache_fd = open_directory(self.cache); self.fds.append(self.cache_fd)
-            self.before_siblings = entries(self.parent_fd)
-            self.before, self.file_count, self.byte_count = tree(self.cache_fd)
-            require(self.file_count > 0)
-            require('.orphaned_at' not in self.before)
-            bundle_fd = open_directory(self.active / '.agentplugins-plugin')
-            try:
-                bundle, _, _ = tree(bundle_fd)
-                require(content(bundle) == content(self.before))
-            finally:
-                os.close(bundle_fd)
+            if _WINDOWS is not None:
+                self.windows = _WINDOWS['Backend'](
+                    case, self.profile, self.parent, self.cache, self.active / '.agentplugins-plugin')
+                self.before = self.windows.before
+                self.file_count, self.byte_count = self.windows.file_count, self.windows.byte_count
+            else:
+                self.anchors = {}
+                for path in (self.profile, *list(self.parent.parents)[:3], self.parent):
+                    require(path == self.profile or path.is_relative_to(self.profile))
+                    info = ordinary(path)
+                    self.anchors[path] = (info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid)
+                self.parent_fd = open_directory(self.parent); self.fds.append(self.parent_fd)
+                self.cache_fd = open_directory(self.cache); self.fds.append(self.cache_fd)
+                self.before_siblings = entries(self.parent_fd)
+                self.before, self.file_count, self.byte_count = tree(self.cache_fd)
+                require(self.file_count > 0)
+                require('.orphaned_at' not in self.before)
+                bundle_fd = open_directory(self.active / '.agentplugins-plugin')
+                try:
+                    bundle, _, _ = tree(bundle_fd)
+                    require(content(bundle) == content(self.before))
+                finally:
+                    os.close(bundle_fd)
             self.installed = read_document(self.profile / 'plugins/installed_plugins.json')
             self.markets = read_document(self.profile / 'plugins/known_marketplaces.json')
             require(type(self.installed.get('version')) is int and self.installed['version'] == 2)
@@ -235,10 +245,15 @@ class CacheRetirement:
             raise
 
     def close(self):
+        if self.windows is not None:
+            self.windows.close()
         while self.fds:
             os.close(self.fds.pop())
 
     def guard(self):
+        if self.windows is not None:
+            self.windows.guard()
+            return
         for path, original in self.anchors.items():
             info = ordinary(path)
             require((info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid) == original)
@@ -253,65 +268,78 @@ class CacheRetirement:
                     and actions[0]['binding_id'] == self.binding_id and actions[0]['client_id'] == 'claude'
                     and actions[0]['action'] == 'remove')
             self.guard()
-            require(not self.cache.exists() and not self.cache.is_symlink())
-            after_siblings = entries(self.parent_fd)
-            retained = set(after_siblings) - set(self.before_siblings)
-            require(len(retained) == 1)
-            nonce = retained.pop()
-            require(re.fullmatch(r'\.agentplugins-cache-retire-[0-9a-f]{32}', nonce))
-            require({k: v for k, v in self.before_siblings.items() if k != self.cache.name}
-                    == {k: v for k, v in after_siblings.items() if k != nonce})
-            quarantine = self.parent / nonce
-            quarantine_fd = open_directory(quarantine); self.fds.append(quarantine_fd)
-            info = os.fstat(quarantine_fd)
-            require(stat.S_IMODE(info.st_mode) == 0o700 and info.st_uid == os.geteuid()
-                    and set(entries(quarantine_fd)) == {'retired'})
-            moved = quarantine / 'retired'
-            named_directory(moved, self.cache_fd)
-            after, _, _ = tree(self.cache_fd)
-            marker = after.pop('.orphaned_at', None)
-            if marker is not None:
-                require(marker[0] == 'file' and marker[5] == 13)
-                fd = os.open('.orphaned_at', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
-                             dir_fd=self.cache_fd)
-                try:
-                    held = os.fstat(fd)
-                    metadata(fd)
-                    require(stat.S_ISREG(held.st_mode) and held.st_nlink == 1
-                            and (held.st_dev, held.st_ino, held.st_size) == (marker[2], marker[3], 13))
-                    body = os.read(fd, 14)
-                    metadata(fd)
-                    require(_FILES['identity'](held) == _FILES['identity'](os.fstat(fd))
-                            == _FILES['identity'](os.stat('.orphaned_at', dir_fd=self.cache_fd, follow_symlinks=False)))
-                    require(re.fullmatch(rb'[1-9][0-9]{12}', body)
-                            and hashlib.sha256(body).hexdigest() == marker[-1])
-                finally:
-                    os.close(fd)
-            require(after == self.before)
+            if self.windows is not None:
+                quarantine, moved, after, marker = self.windows.retired()
+            else:
+                require(not self.cache.exists() and not self.cache.is_symlink())
+                after_siblings = entries(self.parent_fd)
+                retained = set(after_siblings) - set(self.before_siblings)
+                require(len(retained) == 1)
+                nonce = retained.pop()
+                require(re.fullmatch(r'\.agentplugins-cache-retire-[0-9a-f]{32}', nonce))
+                require({k: v for k, v in self.before_siblings.items() if k != self.cache.name}
+                        == {k: v for k, v in after_siblings.items() if k != nonce})
+                quarantine = self.parent / nonce
+                quarantine_fd = open_directory(quarantine); self.fds.append(quarantine_fd)
+                info = os.fstat(quarantine_fd)
+                require(stat.S_IMODE(info.st_mode) == 0o700 and info.st_uid == os.geteuid()
+                        and set(entries(quarantine_fd)) == {'retired'})
+                moved = quarantine / 'retired'
+                named_directory(moved, self.cache_fd)
+                after, _, _ = tree(self.cache_fd)
+                marker = after.pop('.orphaned_at', None)
+                if marker is not None:
+                    require(marker[0] == 'file' and marker[5] == 13)
+                    fd = os.open('.orphaned_at', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                 dir_fd=self.cache_fd)
+                    try:
+                        held = os.fstat(fd)
+                        metadata(fd)
+                        require(stat.S_ISREG(held.st_mode) and held.st_nlink == 1
+                                and (held.st_dev, held.st_ino, held.st_size) == (marker[2], marker[3], 13))
+                        body = os.read(fd, 14)
+                        metadata(fd)
+                        require(_FILES['identity'](held) == _FILES['identity'](os.fstat(fd))
+                                == _FILES['identity'](os.stat('.orphaned_at', dir_fd=self.cache_fd, follow_symlinks=False)))
+                        require(re.fullmatch(rb'[1-9][0-9]{12}', body)
+                                and hashlib.sha256(body).hexdigest() == marker[-1])
+                    finally:
+                        os.close(fd)
+                require(after == self.before)
             installed = self.read_document(self.profile / 'plugins/installed_plugins.json')
             markets = self.read_document(self.profile / 'plugins/known_marketplaces.json')
             require(same_json(installed, dict(self.installed, plugins={k: v for k, v in self.installed['plugins'].items()
                     if k != self.key})) and same_json(markets, {k: v for k, v in self.markets.items() if k != self.market}))
             current = self.snapshotter((self.profile,))
             require(all(current.get(path) == value for path, value in self.before_native.items()))
-            prefix = '.claude/' + moved.relative_to(self.profile).as_posix() + '/'
-            exact_files = {prefix + path for path, row in after.items() if row[0] == 'file'}
+            if self.windows is not None:
+                # Match snapshot's original Windows keys; never normalize raw evidence.
+                exact_files = {'.claude/' + str(moved.relative_to(self.profile) / Path(path))
+                               for path, row in after.items() if row[0] == 'file'}
+            else:
+                prefix = '.claude/' + moved.relative_to(self.profile).as_posix() + '/'
+                exact_files = {prefix + path for path, row in after.items() if row[0] == 'file'}
             require(residuals and all(path in exact_files for path in residuals))
             # Recheck the complete retained tree after native-registry/foreign reads.
-            stable, _, _ = tree(self.cache_fd)
-            if marker is not None:
-                require(stable.pop('.orphaned_at', None) == marker)
-            require(stable == self.before)
-            self.guard(); named_directory(quarantine, quarantine_fd); named_directory(moved, self.cache_fd)
-            final = os.fstat(quarantine_fd)
-            require((final.st_mode, final.st_uid) == (info.st_mode, info.st_uid))
-            require(not self.cache.exists() and not self.cache.is_symlink())
+            if self.windows is not None:
+                self.windows.recheck(quarantine, moved, marker)
+            else:
+                stable, _, _ = tree(self.cache_fd)
+                if marker is not None:
+                    require(stable.pop('.orphaned_at', None) == marker)
+                require(stable == self.before)
+                self.guard(); named_directory(quarantine, quarantine_fd); named_directory(moved, self.cache_fd)
+                final = os.fstat(quarantine_fd)
+                require((final.st_mode, final.st_uid) == (info.st_mode, info.st_uid))
+                require(not self.cache.exists() and not self.cache.is_symlink())
             return {'status': 'verified-cache-retirement-at-checkpoint',
                     'original': self.cache.relative_to(self.case).as_posix(),
                     'retired': moved.relative_to(self.case).as_posix(), 'receipt': self.receipt,
                     'file_count': self.file_count, 'bytes': self.byte_count,
                     'snapshot_equality_sha256': hashlib.sha256(json.dumps(self.before, sort_keys=True).encode()).hexdigest(),
-                    'cache_device': os.fstat(self.cache_fd).st_dev, 'cache_inode': os.fstat(self.cache_fd).st_ino,
+                    **(self.windows.proof() if self.windows is not None else {
+                        'cache_device': os.fstat(self.cache_fd).st_dev,
+                        'cache_inode': os.fstat(self.cache_fd).st_ino}),
                     'orphaned_marker_present': marker is not None, 'writer_closure_claimed': False,
                     'matched_residual_count': len(residuals)}
         except (OSError, ValueError, TypeError, KeyError):

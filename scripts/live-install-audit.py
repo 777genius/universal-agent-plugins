@@ -2007,7 +2007,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     canonical_runroot = runroot.resolve(strict=True)
     if case_root.is_symlink():
         raise ValueError("audit case root is redirected")
-    case_root.mkdir(exist_ok=True)
+    if target == "claude" and kind == "skill" and sys.platform == "win32":
+        CLAUDE_RETIREMENT_AUDIT["_WINDOWS"]["fresh_case"](case_root)
+    else:
+        case_root.mkdir(exist_ok=True)
     if (runroot.is_symlink() or case_root.is_symlink() or not case_root.is_dir()
             or case_root.resolve(strict=True).parent != canonical_runroot):
         raise ValueError("audit case root escaped disposable run root")
@@ -2118,7 +2121,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
                      if target == "claude" and kind == "skill"
-                     and sys.platform in ("linux", "darwin") else None)
+                     and sys.platform in ("linux", "darwin", "win32") else None)
     vscode_user = target == "vscode" and kind == "plugin"
     vscode_roots = (runroot, case_root, home, data, project)
     vscode_native_before = scoped_snapshot(native_roots) if vscode_user else None
