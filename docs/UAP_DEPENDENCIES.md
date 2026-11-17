@@ -93,14 +93,15 @@ Only the selected root assigns `[targets]`. Each dependency inherits the union
 of its consumers' targets, including any direct assignments of its own. One
 canonical source has one version across the environment.
 
-**Current development source (not yet released):** ordinary resolution first tries
+**Release baseline: [CLI 0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110).** Ordinary resolution first tries
 compatible existing pins. For a Registry node without a usable pin, it prefers the
 highest eligible stable version, then the highest signed release sequence at that
 version. The complete graph and every required target must remain compatible;
 a conflicting or ineligible candidate can fall back to a lower one. Transport,
 authenticity and integrity failures remain errors, not permission to try other
 bytes. This is candidate ordering, not a global maximum-version optimization.
-Existing released versions used lowest-compatible fresh ordering. See the
+The older lowest-compatible fresh ordering is historical and does not describe
+CLI 0.1.110. See the
 [accepted decision and implementation plan](plans/fresh-highest-compatible-20261030.md).
 
 An exact semantic version such as `1.2.3` can have multiple publication sequences:

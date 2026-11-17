@@ -354,11 +354,15 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 		"qualify-npm":              {"validate"},
 		"stage-draft":              {"validate", "qualify-go", "qualify-npm", "build"},
 		"platform-proof":           {"validate", "stage-draft"},
-		"hermes-native-proof":      {"validate", "stage-draft", "platform-proof"},
-		"antigravity-native-proof": {"validate", "stage-draft", "platform-proof"},
+		"hermes-native-proof":      {"validate", "stage-draft"},
+		"antigravity-native-proof": {"validate", "stage-draft"},
 		"verified-draft":           {"validate", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof"},
 		"reuse-verified-draft":     {"validate"},
 		"promote-release":          {"validate", "reuse-verified-draft"},
+		// Dispatched once every proof passed, beside verified-draft. The
+		// promotion run then waits in the tag-keyed concurrency group and
+		// authenticates the completed qualification run and its receipt.
+		"dispatch-promotion": {"validate", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof"},
 	}
 	expectedPermissions := map[string]map[string]string{
 		"validate":                 {"checks": "read", "contents": "read", "pull-requests": "read"},
@@ -372,6 +376,7 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 		"verified-draft":           {"contents": "write", "actions": "read", "attestations": "read"},
 		"reuse-verified-draft":     {"contents": "write", "actions": "read", "attestations": "read"},
 		"promote-release":          {"contents": "write", "actions": "write", "attestations": "read"},
+		"dispatch-promotion":       {"actions": "write"},
 	}
 	expectedConditions := map[string]string{
 		"validate":                 "",
@@ -385,6 +390,7 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 		"verified-draft":           "${{ inputs.publish_release != true }}",
 		"reuse-verified-draft":     "${{ inputs.publish_release == true }}",
 		"promote-release":          "${{ inputs.publish_release == true }}",
+		"dispatch-promotion":       "${{ inputs.publish_release != true && inputs.auto_publish == true }}",
 	}
 	for name, needs := range expectedNeeds {
 		job, ok := workflow.Jobs[name]
@@ -559,7 +565,7 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 			job.Needs = kept
 			w.Jobs["verified-draft"] = job
 		}
-		for _, dependency := range []string{"validate", "stage-draft", "platform-proof"} {
+		for _, dependency := range []string{"validate", "stage-draft"} {
 			mutations[name+" missing "+dependency+" edge"] = func(w *releaseWorkflow) {
 				job := w.Jobs[name]
 				kept := []any{}
@@ -601,6 +607,29 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 				w.Jobs[name] = job
 			}
 		}
+	}
+	for _, dependency := range []string{"validate", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof"} {
+		mutations["dispatch-promotion missing "+dependency+" edge"] = func(w *releaseWorkflow) {
+			job := w.Jobs["dispatch-promotion"]
+			kept := []any{}
+			for _, need := range releaseNeeds(job.Needs) {
+				if need != dependency {
+					kept = append(kept, need)
+				}
+			}
+			job.Needs = kept
+			w.Jobs["dispatch-promotion"] = job
+		}
+	}
+	mutations["dispatch-promotion without auto_publish opt-in"] = func(w *releaseWorkflow) {
+		job := w.Jobs["dispatch-promotion"]
+		job.If = "${{ inputs.publish_release != true }}"
+		w.Jobs["dispatch-promotion"] = job
+	}
+	mutations["dispatch-promotion broader permissions"] = func(w *releaseWorkflow) {
+		job := w.Jobs["dispatch-promotion"]
+		job.Permissions = map[string]string{"actions": "write", "contents": "write"}
+		w.Jobs["dispatch-promotion"] = job
 	}
 	for name, mutate := range mutations {
 		t.Run(name, func(t *testing.T) {

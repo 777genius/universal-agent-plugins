@@ -17,11 +17,13 @@ on:
 permissions:
   contents: read
 
-# Replace ordinary PR/push CI; isolate manual and scheduled invocations.
-# Release validation also accepts checks from the associated merged PR head.
+# Release evidence: only a newer push to the same pull request supersedes a
+# run. Each push gets a group of its own, so a later merge neither cancels nor
+# replaces the release checks of an earlier merge commit. Release validation
+# also accepts the merged PR head's checks.
 concurrency:
-  group: skills-picker-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+  group: skills-picker-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   skills-picker:

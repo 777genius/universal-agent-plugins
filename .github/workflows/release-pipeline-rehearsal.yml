@@ -6,6 +6,8 @@ on:
       - '.github/workflows/agentplugins-release.yml'
       - '.github/workflows/agentplugins-platform-proof.yml'
       - '.github/workflows/agentplugins-npm-publish.yml'
+      - '.github/workflows/hermes-native-e2e.yml'
+      - '.github/workflows/antigravity-native-e2e.yml'
       - '.github/workflows/release-pipeline-rehearsal.yml'
       - 'scripts/*agentplugins*draft*.py'
       - 'scripts/*agentplugins*npm_artifact.py'
