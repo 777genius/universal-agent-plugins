@@ -84,6 +84,16 @@ func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
 	}
 	request.PreviousNativeObjects = request.Delivery.NativeObjects
 	request.ProjectTrustConsent = false
+	// Saved bindings outlive transient planner fields. Read-only verification
+	// must recognize their native receipt without rewriting settings or trust.
+	request.Plan.NativePluginRegistration = false
+	request.Plan.PreviousNativeObjects = request.PreviousNativeObjects
+	request.VerifyOnly = true
+	observed, err := New().Activate(t.Context(), env, request)
+	if err != nil || observed.Verification != domain.VerificationInstalled || observed.Activation != domain.ActivationPrepared {
+		t.Fatalf("read-only persisted native registration: %+v %v", observed, err)
+	}
+	request.VerifyOnly = false
 	repeat, err := New().Activate(t.Context(), env, request)
 	if err != nil || repeat.Activation != domain.ActivationPrepared {
 		t.Fatalf("repeat: %+v %v", repeat, err)
