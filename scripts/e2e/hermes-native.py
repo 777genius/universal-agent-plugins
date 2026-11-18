@@ -233,6 +233,7 @@ def run_source_adds():
     runner = Path(os.environ["RUNNER_TEMP"]).resolve()
     evidence = Path(tempfile.mkdtemp(prefix="hermes-native-evidence-source-add-", dir=runner))
     env = dict(os.environ)
+    env["PATH"] = str(Path(env["HERMES_BIN"]).parent) + os.pathsep + env.get("PATH", "")
     home = Path(env["HOME"]).resolve()
     require(home.is_relative_to(runner) and home != runner,
             "source acquisition must use the existing disposable native OS home")

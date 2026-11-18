@@ -37,8 +37,7 @@ func TestHermesSourceSkillsConfirmedAddsNative(t *testing.T) {
 			t.Fatal("native acceptance changed vendor source selection")
 		}
 		status := input.run(t, "vendor-status-after", input.source, "git", "status", "--porcelain")
-		digest := sha256.Sum256(status)
-		if hex.EncodeToString(digest[:]) != input.provenance["hermes_status_sha256"] ||
+		if len(status) != 0 ||
 			hermesSourceHash(t, input.launcher) != input.provenance["launcher_sha256"] ||
 			hermesSourceHash(t, input.native[0]) != input.provenance["native_runtime_sha256"] {
 			t.Fatal("native source acceptance changed its vendor source or selected runtime")
@@ -128,8 +127,9 @@ func hermesSourceSkillsSelection(t *testing.T) *hermesSourceSkills {
 		t.Fatal("unqualified Hermes source pin")
 	}
 	status := input.run(t, "vendor-status", input.source, "git", "status", "--porcelain")
-	digest := sha256.Sum256(status)
-	input.provenance["hermes_status_sha256"] = hex.EncodeToString(digest[:])
+	if len(status) != 0 {
+		t.Fatal("official Hermes source working tree must be clean before native acceptance")
+	}
 	// Register before scenario cleanups: a successful report is written only
 	// after their servers and held fixture resources have returned.
 	t.Cleanup(func() {

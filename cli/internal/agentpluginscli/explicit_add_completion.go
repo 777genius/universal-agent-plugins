@@ -20,6 +20,10 @@ func dependencyActionAliases(actions []dependencyAction) []string {
 	return aliases
 }
 
+func (adapter *dependencyInstaller) explicitAddTrustConsent(action dependencyAction) bool {
+	return (action.Action == environment.ActionInstall || dependencyRepairOperation(action.Action)) && slices.Contains(adapter.trustAliases, action.Alias)
+}
+
 // A repair can reapply incomplete native projections before the prepared-setup
 // classifier runs. Bound its new trust consent to the complete verified input,
 // never the installer's selected or required component subset.
@@ -88,4 +92,44 @@ func skillsRetryDisclosureCovered(reviewed, retry []string) bool {
 		}
 	}
 	return true
+}
+
+// A path-free warning cannot disclose a different native trust profile. Compare
+// the selected authority across attempts, rather than only checking each new
+// plan against itself. Reserved IDs without a receipt are not installed owners.
+func skillsRetryTrustAuthorityCovered(original, next *PreparedSkillsBatch) bool {
+	for _, action := range next.request.prepared {
+		id := domain.ClientID(action.ClientID)
+		if next.app.scope() != domain.ScopeProject || !domain.ClientTraitsFor(id).SavedProjectRepairOnAdd {
+			continue
+		}
+		before, found := original.request.detected[id]
+		after, selected := next.request.detected[id]
+		if !found || !selected || original.app.scope() != domain.ScopeProject || original.app.ProjectRoot != next.app.ProjectRoot ||
+			before.ConfigRoot != after.ConfigRoot || before.ExecutablePath != after.ExecutablePath {
+			return false
+		}
+		pin, found := original.request.lock.Package(action.Alias)
+		if !found || action.Package == nil || !sameSavedIdentity(pin, *action.Package) || !skillsRetryBindingCovered(original.request.prepared, action) {
+			return false
+		}
+	}
+	return true
+}
+
+func skillsRetryBindingCovered(reviewed []dependencyAction, next dependencyAction) bool {
+	for _, action := range reviewed {
+		if action.Alias != next.Alias || action.ClientID != next.ClientID {
+			continue
+		}
+		if action.Action != next.Action {
+			return false
+		}
+		if action.Authority == nil || action.Authority.ReceiptID == "" {
+			return true
+		}
+		return next.Authority != nil && action.Authority.ReceiptID == next.Authority.ReceiptID &&
+			action.InstallationID == next.InstallationID && action.BindingID == next.BindingID
+	}
+	return false
 }

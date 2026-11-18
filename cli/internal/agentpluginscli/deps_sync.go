@@ -260,7 +260,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 		ClientNativeConfigRoot: dependencyNativeConfigRoot(adapter.app, client),
 		ClientExecutable:       backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete,
-		ProjectTrustConsent: (action.Action == environment.ActionInstall || dependencyRepairOperation(action.Action)) && slices.Contains(adapter.trustAliases, action.Alias)}
+		ProjectTrustConsent: adapter.explicitAddTrustConsent(action)}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
 	}
