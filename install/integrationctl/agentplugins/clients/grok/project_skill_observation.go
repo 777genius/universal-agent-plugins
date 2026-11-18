@@ -25,7 +25,10 @@ type projectSkillMetadata struct {
 }
 
 func projectSkillsVerifiable(client domain.DetectedClient, plan domain.DeliveryPlan, executable string) bool {
-	if client.Version != "1.0.70" || executable == "" || executable != client.ExecutablePath ||
+	// The ordinary CLI does not probe a version ahead of planning. A blank
+	// detected version is not authority: the bound native inspect result below
+	// must still prove exact 1.0.70. Reject any known different version.
+	if (client.Version != "" && client.Version != "1.0.70") || executable == "" || executable != client.ExecutablePath ||
 		plan.NativeRegistryExecutable != executable || plan.Status != domain.PlanReady ||
 		plan.PackageMode != domain.PackageNative || plan.InstallIntent != domain.InstallIntentAutomatic ||
 		plan.Policy != domain.PolicyAllowed || len(plan.Components) == 0 {

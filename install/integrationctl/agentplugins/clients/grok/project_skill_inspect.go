@@ -2,6 +2,7 @@ package grok
 
 import (
 	"encoding/json"
+	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
@@ -10,7 +11,7 @@ import (
 // source preparation still uses the existing, separately qualified parser.
 func projectSkillsObserved(native projectInspection, proof *projectSkillProof) bool {
 	document := native.document
-	if native.version != "1.0.70" || !projectSkillFields(document, "grokVersion", "cwd", "projectRoot", "projectTrusted", "plugins", "skills", "mcpServers") || document["projectTrusted"] != true {
+	if native.version != "1.0.70" || !projectSkillReportFields(document) || document["projectTrusted"] != true {
 		return false
 	}
 	mcp, ok := document["mcpServers"].([]any)
@@ -22,6 +23,45 @@ func projectSkillsObserved(native projectInspection, proof *projectSkillProof) b
 		return false
 	}
 	return projectSkillRowsObserved(rows, proof)
+}
+
+// projectSkillReportFields admits only the exact observed 1.0.70 inspect
+// envelope. Optional diagnostic families are never activation authority; the
+// selected plugin, trust, Skill origin and bytes are verified independently.
+func projectSkillReportFields(document map[string]any) bool {
+	required := []string{"grokVersion", "cwd", "projectRoot", "projectTrusted", "plugins", "skills", "mcpServers"}
+	for _, key := range required {
+		if _, ok := document[key]; !ok {
+			return false
+		}
+	}
+	for key, value := range document {
+		switch key {
+		case "grokVersion", "cwd", "projectRoot", "projectTrusted", "plugins", "skills", "mcpServers":
+			continue
+		case "channel":
+			if _, ok := value.(string); !ok {
+				return false
+			}
+		case "updateChannel":
+			if value != nil {
+				if _, ok := value.(string); !ok {
+					return false
+				}
+			}
+		case "projectInstructions", "hooks", "agents", "marketplaces", "lspServers", "experiments":
+			if _, ok := value.([]any); !ok {
+				return false
+			}
+		case "permissions", "loginPolicy", "configSources", "externalCompat":
+			if _, ok := value.(map[string]any); !ok {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func projectSkillRowsObserved(rows []any, proof *projectSkillProof) bool {
@@ -152,7 +192,11 @@ func projectSkillObserved(row map[string]any, plugin string, skill projectSkillM
 	}
 	source, ok := row["source"].(map[string]any)
 	return ok && projectSkillFields(source, "type", "plugin_name", "path") && source["type"] == "plugin" &&
-		source["plugin_name"] == plugin && source["path"] == skill.path
+		source["plugin_name"] == plugin &&
+		func() bool {
+			path, ok := source["path"].(string)
+			return ok && filepath.IsAbs(path) && shared.SameCleanPath(path, skill.path)
+		}()
 }
 
 func projectSkillFields(object map[string]any, fields ...string) bool {
