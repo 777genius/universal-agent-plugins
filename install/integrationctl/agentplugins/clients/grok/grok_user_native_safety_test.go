@@ -158,3 +158,36 @@ func TestGrokUserUnclosedRemovalReadbackNeverAllowsArtifactDeletion(t *testing.T
 		t.Fatalf("unclosed post-uninstall query enabled deletion: %+v %v %+v", outcome, err, base.commands)
 	}
 }
+
+type grokMalformedReplacementReadback struct {
+	base *fakeGrok
+	afterRemoval bool
+}
+
+func (f *grokMalformedReplacementReadback) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	if len(command.Argv) >= 3 && command.Argv[2] == "list" && f.afterRemoval {
+		f.base.commands = append(f.base.commands, append([]string(nil), command.Argv...))
+		return legacyports.CommandResult{Stdout: []byte("[] {}")}, nil
+	}
+	result, err := f.base.Run(ctx, command)
+	if len(command.Argv) >= 3 && command.Argv[2] == "uninstall" && err == nil && result.ExitCode == 0 {
+		f.afterRemoval = true
+	}
+	return result, err
+}
+
+// A stale explicit attestation must not turn a removed native registration
+// into a successful replacement when its post-uninstall listing is unknown.
+func TestGrokUserReplacementUnknownReadbackCannotBeAttested(t *testing.T) {
+	request := grokRequest(t)
+	request.ActivationComplete = true
+	request.Replacing = true
+	base := &fakeGrok{entries: []pluginEntry{{Name: request.DeclaredName, Status: "installed",
+		Source: request.Delivery.ActivePath, Version: "1.0.0"}}}
+	outcome, err := New().Activate(t.Context(), clients.Env{Runner: &grokMalformedReplacementReadback{base: base}}, request)
+	if err == nil || outcome.Activation != domain.ActivationFailed || outcome.Verification != domain.VerificationFailed ||
+		outcome.ActivationAttested || len(base.commands) != 3 ||
+		base.commands[0][2] != "list" || base.commands[1][2] != "uninstall" || base.commands[2][2] != "list" {
+		t.Fatalf("unreadable replacement removal became attested or triggered install: %+v %v %+v", outcome, err, base.commands)
+	}
+}
