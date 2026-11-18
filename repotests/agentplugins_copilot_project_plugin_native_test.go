@@ -4,6 +4,7 @@ package pluginkitairepo_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -118,8 +119,8 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 
 	list := f.command(t, "whole-plugin-list", f.base.Project, f.env(),
 		[]string{f.client, "plugin", "list", "--json"}, 30*time.Second)
-	if !copilotNativePluginListed(t, list.Stdout, "native-proof", marketplace) {
-		t.Fatal("real Copilot did not recognize and enable the selected native project plugin")
+	if present, observed := copilotNativePluginListed(t, list.Stdout, "native-proof", marketplace); !present {
+		t.Fatalf("Copilot native project plugin missing: expected=native-proof@%s observed=%v", marketplace, observed)
 	}
 	skills := f.command(t, "whole-plugin-skills", f.base.Project, f.env(),
 		[]string{f.client, "skill", "list", "--json"}, 30*time.Second)
@@ -161,25 +162,30 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 	}
 	afterList := f.command(t, "whole-plugin-after-remove", f.base.Project, f.env(),
 		[]string{f.client, "plugin", "list", "--json"}, 30*time.Second)
-	if copilotNativePluginListed(t, afterList.Stdout, "native-proof", marketplace) {
-		t.Fatal("real Copilot still lists a removed UAP project plugin")
+	if present, observed := copilotNativePluginListed(t, afterList.Stdout, "native-proof", marketplace); present {
+		t.Fatalf("real Copilot still lists a removed UAP project plugin: %v", observed)
 	}
 	f.check(t)
 	t.Logf("Pinned Copilot native whole-plugin E2E: public add, exact project receipt, plugin list, skill list, public remove and foreign authority preservation; plugin=%s", spec)
 }
 
-func copilotNativePluginListed(t *testing.T, body []byte, name, marketplace string) bool {
+func copilotNativePluginListed(t *testing.T, body []byte, name, marketplace string) (bool, []string) {
 	t.Helper()
 	var rows []struct {
 		Name        string `json:"name"`
 		Marketplace string `json:"marketplace"`
 		Enabled     bool   `json:"enabled"`
 	}
-	if err := json.Unmarshal(body, &rows); err != nil {
-		t.Fatalf("Copilot native plugin listing is not a valid JSON array: %v", err)
+	if err := json.Unmarshal(body, &rows); err != nil || rows == nil {
+		t.Fatalf("Copilot native plugin listing must be a JSON array, not null: %v", err)
+	}
+	if len(rows) > 64 {
+		t.Fatal("Copilot native plugin listing exceeds bounded result count")
 	}
 	count := 0
+	observed := make([]string, 0, len(rows))
 	for _, row := range rows {
+		observed = append(observed, fmt.Sprintf("%s@%s(enabled=%t)", row.Name, row.Marketplace, row.Enabled))
 		if row.Name == name && row.Marketplace == marketplace {
 			if !row.Enabled {
 				t.Fatalf("Copilot native plugin is present but disabled: %+v", row)
@@ -190,5 +196,5 @@ func copilotNativePluginListed(t *testing.T, body []byte, name, marketplace stri
 	if count > 1 {
 		t.Fatalf("Copilot registered the same native plugin %d times", count)
 	}
-	return count == 1
+	return count == 1, observed
 }
