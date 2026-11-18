@@ -32,7 +32,8 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 	if err := verifyCopilotTrust(env, request, false); err != nil {
 		return err
 	}
-	if request.Plan.NativePluginRegistration {
+	if request.Plan.NativePluginRegistration || copilotHasProjectPlugin(request.PreviousNativeObjects) ||
+		copilotHasProjectPlugin(request.Delivery.NativeObjects) {
 		return copilotPreflightWholePlugin(env, request)
 	}
 	if shared.ComponentKindPresent(request.Plan.Components, domain.ComponentMCPServer) {
