@@ -75,8 +75,8 @@ export default defineNuxtConfig({
     inlineStyles: (id) => {
       const moduleId = id?.replaceAll('\\', '/');
       return ![
-        '/components/layout/AppHeader.vue',
-        '/components/layout/AppFooter.vue',
+        // Nuxt bundles the header and footer CSS under the layout module.
+        '/layouts/default.vue',
         '/components/registry/DetailBreadcrumbs.vue',
         '/components/registry/SkillSpectorAssessment.vue',
         '/components/PageBackground.vue',
