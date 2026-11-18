@@ -45,12 +45,18 @@ class DarwinMetadataAPIContracts(unittest.TestCase):
         with patch.object(os, 'fstat', return_value=info):
             subject.check(99)
 
-    def test_explicit_noacl_and_enoattr_only(self):
-        subject = self.subject()
-        self.check(subject)
-        self.assertEqual(subject.freed, [1])
+    def test_absent_header_and_explicit_noacl_keep_xattr_and_abi_guards(self):
+        # XNU permits no extended security header on ordinary APFS files.
+        # The actual macOS ACL-injection fixture below ensures a real ACL
+        # cannot be misclassified as the all-absent case.
+        for properties in (None, {3: 0, 6: 0, 5: 0}):
+            with self.subTest(properties=properties):
+                subject = self.subject(properties=properties)
+                self.check(subject)
+                self.assertEqual(subject.freed, [1])
         for properties in ({3: 0, 6: 1, 5: 0}, {3: 1, 6: 0, 5: 0},
-                           {3: 1, 6: 1, 5: 1}, {3: -1, 6: 1, 5: 0}):
+                           {3: 1, 6: 1, 5: 1}, {3: 0, 6: 0, 5: 1},
+                           {3: -1, 6: 1, 5: 0}):
             with self.subTest(properties=properties):
                 subject = self.subject(properties=properties)
                 with self.assertRaises(ValueError):

@@ -41,7 +41,7 @@ def presence_diagnostic(error):
     presence = error.presence
     if (type(presence) is not tuple or len(presence) != 3
             or any(type(value) is not bool for value in presence)
-            or presence == (True, True, False)):
+            or presence in ((True, True, False), (False, False, False))):
         return None
     return dict(zip(('uuid_present', 'group_uuid_present', 'acl_present'), presence))
 
@@ -94,9 +94,14 @@ class Metadata:
                 require(self.query(section, property_id, ctypes.byref(valid)) == 0
                         and valid.value >= 0)
                 present[property_id] = bool(valid.value)
-            # Source statx1: both UUID properties require a full security header;
-            # ACL absent then represents explicit KAUTH_FILESEC_NOACL.
-            if present != {FILESEC_UUID: True, FILESEC_GRPUUID: True, FILESEC_ACL: False}:
+            # Apple XNU vn_stat_noauth returns KAUTH_FILESEC_NONE when the
+            # filesystem exposes none of the three extended security fields.
+            # Fresh ordinary APFS files/directories use this all-absent case.
+            # The alternative has both UUID fields and an explicit NOACL;
+            # a partial header or any reported ACL remains a refusal.
+            accepted = ({FILESEC_UUID: False, FILESEC_GRPUUID: False, FILESEC_ACL: False},
+                        {FILESEC_UUID: True, FILESEC_GRPUUID: True, FILESEC_ACL: False})
+            if present not in accepted:
                 presence = tuple(present[key] for key in (FILESEC_UUID, FILESEC_GRPUUID, FILESEC_ACL))
                 try:
                     print('DARWIN_CACHE_PRESENCE=' + '{"uuid_present":'

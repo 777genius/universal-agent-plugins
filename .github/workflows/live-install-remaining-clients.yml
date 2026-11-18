@@ -9,6 +9,8 @@ on:
       - 'scripts/codex_plugin_retention_audit.py'
       - 'scripts/test_codex_plugin_retention_audit.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/claude_darwin_metadata.py'
+      - 'scripts/test_claude_darwin_metadata.py'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/project_native_cursor_acquisition.py'
       - 'scripts/devin_structured_inventory_admission.py'
@@ -162,6 +164,9 @@ jobs:
           with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
               stream.write('bin=' + str(binary.parent) + '\n')
           KIRO_NODE
+      - name: Verify real Darwin no-ACL and hostile ACL/xattr refusals
+        if: matrix.target == 'kiro'
+        run: python3 -m unittest discover -s scripts -p 'test_claude_darwin_metadata.py' -v
       - name: Refuse inherited real client profile overrides before live cases
         run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
       - name: Check bounded Codex preserved-data custody
