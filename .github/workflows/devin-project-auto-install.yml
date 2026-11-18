@@ -6,16 +6,17 @@ on:
       - '.github/workflows/devin-project-auto-install.yml'
       - 'scripts/devin_project_auto_install_e2e.py'
       - 'scripts/test_devin_project_auto_install_e2e.py'
+      - 'scripts/native_client_research.py'
       - 'install/integrationctl/agentplugins/clients/windsurf/**'
 permissions:
   contents: read
-concurrency:
-  group: devin-project-v57-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
 jobs:
   native:
     name: Pinned Devin Project Skills and MCP add-repair-remove
-    if: ${{ github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+    if: ${{ (github.event.action != 'labeled' || github.event.label.name == 'ci:full') && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
+    concurrency:
+      group: devin-project-v57-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:

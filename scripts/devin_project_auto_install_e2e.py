@@ -4,6 +4,7 @@ Runs the public source-built UAP CLI and real hash-pinned Devin without vendor
 credentials or model calls. Only file installation and native listing qualify.
 """
 import base64
+from contextlib import contextmanager
 import hashlib
 import io
 import json
@@ -11,14 +12,16 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
+import subprocess
 import sys
 import tarfile
 import tempfile
-import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
 
-from native_client_research import run_probe
+from native_client_research import kill_group, run_probe
 
 VERSION = "3000.12.57"
 # CognitionAI/devin-cli's own publish_npm.py builds this version-specific
@@ -170,6 +173,41 @@ class InertMCP(BaseHTTPRequestHandler):
         return
 
 
+def serve_http(port_file):
+    # The server runs in its own process; run_probe uses preexec_fn and must
+    # never fork from a parent with a live HTTP thread.
+    with ThreadingHTTPServer(("127.0.0.1", 0), InertMCP) as server:
+        port_file.write_text(str(server.server_port))
+        server.serve_forever()
+
+
+@contextmanager
+def external_http_fixture(root):
+    port_file = root / "http-port"
+    child = subprocess.Popen(
+        [sys.executable, str(Path(__file__).resolve()), "--serve-http", str(port_file)],
+        cwd=root, env={"PATH": "/usr/bin:/bin", "PYTHONUNBUFFERED": "1"},
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        start_new_session=True)
+    try:
+        for _ in range(100):
+            if child.poll() is not None:
+                raise RuntimeError("isolated Devin HTTP fixture exited during startup")
+            if port_file.is_file():
+                raw = port_file.read_text()
+                if not raw.isdecimal() or not 1 <= int(raw) <= 65535:
+                    raise RuntimeError("isolated Devin HTTP fixture returned an invalid port")
+                yield int(raw)
+                break
+            time.sleep(0.05)
+        else:
+            raise RuntimeError("isolated Devin HTTP fixture startup deadline exceeded")
+    finally:
+        if child.poll() is None:
+            kill_group(child)
+        child.wait(timeout=5)
+
+
 def available_skill(body, name):
     data = json.loads(body)
     if isinstance(data, dict):
@@ -179,8 +217,25 @@ def available_skill(body, name):
     return any(isinstance(row, dict) and row.get("name") == name for row in data)
 
 
-def available_mcp(body, name):
-    return re.search(r"(?<![A-Za-z0-9_])" + re.escape(name) + r"(?![A-Za-z0-9_])", body) is not None
+def available_mcp(body, name, config_path, transport):
+    # Pinned genuine Devin 3000.12.57 exposes structured MCP inventory rows.
+    # A diagnostic mentioning a name is not proof of a configured server.
+    rows = json.loads(body)
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        raise RuntimeError("genuine Devin MCP JSON inventory has an unknown shape")
+    matching = [row for row in rows if row.get("name") == name]
+    if len(matching) > 1:
+        raise RuntimeError("genuine Devin MCP inventory has duplicate selected names")
+    if not matching:
+        return False
+    row = matching[0]
+    schema = {"name", "enabled", "disabled_reason", "transport", "command", "args",
+              "url", "disabled_tools", "source"}
+    if (set(row) != schema or row["enabled"] is not True or
+            row["disabled_reason"] is not None or row["transport"] != transport or
+            row["source"] != str(config_path)):
+        raise RuntimeError("genuine Devin MCP selected source or enabled state differs")
+    return True
 
 
 def main(root, report):
@@ -221,90 +276,151 @@ def main(root, report):
     original_a = json.loads((projects[0] / ".devin" / "mcp_config.json").read_text())
     original_b = (projects[1] / ".devin" / "mcp_config.json").read_bytes()
     original_skill = (projects[0] / ".devin" / "skills" / "foreign-skill" / "SKILL.md").read_bytes()
-    with ThreadingHTTPServer(("127.0.0.1", 0), InertMCP) as http_server:
-        thread = threading.Thread(target=http_server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            service = root / "service.py"
-            service.write_text(
-                'import json,sys\n'
-                'for line in sys.stdin:\n'
-                ' try:\n'
-                '  request=json.loads(line)\n'
-                '  method=request.get("method")\n'
-                '  result={"protocolVersion":"2025-03-26","capabilities":{"tools":{}},"serverInfo":{"name":"uap-deven","version":"1"}} if method=="initialize" else {"tools":[]} if method=="tools/list" else {}\n'
-                '  if "id" in request: print(json.dumps({"jsonrpc":"2.0","id":request["id"],"result":result}),flush=True)\n'
-                ' except (ValueError,TypeError): pass\n')
-            source = root / "plugin"
-            skill_file = source / "skills" / SKILL / "SKILL.md"
-            skill_file.parent.mkdir(parents=True)
-            skill_file.write_text(f"---\nname: {SKILL}\ndescription: Inert Project installation proof\n---\nNo model action required\n")
-            (source / "plugin.json").write_text(json.dumps({"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-                                                              "name": SKILL, "version":"1.0.0"}))
-            (source / "mcp.json").write_text(json.dumps({"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
-               "mcpServers": {STDIO: {"type":"stdio","command":"python3","args":[str(service)]},
-                              HTTP: {"type":"streamable-http","url":f"http://127.0.0.1:{http_server.server_port}/mcp"}}}))
-            cli = root / "agentplugins"
-            command(["go", "build", "-trimpath", "-o", str(cli), "./cli/cmd/agentplugins"], checkout, os.environ, timeout=200)
-            report["uap_binary_sha256"] = digest(cli.read_bytes())
+    with external_http_fixture(root) as http_port:
+        service = root / "service.py"
+        service.write_text(
+            'import json,sys\n'
+            'for line in sys.stdin:\n'
+            ' try:\n'
+            '  request=json.loads(line)\n'
+            '  method=request.get("method")\n'
+            '  result={"protocolVersion":"2025-03-26","capabilities":{"tools":{}},"serverInfo":{"name":"uap-deven","version":"1"}} if method=="initialize" else {"tools":[]} if method=="tools/list" else {}\n'
+            '  if "id" in request: print(json.dumps({"jsonrpc":"2.0","id":request["id"],"result":result}),flush=True)\n'
+            ' except (ValueError,TypeError): pass\n')
+        source = root / "plugin"
+        skill_file = source / "skills" / SKILL / "SKILL.md"
+        skill_file.parent.mkdir(parents=True)
+        skill_file.write_text(f"---\nname: {SKILL}\ndescription: Inert Project installation proof\n---\nNo model action required\n")
+        (source / "plugin.json").write_text(json.dumps({"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                                                          "name": SKILL, "version":"1.0.0"}))
+        (source / "mcp.json").write_text(json.dumps({"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+           "mcpServers": {STDIO: {"type":"stdio","command":"python3","args":[str(service)]},
+                          HTTP: {"type":"streamable-http","url":f"http://127.0.0.1:{http_port}/mcp"}}}))
+        cli = root / "agentplugins"
+        command(["go", "build", "-trimpath", "-o", str(cli), "./cli/cmd/agentplugins"], checkout, os.environ, timeout=200)
+        report["uap_binary_sha256"] = digest(cli.read_bytes())
 
-            def inventory(stage, present):
-                observations = []
-                for index, project in enumerate(projects):
-                    skill_output = command([str(binary), "skills", "list", "--json"], project, env, timeout=45)
-                    mcp_output = command([str(binary), "mcp", "list"], project, env, timeout=45)
-                    found = [available_skill(skill_output, SKILL), available_mcp(mcp_output, STDIO), available_mcp(mcp_output, HTTP)]
-                    want = present if index == 0 else False
-                    if found != [want] * 3:
-                        raise RuntimeError(f"genuine Devin {stage} Project {index} Skills/MCP discovery mismatched: {found}")
-                    observations.append({"project":index, "owned_skill_stdio_http": found})
-                report["stages"].append({"stage":stage,"inventory":observations})
+        def inventory(stage, present):
+            observations = []
+            for index, project in enumerate(projects):
+                skill_output = command([str(binary), "skills", "list", "--json"], project, env, timeout=45)
+                mcp_output = command([str(binary), "mcp", "list", "--json"], project, env, timeout=45)
+            selected_mcp = project / ".devin" / "mcp_config.json"
+            found = [available_skill(skill_output, SKILL),
+                     available_mcp(mcp_output, STDIO, selected_mcp, "stdio"),
+                     available_mcp(mcp_output, HTTP, selected_mcp, "http")]
+                want = present if index == 0 else False
+                if found != [want] * 3:
+                    raise RuntimeError(f"genuine Devin {stage} Project {index} Skills/MCP discovery mismatched: {found}")
+                observations.append({"project":index, "owned_skill_stdio_http": found})
+            report["stages"].append({"stage":stage,"inventory":observations})
 
-            def cli_call(stage, *arguments):
-                output = command([str(cli), stage, *arguments, "--target", "windsurf",
-                                  "--scope", "project", "--format", "json"],
-                                 projects[0], env, timeout=90)
-                data = json.loads(output)
-                if data.get("command") != stage or data.get("result") != "success":
-                    raise RuntimeError(f"UAP public {stage} did not report success")
-                return data["data"]
+        def cli_call(stage, *arguments):
+            output = command([str(cli), stage, *arguments, "--target", "windsurf",
+                              "--scope", "project", "--format", "json"],
+                             projects[0], env, timeout=90)
+            data = json.loads(output)
+            if data.get("command") != stage or data.get("result") != "success":
+                raise RuntimeError(f"UAP public {stage} did not report success")
+            return data["data"]
 
-            inventory("before-add", False)
-            added = cli_call("add", str(source), "--no-save")
-            targets = added.get("targets")
+        native_a_path = projects[0] / ".devin" / "mcp_config.json"
+        state_path = projects[0] / ".uap" / "state-v2.json"
+
+        def binding_for(iid, required=True):
+            document = json.loads(state_path.read_text())
+            items = document.get("installations")
+            if document.get("schema_version") != 5 or not isinstance(items, list):
+                raise RuntimeError("UAP Project saved state version or shape differs")
+            selected = [item for item in items if item.get("installation_id") == iid]
+            if len(selected) != 1 or not isinstance(selected[0].get("clients"), dict):
+                raise RuntimeError("UAP Project installation or clients differ")
+            bindings = [value for value in selected[0]["clients"].values()
+                        if isinstance(value, dict) and value.get("client_id") == "windsurf"]
+            if not required:
+                if bindings:
+                    raise RuntimeError("removed Project still has an owned client binding")
+                return None
+            if len(bindings) != 1:
+                raise RuntimeError("UAP Project has missing/duplicate selected bindings")
+            binding = bindings[0]
+            path = Path(binding.get("target_locator", ""))
+            root = projects[0] / ".uap" / "managed" / "clients" / "windsurf"
+            if (binding.get("scope") != "project" or
+                    binding.get("native_profile_root") != str(projects[0] / ".devin") or
+                    path.parent != root or not path.is_dir() or path.is_symlink()):
+                raise RuntimeError("UAP Project binding or managed package path differs")
+            return binding
+
+        def preserved(stage):
+            if (cascade.read_bytes() != original_cascade or
+                    (global_root / "mcp_config.json").read_bytes() != original_global or
+                    (projects[1] / ".devin" / "mcp_config.json").read_bytes() != original_b):
+                raise RuntimeError(stage + " changed Cascade, Global or Project B")
+            for project in projects:
+                foreign = project / ".devin" / "skills" / "foreign-skill" / "SKILL.md"
+                if foreign.is_symlink() or not foreign.is_file() or foreign.read_bytes() != original_skill:
+                    raise RuntimeError(stage + " changed an original foreign Skill")
+            current = json.loads(native_a_path.read_text())
+            if current.get("mcpServers", {}).get("foreign_original") != original_a["mcpServers"]["foreign_original"]:
+                raise RuntimeError(stage + " changed an original Project A MCP entry")
+
+        def installation_id(data):
+            targets = data.get("targets")
             if not isinstance(targets, list) or len(targets) != 1 or targets[0].get("target") != "windsurf":
                 raise RuntimeError("UAP add target receipt differs")
-            result = targets[0].get("output", {}).get("result", {})
-            iid = result.get("installation_id") if isinstance(result, dict) else None
-            if not isinstance(iid, str) or not re.fullmatch(r"[0-9a-f-]{36}", iid):
-                raise RuntimeError("UAP add lacks an installation ID")
-            inventory("after-add", True)
-            owned_skill = projects[0] / ".devin" / "skills" / SKILL
-            if owned_skill.is_symlink() or not (owned_skill / "SKILL.md").is_file():
-                raise RuntimeError("UAP-owned Project Skill is absent or aliased")
-            shutil.rmtree(owned_skill)
-            cli_call("repair", iid)
-            inventory("after-repair", True)
-            cli_call("remove", iid)
-            inventory("after-remove", False)
-            native_a = json.loads((projects[0] / ".devin" / "mcp_config.json").read_text())
-            if native_a != original_a or owned_skill.exists() or owned_skill.is_symlink():
-                raise RuntimeError("Project A removal changed foreign MCP or retained owned native objects")
-            if (cascade.read_bytes() != original_cascade or
-                (global_root / "mcp_config.json").read_bytes() != original_global or
-                (projects[1] / ".devin" / "mcp_config.json").read_bytes() != original_b):
-                raise RuntimeError("Project lifecycle mutated Cascade, Global or Project B authority")
-            for project in projects:
-                foreign_skill = project / ".devin" / "skills" / "foreign-skill" / "SKILL.md"
-                if not foreign_skill.is_file() or foreign_skill.is_symlink() or foreign_skill.read_bytes() != original_skill:
-                    raise RuntimeError("Project lifecycle changed foreign Skill")
-            report["installation_discovery_e2e"] = True
-        finally:
-            http_server.shutdown()
-            thread.join(timeout=5)
+            outcome = targets[0].get("output", {}).get("result", {})
+            identifier = outcome.get("installation_id") if isinstance(outcome, dict) else None
+            if not isinstance(identifier, str) or not re.fullmatch(r"[0-9a-f-]{36}", identifier):
+                raise RuntimeError("UAP add has no canonical installation ID")
+            return identifier
+
+        inventory("before-add", False)
+        added = cli_call("add", str(source), "--no-save")
+        iid = installation_id(added)
+        installed_binding = binding_for(iid)
+        managed = Path(installed_binding["target_locator"])
+        installed_native = native_a_path.read_bytes()
+        original_state = state_path.read_bytes()
+        inventory("after-add", True)
+        preserved("after-add")
+
+        replayed = cli_call("add", str(source), "--no-save")
+        if (installation_id(replayed) != iid or binding_for(iid) != installed_binding or
+                native_a_path.read_bytes() != installed_native or state_path.read_bytes() != original_state):
+            raise RuntimeError("unchanged Project add rewrote binding/state or native config")
+        inventory("after-unchanged-add", True)
+        preserved("after-unchanged-add")
+
+        owned_skill = projects[0] / ".devin" / "skills" / SKILL
+        if owned_skill.is_symlink() or not (owned_skill / "SKILL.md").is_file():
+            raise RuntimeError("UAP-owned Project Skill is absent or aliased")
+        shutil.rmtree(owned_skill)
+        cli_call("repair", iid)
+        repaired = binding_for(iid)
+        if repaired["client_binding_id"] != installed_binding["client_binding_id"] or repaired["target_locator"] != str(managed):
+            raise RuntimeError("Project repair changed original binding authority")
+        inventory("after-repair", True)
+        preserved("after-repair")
+
+        cli_call("remove", iid)
+        inventory("after-remove", False)
+        binding_for(iid, required=False)
+        if managed.exists() or managed.is_symlink():
+            raise RuntimeError("Project removal retained the managed package")
+        if json.loads(native_a_path.read_text()) != original_a or owned_skill.exists() or owned_skill.is_symlink():
+            raise RuntimeError("Project A removal changed original MCP or retained owned objects")
+        preserved("after-remove")
+        report["installation_discovery_e2e"] = True
+
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--serve-http":
+        serve_http(Path(sys.argv[2]))
+        sys.exit(0)
+    if len(sys.argv) != 1:
+        raise SystemExit("unsupported Devin E2E invocation")
     result = {"commit":os.environ.get("EXPECTED_COMMIT"), "version":VERSION, "npm_package_version": PACKAGE_VERSION,
               "stages":[], "installation_discovery_e2e":False, "model_runtime_qualified":False}
     with tempfile.TemporaryDirectory(prefix="devin-project-v57-", dir=os.environ.get("RUNNER_TEMP")) as temp:

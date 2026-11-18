@@ -31,14 +31,17 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
         archive = io.BytesIO()
         with tarfile.open(fileobj=archive, mode="w:gz") as output:
             for name, contents in items.items():
-                if traversal and name == "package/bin/devin":
-                    name = "package/../escape"
                 member = tarfile.TarInfo(name)
-                if symlink and name == "package/bin/devin":
-                    member.type, member.linkname = tarfile.SYMTYPE, "../../outside"
-                else:
-                    member.size = len(contents)
-                output.addfile(member, io.BytesIO(contents) if member.isfile() else None)
+                member.size = len(contents)
+                output.addfile(member, io.BytesIO(contents))
+            if traversal:
+                member = tarfile.TarInfo("package/../escape")
+                member.size = 3
+                output.addfile(member, io.BytesIO(b"bad"))
+            if symlink:
+                member = tarfile.TarInfo("package/bad-link")
+                member.type, member.linkname = tarfile.SYMTYPE, "../../outside"
+                output.addfile(member)
         payload = archive.getvalue()
         metadata = {"name":"devin","version":subject.PACKAGE_VERSION,"os":["linux"],"cpu":["x64"],
                     "dist":{"tarball":subject.TARBALL_URL,
@@ -65,7 +68,13 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                 if label == "integrity":
                     archive += b"tampered"
                 with patch.object(subject, "official_npm_bytes", side_effect=[metadata, archive]):
-                    with self.assertRaises(RuntimeError):
+                    expected = {
+                        "integrity": "tarball integrity differs",
+                        "symlink": "unsafe Devin npm platform member",
+                        "traversal": "unsafe Devin npm platform member",
+                        "binary": "independently pinned original",
+                    }[label]
+                    with self.assertRaisesRegex(RuntimeError, expected):
                         subject.install_genuine_devin(Path(directory))
 
     def test_npm_metadata_is_exact_not_any_platform_or_registry_tarball(self):
@@ -104,12 +113,27 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         subject.command(["devin", "--version"], "/tmp", {})
 
-    def test_mcp_inventory_does_not_accept_same_name_prefix_or_suffix(self):
-        self.assertTrue(subject.available_mcp(subject.STDIO + "\n", subject.STDIO))
-        self.assertTrue(subject.available_mcp(subject.HTTP + " (configured)", subject.HTTP))
-        self.assertFalse(subject.available_mcp("pre_" + subject.STDIO, subject.STDIO))
-        self.assertFalse(subject.available_mcp(subject.HTTP + "_foreign", subject.HTTP))
-        self.assertFalse(subject.available_mcp("no server", subject.HTTP))
+    def test_mcp_inventory_requires_structured_selected_enabled_source(self):
+        config = Path("/tmp/project-a/.devin/mcp_config.json")
+        def row(name=subject.STDIO, source=str(config), enabled=True, transport="stdio"):
+            return {"name":name, "enabled":enabled,
+                    "disabled_reason":None if enabled else "disabled",
+                    "transport":transport, "command":"python3",
+                    "args":[], "url":None, "disabled_tools":[], "source":source}
+        body = json.dumps([row(), row(name="foreign")])
+        self.assertTrue(subject.available_mcp(body, subject.STDIO, config, "stdio"))
+        self.assertFalse(subject.available_mcp(body, subject.HTTP, config, "http"))
+        for bad in (
+            json.dumps([row(source="/tmp/foreign/mcp_config.json")]),
+            json.dumps([row(enabled=False)]),
+            json.dumps([row(transport="http")]),
+            json.dumps([row(), row()]),
+            json.dumps({"message":subject.STDIO}),
+            "Skipped " + subject.STDIO + ": invalid configuration",
+        ):
+            with self.subTest(body=bad), self.assertRaises((RuntimeError, ValueError)):
+                subject.available_mcp(bad, subject.STDIO, config, "stdio")
+        self.assertFalse(subject.available_mcp("[]", subject.STDIO, config, "stdio"))
 
 
 if __name__ == "__main__":

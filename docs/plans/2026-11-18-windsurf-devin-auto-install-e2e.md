@@ -30,3 +30,29 @@ Current version admission is intentionally asymmetric: User/Global allows exact 
 - R2: trusted-host provenance; user/project/Cascade isolation; ownership and rollback; truthful native evidence; complete final-source status.
 
 Initial estimate: production 30–100 LOC, tests/contract/workflow 90–250 LOC, documentation 30–60 LOC. Complexity 4/10; reliability target 9/10; confidence 7/10 pending genuine native E2E.
+
+## Post-native review: existing saved lifecycle versus genuine no-save lane
+
+The exact 3000.12.57 first native run at `3c8944c9` passed genuine Linux
+add → repair → remove; original ZIP artifact 14428191958 matches its GitHub
+SHA-256 and reports A/B inventories (0/0 → 3/0 → 3/0 → 0/0), no model calls.
+Its successful proof remains attributable only to that commit, not the later
+review-fix source. This follow-up extends the same native lane with unchanged
+add replay, exact owned state/managed package removal, and foreign-file checks
+at each stage, plus strict structured native MCP source inventory and an
+out-of-process HTTP fixture so the supervised runner never forks a threaded
+parent. Preserve all byte-hash and user/Cascade isolation controls.
+
+**Saved dependency repair is already covered**, without inventing a second
+vendor network fixture, by `TestProjectDevinComposedSourceLifecycle` in
+`cli/cmd/agentplugins/devin_project_lifecycle_test.go`. It creates a saved
+`--alias docs` Project installation from both real loopback TLS Git and ZIP
+sources and deliberately removes an owned Skill before `repair`; it also
+checks locked no-op, update, export/import, foreign files and removal. The
+mandatory Required full tests exercise this path. The native v57 route uses
+`--no-save` intentionally to isolate its exact original package identity.
+
+Review notes: reject name-only MCP text (even when it contains the exact owned
+name), reject archive path traversal at the actual guard rather than only later
+absence, keep the native matrix triggered by shared runner changes and avoid
+unrelated-label cancellation. Do not inherit earlier native PASS for new SHA.
