@@ -430,6 +430,12 @@ func activateCopilotProjectPlugin(ctx context.Context, env clients.Env, request 
 			return copilotVerifyWholePlugin(env, request)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
+			// Preflight only checks native settings: the selected package becomes
+			// readable after staging commits. Verify the installed manifest and
+			// marketplace immediately before touching project/user settings.
+			if err := copilotVerifyProjectPluginSource(root, request.Plan, env.NativeConfig); err != nil {
+				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+			}
 			register := func() error {
 				return copilotMutateProjectPlugin(ctx, env.NativeConfig, root,
 					request.Plan.PhysicalArtifactID, request.Plan.DeclaredName,
