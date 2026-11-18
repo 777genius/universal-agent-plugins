@@ -352,7 +352,7 @@ type grokMutationReadbackFailure struct {
 func (r *grokMutationReadbackFailure) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	if len(command.Argv) > 2 && command.Argv[2] == "list" && r.mutationComplete {
 		r.base.commands = append(r.base.commands, append([]string(nil), command.Argv...))
-		return legacyports.CommandResult{}, errors.New("native Grok list failed after completed mutation")
+		return legacyports.CommandResult{CleanupComplete: true}, errors.New("native Grok list failed after completed mutation")
 	}
 	result, err := r.base.Run(ctx, command)
 	if len(command.Argv) > 2 && (command.Argv[2] == "install" || command.Argv[2] == "uninstall") &&
@@ -369,7 +369,7 @@ func TestGrokUserReplacementFailedReadbackKeepsUncertainEffect(t *testing.T) {
 	base := &fakeGrok{entries: []pluginEntry{{Name: request.DeclaredName, Status: "installed",
 		Source: request.Delivery.ActivePath, Version: "1.0.0"}}}
 	outcome, err := New().Activate(t.Context(), clients.Env{Runner: &grokMutationReadbackFailure{base: base}}, request)
-	if err == nil || outcome.NativeEffect != domain.NativeEffectUncertain ||
+	if err == nil || domain.IsUnclosedClientProbe(err) || outcome.NativeEffect != domain.NativeEffectUncertain ||
 		outcome.Activation != domain.ActivationFailed || outcome.ActivationAttested ||
 		len(base.commands) != 3 || base.commands[0][2] != "list" ||
 		base.commands[1][2] != "uninstall" || base.commands[2][2] != "list" {
@@ -384,7 +384,7 @@ func TestGrokUserRemovalFailedReadbackKeepsUncertainEffect(t *testing.T) {
 	remove := domain.DeactivationRequest{Client: request.Client, DeclaredName: request.DeclaredName,
 		BackendExecutable: request.BackendExecutable, ManagedArtifactPath: request.Delivery.ActivePath, Confirmed: true}
 	outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: &grokMutationReadbackFailure{base: base}}, remove)
-	if err == nil || outcome.NativeEffect != domain.NativeEffectUncertain ||
+	if err == nil || domain.IsUnclosedClientProbe(err) || outcome.NativeEffect != domain.NativeEffectUncertain ||
 		outcome.ExternalRemovalComplete || outcome.ArtifactRemovalAllowed ||
 		len(base.commands) != 3 || base.commands[0][2] != "list" ||
 		base.commands[1][2] != "uninstall" || base.commands[2][2] != "list" {
