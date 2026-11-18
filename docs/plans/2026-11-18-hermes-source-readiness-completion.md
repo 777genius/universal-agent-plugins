@@ -1,7 +1,7 @@
 # Hermes completion: source sessions, native readiness and bounded recovery
 
 Date: 2026-11-18  
-Status: plan review round 2/7 completed; implementation has not started.  
+Status: plan review round 3/7 completed; implementation has not started.  
 Baseline: `fbab48c9d46219ba8e07d5361e6c2043eca9eb97` on `main`.  
 Owner: this PR; changes, including plan revisions, are committed and pushed immediately.
 
@@ -76,8 +76,9 @@ Overlaps to refresh before implementation and before merge:
 - Live vendor credentials, billing or proof of model quality. A scripted local
   provider may prove the actual driver/tool-call path but is not live-provider
   authentication evidence.
-- Restoring a whole User YAML file, overriding foreign content, restoring revoked
-  trust, automatic trust on inspection/startup, and implicit session launching.
+- Restoring a whole User YAML file, overriding foreign content, restoring trust
+  without a newly reviewed and confirmed explicit add, automatic trust on
+  inspection/startup, and implicit session launching.
 - Unrelated clients, public consent flags, default-scope changes, broad refactors,
   website translations, release publication, or unit tests for unchanged helpers.
 
@@ -174,6 +175,28 @@ Both routes must:
 7. Keep action/result JSON and exit codes stable; trust/file preparation stays
    Prepared unless the separately qualified native predicate succeeds.
 
+**Consent and eligibility contract**
+
+- Alias context is only a transport for the existing reviewed action. Authority
+  remains bound to selected target, Project scope, immutable source pin,
+  installation/binding receipt and the identical install/repair operation.
+  No unselected dependency or another target inherits a completion effect.
+- Prepare/review/recheck/dry run/decline execute zero native trust commands and
+  zero configuration writes. Consent is transient, never persisted or inferred
+  by later maintenance. Confirmed Apply occurs only after the existing recheck.
+- Newly enabled repeated completion uses the whole-binding classifier: intact
+  installed/Allowed/Prepared automatic Project binding, exact profile/root, and
+  every delivered component a native Skill. Mixed Skills/MCP, unsupported
+  components, User scope or partial/foreign/edited projections cannot qualify
+  by selecting only a Skill subset. Existing fresh plugin behavior is unchanged.
+- A newly reviewed and confirmed re-add can intentionally grant trust again after
+  revocation. Ordinary maintenance cannot. Do not add a background trust watcher;
+  use existing authority/drift checks, stale-plan handling and explicit retry
+  review. No blind retry after uncertain native effects or unclosed processes.
+- Public JSON warnings/actions remain path-free. Exact paths stay in existing
+  human/local review fields. Reuse `hermesTrustCommandAction` for local commands;
+  shell-sensitive paths remain quoted data, never reconstructed shell commands.
+
 Reconcile `deps_sync.go` with open #931 and select the exact reusable mechanism
 by round 7. Carry disclosure through existing backend review data; avoid #957's
 independent picker rendering work.
@@ -193,7 +216,12 @@ receipts and original-root handles. Classify cases before changing behavior:
 | Native trust writes but readback fails | Preserve the user's trust decision and installed files; report unconfirmed setup. |
 
 Persistent user trust is outside installer rollback. No YAML snapshot restoration
-and no compensating untrust command.
+and no compensating untrust command. Preserve existing independent native checks:
+selected config path, exact confirmation, saved exact Git root, every prior trust
+entry and enabled project discovery. Exit zero or a `Trusted:` line alone is
+insufficient. Missing/malformed/truncated readback, lost entries or disabled
+discovery retains unconfirmed Prepared setup and installed files. Existing
+cancellation and process-uncertainty errors remain authoritative.
 
 ## 6. Critical edge cases
 
@@ -210,7 +238,8 @@ theoretical filesystem permutation. Add tests only where production behavior cha
    creation before the requested native command.
 5. Mixed packages and whole-config comparison: no foreign/global MCP inheritance,
    no ignored mismatch in disabled entries, no fallback config.
-6. Trust revoked between add and retry; future update/repair/sync must not grant it.
+6. A newly confirmed re-add versus maintenance after revocation; no persisted
+   consent, stale authority or blind retry grants trust.
 7. Cancellation or failure between file publication, native trust, readback,
    receipt save and final process cleanup.
 8. Same-name foreign Skill, quarantine, malformed/truncated native output,
@@ -307,3 +336,4 @@ capabilities, deferred to their required runtime/authority designs.
 | Initial | Source launch mutates more than config; much baseline work already exists | Put native feasibility first, reuse current architecture, separate observable readiness and existing recovery | Baseline audit at fbab48; upstream pinned source; merged #923/#956/#994 |
 | Round 1 | Frozen 7ce3cfc4 omitted raw Skills consent/disclosure and treated proven saved-repeat gap as speculative | Made both explicit outcomes, required reviewed/rechecked repair and disclosure before trust; ruled out nonexistent CLI JSON inventory; baseline recovery remains regression-only | Reviewer: hermes_readiness_recovery; CLI skills_batch, deps_sync, environment_session and pinned native skills_hub inspected |
 | Round 2 | Frozen 9d375b70 promised a small source descriptor although modern source PM is home-indexed; readiness observer also unqualified | Explicitly deferred source Project MCP to #942 cross-root profile design; retained Prepared; removed speculative production qualifier/observer and narrowed E2E/estimates to concrete add gaps | Reviewer: hermes_source_design; pinned upstream runtime/profile code and transaction/project_root containment |
+| Round 3 | Frozen 39c68603 had ambiguous revoked-trust exclusion and alias-only wording; repeated mixed bindings and readback needed explicit bounds | Bound consent to existing reviewed action/receipt/target; zero trust writes before Apply; whole-binding Skills-only completion; new confirmed re-add may regrant, maintenance may not; preserved independent readback and path-safe disclosure | Reviewer: hermes_native_evidence; current Hermes trust/classifier and native fixture contracts |
