@@ -8,6 +8,11 @@ on:
         type: string
         required: false
         default: ''
+      require_trusted_publish:
+        description: Verify the triggering run actually published and qualified npm bytes
+        type: boolean
+        required: false
+        default: false
     outputs:
       version:
         description: Verified exact npm/GitHub stable release version
@@ -15,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   resolve:
@@ -34,9 +40,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_VERSION: ${{ inputs.version }}
+          REQUIRE_TRUSTED_PUBLISH: ${{ inputs.require_trusted_publish }}
+          PUBLISH_RUN_ID: ${{ github.event.workflow_run.id || '' }}
+          PUBLISH_HEAD_REF: ${{ github.event.workflow_run.head_branch || '' }}
         run: |
           set -euo pipefail
           requested="${REQUESTED_VERSION:-}"
+          # A successful prepare-only workflow is NOT a published npm release.
+          # The complete run must contain successful publish and verify-public jobs,
+          # and the tested version is bound to that run's immutable release tag.
+          if [[ "${REQUIRE_TRUSTED_PUBLISH}" == "true" && "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            [[ -z "$requested" && "${PUBLISH_RUN_ID}" =~ ^[0-9]+$ && "${PUBLISH_HEAD_REF}" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "::error::Trusted publisher identity missing or ambiguous" >&2
+              exit 2
+            }
+            jobs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PUBLISH_RUN_ID}/jobs?per_page=100")"
+            if ! jq -e '
+              ([.jobs[] | select(.name == "Publish npm package with trusted provenance" and .conclusion == "success")] | length) == 1
+              and ([.jobs[] | select(.name == "Verify public npm provenance and lifecycle" and .conclusion == "success")] | length) == 1
+            ' <<< "$jobs" >/dev/null; then
+              echo "::error::Triggering workflow did not complete trusted npm publish AND public verification" >&2
+              exit 2
+            fi
+            requested="${PUBLISH_HEAD_REF#agentplugins-v}"
+          fi
           if [[ -n "$requested" && ! "$requested" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Only an exact stable version is allowed" >&2
             exit 1
