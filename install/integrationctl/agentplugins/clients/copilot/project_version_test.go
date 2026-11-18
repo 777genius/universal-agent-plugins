@@ -25,7 +25,7 @@ func TestCopilotNativeProjectVersionAdmission(t *testing.T) {
 		{"0.999.99", false},
 		{"1.0.81-unknown", false},
 		{"1.0.81-999999999999999999999999", false},
-		{"1.0.82-beta", true},
+		{"1.0.82-beta", false},
 		{"1.0.81x", false},
 		{"1.0.82.1", false},
 		{"garbage 1.0.103", false},
