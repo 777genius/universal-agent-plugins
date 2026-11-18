@@ -273,3 +273,30 @@ func copilotMutateProjectPlugin(ctx context.Context, kernel nativeconfig.Kernel,
 	}
 	return nil
 }
+
+
+func activateCopilotProjectPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest, root string) (domain.ActivationOutcome, error) {
+	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
+		Automatic: request.Plan.InstallIntent == domain.InstallIntentAutomatic && request.Plan.NativePluginRegistration,
+		UnavailableAction: "select an admitted Agent Plugins 1.0 package for native project registration",
+		RepairAction: "repair the exact UAP-owned Copilot project marketplace registration",
+		RetryAction: "retry Copilot project plugin registration",
+		CompletedAction: "whole Agent Plugin registered for this project without copying its components; open a new Copilot session to load it",
+		Verify: func() error {
+			return copilotVerifyWholePlugin(env, request)
+		},
+		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
+			return withCopilotTrust(ctx, env, request, func() error {
+				return copilotMutateProjectPlugin(ctx, env.NativeConfig, root,
+					request.Plan.PhysicalArtifactID, request.Plan.DeclaredName,
+					copilotHasProjectPlugin(request.PreviousNativeObjects), false)
+			})
+		},
+	})
+	if err == nil && outcome.Verification == domain.VerificationInstalled {
+		// Settings and source integrity are proven here; Copilot's runtime
+		// discovery still requires a new session and a compatible native CLI.
+		outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
+	}
+	return outcome, err
+}
