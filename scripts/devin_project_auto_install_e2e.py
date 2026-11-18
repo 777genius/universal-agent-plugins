@@ -364,12 +364,30 @@ def main(root, report):
             if current.get("mcpServers", {}).get("foreign_original") != original_a["mcpServers"]["foreign_original"]:
                 raise RuntimeError(stage + " changed an original Project A MCP entry")
 
-        def installation_id(data):
-            targets = data.get("targets")
-            if not isinstance(targets, list) or len(targets) != 1 or targets[0].get("target") != "windsurf":
-                raise RuntimeError("UAP add target receipt differs")
-            outcome = targets[0].get("output", {}).get("result", {})
-            identifier = outcome.get("installation_id") if isinstance(outcome, dict) else None
+        def installation_id(data, *, unchanged=False):
+            if not isinstance(data, dict):
+                raise RuntimeError("UAP add has no structured response")
+            if unchanged:
+                # The public singleton no-change result deliberately has no
+                # batch operation or targets; see project_native_windsurf_cycle.
+                if "targets" in data or "operation_id" in data or data.get("dry_run") is not False:
+                    raise RuntimeError("unchanged UAP add used an unexpected batch shape")
+                output = data
+            else:
+                targets = data.get("targets")
+                if (not isinstance(targets, list) or len(targets) != 1 or
+                        not isinstance(targets[0], dict) or targets[0].get("target") != "windsurf" or
+                        targets[0].get("status") != "external_completed"):
+                    raise RuntimeError("UAP first add target receipt differs")
+                output = targets[0].get("output")
+            if not isinstance(output, dict) or not isinstance(output.get("result"), dict):
+                raise RuntimeError("UAP add has no client result")
+            outcome = output["result"]
+            if unchanged and (outcome.get("no_change") is not True or
+                              outcome.get("mutated") is not False or
+                              outcome.get("requires_confirmation") is not False):
+                raise RuntimeError("UAP unchanged add falsely reports a mutation")
+            identifier = outcome.get("installation_id")
             if not isinstance(identifier, str) or not re.fullmatch(r"[0-9a-f-]{36}", identifier):
                 raise RuntimeError("UAP add has no canonical installation ID")
             return identifier
@@ -385,7 +403,7 @@ def main(root, report):
         preserved("after-add")
 
         replayed = cli_call("add", str(source), "--no-save")
-        if (installation_id(replayed) != iid or binding_for(iid) != installed_binding or
+        if (installation_id(replayed, unchanged=True) != iid or binding_for(iid) != installed_binding or
                 native_a_path.read_bytes() != installed_native or state_path.read_bytes() != original_state):
             raise RuntimeError("unchanged Project add rewrote binding/state or native config")
         inventory("after-unchanged-add", True)
