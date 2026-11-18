@@ -186,7 +186,7 @@ func TestGrokUserReplacementUnknownReadbackCannotBeAttested(t *testing.T) {
 		Source: request.Delivery.ActivePath, Version: "1.0.0"}}}
 	outcome, err := New().Activate(t.Context(), clients.Env{Runner: &grokMalformedReplacementReadback{base: base}}, request)
 	if err == nil || outcome.Activation != domain.ActivationFailed || outcome.Verification != domain.VerificationFailed ||
-		outcome.ActivationAttested || len(base.commands) != 3 ||
+		outcome.NativeEffect != domain.NativeEffectUncertain || outcome.ActivationAttested || len(base.commands) != 3 ||
 		base.commands[0][2] != "list" || base.commands[1][2] != "uninstall" || base.commands[2][2] != "list" {
 		t.Fatalf("unreadable replacement removal became attested or triggered install: %+v %v %+v", outcome, err, base.commands)
 	}
