@@ -59,7 +59,7 @@ func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(staging, "mcp.json")); !os.IsNotExist(err) {
 		t.Fatalf("native registration duplicated MCP settings: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(staging, "plugin.json"), []byte("{\"name\":\"review\"}\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(staging, "plugin.json"), []byte("{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\",\"name\":\"review\"}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Dir(request.Plan.ActivePath), 0700); err != nil {
@@ -282,7 +282,7 @@ func TestCopilotWholePluginSourceVerificationRejectsMissingAndSymlinkedDocs(t *t
 	if err := copilotVerifyProjectPluginSource(request.Plan.NativeRegistryRoot, request.Plan, env.NativeConfig); err == nil {
 		t.Fatal("absent source counted as a registered plugin")
 	}
-	plugin := []byte("{\"name\":\"review\"}\n")
+	plugin := []byte("{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\",\"name\":\"review\"}\n")
 	if err := os.WriteFile(manifest, plugin, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +293,7 @@ func TestCopilotWholePluginSourceVerificationRejectsMissingAndSymlinkedDocs(t *t
 	if err := copilotVerifyProjectPluginSource(request.Plan.NativeRegistryRoot, request.Plan, env.NativeConfig); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(manifest, []byte("{\"name\":\"foreign\"}\n"), 0600); err != nil {
+	if err := os.WriteFile(manifest, []byte("{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\",\"name\":\"foreign\"}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if err := copilotVerifyProjectPluginSource(request.Plan.NativeRegistryRoot, request.Plan, env.NativeConfig); err == nil {
