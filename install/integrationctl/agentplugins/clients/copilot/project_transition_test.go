@@ -2,6 +2,8 @@ package copilot
 
 import (
 	"bytes"
+	"context"
+	"sync"
 	"errors"
 	"os"
 	"path/filepath"
@@ -147,5 +149,66 @@ func TestCopilotComponentSwitchUnregisterCloseFailureRemainsUncertain(t *testing
 	}
 	if present, _, err := nativeconfig.InspectCopilotPluginSettings(trustRead(t, settings), registration); err != nil || present {
 		t.Fatal("test did not exercise committed unregister and degraded lock cleanup")
+	}
+}
+
+
+func TestCopilotComponentSwitchRestoresPreviousPairAfterCancellation(t *testing.T) {
+	env, request, settings, layout := copilotComponentSwitchFixture(t)
+	original := trustRead(t, settings)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	var once sync.Once
+	env.NativeConfig = nativeconfig.NewWithLockAcquirer(func(paths nativeconfig.Paths, _ nativeconfig.Codec) (func() error, error) {
+		if paths.JSON != settings {
+			return func() error { return nil }, nil
+		}
+		return func() error { once.Do(cancel); return nil }, nil
+	})
+	_, err := New().Activate(ctx, env, request)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancellation not propagated: %v", err)
+	}
+	if !bytes.Equal(original, trustRead(t, settings)) {
+		t.Fatal("cancelled component switch did not restore exactly owned plugin pair")
+	}
+	if _, err := os.Lstat(filepath.Join(layout.SkillsRoot, "review")); !os.IsNotExist(err) {
+		t.Fatalf("cancelled component switch exposed an uncommitted skill: %v", err)
+	}
+}
+
+func TestCopilotComponentSwitchDoesNotResurrectPreviouslyAbsentPair(t *testing.T) {
+	env, request, settings, layout := copilotComponentSwitchFixture(t)
+	if err := copilotMutateProjectPlugin(t.Context(), env.NativeConfig, request.Plan.NativeRegistryRoot,
+		request.Plan.PhysicalArtifactID, request.Plan.DeclaredName, true, true); err != nil {
+		t.Fatal(err)
+	}
+	absent := trustRead(t, settings)
+	foreign := filepath.Join(layout.SkillsRoot, "review", "SKILL.md")
+	var once sync.Once
+	env.NativeConfig = nativeconfig.NewWithLockAcquirer(func(paths nativeconfig.Paths, _ nativeconfig.Codec) (func() error, error) {
+		if paths.JSON != settings {
+			return func() error { return nil }, nil
+		}
+		return func() error {
+			once.Do(func() {
+				if err := os.MkdirAll(filepath.Dir(foreign), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(foreign, []byte("foreign concurrent skill"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			})
+			return nil
+		}, nil
+	})
+	if _, err := New().Activate(t.Context(), env, request); err == nil {
+		t.Fatal("late foreign component collision was not rejected")
+	}
+	if !bytes.Equal(absent, trustRead(t, settings)) {
+		t.Fatal("switch resurrected an already-absent plugin registration")
+	}
+	if body, err := os.ReadFile(foreign); err != nil || string(body) != "foreign concurrent skill" {
+		t.Fatal("switch changed foreign skill after late collision")
 	}
 }
