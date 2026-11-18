@@ -72,7 +72,11 @@ func copilotProjectPluginObject(plan domain.DeliveryPlan) (domain.NativeObjectOw
 	if err != nil {
 		return domain.NativeObjectOwnership{}, err
 	}
-	reg, path, err := copilotProjectRegistration(root, plan.PhysicalArtifactID, plan.DeclaredName)
+	return copilotProjectPluginObjectAt(root, plan.PhysicalArtifactID, plan.DeclaredName)
+}
+
+func copilotProjectPluginObjectAt(root, physicalID, name string) (domain.NativeObjectOwnership, error) {
+	reg, path, err := copilotProjectRegistration(root, physicalID, name)
 	if err != nil {
 		return domain.NativeObjectOwnership{}, err
 	}
@@ -118,17 +122,9 @@ func copilotValidateProjectPluginObjects(root string, physicalID string, objects
 		return fmt.Errorf("Copilot project plugin marketplace differs from binding")
 	}
 	plugin := strings.TrimSuffix(registered[0].LogicalName, suffix)
-	target, err := domain.NewTargetContext(domain.ScopeProject, root, root)
-	if err != nil {
-		return err
-	}
-	// The receipt is deterministic from the selected project path and package
-	// identity; no ambient settings file or mutable declaration grants ownership.
-	plan := domain.DeliveryPlan{ClientID: domain.ClientCopilot, Scope: domain.ScopeProject,
-		TargetContext: target, NativeRegistryRoot: root,
-		PhysicalArtifactID: physicalID, DeclaredName: plugin,
-		ActivePath: filepath.Join(root, ".uap", "managed", "clients", "copilot", physicalID)}
-	expected, err := copilotProjectPluginObject(plan)
+	// Receipt reconstruction uses only canonical binding facts; it does not
+	// fabricate an ambient user profile or trust authority.
+	expected, err := copilotProjectPluginObjectAt(root, physicalID, plugin)
 	if err != nil {
 		return err
 	}
