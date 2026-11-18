@@ -78,15 +78,9 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 			return layout.Verify(copilotNativeObjects(request.Delivery.NativeObjects), false, env.NativeConfig)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
-			servers := map[string]nativeconfig.Server{}
-			for _, object := range copilotNativeObjects(request.Delivery.NativeObjects) {
-				if object.Kind == copilotProjectMCPKind {
-					server, err := readCopilotProjectServer(request.Delivery.ActivePath, object.LogicalName)
-					if err != nil {
-						return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
-					}
-					servers[object.LogicalName] = server
-				}
+			servers, err := copilotProjectMCPServers(request)
+			if err != nil {
+				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 			}
 			previous := copilotNativeObjects(request.PreviousNativeObjects)
 			if copilotSwitchesToComponents(request) {
@@ -109,6 +103,23 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 		outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
 	}
 	return outcome, err
+}
+
+// Keep the read-only MCP resolution separate from the activation transaction.
+// A missing source must remain an unchanged effect before any native mutation.
+func copilotProjectMCPServers(request domain.ActivationRequest) (map[string]nativeconfig.Server, error) {
+	servers := map[string]nativeconfig.Server{}
+	for _, object := range copilotNativeObjects(request.Delivery.NativeObjects) {
+		if object.Kind != copilotProjectMCPKind {
+			continue
+		}
+		server, err := readCopilotProjectServer(request.Delivery.ActivePath, object.LogicalName)
+		if err != nil {
+			return nil, err
+		}
+		servers[object.LogicalName] = server
+	}
+	return servers, nil
 }
 
 func deactivateCopilotProject(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
