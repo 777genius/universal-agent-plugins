@@ -1,7 +1,7 @@
 # Hermes completion: source sessions, native readiness and bounded recovery
 
 Date: 2026-11-18  
-Status: plan review round 4/7 completed; implementation has not started.  
+Status: plan review round 5/7 completed; implementation has not started.  
 Baseline: `fbab48c9d46219ba8e07d5361e6c2043eca9eb97` on `main`.  
 Owner: this PR; changes, including plan revisions, are committed and pushed immediately.
 
@@ -173,7 +173,7 @@ Both routes must:
    authority, including after `hermes skills untrust`.
 6. Stop on stale review or unclosed processes with existing typed failures.
 7. Keep action/result JSON and exit codes stable; trust/file preparation stays
-   Prepared unless the separately qualified native predicate succeeds.
+   Prepared with ActivationAttested=false throughout this PR.
 
 **Selected transport and execution sequence**
 
@@ -187,6 +187,9 @@ original review separately from mutable options; changing target, profile/root,
 source pin, binding authority, operation or required disclosure produces the
 existing stale-plan error. Raw batch checking must compare its review warnings
 as well as action/path/detected facts.
+Deduplicate exact adapter actions without dropping unrelated warnings. Regenerate
+raw warnings from the same initial inputs, and saved Reason from its stable base;
+do not append again to an already expanded Reason.
 
 Execution reuses the current lifecycle in this order:
 
@@ -199,10 +202,15 @@ Execution reuses the current lifecycle in this order:
 
 The saved helper will reuse `SavedProjectRepairOnAdd` with Hermes opt-in and
 client-neutral wording, in preparation and recheck. A reviewed repair candidate
-is not authority for trust: the existing whole-binding classifier at the fresh
-activation boundary must admit the actual effect. A mixed binding may be
-observationally verified by existing repair but gains no new completion effect.
-No second capability flag or state model.
+is not authority for trust. The intact prepared-completion path uses the existing
+whole-binding classifier, but incomplete-projection repair can reapply before
+that classifier. Therefore newly added repair consent must also be gated from
+the complete freshly loaded digest-bound envelope in `prepareDependencyPackage`,
+before handing its request to the installer. Admit only valid Skills-only input;
+any MCP/app/extension/command or invalid/ambiguous component withholds this new
+repair consent. `RequiredComponents` alone is a subset and is not sufficient.
+Fresh install consent keeps its existing behavior. No new flag, duplicated
+bootstrap, second preparation engine or adapter-ID conditional.
 
 **Consent and eligibility contract**
 
@@ -213,11 +221,13 @@ No second capability flag or state model.
 - Prepare/review/recheck/dry run/decline execute zero native trust commands and
   zero configuration writes. Consent is transient, never persisted or inferred
   by later maintenance. Confirmed Apply occurs only after the existing recheck.
-- Newly enabled repeated completion uses the whole-binding classifier: intact
-  installed/Allowed/Prepared automatic Project binding, exact profile/root, and
-  every delivered component a native Skill. Mixed Skills/MCP, unsupported
-  components, User scope or partial/foreign/edited projections cannot qualify
-  by selecting only a Skill subset. Existing fresh plugin behavior is unchanged.
+- Newly enabled repeated completion requires both the complete-envelope consent
+  gate and the existing whole-binding classifier for intact installed/Allowed/
+  Prepared automatic Project setup. Exact profile/root and native Skills remain
+  required. Mixed or invalid input cannot qualify via a Skill subset, including
+  the incomplete-projection repair branch; User scope gains no Project consent.
+  Partial/foreign/edited projections retain existing refusal. Fresh plugin mixed
+  package behavior is preserved.
 - A newly reviewed and confirmed re-add can intentionally grant trust again after
   revocation. Ordinary maintenance cannot. Do not add a background trust watcher;
   use existing authority/drift checks, stale-plan handling and explicit retry
@@ -268,6 +278,16 @@ insufficient. Missing/malformed/truncated readback, lost entries or disabled
 discovery retains unconfirmed Prepared setup and installed files. Existing
 cancellation and process-uncertainty errors remain authoritative.
 
+### 5.5 Public result and exit semantics
+
+A policy refusal, failed-but-closed trust command or unconfirmed readback can
+still be a successful file installation: retain Prepared, manual guidance and the
+existing successful exit. Do not invent a new failure code for optional trust.
+Cancellation, unclosed native processes, ownership/stale-plan, state-save and
+recovery failures keep existing typed errors and exit mapping. File presence
+cannot suppress those errors. No JSON schema/version, command, confirmation-flag
+or generic readiness changes.
+
 ## 6. Critical edge cases
 
 Review existing evidence and exercise critical changed boundaries, not every
@@ -307,6 +327,9 @@ into new suites.
 - Focused raw fresh/repeat Skills add and saved-repeat regressions: disclosure
   before confirmation, decline/dry-run preservation, exact reviewed repair,
   same IDs/pins and no-consent sync/update/repair controls.
+- One critical mixed-package regression with an incomplete native projection:
+  existing repair may run but newly transported repair consent cannot invoke
+  trust. A complete mixed binding alone does not exercise the bypass branch.
 - One fault-injection regression per actual recovery bug; reuse shared harnesses.
 
 ### Native E2E
@@ -383,3 +406,4 @@ capabilities, deferred to their required runtime/authority designs.
 | Round 2 | Frozen 9d375b70 promised a small source descriptor although modern source PM is home-indexed; readiness observer also unqualified | Explicitly deferred source Project MCP to #942 cross-root profile design; retained Prepared; removed speculative production qualifier/observer and narrowed E2E/estimates to concrete add gaps | Reviewer: hermes_source_design; pinned upstream runtime/profile code and transaction/project_root containment |
 | Round 3 | Frozen 39c68603 had ambiguous revoked-trust exclusion and alias-only wording; repeated mixed bindings and readback needed explicit bounds | Bound consent to existing reviewed action/receipt/target; zero trust writes before Apply; whole-binding Skills-only completion; new confirmed re-add may regrant, maintenance may not; preserved independent readback and path-safe disclosure | Reviewer: hermes_native_evidence; current Hermes trust/classifier and native fixture contracts |
 | Round 4 | Frozen 2fa17552 lacked saved disclosure transport and raw warning recheck; retry coverage did not imply trust coverage | Chose existing Reason/Warnings fields, retained/recomputed review, explicit existing lifecycle sequence and failure boundaries; selected trait-backed reviewed repair with final whole-binding effect gate; no new recovery/retry engine | Reviewer: hermes_readiness_recovery; deps_apply/deps_sync, skills batch/retry and current lint configuration |
+| Round 5 | Frozen 7dd6a921 incorrectly treated CanCompletePreparedSetup as the only repair effect gate; incomplete projection reapply bypasses it | Added complete immutable-envelope repair-consent gate before installer request, preserved fresh mixed behavior, required incomplete-mixed regression; fixed unconditional Prepared and existing optional-trust/typed-error exit semantics | Reviewer: hermes_source_design; usecase/repair_native, hermesTrustApplies and prepareDependencyPackage |
