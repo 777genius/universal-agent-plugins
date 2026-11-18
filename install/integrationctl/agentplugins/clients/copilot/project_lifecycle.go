@@ -32,6 +32,9 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 	if err := verifyCopilotTrust(env, request, false); err != nil {
 		return err
 	}
+	if request.Plan.NativePluginRegistration {
+		return copilotPreflightWholePlugin(env, request)
+	}
 	if shared.ComponentKindPresent(request.Plan.Components, domain.ComponentMCPServer) {
 		layout, err := copilotComponents(root)
 		if err != nil {
@@ -52,6 +55,9 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 	}
 	if err := New().PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
+	}
+	if request.Plan.NativePluginRegistration {
+		return activateCopilotProjectPlugin(ctx, env, request, root)
 	}
 	layout, err := copilotComponents(root)
 	if err != nil {
@@ -98,6 +104,21 @@ func deactivateCopilotProject(ctx context.Context, env clients.Env, request doma
 	root, err := copilotProjectRoot(request.Client, request.TargetContext, request.NativeRegistryRoot)
 	if err != nil {
 		return outcome, err
+	}
+	if copilotHasProjectPlugin(request.NativeObjects) {
+		if err := copilotValidateProjectPluginObjects(root, request.PhysicalArtifactID, request.NativeObjects); err != nil {
+			return outcome, err
+		}
+		if !request.Confirmed {
+			outcome.UserActions = append(outcome.UserActions, "agentplugins will unregister only its exact Copilot project plugin settings; project trust is retained")
+			return outcome, nil
+		}
+		if err := copilotMutateProjectPlugin(ctx, env.NativeConfig, root, request.PhysicalArtifactID, request.DeclaredName, true, true); err != nil && !shared.CommittedNativeDeactivationCleanup(&outcome, err) {
+			return outcome, err
+		}
+		outcome.ExternalRemovalComplete = true
+		outcome.UserActions = append(outcome.UserActions, "Copilot remembered folder trust is retained as your project choice")
+		return outcome, nil
 	}
 	if !request.Confirmed {
 		outcome.UserActions = append(outcome.UserActions, "agentplugins will remove only exact owned Copilot repository skills and MCP members; remembered folder trust is retained")
