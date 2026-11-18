@@ -371,7 +371,10 @@ func grokSignedUserBinding(t *testing.T, journey projectJourney, result usecase.
 
 func grokSignedUserInventory(t *testing.T, body []byte, journey projectJourney, binding domain.ClientBinding, present bool) {
 	t.Helper()
-	var rows []struct{ Name, Status, Source, Version, Path, RepoKey string }
+	var rows []struct {
+		Name, Status, Source, Version, Path string
+		RepoKey string `json:"repo_key"`
+	}
 	if err := json.Unmarshal(body, &rows); err != nil {
 		t.Fatal(err)
 	}
