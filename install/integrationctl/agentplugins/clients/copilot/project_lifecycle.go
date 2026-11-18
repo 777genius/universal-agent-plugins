@@ -32,7 +32,7 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 	if err := verifyCopilotTrust(env, request, false); err != nil {
 		return err
 	}
-	if request.Plan.NativePluginRegistration || copilotHasProjectPlugin(request.PreviousNativeObjects) ||
+	if request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.PreviousNativeObjects) ||
 		copilotHasProjectPlugin(request.Delivery.NativeObjects) {
 		return copilotPreflightWholePlugin(env, request)
 	}
@@ -57,7 +57,7 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 	if err := New().PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if request.Plan.NativePluginRegistration || copilotHasProjectPlugin(request.PreviousNativeObjects) ||
+	if request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.PreviousNativeObjects) ||
 		copilotHasProjectPlugin(request.Delivery.NativeObjects) {
 		return activateCopilotProjectPlugin(ctx, env, request, root)
 	}
