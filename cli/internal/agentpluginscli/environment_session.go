@@ -135,7 +135,7 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	if err != nil {
 		return request, err
 	}
-	prepared.Bindings = reviewedCopilotSavedAddActions(cmd, app, opts, targets, prepared.Bindings)
+	prepared.Bindings = reviewedSavedAddActions(cmd, app, opts, targets, prepared.Bindings)
 	detected, err := detectDependencyClients(cmd.Context(), app)
 	if err != nil {
 		return request, err
@@ -163,7 +163,7 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 // Saved add may review native trust with explicit installation consent or the
 // existing interactive confirmation. A matching package receipt alone does not
 // prove folder trust; ordinary deps sync and other projects stay unchanged.
-func reviewedCopilotSavedAddActions(cmd *cobra.Command, app App, opts *options, targets []string, actions []dependencyAction) []dependencyAction {
+func reviewedSavedAddActions(cmd *cobra.Command, app App, opts *options, targets []string, actions []dependencyAction) []dependencyAction {
 	canReview := opts.yes || strings.TrimSpace(opts.target) != "" || (app.Terminal && opts.format == "human")
 	if cmd.Name() != "add" || !canReview || app.scope() != domain.ScopeProject ||
 		len(targets) != 1 || !domain.ClientTraitsFor(domain.ClientID(targets[0])).SavedProjectRepairOnAdd {
@@ -175,7 +175,7 @@ func reviewedCopilotSavedAddActions(cmd *cobra.Command, app App, opts *options, 
 			continue
 		}
 		reviewed := managementNativeRepair(action)
-		reviewed.Reason = "Verify and finish selected Copilot project folder trust if missing"
+		reviewed.Reason = "Verify and finish selected project setup if missing"
 		actions[i] = reviewed
 	}
 	return actions
