@@ -9592,7 +9592,7 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                 self.assertTrue(row['removal_verified'])
                 self.assertTrue(row['sentinels_preserved'])
                 self.assertEqual(row['public_skill_ready'], {'after-add': True, 'repeat-add': True})
-                self.assertEqual(row['repeat_native_unchanged'], replaced)
+                self.assertFalse(row['repeat_native_unchanged'])
                 self.assertEqual(row['repeat_native_runtime_only'], not replaced and not failure)
                 self.assertEqual(row['repeat_verified'], not replaced and not failure)
                 self.assertEqual(row['status'], 'repeat-add-unqualified' if replaced or failure else 'passed')

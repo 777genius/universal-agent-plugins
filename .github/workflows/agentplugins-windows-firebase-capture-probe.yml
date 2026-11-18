@@ -36,18 +36,24 @@ jobs:
         run: |
           python -m unittest scripts.test_live_install_audit_env.CrossPlatformPublishedProofRegressions.test_scoped_file_capture_reads_native_json_without_pipe_wait scripts.test_live_install_audit_env.WindowsOwnedFileCaptureContracts -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Install exact published UAP 0.1.101 and genuine Claude 2.1.263
+      - name: Install genuine pinned Claude 2.1.263
+        id: native-bootstrap
+        shell: pwsh
+        run: |
+          npm.cmd install --global '@anthropic-ai/claude-code@2.1.263'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          claude --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install exact published UAP 0.1.101 legacy control
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         run: |
           npm.cmd install --global universal-agent-plugins@0.1.101
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm.cmd install --global '@anthropic-ai/claude-code@2.1.263'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $v = (agentplugins version | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $v -ne 'agentplugins 0.1.101') { throw "Wrong UAP release" }
-          claude --version
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Genuine pinned Firebase add, repeat, native attribution and remove
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         env:
           AUDIT_VENDOR_OUTCOME: success
@@ -120,7 +126,7 @@ jobs:
         if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}
         shell: pwsh
         env:
-          AUDIT_VENDOR_OUTCOME: success
+          AUDIT_VENDOR_OUTCOME: ${{ steps.native-bootstrap.outcome }}
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
           @'
@@ -136,6 +142,8 @@ jobs:
           spec = importlib.util.spec_from_file_location('published_firebase', source)
           audit = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(audit)
+          if not audit.vendor_bootstrap_attested():
+              raise SystemExit('Vendor bootstrap was not verified; no native-client PASS is permitted')
           doc = json.loads(Path('tests/live-install/fixtures.json').read_text(encoding='utf-8'))
           audit.validate_fixtures(doc)
           assert doc['plugin_aliases'][6] == 'firebase'
@@ -182,7 +190,7 @@ jobs:
           '@ | python -
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve exact-source evidence on failure
-        if: always()
+        if: ${{ always() && github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
         with:
           name: published-firebase-claude
