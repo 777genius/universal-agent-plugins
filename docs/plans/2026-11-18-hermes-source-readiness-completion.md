@@ -57,8 +57,10 @@ Overlaps to refresh before implementation and before merge:
 
 1. Close raw Skills add/picker consent-and-disclosure gaps for fresh and exact
    prepared repeat installs, using existing confirmation/review models.
-2. Complete repeated saved plugin add through an eligible repair shown before
-   confirmation and independently reselected during stale-plan checking.
+2. Complete repeated saved plugin add with the single explicit target
+   `--target hermes` through an eligible repair shown before confirmation and
+   independently reselected during stale-plan checking. Preserve the existing
+   single-target hook; multi-target saved-repeat expansion is outside this scope.
 3. Keep Prepared truthful; improve guidance and native E2E evidence rather than
    introduce an unqualified production observer.
 4. Exercise interrupted installation recovery through existing transactions and

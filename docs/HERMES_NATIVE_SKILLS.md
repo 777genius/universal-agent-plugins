@@ -80,8 +80,10 @@ paragraph describes source behavior under qualification, not a newer published
 CLI release.
 
 A newly reviewed and confirmed re-add can intentionally restore trust after a
-user revoked it. Ordinary maintenance and automatic retries cannot reuse that
-old confirmation. Preparation, review, recheck, decline and dry run do not invoke
+user revoked it. Ordinary maintenance never inherits add consent. A user-approved
+retry may retain the identical reviewed trust scope; a changed profile, executable,
+source pin, operation or retained ownership requires a fresh full review.
+Preparation, review, recheck, decline and dry run do not invoke
 native trust or write configuration. Installation, binding identity and source
 pins remain unchanged during an exact repeat. Trust still leaves production
 status **Prepared**: native discovery and activation are distinct facts.
