@@ -80,7 +80,8 @@ class RemotionTemporaryRootTest(unittest.TestCase):
                             self.handoff(self.root)
                         resolve.assert_not_called()
 
-    def run_setup_failure(self, failed_handoff, replace=False, late_replace=False):
+    def run_setup_failure(self, failed_handoff, replace=False, late_replace=False,
+                          native_case=None, expected_failure="TEMP setup"):
         """Exercise real main/creation/retention, without running a native case."""
         runner = self.base / "runner-temp"
         default = self.base / "default-temp-with-a-longer-physical-spelling"
@@ -128,7 +129,7 @@ class RemotionTemporaryRootTest(unittest.TestCase):
 
         native = SimpleNamespace(
             validate_fixtures=lambda _: None,
-            do_case=lambda *args: self.fail("native case ran after TEMP setup failed"))
+            do_case=native_case or (lambda *args: self.fail("native case ran after TEMP setup failed")))
         loader = SimpleNamespace(exec_module=lambda _: None)
         imports = SimpleNamespace(util=SimpleNamespace(
             spec_from_file_location=lambda *args: SimpleNamespace(loader=loader),
@@ -141,10 +142,12 @@ class RemotionTemporaryRootTest(unittest.TestCase):
         with patch.dict(main.__globals__, {
                 "os": environment, "subprocess": git, "importlib": imports,
                 "tempfile": SimpleNamespace(mkdtemp=create), "physical_temp_root": handoff,
-                "temp_root_authority": observe_authority}), patch.object(shutil, "rmtree") as remove:
-            with self.assertRaisesRegex(SystemExit, "TEMP setup"):
+                "temp_root_authority": observe_authority}), patch.object(shutil, "rmtree") as remove, \
+                patch("builtins.print") as emitted:
+            with self.assertRaisesRegex(SystemExit, expected_failure):
                 main()
             remove.assert_not_called()
+            self.emitted = [json.loads(call.args[0]) for call in emitted.call_args_list]
         report = runner / "remotion-windows-source-longtemp.json"
         self.assertTrue(report.is_file(), "TEMP setup failure lost its evidence")
         return json.loads(report.read_text()), created, moved
@@ -187,6 +190,61 @@ class RemotionTemporaryRootTest(unittest.TestCase):
         self.assertEqual((moved[0] / "owned.txt").read_text(), "original owned content")
         self.assertEqual(evidence["temp_roots"]["default-windows-temp"]["cleanup"],
                          "retained-for-evidence")
+
+    def test_native_timeout_keeps_exact_phase_note_in_log_and_report(self):
+        failure = TimeoutError()
+        failure.add_note("Codex native skill inventory phase='repeat-installed'; command=['inert', 'app-server']")
+        calls = []
+
+        def native_case(*args):
+            calls.append(args[5])
+            if len(calls) == 1:
+                return {"status": "passed", "codex_runtime_proof": {"inert": True}}
+            raise failure
+
+        evidence, created, _ = self.run_setup_failure(
+            0, native_case=native_case, expected_failure="default-windows-temp: TimeoutError")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(evidence["results"]["runner-temp"]["case"]["status"], "passed")
+        result = evidence["results"]["default-windows-temp"]
+        self.assertNotIn("case", result, "failed native execution must not invent a completed case")
+        self.assertEqual(result["stage"], "native-case")
+        self.assertEqual(result["error_type"], "TimeoutError")
+        self.assertEqual(result["error"], "TimeoutError()")
+        self.assertIn("native_case", result["error_traceback"])
+        self.assertIn("phase='repeat-installed'", result["error_traceback"])
+        self.assertEqual(len(self.emitted), 1)
+        self.assertEqual(self.emitted[0], {"case": "default-windows-temp", "status": "harness-error",
+                         **{key: result[key] for key in ("stage", "error_type", "error", "error_traceback")}})
+        self.assertTrue(all(path.is_dir() for path in created))
+        self.assertEqual({row["cleanup"] for row in evidence["temp_roots"].values()},
+                         {"retained-for-evidence"})
+
+    def test_native_error_and_traceback_are_bounded_without_passing_failed_case(self):
+        def native_case(*_):
+            raise ValueError("x" * 20000)
+
+        evidence, _, _ = self.run_setup_failure(
+            0, native_case=native_case, expected_failure="runner-temp: ValueError; default-windows-temp: ValueError")
+        self.assertEqual(len(self.emitted), 2)
+        for label, result in evidence["results"].items():
+            self.assertEqual(result["stage"], "native-case")
+            self.assertEqual(len(result["error"]), 1800)
+            self.assertEqual(len(result["error_traceback"]), 8192)
+            self.assertNotIn("case", result)
+            output = next(row for row in self.emitted if row["case"] == label)
+            self.assertEqual(output["status"], "harness-error")
+            self.assertEqual(output["error_traceback"], result["error_traceback"])
+
+    def test_missing_native_proof_keeps_returned_case_and_failure_stage(self):
+        evidence, _, _ = self.run_setup_failure(
+            0, native_case=lambda *_: {"status": "passed"},
+            expected_failure="runner-temp: RuntimeError; default-windows-temp: RuntimeError")
+        for result in evidence["results"].values():
+            self.assertEqual(result["case"], {"status": "passed"})
+            self.assertEqual(result["stage"], "native-proof")
+            self.assertIn("strict native Codex runtime proof is missing", result["error"])
+        self.assertTrue(all(row["status"] == "harness-error" for row in self.emitted))
 
 
 class RemotionRepeatNativePhaseTest(unittest.TestCase):
