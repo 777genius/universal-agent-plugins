@@ -101,7 +101,7 @@ func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
 func TestCopilotWholePluginEligibilityKeepsLegacyProjectComponents(t *testing.T) {
 	envelope := domain.PackageEnvelope{FormatID: domain.FormatIDAgentPluginsV1,
 		Skills: map[string]domain.Skill{"review": {Name: "review"}}}
-	in := clients.PlanInput{Envelope: envelope}
+	in := clients.PlanInput{Envelope: envelope, Client: domain.DetectedClient{ClientID: domain.ClientCopilot, Version: "1.0.82"}}
 	plan := domain.DeliveryPlan{Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "review", Support: domain.SupportNative}}}
 	if !copilotWholePluginEligible(in, plan) {
 		t.Fatal("portable v1 plugin was not eligible")
