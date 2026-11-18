@@ -236,3 +236,52 @@ func TestGrokUserRemovalRequiresPositiveNativeReadback(t *testing.T) {
 		})
 	}
 }
+
+
+// --external-uninstalled is an attestation for an unavailable client, not a
+// bypass of a runnable Grok CLI's live registration. Never remove managed
+// bytes while an existing registration could still refer to those bytes.
+func TestGrokUserExternalUninstalledCannotBypassAvailableNativeRegistry(t *testing.T) {
+	request := grokRequest(t)
+	remove := domain.DeactivationRequest{Client: request.Client, DeclaredName: request.DeclaredName,
+		BackendExecutable: request.BackendExecutable, ManagedArtifactPath: request.Delivery.ActivePath,
+		Confirmed: true, ExternalUninstalled: true}
+	t.Run("still-registered", func(t *testing.T) {
+		runner := &fakeGrok{entries: []pluginEntry{{Name: request.DeclaredName, Status: "installed",
+			Source: request.Delivery.ActivePath, Version: request.Plan.DeclaredVersion}}}
+		outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: runner}, remove)
+		if err == nil || outcome.ExternalRemovalComplete || outcome.ArtifactRemovalAllowed ||
+			len(runner.commands) != 1 || runner.commands[0][2] != "list" {
+			t.Fatalf("external attestation bypassed native registration: %+v %v %+v", outcome, err, runner.commands)
+		}
+	})
+	t.Run("native-list-unreadable", func(t *testing.T) {
+		base := &fakeGrok{}
+		cause := errors.New("native listing unreadable")
+		runner := &grokFaultRunner{other: base, verb: "list", err: cause}
+		outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: runner}, remove)
+		if !errors.Is(err, cause) || outcome.ExternalRemovalComplete || outcome.ArtifactRemovalAllowed ||
+			len(base.commands) != 1 || base.commands[0][2] != "list" {
+			t.Fatalf("external attestation hid unreadable native registration: %+v %v %+v", outcome, err, base.commands)
+		}
+	})
+	t.Run("native-list-unclosed", func(t *testing.T) {
+		base := &fakeGrok{}
+		runner := &grokFaultRunner{other: base, verb: "list", err: &domain.UnclosedClientProbe{
+			Operation: "grok plugin list", Err: errors.New("unknown process closure")}}
+		outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: runner}, remove)
+		if !domain.IsUnclosedClientProbe(err) || outcome.NativeEffect != domain.NativeEffectUncertain ||
+			outcome.ExternalRemovalComplete || outcome.ArtifactRemovalAllowed ||
+			len(base.commands) != 1 || base.commands[0][2] != "list" {
+			t.Fatalf("external attestation hid unclosed native registration: %+v %v %+v", outcome, err, base.commands)
+		}
+	})
+	t.Run("native-confirmed-absent", func(t *testing.T) {
+		runner := &fakeGrok{}
+		outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: runner}, remove)
+		if err != nil || !outcome.ExternalRemovalComplete || !outcome.ArtifactRemovalAllowed ||
+			len(runner.commands) != 1 || runner.commands[0][2] != "list" {
+			t.Fatalf("verified external removal was rejected: %+v %v %+v", outcome, err, runner.commands)
+		}
+	})
+}

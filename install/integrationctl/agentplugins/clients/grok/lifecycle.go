@@ -140,7 +140,19 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 	}
 	outcome := shared.StartedDeactivation()
 	if request.ExternalUninstalled {
+		// External confirmation is necessary when Grok is unavailable, but
+		// must not bypass fresh native evidence when it can be queried.
+		if shared.HasClientCLI(env, request.BackendExecutable) {
+			outcome.ArtifactRemovalAllowed = false
+			if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
+				if domain.IsUnclosedClientProbe(shared.CompletionProbeFailure(err)) {
+					outcome.NativeEffect = domain.NativeEffectUncertain
+				}
+				return outcome, fmt.Errorf("verify externally uninstalled Grok plugin: %w", err)
+			}
+		}
 		outcome.ExternalRemovalComplete = true
+		outcome.ArtifactRemovalAllowed = true
 		return outcome, nil
 	}
 	if adapter.RequiresExternalUninstalled(env, request) {
@@ -150,7 +162,7 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 		outcome.UserActions = []string{"agentplugins will uninstall the managed Grok Build plugin automatically"}
 		return outcome, nil
 	}
-	// A native listing is not an absence receipt. Keep the managed artifact
+	// An unknown native listing is not an absence receipt. Keep the managed artifact
 	// until an exact absence or completed owned unregister is verified.
 	outcome.ArtifactRemovalAllowed = false
 	entries, err := listPlugins(ctx, env, request.BackendExecutable)
