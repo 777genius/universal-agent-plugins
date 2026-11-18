@@ -1,7 +1,8 @@
 # Hermes completion: source sessions, native readiness and bounded recovery
 
 Date: 2026-11-18  
-Status: plan review round 6/7 completed; implementation has not started.  
+Status: all seven sequential plan reviews completed; bounded implementation approved.
+Source-installed Project MCP and production Ready promotion remain explicitly deferred.  
 Baseline: `fbab48c9d46219ba8e07d5361e6c2043eca9eb97` on `main`.  
 Owner: this PR; changes, including plan revisions, are committed and pushed immediately.
 
@@ -166,7 +167,9 @@ Widening only the consent bit cannot fix the unchanged-action short circuit.
 Both routes must:
 
 1. Act only during newly confirmed explicit add and its reviewed selected closure.
-2. Finish only an intact eligible prepared Skills-only Project binding.
+2. Require an intact immutable package and a valid exact-owned Skills-only
+   Project binding. Existing reviewed repair may reconstruct an entirely absent
+   owned projection; present partial/foreign/edited projections remain refused.
 3. Preserve source pins, installation/binding IDs, receipts and unrelated intent.
 4. Reuse exact trust profile/root checks and preserve prior trust choices.
 5. Leave ordinary sync, update, repair, verify, remove and startup without trust
@@ -232,7 +235,8 @@ bootstrap, second preparation engine or adapter-ID conditional.
   revocation. Ordinary maintenance cannot. Do not add a background trust watcher;
   use existing authority/drift checks, stale-plan handling and explicit retry
   review. No blind retry after uncertain native effects or unclosed processes.
-- Public JSON warnings/actions remain path-free. Exact paths stay in existing
+- Newly transported adapter trust disclosure remains path-free in public JSON.
+  Preserve unrelated pre-existing review fields; exact paths stay in existing
   human/local review fields. Reuse `hermesTrustCommandAction` for local commands;
   shell-sensitive paths remain quoted data, never reconstructed shell commands.
 
@@ -387,6 +391,13 @@ installer rollback.
 - Compile the gated native CLI test executable and run through the existing
   supervised process owner on actual GitHub-hosted Linux/macOS/Windows. Extend
   the existing workflow's path filter for the changed fixture/backend seams.
+- Compile/run the new public-Cobra source tests only when
+  `inputs.release_tag == ''`, on POSIX and Windows. They qualify checked-out
+  source and its test binary, never a released executable. Release-tag calls
+  retain frozen release assets, existing released lifecycle/proof/aggregation
+  and receipts; source tests are not release acceptance dependencies.
+- Require both named native scenarios to execute; an empty successful test
+  selection is not evidence. Run after the existing Python lifecycle.
 - Record test-binary hash, external UAP hash/tree, vendor pin, launcher/runtime,
   original streams, scenario outcomes and process settlement in retained artifacts.
 - The local supervisor preflight actually refused before starting a child
@@ -415,6 +426,21 @@ seven simultaneous checklists do not count as seven rounds.
 After round 7: implementation in small reviewable commits, each pushed immediately.
 Parallel work uses non-overlapping file ownership; one integrator commits combined
 changes. Run focused verification after each meaningful slice.
+
+Concrete implementation order and ownership:
+
+| Slice | Files / responsibility | Boundary |
+| --- | --- | --- |
+| 1 | CLI dependency preparation and raw Skills batch; existing Hermes trait | Retained explicit-add context; complete-envelope gate for repair; no native effect during prepare. |
+| 2 | Existing saved-add repair helper, review collection and raw retry check | Same operation/disclosure before and after confirmation; existing Reason/Warnings only. |
+| 3 | Focused backend/composed regressions | Changed consent/disclosure/stale/mixed-absence boundaries; reuse existing trust/recovery fixtures. |
+| 4 | One gated native CLI fixture, existing observer/workflow, Hermes technical docs | Real source-native journeys and exact provenance; source-only new fixture steps. |
+| 5 | Independent code reviews, fixes, required checks and native evidence | Root integrates; agents own disjoint files; no parallel commits or silently overwritten changes. |
+
+Freeze production/test/workflow source after review fixes. Record final CI/evidence
+URLs and review dispositions in the PR body so recording results does not create
+another untested source revision. Any actual file change is committed and pushed
+immediately and invalidates affected prior verification.
 
 Conduct at least three implementation review/fix rounds:
 (1) adapter/runtime correctness; (2) isolation/recovery/adversarial cases;
@@ -456,3 +482,4 @@ capabilities, deferred to their required runtime/authority designs.
 | Round 4 | Frozen 2fa17552 lacked saved disclosure transport and raw warning recheck; retry coverage did not imply trust coverage | Chose existing Reason/Warnings fields, retained/recomputed review, explicit existing lifecycle sequence and failure boundaries; selected trait-backed reviewed repair with final whole-binding effect gate; no new recovery/retry engine | Reviewer: hermes_readiness_recovery; deps_apply/deps_sync, skills batch/retry and current lint configuration |
 | Round 5 | Frozen 7dd6a921 incorrectly treated CanCompletePreparedSetup as the only repair effect gate; incomplete projection reapply bypasses it | Added complete immutable-envelope repair-consent gate before installer request, preserved fresh mixed behavior, required incomplete-mixed regression; fixed unconditional Prepared and existing optional-trust/typed-error exit semantics | Reviewer: hermes_source_design; usecase/repair_native, hermesTrustApplies and prepareDependencyPackage |
 | Round 6 | Frozen 0001a0dc lacked exact changed native journeys and source provenance; local process supervision is unavailable | Selected existing TLS raw/Git fixtures with real public-Cobra/native composition; exact installed-runtime discovery; corrected head checkout; three existing hosted matrices and explicit local-blocked/skip semantics | Reviewer: hermes_native_evidence; native workflows, cold composition and TLS fixture sources; actual local NoChildStarted preflight |
+| Round 7 | Cross-review of frozen 72da631b found ambiguous intact-projection wording and missing source/release test separation | Clarified immutable-package versus absent-owned-projection repair, scoped path-free disclosure, made new native fixtures source-only, fixed concrete implementation order and final-source evidence recording | Reviewers: hermes_source_design, hermes_readiness_recovery, hermes_native_evidence; all approved bounded implementation with these corrections |
