@@ -57,7 +57,8 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 	if err := New().PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if request.Plan.NativePluginRegistration {
+	if request.Plan.NativePluginRegistration || copilotHasProjectPlugin(request.PreviousNativeObjects) ||
+		copilotHasProjectPlugin(request.Delivery.NativeObjects) {
 		return activateCopilotProjectPlugin(ctx, env, request, root)
 	}
 	layout, err := copilotComponents(root)
