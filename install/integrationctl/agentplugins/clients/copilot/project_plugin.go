@@ -421,7 +421,7 @@ func activateCopilotProjectPlugin(ctx context.Context, env clients.Env, request 
 		projected.VerifyOnly = true
 	}
 	outcome, err := shared.CompleteNativeConfigActivation(ctx, projected, shared.NativeConfigActivation{
-		Automatic: request.Plan.InstallIntent == domain.InstallIntentAutomatic && (request.Plan.NativePluginRegistration || copilotHasProjectPlugin(request.PreviousNativeObjects) || copilotHasProjectPlugin(request.Delivery.NativeObjects)),
+		Automatic: request.Plan.InstallIntent == domain.InstallIntentAutomatic && (request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.PreviousNativeObjects) || copilotHasProjectPlugin(request.Delivery.NativeObjects)),
 		UnavailableAction: "select an admitted Agent Plugins 1.0 package for native project registration",
 		RepairAction: "repair the exact UAP-owned Copilot project marketplace registration",
 		RetryAction: "retry Copilot project plugin registration",
