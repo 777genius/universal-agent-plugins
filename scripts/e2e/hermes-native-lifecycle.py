@@ -191,9 +191,18 @@ class Lifecycle:
                      "fresh-user-mcp-test.txt", env=env)
         self.run_uap("fresh-user-remove", "remove", "hermes-uap-native-fresh",
                      "--scope", "user", env=env)
+        config = fresh / "config.yaml"
         require(not skill.exists() and
-                "uap-native-test-server" not in (fresh / "config.yaml").read_text(encoding="utf-8"),
+                (not config.exists() or
+                 "uap-native-test-server" not in config.read_text(encoding="utf-8")),
                 "fresh-profile uninstall left UAP-managed native entries")
+        remaining_skills = self.capture([*self.hermes, "skills", "list", "--source", "local", "--enabled-only"],
+                                        "fresh-removed-skills.txt", env=env)
+        remaining_mcp = self.capture([*self.hermes, "mcp", "list"],
+                                     "fresh-removed-mcp.txt", env=env)
+        require("native-smoke-user" not in remaining_skills.read_text(encoding="utf-8") and
+                "uap-native-test-server" not in remaining_mcp.read_text(encoding="utf-8"),
+                "native Hermes still discovers a removed profile Skill or MCP")
         require(self.config.read_bytes() == original,
                 "fresh-profile lifecycle changed the pre-existing Hermes profile")
 
