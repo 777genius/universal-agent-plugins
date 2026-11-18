@@ -315,13 +315,8 @@ func (requirements Requirements) Validate() error {
 		}
 		sources[key] = alias
 	}
-	for alias, present := range requirements.Development {
-		if !present {
-			return fmt.Errorf("development alias %q must be true", alias)
-		}
-		if _, declared := requirements.Dependencies[alias]; !declared {
-			return fmt.Errorf("development alias %q is not declared", alias)
-		}
+	if err := requirements.validateDevelopmentAliases(); err != nil {
+		return err
 	}
 	assigned := map[string]bool{}
 	for target, aliases := range requirements.Targets {
@@ -343,6 +338,20 @@ func (requirements Requirements) Validate() error {
 	for alias := range requirements.Dependencies {
 		if !assigned[alias] {
 			return fmt.Errorf("alias %q has no target assignment", alias)
+		}
+	}
+	return nil
+}
+
+// validateDevelopmentAliases keeps the root-only classification invariant
+// separate from graph and target validation.
+func (requirements Requirements) validateDevelopmentAliases() error {
+	for alias, present := range requirements.Development {
+		if !present {
+			return fmt.Errorf("development alias %q must be true", alias)
+		}
+		if _, declared := requirements.Dependencies[alias]; !declared {
+			return fmt.Errorf("development alias %q is not declared", alias)
 		}
 	}
 	return nil
