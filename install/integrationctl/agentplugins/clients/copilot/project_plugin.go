@@ -370,36 +370,45 @@ func copilotPreflightWholePlugin(env clients.Env, request domain.ActivationReque
 // The exact-file kernel provides native writer locks, no-follow reads, CAS,
 // readback and conditional rollback. Do not make direct settings writes here.
 func copilotMutateProjectPlugin(ctx context.Context, kernel nativeconfig.Kernel, root, physicalID, name string, owned, remove bool) error {
+	_, err := copilotMutateProjectPluginResult(ctx, kernel, root, physicalID, name, owned, remove)
+	return err
+}
+
+// The returned change bit belongs only to a verified committed settings edit;
+// an unchanged removal must never grant later compensation ownership.
+func copilotMutateProjectPluginResult(ctx context.Context, kernel nativeconfig.Kernel, root, physicalID, name string, owned, remove bool) (bool, error) {
+	unchanged := func(err error) (bool, error) {
+		return false, &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+	}
 	if err := ctx.Err(); err != nil {
-		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+		return unchanged(err)
 	}
 	reg, path, err := copilotProjectRegistration(root, physicalID, name)
 	if err != nil {
-		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+		return unchanged(err)
 	}
 	if !remove {
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-			return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+			return unchanged(err)
 		}
 	}
 	if err := pathpolicy.RequireContainedChild(root, path); err != nil {
-		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+		return unchanged(err)
 	}
 	file, err := kernel.BeginExactFile(path)
 	if err != nil {
-		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+		return unchanged(err)
 	}
 	original := file.Original()
 	if original.Exists && len(original.Body) == 0 {
-		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged,
-			Err: errors.Join(fmt.Errorf("copilot project settings is an empty existing file"), file.Close())}
+		return unchanged(errors.Join(fmt.Errorf("copilot project settings is an empty existing file"), file.Close()))
 	}
 	next, changed, err := nativeconfig.PatchCopilotPluginSettings(original.Body, reg, owned, remove)
 	if err == nil {
 		err = ctx.Err()
 	}
 	if err != nil {
-		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: errors.Join(err, file.Close())}
+		return unchanged(errors.Join(err, file.Close()))
 	}
 	if changed {
 		if err := file.Apply(next); err != nil {
@@ -409,17 +418,16 @@ func copilotMutateProjectPlugin(ctx context.Context, kernel nativeconfig.Kernel,
 			if rollback != nil || file.Effect() != nativeconfig.FileUnchanged {
 				effect = domain.NativeEffectUncertain
 			}
-			return &shared.NativeEffectError{Effect: effect, Err: errors.Join(err, rollback, closeErr)}
+			return false, &shared.NativeEffectError{Effect: effect, Err: errors.Join(err, rollback, closeErr)}
 		}
 	}
-	closeErr := file.Close()
-	if closeErr != nil {
+	if err := file.Close(); err != nil {
 		if changed {
-			return &nativeconfig.CommittedCleanupError{Err: closeErr}
+			return true, &nativeconfig.CommittedCleanupError{Err: err}
 		}
-		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: closeErr}
+		return unchanged(err)
 	}
-	return nil
+	return changed, nil
 }
 
 func copilotPluginNativeObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
