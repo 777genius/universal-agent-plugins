@@ -117,6 +117,7 @@ type DeliveryPlan struct {
 // SetNativePluginRegistration selects transient native project registration without
 // changing public DTOs or the planner's recorded golden snapshots.
 func (p *DeliveryPlan) SetNativePluginRegistration(yes bool) { p.nativePluginRegistration = yes }
+// HasNativePluginRegistration is an in-memory scoped plan choice, never a persisted capability flag.
 func (p DeliveryPlan) HasNativePluginRegistration() bool { return p.nativePluginRegistration }
 
 type DeliveryTarget struct {
