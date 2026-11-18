@@ -345,10 +345,10 @@ func TestCopilotOptionalVersionProbeNeverBlocksLegacyProjectDelivery(t *testing.
 		ExecutablePath: projectVersionFixturePath("bin", "copilot"), ConfigRoot: projectVersionFixturePath("profile", ".copilot"),
 	}
 	for _, tc := range []struct {
-		name string
-		probeErr error
+		name          string
+		probeErr      error
 		probedVersion string
-		wantVersion string
+		wantVersion   string
 	}{
 		{name: "failed", probeErr: errors.New("native version probe failed")},
 		{name: "empty", probedVersion: ""},
