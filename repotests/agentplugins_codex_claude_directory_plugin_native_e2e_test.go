@@ -257,14 +257,26 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	}
 	if terminalInstall {
 		nativeJSON(t, filepath.Join(f.Root, "native-terminal-plugin-lifecycle.json"), map[string]any{
-			"status": "passed", "surface": "terminal", "scope": "user", "plugin": directorySitePlugin,
-			"installation_id": installationID,
-			"distribution": directorySiteDistribution, "revision": directorySiteRevision,
-			"ui_report_sha256": nativeSHA(t, filepath.Join(f.Root, "native-terminal-plugin.json")),
-			"installer_sha256": nativeSHA(t, installer), "codex_sha256": nativeSHA(t, codexBin), "claude_sha256": nativeSHA(t, claudeBin),
-			"selected_targets": []string{"claude", "codex"}, "native_inventory_verified": true,
-			"repeat_unchanged": true, "repair_verified": true, "native_removal_verified": true, "foreign_preserved": true,
-			"model_request": false, "authentication_verified": false, "mcp_readiness_verified": false,
+			"status":                    "passed",
+			"surface":                   "terminal",
+			"scope":                     "user",
+			"plugin":                    directorySitePlugin,
+			"installation_id":           installationID,
+			"distribution":              directorySiteDistribution,
+			"revision":                  directorySiteRevision,
+			"ui_report_sha256":          nativeSHA(t, filepath.Join(f.Root, "native-terminal-plugin.json")),
+			"installer_sha256":          nativeSHA(t, installer),
+			"codex_sha256":              nativeSHA(t, codexBin),
+			"claude_sha256":             nativeSHA(t, claudeBin),
+			"selected_targets":          []string{"claude", "codex"},
+			"native_inventory_verified": true,
+			"repeat_unchanged":          true,
+			"repair_verified":           true,
+			"native_removal_verified":   true,
+			"foreign_preserved":         true,
+			"model_request":             false,
+			"authentication_verified":   false,
+			"mcp_readiness_verified":    false,
 		})
 	}
 }
