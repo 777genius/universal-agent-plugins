@@ -75,6 +75,7 @@ func activateUser(ctx context.Context, env clients.Env, request domain.Activatio
 		}
 		if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
 			if errors.Is(err, errUnknownList) {
+				outcome.NativeEffect = domain.NativeEffectUncertain
 				// A completed uninstall followed by an unreadable native list
 				// cannot inherit an earlier manual installation attestation.
 				return shared.FailedActivation(outcome, "inspect `grok plugin list --json` before retrying replacement", fmt.Errorf("verify previous Grok plugin removal: %w", err))
