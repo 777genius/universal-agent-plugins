@@ -5,7 +5,6 @@ package pluginkitairepo_test
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -143,5 +142,4 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 	}
 	f.check(t)
 	t.Logf("Pinned Copilot native whole-plugin E2E: public add, exact project receipt, plugin list, skill list, public remove and foreign authority preservation; plugin=%s", spec)
-	_ = fmt.Sprintf // intentional compile guard until the provider artifact freezes this lane
 }
