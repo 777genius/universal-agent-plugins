@@ -24,11 +24,34 @@ const copilotProjectPluginKind = "copilot_project_plugin_registration"
 // Existing loose-component bindings retain their previous behavior and never
 // silently migrate across two independent native configuration surfaces.
 func copilotWholePluginEligible(in clients.PlanInput, plan domain.DeliveryPlan) bool {
-	if in.Envelope.FormatID != domain.FormatIDAgentPluginsV1 || len(plan.Components) == 0 {
+	if in.Envelope.FormatID != domain.FormatIDAgentPluginsV1 || len(plan.Components) == 0 ||
+		in.Envelope.App.Present || len(in.Envelope.Commands) != 0 || len(in.Envelope.InvalidCommands) != 0 ||
+		len(in.Envelope.MCP.InvalidServer) != 0 || len(in.Envelope.Inventory.InvalidSkills) != 0 ||
+		in.Envelope.Inventory.InvalidSkillsRoot {
+		return false
+	}
+	for _, diagnostic := range in.Envelope.Diagnostics {
+		if diagnostic.Severity == domain.SeverityError {
+			return false
+		}
+	}
+	// A full native plugin exposes every bundled component. Never use this
+	// path when the plan filtered or rejected even one source component.
+	if len(plan.Components) != len(in.Envelope.Skills)+len(in.Envelope.MCP.Servers)+len(in.Envelope.Manifest.Extensions) {
 		return false
 	}
 	for _, component := range plan.Components {
-		if component.Support != domain.SupportNative || component.Kind == domain.ComponentApp {
+		if component.Support != domain.SupportNative {
+			return false
+		}
+		switch component.Kind {
+		case domain.ComponentSkill:
+			if _, ok := in.Envelope.Skills[component.Name]; !ok { return false }
+		case domain.ComponentMCPServer:
+			if _, ok := in.Envelope.MCP.Servers[component.Name]; !ok { return false }
+		case domain.ComponentExtension:
+			if _, ok := in.Envelope.Manifest.Extensions[component.Name]; !ok { return false }
+		default:
 			return false
 		}
 	}
