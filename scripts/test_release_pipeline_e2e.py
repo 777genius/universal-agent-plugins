@@ -423,7 +423,7 @@ goos, goarch = os.environ['GOOS'], os.environ['GOARCH']
 suffix = '.exe' if goos == 'windows' else ''
 expected = os.path.join(os.environ['RUNNER_TEMP'], f'agentplugins_1.2.3_{goos}_{goarch}{suffix}')
 a = sys.argv[1:]
-assert a == ['build', '-trimpath', '-ldflags=-s -w -X main.version=1.2.3', '-o', expected, './cmd/agentplugins']
+assert a == ['build', '-trimpath', '-ldflags=-s -w -X main.version=1.2.3 -X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Enabled=release-cli-contract-v1 -X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Revision=' + os.environ['SOURCE_COMMIT'], '-o', expected, './cmd/agentplugins']
 with open(os.environ['GO_LOG'], 'a') as log:
     log.write(f'{goos}/{goarch}\\n')
 if f'{goos}-{goarch}' in os.environ.get('FAIL_TARGETS', '').split():
@@ -446,7 +446,7 @@ if f'{goos}-{goarch}' != os.environ.get('SKIP_TARGET'):
                 go_log = self.root / ('go-log-' + case)
                 result = self.run_command(['bash', '-e', '-o', 'pipefail', '-c', build], cwd=cli,
                     env={**env, 'TAG': TAG, 'RUNNER_TEMP': str(out), 'GITHUB_WORKSPACE': str(self.source),
-                         'EXPECTED_COMMIT': self.commit, 'GO_LOG': str(go_log), 'SKIP_TARGET': skip,
+                         'EXPECTED_COMMIT': self.commit, 'SOURCE_COMMIT': self.commit, 'GO_LOG': str(go_log), 'SKIP_TARGET': skip,
                          'FAIL_TARGETS': fail},
                     check=False)
                 # One job builds every target exactly once, in one shared checkout,
