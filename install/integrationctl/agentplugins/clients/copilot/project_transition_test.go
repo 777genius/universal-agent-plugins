@@ -212,3 +212,74 @@ func TestCopilotComponentSwitchDoesNotResurrectPreviouslyAbsentPair(t *testing.T
 		t.Fatal("switch changed foreign skill after late collision")
 	}
 }
+
+
+func TestCopilotComponentSwitchRefusesBareMCPBeforeUnregister(t *testing.T) {
+	env, request, settings, layout := copilotComponentSwitchFixture(t)
+	request.Plan.Components = append(request.Plan.Components,
+		domain.ComponentDecision{Kind: domain.ComponentMCPServer, Name: "probe", Support: domain.SupportNative})
+	before := trustRead(t, settings)
+	if err := os.MkdirAll(filepath.Dir(layout.ConfigPaths.JSON), 0700); err != nil {
+		t.Fatal(err)
+	}
+	bare := []byte("{\"mcpServers\":true}")
+	if err := os.WriteFile(layout.ConfigPaths.JSON, bare, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := New().PreflightActivation(env, request); err == nil {
+		t.Fatal("bare project MCP config was admitted before retiring plugin")
+	}
+	if !bytes.Equal(before, trustRead(t, settings)) {
+		t.Fatal("preflight changed owned Copilot plugin registration")
+	}
+	if got, err := os.ReadFile(layout.ConfigPaths.JSON); err != nil || !bytes.Equal(got, bare) {
+		t.Fatal("unsafe project MCP configuration changed")
+	}
+}
+
+func TestCopilotComponentSwitchCommitsMCPWhenLockCleanupFails(t *testing.T) {
+	env, request, settings, layout := copilotComponentSwitchFixture(t)
+	// Replace the desired loose skill with one real native MCP server.
+	mcpSource := filepath.Join(request.Plan.ActivePath, "mcp.json")
+	if err := os.WriteFile(mcpSource,
+		[]byte("{\"mcpServers\":{\"probe\":{\"type\":\"http\",\"url\":\"http://127.0.0.1:9/mcp\"}}}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	server, err := readCopilotProjectServer(request.Plan.ActivePath, "probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcp, err := layout.MCPObject("probe", server, layout.ConfigPaths.JSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentMCPServer, Name: "probe", Support: domain.SupportNative}}
+	request.Delivery.NativeObjects = []domain.NativeObjectOwnership{mcp}
+	cleanup := errors.New("deliberate post-commit MCP lock cleanup failure")
+	env.NativeConfig = nativeconfig.NewWithLockAcquirer(func(paths nativeconfig.Paths, _ nativeconfig.Codec) (func() error, error) {
+		if paths.JSON == settings {
+			return func() error { return nil }, nil
+		}
+		if paths.JSON == layout.ConfigPaths.JSON {
+			return func() error { return cleanup }, nil
+		}
+		t.Fatalf("unrecognized writer target: %s", paths.JSON)
+		return nil, nil
+	})
+	outcome, err := New().Activate(t.Context(), env, request)
+	if err != nil || outcome.Verification != domain.VerificationInstalled ||
+		outcome.NativeEffect != domain.NativeEffectCommitted ||
+		len(outcome.NativeObjects) != len(request.Delivery.NativeObjects) {
+		t.Fatalf("committed MCP was misreported after cleanup failure: %+v %v", outcome, err)
+	}
+	if err := layout.Verify([]domain.NativeObjectOwnership{mcp}, false, env.NativeConfig); err != nil {
+		t.Fatalf("new MCP server was not committed: %v", err)
+	}
+	reg, _, err := copilotProjectRegistration(request.Plan.NativeRegistryRoot, request.Plan.PhysicalArtifactID, request.DeclaredName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if present, _, err := nativeconfig.InspectCopilotPluginSettings(trustRead(t, settings), reg); err != nil || present {
+		t.Fatal("old whole-plugin registration still present after committed MCP transition")
+	}
+}
