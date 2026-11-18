@@ -18,11 +18,11 @@ func TestDevelopmentRootsInstallAndColdLockedRestore(t *testing.T) {
 		Digest: "sha256:" + strings.Repeat("a", 64),
 		Snapshot: domain.DirectorySnapshot{
 			SnapshotSchemaVersion: 1, Sequence: 1,
-			SourceCommit: strings.Repeat("a", 40),
-			Products: []domain.DirectoryProduct{},
+			SourceCommit:  strings.Repeat("a", 40),
+			Products:      []domain.DirectoryProduct{},
 			Distributions: []domain.DirectoryDistribution{},
-			Evidence: []domain.DirectoryEvidence{},
-			Revocations: []domain.DirectoryRevocation{},
+			Evidence:      []domain.DirectoryEvidence{},
+			Revocations:   []domain.DirectoryRevocation{},
 		},
 	}}
 	source := newFreshRestoreEnvironment(t, repo, directory)
