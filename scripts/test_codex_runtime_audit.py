@@ -939,6 +939,38 @@ class CodexSkillProfileGuardTest(unittest.TestCase):
                             and set(row["runtime_files_fully_read"]) == {"state_5.sqlite"}
                             for row in observations))
 
+    def test_exchange_failure_keeps_type_phase_command_and_profile(self):
+        baseline = copy.deepcopy(self.observer.baseline)
+        observations = copy.deepcopy(self.observer.observations)
+        for phase, present in (("before-install", False), ("installed", True),
+                               ("repeat-installed", True), ("removed", False)):
+            for failure_type in (TimeoutError, ValueError):
+                with self.subTest(phase=phase, failure_type=failure_type):
+                    if present:
+                        self.selected.parent.mkdir(exist_ok=True)
+                        self.selected.write_text("inert selected Skill\n", encoding="utf-8")
+                    elif self.selected.exists():
+                        self.selected.unlink()
+                    failure = failure_type()
+                    cause = RuntimeError("original exchange callsite")
+                    failure.__cause__ = cause
+                    self.exchange.side_effect = failure
+                    calls = self.exchange.call_count
+                    with self.assertRaises(failure_type) as caught:
+                        self.observer.checkpoint(phase, present)
+                    self.assertIs(caught.exception, failure)
+                    self.assertIs(caught.exception.__cause__, cause)
+                    self.assertEqual(repr(caught.exception), failure_type.__name__ + "()")
+                    notes = "\n".join(getattr(caught.exception, "__notes__", []))
+                    self.assertIn("phase=" + repr(phase), notes)
+                    self.assertIn("command=" + repr([sys.executable, "app-server"]), notes)
+                    self.assertEqual(self.exchange.call_count, calls + 1)
+                    self.assertEqual(self.observer.baseline, baseline)
+                    self.assertEqual(self.observer.observations, observations)
+                    self.assertEqual(self.observer.config.read_bytes(), self.original)
+                    self.assertEqual(self.foreign.read_text(encoding="utf-8"),
+                                     "independently owned fixture\n")
+
     def test_temporary_git_name_refusal_keeps_actual_checkpoint_and_baseline(self):
         rejected = self.profile / ".tmp" / "unqualified"
         rejected.mkdir(parents=True)

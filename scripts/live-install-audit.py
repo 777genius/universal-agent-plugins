@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+import traceback
 import uuid
 from runpy import run_path
 from datetime import datetime, timezone
@@ -23,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
+OPENCODE_BOOTSTRAP_AUDIT = run_path(str(ROOT / "scripts/opencode_bootstrap_audit.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -465,8 +467,9 @@ def failed_case_diagnostics(row):
             "repeat_native_phases", "repeat_verified",
             "removal_verified", "sentinels_preserved", "public_target_states")
     evidence = {key: row[key] for key in keys if row.get(key) is not None}
-    if "error" in row:
-        evidence["error"] = str(row["error"])[:8192]
+    for key in ("error", "error_traceback"):
+        if key in row:
+            evidence[key] = str(row[key])[:8192]
     return evidence
 
 
@@ -1188,7 +1191,8 @@ def _codex_system_skill_checkpoint(home, original):
 
 
 def native_identity_residuals(native_roots, identity, observed_paths, target,
-                              component_names=()):
+                              component_names=(), *, client_version=None,
+                              bootstrap_proof=None):
     """After remove, reject any remaining named native file/config entry.
 
     Codex may retain its downloaded source cache after its native plugin and
@@ -1197,6 +1201,21 @@ def native_identity_residuals(native_roots, identity, observed_paths, target,
     leftover = []
     identities = tuple(dict.fromkeys((identity, *component_names)))
     normalized = {name.casefold() for name in identities}
+
+    def named_path(relative):
+        return any(
+            part.casefold() in normalized or Path(part).stem.casefold() in normalized
+            or any(re.fullmatch(re.escape(name) + r"@agentplugins-[0-9a-f]{12}",
+                                Path(part).stem, re.IGNORECASE) for name in identities)
+            for part in Path(relative).parts)
+
+    def named_content(contents):
+        qualified = any(re.search(
+            r"(?<![A-Za-z0-9_./:-])" + re.escape(name)
+            + r"@agentplugins-[0-9a-f]{12}(?![A-Za-z0-9_./-])",
+            contents, re.IGNORECASE) for name in identities)
+        return qualified or any(exact_native_identity(contents, name) for name in identities)
+
     for root in native_roots:
         prefix = root.name + "/"
         if root.is_symlink():
@@ -1214,6 +1233,16 @@ def native_identity_residuals(native_roots, identity, observed_paths, target,
             file = root / relative
             try:
                 mode = file.lstat().st_mode
+                if target == "opencode" and OPENCODE_BOOTSTRAP_AUDIT["candidate"](relative):
+                    proof = (OPENCODE_BOOTSTRAP_AUDIT["qualify"](
+                        root, relative, client_version, named_path, named_content)
+                        if all(name.strip() for name in identities) and not named_path(relative)
+                        else None)
+                    if proof is None:
+                        leftover.append(observed + ": unverified-native-bootstrap")
+                    elif bootstrap_proof is not None:
+                        bootstrap_proof.append(proof)
+                    continue
                 if stat.S_ISLNK(mode):
                     if (target != "qoder" or "/".join(Path(relative).parts) != "logs/latest"
                             or not qoder_passive_latest_log_link(root, file)):
@@ -1222,25 +1251,14 @@ def native_identity_residuals(native_roots, identity, observed_paths, target,
                     leftover.append(observed + ": non-regular")
                 elif passive_native_path(target, relative):
                     continue
-                elif any(
-                        part.casefold() in normalized
-                        or Path(part).stem.casefold() in normalized
-                        or any(re.fullmatch(
-                            re.escape(name) + r"@agentplugins-[0-9a-f]{12}",
-                            Path(part).stem, re.IGNORECASE) for name in identities)
-                        for part in Path(relative).parts):
+                elif named_path(relative):
                     leftover.append(observed)
                 elif file.stat().st_size > 1024 * 1024:
                     # Unread content must never count as clean native state.
                     leftover.append(observed + ": unscanned-too-large")
                 else:
                     contents = file.read_text(encoding="utf-8", errors="replace")
-                    qualified = any(re.search(
-                        r"(?<![A-Za-z0-9_./:-])" + re.escape(name)
-                        + r"@agentplugins-[0-9a-f]{12}(?![A-Za-z0-9_./-])",
-                        contents, re.IGNORECASE) for name in identities)
-                    if qualified or any(exact_native_identity(contents, name)
-                                        for name in identities):
+                    if named_content(contents):
                         leftover.append(observed)
             except FileNotFoundError:
                 continue
@@ -2032,14 +2050,14 @@ def initialize_project_skill_git_root(project, env, case_root):
 
 
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-            signed_release_pins=None):
+            signed_release_pins=None, *, client_version=None):
     with ExitStack() as audits:
         return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-                        signed_release_pins, audits)
+                        signed_release_pins, audits, client_version)
 
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-             signed_release_pins, audits):
+             signed_release_pins, audits, client_version):
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
     project = case_root / "project"
@@ -2488,11 +2506,13 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if codex_system_metadata is not None and cleanup and cleanup["exit_code"] == 0:
         assert_case_unchanged()
         codex_system_files = _codex_system_skill_checkpoint(home, codex_system_metadata)
+    opencode_bootstrap_proof = []
     native_residuals = (
         native_identity_residuals(
             native_roots, identity,
             sorted(set(snapshot(native_roots)) | set(native_attribution) | set(unsafe_paths)),
-            target, native_components)
+            target, native_components, client_version=client_version,
+            bootstrap_proof=opencode_bootstrap_proof)
         if cleanup and cleanup["exit_code"] == 0 else []
     )
     codex_system_residuals_verified = False
@@ -2676,6 +2696,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                if claude_retirement_proof is not None else {}),
             **({"codex_system_skill_retention": codex_system_skill_proof}
                if codex_system_skill_proof is not None else {}),
+            **({"opencode_bootstrap_retention": opencode_bootstrap_proof}
+               if opencode_bootstrap_proof else {}),
             "retained_passive_native_files": sorted(set(passive_retained)),
             "qoder_passive_log_link_verified": qoder_passive_log_link_verified,
             "qoder_native_after_repeat": qoder_native_before_remove,
@@ -2888,13 +2910,16 @@ def main():
             try:
                 result = do_case(cli, args.target, args.kind, item, i, runroot,
                                  doc["plugin_declared_names"],
-                                 doc["signed_release_pins"])
+                                 doc["signed_release_pins"],
+                                 **({"client_version": report.get("client_version")}
+                                    if args.target == "opencode" else {}))
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "source": item if args.kind == "plugin" else item["source"],
                           "identity": (doc["plugin_declared_names"].get(item, item)
                                        if args.kind == "plugin" else item["name"]),
-                          "status": "harness-error", "error": repr(e)}
+                          "status": "harness-error", "error": repr(e),
+                          "error_traceback": traceback.format_exc(limit=-8)[-8192:]}
             report["results"].append(result)
             report["cases_attempted"] += 1
             save()

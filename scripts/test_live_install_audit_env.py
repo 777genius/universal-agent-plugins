@@ -5225,6 +5225,50 @@ module.exports = {
         self.assertEqual(case["identity"], fixtures["plugin_declared_names"].get(source, source))
         self.assertEqual((case["kind"], case["target"]), ("plugin", "chatgpt"))
 
+    def test_harness_timeout_retains_bounded_chained_traceback_without_locals(self):
+        audit = load_audit()
+        for large_cause in (False, True):
+            with self.subTest(large_cause=large_cause), TemporaryDirectory() as temporary:
+                def fail(*args):
+                    private_local = "do-not-capture-" + "local-value"
+                    try:
+                        raise ValueError("inner diagnostic cause" + ("x" * 16384 if large_cause else ""))
+                    except ValueError as cause:
+                        failure = TimeoutError()
+                        failure.add_note("phase='before-install'; command=['/isolated/codex', 'app-server']")
+                        raise failure from cause
+
+                cli = Path(temporary) / "inert-cli"
+                cli.write_text("no native execution")
+                with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                        patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
+                                           "--target", "chatgpt", "--kind", "plugin",
+                                           "--limit", "1", "--report-dir", temporary]), \
+                        patch.object(audit, "version_evidence", return_value={"status": "reported"}), \
+                        patch.object(audit, "do_case", side_effect=fail) as run_case, \
+                        patch("builtins.print") as printed:
+                    self.assertEqual(audit.main(), 1)
+                run_case.assert_called_once()
+                report = json.loads((Path(temporary) / "chatgpt-plugin.json").read_text())
+                self.assertEqual((report["cases_attempted"], report["passed"],
+                                  report["verified_negative_coverage"]), (1, 0, 0))
+                case = report["results"][0]
+                self.assertEqual((case["status"], case["error"]), ("harness-error", "TimeoutError()"))
+                detail = case.get("error_traceback", "")
+                self.assertIn("TimeoutError", detail)
+                self.assertIn("in fail", detail)
+                self.assertIn("phase='before-install'", detail)
+                self.assertIn("command=['/isolated/codex', 'app-server']", detail)
+                self.assertNotIn("do-not-capture-local-value", detail)
+                self.assertLessEqual(len(detail), 8192)
+                if large_cause:
+                    self.assertEqual(len(detail), 8192)
+                else:
+                    self.assertIn("ValueError: inner diagnostic cause", detail)
+                    self.assertIn("direct cause", detail)
+                logged = json.loads(printed.call_args_list[0].args[0])
+                self.assertEqual(logged.get("error_traceback"), detail)
+
     def test_reports_distinct_pr_head_and_checked_merge_sha(self):
         # BUG-015: pull_request GITHUB_SHA is a merge checkout, not PR head.
         import json

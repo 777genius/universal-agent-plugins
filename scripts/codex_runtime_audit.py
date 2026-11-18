@@ -899,7 +899,12 @@ class CodexRuntimeAudit:
     def checkpoint(self, phase, present):
         self.guard()
         selected_bytes = _regular_bytes(self.selected, FILE_LIMIT) if present else None
-        listing = asyncio.run(_exchange(self.binary, self.project, self.profile, self.environment))
+        try:
+            listing = asyncio.run(_exchange(self.binary, self.project, self.profile, self.environment))
+        except Exception as error:
+            error.add_note(f"Codex native skill inventory phase={phase!r}; "
+                           f"command={[str(self.binary), 'app-server']!r}")
+            raise
         self.guard()
         if present and _regular_bytes(self.selected, FILE_LIMIT) != selected_bytes:
             raise ValueError("Codex selected Skill bytes changed during native discovery")

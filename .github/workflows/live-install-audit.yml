@@ -10,6 +10,8 @@ on:
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/claude_cache_retirement_audit.py'
       - 'scripts/test_codex_runtime_audit.py'
+      - 'scripts/opencode_bootstrap_audit.py'
+      - 'scripts/test_opencode_bootstrap_audit.py'
       - 'tests/live-install/fixtures.json'
       - 'install/integrationctl/agentplugins/adapters/securityscan/scanner*.go'
       - '.github/workflows/live-install-audit.yml'
@@ -67,6 +69,7 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
           python3 -m unittest discover -s scripts -p 'test_codex_runtime_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_opencode_bootstrap_audit.py'
       - name: Verify exact empty-stderr LintAI exit diagnostic
         run: go test ./install/integrationctl/agentplugins/adapters/securityscan -run '^TestCommandScannerIncludesNonzeroExitWhenStderrIsEmpty$' -count=1
       - name: Build actual PR CLI with current eligible directory version policy

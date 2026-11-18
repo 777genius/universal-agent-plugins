@@ -71,6 +71,15 @@ func (f *codexProjectNativeFixture) run(t *testing.T, label string, args ...stri
 
 func (f *codexProjectNativeFixture) skills(t *testing.T, label, project string) map[string]string {
 	t.Helper()
+	found, err := codexProjectDiscoveredSkills(f.skillListing(t, label, project), project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return found
+}
+
+func (f *codexProjectNativeFixture) skillListing(t *testing.T, label, project string) []byte {
+	t.Helper()
 	selected := *f.base
 	selected.Project = project
 	r := startNativeRPC(t, &selected, f.client, label)
@@ -79,12 +88,9 @@ func (f *codexProjectNativeFixture) skills(t *testing.T, label, project string) 
 	if err := json.NewEncoder(r.in).Encode(map[string]any{"method": "initialized"}); err != nil {
 		t.Fatal(err)
 	}
-	found, err := codexProjectDiscoveredSkills(r.must(t, "skills/list", map[string]any{"cwds": []string{project}, "forceReload": true}), project)
-	if err != nil {
-		t.Fatal(err)
-	}
+	listing := r.must(t, "skills/list", map[string]any{"cwds": []string{project}, "forceReload": true})
 	f.requireForeign(t)
-	return found
+	return listing
 }
 
 func (f *codexProjectNativeFixture) evidence(t *testing.T, stages map[string]nativeStage) map[string]any {
