@@ -184,6 +184,7 @@ var clientDefinitions = []ClientDefinition{
 		BindsNativeProfileRoot:   true,
 		TracksNativeEffects:      true,
 		SupportsPreparedRecovery: true,
+		SavedProjectRepairOnAdd:  true,
 	}), LifecycleNativeConfig), SupportNative, SupportPrepared)),
 	withProjectScope(clientDefinition(ClientAntigravity, "Google Antigravity", "antigravity", "managed", "native", false, PackageNative, SupportNative, SupportNative, SupportUnsupported, SupportUnsupported, SupportUnsupported, ClientTraits{
 		InstallIntents: []InstallIntent{InstallIntentAutomatic},

@@ -1,0 +1,495 @@
+# Hermes completion: source sessions, native readiness and bounded recovery
+
+Date: 2026-11-18  
+Status: all seven sequential plan reviews completed; bounded implementation approved.
+Source-installed Project MCP and production Ready promotion remain explicitly deferred.  
+Baseline: `fbab48c9d46219ba8e07d5361e6c2043eca9eb97` on `main`.  
+Owner: this PR; changes, including plan revisions, are committed and pushed immediately.
+
+## 1. Intended result
+
+A Hermes installation should have a clear, honest next step: UAP prepares the selected
+components automatically, verifies the native facts that it can actually observe,
+and refuses an unsafe or ambiguous runtime without touching another profile.
+The concrete new capability is complete, disclosed native Project trust during
+fresh/repeated raw Skills add and repeated saved plugin add. Source-installed
+Project MCP and production native Ready promotion remain blocked by the pinned
+runtime contracts described below; neither is counted as completed in this PR.
+
+This PR contains the plan, its seven review rounds, implementation, focused
+regressions, native E2E evidence, review fixes and final merge. It does not publish
+a release. There is no line-count target and no requirement to invent production
+changes where the baseline already works.
+
+## 2. Verified baseline and dependencies
+
+The baseline already includes:
+
+- Automatic User Skills and supported stdio/Streamable HTTP MCP preparation.
+- Project Skills; confirmed plugin add grants eligible exact-root native trust,
+  including supported prepared completion, with independent trust-list confirmation.
+  Raw Skills add/picker and repeated saved dependency add have separate gaps below.
+- Standalone-only Project MCP at `<project>/.hermes/uap-session`, selected through
+  the existing explicit native session command.
+- Exact component ownership, receipts, locks, staged Skill swaps, native YAML
+  mutation, compensation and retained recovery on ambiguous effects.
+- `Prepared` as the truthful result after file preparation or trust.
+- Revoked trust preserved by update, repair, dependency sync and verification.
+- Meaningful native Linux/macOS/Windows lanes from merged PRs #923, #956 and #994.
+
+The current source-runtime refusal is intentional. Upstream Hermes at
+`2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19` runs dependency preparation and update
+recovery before ordinary configuration handling. A different `HERMES_HOME`
+can select different dependency state; a manifest bypass is not a solution.
+
+Overlaps to refresh before implementation and before merge:
+
+| Existing work | Boundary in this PR |
+| --- | --- |
+| Open #957, generic native Skill readiness/UI | No unrelated clients, generic readiness redesign or picker UI. Reuse established ports; reconcile if it merges. |
+| Open #931, native qualification continuation | Inspect exact changed paths before touching shared native harnesses or saved dependency consent. |
+| Merged #994, automatic Hermes install E2E | Extend its fixtures only for changed behavior; do not rebuild the matrix. |
+| VS Code hold | No changes to VS Code or its generated declarations. |
+
+## 3. Scope
+
+### Included
+
+1. Close raw Skills add/picker consent-and-disclosure gaps for fresh and exact
+   prepared repeat installs, using existing confirmation/review models.
+2. Complete repeated saved plugin add with the single explicit target
+   `--target hermes` through an eligible repair shown before confirmation and
+   independently reselected during stale-plan checking. Preserve the existing
+   single-target hook; multi-target saved-repeat expansion is outside this scope.
+3. Keep Prepared truthful; improve guidance and native E2E evidence rather than
+   introduce an unqualified production observer.
+4. Exercise interrupted installation recovery through existing transactions and
+   correct only demonstrated Hermes-specific gaps.
+5. Document the source-runtime blocker and preserve inert source-MCP refusal,
+   standalone support, profile isolation, JSON shape and exit codes.
+
+### Excluded
+
+- Arbitrary Hermes forks, unpinned upstream releases, every source installation
+  layout, arbitrary worktrees, dotenv/managed/backend overlays, or global fallback.
+- A dependency installer, environment copier, reconstructed Hermes package-manager
+  facts, profile migration, second state store, second session engine or generic
+  runtime registry.
+- Global User MCP writes as a substitute for Project MCP.
+- Live vendor credentials, billing or proof of model quality. A scripted local
+  provider may prove the actual driver/tool-call path but is not live-provider
+  authentication evidence.
+- Restoring a whole User YAML file, overriding foreign content, restoring trust
+  without a newly reviewed and confirmed explicit add, automatic trust on
+  inspection/startup, and implicit session launching.
+- Unrelated clients, public consent flags, default-scope changes, broad refactors,
+  website translations, release publication, or unit tests for unchanged helpers.
+
+## 4. Source-runtime decision: blocked, preserved and documented
+
+Pinned-source inspection resolves the current gate: do not expand source-installed
+Project MCP admission in this PR. The ordinary official launcher uses store Python,
+then home-indexed dependency preparation, update recovery and runtime activation.
+A fresh `<project>/.hermes/uap-session` can provision its own dependency state;
+suppressing lazy preparation alone leaves recovery/activation and can instead
+refuse because store Python has no selected dependencies.
+
+There is no independent supported config-file override in the pinned execution
+path. Native named profiles can separate config from shared dependencies:
+`<actual-Hermes-root>/profiles/<name>` selects a separate config while sharing
+the original dependency root. This changes the ownership model: the directory
+is outside Project containment, while existing publication and session authority
+explicitly require Project containment and reject overlap with User authority.
+Native profile creation also has gateway/multiplexer side effects.
+
+The follow-up in [#942](https://github.com/777genius/universal-agent-plugins/issues/942)
+requires a separately reviewed cross-root publication/ownership contract, normal
+and custom-root native probes, runtime lease/recovery bounds, and selective
+removal. No legacy-venv-only admission, per-project PM preprovisioning, synthetic
+facts, native launcher substitution or path-policy exception in this PR.
+
+Primary source at `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`:
+
+- [Dependency home and activation](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/pm/environments.py).
+- [Profile/root resolution](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_constants.py).
+- [Source preparation](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_cli/venv_sync.py).
+- [Official launcher](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_cli/_launchers.py).
+- [Bootstrap and recovery](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_bootstrap.py).
+
+Supported alternatives remain Project Skills, User MCP, or an explicit Project
+session using the qualified standalone bundle. Document these without implying
+that ordinary `hermes` automatically enters UAP's isolated Project session.
+
+## 5. Minimal implementation design
+
+### 5.1 Preserve existing runtime/session admission
+
+No production changes to `qualifyHermesBundle`, source bootstrap, runtime
+descriptor, session root publication, `hermesProjectAuthority` or the passive
+catalog are justified. Preserve refusal before Project mutation and exercise
+that boundary in the existing source-native lane. Planning must not execute
+`--print-runtime-command` as a discovery shortcut: that path can run recovery.
+
+
+### 5.2 Native readiness
+
+The pinned CLI has no exact JSON Skill inventory: `hermes skills list` renders
+names/source/trust/status without selected paths or digests. Existing E2E uses
+installed-runtime `find_all_skills` and `skill_view(preprocess=False)` instead.
+Moving that observer into production needs separately qualified runtime custody;
+`PreparedSetupCompleter` is not an observation transport. No table/JSON shortcut.
+
+Production outcome remains `Prepared`, including after successful trust.
+`PreparedSetupCompleter` only classifies eligible confirmed completion; it does
+not attest native discovery. No new observer, table parser, generic readiness
+model or active-status promotion in this PR.
+
+Native E2E independently proves discovery of exact selected Skill paths/content
+and trust behavior. Report file preparation, native discovery, MCP connection,
+tools/call and live-provider authentication separately. Missing or ambiguous
+native evidence cannot produce a stronger production status.
+
+### 5.3 Explicit-add completion
+
+Two proven routes need completion; existing direct plugin add is baseline.
+
+**Raw Skills add/picker:** pass the explicit selected-add alias context through
+preparation, review, stale-plan check, confirmed Apply and retry. Before enabling
+native trust, carry the Hermes adapter's existing whole-root trust disclosure
+from plan actions into raw Skills' existing warning/review model. The disclosure covers
+both Skill directories, future content, quarantine and persistence after removal.
+No picker UI redesign and no new consent flag. Decline/dry run has no trust effect.
+
+**Repeated saved plugin add:** convert an eligible unchanged exact binding to the
+existing reviewed native repair before confirmation, and select the identical
+operation during recheck. Reuse the saved-add repair hook, existing trait or
+capability classification, `managementNativeRepair` and `PreparedSetupCompleter`.
+Widening only the consent bit cannot fix the unchanged-action short circuit.
+
+Both routes must:
+
+1. Act only during newly confirmed explicit add and its reviewed selected closure.
+2. Require an intact immutable package and a valid exact-owned Skills-only
+   Project binding. Existing reviewed repair may reconstruct an entirely absent
+   owned projection; present partial/foreign/edited projections remain refused.
+3. Preserve source pins, installation/binding IDs, receipts and unrelated intent.
+4. Reuse exact trust profile/root checks and preserve prior trust choices.
+5. Leave ordinary sync, update, repair, verify, remove and startup without trust
+   authority, including after `hermes skills untrust`.
+6. Stop on stale review or unclosed processes with existing typed failures.
+7. Keep action/result JSON and exit codes stable; trust/file preparation stays
+   Prepared with ActivationAttested=false throughout this PR.
+
+**Selected transport and execution sequence**
+
+Use adapter-generated path-free disclosure as the single source. Raw Skills
+reviews retain it in existing `Warnings`; saved add retains it in the existing
+per-action `Reason`, after the repair explanation. Both are rendered before
+confirmation; saved JSON retains its schema. Do not add a saved warning DTO.
+
+Recompute disclosure with the same selected operation during recheck. Retain the
+original review separately from mutable options; changing target, profile/root,
+source pin, binding authority, operation or required disclosure produces the
+existing stale-plan error. Raw batch checking must compare its review warnings
+as well as action/path/detected facts.
+Deduplicate exact adapter actions without dropping unrelated warnings. Regenerate
+raw warnings from the same initial inputs, and saved Reason from its stable base;
+do not append again to an already expanded Reason.
+
+Execution reuses the current lifecycle in this order:
+
+1. Inspect exact owner/source; select eligible install or reviewed repair.
+2. Derive and retain disclosure; review and confirm through existing UI.
+3. Acquire existing mutation lock and recheck inputs/authority/review.
+4. Use existing projection/activation transaction, native trust profile lock and
+   independent readback; persist the existing lifecycle outcome.
+5. Render truthful Prepared result and any unconfirmed/manual next action.
+
+The saved helper will reuse `SavedProjectRepairOnAdd` with Hermes opt-in and
+client-neutral wording, in preparation and recheck. A reviewed repair candidate
+is not authority for trust. Before promoting an unchanged binding to optional
+completion, verify the full locked envelope; mixed input stays unchanged and
+does not gain a native version probe. Existing lifecycle actions retain their
+semantics. The intact prepared-completion path uses the existing
+whole-binding classifier, but incomplete-projection repair can reapply before
+that classifier. Therefore newly added repair consent must also be gated from
+the complete freshly loaded digest-bound envelope in `prepareDependencyPackage`,
+before handing its request to the installer. Admit only valid Skills-only input;
+any MCP/app/extension/command or invalid/ambiguous component withholds this new
+repair consent. `RequiredComponents` alone is a subset and is not sufficient.
+Fresh install consent keeps its existing behavior. No new flag, duplicated
+bootstrap, second preparation engine or adapter-ID conditional.
+Carry the existing private consent through preview planning so the adapter's
+disclosure describes the actual grant or explicitly states that trust is unchanged;
+preserve independent mixed-package session guidance.
+
+**Consent and eligibility contract**
+
+- Alias context is only a transport for the existing reviewed action. Authority
+  remains bound to selected target, Project scope, immutable source pin,
+  installation/binding receipt and the identical install/repair operation.
+  No unselected dependency or another target inherits a completion effect.
+- Prepare/review/recheck/dry run/decline execute zero native trust commands and
+  zero configuration writes. Consent is transient, never persisted or inferred
+  by later maintenance. Confirmed Apply occurs only after the existing recheck.
+- Newly enabled repeated completion requires both the complete-envelope consent
+  gate and the existing whole-binding classifier for intact installed/Allowed/
+  Prepared automatic Project setup. Exact profile/root and native Skills remain
+  required. Mixed or invalid input cannot qualify via a Skill subset, including
+  the incomplete-projection repair branch; User scope gains no Project consent.
+  Partial/foreign/edited projections retain existing refusal. Fresh plugin mixed
+  package behavior is preserved.
+- A newly reviewed and confirmed re-add can intentionally grant trust again after
+  revocation. Ordinary maintenance cannot. Do not add a background trust watcher;
+  use existing authority/drift checks, stale-plan handling and explicit retry
+  review. No blind retry after uncertain native effects or unclosed processes.
+- Newly transported adapter trust disclosure remains path-free in public JSON.
+  Preserve unrelated pre-existing review fields; exact paths stay in existing
+  human/local review fields. Reuse `hermesTrustCommandAction` for local commands;
+  shell-sensitive paths remain quoted data, never reconstructed shell commands.
+
+Reconcile `deps_sync.go` with open #931 before edits. Carry disclosure through existing backend review data; avoid #957's
+independent picker rendering work.
+
+### 5.4 Recovery
+
+Use the current journal, staged Skill transaction, native-config kernel,
+receipts and original-root handles. Classify cases before changing behavior:
+
+| State | Allowed outcome |
+| --- | --- |
+| Entire exact-owned projection absent | Existing reviewed repair can recreate it. |
+| Intact exact-owned projection; setup/discovery incomplete | Explicit add may finish eligible setup; ordinary verification reports facts. |
+| Present partial/edited/foreign projection | Refuse overwrite; preserve evidence and user content. |
+| MCP fails after Skill publication | Compensate only exact prior owned Skill state. |
+| Authority changes or effects/process cleanup remain uncertain | Retain recovery, report uncertainty and stop automatic retry. |
+| Native trust writes but readback fails | Preserve the user's trust decision and installed files; report unconfirmed setup. |
+
+Failure boundaries remain separate:
+
+- Before effects: cancellation or stale authority stops with the existing typed
+  error and no trust invocation.
+- After file publication/trust attempt: preserve files and persistent user trust,
+  retain existing outcome/recovery evidence; cancellation remains cancellation.
+- Unclosed process family, uncertain effects or state-save/recovery failure:
+  stop retry, retain evidence and use existing reconciliation. File presence
+  cannot establish successful cleanup or a committed outcome.
+
+A user-triggered retry uses a fresh existing prepared plan. Alias/client/path
+coverage alone does not cover expanded trust disclosure or completion authority;
+expanded review uses the existing confirmation flow. No new retry coordinator
+or persisted consent. Exact same-pin/binding/receipt identity is retained.
+`managementNativeRepair` updates only the operation and existing expected-action
+authority; it does not adopt by name or authorize a partial-tree overwrite.
+
+Persistent user trust is outside installer rollback. No YAML snapshot restoration
+and no compensating untrust command. Preserve existing independent native checks:
+selected config path, exact confirmation, saved exact Git root, every prior trust
+entry and enabled project discovery. Exit zero or a `Trusted:` line alone is
+insufficient. Missing/malformed/truncated readback, lost entries or disabled
+discovery retains unconfirmed Prepared setup and installed files. Existing
+cancellation and process-uncertainty errors remain authoritative.
+
+### 5.5 Public result and exit semantics
+
+A policy refusal, failed-but-closed trust command or unconfirmed readback can
+still be a successful file installation: retain Prepared, manual guidance and the
+existing successful exit. Do not invent a new failure code for optional trust.
+Cancellation, unclosed native processes, ownership/stale-plan, state-save and
+recovery failures keep existing typed errors and exit mapping. File presence
+cannot suppress those errors. No JSON schema/version, command, confirmation-flag
+or generic readiness changes.
+
+## 6. Critical edge cases
+
+Review existing evidence and exercise critical changed boundaries, not every
+theoretical filesystem permutation. Add tests only where production behavior changes:
+
+1. Source/launcher/runtime replacement after plan, including same bytes at a new
+   physical object; root/parent replacement and Git worktree redirection.
+2. Active profile, managed overlay, backend or environment expansion selects a
+   different configuration source.
+3. Project A/B/User/default-home overlap, Windows case aliases/reparse points and
+   inherited home selectors.
+4. Dependency adoption/sync/recovery, update journal, bytecode and scratch helper
+   creation before the requested native command.
+5. Mixed packages and whole-config comparison: no foreign/global MCP inheritance,
+   no ignored mismatch in disabled entries, no fallback config.
+6. A newly confirmed re-add versus maintenance after revocation; no persisted
+   consent, stale authority or blind retry grants trust.
+7. Cancellation or failure between file publication, native trust, readback,
+   receipt save and final process cleanup.
+8. Same-name foreign Skill, quarantine, malformed/truncated native output,
+   disappearance or drift after observation.
+9. Concurrent UAP/native edits: exact lock/revalidation or safe refusal; no stale
+   observation may authorize a later mutation.
+10. Nonterminal/JSON output: one structured result, preserved typed exit behavior,
+    no prompt/progress contamination.
+
+## 7. Test strategy
+
+### Reuse first
+
+Rerun existing Hermes profile, trust, Project session, retained-authority,
+transaction/rollback and CLI cold tests. Do not clone their unchanged assertions
+into new suites.
+
+### Add only tests for changed decision boundaries
+
+- Focused raw fresh/repeat Skills add and saved-repeat regressions: disclosure
+  before confirmation, decline/dry-run preservation, exact reviewed repair,
+  same IDs/pins and no-consent sync/update/repair controls.
+- One critical mixed-package regression with an incomplete native projection:
+  existing repair may run but newly transported repair consent cannot invoke
+  trust. A complete mixed binding alone does not exercise the bypass branch.
+- An unchanged mixed saved add remains unchanged through recheck, without a new
+  version probe. Check restored native files before the ordinary-repair control.
+- One fault-injection regression per actual recovery bug; reuse shared harnesses.
+
+### Native E2E
+
+Extend existing workflows, do not introduce a fourth overlapping matrix:
+
+| Lane | Required evidence |
+| --- | --- |
+| `hermes-native-e2e.yml` | Actual pinned source installation, User/Project Skills discovery, trust/revocation, fresh/repeat/repair/remove, preserved unrelated content. |
+| `hermes-project-install.yml` | Standalone regression, exact isolated config and User/Project A/B preservation. Source Project MCP stays refused in the source-native lane. |
+| `hermes-noauth-tool-call.yml` | Real native driver and MCP tools/call through a deterministic local provider; source/runtime identity recorded. |
+
+Linux, macOS and Windows must actually execute the changed source Skills/trust
+journeys and existing standalone Project MCP regression. No source Project MCP
+support claim follows from a successful source User-scope tool call. Preserve unsupported outcomes rather than skip tests
+and call the matrix green. Record exact UAP source SHA, vendor pin, launcher and
+native runtime, OS, scenario result, cleanup result and artifact/run URLs.
+
+### Concrete changed native journeys
+
+Add one gated source-native public-Cobra test file, with two scenarios:
+
+1. Raw HTTPS Skill: inspect/decline or dry run without trust; fresh confirmed add;
+   exact native selected-path/content discovery; explicit native untrust; repeat
+   add; same pin/installation/binding identity; native regrant/discovery; removal.
+2. Saved Skills-only TLS Git plugin: initial add; explicit native untrust; ordinary
+   sync without regrant; repeated explicit add with the reviewed repair; same
+   IDs/pin/intent; native regrant/discovery; removal with persistent trust retained.
+
+Reuse `newProjectSkillsSource("https")` and
+`newProjectJourneyTransportIn(..., "git", callerRoot)`; remove the latter's MCP
+fixture before its disposable source commit. These are real local TLS/Git sources
+through the existing acquisition seams. No production URL rewrite, TLS bypass,
+new live repository or host certificate change.
+
+The new test runs public Cobra in process with fixture acquisition/security
+boundaries, production composition and the real installed Hermes detector,
+runner, version and runtime. Describe that honestly; the separately built
+external UAP binary runs the existing Python lifecycle and provides separate
+provenance. Preserve actual installed `HERMES_HOME` and native home after Git
+fixture setup; do not create a fresh source dependency home as a shortcut.
+
+Reuse the installed-runtime observer with `skill_view(preprocess=False)`, joining
+the selected name, physical directory, content marker and trusted exact Git root.
+Run new scenarios after the existing Python lifecycle, whose initial trust list
+must be empty. A fixture's deliberate native untrust is a test/user action, never
+installer rollback.
+
+### Execution and evidence
+
+- Fix both source-native checkouts to use
+  `inputs.frozen_commit || github.event.pull_request.head.sha || github.sha`.
+  Assert clean actual HEAD against the recorded source, rather than trust an env
+  string naming a different synthetic merge.
+- Compile the gated native CLI test executable and run through the existing
+  supervised process owner on actual GitHub-hosted Linux/macOS/Windows. Extend
+  the existing workflow's path filter for the changed fixture/backend seams.
+- Compile/run the new public-Cobra source tests only when
+  `inputs.release_tag == ''`, on POSIX and Windows. They qualify checked-out
+  source and its test binary, never a released executable. Release-tag calls
+  retain frozen release assets, existing released lifecycle/proof/aggregation
+  and receipts; source tests are not release acceptance dependencies.
+- Require both named native scenarios to execute; an empty successful test
+  selection is not evidence. Run after the existing Python lifecycle.
+- Record test-binary hash, external UAP hash/tree, vendor pin, launcher/runtime,
+  original streams, scenario outcomes and process settlement in retained artifacts.
+- The local supervisor preflight actually refused before starting a child
+  (`NoChildStarted=true`) because the proc children interface is unavailable.
+  Local native acceptance is blocked; no unsupervised fallback or hosted-variable
+  spoofing. Compile/pure tests/lint can still provide their own limited evidence.
+- Ordinary Go test runs may skip the deliberately gated native fixture; those
+  skips are not native PASS. Only the actual bounded native lane counts.
+
+## 8. Delivery sequence and seven plan reviews
+
+Initial plan is committed/pushed before the review sequence. Every revised plan
+is a separate immediate commit/push. Reviewers assess the actual previous revision;
+seven simultaneous checklists do not count as seven rounds.
+
+| Round | Focus | Required result |
+| --- | --- | --- |
+| 1 | Baseline and scope | Remove already completed work; name exact new outcomes and non-goals. |
+| 2 | Source feasibility and architecture | Resolve official/legacy runtime distinction, qualification gate and smallest integration seam. |
+| 3 | Isolation, trust and native authority | Define irreversible decisions, configuration ownership and race/refusal cases. |
+| 4 | Recovery, cancellation and concurrency | Explicit state transitions, transaction boundaries and retained recovery. |
+| 5 | Readiness and CLI contract | Exact success predicates, Prepared fallback, consent and output compatibility. |
+| 6 | E2E and evidence | Minimal meaningful tests; supported OS/source matrix; real final-source evidence. |
+| 7 | Adversarial final simplification | Cross-review revised plan, remove unnecessary abstractions, settle open decisions and implementation order. |
+
+After round 7: implementation in small reviewable commits, each pushed immediately.
+Parallel work uses non-overlapping file ownership; one integrator commits combined
+changes. Run focused verification after each meaningful slice.
+
+Concrete implementation order and ownership:
+
+| Slice | Files / responsibility | Boundary |
+| --- | --- | --- |
+| 1 | CLI dependency preparation and raw Skills batch; existing Hermes trait | Retained explicit-add context; complete-envelope gate for repair; no native effect during prepare. |
+| 2 | Existing saved-add repair helper, review collection and raw retry check | Same operation/disclosure before and after confirmation; existing Reason/Warnings only. |
+| 3 | Focused backend/composed regressions | Changed consent/disclosure/stale/mixed-absence boundaries; reuse existing trust/recovery fixtures. |
+| 4 | One gated native CLI fixture, existing observer/workflow, Hermes technical docs | Real source-native journeys and exact provenance; source-only new fixture steps. |
+| 5 | Independent code reviews, fixes, required checks and native evidence | Root integrates; agents own disjoint files; no parallel commits or silently overwritten changes. |
+
+Freeze production/test/workflow source after review fixes. Record final CI/evidence
+URLs and review dispositions in the PR body so recording results does not create
+another untested source revision. Any actual file change is committed and pushed
+immediately and invalidates affected prior verification.
+
+Conduct at least three implementation review/fix rounds:
+(1) adapter/runtime correctness; (2) isolation/recovery/adversarial cases;
+(3) final diff, E2E evidence and simplification. Findings are fixed or explicitly
+resolved with evidence; do not merely record three approvals.
+
+## 9. Merge gates
+
+- Seven plan rounds completed with real findings/dispositions and pushed history.
+- Production code obeys repository layering, no-growth legacy ratchet and function
+  size limits; no new blanket suppression or client-ID branch.
+- `make lint`, `make test-core`, affected installer/native/rollback checks and
+  required CI pass on the final source. Run additional compatibility or package
+  manager lanes only where the changed behavior requires them.
+- Relevant native Linux/macOS/Windows jobs and tool-call scenarios actually pass.
+  Queued, skipped, cancelled, historical or evidence-only runs are not PASS.
+- Final review considers current main and overlapping PR changes; resolve conflicts
+  without overwriting unrelated work and rerun checks for affected integration.
+- Convert Draft to ready only after implementation/review; merge the verified head.
+  Check merge result and post-merge workflow outcomes without claiming cancelled
+  post-merge runs passed.
+- No release/tag/version publication as part of this task.
+
+## 10. Estimates and review log
+
+The bounded implementation is consent/disclosure propagation, reviewed repeat
+completion, focused regressions, technical guidance and affected native evidence.
+Expect roughly 100–350 production lines plus tests/harness changes; this is a
+planning estimate, not a target. Reuse existing contracts before adding abstractions.
+Source-installed Project MCP and native Ready promotion remain explicit unmet
+capabilities, deferred to their required runtime/authority designs.
+
+| Revision | Finding | Change / disposition | Evidence |
+| --- | --- | --- | --- |
+| Initial | Source launch mutates more than config; much baseline work already exists | Put native feasibility first, reuse current architecture, separate observable readiness and existing recovery | Baseline audit at fbab48; upstream pinned source; merged #923/#956/#994 |
+| Round 1 | Frozen 7ce3cfc4 omitted raw Skills consent/disclosure and treated proven saved-repeat gap as speculative | Made both explicit outcomes, required reviewed/rechecked repair and disclosure before trust; ruled out nonexistent CLI JSON inventory; baseline recovery remains regression-only | Reviewer: hermes_readiness_recovery; CLI skills_batch, deps_sync, environment_session and pinned native skills_hub inspected |
+| Round 2 | Frozen 9d375b70 promised a small source descriptor although modern source PM is home-indexed; readiness observer also unqualified | Explicitly deferred source Project MCP to #942 cross-root profile design; retained Prepared; removed speculative production qualifier/observer and narrowed E2E/estimates to concrete add gaps | Reviewer: hermes_source_design; pinned upstream runtime/profile code and transaction/project_root containment |
+| Round 3 | Frozen 39c68603 had ambiguous revoked-trust exclusion and alias-only wording; repeated mixed bindings and readback needed explicit bounds | Bound consent to existing reviewed action/receipt/target; zero trust writes before Apply; whole-binding Skills-only completion; new confirmed re-add may regrant, maintenance may not; preserved independent readback and path-safe disclosure | Reviewer: hermes_native_evidence; current Hermes trust/classifier and native fixture contracts |
+| Round 4 | Frozen 2fa17552 lacked saved disclosure transport and raw warning recheck; retry coverage did not imply trust coverage | Chose existing Reason/Warnings fields, retained/recomputed review, explicit existing lifecycle sequence and failure boundaries; selected trait-backed reviewed repair with final whole-binding effect gate; no new recovery/retry engine | Reviewer: hermes_readiness_recovery; deps_apply/deps_sync, skills batch/retry and current lint configuration |
+| Round 5 | Frozen 7dd6a921 incorrectly treated CanCompletePreparedSetup as the only repair effect gate; incomplete projection reapply bypasses it | Added complete immutable-envelope repair-consent gate before installer request, preserved fresh mixed behavior, required incomplete-mixed regression; fixed unconditional Prepared and existing optional-trust/typed-error exit semantics | Reviewer: hermes_source_design; usecase/repair_native, hermesTrustApplies and prepareDependencyPackage |
+| Round 6 | Frozen 0001a0dc lacked exact changed native journeys and source provenance; local process supervision is unavailable | Selected existing TLS raw/Git fixtures with real public-Cobra/native composition; exact installed-runtime discovery; corrected head checkout; three existing hosted matrices and explicit local-blocked/skip semantics | Reviewer: hermes_native_evidence; native workflows, cold composition and TLS fixture sources; actual local NoChildStarted preflight |
+| Round 7 | Cross-review of frozen 72da631b found ambiguous intact-projection wording and missing source/release test separation | Clarified immutable-package versus absent-owned-projection repair, scoped path-free disclosure, made new native fixtures source-only, fixed concrete implementation order and final-source evidence recording | Reviewers: hermes_source_design, hermes_readiness_recovery, hermes_native_evidence; all approved bounded implementation with these corrections |

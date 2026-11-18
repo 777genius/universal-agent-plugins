@@ -4,10 +4,12 @@ import json
 import os
 from pathlib import Path
 from contextlib import suppress
+import hashlib
 import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 HERMES_SHA = "2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19"
 USER_SKILL = "native-smoke-user"
@@ -80,6 +82,32 @@ def observe_skills(user_marker, project_count, trusted):
 
 
 def invoke_skills(user_marker, project_count, trust):
+    invoke_native_observer(["skills", user_marker, str(project_count), trust])
+
+
+def observe_selected_skill(name, expected, marker):
+    from tools import skills_tool
+    from agent.skill_utils import find_project_root, is_project_root_trusted
+
+    source = Path(os.environ["RUNNER_TEMP"]) / "hermes-agent"
+    require(Path(skills_tool.__file__).resolve().parents[1] == source.resolve(),
+            "selected Skill observer imported another Hermes checkout")
+    project = find_project_root()
+    require(project is not None and project.resolve() == Path.cwd().resolve()
+            and is_project_root_trusted(project), "selected Git root is not natively trusted")
+    view = json.loads(skills_tool.skill_view(name, preprocess=False))
+    require(view.get("success") is True and marker in view.get("content", "")
+            and Path(view["skill_dir"]).resolve() == Path(expected).resolve(),
+            "native Skill identity, selected path or content differs")
+    require(sum(item["name"] == name for item in skills_tool.find_all_skills()) == 1,
+            "native selected Skill is absent or ambiguous")
+    print(json.dumps({"name": name, "skill_dir": str(Path(view["skill_dir"]).resolve()),
+                      "project_root": str(project.resolve()), "trusted": True,
+                      "content_marker": marker, "preprocess": False,
+                      "native_skill_observation": "passed"}))
+
+
+def invoke_native_observer(arguments):
     source = Path(os.environ["RUNNER_TEMP"]) / "hermes-agent"
     # This official pre-bootstrap API is stdlib-only. The host Python builds
     # argv; only the installation-bound interpreter executes the observation.
@@ -97,7 +125,7 @@ def invoke_skills(user_marker, project_count, trust):
             and isinstance(native_argv[0], str) and Path(native_argv[0]).is_absolute(),
             "Hermes did not resolve its installation-bound interpreter")
     command = runtime_command(
-        source, args=["skills", user_marker, str(project_count), trust], python=native_argv[0],
+        source, args=arguments, python=native_argv[0],
         code=f"runpy.run_path({str(Path(__file__).resolve())!r}, run_name='__main__')")
     subprocess.run(command, check=True, timeout=60)
 
@@ -195,6 +223,61 @@ def run_lifecycle(script):
           + str(evidence))
 
 
+def run_source_adds():
+    require(not os.environ.get("RELEASE_TAG") and os.environ.get("GITHUB_ACTIONS") == "true"
+            and os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted",
+            "source add acceptance requires the actual source-native hosted lane")
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from hermes_install_acceptance import supervised
+
+    runner = Path(os.environ["RUNNER_TEMP"]).resolve()
+    evidence = Path(tempfile.mkdtemp(prefix="hermes-native-evidence-source-add-", dir=runner))
+    env = dict(os.environ)
+    env["PATH"] = str(Path(env["HERMES_BIN"]).parent) + os.pathsep + env.get("PATH", "")
+    home = Path(env["HOME"]).resolve()
+    require(home.is_relative_to(runner) and home != runner,
+            "source acquisition must use the existing disposable native OS home")
+    git_config = home / ".gitconfig"
+    # Native TLS Git keeps the real disposable HOME. Its CA setting is needed
+    # by Windows schannel, while credentials and the OS certificate store stay empty.
+    with git_config.open("x", encoding="utf-8") as stream:
+        stream.write("[credential]\n helper =\n[http]\n schannelUseSSLCAInfo = true\n")
+    git_digest = hashlib.sha256(git_config.read_bytes()).hexdigest()
+    (evidence / "fixture-git-preparation.json").write_text(json.dumps({
+        "path": str(git_config), "sha256": git_digest, "created_exclusively": True,
+        "purpose": "credential-empty fixture Git CA policy; no TLS bypass"}, indent=2) + "\n")
+    env["HERMES_HOME"] = str(Path(env["HERMES_HOME"]).resolve())
+    if not env.get("HERMES_NATIVE_RUNTIME_COMMAND_FILE"):
+        record, stdout, stderr = supervised([env["HERMES_BIN"], "--print-runtime-command"],
+                                            Path.cwd(), env, timeout=60)
+        runtime = evidence / "runtime-command.json"
+        runtime.write_bytes(stdout)
+        (evidence / "runtime.stderr").write_bytes(stderr)
+        (evidence / "runtime-supervision.json").write_text(json.dumps(record, indent=2) + "\n")
+        env["HERMES_NATIVE_RUNTIME_COMMAND_FILE"] = str(runtime)
+    env.update(UAP_HERMES_SOURCE_SKILLS_NATIVE="1", HERMES_SOURCE_SKILLS_EVIDENCE=str(evidence),
+               HERMES_SOURCE_HOST_PYTHON=sys.executable,
+               HERMES_SOURCE_SKILLS_DEADLINE_UNIX_MS=str(int(time.time() * 1000) + 360000))
+    command = [env["HERMES_SOURCE_TEST_BIN"],
+               "-test.run=^TestHermesSourceSkillsConfirmedAddsNative$", "-test.v", "-test.timeout=6m"]
+    record, stdout, stderr = supervised(command, Path.cwd(), env, timeout=390)
+    (evidence / "test.stdout").write_bytes(stdout)
+    (evidence / "test.stderr").write_bytes(stderr)
+    (evidence / "test-supervision.json").write_text(json.dumps(record, indent=2) + "\n")
+    report = json.loads((evidence / "report.json").read_text())
+    require(report.get("completed") is True
+            and report.get("scenarios") == ["raw-https", "saved-git"]
+            and report.get("native_discovery") is True,
+            "both native source add scenarios must actually execute")
+    require(hashlib.sha256(git_config.read_bytes()).hexdigest() == git_digest,
+            "native source scenario changed the prepared fixture Git policy")
+    for name in ("raw-https", "saved-git"):
+        require(("--- PASS: TestHermesSourceSkillsConfirmedAddsNative/" + name).encode() in stdout,
+                "missing executed native source scenario: " + name)
+    sys.stdout.buffer.write(stdout)
+    print("Source-only public-Cobra native Skills add acceptance passed: " + str(evidence), flush=True)
+
+
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "run":
         run_lifecycle(Path(sys.argv[2]).resolve())
@@ -202,8 +285,14 @@ if __name__ == "__main__":
         observe_skills(sys.argv[2], int(sys.argv[3]), sys.argv[4] == "trusted")
     elif len(sys.argv) == 5 and sys.argv[1] == "observe" and sys.argv[4] in TRUST_STATES:
         invoke_skills(sys.argv[2], int(sys.argv[3]), sys.argv[4])
+    elif len(sys.argv) == 5 and sys.argv[1] == "selected":
+        invoke_native_observer(["selected-native", *sys.argv[2:]])
+    elif len(sys.argv) == 5 and sys.argv[1] == "selected-native":
+        observe_selected_skill(*sys.argv[2:])
     elif len(sys.argv) == 3 and sys.argv[1] == "refusal":
         check_project_refusal(sys.argv[2])
+    elif sys.argv[1:] == ["source-adds"]:
+        run_source_adds()
     else:
         raise SystemExit("Usage: hermes-native.py run <script> | "
                          "observe <marker|absent> <count> <trusted|untrusted>")

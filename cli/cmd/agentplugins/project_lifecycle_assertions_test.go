@@ -140,6 +140,9 @@ func (journey projectJourney) assertPortablePair(t *testing.T, root string) [2]s
 	pair := [2]string{projectJourneyRead(t, filepath.Join(root, "uap.toml")), projectJourneyRead(t, filepath.Join(root, "uap.lock"))}
 	for _, body := range pair {
 		for _, path := range []string{journey.home, journey.cache, journey.a, journey.b, journey.transport.repo, journey.transport.remote} {
+			if path == "" {
+				continue // HTTPS Skill fixtures have no Git repository or remote.
+			}
 			if strings.Contains(body, path) || strings.Contains(body, filepath.ToSlash(path)) || strings.Contains(body, strings.ReplaceAll(path, `\`, `\\`)) {
 				t.Fatalf("portable agreement contains machine path %q", path)
 			}

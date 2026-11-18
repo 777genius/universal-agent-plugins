@@ -90,8 +90,9 @@ func (planner Planner) plan(ctx context.Context, request domain.PlanRequest) (do
 		return domain.DeliveryPlan{}, err
 	}
 	input := clients.PlanInput{
-		TargetContext: plan.TargetContext,
-		Envelope:      request.Envelope, Client: request.Client,
+		TargetContext:       plan.TargetContext,
+		ProjectTrustConsent: request.ProjectTrustConsent,
+		Envelope:            request.Envelope, Client: request.Client,
 		Detected: request.Detected, Intent: request.InstallIntent,
 		LocalEntryObservation:     request.LocalEntryObservation.Clone(),
 		PreviousNativeObjects:     append([]domain.NativeObjectOwnership(nil), request.PreviousNativeObjects...),
