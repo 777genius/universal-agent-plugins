@@ -26,7 +26,7 @@ func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.Activatio
 // VerifierAvailable reports exact repository configuration or user CLI inspection.
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
 	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
-		return plan.NativePluginRegistration || shared.OnlyNativeComponents(plan.Components)
+		return plan.NativePluginRegistration || copilotHasProjectPlugin(plan.PreviousNativeObjects) || shared.OnlyNativeComponents(plan.Components)
 	}
 	return shared.CopilotVerifierAvailable(backendExecutable)
 }
