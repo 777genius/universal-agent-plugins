@@ -24,6 +24,26 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 	t.Setenv("AGENTPLUGINS_PROJECT_NATIVE_OUTPUT", t.TempDir())
 	f := newCopilotProjectAttempt(t)
 	defer f.cancel()
+	// The isolated whole-plugin subtest has its own attempt collector, separate
+	// from the component-cycle archive. Preserve its genuine process evidence
+	// in the retained GitHub job log, including on an early fatal assertion.
+	defer func() {
+		for _, stage := range []string{"whole-plugin-add", "whole-plugin-list", "whole-plugin-skills", "whole-plugin-remove", "whole-plugin-after-remove"} {
+			for _, suffix := range []string{"command.json", "stdout.log", "stderr.log"} {
+				name := stage + "." + suffix
+				body, ok := f.files[name]
+				if !ok {
+					continue
+				}
+				const maxLog = 16 << 10
+				if len(body) > maxLog {
+					t.Logf("native whole-plugin %s (%d bytes, first %d): %q", name, len(body), maxLog, body[:maxLog])
+				} else {
+					t.Logf("native whole-plugin %s (%d bytes): %q", name, len(body), body)
+				}
+			}
+		}
+	}()
 	f.preparePackage(t)
 
 	// The fixture's original bin/probe identity was frozen by preparePackage.
