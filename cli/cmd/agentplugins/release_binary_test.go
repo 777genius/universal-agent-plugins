@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
 
 func TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride(t *testing.T) {
@@ -65,6 +68,17 @@ func TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride(t *testing.T) {
 	authorOut, authorErr := author.CombinedOutput()
 	if authorErr != nil || !bytes.Contains(authorOut, []byte("init")) || !bytes.Contains(authorOut, []byte("validate")) {
 		t.Fatalf("release-built author help missing: %v\n%s", authorErr, authorOut)
+	}
+	// A release build must preserve the existing private MCP stdio protocol.
+	// An incomplete invocation is rejected by its own dispatcher with exit 126,
+	// not misrouted into installer/author command parsing.
+	private := exec.CommandContext(t.Context(), binary, managedstdio.Mode)
+	private.Env = replaceEnvironment(os.Environ(), malicious)
+	privateOut, privateErr := private.CombinedOutput()
+	var privateExit *exec.ExitError
+	if !errors.As(privateErr, &privateExit) || privateExit.ExitCode() != 126 ||
+		!bytes.HasPrefix(privateOut, []byte("managed stdio:")) {
+		t.Fatalf("release-built binary lost private stdio dispatch: %v\n%s", privateErr, privateOut)
 	}
 	if _, err := os.Lstat(home); !os.IsNotExist(err) {
 		t.Fatalf("release-built binary mutated AGENTPLUGINS_HOME while rejecting caller conformance data: %v", err)
