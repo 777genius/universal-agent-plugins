@@ -344,7 +344,7 @@ func TestGrokUserVerifyOnlyMayStillUseExplicitManualAttestation(t *testing.T) {
 }
 
 type grokMutationReadbackFailure struct {
-	base *fakeGrok
+	base             *fakeGrok
 	mutationComplete bool
 }
 
