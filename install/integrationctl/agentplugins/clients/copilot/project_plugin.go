@@ -107,8 +107,8 @@ func copilotProjectRegistration(root, physicalID, name string) (nativeconfig.Cop
 	}
 	registration := nativeconfig.CopilotPluginRegistration{
 		Marketplace: shared.ManagedMarketplaceName(physicalID),
-		Plugin: name,
-		Directory: filepath.ToSlash(filepath.Join(".uap", "managed", "clients", "copilot", physicalID)),
+		Plugin:      name,
+		Directory:   filepath.ToSlash(filepath.Join(".uap", "managed", "clients", "copilot", physicalID)),
 	}
 	if err := registration.Validate(); err != nil {
 		return nativeconfig.CopilotPluginRegistration{}, "", err
@@ -136,7 +136,7 @@ func copilotProjectPluginObjectAt(root, physicalID, name string) (domain.NativeO
 	sum := sha256.Sum256(append([]byte("copilot-project-registration-v1\x00"), encoded...))
 	return domain.NativeObjectOwnership{
 		ObjectID: copilotProjectPluginKind + ":" + reg.Plugin + "@" + reg.Marketplace,
-		Kind: copilotProjectPluginKind, LogicalName: reg.Plugin + "@" + reg.Marketplace,
+		Kind:     copilotProjectPluginKind, LogicalName: reg.Plugin + "@" + reg.Marketplace,
 		Path: path, ManagedDigest: "sha256:" + hex.EncodeToString(sum[:]),
 		ProtectionClass: "managed",
 	}, nil
