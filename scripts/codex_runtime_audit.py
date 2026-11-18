@@ -635,10 +635,12 @@ def _note_group_drain_failure(error, process, when, transcript=None):
         error.add_note("Codex native group diagnostic unavailable: " + type(diagnostic).__name__)
 
 
-async def _start_native(binary, project, environment):
+async def _start_native(binary, project, environment, *, sqlite_baseline=False):
     windows = os.name == "nt"
-    argv = ([sys.executable, str(Path(__file__).resolve()), "--windows-native-start", str(binary)]
-            if windows else [str(binary), "app-server"])
+    baseline_args = ["--disable", "plugins"] if sqlite_baseline else []
+    bootstrap_args = ["--sqlite-baseline"] if sqlite_baseline else []
+    argv = ([sys.executable, str(Path(__file__).resolve()), "--windows-native-start", str(binary),
+             *bootstrap_args] if windows else [str(binary), *baseline_args, "app-server"])
     options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if windows else {"start_new_session": True}
     process = await asyncio.create_subprocess_exec(
         *argv, cwd=project, env=environment,
@@ -701,8 +703,9 @@ async def _finish_native(process, job, completed, readers):
             await _close_native_transport(process)
 
 
-async def _exchange(binary, project, profile, environment):
-    process, job = await _start_native(binary, project, environment)
+async def _exchange(binary, project, profile, environment, *, sqlite_baseline=False):
+    startup = {"sqlite_baseline": True} if sqlite_baseline else {}
+    process, job = await _start_native(binary, project, environment, **startup)
     errors = asyncio.create_task(_drain(process.stderr, 1 << 20))
     readers, completed = [errors], False
     transcript, total, group_drain = [], 0, False
@@ -905,8 +908,11 @@ class CodexPluginSQLiteAudit:
                       if key.upper() in {"PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR",
                                          "TEMP", "TMP", "TMPDIR"}}
         native_env["CODEX_HOME"] = str(self.profile)
+        # This preinstall exchange initializes only SQLite and builtin Skills.
+        # Suppress unrelated curated-plugin Git startup for this process alone;
+        # public plugin lifecycle and native verification keep default features.
         listing = asyncio.run(_exchange(
-            Path(binary), project, self.profile, native_env))
+            Path(binary), project, self.profile, native_env, sqlite_baseline=True))
         self.native_version = "0.153.4"
         self.guard()
         rows = listing.get("data")
@@ -1026,11 +1032,18 @@ class CodexRuntimeAudit:
                 "runtime_baseline": self.baseline, "observations": self.observations}
 
 
-if __name__ == "__main__":
-    if os.name != "nt" or len(sys.argv) != 3 or sys.argv[1] != "--windows-native-start":
+def _windows_native_start(argv):
+    if (os.name != "nt" or len(argv) not in (3, 4)
+            or argv[1] != "--windows-native-start"
+            or argv[3:] not in ([], ["--sqlite-baseline"])):
         raise SystemExit("private Windows native observer bootstrap required")
     # Exactly one unbuffered byte: no JSON protocol input can be consumed here.
     if os.read(0, 1) != b"!":
         raise SystemExit("native observer process ownership was not established")
-    raise SystemExit(subprocess.call([sys.argv[2], "app-server"], stdin=sys.stdin,
-                                    stdout=sys.stdout, stderr=sys.stderr))
+    baseline_args = ["--disable", "plugins"] if argv[3:] else []
+    return subprocess.call([argv[2], *baseline_args, "app-server"], stdin=sys.stdin,
+                           stdout=sys.stdout, stderr=sys.stderr)
+
+
+if __name__ == "__main__":
+    raise SystemExit(_windows_native_start(sys.argv))

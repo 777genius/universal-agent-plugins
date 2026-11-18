@@ -91,10 +91,7 @@ func (candidate *skillsBatchCandidate) prepare(ctx context.Context, app, preview
 	if err != nil {
 		return nil, err
 	}
-	warnings := []string{}
-	if notice := savedTargetNotice(locked, aliases, candidate.targets); notice != "" {
-		warnings = append(warnings, notice)
-	}
+	warnings := skillsInitialReviewWarnings(locked, aliases, candidate.targets)
 	bindings, detected, paths, err := prepareSkillsBindings(ctx, preview, candidate.requirements, locked, aliases, nil, candidate.targets, &warnings)
 	if err != nil {
 		return nil, err
@@ -143,7 +140,7 @@ func prepareSkillsBindings(ctx context.Context, app App, requirements environmen
 		return nil, nil, nil, err
 	}
 	paths := skillBindingPaths(view, prepared.Bindings)
-	adapter := &dependencyInstaller{app: app, opts: app.skillsOptions(), detected: detected, previewPaths: paths}
+	adapter := &dependencyInstaller{app: app, opts: app.skillsOptions(), detected: detected, previewPaths: paths, trustAliases: append([]string(nil), aliases...)}
 	if len(warnings) > 0 {
 		adapter.previewWarnings = warnings[0]
 	}

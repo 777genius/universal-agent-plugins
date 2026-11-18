@@ -59,7 +59,7 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 }
 
 func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, detected map[domain.ClientID]domain.DetectedClient, consent ...map[string]bool) ([]dependencyAction, error) {
-	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd}
+	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, trustAliases: explicitAddAliases(cmd, dependencyActionAliases(actions))}
 	if err := adapter.preflightProjectVersions(cmd.Context(), actions); err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 			_ = update.Close()
 		}
 	}()
-	for _, action := range actions {
+	for i, action := range actions {
 		if action.Action == environment.ActionUnchanged {
 			if err := adapter.verifyUnchangedProjection(ctx, action); err != nil {
 				return nil, &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
@@ -105,6 +105,7 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 			adapter.previewPaths[action.Alias+"\x00"+action.ClientID] = plan.TargetPath
 		}
 		adapter.recordDependencyReview(action, plan)
+		actions[i].Reason = adapter.explicitAddReviewReason(action, plan)
 
 		if action.Action == environment.ActionUpdate && updates[action.Alias] == nil {
 			updates[action.Alias] = prepared
@@ -259,7 +260,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 		ClientNativeConfigRoot: dependencyNativeConfigRoot(adapter.app, client),
 		ClientExecutable:       backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete,
-		ProjectTrustConsent: action.Action == environment.ActionInstall && slices.Contains(adapter.trustAliases, action.Alias)}
+		ProjectTrustConsent: adapter.explicitAddTrustConsent(action)}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
 	}
@@ -524,6 +525,7 @@ func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context
 		OriginMode: loaded.origin, Directory: loaded.directory, Compatibility: loaded.hints}
 	request.Assessment = &installer.Assessment{TreeDigest: action.Package.TreeDigest, Outcome: installer.AssessmentAllow, Reason: "authorized by CLI security policy for exact pinned bytes"}
 	request.RequiredComponents = requiredFacadeComponents(loaded.envelope)
+	request.ProjectTrustConsent = completeEnvelopeTrustConsent(request, action, loaded.envelope)
 	if adapter.previewUpdate != nil {
 		return adapter.app.Installer.PreviewInstallAfterUpdate(ctx, request, adapter.previewUpdate)
 	}
