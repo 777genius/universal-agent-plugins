@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"sync"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -168,10 +168,10 @@ func TestCopilotComponentSwitchRestoresPreviousPairAfterCancellation(t *testing.
 		t.Fatalf("cancellation not propagated: %v", err)
 	}
 	if !bytes.Equal(original, trustRead(t, settings)) {
-		t.Fatal("cancelled component switch did not restore exactly owned plugin pair")
+		t.Fatal("canceled component switch did not restore exactly owned plugin pair")
 	}
 	if _, err := os.Lstat(filepath.Join(layout.SkillsRoot, "review")); !os.IsNotExist(err) {
-		t.Fatalf("cancelled component switch exposed an uncommitted skill: %v", err)
+		t.Fatalf("canceled component switch exposed an uncommitted skill: %v", err)
 	}
 }
 
