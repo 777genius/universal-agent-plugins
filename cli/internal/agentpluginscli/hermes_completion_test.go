@@ -172,7 +172,10 @@ func TestHermesCompletionRawReviewRepeatAndStaleDisclosure(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer stale.Close()
-	stale.warnings = nil
+	if err := stale.Check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	stale.warnings[0] = "changed review disclosure"
 	if _, err := stale.Apply(t.Context()); !errors.Is(err, ErrSkillsPlanStale) || runner.grants != 2 {
 		t.Fatalf("changed review disclosure was applied: grants=%d err=%v", runner.grants, err)
 	}
@@ -224,16 +227,28 @@ func TestHermesCompletionSavedRepeatAndMixedMissingProjection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(request.prepared) != 1 || request.prepared[0].Action != "repair" || runner.grants != 0 {
-				t.Fatalf("saved repeat lacks inert exact repair: %+v", request.prepared)
+			wantAction := "repair"
+			if mixed {
+				wantAction = "unchanged"
 			}
-			hermesCompletionDisclosure(t, request.prepared[0].Reason)
+			if len(request.prepared) != 1 || string(request.prepared[0].Action) != wantAction || runner.grants != 0 {
+				t.Fatalf("saved repeat selected unexpected work: %+v", request.prepared)
+			}
+			action := managementNativeRepair(request.prepared[0])
 			adapter := &dependencyInstaller{app: journey.cli.app, opts: opts, detected: request.detected, trustAliases: request.aliases}
-			prepared, err := adapter.Prepare(t.Context(), request.prepared[0])
+			prepared, err := adapter.Prepare(t.Context(), action)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer func() { _ = prepared.Close() }()
+			if mixed {
+				reason := adapter.explicitAddReviewReason(action, prepared.Plan())
+				if !strings.Contains(reason, "This operation does not change Hermes project trust") || strings.Contains(reason, "A confirmed explicit add asks") {
+					t.Fatalf("mixed repair misrepresented trust consent: %s", reason)
+				}
+			} else {
+				hermesCompletionDisclosure(t, request.prepared[0].Reason)
+			}
 			complete, err := journey.cli.app.Installer.VerifyPreparedProjection(t.Context(), prepared)
 			if err != nil || !complete {
 				t.Fatalf("immutable projection lost coherence: complete=%v err=%v", complete, err)
@@ -243,16 +258,23 @@ func TestHermesCompletionSavedRepeatAndMixedMissingProjection(t *testing.T) {
 				if observed {
 					t.Fatal("missing native Skill was reported coherent")
 				}
+				// Even explicitly transported add consent must not activate trust
+				// when a mixed package takes the incomplete-binding repair path.
+				if _, err := adapter.Apply(t.Context(), prepared); err != nil {
+					t.Fatal(err)
+				}
 			}
 			if err := prepared.Close(); err != nil {
 				t.Fatal(err)
 			}
-			if err := applyDependencySync(command, journey.cli.app, opts, request, true); err != nil {
-				t.Fatal(err)
-			}
-			var decoded map[string]any
-			if err := json.Unmarshal(output.Bytes(), &decoded); err != nil {
-				t.Fatalf("saved JSON: %v", err)
+			if !mixed {
+				if err := applyDependencySync(command, journey.cli.app, opts, request, true); err != nil {
+					t.Fatal(err)
+				}
+				var decoded map[string]any
+				if err := json.Unmarshal(output.Bytes(), &decoded); err != nil {
+					t.Fatalf("saved JSON: %v", err)
+				}
 			}
 			wantGrants := 1
 			if mixed {
@@ -264,9 +286,16 @@ func TestHermesCompletionSavedRepeatAndMixedMissingProjection(t *testing.T) {
 				!reflect.DeepEqual(before.PackageRevision, after.PackageRevision) || !reflect.DeepEqual(before.NativeObjects, after.NativeObjects) {
 				t.Fatalf("repair changed authority or mixed repair granted trust: grants=%d want=%d", runner.grants, wantGrants)
 			}
+			for _, object := range before.NativeObjects {
+				if object.Kind == "hermes_project_skill" {
+					if _, err := os.Stat(filepath.Join(object.Path, "SKILL.md")); err != nil {
+						t.Fatalf("reviewed repair did not restore the native projection: %v", err)
+					}
+				}
+			}
 			runner.trusted = nil
 			maintenance := &dependencyInstaller{app: journey.cli.app, opts: opts, detected: request.detected}
-			ordinary, err := maintenance.Prepare(t.Context(), request.prepared[0])
+			ordinary, err := maintenance.Prepare(t.Context(), action)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -278,13 +307,6 @@ func TestHermesCompletionSavedRepeatAndMixedMissingProjection(t *testing.T) {
 			}
 			if runner.grants != wantGrants || len(runner.trusted) != 0 {
 				t.Fatal("ordinary repair regranted native trust")
-			}
-			for _, object := range before.NativeObjects {
-				if object.Kind == "hermes_project_skill" {
-					if _, err := os.Stat(filepath.Join(object.Path, "SKILL.md")); err != nil {
-						t.Fatalf("incomplete native projection was not repaired: %v", err)
-					}
-				}
 			}
 		})
 	}

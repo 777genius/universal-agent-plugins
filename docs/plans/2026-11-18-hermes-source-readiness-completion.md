@@ -207,7 +207,10 @@ Execution reuses the current lifecycle in this order:
 
 The saved helper will reuse `SavedProjectRepairOnAdd` with Hermes opt-in and
 client-neutral wording, in preparation and recheck. A reviewed repair candidate
-is not authority for trust. The intact prepared-completion path uses the existing
+is not authority for trust. Before promoting an unchanged binding to optional
+completion, verify the full locked envelope; mixed input stays unchanged and
+does not gain a native version probe. Existing lifecycle actions retain their
+semantics. The intact prepared-completion path uses the existing
 whole-binding classifier, but incomplete-projection repair can reapply before
 that classifier. Therefore newly added repair consent must also be gated from
 the complete freshly loaded digest-bound envelope in `prepareDependencyPackage`,
@@ -216,6 +219,9 @@ any MCP/app/extension/command or invalid/ambiguous component withholds this new
 repair consent. `RequiredComponents` alone is a subset and is not sufficient.
 Fresh install consent keeps its existing behavior. No new flag, duplicated
 bootstrap, second preparation engine or adapter-ID conditional.
+Carry the existing private consent through preview planning so the adapter's
+disclosure describes the actual grant or explicitly states that trust is unchanged;
+preserve independent mixed-package session guidance.
 
 **Consent and eligibility contract**
 
@@ -336,6 +342,8 @@ into new suites.
 - One critical mixed-package regression with an incomplete native projection:
   existing repair may run but newly transported repair consent cannot invoke
   trust. A complete mixed binding alone does not exercise the bypass branch.
+- An unchanged mixed saved add remains unchanged through recheck, without a new
+  version probe. Check restored native files before the ordinary-repair control.
 - One fault-injection regression per actual recovery bug; reuse shared harnesses.
 
 ### Native E2E

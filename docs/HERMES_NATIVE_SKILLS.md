@@ -62,7 +62,7 @@ require `--target`. Such runs show no review card before trust is granted, and
 JSON output carries the disclosure only in the plan and the result.
 
 Only an explicit `add` grants trust, including a repeated `add` that finishes
-an older Skills-only installation. Update, repair and `deps sync` never run the
+an older Skills-only installation. Update, ordinary repair and `deps sync` never run the
 trust command, so a `hermes skills untrust` stays in effect; they report that
 UAP did not change trust and how to grant it manually. A saved `add` passes this
 consent only for its explicitly selected dependency closure. Installer SDK hosts
@@ -76,6 +76,9 @@ Skills picker. Repeating a saved plugin `add` with the single explicit target
 reviewed repair. The complete source must be valid and Skills-only for this new
 repeat-repair consent; mixed Skills/MCP or other components cannot qualify via a
 Skills subset, including when repair must recreate an absent projection. This
+optional completion leaves unchanged mixed bindings unchanged and adds no native
+version probe for them. Review guidance reflects the effective consent: a repair
+without consent explicitly reports that it does not change project trust. This
 paragraph describes source behavior under qualification, not a newer published
 CLI release.
 

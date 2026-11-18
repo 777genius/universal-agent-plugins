@@ -383,7 +383,10 @@ func (request dependencySyncRequest) recheck(cmd *cobra.Command, app App, opts *
 	if err != nil {
 		return nil, err
 	}
-	actions = reviewedSavedAddActions(cmd, app, opts, request.targets, actions)
+	actions, err = reviewedSavedAddActions(cmd, app, opts, request.targets, actions)
+	if err != nil {
+		return nil, err
+	}
 	actions, err = preflightDependencyActions(cmd, app, opts, actions, detected, request.consent)
 	if err != nil {
 		return nil, fmt.Errorf("dependency sync changed after preflight: %w", err)
