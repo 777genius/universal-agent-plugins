@@ -122,6 +122,12 @@ func removeSavedTargets(requirements environment.Requirements, alias string, tar
 	for key, value := range requirements.Dependencies {
 		out.Dependencies[key] = value
 	}
+	if len(requirements.Development) > 0 {
+		out.Development = make(map[string]bool, len(requirements.Development))
+		for alias := range requirements.Development {
+			out.Development[alias] = true
+		}
+	}
 	remaining := false
 	for target, aliases := range requirements.Targets {
 		kept := append([]string(nil), aliases...)
@@ -137,6 +143,10 @@ func removeSavedTargets(requirements environment.Requirements, alias string, tar
 	}
 	if !remaining {
 		delete(out.Dependencies, alias)
+		delete(out.Development, alias)
+		if len(out.Development) == 0 {
+			out.Development = nil
+		}
 	}
 	return out
 }

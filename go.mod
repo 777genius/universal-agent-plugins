@@ -13,6 +13,7 @@ require (
 )
 
 require (
+	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/creachadair/tomledit v0.0.29 // indirect
 	github.com/dlclark/regexp2 v1.12.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.3 // indirect
