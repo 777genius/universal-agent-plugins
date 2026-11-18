@@ -59,6 +59,12 @@ func copilotApplyComponentSwitch(ctx context.Context, env clients.Env,
 	// Remove only our exact settings pair before exposing loose skills/MCP.
 	if err := copilotMutateProjectPlugin(ctx, env.NativeConfig, root,
 		request.Plan.PhysicalArtifactID, request.Plan.DeclaredName, true, true); err != nil {
+		// Removal can commit while releasing the native writer lock fails.
+		// Components have not started yet: never classify this partial
+		// transition as a successfully installed new component projection.
+		if nativeconfig.IsCommittedCleanup(err) {
+			return &shared.NativeEffectError{Effect: domain.NativeEffectUncertain, Err: err}
+		}
 		return err
 	}
 	if err := mutation.Apply(ctx); err != nil {
