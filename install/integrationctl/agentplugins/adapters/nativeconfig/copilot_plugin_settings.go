@@ -140,24 +140,9 @@ func PatchCopilotPluginSettings(body []byte, r CopilotPluginRegistration, owned,
 		if exact {
 			return bytes.Clone(body), false, nil
 		}
-		marketplaces, err := objectCollection(doc.root, "extraKnownMarketplaces", true)
-		if err != nil {
+		if err := addCopilotPluginSettingsMembers(doc, r); err != nil {
 			return nil, false, err
 		}
-		enabled, err := objectCollection(doc.root, "enabledPlugins", true)
-		if err != nil {
-			return nil, false, err
-		}
-		value, err := jsonValue(r.marketplaceValue())
-		if err != nil {
-			return nil, false, err
-		}
-		setEntry(marketplaces, r.Marketplace, value)
-		value, err = jsonValue(true)
-		if err != nil {
-			return nil, false, err
-		}
-		setEntry(enabled, r.pluginKey(), value)
 	}
 	next, err := doc.render()
 	if err != nil {
@@ -169,4 +154,26 @@ func PatchCopilotPluginSettings(body []byte, r CopilotPluginRegistration, owned,
 		return nil, false, fmt.Errorf("copilot project settings would exceed the 1 MiB inspection limit")
 	}
 	return next, true, nil
+}
+
+func addCopilotPluginSettingsMembers(doc *document, r CopilotPluginRegistration) error {
+	marketplaces, err := objectCollection(doc.root, "extraKnownMarketplaces", true)
+	if err != nil {
+		return err
+	}
+	enabled, err := objectCollection(doc.root, "enabledPlugins", true)
+	if err != nil {
+		return err
+	}
+	value, err := jsonValue(r.marketplaceValue())
+	if err != nil {
+		return err
+	}
+	setEntry(marketplaces, r.Marketplace, value)
+	value, err = jsonValue(true)
+	if err != nil {
+		return err
+	}
+	setEntry(enabled, r.pluginKey(), value)
+	return nil
 }
