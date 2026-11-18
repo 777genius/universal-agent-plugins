@@ -321,7 +321,11 @@ func grokSignedUserSnapshot(t *testing.T, roots ...string) map[string]grokSigned
 
 func grokSignedUserUnchanged(t *testing.T, before map[string]grokSignedFile, roots ...string) {
 	t.Helper()
-	after := grokSignedUserSnapshot(t, roots...)
+	grokSignedUserCompare(t, before, grokSignedUserSnapshot(t, roots...))
+}
+
+func grokSignedUserCompare(t *testing.T, before, after map[string]grokSignedFile) {
+	t.Helper()
 	if len(before) != len(after) {
 		t.Fatal("read-only User operation changed the protected inventory")
 	}
@@ -339,6 +343,34 @@ func grokSignedUserUnchanged(t *testing.T, before map[string]grokSignedFile, roo
 			t.Fatal("read-only User operation changed protected bytes or identity", path)
 		}
 	}
+}
+
+// Grok 1.0.70 writes native diagnostics during plugin list --json.
+// A read-only repeat may append to exactly this existing native log, but must
+// leave all other managed, user and foreign files and their identities intact.
+func grokSignedUserNativeLogAppendOnly(t *testing.T, before map[string]grokSignedFile, logPath string, priorLog []byte, roots ...string) {
+	t.Helper()
+	after := grokSignedUserSnapshot(t, roots...)
+	original, existed := before[logPath]
+	current, stillExists := after[logPath]
+	if !existed || !stillExists || original.info == nil || current.info == nil ||
+		!original.info.Mode().IsRegular() || !current.info.Mode().IsRegular() ||
+		!os.SameFile(original.info, current.info) || original.info.Mode() != current.info.Mode() {
+		t.Fatal("Grok native diagnostic log disappeared or was replaced", logPath)
+	}
+	left, right := original.info.Sys().(*syscall.Stat_t), current.info.Sys().(*syscall.Stat_t)
+	if left.Uid != right.Uid || left.Gid != right.Gid || left.Nlink != right.Nlink ||
+		original.info.Size() != int64(len(priorLog)) || current.info.Size() < original.info.Size() ||
+		current.info.Size()-original.info.Size() > 1<<20 {
+		t.Fatal("Grok native diagnostic log identity or bounded append differs", logPath)
+	}
+	body, err := os.ReadFile(logPath)
+	if err != nil || int64(len(body)) != current.info.Size() || !bytes.HasPrefix(body, priorLog) {
+		t.Fatal("Grok native diagnostic log was rewritten, not appended", logPath, err)
+	}
+	delete(before, logPath)
+	delete(after, logPath)
+	grokSignedUserCompare(t, before, after)
 }
 
 func grokSignedUserBinding(t *testing.T, journey projectJourney, result usecase.AddResult, source domain.PackageEnvelope, revision string) domain.ClientBinding {
@@ -474,13 +506,20 @@ func TestGrokNativeUserSignedRepeatIsFreshAndReadOnly(t *testing.T) {
 	state := journey.state(t, "")
 	protectedRoots := []string{journey.home, journey.app.ManagedRoot, binding.TargetLocator, filepath.Join(journey.cache, "state-v2.json"), source, journey.a, journey.b}
 	protected := grokSignedUserSnapshot(t, protectedRoots...)
+	// Only the pinned Grok native listing's append-only diagnostic log may
+	// change on an unchanged User repeat; all other paths remain guarded.
+	nativeLog := filepath.Join(journey.home, ".grok", "logs", "unified.jsonl")
+	priorLog, err := os.ReadFile(nativeLog)
+	if err != nil {
+		t.Fatal("pinned Grok native diagnostic log is missing", err)
+	}
 	witness.phase = "repeat"
 	repeat := grokSignedUserReady(t, grokSignedUserPublic(t, journey, args...), true)
 	if repeat.InstallationID != first.InstallationID || !reflect.DeepEqual(state, journey.state(t, "")) {
 		t.Fatal("unchanged User repeat rewrote committed ownership/state")
 	}
 	grokSignedUserInventory(t, witness.phaseCalls(t, "repeat", 1, 0), journey, binding, true)
-	grokSignedUserUnchanged(t, protected, protectedRoots...)
+	grokSignedUserNativeLogAppendOnly(t, protected, nativeLog, priorLog, protectedRoots...)
 	witness.phase = "remove"
 	grokSignedUserPublic(t, journey, "remove", first.InstallationID, "--target", "grok", "--yes")
 	grokSignedUserInventory(t, witness.phaseCalls(t, "remove", 2, 1), journey, binding, false)
