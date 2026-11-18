@@ -60,7 +60,7 @@ func projectCopilotInteractiveAdd(t *testing.T, journey projectJourney, answer s
 	if err := root.Execute(); err != nil {
 		t.Fatalf("interactive saved Copilot add failed: %v\n%s%s", err, output.String(), stderr.String())
 	}
-	if !strings.Contains(output.String()+stderr.String(), "Apply the preflighted dependency sync?") {
+	if !strings.Contains(output.String()+stderr.String(), "Apply these changes?") {
 		t.Fatal("interactive saved Copilot add did not request the existing confirmation")
 	}
 }

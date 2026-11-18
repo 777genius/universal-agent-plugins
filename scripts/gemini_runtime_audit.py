@@ -99,6 +99,10 @@ def _millisecond(value):
     return value.replace(microsecond=value.microsecond // 1000 * 1000)
 
 
+def _now():
+    return datetime.now(timezone.utc)
+
+
 def _complete_snapshot(snapshot):
     if (not isinstance(snapshot, dict) or any(
             not isinstance(path, str) or not isinstance(digest, str)
@@ -195,7 +199,7 @@ def _startup(body, filename, project_hash, interval, project_temp):
 class GeminiRepeatAudit:
     """Hold the pre-repeat namespace and verify both actual public phases."""
 
-    def __init__(self, home, project, before, version):
+    def __init__(self, home, project, before, version, *, profile_snapshot):
         self.parents, self.leaves, self.files, self.phases = {}, {}, {}, []
         self.reason, self.complete = None, False
         self.failure_facts = None
@@ -205,12 +209,14 @@ class GeminiRepeatAudit:
         self.baseline_observed = False
         self.baseline_record = None
         self.before = self.previous = before
+        self.profile_snapshotter = profile_snapshot
         self.profile, self.project = Path(home) / ".gemini", Path(project)
-        self.observed_at = self.command_finished = datetime.now(timezone.utc)
+        self.observed_at = self.command_finished = _now()
         try:
             if not pinned_version(version):
                 raise ValueError("Gemini empty-session proof requires supported custody and native 0.66.0")
             _complete_snapshot(before)
+            self.initial_paths = set(before)
             self.deadline = time.monotonic() + 5
             if sys.platform == "win32":
                 backend = run_path(str(Path(__file__).with_name("gemini_windows_custody.py")))
@@ -254,10 +260,32 @@ class GeminiRepeatAudit:
                         or self.windows is not None and "\\" in name):
                     raise ValueError("Gemini pre-repeat chat layout is not flat")
                 self._open(self.chats / name, 1 << 20)
+            self.protected_profile = self._profile_snapshot()
             self._guard()
         except (OSError, ValueError, RuntimeError, UnicodeError, TypeError) as error:
             self.reason = "os-error" if isinstance(error, OSError) else str(error)[:512]
             self.close()
+
+    def _profile_snapshot(self):
+        try:
+            return self.profile_snapshotter((self.profile,))
+        except AssertionError as error:
+            raise ValueError("Gemini protected profile snapshot is incomplete") from error
+
+    def _guard_profile(self):
+        observed = self._profile_snapshot()
+        allowed = set(self.files)
+        if self.baseline_record is not None:
+            allowed.add(self.baseline_record["path"])
+        for key in allowed - self.initial_paths:
+            # Only exact journal files already admitted through held custody may
+            # appear. Their existing parent directories never gain an exemption.
+            relative = key[len(self.profile.name) + 1:].replace("\\", "/")
+            observed.pop(key, None)
+            observed.pop("metadata:0:" + relative, None)
+        if observed != self.protected_profile:
+            raise ValueError("Gemini protected profile entries changed")
+        self._guard()
 
     def _hold(self, path):
         if self.windows is not None:
@@ -338,7 +366,7 @@ class GeminiRepeatAudit:
             _complete_snapshot(snapshot)
             started, finished = _interval(interval)
             if (self.baseline_observed or self.phases or started < self.observed_at
-                    or finished > datetime.now(timezone.utc)):
+                    or finished > _now()):
                 raise ValueError("Gemini startup baseline command interval is invalid")
             if any(snapshot.get(path) != digest for path, digest in self.before.items()):
                 raise ValueError("Gemini startup baseline changed previous entries")
@@ -365,6 +393,7 @@ class GeminiRepeatAudit:
                     "finished": finished.isoformat(), "operation": "native-skills-list-baseline",
                 }
             self._guard()
+            self._guard_profile()
             self.before = self.previous = snapshot
             self.command_finished = finished
             self.baseline_observed = True
@@ -383,7 +412,7 @@ class GeminiRepeatAudit:
             self.phase, self.role = label, "new-chat"
             _complete_snapshot(snapshot)
             started, finished = _interval(interval)
-            if started < self.command_finished or finished > datetime.now(timezone.utc):
+            if started < self.command_finished or finished > _now():
                 raise ValueError("Gemini startup command intervals overlap or are in the future")
             if any(snapshot.get(path) != digest for path, digest in self.previous.items()):
                 raise ValueError("Gemini runtime repeat changed a previous entry")
@@ -416,6 +445,7 @@ class GeminiRepeatAudit:
                                    "sha256": hashlib.sha256(body).hexdigest(),
                                    "records": body.count(b"\n"), "conversation_records": 0}
             self._guard()
+            self._guard_profile()
             self.previous = snapshot
             self.command_finished = finished
             self.phases.append(label)
@@ -428,6 +458,7 @@ class GeminiRepeatAudit:
                 self.deadline = time.monotonic() + 5
                 self._guard()
                 _complete_snapshot(snapshot)
+                self._guard_profile()
                 if len(self.phases) != 2 or snapshot != self.previous:
                     raise ValueError("Gemini runtime final snapshot differs from the public phases")
                 self.complete = True

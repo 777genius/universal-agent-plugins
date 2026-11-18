@@ -129,6 +129,8 @@ class RemotionTemporaryRootTest(unittest.TestCase):
 
         native = SimpleNamespace(
             validate_fixtures=lambda _: None,
+            bounded_error_traceback=run_path(str(Path(__file__).with_name(
+                "live-install-audit.py")))["bounded_error_traceback"],
             do_case=native_case or (lambda *args: self.fail("native case ran after TEMP setup failed")))
         loader = SimpleNamespace(exec_module=lambda _: None)
         imports = SimpleNamespace(util=SimpleNamespace(
@@ -222,7 +224,10 @@ class RemotionTemporaryRootTest(unittest.TestCase):
 
     def test_native_error_and_traceback_are_bounded_without_passing_failed_case(self):
         def native_case(*_):
-            raise ValueError("x" * 20000)
+            error = ValueError("x" * 20000)
+            error.add_note("phase='repeat-installed'; " + "n" * 20000)
+            error.add_note("second diagnostic note")
+            raise error
 
         evidence, _, _ = self.run_setup_failure(
             0, native_case=native_case, expected_failure="runner-temp: ValueError; default-windows-temp: ValueError")
@@ -230,7 +235,12 @@ class RemotionTemporaryRootTest(unittest.TestCase):
         for label, result in evidence["results"].items():
             self.assertEqual(result["stage"], "native-case")
             self.assertEqual(len(result["error"]), 1800)
-            self.assertEqual(len(result["error_traceback"]), 8192)
+            self.assertLessEqual(len(result["error_traceback"]), 8192)
+            self.assertIn("in native_case", result["error_traceback"])
+            self.assertIn("ValueError: ", result["error_traceback"])
+            self.assertIn("phase='repeat-installed'", result["error_traceback"])
+            self.assertIn("second diagnostic note", result["error_traceback"])
+            self.assertIn("traceback truncated", result["error_traceback"])
             self.assertNotIn("case", result)
             output = next(row for row in self.emitted if row["case"] == label)
             self.assertEqual(output["status"], "harness-error")
@@ -250,6 +260,29 @@ class RemotionTemporaryRootTest(unittest.TestCase):
 class RemotionRepeatNativePhaseTest(unittest.TestCase):
     def setUp(self):
         self.live = run_path(str(Path(__file__).with_name("live-install-audit.py")))
+
+    def test_bounded_traceback_keeps_all_eight_long_failure_frames(self):
+        following = None
+        for index in reversed(range(8)):
+            name = f"frame_{index}_" + "n" * 120
+            namespace = {"following": following}
+            statement = "raise ValueError('x' * 20000)" if index == 7 else "following()"
+            code = compile(f"def {name}():\n    {statement}\n",
+                           f"fixture-{index}-" + "f" * 600 + ".py", "exec")
+            exec(code, namespace)
+            following = namespace[name]
+        try:
+            following()
+        except ValueError as error:
+            detail = self.live["bounded_error_traceback"](error)
+        else:
+            self.fail("deep failure fixture did not raise")
+        self.assertLessEqual(len(detail), 8192)
+        self.assertEqual(detail.count("  File "), 8)
+        for index in range(8):
+            self.assertIn(f"in frame_{index}_", detail)
+        self.assertIn("ValueError: ", detail)
+        self.assertIn("traceback truncated", detail)
 
     def test_every_phase_keeps_the_original_snapshot_without_adopting_new_files(self):
         with tempfile.TemporaryDirectory(prefix="remotion-phases-inert-") as temporary:

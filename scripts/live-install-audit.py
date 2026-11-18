@@ -462,6 +462,27 @@ def repeat_native_phase_evidence(before, after_add, after_list, after_native):
 
 
 
+def bounded_error_traceback(error):
+    """Keep the failure frames even when a message or note fills the budget."""
+    formatted = "".join(traceback.format_exception(error, limit=-8))
+    if len(formatted) <= 8192:
+        return formatted
+    frames = "".join(
+        f"  File {repr(frame.filename)[-320:]}, line {str(frame.lineno)[:24]}, in {frame.name[:96]}\n"
+        for frame in traceback.extract_tb(error.__traceback__, limit=-8))
+    try:
+        message = str(error)[:2048]
+    except Exception:
+        message = "<exception message unavailable>"
+    notes = getattr(error, "__notes__", ())
+    notes = notes if isinstance(notes, (list, tuple)) else ()
+    notes = "\n".join(note[:192] for note in notes[:8] if isinstance(note, str))[:1536]
+    return ("Traceback (most recent call last):\n" + frames
+            + type(error).__name__[:256] + ": " + message + "\n"
+            + ("Notes:\n" + notes + "\n" if notes else "")
+            + "[traceback truncated; message, notes and earlier context bounded]\n")
+
+
 def failed_case_diagnostics(row):
     """Expose existing failed-case evidence in logs; never change qualification."""
     keys = ("codex_public_add_ready", "codex_public_repeat_ready", "public_skill_ready",
@@ -1395,7 +1416,7 @@ def matches_pinned_skill_bytes(project, skill_path, blob_sha1):
         return False
 
 
-def has_target_registration(response, identity, target):
+def has_target_registration(response, identity, target, *, skill_source=None):
     """Inspect failed add's list without requiring a verified/active binding."""
     if not isinstance(response, dict):
         return False
@@ -1404,7 +1425,8 @@ def has_target_registration(response, identity, target):
     if not isinstance(installations, list):
         return False
     return any(
-        isinstance(node, dict) and node.get("name") == identity
+        isinstance(node, dict) and (node.get("name") == identity
+                                   or skill_source is not None and node.get("source") == skill_source)
         and isinstance(node.get("clients"), list)
         and any(isinstance(client, dict) and client.get("client_id") == target
                 for client in node["clients"])
@@ -2380,7 +2402,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if gemini_skill_case and installed:
         gemini_baseline_before = snapshot(native_roots)
         gemini_runtime = GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
-            home, project, gemini_baseline_before, client_version)
+            home, project, gemini_baseline_before, client_version,
+            profile_snapshot=scoped_snapshot)
         audits.callback(gemini_runtime.close)
         if gemini_runtime.reason is None:
             # Match runGeminiInventory: locale/timezone and other inherited variables
@@ -2622,7 +2645,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # A successful remove must not re-register this identity under a new ID.
     post_remove_identity_registered = bool(
         post_list_schema_valid and (
-            has_target_registration(post_list_json, identity, target)
+            has_target_registration(
+                post_list_json, identity, target,
+                skill_source=f'{item["repo"]}/skills/{item["folder"]}'
+                if kind == "skill" and target == "claude" else None)
             or (grok_prepared and grok_prepared_source_survives(
                 post_list_json, item, matching[0]["name"], matching[0]["installation_id"]))))
     post_lock_pinned = bool(kind == "skill" and (project / "uap.lock").exists()
@@ -2808,10 +2834,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "public_target_states": {
                 "after-add": public_target_state_observation(
                     listed_json, identity, target,
-                    installation_ids=old_ids if kind == "skill" else None),
+                    installation_ids=old_ids if kind == "skill" else None,
+                    skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None),
                 "repeat-add": public_target_state_observation(
                     repeat_list_json, identity, target,
-                    installation_ids=repeat_identity_ids if kind == "skill" else None),
+                    installation_ids=repeat_identity_ids if kind == "skill" else None,
+                    skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None),
                 "after-remove": public_target_state_observation(
                     post_list_json, identity, target,
                     installation_ids=old_ids | set(repeat_identity_ids) if kind == "skill" else None,
@@ -3084,7 +3112,7 @@ def main():
                           "identity": (doc["plugin_declared_names"].get(item, item)
                                        if args.kind == "plugin" else item["name"]),
                           "status": "harness-error", "error": repr(e),
-                          "error_traceback": traceback.format_exc(limit=-8)[-8192:]}
+                          "error_traceback": bounded_error_traceback(e)}
             report["results"].append(result)
             report["cases_attempted"] += 1
             save()

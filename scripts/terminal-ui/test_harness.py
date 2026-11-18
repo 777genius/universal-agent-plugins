@@ -126,6 +126,18 @@ class ScannerTests(unittest.TestCase):
 
 
 class ScreenTests(unittest.TestCase):
+    def test_backward_tab_rejects_private_multiple_or_intermediate_parameters(self):
+        for sequence in (b'\x1b[?2Z', b'\x1b[>2Z', b'\x1b[1;2Z',
+                         b'\x1b[;Z', b'\x1b[1:2Z', b'\x1b[2 Z', b'\x1b[2$Z'):
+            with self.subTest(sequence=sequence):
+                screen = h.Screen(3, 30)
+                screen.feed(b'unchanged cells')
+                before = screen.snapshot(), screen.row, screen.col
+                for value in sequence:
+                    screen.feed(bytes([value]))
+                self.assertEqual((screen.snapshot(), screen.row, screen.col), before)
+                self.assertEqual(screen.unknown, {sequence.decode('ascii')})
+
     def test_fragmented_ansi_and_utf8(self):
         screen = h.Screen(3, 30)
         for chunk in (b'old\r\x1b[', b'2Knew \xc3', b'\xa9\n\rsecond'):
