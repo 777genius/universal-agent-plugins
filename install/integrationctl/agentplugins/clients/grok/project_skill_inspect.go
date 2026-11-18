@@ -40,8 +40,11 @@ func projectSkillRowsObserved(rows []any, proof *projectSkillProof) bool {
 				return false
 			}
 			found++
-		} else if source, valid := row["source"].(map[string]any); valid && source["plugin_name"] == proof.name {
-			return false
+		} else if source, valid := row["source"].(map[string]any); valid {
+			if name, present := source["plugin_name"].(string); present &&
+				shared.FoldJSONKey(name) == shared.FoldJSONKey(proof.name) {
+				return false
+			}
 		}
 	}
 	return found == len(proof.skills)
@@ -55,6 +58,20 @@ func projectSkillEntry(row map[string]any) bool {
 		}
 		fields = append(fields, "disabled")
 	}
+	// Grok reports unrelated native Skills (project/user/bundled/config/server)
+	// in the same inspect collection. Collisions may have two extra fields.
+	if collision, present := row["collidesWith"]; present {
+		if value, ok := collision.(string); !ok || value == "" {
+			return false
+		}
+		fields = append(fields, "collidesWith")
+	}
+	if invoked, present := row["invocableAs"]; present {
+		if value, ok := invoked.(string); !ok || value == "" {
+			return false
+		}
+		fields = append(fields, "invocableAs")
+	}
 	if !projectSkillFields(row, fields...) {
 		return false
 	}
@@ -65,12 +82,27 @@ func projectSkillEntry(row map[string]any) bool {
 		return false
 	}
 	source, ok := row["source"].(map[string]any)
-	if !ok || !projectSkillFields(source, "type", "plugin_name", "path") || source["type"] != "plugin" {
+	if !ok {
 		return false
 	}
-	name, ok := source["plugin_name"].(string)
 	path, located := source["path"].(string)
-	return ok && name != "" && located && path != ""
+	if !located || path == "" {
+		return false
+	}
+	switch source["type"] {
+	case "plugin":
+		if !projectSkillFields(source, "type", "plugin_name", "path") {
+			return false
+		}
+		name, ok := source["plugin_name"].(string)
+		return ok && name != ""
+	case "project", "user", "bundled", "config", "server":
+		// Foreign native Skills are inventory, not evidence of an owned
+		// plugin. The selected Skill still needs exact plugin-origin proof.
+		return projectSkillFields(source, "type", "path")
+	default:
+		return false
+	}
 }
 
 func projectSkillPluginObserved(document map[string]any, proof *projectSkillProof) bool {
