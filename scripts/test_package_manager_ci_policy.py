@@ -37,7 +37,12 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         version = (root / "agentplugins-published-version.yml").read_text(encoding="utf-8")
         installer = (root / "agentplugins-native-install.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_call:", version)
-        self.assertIn("releases/latest", version)
+        # GitHub Release may be public before npm environment approval.
+        # For unpinned PR/weekly smoke, only npm latest may select a target,
+        # and it still requires the corresponding public GitHub release.
+        self.assertNotIn("releases/latest", version)
+        self.assertIn('tag="agentplugins-v$current"', version)
+        self.assertIn('[[ "$current" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]', version)
         self.assertIn("npm view universal-agent-plugins dist-tags.latest", version)
         self.assertIn("npm view \"universal-agent-plugins@$version\" version", version)
         for target in ("darwin-amd64", "darwin-arm64", "linux-amd64",
