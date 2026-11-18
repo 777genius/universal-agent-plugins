@@ -5035,7 +5035,10 @@ module.exports = {
                 def source_call(argv, *_args, **_kwargs):
                     return dict(empty if len(argv) > 1 and argv[1] == "list" else refused)
                 with TemporaryDirectory() as temporary:
-                    with patch.object(audit, "call", side_effect=source_call):
+                    # Synthetic refusal-policy test, not a native Codex E2E.
+                    # Separate tests enforce real app-server/SQLite custody.
+                    with (patch.dict(audit.AGENT_BINARIES, {"codex": ""}),
+                          patch.object(audit, "call", side_effect=source_call)):
                         result = audit.do_case(
                             "/unused/audit-cli", target, "plugin", "atlassian",
                             0, Path(temporary).resolve(), {})
