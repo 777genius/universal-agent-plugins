@@ -1,6 +1,7 @@
 package grok
 
 import (
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"path/filepath"
 	"testing"
 
@@ -85,6 +86,27 @@ func TestProjectGrokUnrelatedNativeSourcesCannotForgeOwnedSkillProof(t *testing.
 			if err != nil || outcome.Activation != domain.ActivationPrepared ||
 				outcome.Verification != domain.VerificationPackageValid || f.runner.calls != 1 {
 				t.Fatalf("unqualified source fabricated Grok Ready: %+v %v", outcome, err)
+			}
+		})
+	}
+}
+
+// File discovery must catch case-folded foreign aliases, even when native
+// inspect has not reported the untrusted filesystem entry.
+func TestProjectGrokUnrelatedNativeSourcesRejectFoldedFilesystemAliases(t *testing.T) {
+	for _, tc := range []struct {
+		name, relative, body string
+	}{
+		{"foreign-plugin", "plugins/foreign/.grok-plugin/plugin.json", "{\"name\":\"DEMO\"}"},
+		{"foreign-direct-skill", "skills/DOCS/SKILL.md", "foreign"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := projectTestRequest(t)
+			target := filepath.Join(request.Plan.NativeRegistryRoot, filepath.FromSlash(tc.relative))
+			projectTestWrite(t, target, tc.body)
+			finding, err := inspectProjectFiles(request.Plan, false)
+			if err != nil || finding != clients.RegistryCollision {
+				t.Fatalf("folded foreign filesystem entry was missed: %v, %v", finding, err)
 			}
 		})
 	}
