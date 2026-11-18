@@ -425,7 +425,7 @@ def snapshot(root, *, include_directories=False):
                     # timestamps: native journals may touch existing parents.
                     try:
                         info = path.lstat()
-                        identity = (info.st_mode, info.st_dev, info.st_ino) if stat.S_ISDIR(info.st_mode) else "non-regular"
+                        identity = f"{info.st_mode}:{info.st_dev}:{info.st_ino}" if stat.S_ISDIR(info.st_mode) else "non-regular"
                     except OSError:
                         identity = "unreadable"
                     found[f"directory:{target_root.name}/{path.relative_to(target_root).as_posix()}"] = identity
