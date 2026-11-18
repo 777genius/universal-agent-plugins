@@ -36,6 +36,7 @@ require (
 )
 
 require (
+	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/catppuccin/go v0.2.0 // indirect
 	github.com/charmbracelet/x/exp/ordered v0.1.0 // indirect
