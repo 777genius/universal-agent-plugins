@@ -39,12 +39,6 @@ const (
 	discoveryPublicKey = "IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc="
 )
 
-// This mirror is a separately compiled binary. Refuse the same already-trusted
-// successor credential as the CLI, even if it is relabeled for a modern feed.
-// These are public trust pins, not signing material or publication approval.
-const mirrorNextDirectoryKeyID = "uap-directory-2026-11"
-const mirrorNextDirectoryPublicKey = "k0F0ZlRXsgUa3+OMOUle6GdpihXUUcHI+42wNeuGAMc="
-
 var shaPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 type trustedKeysDocument struct {

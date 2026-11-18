@@ -15,6 +15,12 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 )
 
+// This mirror is a separately compiled binary. Refuse the same already-trusted
+// successor credential as the CLI, even if it is relabeled for a modern feed.
+// These are public trust pins, not signing material or publication approval.
+const mirrorNextDirectoryKeyID = "uap-directory-2026-11"
+const mirrorNextDirectoryPublicKey = "k0F0ZlRXsgUa3+OMOUle6GdpihXUUcHI+42wNeuGAMc="
+
 // Only reviewed composition can supply this profile. Production still constructs
 // the historical profile; neither input bytes nor public flags can select modern.
 type directoryMirrorProfile struct {
