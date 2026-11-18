@@ -5,10 +5,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -229,5 +231,62 @@ func TestCopilotWholePluginInspectRejectsDifferentOwnedPluginName(t *testing.T) 
 	other.DeclaredName = "different"
 	if finding, err := copilotInspectWholePlugin(other, binding, env.NativeConfig); err == nil || finding != clients.RegistryIndeterminate {
 		t.Fatalf("foreign logical identity treated as installed: %s %v", finding, err)
+	}
+}
+
+// The native plugin loader reads its own manifest and marketplace only after
+// staging becomes the selected managed package. A valid settings entry alone
+// must never make an absent/foreign source look installed.
+func TestCopilotWholePluginSourceVerificationRejectsMissingAndSymlinkedDocs(t *testing.T) {
+	env, request, _ := trustFixture(t)
+	request.Plan.DeclaredName = "review"
+	active := request.Plan.ActivePath
+	manifest := filepath.Join(active, "plugin.json")
+	marketplace := filepath.Join(active, ".github", "plugin", "marketplace.json")
+	if err := os.MkdirAll(filepath.Dir(marketplace), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := copilotVerifyProjectPluginSource(request.Plan.NativeRegistryRoot, request.Plan, env.NativeConfig); err == nil {
+		t.Fatal("absent source counted as a registered plugin")
+	}
+	plugin := []byte("{\"name\":\"review\"}\n")
+	if err := os.WriteFile(manifest, plugin, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := shared.ProjectCopilotMarketplace(active,
+		domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "review", Version: "1.0.0"}}, request.Plan); err != nil {
+		t.Fatal(err)
+	}
+	if err := copilotVerifyProjectPluginSource(request.Plan.NativeRegistryRoot, request.Plan, env.NativeConfig); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(manifest, []byte("{\"name\":\"foreign\"}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := copilotVerifyProjectPluginSource(request.Plan.NativeRegistryRoot, request.Plan, env.NativeConfig); err == nil {
+		t.Fatal("foreign manifest admitted")
+	}
+	if err := os.WriteFile(manifest, plugin, 0600); err != nil {
+		t.Fatal(err)
+	}
+	foreign := filepath.Join(t.TempDir(), "outside-marketplace.json")
+	body, err := os.ReadFile(marketplace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(foreign, body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(marketplace); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(foreign, marketplace); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skip("symlink privilege unavailable")
+		}
+		t.Fatal(err)
+	}
+	if err := copilotVerifyProjectPluginSource(request.Plan.NativeRegistryRoot, request.Plan, env.NativeConfig); err == nil {
+		t.Fatal("native marketplace reader followed a foreign symlink")
 	}
 }
