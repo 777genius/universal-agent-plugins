@@ -1,10 +1,10 @@
 package grok
 
 import (
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"path/filepath"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
