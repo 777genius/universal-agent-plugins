@@ -77,8 +77,13 @@ async function run() {
         await shot('playing');
         await video.evaluate(el => el.pause());
         await expect.poll(() => video.evaluate(el => el.paused)).toBe(true);
-        if (await page.evaluate(() => Boolean(document.fullscreenElement))) await page.keyboard.press('Escape');
-        else await demo.getByRole('button', { name: 'Close demo' }).click();
+        if (await page.evaluate(() => Boolean(document.fullscreenElement))) {
+          await expect.poll(() => demo.evaluate(el => document.fullscreenElement === el)).toBe(true);
+          // Synthetic Escape does not reliably invoke Chrome's native fullscreen exit.
+          // Exercise the real browser exit and the component's fullscreenchange cleanup.
+          await page.evaluate(() => document.exitFullscreen());
+          await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+        } else await demo.getByRole('button', { name: 'Close demo' }).click();
         await expect(demo.locator('iframe')).toHaveCount(0);
         await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
         await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
