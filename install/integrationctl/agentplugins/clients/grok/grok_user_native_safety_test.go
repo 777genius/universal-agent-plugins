@@ -160,7 +160,7 @@ func TestGrokUserUnclosedRemovalReadbackNeverAllowsArtifactDeletion(t *testing.T
 }
 
 type grokMalformedReplacementReadback struct {
-	base *fakeGrok
+	base         *fakeGrok
 	afterRemoval bool
 }
 
