@@ -110,7 +110,6 @@ func TestCopilotPluginSettingsKeepsIndependentMarketplaces(t *testing.T) {
 	}
 }
 
-
 func TestCopilotPluginSettingsRestoresOnlyCompletelyAbsentOwnedPair(t *testing.T) {
 	reg := CopilotPluginRegistration{Marketplace: "agentplugins-abc123", Plugin: "review", Directory: ".uap/managed/clients/copilot/fixture"}
 	foreign := []byte("// other data stays\n{\"enabledPlugins\":{\"foreign@other\":false},\"other\":17}\n")
@@ -134,7 +133,6 @@ func TestCopilotPluginSettingsRestoresOnlyCompletelyAbsentOwnedPair(t *testing.T
 		t.Fatalf("partial disabled pair was adopted: %v", err)
 	}
 }
-
 
 func TestCopilotPluginSettingsRefusesUnverifiableOversizeCommit(t *testing.T) {
 	registration := CopilotPluginRegistration{
