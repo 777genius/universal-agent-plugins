@@ -1,0 +1,153 @@
+package copilot
+
+import (
+	"bytes"
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
+	env, request, trustPath := trustFixture(t)
+	request.Client.ClientID = domain.ClientCopilot
+	request.Plan.DeclaredName = "review"
+	request.Plan.NativePluginRegistration = true
+	request.Plan.InstallIntent = domain.InstallIntentAutomatic
+	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "review", Support: domain.SupportNative}}
+	request.DeclaredName = "review"
+	request.Delivery = domain.StagedDelivery{ClientID: domain.ClientCopilot, ActivePath: request.Plan.ActivePath}
+	object, err := copilotProjectPluginObject(request.Plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Delivery.NativeObjects = []domain.NativeObjectOwnership{object}
+	reg, settingsPath, err := copilotProjectRegistration(request.Plan.NativeRegistryRoot, request.Plan.PhysicalArtifactID, request.DeclaredName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	foreign := []byte("// foreign settings\n{\"foreign\":42,\"enabledPlugins\":{\"foreign@other\":false}}\n")
+	if err := os.WriteFile(settingsPath, foreign, 0600); err != nil {
+		t.Fatal(err)
+	}
+	staging := filepath.Join(t.TempDir(), "staging")
+	if err := os.MkdirAll(staging, 0700); err != nil {
+		t.Fatal(err)
+	}
+	envelope := domain.PackageEnvelope{FormatID: domain.FormatIDAgentPluginsV1,
+		Manifest: domain.PluginManifest{Name: "review", Version: "1.0.0"}}
+	projected, err := New().Project(t.Context(), clients.ProjectionInput{StagingPath: staging, Envelope: envelope, Plan: request.Plan})
+	if err != nil || len(projected) != 1 || projected[0] != object {
+		t.Fatalf("whole plugin projection: %v %#v", err, projected)
+	}
+	if _, err := os.Stat(filepath.Join(staging, ".github", "plugin", "marketplace.json")); err != nil {
+		t.Fatal("native marketplace was not staged:", err)
+	}
+	if _, err := os.Stat(filepath.Join(staging, ".github", "skills")); !os.IsNotExist(err) {
+		t.Fatalf("native registration duplicated loose skills: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(staging, "mcp.json")); !os.IsNotExist(err) {
+		t.Fatalf("native registration duplicated MCP settings: %v", err)
+	}
+	outcome, err := New().Activate(t.Context(), env, request)
+	if err != nil || outcome.Verification != domain.VerificationInstalled || outcome.Activation != domain.ActivationPrepared {
+		t.Fatalf("Copilot project automatic registration: %+v %v", outcome, err)
+	}
+	installed, err := os.ReadFile(settingsPath)
+	if err != nil || !bytes.Contains(installed, []byte("foreign@other")) || !bytes.Contains(installed, []byte("// foreign settings")) {
+		t.Fatalf("foreign settings lost: %v %s", err, installed)
+	}
+	if present, exact, err := nativeconfig.InspectCopilotPluginSettings(installed, reg); err != nil || !present || !exact {
+		t.Fatalf("native Copilot registration missing: %v %v %v", present, exact, err)
+	}
+	if _, err := os.Stat(trustPath); err != nil {
+		t.Fatalf("project trust not remembered: %v", err)
+	}
+	request.PreviousNativeObjects = request.Delivery.NativeObjects
+	repeat, err := New().Activate(t.Context(), env, request)
+	if err != nil || repeat.Activation != domain.ActivationPrepared {
+		t.Fatalf("repeat: %+v %v", repeat, err)
+	}
+	if next, err := os.ReadFile(settingsPath); err != nil || !bytes.Equal(installed, next) {
+		t.Fatal("repeat rewrote unchanged project settings")
+	}
+	removed, err := New().Deactivate(t.Context(), env, domain.DeactivationRequest{
+		Client: request.Client, TargetContext: request.Plan.TargetContext,
+		NativeRegistryRoot: request.Plan.NativeRegistryRoot, PhysicalArtifactID: request.Plan.PhysicalArtifactID,
+		DeclaredName: request.DeclaredName, NativeObjects: request.Delivery.NativeObjects, Confirmed: true,
+	})
+	if err != nil || !removed.ExternalRemovalComplete {
+		t.Fatalf("native project removal failed: %+v %v", removed, err)
+	}
+	finalSettings, err := os.ReadFile(settingsPath)
+	if err != nil || !bytes.Contains(finalSettings, []byte("foreign@other")) {
+		t.Fatalf("removal damaged foreign settings: %v %s", err, finalSettings)
+	}
+	if present, _, err := nativeconfig.InspectCopilotPluginSettings(finalSettings, reg); err != nil || present {
+		t.Fatal("project marketplace still registered")
+	}
+	if _, err := os.Stat(trustPath); err != nil {
+		t.Fatal("plugin removal revoked persisted project trust")
+	}
+}
+
+func TestCopilotWholePluginEligibilityKeepsLegacyProjectComponents(t *testing.T) {
+	envelope := domain.PackageEnvelope{FormatID: domain.FormatIDAgentPluginsV1}
+	in := clients.PlanInput{Envelope: envelope}
+	plan := domain.DeliveryPlan{Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "review", Support: domain.SupportNative}}}
+	if !copilotWholePluginEligible(in, plan) {
+		t.Fatal("portable v1 plugin was not eligible")
+	}
+	in.PreviousNativeObjects = []domain.NativeObjectOwnership{{Kind: copilotProjectSkillKind}}
+	if copilotWholePluginEligible(in, plan) {
+		t.Fatal("legacy component registration migrated without ownership transaction")
+	}
+	in.PreviousNativeObjects = nil
+	plan.Components = append(plan.Components, domain.ComponentDecision{Kind: domain.ComponentMCPServer, Name: "blocked", Support: domain.SupportUnsupported})
+	if copilotWholePluginEligible(in, plan) {
+		t.Fatal("whole plugin bypassed unsupported component admission")
+	}
+	plan.Components = plan.Components[:1]
+	in.Envelope.FormatID = domain.FormatIDLegacyV1
+	if copilotWholePluginEligible(in, plan) {
+		t.Fatal("legacy package incorrectly treated as Agent Plugins 1.0")
+	}
+}
+
+func TestCopilotWholePluginRegistrationRefusesDriftAndForeignReplacement(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "project")
+	if err := os.MkdirAll(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	reg, path, err := copilotProjectRegistration(root, "fixture", "review")
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign := []byte("{\"extraKnownMarketplaces\":{\"" + reg.Marketplace + "\":{\"source\":{\"source\":\"directory\",\"path\":\"foreign\"}}}}")
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, foreign, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := copilotMutateProjectPlugin(context.Background(), nativeconfig.New(), root, "fixture", "review", false, false); err == nil {
+		t.Fatal("foreign marketplace overwritten")
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(got, foreign) {
+		t.Fatal("collision damaged foreign configuration")
+	}
+	if err := copilotMutateProjectPlugin(context.Background(), nativeconfig.New(), root, "fixture", "review", true, true); err == nil {
+		t.Fatal("unowned marketplace removed")
+	}
+	if got, err := os.ReadFile(path); err != nil || !bytes.Equal(got, foreign) {
+		t.Fatal("removal damaged foreign configuration")
+	}
+}
