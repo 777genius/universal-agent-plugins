@@ -307,11 +307,11 @@ func TestCopilotWholePluginInspectRejectsDifferentOwnedPluginName(t *testing.T) 
 		t.Fatal(err)
 	}
 	binding := &domain.ClientBinding{
-		Scope: string(domain.ScopeProject),
+		Scope:             string(domain.ScopeProject),
 		NativeProfileRoot: request.Plan.NativeRegistryRoot,
-		PhysicalArtifact: request.Plan.PhysicalArtifactID,
-		TargetLocator: request.Plan.ActivePath,
-		NativeObjects: []domain.NativeObjectOwnership{owned},
+		PhysicalArtifact:  request.Plan.PhysicalArtifactID,
+		TargetLocator:     request.Plan.ActivePath,
+		NativeObjects:     []domain.NativeObjectOwnership{owned},
 	}
 	other := request.Plan
 	other.DeclaredName = "different"
