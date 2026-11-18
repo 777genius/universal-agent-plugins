@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import tarfile
@@ -305,10 +304,10 @@ def main(root, report):
             for index, project in enumerate(projects):
                 skill_output = command([str(binary), "skills", "list", "--json"], project, env, timeout=45)
                 mcp_output = command([str(binary), "mcp", "list", "--json"], project, env, timeout=45)
-            selected_mcp = project / ".devin" / "mcp_config.json"
-            found = [available_skill(skill_output, SKILL),
-                     available_mcp(mcp_output, STDIO, selected_mcp, "stdio"),
-                     available_mcp(mcp_output, HTTP, selected_mcp, "http")]
+                selected_mcp = project / ".devin" / "mcp_config.json"
+                found = [available_skill(skill_output, SKILL),
+                         available_mcp(mcp_output, STDIO, selected_mcp, "stdio"),
+                         available_mcp(mcp_output, HTTP, selected_mcp, "http")]
                 want = present if index == 0 else False
                 if found != [want] * 3:
                     raise RuntimeError(f"genuine Devin {stage} Project {index} Skills/MCP discovery mismatched: {found}")
