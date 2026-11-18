@@ -430,3 +430,18 @@ func TestGrokUserFailedNativeMutationCannotUseUnknownListAttestation(t *testing.
 		t.Fatalf("failed native mutation reused manual list attestation: %+v %v %+v", outcome, err, base.commands)
 	}
 }
+
+func TestGrokUserAutomaticPreflightCannotReuseManualAttestation(t *testing.T) {
+	request := grokRequest(t)
+	request.ActivationComplete = true
+	request.VerifyOnly = false
+	base := &fakeGrok{entries: []pluginEntry{}}
+	outcome, err := New().Activate(t.Context(), clients.Env{Runner: &grokFaultRunner{
+		other: base, verb: "list", err: errUnknownList,
+	}}, request)
+	if err != nil || outcome.Activation == domain.ActivationActive || outcome.ActivationAttested ||
+		outcome.Verification == domain.VerificationInstalled || len(base.commands) != 1 ||
+		base.commands[0][2] != "list" {
+		t.Fatalf("automatic preflight reused stale manual attestation: %+v %v %+v", outcome, err, base.commands)
+	}
+}
