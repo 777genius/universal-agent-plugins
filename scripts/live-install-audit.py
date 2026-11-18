@@ -23,6 +23,7 @@ from urllib.parse import urlsplit, urlunsplit
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
+HISTORICAL_CODEX = run_path(str(ROOT / "scripts/published_codex_baseline.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
 OPENCODE_BOOTSTRAP_AUDIT = run_path(str(ROOT / "scripts/opencode_bootstrap_audit.py"))
 
@@ -2050,14 +2051,15 @@ def initialize_project_skill_git_root(project, env, case_root):
 
 
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-            signed_release_pins=None, *, client_version=None):
+            signed_release_pins=None, *, client_version=None, historical_baseline=False):
     with ExitStack() as audits:
         return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-                        signed_release_pins, audits, client_version)
+                        signed_release_pins, audits, client_version,
+                        **({"historical_baseline": True} if historical_baseline else {}))
 
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-             signed_release_pins, audits, client_version):
+             signed_release_pins, audits, client_version, *, historical_baseline=False):
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
     project = case_root / "project"
@@ -2128,6 +2130,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     codex_system_skill_proof = None
     codex_add_ready = False
     codex_repeat_ready = False
+    historical_observer = (HISTORICAL_CODEX["PublishedBaseline"](cli, env, project)
+                           if historical_baseline else None)
+    historical_add_verified = historical_repeat_add_verified = False
+    historical_repeat_lifecycle_verified = False
     def assert_case_unchanged():
         # Native clients and acquired packages execute as subprocesses.
         # Re-anchor before and after each call; otherwise an ancestor symlink
@@ -2155,6 +2161,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         assert_case_unchanged()
         outcome = call(*args, **kwargs)
         assert_case_unchanged()
+        if historical_observer is not None:
+            historical_observer.after_command()
+            assert_case_unchanged()
         if codex_plugin_sqlite is not None:
             codex_plugin_sqlite.checkpoint("after-public-command")
         return outcome
@@ -2307,6 +2316,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if codex_runtime is not None and installed:
         codex_runtime.checkpoint("installed", True)
         codex_add_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](added_json, matching, identity)
+        if historical_observer is not None:
+            historical_add_verified = HISTORICAL_CODEX["historical_add"](
+                added_json, matching, item, project / skill_path)
     # BUG-016: a single successful add/remove cannot attest idempotence.
     # Repeat the same source and target only after the first registered add;
     # keep native, managed and foreign state inside the same disposable case.
@@ -2368,14 +2380,18 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
-        repeat_verified = bool(
+        historical_repeat_lifecycle_verified = bool(
             repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
             and len(repeat_matches) == 1
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
             and (not grok_prepared or repeat_project_unchanged)
-            and (not codex_skill_case or codex_repeat_ready)
         )
+        repeat_verified = bool(historical_repeat_lifecycle_verified
+                               and (not codex_skill_case or codex_repeat_ready))
+        if historical_observer is not None:
+            historical_repeat_add_verified = HISTORICAL_CODEX["historical_add"](
+                repeat_add_json, repeat_matches, item, project / skill_path, repeated=True)
     # BUG-039: independent native ID+version proof before UAP removes it.
     qoder_native_before_remove = None
     if target == "qoder" and kind == "plugin" and installed and repeat_verified:
@@ -2704,6 +2720,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "qoder_native_after_remove": qoder_native_after_remove,
             "copilot_native_after_repeat": copilot_native_before_remove,
             "copilot_native_after_remove": copilot_native_after_remove,
+            **({"historical_npm_proof": historical_observer.proof,
+                "historical_add_verified": historical_add_verified,
+                "historical_repeat_add_verified": historical_repeat_add_verified,
+                "historical_repeat_lifecycle_verified": historical_repeat_lifecycle_verified}
+               if historical_observer is not None else {}),
             "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
             "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
             "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
@@ -2830,7 +2851,13 @@ def main():
     p.add_argument("--target", required=True)
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--report-dir", required=True)
+    p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"]),
+                   default="native")
     args = p.parse_args()
+    historical_baseline = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
+    if historical_baseline and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
+            "codex", "skill", "linux", "x86_64", 2):
+        p.error("Historical npm observation requires exactly two Codex Skills on Linux x86_64")
     doc = json.loads(FIXTURES.read_text())
     validate_fixtures(doc)
     if args.target not in doc["targets"] or not 1 <= args.limit <= 30:
@@ -2854,6 +2881,9 @@ def main():
               "fixture_count": len(cases), "cases_attempted": 0,
               "source_selection_complete": args.limit == 30,
               "full_coverage": False, "results": []}
+    if historical_baseline:
+        report["acceptance"] = args.acceptance
+        report.update(HISTORICAL_CODEX["summary"](report, doc))
     report_file = report_dir / f"{args.target}-{args.kind}.json"
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
@@ -2912,7 +2942,8 @@ def main():
                                  doc["plugin_declared_names"],
                                  doc["signed_release_pins"],
                                  **({"client_version": report.get("client_version")}
-                                    if args.target == "opencode" else {}))
+                                    if args.target == "opencode" else {}),
+                                 **({"historical_baseline": True} if historical_baseline else {}))
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "source": item if args.kind == "plugin" else item["source"],
@@ -2944,6 +2975,12 @@ def main():
     save()
     print(f'{args.target} {args.kind}: {passed}/{args.limit} native PASS; '
           f'verified_negative={len(accepted_negatives)}; attempted={report["cases_attempted"]}')
+    if historical_baseline:
+        report.update(HISTORICAL_CODEX["summary"](report, doc))
+        save()
+        print(f'Historical npm lifecycle observations: {report["historical_lifecycle_observed"]}/2; '
+              'modern public readiness remains unavailable; native PASS count unchanged')
+        return 0 if report["historical_observation_complete"] else 1
     return 0 if (report["cases_attempted"] == args.limit
                  and passed + len(accepted_negatives) == args.limit) else 1
 

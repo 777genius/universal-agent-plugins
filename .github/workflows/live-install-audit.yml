@@ -6,6 +6,8 @@ on:
     paths:
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/live-install-audit.py'
+      - 'scripts/published_codex_baseline.py'
+      - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/claude_cache_retirement_audit.py'
@@ -113,6 +115,8 @@ jobs:
       - name: Install native Codex sandbox prerequisite
         shell: bash
         run: bash scripts/prepare-codex-linux-sandbox.sh
+      - name: Verify historical observer negative controls
+        run: python3 -m unittest discover -s scripts -p test_published_codex_baseline.py
       - name: Install the actual public npm installer and Codex
         id: published-install
         run: |
@@ -126,8 +130,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/published-proof"
           result=0
           for kind in plugin skill; do
+            # Keep this immutable release's lifecycle distinct from current Ready.
+            acceptance=native
+            if [ "$kind" = skill ]; then acceptance=published-0.1.95-codex-skills; fi
             python3 scripts/live-install-audit.py --cli "$(command -v agentplugins)" \
-              --target codex --kind "$kind" --limit 2 \
+              --target codex --kind "$kind" --limit 2 --acceptance "$acceptance" \
               --report-dir "$RUNNER_TEMP/published-proof" || result=1
           done
           exit "$result"
