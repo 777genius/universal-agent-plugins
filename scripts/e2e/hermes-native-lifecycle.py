@@ -52,9 +52,9 @@ class Lifecycle:
                                + error.read_text(encoding="utf-8", errors="replace"))
         return output
 
-    def run_uap(self, stage, *args):
+    def run_uap(self, stage, *args, env=None):
         return self.capture([self.uap, *args, "--target", "hermes", "--yes",
-                             "--format", "json"], stage + "-uap.json")
+                             "--format", "json"], stage + "-uap.json", env=env)
 
     def observe(self, stage, cwd, marker, project_count, trusted=False):
         # Observe the profile a bare `hermes` resolves, never an assumed file.
@@ -162,6 +162,40 @@ class Lifecycle:
         # Refuse unexpected additional contents rather than deleting a whole tree.
         skill.unlink()
         skill.parent.rmdir()
+
+    def fresh_user_lifecycle(self):
+        # A new user has no config.yaml or previous UAP binding. Preserve the
+        # existing selected profile while checking native discovery in this one.
+        fresh = self.root / "fresh-user-home"
+        source = self.root / "fresh-user-src"
+        shutil.copytree(self.user_source, source)
+        manifest = source / "plugin.json"
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload["name"] = "hermes-uap-native-fresh"
+        manifest.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+        env = dict(os.environ, HERMES_HOME=str(fresh))
+        original = self.config.read_bytes()
+        require(not fresh.exists(), "fresh native profile must not be seeded")
+        self.run_uap("fresh-user-add", "add", source, "--scope", "user", "--no-save", env=env)
+        skill = self.skill("user", fresh)
+        require(skill.is_file() and (fresh / "config.yaml").is_file(),
+                "automatic installation did not create fresh Hermes Skills and MCP config")
+        listing = self.capture([*self.hermes, "skills", "list", "--source", "local", "--enabled-only"],
+                               "fresh-user-skills.txt", env=env)
+        require("native-smoke-user" in listing.read_text(encoding="utf-8"),
+                "real Hermes did not discover a Skill installed into a new profile")
+        mcp = self.capture([*self.hermes, "mcp", "list"], "fresh-user-mcp.txt", env=env)
+        require("uap-native-test-server" in mcp.read_text(encoding="utf-8"),
+                "real Hermes did not discover MCP installed into a new profile")
+        self.capture([*self.hermes, "mcp", "test", "uap-native-test-server"],
+                     "fresh-user-mcp-test.txt", env=env)
+        self.run_uap("fresh-user-remove", "remove", "hermes-uap-native-fresh",
+                     "--scope", "user", env=env)
+        require(not skill.exists() and
+                "uap-native-test-server" not in (fresh / "config.yaml").read_text(encoding="utf-8"),
+                "fresh-profile uninstall left UAP-managed native entries")
+        require(self.config.read_bytes() == original,
+                "fresh-profile lifecycle changed the pre-existing Hermes profile")
 
     def user_lifecycle(self):
         self.run_uap("user-add", "add", self.user_source, "--scope", "user", "--no-save")
@@ -302,10 +336,11 @@ def main():
     with tempfile.TemporaryDirectory(prefix="hermes-uap-native-", dir=os.environ["RUNNER_TEMP"]) as tmp:
         suite = Lifecycle(Path(tmp))
         suite.prepare()
+        suite.fresh_user_lifecycle()
         suite.user_lifecycle()
         suite.project_lifecycle()
         suite.remove_user()
-    print("Hermes native User lifecycle, Project A/B isolation and trust boundary passed.", flush=True)
+    print("Hermes native fresh-profile/User lifecycle, Project A/B isolation and trust boundary passed.", flush=True)
 
 
 if __name__ == "__main__":
