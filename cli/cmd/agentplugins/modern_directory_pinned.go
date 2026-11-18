@@ -41,16 +41,20 @@ func newPinnedModernDirectoryClient(dataRoot string, approved pinnedModernDirect
 		return nil, err
 	}
 	if approved.KeyID == "" || approved.KeyID != strings.TrimSpace(approved.KeyID) ||
-		approved.KeyID == defaultDirectoryKeyID {
+		(approved.KeyID == defaultDirectoryKeyID || approved.KeyID == nextDirectoryKeyID) {
 		return nil, fmt.Errorf("modern Directory requires a distinct pinned signing key ID")
 	}
 	raw, err := base64.StdEncoding.Strict().DecodeString(approved.PublicKeyBase64)
 	if err != nil || len(raw) != ed25519.PublicKeySize {
 		return nil, fmt.Errorf("modern Directory requires a valid pinned Ed25519 public key")
 	}
-	legacy, err := base64.StdEncoding.Strict().DecodeString(defaultDirectoryPublicKey)
-	if err != nil || len(legacy) != ed25519.PublicKeySize || bytes.Equal(raw, legacy) {
-		return nil, fmt.Errorf("modern Directory cannot reuse the historical signing key")
+	// Both current and next keys already belong to the production Directory
+	// trust store. A new feed cannot borrow either key under a different ID.
+	for _, existing := range []string{defaultDirectoryPublicKey, nextDirectoryPublicKey} {
+		pretrusted, err := base64.StdEncoding.Strict().DecodeString(existing)
+		if err != nil || len(pretrusted) != ed25519.PublicKeySize || bytes.Equal(raw, pretrusted) {
+			return nil, fmt.Errorf("modern Directory cannot reuse the historical signing key or its pretrusted successor")
+		}
 	}
 	trust := directoryv1.NewModernTrustStore([]directoryv1.TrustedKey{{
 		ID: approved.KeyID, PublicKey: ed25519.PublicKey(raw), State: directoryv1.KeyCurrent,
