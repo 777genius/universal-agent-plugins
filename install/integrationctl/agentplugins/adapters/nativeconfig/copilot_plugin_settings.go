@@ -119,14 +119,17 @@ func PatchCopilotPluginSettings(body []byte, r CopilotPluginRegistration, owned,
 		return nil, false, err
 	}
 	if owned {
-		if !exact {
-			return nil, false, fmt.Errorf("%w: Copilot project registration changed or disappeared", ErrNotOwned)
+		// An entirely absent pair can be restored or removed using the
+		// previously verified state receipt. A partial or changed pair cannot:
+		// it may have been replaced by a concurrent native/foreign writer.
+		if present && !exact {
+			return nil, false, fmt.Errorf("%w: Copilot project registration changed or became partial", ErrNotOwned)
 		}
 	} else if present {
 		return nil, false, fmt.Errorf("%w: Copilot project registration namespace already occupied", ErrCollision)
 	}
 	if remove {
-		if !owned {
+		if !owned || !present {
 			return bytes.Clone(body), false, nil
 		}
 		marketplaces, _ := objectCollection(doc.root, "extraKnownMarketplaces", false)
