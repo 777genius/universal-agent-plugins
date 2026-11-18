@@ -295,3 +295,50 @@ func TestGrokUserExternalUninstalledCannotBypassAvailableNativeRegistry(t *testi
 		}
 	})
 }
+
+type grokMalformedInstallReadback struct {
+	base         *fakeGrok
+	afterInstall bool
+}
+
+func (f *grokMalformedInstallReadback) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	if len(command.Argv) >= 3 && command.Argv[2] == "list" && f.afterInstall {
+		f.base.commands = append(f.base.commands, append([]string(nil), command.Argv...))
+		return legacyports.CommandResult{Stdout: []byte("[] {}")}, nil
+	}
+	result, err := f.base.Run(ctx, command)
+	if len(command.Argv) >= 3 && command.Argv[2] == "install" && err == nil && result.ExitCode == 0 {
+		f.afterInstall = true
+	}
+	return result, err
+}
+
+// An old operator confirmation is not proof of the new install's visibility.
+// A malformed post-install list must fail closed without a second mutation.
+func TestGrokUserPostInstallUnknownReadbackCannotReuseManualAttestation(t *testing.T) {
+	request := grokRequest(t)
+	request.ActivationComplete = true
+	base := &fakeGrok{}
+	runner := &grokMalformedInstallReadback{base: base}
+	outcome, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request)
+	if !errors.Is(err, errUnknownList) || outcome.Activation != domain.ActivationFailed ||
+		outcome.Verification != domain.VerificationFailed || outcome.NativeEffect != domain.NativeEffectUncertain ||
+		outcome.ActivationAttested || outcome.AuthoritativeObservation || len(base.commands) != 3 ||
+		base.commands[0][2] != "list" || base.commands[1][2] != "install" || base.commands[2][2] != "list" {
+		t.Fatalf("unreadable post-install registration became attested Ready: %+v %v %+v", outcome, err, base.commands)
+	}
+}
+
+func TestGrokUserVerifyOnlyMayStillUseExplicitManualAttestation(t *testing.T) {
+	request := grokRequest(t)
+	request.ActivationComplete = true
+	request.VerifyOnly = true
+	base := &fakeGrok{}
+	runner := &grokMalformedInstallReadback{base: base, afterInstall: true}
+	outcome, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request)
+	if err != nil || outcome.Activation != domain.ActivationActive || !outcome.ActivationAttested ||
+		outcome.NativeEffect == domain.NativeEffectUncertain || len(base.commands) != 1 ||
+		base.commands[0][2] != "list" {
+		t.Fatalf("read-only manual attestation contract changed: %+v %v %+v", outcome, err, base.commands)
+	}
+}

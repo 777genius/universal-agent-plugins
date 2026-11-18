@@ -50,7 +50,7 @@ func activateUser(ctx context.Context, env clients.Env, request domain.Activatio
 		return outcome, nil
 	}
 	if request.VerifyOnly {
-		return verifyActivation(ctx, env, request, outcome)
+		return verifyActivation(ctx, env, request, outcome, false)
 	}
 	entries, err := listPlugins(ctx, env, request.BackendExecutable)
 	if err != nil {
@@ -88,12 +88,20 @@ func activateUser(ctx context.Context, env clients.Env, request domain.Activatio
 		// stale listing. Never launch another command after that failure.
 		return activationError(outcome, request, fmt.Errorf("install grok plugin: %w", err))
 	}
-	return verifyActivation(ctx, env, request, outcome)
+	return verifyActivation(ctx, env, request, outcome, true)
 }
 
-func verifyActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
+func verifyActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome, installedNow bool) (domain.ActivationOutcome, error) {
 	entries, err := listPlugins(ctx, env, request.BackendExecutable)
 	if err != nil {
+		if installedNow {
+			// A previous manual attestation cannot prove this new native install.
+			// Unknown readback after a successful mutation has uncertain effect:
+			// do not claim Ready or retry native operations in the same session.
+			outcome.NativeEffect = domain.NativeEffectUncertain
+			return shared.FailedActivation(outcome, "inspect `grok plugin list --json` before retrying installation",
+				fmt.Errorf("verify newly installed Grok plugin: %w", shared.CompletionProbeFailure(err)))
+		}
 		return activationError(outcome, request, err)
 	}
 	entry, found := findEntry(entries, request.DeclaredName)
