@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { navigate, offline, projections, registryFixture, targets, wording } from './i18n-state.helpers';
+import { navigate, offline, openCardInstall, projections, registryFixture, targets, wording } from './i18n-state.helpers';
 
 function pluginWithOnlyCodex() {
   const index = registryFixture();
@@ -46,7 +46,7 @@ for (const width of [1440, 390]) {
       await expect(hero).toContainText(notice);
       await expect(hero).not.toContainText(repairNotice);
     }
-    await card.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, card);
     for (const [agent, client] of [['Hermes Agent', 'hermes'], ['Google Antigravity', 'antigravity'], ['Pi', 'pi']]) {
       await targets(page, card, [agent!]);
       const add = `${cli} add ${selector} --target ${client}`;
@@ -104,7 +104,7 @@ for (const width of [1440, 390]) {
     await projections(page, index);
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
-    await card.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, card);
     for (const picker of [page.getByRole('dialog'), page.locator('.hero-shell')]) {
       await picker.locator('.app-multiselect__trigger').click();
       for (const agent of ['Hermes Agent', 'Google Antigravity', 'Pi'])
@@ -122,7 +122,7 @@ for (const width of [1440, 390]) {
     await projections(page, pluginWithOnlyCodex());
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
-    await card.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, card);
     await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     const web = page.getByRole('checkbox', { name: /^ChatGPT Web/ });
     for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
@@ -173,7 +173,7 @@ for (const width of [1440, 390]) {
     await projections(page, index);
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
-    await card.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, card);
     const hero = page.locator('.hero-shell');
     for (const picker of [page.getByRole('dialog'), hero]) {
       await picker.locator('.app-multiselect__trigger').click();
@@ -256,7 +256,7 @@ test('automatic authentication uses the selected User or Project scope, not a po
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
   const indicator = card.locator('.authentication-indicator');
   await expect(indicator).toHaveAttribute('data-authentication', 'not_required');
-  await card.locator('.plugin-card__install-toggle').click();
+  await openCardInstall(page, card);
   const project = page.getByRole('dialog').locator('.install-scope').getByRole('button', { name: 'This project' });
   await expect(project).toBeEnabled();
   await project.click();
@@ -375,7 +375,7 @@ for (const path of ['/', '/plugins/'] as const) {
     await navigate(page, path, 'en', path === '/' ? '?q=i18n-state-00' : '');
 
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
-    await card.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, card);
     await targets(page, card, ['Google Antigravity']);
     await expect(page.getByRole('dialog').locator('.command-snippet--add code'))
       .toContainText('universal-agent-plugins@0.1.110 add github:');
@@ -385,7 +385,7 @@ for (const path of ['/', '/plugins/'] as const) {
       await targets(page, hero, ['Google Antigravity']);
       await expect(hero.locator('.command-snippet--add code'))
         .toContainText('universal-agent-plugins@0.1.110 add github:');
-      await card.locator('.plugin-card__install-toggle').click();
+      await openCardInstall(page, card);
       await expect(page.getByRole('dialog').locator('.command-snippet--add code'))
         .toContainText('universal-agent-plugins@0.1.110 add github:');
     }
