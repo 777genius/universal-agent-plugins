@@ -88,8 +88,14 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 					servers[object.LogicalName] = server
 				}
 			}
+			previous := copilotNativeObjects(request.PreviousNativeObjects)
+			if copilotSwitchesToComponents(request) {
+				// The owned plugin registration belongs to the separate settings
+				// transaction; it is not an owned loose Skill or MCP object.
+				previous = nil
+			}
 			mutation := shared.ProjectComponentMutation{Layout: layout, ActivePath: request.Delivery.ActivePath,
-				Previous: copilotNativeObjects(request.PreviousNativeObjects), Desired: copilotNativeObjects(request.Delivery.NativeObjects), Servers: servers, Kernel: env.NativeConfig}
+				Previous: previous, Desired: copilotNativeObjects(request.Delivery.NativeObjects), Servers: servers, Kernel: env.NativeConfig}
 			if err := mutation.Preflight(ctx); err != nil {
 				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 			}
