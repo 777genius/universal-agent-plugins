@@ -18,7 +18,7 @@ var (
 // AutomaticallyActivates selects repository files or the existing user CLI lane.
 func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.ActivationRequest) bool {
 	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
-		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components)
+		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && (request.Plan.NativePluginRegistration || shared.OnlyNativeComponents(request.Plan.Components))
 	}
 	return shared.CopilotAutomaticallyActivates(env, request)
 }
@@ -26,7 +26,7 @@ func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.Activatio
 // VerifierAvailable reports exact repository configuration or user CLI inspection.
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
 	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
-		return shared.OnlyNativeComponents(plan.Components)
+		return plan.NativePluginRegistration || shared.OnlyNativeComponents(plan.Components)
 	}
 	return shared.CopilotVerifierAvailable(backendExecutable)
 }
