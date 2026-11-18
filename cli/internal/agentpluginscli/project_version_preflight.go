@@ -44,22 +44,18 @@ func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, 
 		// without targeted probing must never execute unrelated clients.
 		return nil
 	}
-	// Preserve the mandatory selection as one atomic probe. Optional
-	// client capabilities are queried separately so their failure never
-	// suppresses a mandatory host-version requirement.
-	mandatory := make([]domain.ClientID, 0, len(requested))
-	optional := make([]domain.ClientID, 0, 1)
-	for _, id := range requested {
-		probe, ok := clients.As[clients.BestEffortProjectVersionProbe](app.ClientRegistry, id)
-		if app.scope() == domain.ScopeProject && ok && probe.ProjectVersionProbeBestEffort() {
-			optional = append(optional, id)
-		} else {
-			mandatory = append(mandatory, id)
-		}
-	}
+	return probeMissingProjectVersions(ctx, app.ClientRegistry, app.scope(), targeted, requested, detected)
+}
+
+// Preserve mandatory version requirements as one atomic probe. Optional
+// client capabilities are queried separately, so their failures cannot
+// suppress an existing mandatory host-version requirement.
+func probeMissingProjectVersions(ctx context.Context, registry *clients.Registry, scope domain.InstallScope,
+	detector ports.TargetedVersionProbingClientDetector, requested []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) error {
+	mandatory, optional := splitProjectVersionProbes(registry, scope, requested)
 	versions := make(map[domain.ClientID]string, len(requested))
 	if len(mandatory) > 0 {
-		probed, err := targeted.DetectTargetsWithVersionProbe(ctx, mandatory)
+		probed, err := detector.DetectTargetsWithVersionProbe(ctx, mandatory)
 		if err != nil {
 			return fmt.Errorf("targets %v version detection failed; no target was changed: %w", mandatory, err)
 		}
@@ -75,7 +71,7 @@ func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, 
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		probed, err := targeted.DetectTargetsWithVersionProbe(ctx, []domain.ClientID{id})
+		probed, err := detector.DetectTargetsWithVersionProbe(ctx, []domain.ClientID{id})
 		if err != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
@@ -92,6 +88,19 @@ func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, 
 		detected[id] = client
 	}
 	return nil
+}
+
+func splitProjectVersionProbes(registry *clients.Registry, scope domain.InstallScope,
+	requested []domain.ClientID) (mandatory, optional []domain.ClientID) {
+	for _, id := range requested {
+		probe, ok := clients.As[clients.BestEffortProjectVersionProbe](registry, id)
+		if scope == domain.ScopeProject && ok && probe.ProjectVersionProbeBestEffort() {
+			optional = append(optional, id)
+		} else {
+			mandatory = append(mandatory, id)
+		}
+	}
+	return mandatory, optional
 }
 
 func missingProjectVersionTargets(registry *clients.Registry, targets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient, scopes ...domain.InstallScope) []domain.ClientID {
