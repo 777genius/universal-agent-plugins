@@ -111,15 +111,16 @@ type DeliveryPlan struct {
 	ActivePath   string `json:"-"`
 }
 
-// DeliveryTarget contains deterministic operational paths computed from the
-// configured client roots. Persisted state must be checked against this value
-// before any destructive operation.
 // SetNativePluginRegistration selects transient native project registration without
 // changing public DTOs or the planner's recorded golden snapshots.
 func (p *DeliveryPlan) SetNativePluginRegistration(yes bool) { p.nativePluginRegistration = yes }
+
 // HasNativePluginRegistration is an in-memory scoped plan choice, never a persisted capability flag.
 func (p DeliveryPlan) HasNativePluginRegistration() bool { return p.nativePluginRegistration }
 
+// DeliveryTarget contains deterministic operational paths computed from the
+// configured client roots. Persisted state must be checked against this value
+// before any destructive operation.
 type DeliveryTarget struct {
 	TargetContext      TargetContext     `json:"-"`
 	NativeRegistryRoot string            `json:"-"`
