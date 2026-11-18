@@ -1,7 +1,7 @@
 # Hermes completion: source sessions, native readiness and bounded recovery
 
 Date: 2026-11-18  
-Status: plan review round 3/7 completed; implementation has not started.  
+Status: plan review round 4/7 completed; implementation has not started.  
 Baseline: `fbab48c9d46219ba8e07d5361e6c2043eca9eb97` on `main`.  
 Owner: this PR; changes, including plan revisions, are committed and pushed immediately.
 
@@ -153,7 +153,7 @@ Two proven routes need completion; existing direct plugin add is baseline.
 **Raw Skills add/picker:** pass the explicit selected-add alias context through
 preparation, review, stale-plan check, confirmed Apply and retry. Before enabling
 native trust, carry the Hermes adapter's existing whole-root trust disclosure
-from plan actions into the existing warning/review model. The disclosure covers
+from plan actions into raw Skills' existing warning/review model. The disclosure covers
 both Skill directories, future content, quarantine and persistence after removal.
 No picker UI redesign and no new consent flag. Decline/dry run has no trust effect.
 
@@ -174,6 +174,35 @@ Both routes must:
 6. Stop on stale review or unclosed processes with existing typed failures.
 7. Keep action/result JSON and exit codes stable; trust/file preparation stays
    Prepared unless the separately qualified native predicate succeeds.
+
+**Selected transport and execution sequence**
+
+Use adapter-generated path-free disclosure as the single source. Raw Skills
+reviews retain it in existing `Warnings`; saved add retains it in the existing
+per-action `Reason`, after the repair explanation. Both are rendered before
+confirmation; saved JSON retains its schema. Do not add a saved warning DTO.
+
+Recompute disclosure with the same selected operation during recheck. Retain the
+original review separately from mutable options; changing target, profile/root,
+source pin, binding authority, operation or required disclosure produces the
+existing stale-plan error. Raw batch checking must compare its review warnings
+as well as action/path/detected facts.
+
+Execution reuses the current lifecycle in this order:
+
+1. Inspect exact owner/source; select eligible install or reviewed repair.
+2. Derive and retain disclosure; review and confirm through existing UI.
+3. Acquire existing mutation lock and recheck inputs/authority/review.
+4. Use existing projection/activation transaction, native trust profile lock and
+   independent readback; persist the existing lifecycle outcome.
+5. Render truthful Prepared result and any unconfirmed/manual next action.
+
+The saved helper will reuse `SavedProjectRepairOnAdd` with Hermes opt-in and
+client-neutral wording, in preparation and recheck. A reviewed repair candidate
+is not authority for trust: the existing whole-binding classifier at the fresh
+activation boundary must admit the actual effect. A mixed binding may be
+observationally verified by existing repair but gains no new completion effect.
+No second capability flag or state model.
 
 **Consent and eligibility contract**
 
@@ -197,8 +226,7 @@ Both routes must:
   human/local review fields. Reuse `hermesTrustCommandAction` for local commands;
   shell-sensitive paths remain quoted data, never reconstructed shell commands.
 
-Reconcile `deps_sync.go` with open #931 and select the exact reusable mechanism
-by round 7. Carry disclosure through existing backend review data; avoid #957's
+Reconcile `deps_sync.go` with open #931 before edits. Carry disclosure through existing backend review data; avoid #957's
 independent picker rendering work.
 
 ### 5.4 Recovery
@@ -214,6 +242,23 @@ receipts and original-root handles. Classify cases before changing behavior:
 | MCP fails after Skill publication | Compensate only exact prior owned Skill state. |
 | Authority changes or effects/process cleanup remain uncertain | Retain recovery, report uncertainty and stop automatic retry. |
 | Native trust writes but readback fails | Preserve the user's trust decision and installed files; report unconfirmed setup. |
+
+Failure boundaries remain separate:
+
+- Before effects: cancellation or stale authority stops with the existing typed
+  error and no trust invocation.
+- After file publication/trust attempt: preserve files and persistent user trust,
+  retain existing outcome/recovery evidence; cancellation remains cancellation.
+- Unclosed process family, uncertain effects or state-save/recovery failure:
+  stop retry, retain evidence and use existing reconciliation. File presence
+  cannot establish successful cleanup or a committed outcome.
+
+A user-triggered retry uses a fresh existing prepared plan. Alias/client/path
+coverage alone does not cover expanded trust disclosure or completion authority;
+expanded review uses the existing confirmation flow. No new retry coordinator
+or persisted consent. Exact same-pin/binding/receipt identity is retained.
+`managementNativeRepair` updates only the operation and existing expected-action
+authority; it does not adopt by name or authorize a partial-tree overwrite.
 
 Persistent user trust is outside installer rollback. No YAML snapshot restoration
 and no compensating untrust command. Preserve existing independent native checks:
@@ -337,3 +382,4 @@ capabilities, deferred to their required runtime/authority designs.
 | Round 1 | Frozen 7ce3cfc4 omitted raw Skills consent/disclosure and treated proven saved-repeat gap as speculative | Made both explicit outcomes, required reviewed/rechecked repair and disclosure before trust; ruled out nonexistent CLI JSON inventory; baseline recovery remains regression-only | Reviewer: hermes_readiness_recovery; CLI skills_batch, deps_sync, environment_session and pinned native skills_hub inspected |
 | Round 2 | Frozen 9d375b70 promised a small source descriptor although modern source PM is home-indexed; readiness observer also unqualified | Explicitly deferred source Project MCP to #942 cross-root profile design; retained Prepared; removed speculative production qualifier/observer and narrowed E2E/estimates to concrete add gaps | Reviewer: hermes_source_design; pinned upstream runtime/profile code and transaction/project_root containment |
 | Round 3 | Frozen 39c68603 had ambiguous revoked-trust exclusion and alias-only wording; repeated mixed bindings and readback needed explicit bounds | Bound consent to existing reviewed action/receipt/target; zero trust writes before Apply; whole-binding Skills-only completion; new confirmed re-add may regrant, maintenance may not; preserved independent readback and path-safe disclosure | Reviewer: hermes_native_evidence; current Hermes trust/classifier and native fixture contracts |
+| Round 4 | Frozen 2fa17552 lacked saved disclosure transport and raw warning recheck; retry coverage did not imply trust coverage | Chose existing Reason/Warnings fields, retained/recomputed review, explicit existing lifecycle sequence and failure boundaries; selected trait-backed reviewed repair with final whole-binding effect gate; no new recovery/retry engine | Reviewer: hermes_readiness_recovery; deps_apply/deps_sync, skills batch/retry and current lint configuration |
