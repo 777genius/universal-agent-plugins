@@ -3,7 +3,6 @@
 package pluginkitairepo_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -113,14 +112,31 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 	}
 
 	list := f.command(t, "whole-plugin-list", f.base.Project, f.env(),
-		[]string{f.client, "plugin", "list"}, 30*time.Second)
-	if !bytes.Contains(list.Stdout, []byte("native-proof")) || !bytes.Contains(list.Stdout, []byte(marketplace)) {
-		t.Fatalf("real Copilot did not list native project plugin: %s", list.Stdout)
+		[]string{f.client, "plugin", "list", "--json"}, 30*time.Second)
+	if !copilotNativePluginListed(t, list.Stdout, "native-proof", marketplace) {
+		t.Fatal("real Copilot did not recognize and enable the selected native project plugin")
 	}
 	skills := f.command(t, "whole-plugin-skills", f.base.Project, f.env(),
-		[]string{f.client, "skill", "list"}, 30*time.Second)
-	if !bytes.Contains(skills.Stdout, []byte("uapcopilota")) {
-		t.Fatalf("real Copilot did not list native plugin skill: %s", skills.Stdout)
+		[]string{f.client, "skill", "list", "--json"}, 30*time.Second)
+	var skillRows []struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.Unmarshal(skills.Stdout, &skillRows); err != nil {
+		t.Fatalf("real Copilot skill list is not structured native discovery: %v", err)
+	}
+	seenSkill := 0
+	for _, skill := range skillRows {
+		if skill.Name == "uapcopilota" {
+			if !skill.Enabled || !strings.HasPrefix(filepath.Clean(skill.Path), binding.TargetLocator+string(filepath.Separator)) {
+				t.Fatalf("Copilot loaded the wrong native plugin skill: %+v", skill)
+			}
+			seenSkill++
+		}
+	}
+	if seenSkill != 1 {
+		t.Fatalf("Copilot native plugin skill discovery count differs: %d", seenSkill)
 	}
 	removed := f.command(t, "whole-plugin-remove", f.base.Project, f.env(),
 		[]string{f.installer, "remove", "native-proof", "--scope", "project", "--project-root", f.base.Project,
@@ -136,10 +152,35 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 		t.Fatal("removed UAP plugin remains in Copilot project settings")
 	}
 	afterList := f.command(t, "whole-plugin-after-remove", f.base.Project, f.env(),
-		[]string{f.client, "plugin", "list"}, 30*time.Second)
-	if bytes.Contains(afterList.Stdout, []byte(spec)) {
+		[]string{f.client, "plugin", "list", "--json"}, 30*time.Second)
+	if copilotNativePluginListed(t, afterList.Stdout, "native-proof", marketplace) {
 		t.Fatal("real Copilot still lists a removed UAP project plugin")
 	}
 	f.check(t)
 	t.Logf("Pinned Copilot native whole-plugin E2E: public add, exact project receipt, plugin list, skill list, public remove and foreign authority preservation; plugin=%s", spec)
+}
+
+func copilotNativePluginListed(t *testing.T, body []byte, name, marketplace string) bool {
+	t.Helper()
+	var rows []struct {
+		Name string `json:"name"`
+		Marketplace string `json:"marketplace"`
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		t.Fatalf("Copilot native plugin listing is not a valid JSON array: %v", err)
+	}
+	count := 0
+	for _, row := range rows {
+		if row.Name == name && row.Marketplace == marketplace {
+			if !row.Enabled {
+				t.Fatalf("Copilot native plugin is present but disabled: %+v", row)
+			}
+			count++
+		}
+	}
+	if count > 1 {
+		t.Fatalf("Copilot registered the same native plugin %d times", count)
+	}
+	return count == 1
 }
