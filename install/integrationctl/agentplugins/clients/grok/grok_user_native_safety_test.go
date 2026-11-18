@@ -192,7 +192,6 @@ func TestGrokUserReplacementUnknownReadbackCannotBeAttested(t *testing.T) {
 	}
 }
 
-
 // A failed listing or a foreign same-name plugin must never authorize
 // deletion of the owned artifact. Only a fresh native absence or a verified
 // completed unregister releases the filesystem cleanup boundary.
