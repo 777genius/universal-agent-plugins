@@ -48,15 +48,16 @@ func TestGrokUserRejectsCaseFoldedRegistryAliases(t *testing.T) {
 }
 
 type grokFaultRunner struct {
-	other *fakeGrok
-	verb  string
-	err   error
+	other  *fakeGrok
+	verb   string
+	err    error
+	closed bool
 }
 
 func (f *grokFaultRunner) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	if len(command.Argv) > 2 && command.Argv[2] == f.verb {
 		f.other.commands = append(f.other.commands, append([]string(nil), command.Argv...))
-		return legacyports.CommandResult{}, f.err
+		return legacyports.CommandResult{CleanupComplete: f.closed}, f.err
 	}
 	return f.other.Run(ctx, command)
 }
@@ -437,7 +438,7 @@ func TestGrokUserAutomaticPreflightCannotReuseManualAttestation(t *testing.T) {
 	request.VerifyOnly = false
 	base := &fakeGrok{entries: []pluginEntry{}}
 	outcome, err := New().Activate(t.Context(), clients.Env{Runner: &grokFaultRunner{
-		other: base, verb: "list", err: errUnknownList,
+		other: base, verb: "list", err: errUnknownList, closed: true,
 	}}, request)
 	if !errors.Is(err, errUnknownList) || outcome.Activation != domain.ActivationFailed || outcome.ActivationAttested ||
 		outcome.Verification != domain.VerificationFailed || len(base.commands) != 1 ||
