@@ -46,9 +46,14 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 	installed := f.command(t, "whole-plugin-add", f.base.Project, f.env(), args, 45*time.Second)
 	var envelope struct {
 		Result string `json:"result"`
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
 	}
-	if err := json.Unmarshal(installed.Stdout, &envelope); err != nil || envelope.Result != "success" {
-		t.Fatalf("public UAP whole-plugin installation failed: %v", err)
+	decodeErr := json.Unmarshal(installed.Stdout, &envelope)
+	if decodeErr != nil || installed.ExitCode != 0 || envelope.Result != "success" {
+		t.Fatalf("public UAP whole-plugin install failed: exit=%d result=%q error_code=%q decode=%v",
+			installed.ExitCode, envelope.Result, envelope.Error.Code, decodeErr)
 	}
 	stateBody, err := projectNativeRuntimeRead(filepath.Join(f.base.Project, ".uap", "state-v2.json"), copilotProjectBodyLimit)
 	if err != nil {
@@ -141,7 +146,10 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 	removed := f.command(t, "whole-plugin-remove", f.base.Project, f.env(),
 		[]string{f.installer, "remove", "native-proof", "--scope", "project", "--project-root", f.base.Project,
 			"--target", "copilot", "--format", "json"}, 45*time.Second)
-	if err := json.Unmarshal(removed.Stdout, &envelope); err != nil || envelope.Result != "success" {
+	var removal struct {
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal(removed.Stdout, &removal); err != nil || removal.Result != "success" {
 		t.Fatalf("public UAP native project remove failed: %v", err)
 	}
 	after, err := projectNativeRuntimeRead(settings, copilotProjectBodyLimit)
