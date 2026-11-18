@@ -439,8 +439,8 @@ func TestGrokUserAutomaticPreflightCannotReuseManualAttestation(t *testing.T) {
 	outcome, err := New().Activate(t.Context(), clients.Env{Runner: &grokFaultRunner{
 		other: base, verb: "list", err: errUnknownList,
 	}}, request)
-	if err != nil || outcome.Activation == domain.ActivationActive || outcome.ActivationAttested ||
-		outcome.Verification == domain.VerificationInstalled || len(base.commands) != 1 ||
+	if !errors.Is(err, errUnknownList) || outcome.Activation != domain.ActivationFailed || outcome.ActivationAttested ||
+		outcome.Verification != domain.VerificationFailed || len(base.commands) != 1 ||
 		base.commands[0][2] != "list" {
 		t.Fatalf("automatic preflight reused stale manual attestation: %+v %v %+v", outcome, err, base.commands)
 	}
