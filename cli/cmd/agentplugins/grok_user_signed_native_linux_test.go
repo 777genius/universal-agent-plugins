@@ -371,7 +371,7 @@ func grokSignedUserBinding(t *testing.T, journey projectJourney, result usecase.
 
 func grokSignedUserInventory(t *testing.T, body []byte, journey projectJourney, binding domain.ClientBinding, present bool) {
 	t.Helper()
-	var rows []struct{ Name, Status, Source, Version, Path string }
+	var rows []struct{ Name, Status, Source, Version, Path, RepoKey string }
 	if err := json.Unmarshal(body, &rows); err != nil {
 		t.Fatal(err)
 	}
@@ -381,7 +381,8 @@ func grokSignedUserInventory(t *testing.T, body []byte, journey projectJourney, 
 			continue
 		}
 		count++
-		if !present || row.Status != "installed" || row.Source != binding.TargetLocator || row.Version != "1.0.0" || pathpolicy.RequireContainedChild(filepath.Join(journey.home, ".grok", "plugins"), row.Path) != nil {
+		if !present || row.Status != "installed" || row.Source != binding.TargetLocator || row.Version != "1.0.0" || pathpolicy.RequireContainedChild(filepath.Join(journey.home, ".grok", "installed-plugins"), row.Path) != nil ||
+			row.RepoKey != filepath.Base(row.Path) || !strings.HasPrefix(row.RepoKey, binding.PhysicalArtifact+"-") {
 			t.Fatal("genuine User registration differs from the exact owned package", row)
 		}
 		var expected string

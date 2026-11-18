@@ -180,3 +180,53 @@ func TestProjectGrokObservedSkillsRejectProbeDriftAndUnclosedCause(t *testing.T)
 		})
 	}
 }
+
+// A real Grok 1.0.70 inspect carries diagnostic families not used by the
+// adapter's activation proof, and plugin Skill paths contain a harmless /./.
+func TestProjectGrokObservedSkillsRealNativeEnvelopeWithoutVersionProbe(t *testing.T) {
+	f := newProjectSkillFixture(t)
+	f.request.Client.Version = "" // ordinary CLI detection does not run --version
+	f.runner.document["channel"] = "unknown"
+	f.runner.document["updateChannel"] = nil
+	f.runner.document["projectInstructions"] = []any{}
+	f.runner.document["permissions"] = map[string]any{"loaded": 0}
+	f.runner.document["loginPolicy"] = map[string]any{"apiKeyAuthDisabled": false}
+	f.runner.document["hooks"] = []any{}
+	f.runner.document["agents"] = []any{}
+	f.runner.document["marketplaces"] = []any{}
+	f.runner.document["lspServers"] = []any{}
+	f.runner.document["configSources"] = map[string]any{"layers": []any{}}
+	f.runner.document["experiments"] = []any{}
+	f.runner.document["externalCompat"] = map[string]any{"remoteSettingsLoaded": false}
+	source := f.skill()["source"].(map[string]any)
+	source["path"] = filepath.Join(f.request.Plan.ActivePath, "skills") + "/./docs/SKILL.md"
+	out, err := New().Activate(t.Context(), f.env, f.request)
+	if err != nil || out.Activation != domain.ActivationActive ||
+		out.Verification != domain.VerificationInstalled || f.runner.calls != 1 ||
+		!New().VerifierAvailable(f.request.Client, f.request.Plan, f.request.BackendExecutable) {
+		t.Fatalf("pinned Grok native report with unprobed version stayed Prepared: %+v %v", out, err)
+	}
+
+	for _, mutation := range []string{"wrong-version", "extra-field", "wrong-type", "untrusted"} {
+		t.Run(mutation, func(t *testing.T) {
+			switch mutation {
+			case "wrong-version": f.runner.document["grokVersion"] = "1.0.67"
+			case "extra-field": f.runner.document["unobservedAuthority"] = true
+			case "wrong-type": f.runner.document["permissions"] = "unknown"
+			case "untrusted": f.runner.document["projectTrusted"] = false
+			}
+			defer func() {
+				f.runner.document["grokVersion"] = "1.0.70"
+				delete(f.runner.document, "unobservedAuthority")
+				f.runner.document["permissions"] = map[string]any{"loaded": 0}
+				f.runner.document["projectTrusted"] = true
+			}()
+			f.runner.calls = 0
+			out, err := New().Activate(t.Context(), f.env, f.request)
+			if err != nil || out.Activation != domain.ActivationPrepared ||
+				out.Verification != domain.VerificationPackageValid || f.runner.calls != 1 {
+				t.Fatalf("unqualified native envelope promoted: %+v %v", out, err)
+			}
+		})
+	}
+}
