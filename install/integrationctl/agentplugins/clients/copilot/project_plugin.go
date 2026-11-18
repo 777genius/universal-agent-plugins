@@ -451,15 +451,15 @@ func activateCopilotProjectPlugin(ctx context.Context, env clients.Env, request 
 		projected.VerifyOnly = true
 	}
 	outcome, err := shared.CompleteNativeConfigActivation(ctx, projected, shared.NativeConfigActivation{
-		Automatic: request.Plan.InstallIntent == domain.InstallIntentAutomatic && (request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.PreviousNativeObjects) || copilotHasProjectPlugin(request.Delivery.NativeObjects)),
+		Automatic:         request.Plan.InstallIntent == domain.InstallIntentAutomatic && (request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.PreviousNativeObjects) || copilotHasProjectPlugin(request.Delivery.NativeObjects)),
 		UnavailableAction: "select an admitted Agent Plugins 1.0 package for native project registration",
-		RepairAction: "repair the exact UAP-owned Copilot project marketplace registration",
-		RetryAction: "retry Copilot project plugin registration",
-		CompletedAction: "whole Agent Plugin registered for this project without copying its components; open a new Copilot session to load it",
-		Verify: func() error {
+		RepairAction:      "repair the exact UAP-owned Copilot project marketplace registration",
+		RetryAction:       "retry Copilot project plugin registration",
+		CompletedAction:   "whole Agent Plugin registered for this project without copying its components; open a new Copilot session to load it",
+		Verify:            func() error {
 			return copilotVerifyWholePlugin(env, request)
 		},
-		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
+		Activate:          func(ctx context.Context, request domain.ActivationRequest) error {
 			// Preflight only checks native settings: the selected package becomes
 			// readable after staging commits. Verify the installed manifest and
 			// marketplace immediately before touching project/user settings.
