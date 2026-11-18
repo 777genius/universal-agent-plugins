@@ -18,7 +18,7 @@ var (
 // AutomaticallyActivates selects repository files or the existing user CLI lane.
 func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.ActivationRequest) bool {
 	if request.Plan.Scope == domain.ScopeProject || request.Plan.TargetContext.Scope == domain.ScopeProject {
-		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && (request.Plan.NativePluginRegistration || shared.OnlyNativeComponents(request.Plan.Components))
+		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && (request.Plan.NativePluginRegistration || copilotHasProjectPlugin(request.PreviousNativeObjects) || shared.OnlyNativeComponents(request.Plan.Components))
 	}
 	return shared.CopilotAutomaticallyActivates(env, request)
 }
