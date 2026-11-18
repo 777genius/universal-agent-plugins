@@ -166,7 +166,10 @@ func TestModernDirectoryProfileRequiresIndependentAuthority(t *testing.T) {
 		{"historical key id", func(a *modernMirrorAuthority) { a.KeyID = directoryKeyID }},
 		{"historical key bytes", func(a *modernMirrorAuthority) { a.PublicKeyBase64 = directoryPublicKey }},
 		{"successor key id", func(a *modernMirrorAuthority) { a.KeyID = mirrorNextDirectoryKeyID }},
-		{"successor key bytes renamed", func(a *modernMirrorAuthority) { a.KeyID = "alias-for-pretrusted-successor"; a.PublicKeyBase64 = mirrorNextDirectoryPublicKey }},
+		{"successor key bytes renamed", func(a *modernMirrorAuthority) {
+			a.KeyID = "alias-for-pretrusted-successor"
+			a.PublicKeyBase64 = mirrorNextDirectoryPublicKey
+		}},
 		{"malformed key", func(a *modernMirrorAuthority) { a.PublicKeyBase64 = "invalid" }},
 		{"historical origin", func(a *modernMirrorAuthority) { a.Origin = defaultPagesOrigin + "registry/modern/schemas/1/" }},
 		{"origin spelling", func(a *modernMirrorAuthority) { a.Origin = "https://777GENIUS.github.io.:00443/other/schemas/1/" }},
