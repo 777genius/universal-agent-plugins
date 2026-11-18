@@ -3,8 +3,8 @@ package copilot
 import (
 	"bytes"
 	"context"
-	"sync"
 	"errors"
+	"sync"
 	"os"
 	"path/filepath"
 	"testing"

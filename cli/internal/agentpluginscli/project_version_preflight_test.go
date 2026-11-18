@@ -334,7 +334,6 @@ func TestUserDevinSavedDependencyMutationProbesExactSelectedVersion(t *testing.T
 	}
 }
 
-
 func TestCopilotOptionalVersionProbeNeverBlocksLegacyProjectDelivery(t *testing.T) {
 	registry, err := clients.NewRegistry(copilot.New())
 	if err != nil {
