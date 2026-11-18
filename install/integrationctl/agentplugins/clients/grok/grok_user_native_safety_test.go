@@ -245,6 +245,17 @@ func TestGrokUserExternalUninstalledCannotBypassAvailableNativeRegistry(t *testi
 	remove := domain.DeactivationRequest{Client: request.Client, DeclaredName: request.DeclaredName,
 		BackendExecutable: request.BackendExecutable, ManagedArtifactPath: request.Delivery.ActivePath,
 		Confirmed: true, ExternalUninstalled: true}
+
+	t.Run("unconfirmed-preview-does-not-probe-native-cli", func(t *testing.T) {
+		runner := &fakeGrok{entries: []pluginEntry{{Name: request.DeclaredName, Status: "installed",
+			Source: request.Delivery.ActivePath, Version: request.Plan.DeclaredVersion}}}
+		preview := remove
+		preview.Confirmed = false
+		outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: runner}, preview)
+		if err != nil || len(runner.commands) != 0 || !outcome.ArtifactRemovalAllowed {
+			t.Fatalf("external preview invoked native Grok or failed: %+v %v %+v", outcome, err, runner.commands)
+		}
+	})
 	t.Run("still-registered", func(t *testing.T) {
 		runner := &fakeGrok{entries: []pluginEntry{{Name: request.DeclaredName, Status: "installed",
 			Source: request.Delivery.ActivePath, Version: request.Plan.DeclaredVersion}}}

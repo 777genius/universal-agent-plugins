@@ -142,7 +142,7 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 	if request.ExternalUninstalled {
 		// External confirmation is necessary when Grok is unavailable, but
 		// must not bypass fresh native evidence when it can be queried.
-		if shared.HasClientCLI(env, request.BackendExecutable) {
+		if request.Confirmed && shared.HasClientCLI(env, request.BackendExecutable) {
 			outcome.ArtifactRemovalAllowed = false
 			if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
 				if domain.IsUnclosedClientProbe(shared.CompletionProbeFailure(err)) {
