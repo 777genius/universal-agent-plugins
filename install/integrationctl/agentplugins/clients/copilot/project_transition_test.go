@@ -2,6 +2,7 @@ package copilot
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -115,5 +116,36 @@ func TestCopilotWholePluginToComponentsCollisionPreservesOldNativeRegistration(t
 	}
 	if present, exact, err := nativeconfig.InspectCopilotPluginSettings(trustRead(t, settings), registration); err != nil || !present || !exact {
 		t.Fatal("refused transition lost previously owned native registration")
+	}
+}
+
+
+func TestCopilotComponentSwitchUnregisterCloseFailureRemainsUncertain(t *testing.T) {
+	env, request, settings, layout := copilotComponentSwitchFixture(t)
+	failure := errors.New("forced native settings lock cleanup failure")
+	env.NativeConfig = nativeconfig.NewWithLockAcquirer(func(paths nativeconfig.Paths, _ nativeconfig.Codec) (func() error, error) {
+		if paths.JSON != settings {
+			t.Fatalf("unexpected native writer lock: %s", paths.JSON)
+		}
+		return func() error { return failure }, nil
+	})
+	outcome, err := New().Activate(t.Context(), env, request)
+	if !errors.Is(err, failure) || outcome.NativeEffect != domain.NativeEffectUncertain ||
+		outcome.Verification == domain.VerificationInstalled {
+		t.Fatalf("partially committed unregister falsely qualified new native components: %+v %v", outcome, err)
+	}
+	if _, err := os.Lstat(filepath.Join(layout.SkillsRoot, "review")); !os.IsNotExist(err) {
+		t.Fatal("component install ran after uncertain native unregister cleanup")
+	}
+	if len(outcome.NativeObjects) != len(request.PreviousNativeObjects) {
+		t.Fatal("new component ownership was published before the component mutation started")
+	}
+	registration, _, err := copilotProjectRegistration(request.Plan.NativeRegistryRoot,
+		request.Plan.PhysicalArtifactID, request.DeclaredName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if present, _, err := nativeconfig.InspectCopilotPluginSettings(trustRead(t, settings), registration); err != nil || present {
+		t.Fatal("test did not exercise committed unregister and degraded lock cleanup")
 	}
 }
