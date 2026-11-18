@@ -132,7 +132,9 @@ def main(root, report):
         (native / "skills" / "foreign-skill").mkdir(parents=True)
         (native / "skills" / "foreign-skill" / "SKILL.md").write_text("---\nname: foreign-skill\ndescription: foreign\n---\n")
         (native / "mcp_config.json").write_text('{"mcpServers":{"foreign_original":{"url":"https://foreign.invalid/mcp"}}}\n')
+    original_a = json.loads((projects[0] / ".devin" / "mcp_config.json").read_text())
     original_b = (projects[1] / ".devin" / "mcp_config.json").read_bytes()
+    original_skill = (projects[0] / ".devin" / "skills" / "foreign-skill" / "SKILL.md").read_bytes()
     with ThreadingHTTPServer(("127.0.0.1", 0), InertMCP) as http_server:
         thread = threading.Thread(target=http_server.serve_forever, daemon=True)
         thread.start()
@@ -200,15 +202,16 @@ def main(root, report):
             cli_call("remove", iid)
             inventory("after-remove", False)
             native_a = json.loads((projects[0] / ".devin" / "mcp_config.json").read_text())
-            if "foreign_original" not in native_a.get("mcpServers", {}) or any(name in native_a.get("mcpServers", {}) for name in (STDIO, HTTP)):
-                raise RuntimeError("Project A removal changed foreign MCP or retained owned MCP")
+            if native_a != original_a or owned_skill.exists() or owned_skill.is_symlink():
+                raise RuntimeError("Project A removal changed foreign MCP or retained owned native objects")
             if (cascade.read_bytes() != original_cascade or
                 (global_root / "mcp_config.json").read_bytes() != original_global or
                 (projects[1] / ".devin" / "mcp_config.json").read_bytes() != original_b):
                 raise RuntimeError("Project lifecycle mutated Cascade, Global or Project B authority")
             for project in projects:
-                if not (project / ".devin" / "skills" / "foreign-skill" / "SKILL.md").is_file():
-                    raise RuntimeError("Project lifecycle removed foreign Skill")
+                foreign_skill = project / ".devin" / "skills" / "foreign-skill" / "SKILL.md"
+                if not foreign_skill.is_file() or foreign_skill.is_symlink() or foreign_skill.read_bytes() != original_skill:
+                    raise RuntimeError("Project lifecycle changed foreign Skill")
             report["installation_discovery_e2e"] = True
         finally:
             http_server.shutdown()
