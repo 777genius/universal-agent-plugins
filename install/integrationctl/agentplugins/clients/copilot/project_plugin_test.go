@@ -101,6 +101,29 @@ func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
 	if next, err := os.ReadFile(settingsPath); err != nil || !bytes.Equal(installed, next) {
 		t.Fatal("repeat rewrote unchanged project settings")
 	}
+	// Native users may delete the two UAP entries to disable this plugin.
+	// The saved binding proves which *absent* names repair may restore, while
+	// all foreign data and persistent trust remain untouched.
+	if err := os.WriteFile(settingsPath, foreign, 0600); err != nil {
+		t.Fatal(err)
+	}
+	managed := &domain.ClientBinding{
+		ClientID: string(domain.ClientCopilot), Scope: string(domain.ScopeProject),
+		PhysicalArtifact: request.Plan.PhysicalArtifactID, TargetLocator: request.Plan.ActivePath,
+		NativeProfileRoot: request.Plan.NativeRegistryRoot, NativeObjects: request.Delivery.NativeObjects,
+	}
+	finding, err := New().InspectNativeRegistry(t.Context(), env, request.Client, request.Plan, managed)
+	if err != nil || finding != clients.RegistryClear {
+		t.Fatalf("missing owned registration incorrectly classified: %v %v", finding, err)
+	}
+	request.Plan.PreviousNativeObjects = request.PreviousNativeObjects
+	repaired, err := New().Activate(t.Context(), env, request)
+	if err != nil || repaired.Activation != domain.ActivationPrepared {
+		t.Fatalf("repair of missing Copilot project registration: %+v %v", repaired, err)
+	}
+	if present, exact, err := nativeconfig.InspectCopilotPluginSettings(trustRead(t, settingsPath), reg); err != nil || !present || !exact {
+		t.Fatalf("repaired Copilot native registration not verified: %v %v %v", present, exact, err)
+	}
 	removed, err := New().Deactivate(t.Context(), env, domain.DeactivationRequest{
 		Client: request.Client, TargetContext: request.Plan.TargetContext,
 		NativeRegistryRoot: request.Plan.NativeRegistryRoot, PhysicalArtifactID: request.Plan.PhysicalArtifactID,
