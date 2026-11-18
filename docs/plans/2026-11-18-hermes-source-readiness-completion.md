@@ -1,7 +1,7 @@
 # Hermes completion: source sessions, native readiness and bounded recovery
 
 Date: 2026-11-18  
-Status: initial draft; seven sequential review rounds required before implementation.  
+Status: plan review round 1/7 completed; implementation has not started.  
 Baseline: `fbab48c9d46219ba8e07d5361e6c2043eca9eb97` on `main`.  
 Owner: this PR; changes, including plan revisions, are committed and pushed immediately.
 
@@ -24,8 +24,9 @@ changes where the baseline already works.
 The baseline already includes:
 
 - Automatic User Skills and supported stdio/Streamable HTTP MCP preparation.
-- Project Skills; native trust after a confirmed initial add of an exact eligible
-  Git root; independent trust-list confirmation.
+- Project Skills; confirmed plugin add grants eligible exact-root native trust,
+  including supported prepared completion, with independent trust-list confirmation.
+  Raw Skills add/picker and repeated saved dependency add have separate gaps below.
 - Standalone-only Project MCP at `<project>/.hermes/uap-session`, selected through
   the existing explicit native session command.
 - Exact component ownership, receipts, locks, staged Skill swaps, native YAML
@@ -59,9 +60,10 @@ Overlaps to refresh before implementation and before merge:
 3. Improve Hermes native readiness only where a fresh, exact native observation
    supports the claim. Start with pure Skills; mixed Skills/MCP remains Prepared
    unless every relevant predicate is observed.
-4. Close a proven explicit-add completion gap if the existing prepared-setup
-   contract can finish an intact, exact-owned installation without new consent
-   semantics. Ordinary sync/update/repair never gain trust authority.
+4. Close the proven raw Skills add/picker consent-and-disclosure gap, for fresh
+   and exact prepared repeat installs; close repeated saved plugin-add completion
+   through a repair already shown in review. Reuse transient explicit-add consent
+   and prepared-setup contracts. Ordinary sync/update/repair gain no trust authority.
 5. Exercise interrupted installation recovery through existing transactions and
    correct only demonstrated Hermes-specific gaps.
 6. Update Hermes technical documentation, actionable limitations and the evidence
@@ -137,6 +139,12 @@ the upstream launcher can run update recovery first.
 
 ### 5.2 Native readiness
 
+The pinned CLI has no exact JSON Skill inventory: `hermes skills list` renders
+names/source/trust/status without selected paths or digests. Existing E2E uses
+installed-runtime `find_all_skills` and `skill_view(preprocess=False)` instead.
+Moving that observer into production needs separately qualified runtime custody;
+`PreparedSetupCompleter` is not an observation transport. No table/JSON shortcut.
+
 Define the observable predicate before changing outcomes:
 
 - Current selected runtime and profile, exact requested Skill identity, content
@@ -158,18 +166,36 @@ native E2E evidence instead of adding a weak readiness heuristic.
 
 ### 5.3 Explicit-add completion
 
-Investigate the documented repeated saved-add gap. Any implementation must:
+Two proven routes need completion; existing direct plugin add is baseline.
 
-1. Act only during a newly confirmed explicit add and its reviewed dependency
-   closure, using existing transient consent and exact receipt identity.
+**Raw Skills add/picker:** pass the explicit selected-add alias context through
+preparation, review, stale-plan check, confirmed Apply and retry. Before enabling
+native trust, carry the Hermes adapter's existing whole-root trust disclosure
+from plan actions into the existing warning/review model. The disclosure covers
+both Skill directories, future content, quarantine and persistence after removal.
+No picker UI redesign and no new consent flag. Decline/dry run has no trust effect.
+
+**Repeated saved plugin add:** convert an eligible unchanged exact binding to the
+existing reviewed native repair before confirmation, and select the identical
+operation during recheck. Reuse the saved-add repair hook, existing trait or
+capability classification, `managementNativeRepair` and `PreparedSetupCompleter`.
+Widening only the consent bit cannot fix the unchanged-action short circuit.
+
+Both routes must:
+
+1. Act only during newly confirmed explicit add and its reviewed selected closure.
 2. Finish only an intact eligible prepared Skills-only Project binding.
-3. Reuse `PreparedSetupCompleter` and existing trust profile/root checks.
-4. Leave ordinary sync, update, repair, verify, remove and startup without
-   authority to trust, including after `hermes skills untrust`.
-5. Preserve action/result JSON and existing exit codes.
+3. Preserve source pins, installation/binding IDs, receipts and unrelated intent.
+4. Reuse exact trust profile/root checks and preserve prior trust choices.
+5. Leave ordinary sync, update, repair, verify, remove and startup without trust
+   authority, including after `hermes skills untrust`.
+6. Stop on stale review or unclosed processes with existing typed failures.
+7. Keep action/result JSON and exit codes stable; trust/file preparation stays
+   Prepared unless the separately qualified native predicate succeeds.
 
-If fixing it requires a new generic consent model or conflicts with the active
-owner of `deps_sync.go`, narrow the change or integrate the merged contract first.
+Reconcile `deps_sync.go` with open #931 and select the exact reusable mechanism
+by round 7. Carry disclosure through existing backend review data; avoid #957's
+independent picker rendering work.
 
 ### 5.4 Recovery
 
@@ -190,8 +216,8 @@ and no compensating untrust command.
 
 ## 6. Critical edge cases
 
-The implementation and tests cover critical changed boundaries, not every
-theoretical filesystem permutation:
+Review existing evidence and exercise critical changed boundaries, not every
+theoretical filesystem permutation. Add tests only where production behavior changes:
 
 1. Source/launcher/runtime replacement after plan, including same bytes at a new
    physical object; root/parent replacement and Git worktree redirection.
@@ -227,8 +253,9 @@ into new suites.
   drift/overlay/recovery cases, if source support is implemented.
 - Small pure-Skill discovery identity/ambiguity/cancellation tests, only if the
   production observer changes.
-- One explicit repeated saved-add completion regression paired with no-consent
-  sync/update/repair controls, only if that gap is changed.
+- Focused raw fresh/repeat Skills add and saved-repeat regressions: disclosure
+  before confirmation, decline/dry-run preservation, exact reviewed repair,
+  same IDs/pins and no-consent sync/update/repair controls.
 - One fault-injection regression per actual recovery bug; reuse shared harnesses.
 
 ### Native E2E
@@ -300,3 +327,4 @@ If safe support requires Hermes dependency-state synthesis, stop that design.
 | Revision | Finding | Change / disposition | Evidence |
 | --- | --- | --- | --- |
 | Initial | Source launch mutates more than config; much baseline work already exists | Put native feasibility first, reuse current architecture, separate observable readiness and existing recovery | Baseline audit at fbab48; upstream pinned source; merged #923/#956/#994 |
+| Round 1 | Frozen 7ce3cfc4 omitted raw Skills consent/disclosure and treated proven saved-repeat gap as speculative | Made both explicit outcomes, required reviewed/rechecked repair and disclosure before trust; ruled out nonexistent CLI JSON inventory; baseline recovery remains regression-only | Reviewer: hermes_readiness_recovery; CLI skills_batch, deps_sync, environment_session and pinned native skills_hub inspected |
