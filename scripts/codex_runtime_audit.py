@@ -450,6 +450,12 @@ async def _exchange(binary, project, profile, environment, *,
                 await asyncio.sleep(.02)  # Still inside the same finite 15-second budget.
             completed = True
             return (native_version, listing) if with_metadata else listing
+    except TimeoutError as error:
+        # Preserve the strict budget and native process ownership requirements.
+        # Expose only bounded failure evidence before the existing owned cleanup.
+        raise TimeoutError(
+            f"Codex native discovery timed out: phase={phase}; "
+            f"launcher_exit_code={process.returncode!r}") from error
     finally:
         failure = sys.exception()
         diagnostic = {}

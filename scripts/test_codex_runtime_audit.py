@@ -1104,7 +1104,9 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
 
             async def exercise_fault():
                 with patch.object(audit, "_start_native", side_effect=capture_owned_pipes):
-                    with self.assertRaises(TimeoutError):
+                    with self.assertRaisesRegex(
+                            TimeoutError,
+                            r"Codex native discovery timed out: phase=reader-drain; launcher_exit_code=0"):
                         await audit._exchange(Path(sys.executable), root, profile, environment)
                 self.assertEqual([descriptor for descriptor, _, _ in pipes], [1, 2])
                 # Check at the observer boundary, before asyncio.run closes the
