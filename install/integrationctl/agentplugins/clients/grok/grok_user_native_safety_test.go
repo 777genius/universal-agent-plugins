@@ -406,7 +406,7 @@ func (r *grokUnexpectedInstalledVersion) Run(ctx context.Context, command legacy
 func TestGrokUserPostInstallNegativeReadbackKeepsUncertainEffect(t *testing.T) {
 	request := grokRequest(t)
 	request.ActivationComplete = true
-	base := &fakeGrok{}
+	base := &fakeGrok{entries: []pluginEntry{}}
 	outcome, err := New().Activate(t.Context(), clients.Env{Runner: &grokUnexpectedInstalledVersion{base: base}}, request)
 	if err == nil || outcome.NativeEffect != domain.NativeEffectUncertain ||
 		outcome.Activation != domain.ActivationFailed || outcome.ActivationAttested ||
