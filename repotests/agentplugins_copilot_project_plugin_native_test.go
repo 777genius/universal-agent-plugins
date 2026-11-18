@@ -46,7 +46,7 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 	installed := f.command(t, "whole-plugin-add", f.base.Project, f.env(), args, 45*time.Second)
 	var envelope struct {
 		Result string `json:"result"`
-		Error struct {
+		Error  struct {
 			Code string `json:"code"`
 		} `json:"error"`
 	}
