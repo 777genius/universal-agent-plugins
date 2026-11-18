@@ -25,7 +25,7 @@ type nativeTerminalPluginReport struct {
 	ClosureVerified             bool     `json:"closure_verified"`
 	ModelRequest                *bool    `json:"model_request"`
 	AuthenticationQualified     *bool    `json:"authentication_qualified"`
-	NativeReadinessQualified     *bool    `json:"native_readiness_qualified"`
+	NativeReadinessQualified    *bool    `json:"native_readiness_qualified"`
 	Result                      struct {
 		InstallationID string `json:"installation_id"`
 	} `json:"result"`
@@ -57,7 +57,11 @@ func readNativeTerminalPluginReport(t *testing.T, root string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("close terminal plugin evidence: %v", err)
+		}
+	}()
 	if info, err := file.Stat(); err != nil || !info.Mode().IsRegular() {
 		t.Fatalf("terminal plugin evidence is not a regular file: %v", err)
 	}
