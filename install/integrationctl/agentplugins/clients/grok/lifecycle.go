@@ -150,6 +150,9 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 		outcome.UserActions = []string{"agentplugins will uninstall the managed Grok Build plugin automatically"}
 		return outcome, nil
 	}
+	// A native listing is not an absence receipt. Keep the managed artifact
+	// until an exact absence or completed owned unregister is verified.
+	outcome.ArtifactRemovalAllowed = false
 	entries, err := listPlugins(ctx, env, request.BackendExecutable)
 	if err != nil {
 		return outcome, err
@@ -157,6 +160,7 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 	entry, found := findEntry(entries, request.DeclaredName)
 	if !found {
 		outcome.ExternalRemovalComplete = true
+		outcome.ArtifactRemovalAllowed = true
 		return outcome, nil
 	}
 	if !expectedEntry(entry, request.DeclaredName, request.ManagedArtifactPath) {
@@ -178,5 +182,6 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 		return outcome, err
 	}
 	outcome.ExternalRemovalComplete = true
+	outcome.ArtifactRemovalAllowed = true
 	return outcome, nil
 }

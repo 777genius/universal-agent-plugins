@@ -191,3 +191,49 @@ func TestGrokUserReplacementUnknownReadbackCannotBeAttested(t *testing.T) {
 		t.Fatalf("unreadable replacement removal became attested or triggered install: %+v %v %+v", outcome, err, base.commands)
 	}
 }
+
+
+// A failed listing or a foreign same-name plugin must never authorize
+// deletion of the owned artifact. Only a fresh native absence or a verified
+// completed unregister releases the filesystem cleanup boundary.
+func TestGrokUserRemovalRequiresPositiveNativeReadback(t *testing.T) {
+	request := grokRequest(t)
+	remove := domain.DeactivationRequest{Client: request.Client, DeclaredName: request.DeclaredName,
+		BackendExecutable: request.BackendExecutable, ManagedArtifactPath: request.Delivery.ActivePath, Confirmed: true}
+	t.Run("unreadable-list", func(t *testing.T) {
+		base := &fakeGrok{}
+		cause := errors.New("native listing unavailable")
+		outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: &grokFaultRunner{
+			other: base, verb: "list", err: cause}}, remove)
+		if !errors.Is(err, cause) || outcome.ExternalRemovalComplete || outcome.ArtifactRemovalAllowed ||
+			len(base.commands) != 1 || base.commands[0][2] != "list" {
+			t.Fatalf("unknown native registry allowed cleanup: %+v %v %+v", outcome, err, base.commands)
+		}
+	})
+	t.Run("foreign-registration", func(t *testing.T) {
+		base := &fakeGrok{entries: []pluginEntry{{Name: request.DeclaredName, Status: "installed",
+			Source: request.Delivery.ActivePath + "-foreign", Version: request.Plan.DeclaredVersion}}}
+		outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: base}, remove)
+		if err == nil || outcome.ExternalRemovalComplete || outcome.ArtifactRemovalAllowed ||
+			len(base.commands) != 1 || base.commands[0][2] != "list" {
+			t.Fatalf("foreign native registration allowed cleanup: %+v %v %+v", outcome, err, base.commands)
+		}
+	})
+	for _, tc := range []struct {
+		name    string
+		entries []pluginEntry
+		calls   int
+	}{
+		{name: "confirmed-absent", calls: 1},
+		{name: "verified-owned-uninstall", calls: 3, entries: []pluginEntry{{Name: request.DeclaredName,
+			Status: "installed", Source: request.Delivery.ActivePath, Version: request.Plan.DeclaredVersion}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			base := &fakeGrok{entries: tc.entries}
+			outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: base}, remove)
+			if err != nil || !outcome.ExternalRemovalComplete || !outcome.ArtifactRemovalAllowed || len(base.commands) != tc.calls {
+				t.Fatalf("verified native removal was not authorized: %+v %v %+v", outcome, err, base.commands)
+			}
+		})
+	}
+}
