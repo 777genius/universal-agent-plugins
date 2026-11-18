@@ -110,7 +110,7 @@ class ReadonlyFixtureTests(unittest.TestCase):
             elif len(calls) == 4:
                 output = b"GROK_READONLY_NATIVE_INVENTORY_PASS\n"
             elif len(calls) == 5:
-                output = b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS\n"
+                output = b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS\nGROK_NATIVE_USER_SIGNED_REPEAT_PASS\n"
             else:
                 raise AssertionError("unexpected process call")
             return SimpleNamespace(returncode=0, stdout=output, stderr=b"")
