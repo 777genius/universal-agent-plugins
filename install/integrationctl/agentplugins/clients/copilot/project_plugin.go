@@ -274,8 +274,14 @@ func copilotInspectWholePlugin(plan domain.DeliveryPlan, managed *domain.ClientB
 		}
 		return clients.RegistryClear, nil
 	}
+	if !present {
+		// Both entries disappeared. Retain the verified binding authority so
+		// repair can re-create this exact registration without adopting a
+		// partially replaced or unrelated namespace.
+		return clients.RegistryClear, nil
+	}
 	if !exact {
-		return clients.RegistryIndeterminate, fmt.Errorf("Copilot owned project plugin settings were changed or removed")
+		return clients.RegistryIndeterminate, fmt.Errorf("Copilot owned project plugin settings were changed or partially removed")
 	}
 	return clients.RegistryExpected, nil
 }
