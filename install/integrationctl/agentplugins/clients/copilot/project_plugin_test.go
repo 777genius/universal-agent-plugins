@@ -254,6 +254,20 @@ func TestCopilotWholePluginRepairCannotRestoreRevokedProjectTrust(t *testing.T) 
 	request.Delivery.NativeObjects = []domain.NativeObjectOwnership{object}
 	request.PreviousNativeObjects = request.Delivery.NativeObjects
 	request.ProjectTrustConsent = false
+	if err := os.MkdirAll(request.Plan.ActivePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(request.Plan.ActivePath, "plugin.json"),
+		[]byte("{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\",\"name\":\"review\"}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := shared.ProjectCopilotMarketplace(request.Plan.ActivePath,
+		domain.PackageEnvelope{Manifest: domain.PluginManifest{Name: "review", Version: "1.0.0"}}, request.Plan); err != nil {
+		t.Fatal(err)
+	}
+	if err := copilotVerifyProjectPluginSource(request.Plan.NativeRegistryRoot, request.Plan, env.NativeConfig); err != nil {
+		t.Fatal("test must exercise trust refusal with a valid native plugin source:", err)
+	}
 	outcome, err := New().Activate(t.Context(), env, request)
 	if err == nil || outcome.Verification == domain.VerificationInstalled {
 		t.Fatalf("repair re-granted revoked trust: %+v %v", outcome, err)
@@ -268,6 +282,15 @@ func TestCopilotWholePluginRepairCannotRestoreRevokedProjectTrust(t *testing.T) 
 	}
 	if _, err := os.Lstat(settingsPath); !os.IsNotExist(err) {
 		t.Fatal("rejected repair wrote project plugin settings")
+	}
+	// An existing explicit trust decision permits the same repair, without
+	// re-granting trust through the repair path.
+	if err := withCopilotTrust(t.Context(), env, request, func() error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	repaired, err := New().Activate(t.Context(), env, request)
+	if err != nil || repaired.Verification != domain.VerificationInstalled {
+		t.Fatalf("previously trusted project did not repair same plugin source: %+v %v", repaired, err)
 	}
 }
 
