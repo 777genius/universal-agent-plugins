@@ -251,7 +251,7 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
             print("Windows parent rename safety branch: " + branch, flush=True)
 
     def test_real_existing_junction_is_refused_before_descendant_custody(self):
-        with TemporaryDirectory() as temporary:
+        with TemporaryDirectory(prefix="gemini-junction-&-") as temporary:
             root = Path(temporary).resolve()
             target, junction = root / "target", root / "junction"
             target.mkdir()
@@ -260,8 +260,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
             # Create the reparse point before the first native custody handle.
             command = Path(os.environ["SystemRoot"]) / "System32/cmd.exe"
             result = subprocess.run(
-                [str(command), "/d", "/c", "mklink", "/J", str(junction), str(target)],
-                capture_output=True, timeout=10, check=False)
+                [str(command), "/d", "/c", "mklink", "/J", "junction", "target"],
+                cwd=root, capture_output=True, timeout=10, check=False)
             self.assertEqual(result.returncode, 0, result.stderr[:256])
             self.assertTrue(junction.lstat().st_file_attributes & 0x400)
             deadline = time.monotonic() + 5

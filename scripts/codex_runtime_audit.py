@@ -623,8 +623,7 @@ def _note_group_drain_failure(error, process, when, transcript=None):
             received = b"".join(transcript)
             detail["rpc_stdout"] = {
                 "bytes": len(received), "messages": len(transcript),
-                "sha256": hashlib.sha256(received).hexdigest(),
-                "prefix_hex": received[:256].hex(), "prefix_truncated": len(received) > 256}
+                "sha256": hashlib.sha256(received).hexdigest()}
         body = json.dumps(detail, sort_keys=True, separators=(",", ":"))
         if len(body) > 3072:
             body = json.dumps({"phase": "group-drain", "when": when, "pid": process.pid,

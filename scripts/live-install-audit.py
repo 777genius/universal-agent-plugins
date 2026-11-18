@@ -472,6 +472,43 @@ def failed_case_diagnostics(row):
     for key in ("error", "error_traceback"):
         if key in row:
             evidence[key] = str(row[key])[:8192]
+    proof = row.get("gemini_runtime_proof")
+    if isinstance(proof, dict):
+        # Project only bounded facts already emitted by the strict observer.
+        # Never print journal text, native CLI output, or full record/path lists.
+        summary = {key: value[:512] if isinstance(value := proof.get(key), str)
+                   else None if value is None else "invalid"
+                   for key in ("status", "reason")}
+        phases = proof.get("phases")
+        summary["phases"] = [
+            phase if phase in ("after-public-repeat-add", "after-public-repeat-list") else "invalid"
+            for phase in phases[:2]] if isinstance(phases, list) else []
+        summary["phases_truncated"] = isinstance(phases, list) and len(phases) > 2
+        fields = {
+            "baseline": ("bytes", "records", "started", "finished"),
+            "failure_facts": ("phase", "role", "operation", "exact_key_present",
+                              "slug_is_string", "slug_matches_pattern", "slug_binding_count",
+                              "regular", "single_link", "positive_size", "within_limit",
+                              "descriptor_capacity", "bytes", "lf_count", "final_lf"),
+        }
+        for section, keys in fields.items():
+            facts = proof.get(section)
+            summary[section] = ({
+                key: value[:64] if isinstance(value := facts[key], str)
+                else value if value is None or type(value) is bool
+                or type(value) is int and 0 <= value <= 1 << 20 else "invalid"
+                for key in keys if key in facts
+            } if isinstance(facts, dict) else None)
+        facts = proof.get("failure_facts")
+        shapes = facts.get("record_shapes") if isinstance(facts, dict) else None
+        if isinstance(shapes, list):
+            allowed = ("json-refused", "metadata-fields", "user-text-fields",
+                       "last-updated-fields", "other")
+            summary["failure_facts"]["record_shapes"] = [
+                shape if isinstance(shape, str) and shape in allowed else "invalid"
+                for shape in shapes[:3]]
+            summary["failure_facts"]["record_shapes_truncated"] = len(shapes) > 3
+        evidence["gemini_runtime_proof"] = summary
     return evidence
 
 
@@ -2353,6 +2390,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # Repeat the same source and target only after the first registered add;
     # keep native, managed and foreign state inside the same disposable case.
     repeat_add = None
+    repeat_add_json = None
     repeat_list = None
     repeat_list_json = None
     repeat_identity_ids = []
@@ -2717,6 +2755,16 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         status = "incomplete-native-proof"
     else:
         status = "install-failed"
+    # A clean file lifecycle cannot override the installer's public setup
+    # result. This is a necessary condition only; every native gate above
+    # remains required, including Codex's independent inventory checkpoints.
+    skill_public_ready = ({phase: bool(
+        isinstance(response, dict) and response.get("readiness") == "ready"
+        and response.get("next_actions") in (None, []))
+        for phase, response in (("after-add", added_json), ("repeat-add", repeat_add_json))}
+        if kind == "skill" else None)
+    if status == "passed" and skill_public_ready is not None and not all(skill_public_ready.values()):
+        status = "incomplete-native-proof"
     return {"kind": kind, "index": index, "identity": identity, "target": target,
             "source": item if kind == "plugin" else item["source"],
             "status": status, "install": output, "list": listed,
@@ -2733,6 +2781,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 "after-add": public_target_state_observation(listed_json, identity, target),
                 "repeat-add": public_target_state_observation(repeat_list_json, identity, target),
                 "after-remove": public_target_state_observation(post_list_json, identity, target)},
+            "public_skill_ready": skill_public_ready,
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,

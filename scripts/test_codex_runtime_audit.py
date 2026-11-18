@@ -1088,8 +1088,11 @@ def process_running(pid):
             api.CloseHandle(handle)
     try:
         status = Path(f"/proc/{pid}/stat")
-        if status.is_file() and status.read_text().rsplit(")", 1)[1].split()[0] in ("Z", "X"):
-            return False
+        try:
+            if status.is_file() and status.read_text().rsplit(")", 1)[1].split()[0] in ("Z", "X"):
+                return False
+        except FileNotFoundError:
+            pass  # The proc entry can disappear before the existing signal probe.
         os.kill(pid, 0)
         return True
     except ProcessLookupError:
@@ -1122,6 +1125,46 @@ class CodexGroupDiagnosticTest(unittest.TestCase):
                 {"pid": 101, "ppid": 1, "pgid": 42, "sid": 42, "state": "Z", "start_ticks": 333},
                 {"pid": 102, "ppid": 99, "pgid": 42, "sid": 42, "state": "S", "start_ticks": 444}])
 
+    def test_truncated_snapshot_may_omit_live_members_without_closing_group(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.member(root, 101, 1, 42, "S")
+            with patch.object(audit, "_posix_group_active", return_value=True), \
+                    patch.object(audit.time, "monotonic", side_effect=[0.0, .25]):
+                result = audit._posix_group_diagnostic(42, proc_root=root)
+            self.assertTrue(result["group_exists"])
+            self.assertTrue(result["diagnostic_only"])
+            self.assertTrue(result["truncated"])
+            self.assertFalse(result["scan_complete"])
+            self.assertEqual(result["members"], [])
+
+    def test_recorded_pid_liveness_falls_back_when_proc_stat_disappears(self):
+        for outcome, expected in ((None, True), (ProcessLookupError(), False)):
+            with self.subTest(outcome=type(outcome).__name__), \
+                    patch.object(Path, "is_file", return_value=True), \
+                    patch.object(Path, "read_text", side_effect=FileNotFoundError()), \
+                    patch.object(os, "kill", side_effect=outcome) as probe:
+                self.assertEqual(process_running(42), expected)
+                probe.assert_called_once_with(42, 0)
+        with patch.object(Path, "is_file", return_value=True), \
+                patch.object(Path, "read_text", side_effect=FileNotFoundError()), \
+                patch.object(os, "kill", side_effect=PermissionError()) as probe:
+            with self.assertRaises(PermissionError):
+                process_running(42)
+            probe.assert_called_once_with(42, 0)
+
+    def test_recorded_pid_liveness_preserves_observed_proc_states(self):
+        for state, expected in (("Z", False), ("X", False), ("S", True)):
+            with self.subTest(state=state), \
+                    patch.object(Path, "is_file", return_value=True), \
+                    patch.object(Path, "read_text", return_value=f"42 (inert) {state} 0\n"), \
+                    patch.object(os, "kill") as probe:
+                self.assertEqual(process_running(42), expected)
+                if expected:
+                    probe.assert_called_once_with(42, 0)
+                else:
+                    probe.assert_not_called()
+
     def test_member_count_file_bound_and_redirection_are_visible(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1149,12 +1192,14 @@ class CodexGroupDiagnosticTest(unittest.TestCase):
             self.assertTrue(result["group_exists"])
             self.assertEqual(foreign.read_bytes(), b"foreign diagnostic bytes\n")
 
-    def test_failure_notes_keep_original_exception_and_exact_bounded_wire_prefix(self):
+    def test_failure_notes_keep_original_exception_and_wire_digest_without_contents(self):
         failure = TimeoutError()
         cause = RuntimeError("original cause")
         failure.__cause__ = cause
         process = SimpleNamespace(pid=42, returncode=0)
-        wire = b'{"id":1,"result":{}}\n' + b"x" * 2048
+        private_profile = "/private/inert-codex-profile"
+        wire = (json.dumps({"id": 1, "result": {"codexHome": private_profile}}).encode()
+                + b"\n" + b"x" * 2048)
         snapshot = {"pgid": 42, "group_exists": True, "members": [{"pid": 101, "state": "Z"}],
                     "diagnostic_only": True}
         with patch.object(audit, "_posix_group_diagnostic", return_value=snapshot):
@@ -1167,8 +1212,10 @@ class CodexGroupDiagnosticTest(unittest.TestCase):
         self.assertTrue(all(len(note) < 3200 for note in failure.__notes__))
         self.assertEqual(before["phase"], "group-drain")
         self.assertEqual(before["rpc_stdout"], {
-            "bytes": len(wire), "messages": 1, "sha256": audit.hashlib.sha256(wire).hexdigest(),
-            "prefix_hex": wire[:256].hex(), "prefix_truncated": True})
+            "bytes": len(wire), "messages": 1, "sha256": audit.hashlib.sha256(wire).hexdigest()})
+        for note in failure.__notes__:
+            self.assertNotIn(private_profile, note)
+            self.assertNotIn(private_profile.encode().hex(), note)
         self.assertEqual(before["group"], snapshot)
         self.assertEqual(after["when"], "after-owned-cleanup")
         self.assertNotIn("rpc_stdout", after)
@@ -1271,9 +1318,8 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
         self.assertGreater(before["rpc_stdout"]["bytes"], 0)
         self.assertEqual(len(before["rpc_stdout"]["sha256"]), 64)
         self.assertTrue(before["group"]["group_exists"])
-        self.assertTrue(any(member["state"] not in ("Z", "X")
-                            for member in before["group"]["members"]),
-                        "inert live orphan was not observed at the group-drain refusal")
+        # A bounded host-wide proc sample may omit this live child. The controlled
+        # proc-root test separately requires exact live/zombie member reporting.
         self.assertTrue(after["group"]["diagnostic_only"])
         # A post-kill zombie is retained as a member, never promoted to closure.
         # Check production cleanup before the fixture's independent safety kill.

@@ -1,6 +1,15 @@
-"""Synthetic stream controls for the genuine keyboard driver; no agent runs."""
+"""Stream and inert owned-process controls for the keyboard driver; no agent runs."""
+import json
+import os
+from pathlib import Path
+import signal
+import socket
+import subprocess
+import sys
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 import native_skills as n
 
@@ -117,6 +126,193 @@ class NativeSkillsProgressTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "capture failed"):
             n.wait_install_progress(session, 0)
         self.assertIn("Skills installation verified.", session.screen.snapshot())
+
+
+
+class NativeSkillsFailureControls(unittest.TestCase):
+    def test_exit_visible_after_empty_read_drains_queued_progress_with_same_deadline(self):
+        transcript = QUEUED + PROGRESS + FINISHED + VERIFIED
+        session = StreamSession(b"", [b"", transcript])
+        session.process.poll = lambda: 0
+        reads = []
+        pump = session.pump
+
+        def recorded(timeout=0.1):
+            reads.append(timeout)
+            return pump(timeout)
+
+        session.pump = recorded
+        n.wait_install_progress(session, 0)
+        self.assertIn("0/2 preparing", session.frames["install-progress"])
+        self.assertIn(0, reads)
+        self.assertEqual(bytes(session.raw), transcript)
+
+        expired = StreamSession(b"", [b"", transcript])
+        expired.process.poll = lambda: 0
+        with patch.object(n.time, "monotonic", side_effect=[0, 0, 5]):
+            with self.assertRaisesRegex(AssertionError, "exited before"):
+                n.wait_install_progress(expired, 0)
+        self.assertEqual(expired.chunks, [transcript])
+        self.assertNotIn("install-progress", expired.frames)
+
+    def test_missing_events_or_failed_close_always_retains_a_failed_report(self):
+        import hashlib
+        for closed, contents, expected in (
+                (True, None, False), (True, "invalid-json", False),
+                (True, "[]", False), (False, "valid", False), (True, "valid", True)):
+            with self.subTest(closed=closed, contents=contents), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                evidence = root / "evidence"
+                evidence.mkdir()
+                events = {"exit": 0, "forced_cleanup": False, "restoration": {
+                    key: True for key in ("termios_equal", "cursor_restored", "next_line_read", "echo")}}
+                if contents is not None:
+                    (evidence / "events.json").write_text(json.dumps(events) if contents == "valid" else contents)
+                raw = b"actual retained terminal bytes\n"
+                report = {"status": "passed", "verified_result": True}
+                n.preserve(SimpleNamespace(raw=raw), report, root, evidence, closed=closed)
+                saved = json.loads((root / "native-terminal-skills.json").read_text())
+                self.assertIs(saved["closure_verified"], expected)
+                self.assertEqual(saved["status"], "passed" if expected else "failed")
+                self.assertEqual((root / "native-terminal-skills.log").read_bytes(), raw)
+                self.assertEqual(saved["transcript"]["sha256"], hashlib.sha256(raw).hexdigest())
+                if contents != "valid":
+                    self.assertIn("terminal_evidence_error", saved)
+
+    def test_failure_screen_redacts_exact_and_wrapped_private_prefixes(self):
+        project = Path("/private/fixture[1]/project")
+        home = "/private/home[2]"
+        wrapped = str(project)[:12] + "\r\n  │" + str(project)[12:]
+        raw = ("Choose Skills to install\r\n" + str(project) + "\r\n" +
+               str(project.parent) + "\r\n" + home + "\r\n" + wrapped +
+               "\r\n[ ] 1. docx · skills/docx\r\nenter submit\r\n").encode()
+        session = StreamSession(raw, [])
+        session.fixture = SimpleNamespace(project=project, env={"HOME": home})
+        view = n.failure_screen(session)
+        self.assertNotIn("/private/", view)
+        self.assertNotIn("fixture[1]", view)
+        self.assertNotIn("home[2]", view)
+        self.assertEqual(view.count("<project>"), 2)
+        self.assertIn("<fixture>", view)
+        self.assertIn("<home>", view)
+        self.assertIn("docx · skills/docx", view)
+        self.assertIn("enter submit", view)
+        self.assertEqual(bytes(session.raw), raw)
+
+
+class NativeSkillsOwnerControls(unittest.TestCase):
+    @unittest.skipUnless(hasattr(signal, "pthread_sigmask"), "POSIX signal masking is required")
+    def test_interrupt_does_not_split_a_status_response_or_the_next_rpc(self):
+        code = r"""
+import json, os, signal, socket, sys
+sys.path.insert(0, sys.argv[1])
+import native_skills as n
+number = getattr(signal, sys.argv[2])
+left, right = socket.socketpair()
+left.settimeout(2)
+right.settimeout(2)
+peer = os.fork()
+if peer == 0:
+    left.close()
+    wire = right.makefile("rwb", buffering=0)
+    status = 1
+    try:
+        assert json.loads(wire.readline())["op"] == "first"
+        wire.write(b'{"result":')
+        os.kill(os.getppid(), number)
+        wire.write(b'1}\n')
+        assert json.loads(wire.readline())["op"] == "second"
+        wire.write(b'{"result":2}\n')
+        status = 0
+    finally:
+        wire.close()
+        right.close()
+        os._exit(status)
+right.close()
+session = n.NativeSession.__new__(n.NativeSession)
+session.channel = left.makefile("rwb", buffering=0)
+def interrupt(_number, _frame):
+    raise KeyboardInterrupt("owned interrupt")
+signal.signal(number, interrupt)
+try:
+    interrupted = False
+    try:
+        session.rpc(op="first")
+    except KeyboardInterrupt:
+        interrupted = True
+    assert interrupted
+    assert session.rpc(op="second") == 2
+finally:
+    session.channel.close()
+    left.close()
+    _, status = os.waitpid(peer, 0)
+assert status == 0, status
+print("complete response consumed; next RPC aligned")
+"""
+        for number in ("SIGINT", "SIGTERM"):
+            with self.subTest(signal=number), TemporaryDirectory() as temporary:
+                completed = subprocess.run(
+                    [sys.executable, "-I", "-c", code, str(Path(n.__file__).parent), number],
+                    env={"PATH": os.defpath, "HOME": temporary}, capture_output=True,
+                    text=True, timeout=10, check=False)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+                self.assertEqual(completed.stdout, "complete response consumed; next RPC aligned\n")
+
+    @unittest.skipUnless(sys.platform == "linux", "native keyboard EOF fallback is a Linux contract")
+    def test_owner_eof_closes_an_already_live_owned_descendant(self):
+        # The assertion precedes the fallback kill below: cleanup cannot supply
+        # the observed EOF. No installer, agent, model, or paid service runs.
+        descendant = ("import socket,sys,time; "
+                      "connection=socket.socket(socket.AF_UNIX); connection.connect(sys.argv[1]); "
+                      "connection.sendall(b'live\\n'); time.sleep(30)")
+        job = ("import subprocess,sys,time; "
+               "subprocess.Popen([sys.executable,'-I','-c',sys.argv[1],sys.argv[2]]); time.sleep(30)")
+        with TemporaryDirectory() as temporary, socket.socket(socket.AF_UNIX) as listener:
+            root = Path(temporary)
+            project, evidence = root / "project", root / "evidence"
+            project.mkdir()
+            evidence.mkdir()
+            address = str(root / "liveness.sock")
+            listener.bind(address)
+            listener.listen(1)
+            listener.settimeout(3)
+            session = n.NativeSession(
+                [sys.executable, "-I", "-c", job, descendant, address],
+                SimpleNamespace(project=project, env={"PATH": os.defpath, "HOME": str(root)}),
+                evidence, timeout=3)
+            try:
+                connection, _ = listener.accept()
+                with connection:
+                    connection.settimeout(3)
+                    with connection.makefile("rb", buffering=0) as wire:
+                        self.assertEqual(wire.readline(64), b"live\n")
+                    self.assertIsNone(session.process.poll())
+                    connection.settimeout(0.05)
+                    with self.assertRaises(socket.timeout):
+                        connection.recv(1)
+                    # This is the same status-channel EOF left by a hard-killed
+                    # driver. The persistent owner must close its live jobs.
+                    session.channel.close()
+                    session.control.close()
+                    self.assertEqual(session.owner.wait(timeout=3), 0)
+                    connection.settimeout(3)
+                    self.assertEqual(connection.recv(1), b"")
+            finally:
+                try:
+                    os.killpg(session.process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                session.channel.close()
+                session.control.close()
+                try:
+                    session.owner.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    session.owner.kill()
+                    session.owner.wait(timeout=2)
+                finally:
+                    session.owner.stderr.close()
+                    os.close(session.master)
+                    os.close(session.slave)
 
 
 if __name__ == "__main__":

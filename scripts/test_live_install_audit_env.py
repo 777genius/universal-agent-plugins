@@ -5057,6 +5057,9 @@ module.exports = {
                             (project / "uap.toml").write_text("demo-skill")
                             (project / "uap.lock").write_text("demo-skill")
                         state["added"] += 1
+                        result = success()
+                        result["_json"].update(readiness="ready", next_actions=[])
+                        return result
                     elif operation == "remove":
                         if relocate:
                             moved = skill_dir.with_name("other")
@@ -5521,6 +5524,75 @@ module.exports = {
         self.assertEqual(audit.failed_case_diagnostics(
             {"public_target_states": {"after-add": observed}}),
             {"public_target_states": {"after-add": observed}})
+
+    def test_failed_case_diagnostics_projects_gemini_refusal_without_journal_contents(self):
+        audit = load_audit()
+        proof = {
+            "status": "unqualified", "reason": "Gemini startup environment framing differs",
+            "phases": ["after-public-repeat-add"],
+            "baseline": {"bytes": 1234, "records": 3,
+                         "started": "2026-11-18T10:40:00+00:00",
+                         "finished": "2026-11-18T10:40:01+00:00",
+                         "path": "/private/journal", "text": "private journal content"},
+            "failure_facts": {"phase": "after-public-repeat-list", "role": "new-chat",
+                              "operation": "record-framing", "bytes": 1234, "lf_count": 3,
+                              "final_lf": True, "record_shapes": [
+                                  "metadata-fields", "user-text-fields", "last-updated-fields"],
+                              "text": "private journal content", "stdout": "private native output"},
+            "files": [{"path": "/private/journal", "body": "private journal content"}],
+            "stdout": "private native output",
+        }
+        row = {"status": "repeat-add-unqualified", "repeat_verified": False,
+               "removal_verified": True, "gemini_runtime_proof": proof}
+        original = json.dumps(row, sort_keys=True)
+        observed = audit.failed_case_diagnostics(row)
+        expected = {
+            "status": proof["status"], "reason": proof["reason"],
+            "phases": proof["phases"], "phases_truncated": False,
+            "baseline": {key: proof["baseline"][key]
+                         for key in ("bytes", "records", "started", "finished")},
+            "failure_facts": {key: proof["failure_facts"][key] for key in (
+                "phase", "role", "operation", "bytes", "lf_count", "final_lf", "record_shapes")},
+        }
+        expected["failure_facts"]["record_shapes_truncated"] = False
+        self.assertEqual(observed, {"repeat_verified": False, "removal_verified": True,
+                                   "gemini_runtime_proof": expected})
+        self.assertNotIn("private", json.dumps(observed))
+        self.assertEqual(json.dumps(row, sort_keys=True), original)
+
+    def test_failed_case_diagnostics_bounds_invalid_gemini_facts_without_changing_other_clients(self):
+        audit = load_audit()
+        for proof in (None, [], "private", 7):
+            with self.subTest(proof=proof):
+                self.assertEqual(audit.failed_case_diagnostics(
+                    {"repeat_verified": False, "gemini_runtime_proof": proof}),
+                    {"repeat_verified": False})
+        proof = {
+            "status": "x" * 1000, "reason": "r" * 1000,
+            "phases": ["after-public-repeat-add", {"private": "secret"}] * 100,
+            "baseline": {"bytes": 1 << 30, "records": {"private": "secret"},
+                         "started": "s" * 1000, "finished": ["private"]},
+            "failure_facts": {"operation": "o" * 1000, "bytes": -1,
+                              "within_limit": True, "slug_binding_count": None,
+                              "record_shapes": ["metadata-fields", {"private": "secret"},
+                                                "private"] * 100,
+                              "unknown": "private"},
+        }
+        original = json.dumps(proof, sort_keys=True)
+        observed = audit.failed_case_diagnostics({"gemini_runtime_proof": proof})["gemini_runtime_proof"]
+        self.assertEqual(observed["status"], "x" * 512)
+        self.assertEqual(observed["reason"], "r" * 512)
+        self.assertEqual(observed["phases"], ["after-public-repeat-add", "invalid"])
+        self.assertTrue(observed["phases_truncated"])
+        self.assertEqual(observed["baseline"], {
+            "bytes": "invalid", "records": "invalid", "started": "s" * 64, "finished": "invalid"})
+        self.assertEqual(observed["failure_facts"], {
+            "operation": "o" * 64, "bytes": "invalid", "within_limit": True,
+            "slug_binding_count": None, "record_shapes": ["metadata-fields", "invalid", "invalid"],
+            "record_shapes_truncated": True})
+        self.assertLess(len(json.dumps(observed).encode()), 4096)
+        self.assertNotIn("private", json.dumps(observed))
+        self.assertEqual(json.dumps(proof, sort_keys=True), original)
 
     def test_public_target_states_bound_rows_and_redact_invalid_values(self):
         audit = load_audit()
@@ -6980,14 +7052,14 @@ module.exports = {
                   "clients": [{"client_id": "claude",
                                "verification": "installation_verified"}]}]
 
-        def check(residue):
+        def check(residue, selected_target="claude", readiness=("ready", "ready"),
+                  actions=(None, None)):
             with TemporaryDirectory() as temporary:
                 runroot = Path(temporary).resolve()
                 project = runroot / "skill-00/project"
-                target = "codex" if residue == "post-native-recreated" else "claude"
+                target = "codex" if residue == "post-native-recreated" else selected_target
                 native = runroot / "skill-00/home" / ("." + target)
-                skill_root = ".agents" if target == "codex" else ".claude"
-                skill = project / skill_root / "skills/demo-skill/SKILL.md"
+                skill = project / audit.PROJECT_SKILL_ROOTS[target][0] / "demo-skill/SKILL.md"
                 selected_match = [dict(match[0], clients=[
                     {"client_id": target, "verification": "installation_verified"}])]
                 state, phases = {"installed": False}, []
@@ -7003,6 +7075,7 @@ module.exports = {
                     evidence=lambda: {"phases": list(phases)})
                 def fake_call(argv, env, cwd, timeout=105):
                     if argv[1] == "skills":
+                        state["add_count"] = state.get("add_count", 0) + 1
                         skill.parent.mkdir(parents=True, exist_ok=True)
                         skill.write_text("---\nname: demo-skill\n---\n")
                         (project / "uap.toml").write_text("demo-skill\n")
@@ -7026,15 +7099,23 @@ module.exports = {
                             skill.write_text("---\nname: demo-skill\n---\n")
                         elif residue == "post-list-foreign":
                             (runroot / "skill-00/home/foreign-untouched.txt").write_text("changed by list")
+                    result = {"data": {"installations": selected_match if state["installed"] else []}}
+                    if argv[1] == "skills":
+                        result = {"schema_version": 1, "command": "skills add", "result": "success",
+                                  "status": "succeeded", "scope": "project", "items": [{
+                                      "alias": identity, "targetId": target, "status": "succeeded"}]}
+                        index = state["add_count"] - 1
+                        if readiness[index] is not None:
+                            result["readiness"] = readiness[index]
+                        if actions[index] is not None:
+                            result["next_actions"] = actions[index]
                     return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
-                            "timeout": False,
-                            "_json": {"data": {"installations":
-                                               selected_match if state["installed"] else []}}}
+                            "timeout": False, "_json": result}
                 with patch.object(audit, "call", side_effect=fake_call), \
                      patch.object(audit, "matching_installations", return_value=selected_match), \
                      patch.object(audit, "locked_skill_is_pinned", return_value=True), \
                      patch.object(audit, "matches_pinned_skill_bytes", return_value=True), \
-                     patch.dict(audit.AGENT_BINARIES, {"codex": "/inert/codex"}), \
+                     patch.dict(audit.AGENT_BINARIES, {"codex": "/inert/codex"}, clear=True), \
                      patch.dict(audit.CODEX_RUNTIME_AUDIT, {
                          "CodexRuntimeAudit": lambda *args: observer,
                          "public_skill_ready": lambda *args: True}):
@@ -7077,6 +7158,31 @@ module.exports = {
         foreign = check("post-list-foreign")
         self.assertFalse(foreign["sentinels_preserved"])
         self.assertEqual(foreign["status"], "cleanup-failed")
+
+        # Actual catalog runs for these clients had clean file lifecycles but
+        # public needs_action. Preserve the cleanup proof without native PASS.
+        for target in ("cursor", "kiro", "windsurf", "claude"):
+            for readiness in (("needs_action", "needs_action"), ("ready", "needs_action"),
+                              ("needs_action", "ready"), (None, "ready"), ("ready", None),
+                              (True, "ready"), ("unknown", "ready")):
+                with self.subTest(target=target, readiness=readiness):
+                    pending = check(None, target, readiness)
+                    self.assertEqual(pending["status"], "incomplete-native-proof")
+                    self.assertTrue(pending["removal_verified"])
+                    self.assertTrue(pending["repeat_verified"])
+                    self.assertTrue(pending["sentinels_preserved"])
+                    self.assertEqual(pending["public_skill_ready"], {
+                        "after-add": readiness[0] == "ready", "repeat-add": readiness[1] == "ready"})
+            ready = check(None, target)
+            self.assertEqual(ready["status"], "passed")
+            for actions in ((["finish setup"], None), (None, ["finish setup"]), ({"pending": True}, None)):
+                with self.subTest(target=target, actions=actions):
+                    pending = check(None, target, actions=actions)
+                    self.assertEqual(pending["status"], "incomplete-native-proof")
+                    self.assertTrue(pending["removal_verified"])
+        pending_with_residue = check("symlink", readiness=("needs_action", "needs_action"))
+        self.assertEqual(pending_with_residue["status"], "cleanup-failed")
+        self.assertFalse(pending_with_residue["removal_verified"])
 
 
     def test_copilot_settings_probe_redacts_values_and_keeps_refusals(self):
@@ -8030,7 +8136,8 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
         cleanup = {'schema_version': 1, 'result': 'success', 'outcome': 'completed', 'scope': 'project',
                    'actions': [{'installation_id': public['installation_id'], 'binding_id': 'owned-binding',
                                 'client_id': 'claude', 'action': 'remove'}]}
-        added = {'items': [{'targetId': 'claude', 'alias': 'owned-test', 'destinationPath': str(active)}]}
+        added = {'readiness': 'ready', 'next_actions': [],
+                 'items': [{'targetId': 'claude', 'alias': 'owned-test', 'destinationPath': str(active)}]}
         return dict(cleanup=cleanup, home=home, project=project, profile=profile, before=before, public=public, added=added,
                     active=active, cache=cache, state=state, installed=installed, markets=markets, market=market, key=key)
 
@@ -9227,6 +9334,7 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                 self.assertEqual(operations, ['add', 'list', 'native-list', 'add', 'list', 'remove', 'list'])
                 self.assertTrue(row['removal_verified'])
                 self.assertTrue(row['sentinels_preserved'])
+                self.assertEqual(row['public_skill_ready'], {'after-add': True, 'repeat-add': True})
                 self.assertEqual(row['repeat_native_unchanged'], replaced)
                 self.assertEqual(row['repeat_native_runtime_only'], not replaced and not failure)
                 self.assertEqual(row['repeat_verified'], not replaced and not failure)
@@ -9248,6 +9356,10 @@ gemini_startup_snapshot = GEMINI_STARTUP_AUDIT.snapshot
 GEMINI_STARTUP_VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0"}
 
 class GeminiStartupEnvironmentContracts(unittest.TestCase):
+    IDENTITY_REFUSAL = (
+        r'^Gemini (?:runtime previous file changed or replaced|Windows custody: '
+        r'(?:held file changed|held name changed|current name identity))$'
+    )
 
     @contextmanager
     def fixture(self, baseline_mutation=None):
@@ -9289,7 +9401,7 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
                 old.write_bytes(b'changed foreign startup authority')
             elif baseline_mutation == 'old-swap':
                 body = old.read_bytes()
-                old.unlink()
+                old.rename(root / 'held-foreign-before-list.jsonl')
                 old.write_bytes(body)
             body = b''.join(json.dumps(value).encode() + b'\n' for value in values)
             if baseline_mutation == 'duplicate':
@@ -9401,10 +9513,18 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
                 if mutation == 'swap':
                     p = c['old']
                     b = p.read_bytes()
-                    p.unlink()
+                    p.rename(c['home'].parent / 'held-foreign-before-list.jsonl')
                     p.write_bytes(b)
+                    self.assertEqual(gemini_startup_snapshot([c['profile']]), c['before'])
                 after, _ = self.phase(c, 1, interval=mutation != 'interval')
+                reason = c['observer'].reason
+                if mutation == 'swap':
+                    self.assertRegex(reason or '', self.IDENTITY_REFUSAL)
+                else:
+                    self.assertEqual(reason, 'Gemini startup command interval is invalid')
+                self.assertEqual(c['observer'].phases, [])
                 self.assertFalse(c['observer'].finish(after))
+                self.assertEqual(c['observer'].reason, reason)
 
     def test_duplicate_json_and_wrong_phase_window_refuse(self):
         for mutation in ('duplicate', 'window'):
@@ -9436,7 +9556,7 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
                 if replaced:
                     self.assertEqual(case['old'].read_bytes(),
                                      b'foreign startup authority stays unchanged')
-                    self.assertIsNotNone(case['observer'].reason)
+                    self.assertRegex(case['observer'].reason or '', self.IDENTITY_REFUSAL)
                     self.assertFalse(case['observer'].finish(case['before']))
                 else:
                     self.phase(case, 1)

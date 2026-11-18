@@ -19,6 +19,17 @@ TARGETS = ("claude", "codex")
 LIMIT = 1 << 20
 
 
+class NativeSession(Session):
+    def rpc(self, **request):
+        # A pending interrupt must not split one status response and make close
+        # consume its unread suffix. Go still owns the bounded hard escalation.
+        before = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+        try:
+            return super().rpc(**request)
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, before)
+
+
 def arguments(installer, project, source):
     return [str(installer), "skills", "add", source, "--no-ui", "--scope", "project",
             "--project-root", str(project)]
@@ -39,6 +50,20 @@ def screen(session):
     return rendered.snapshot()
 
 
+def failure_screen(session):
+    view = screen(session)
+    paths = [(str(session.fixture.project), "<project>"),
+             (str(session.fixture.project.parent), "<fixture>")]
+    paths += [(session.fixture.env.get(key, ""), "<home>") for key in ("HOME", "USERPROFILE")]
+    for path, label in sorted(paths, key=lambda item: len(item[0]), reverse=True):
+        if len(path) <= 1:
+            continue
+        # A physical terminal wrap may split the known private prefix.
+        pattern = r"(?:\n[ \t│┃]*)?".join(re.escape(char) for char in path)
+        view = re.sub(pattern, label, view)
+    return repr(view[-8192:])
+
+
 def wait_screen(session, label, predicate):
     deadline = time.monotonic() + session.timeout
     while time.monotonic() < deadline:
@@ -48,7 +73,8 @@ def wait_screen(session, label, predicate):
             session.frame(label)
             return view
         check(session.process.poll() is None, "public CLI exited before " + label)
-    raise AssertionError("timeout waiting for terminal screen: " + label)
+    raise AssertionError("timeout waiting for terminal screen: " + label +
+                         "; last rendered screen=" + failure_screen(session))
 
 
 def wait_install_progress(session, after):
@@ -96,7 +122,12 @@ def wait_install_progress(session, after):
                 finally:
                     session.screen = latest
                 return end
-        check(session.process.poll() is None or received, "public CLI exited before install-progress")
+        if session.process.poll() is not None and not received:
+            # Exit may become visible after the timed read. Consume bytes that
+            # were queued before exit without extending this same deadline.
+            if time.monotonic() < deadline and session.pump(0):
+                continue
+            raise AssertionError("public CLI exited before install-progress")
     raise AssertionError("timeout waiting for terminal screen: install-progress")
 
 
@@ -195,19 +226,27 @@ def verified_result(raw):
         check(refused not in result, "terminal result still requires action: " + refused)
 
 
-def preserve(session, report, root, evidence):
+def preserve(session, report, root, evidence, *, closed):
     # The native collector copies top-level JSON/log files only. Keep the
     # actual transcript and rendered frames there, including on failure.
     raw = bytes(session.raw)
     report["transcript"] = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
                             "truncated": len(raw) > LIMIT}
     (root / "native-terminal-skills.log").write_bytes(raw[-LIMIT:])
-    events = json.loads((evidence / "events.json").read_text())
+    events = {}
+    try:
+        events = json.loads((evidence / "events.json").read_text())
+        check(isinstance(events, dict), "terminal events are not an object")
+    except (OSError, ValueError, AssertionError) as error:
+        report["terminal_evidence_error"] = repr(error)[:512]
+        events = {}
     report["terminal"] = events
-    restoration = events.get("restoration") or {}
-    report["closure_verified"] = (events["exit"] == 0 and not events["forced_cleanup"] and
-                                  all(restoration.get(key) is True for key in
-                                      ("termios_equal", "cursor_restored", "next_line_read", "echo")))
+    restoration = events.get("restoration")
+    report["closure_verified"] = (
+        closed and type(events.get("exit")) is int and events["exit"] == 0
+        and events.get("forced_cleanup") is False and isinstance(restoration, dict)
+        and all(restoration.get(key) is True for key in
+                ("termios_equal", "cursor_restored", "next_line_read", "echo")))
     if not report["closure_verified"] or len(raw) > LIMIT:
         report["status"] = "failed"
     report["frames"] = [{"name": path.stem, "text": path.read_text(),
@@ -238,7 +277,7 @@ def main():
               "verified_result": False, "phase": "selection"}
     before = {str(project / directory): hashes(project / directory)
               for directory in (".agents/skills", ".claude/skills")}
-    session = Session(argv, SimpleNamespace(project=project, env=dict(os.environ)), evidence,
+    session = NativeSession(argv, SimpleNamespace(project=project, env=dict(os.environ)), evidence,
                       timeout=120, rows=35, cols=120)
 
     def interrupt(_number, _frame):
@@ -263,15 +302,24 @@ def main():
         verified_result(session.raw)
         screen(session)
         session.frame("verified-result")
-        report["verified_result"], report["phase"], report["status"] = True, "complete", "passed"
+        report["verified_result"], report["phase"] = True, "complete"
     except BaseException as error:
         report["error"] = str(error)
         raise
     finally:
+        closed = False
         try:
             session.close()
+            check(session.owner.returncode == 0, "terminal owner did not exit successfully")
+            closed = True
+        except BaseException as error:
+            report["closure_error"] = repr(error)[:512]
+            report["status"] = "failed"
+            raise
         finally:
-            preserve(session, report, root, evidence)
+            if closed and report["verified_result"] and "error" not in report:
+                report["status"] = "passed"
+            preserve(session, report, root, evidence, closed=closed)
     check(report["closure_verified"], "native Skills keyboard terminal was not restored and closed")
 
 
