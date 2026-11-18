@@ -223,7 +223,7 @@ func TestGrokUserRemovalRequiresPositiveNativeReadback(t *testing.T) {
 		entries []pluginEntry
 		calls   int
 	}{
-		{name: "confirmed-absent", calls: 1},
+		{name: "confirmed-absent", calls: 1, entries: []pluginEntry{}},
 		{name: "verified-owned-uninstall", calls: 3, entries: []pluginEntry{{Name: request.DeclaredName,
 			Status: "installed", Source: request.Delivery.ActivePath, Version: request.Plan.DeclaredVersion}}},
 	} {
@@ -287,7 +287,7 @@ func TestGrokUserExternalUninstalledCannotBypassAvailableNativeRegistry(t *testi
 		}
 	})
 	t.Run("native-confirmed-absent", func(t *testing.T) {
-		runner := &fakeGrok{}
+		runner := &fakeGrok{entries: []pluginEntry{}}
 		outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: runner}, remove)
 		if err != nil || !outcome.ExternalRemovalComplete || !outcome.ArtifactRemovalAllowed ||
 			len(runner.commands) != 1 || runner.commands[0][2] != "list" {
