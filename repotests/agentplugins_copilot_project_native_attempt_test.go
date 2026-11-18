@@ -135,6 +135,14 @@ func (f *copilotProjectAttempt) command(t *testing.T, label, cwd string, env, ar
 		f.evidence["commands"] = append(f.evidence["commands"].([]string), label)
 	}
 	f.check(t)
+	// This disposable, no-auth public UAP add reports its structured
+	// error code to the test when it fails normally. Process closure, timeout
+	// and output limits remain fatal. Other genuine native cases stay strict.
+	if label == "whole-plugin-add" && err == nil && ctx.Err() == nil && result.ExitCode > 0 &&
+		len(result.Stdout) <= copilotProjectBodyLimit &&
+		!bytes.Contains(result.Stderr, []byte("stderr bytes omitted")) {
+		return result
+	}
 	if err != nil || ctx.Err() != nil || result.ExitCode != 0 || len(result.Stdout) > copilotProjectBodyLimit || bytes.Contains(result.Stderr, []byte("stderr bytes omitted")) {
 		t.Fatalf("%s process/capture/cleanup failed; see bounded evidence", label)
 	}
