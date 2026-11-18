@@ -69,6 +69,9 @@ type DeliveryPlan struct {
 	profileAuthority           *ProfileAuthority       `json:"-"`
 	profileNamespace           string                  `json:"-"`
 	PreviousNativeObjects      []NativeObjectOwnership `json:"-"`
+	// NativePluginRegistration is a transient Copilot project projection choice.
+	// The persisted native-object kind records ownership for later removal.
+	NativePluginRegistration bool `json:"-"`
 	LocalEntryObservation      *LocalEntryObservation  `json:"-"`
 	SelectedDelivery           SelectedDelivery        `json:"-"`
 	OpenCodeHost               OpenCodeHostAuthority   `json:"-"`
