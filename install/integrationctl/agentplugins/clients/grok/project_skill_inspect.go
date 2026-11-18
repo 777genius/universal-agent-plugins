@@ -58,8 +58,20 @@ func projectSkillEntry(row map[string]any) bool {
 		}
 		fields = append(fields, "disabled")
 	}
-	// Grok reports unrelated native Skills (project/user/bundled/config/server)
-	// in the same inspect collection. Collisions may have two extra fields.
+	// Grok reports unrelated native Skills alongside plugin Skills.
+	// Keep only the native optional inspect fields and their exact types.
+	if vendor, present := row["vendor"]; present {
+		if value, ok := vendor.(string); !ok || value == "" {
+			return false
+		}
+		fields = append(fields, "vendor")
+	}
+	if status, present := row["compatibilityStatus"]; present {
+		if status != "enabled" && status != "disabled" {
+			return false
+		}
+		fields = append(fields, "compatibilityStatus")
+	}
 	if collision, present := row["collidesWith"]; present {
 		if value, ok := collision.(string); !ok || value == "" {
 			return false
@@ -96,7 +108,7 @@ func projectSkillEntry(row map[string]any) bool {
 		}
 		name, ok := source["plugin_name"].(string)
 		return ok && name != ""
-	case "project", "user", "bundled", "config", "server":
+	case "project", "user", "bundled", "configToml", "server":
 		// Foreign native Skills are inventory, not evidence of an owned
 		// plugin. The selected Skill still needs exact plugin-origin proof.
 		return projectSkillFields(source, "type", "path")

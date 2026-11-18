@@ -8,15 +8,19 @@ import (
 )
 
 func TestProjectGrokOwnedSkillsReadyWithUnrelatedNativeSources(t *testing.T) {
-	for _, origin := range []string{"project", "user", "bundled", "config", "server"} {
+	for _, origin := range []string{"project", "user", "bundled", "configToml", "server"} {
 		t.Run(origin, func(t *testing.T) {
 			fixture := newProjectSkillFixture(t)
 			skill := map[string]any{"name": "foreign-" + origin, "description": "Retained native Skill", "userInvocable": true,
 				"source": map[string]any{"type": origin, "path": filepath.Join(fixture.request.Client.ConfigRoot, origin, "SKILL.md")}}
 			if origin == "project" {
-				skill["disabled"] = true
 				skill["collidesWith"] = "foreign"
 				skill["invocableAs"] = "foreign:project"
+			}
+			if origin == "user" {
+				skill["vendor"] = "claude"
+				skill["compatibilityStatus"] = "disabled"
+				skill["disabled"] = true
 			}
 			fixture.runner.document["skills"] = append(fixture.runner.document["skills"].([]any), skill)
 			unchanged := projectSkillFilesUnchanged(t,
@@ -54,6 +58,17 @@ func TestProjectGrokUnrelatedNativeSourcesCannotForgeOwnedSkillProof(t *testing.
 			f.runner.document["skills"] = append(f.runner.document["skills"].([]any), map[string]any{
 				"name": "Docs", "description": "Other", "userInvocable": true,
 				"source": map[string]any{"type": "user", "path": "/tmp/foreign/SKILL.md"}})
+		},
+		"invalid-status": func(f *projectSkillFixture) {
+			f.runner.document["skills"] = append(f.runner.document["skills"].([]any), map[string]any{
+				"name": "another", "description": "Other", "userInvocable": true,
+				"compatibilityStatus": "some-future-status",
+				"source": map[string]any{"type": "user", "path": "/tmp/foreign/SKILL.md"}})
+		},
+		"unsupported-config-alias": func(f *projectSkillFixture) {
+			f.runner.document["skills"] = append(f.runner.document["skills"].([]any), map[string]any{
+				"name": "another", "description": "Other", "userInvocable": true,
+				"source": map[string]any{"type": "config", "path": "/tmp/foreign/SKILL.md"}})
 		},
 		"invalid-extra-field": func(f *projectSkillFixture) {
 			f.runner.document["skills"] = append(f.runner.document["skills"].([]any), map[string]any{
