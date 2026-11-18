@@ -43,12 +43,17 @@ func newModernDirectoryProfile(approved modernMirrorAuthority) (directoryMirrorP
 		return directoryMirrorProfile{}, err
 	}
 	key, err := decodeKey(approved.KeyID, approved.PublicKeyBase64, string(directoryv1.KeyCurrent))
-	if err != nil || approved.KeyID == "" || approved.KeyID != strings.TrimSpace(approved.KeyID) || approved.KeyID == directoryKeyID {
+	if err != nil || approved.KeyID == "" || approved.KeyID != strings.TrimSpace(approved.KeyID) ||
+		approved.KeyID == directoryKeyID || approved.KeyID == mirrorNextDirectoryKeyID {
 		return directoryMirrorProfile{}, errors.New("modern Directory requires a distinct pinned signing key")
 	}
-	legacy, err := base64.StdEncoding.Strict().DecodeString(directoryPublicKey)
-	if err != nil || len(legacy) != ed25519.PublicKeySize || bytes.Equal(key.PublicKey, legacy) {
-		return directoryMirrorProfile{}, errors.New("modern Directory cannot reuse historical public key bytes")
+	// A new feed cannot borrow either public key already compiled into the
+	// production legacy CLI trust store, regardless of the submitted key ID.
+	for _, existing := range []string{directoryPublicKey, mirrorNextDirectoryPublicKey} {
+		trusted, decodeErr := base64.StdEncoding.Strict().DecodeString(existing)
+		if decodeErr != nil || len(trusted) != ed25519.PublicKeySize || bytes.Equal(key.PublicKey, trusted) {
+			return directoryMirrorProfile{}, errors.New("modern Directory cannot reuse a pretrusted production public key")
+		}
 	}
 	body, err := json.Marshal(map[string]any{"schema_version": 1, "keys": []map[string]string{{
 		"key_id": approved.KeyID, "public_key": approved.PublicKeyBase64, "state": string(directoryv1.KeyCurrent),
