@@ -207,13 +207,34 @@ def external_http_fixture(root):
         child.wait(timeout=5)
 
 
-def available_skill(body, name):
-    data = json.loads(body)
-    if isinstance(data, dict):
-        data = data.get("skills")
-    if not isinstance(data, list):
+def available_skill(body, name, project):
+    # Exact pinned Devin 3000.12.57 native JSON identifies the source, not
+    # merely the display name. A user/foreign Skill with the same name is not
+    # proof that the selected Project Skill is visible to Devin.
+    rows = json.loads(body)
+    if isinstance(rows, dict):
+        rows = rows.get("skills")
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
         raise RuntimeError("genuine Devin Skill inventory has an unknown shape")
-    return any(isinstance(row, dict) and row.get("name") == name for row in data)
+    scoped_name = f"{project}:{name}"
+    matching = [row for row in rows
+                if row.get("display_name") == name or row.get("name") in (name, scoped_name)]
+    if len(matching) > 1:
+        raise RuntimeError("genuine Devin Skill inventory has duplicate selected names")
+    if not matching:
+        return False
+    row = matching[0]
+    schema = {"name", "description", "triggers", "provider", "base_dir",
+              "display_name", "warnings", "errors"}
+    if (set(row) != schema or row["name"] not in (name, scoped_name) or
+            row["display_name"] != name or row["provider"] != "Devin" or
+            row["base_dir"] != str(Path(project) / ".devin" / "skills" / name) or
+            not isinstance(row["description"], str) or
+            not isinstance(row["triggers"], list) or
+            any(not isinstance(trigger, str) for trigger in row["triggers"]) or
+            row["warnings"] != [] or row["errors"] != []):
+        raise RuntimeError("genuine Devin Skill selected source or metadata differs")
+    return True
 
 
 def available_mcp(body, name, config_path, transport):
@@ -305,7 +326,7 @@ def main(root, report):
                 skill_output = command([str(binary), "skills", "list", "--json"], project, env, timeout=45)
                 mcp_output = command([str(binary), "mcp", "list", "--json"], project, env, timeout=45)
                 selected_mcp = project / ".devin" / "mcp_config.json"
-                found = [available_skill(skill_output, SKILL),
+                found = [available_skill(skill_output, SKILL, project),
                          available_mcp(mcp_output, STDIO, selected_mcp, "stdio"),
                          available_mcp(mcp_output, HTTP, selected_mcp, "http")]
                 want = present if index == 0 else False
