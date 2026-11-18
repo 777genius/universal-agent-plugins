@@ -80,3 +80,15 @@ for (const target of ['grok', 'kimi'] as const) {
     assert.deepEqual(agentInstallExample([context7, alternative], target), { plugin: alternative, target });
   });
 }
+
+test('agent examples honor explicit Project scope without broadening default user eligibility', () => {
+  const plugin = onlyTarget('codex');
+  plugin.distributions[0]!.releases[0]!.targets[0]!.scopes = ['project'];
+  assert.equal(agentInstallExample([plugin], 'codex'), undefined);
+  assert.deepEqual(agentInstallExample([plugin], 'codex', 'project'), { plugin, target: 'codex' });
+  assert.equal(agentInstallExample([plugin], 'chatgpt', 'project'), undefined,
+    'Desktop remains user-only even when canonical Codex supports Project');
+  plugin.distributions[0]!.releases[0]!.blocking_clients.push('codex');
+  assert.equal(agentInstallExample([plugin], 'codex', 'project'), undefined,
+    'Scope-aware examples preserve signed blocking policy');
+});

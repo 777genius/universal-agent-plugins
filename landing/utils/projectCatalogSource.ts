@@ -162,11 +162,46 @@ export function pinnedCatalogSelection(
   return undefined;
 }
 
-export function pinnedCatalogCommands(plugin: RegistryPlugin, client: ClientID, scope: InstallScope) {
-  const selection = pinnedCatalogSelection(plugin, client, scope);
+/**
+ * One exact-source request for explicit local choices whose existing routes
+ * identify the same immutable portable package. Signed grants are unchanged.
+ */
+export function pinnedCatalogGroupSelection(
+  plugin: RegistryPlugin, clients: readonly ClientID[], scope: InstallScope,
+) {
+  const selections = clients.map(client => pinnedCatalogSelection(plugin, client, scope));
+  const source = selections.find(selection => selection);
+  if (!source || !clients.length) return undefined;
+  const sameSource = (candidate: PluginSource) =>
+    candidate.repository === source.source.repository && candidate.revision === source.source.revision &&
+    candidate.path === source.source.path && candidate.tree_sha256 === source.source.tree_sha256 &&
+    candidate.manifest_sha256 === source.source.manifest_sha256;
+  if (!clients.every((client, index) => {
+    if (!clientCapabilities.get(client)?.saved_dependency ||
+        !source.components.every(component => scopedComponentSupported(client, component, scope))) return false;
+    const pinned = selections[index];
+    if (pinned) return sameSource(pinned.source) && pinned.manifestName === source.manifestName;
+    // A signed target may join only through its own eligible scoped policy.
+    // pinnedCatalogSelection already excludes every canonical scoped closure.
+    const signed = scope === 'project'
+      ? projectCatalogSelection(plugin, [client]).resolution.distribution
+      : resolveDistribution(plugin, [client], 'user').distribution;
+    return Boolean(signed && sameSource(signed.source) &&
+      signed.targets.some(target => target.client === client && !target.app_binding) &&
+      signed.components.length === source.components.length &&
+      signed.components.every(component => source.components.includes(component)));
+  })) return undefined;
+  return { ...source, clients: [...new Set(clients)] };
+}
+
+export function pinnedCatalogCommands(plugin: RegistryPlugin, client: ClientID | readonly ClientID[], scope: InstallScope) {
+  const clients = typeof client === 'string' ? [client] : [...client];
+  const selection = clients.length === 1
+    ? pinnedCatalogSelection(plugin, clients[0]!, scope)
+    : pinnedCatalogGroupSelection(plugin, clients, scope);
   if (!selection) throw new Error('No eligible explicit exact-source installation');
-  return installCommands(selection.selector, selection.manifestName, [client], undefined, scope,
-    `npx -y universal-agent-plugins@${PINNED_CATALOG_CLI_VERSION}`, [client]);
+  return installCommands(selection.selector, selection.manifestName, clients, undefined, scope,
+    `npx -y universal-agent-plugins@${PINNED_CATALOG_CLI_VERSION}`, clients);
 }
 
 /** Current release presentation only; source eligibility and CLI diagnostics stay unchanged. */

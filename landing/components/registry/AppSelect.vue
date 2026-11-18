@@ -25,7 +25,7 @@ const props = defineProps<{
   options: readonly SelectOption[];
   label: string;
   leadingIcon?:
-    'category' | 'component' | 'source' | 'trust' | 'agent' | 'authentication' | 'owner';
+    'sort' | 'category' | 'component' | 'source' | 'trust' | 'agent' | 'authentication' | 'owner';
 }>();
 
 const emit = defineEmits<{
