@@ -82,6 +82,9 @@ func probeMissingProjectVersions(ctx context.Context, registry *clients.Registry
 			versions[id] = version
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	for id, version := range versions {
 		client := detected[id]
 		client.Version = version
