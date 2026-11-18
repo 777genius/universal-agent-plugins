@@ -456,10 +456,10 @@ func activateCopilotProjectPlugin(ctx context.Context, env clients.Env, request 
 		RepairAction:      "repair the exact UAP-owned Copilot project marketplace registration",
 		RetryAction:       "retry Copilot project plugin registration",
 		CompletedAction:   "whole Agent Plugin registered for this project without copying its components; open a new Copilot session to load it",
-		Verify:            func() error {
+		Verify: func() error {
 			return copilotVerifyWholePlugin(env, request)
 		},
-		Activate:          func(ctx context.Context, request domain.ActivationRequest) error {
+		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
 			// Preflight only checks native settings: the selected package becomes
 			// readable after staging commits. Verify the installed manifest and
 			// marketplace immediately before touching project/user settings.

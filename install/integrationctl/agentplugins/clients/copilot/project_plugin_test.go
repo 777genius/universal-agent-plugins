@@ -390,7 +390,7 @@ func TestCopilotSavedWholePluginKeepsStagedMarketplaceWithoutVersion(t *testing.
 	envelope := domain.PackageEnvelope{
 		FormatID: domain.FormatIDAgentPluginsV1,
 		Manifest: domain.PluginManifest{Name: "review", Version: "1.0.0"},
-		Skills: map[string]domain.Skill{"review": {Name: "review"}},
+		Skills:   map[string]domain.Skill{"review": {Name: "review"}},
 	}
 	input := clients.PlanInput{
 		Client: request.Client, TargetContext: request.Plan.TargetContext,
