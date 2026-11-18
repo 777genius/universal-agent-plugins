@@ -125,3 +125,36 @@ func TestGrokUserCannotAttestDuplicatedNativeRegistration(t *testing.T) {
 		t.Fatalf("duplicate native identities became attested activation: %+v %v %+v", outcome, err, runner.commands)
 	}
 }
+
+type grokUnclosedRemovalReadback struct {
+	base         *fakeGrok
+	afterRemoval bool
+}
+
+func (f *grokUnclosedRemovalReadback) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	if len(command.Argv) >= 3 && command.Argv[2] == "list" && f.afterRemoval {
+		f.base.commands = append(f.base.commands, append([]string(nil), command.Argv...))
+		return legacyports.CommandResult{}, &domain.UnclosedClientProbe{
+			Operation: "grok post-removal list", Err: errors.New("cannot confirm native process closure")}
+	}
+	result, err := f.base.Run(ctx, command)
+	if len(command.Argv) >= 3 && command.Argv[2] == "uninstall" && err == nil && result.ExitCode == 0 {
+		f.afterRemoval = true
+	}
+	return result, err
+}
+
+func TestGrokUserUnclosedRemovalReadbackNeverAllowsArtifactDeletion(t *testing.T) {
+	request := grokRequest(t)
+	base := &fakeGrok{entries: []pluginEntry{{Name: request.DeclaredName, Status: "installed",
+		Source: request.Delivery.ActivePath, Version: request.Plan.DeclaredVersion}}}
+	runner := &grokUnclosedRemovalReadback{base: base}
+	remove := domain.DeactivationRequest{Client: request.Client, DeclaredName: request.DeclaredName,
+		BackendExecutable: request.BackendExecutable, ManagedArtifactPath: request.Delivery.ActivePath, Confirmed: true}
+	outcome, err := New().Deactivate(context.Background(), clients.Env{Runner: runner}, remove)
+	if err == nil || !domain.IsUnclosedClientProbe(err) || outcome.NativeEffect != domain.NativeEffectUncertain ||
+		outcome.ExternalRemovalComplete || outcome.ArtifactRemovalAllowed || len(base.commands) != 3 ||
+		base.commands[0][2] != "list" || base.commands[1][2] != "uninstall" || base.commands[2][2] != "list" {
+		t.Fatalf("unclosed post-uninstall query enabled deletion: %+v %v %+v", outcome, err, base.commands)
+	}
+}

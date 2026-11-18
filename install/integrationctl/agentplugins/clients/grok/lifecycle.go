@@ -166,6 +166,9 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 	}
 	if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
 		outcome.ArtifactRemovalAllowed = false
+		if domain.IsUnclosedClientProbe(err) {
+			outcome.NativeEffect = domain.NativeEffectUncertain
+		}
 		return outcome, err
 	}
 	outcome.ExternalRemovalComplete = true
