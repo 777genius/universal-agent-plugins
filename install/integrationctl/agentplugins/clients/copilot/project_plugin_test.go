@@ -159,3 +159,66 @@ func TestCopilotWholePluginRegistrationRefusesDriftAndForeignReplacement(t *test
 		t.Fatal("removal damaged foreign configuration")
 	}
 }
+
+
+func TestCopilotWholePluginRepairCannotRestoreRevokedProjectTrust(t *testing.T) {
+	env, request, trustPath := trustFixture(t)
+	request.Plan.DeclaredName = "review"
+	request.Plan.NativePluginRegistration = true
+	request.Plan.InstallIntent = domain.InstallIntentAutomatic
+	request.Plan.Components = []domain.ComponentDecision{{
+		Kind: domain.ComponentSkill, Name: "review", Support: domain.SupportNative,
+	}}
+	request.DeclaredName = "review"
+	request.Delivery = domain.StagedDelivery{
+		ClientID: domain.ClientCopilot, ActivePath: request.Plan.ActivePath,
+	}
+	object, err := copilotProjectPluginObject(request.Plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Delivery.NativeObjects = []domain.NativeObjectOwnership{object}
+	request.PreviousNativeObjects = request.Delivery.NativeObjects
+	request.ProjectTrustConsent = false
+	outcome, err := New().Activate(t.Context(), env, request)
+	if err == nil || outcome.Verification == domain.VerificationInstalled {
+		t.Fatalf("repair re-granted revoked trust: %+v %v", outcome, err)
+	}
+	if _, err := os.Lstat(trustPath); !os.IsNotExist(err) {
+		t.Fatal("repair wrote project trust without user consent")
+	}
+	_, settingsPath, err := copilotProjectRegistration(request.Plan.NativeRegistryRoot,
+		request.Plan.PhysicalArtifactID, request.Plan.DeclaredName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(settingsPath); !os.IsNotExist(err) {
+		t.Fatal("rejected repair wrote project plugin settings")
+	}
+}
+
+func TestCopilotWholePluginInspectRejectsDifferentOwnedPluginName(t *testing.T) {
+	env, request, _ := trustFixture(t)
+	request.Plan.DeclaredName = "review"
+	request.Plan.NativePluginRegistration = true
+	request.Plan.InstallIntent = domain.InstallIntentAutomatic
+	request.Plan.Components = []domain.ComponentDecision{{
+		Kind: domain.ComponentSkill, Name: "review", Support: domain.SupportNative,
+	}}
+	owned, err := copilotProjectPluginObject(request.Plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := &domain.ClientBinding{
+		Scope: string(domain.ScopeProject),
+		NativeProfileRoot: request.Plan.NativeRegistryRoot,
+		PhysicalArtifact: request.Plan.PhysicalArtifactID,
+		TargetLocator: request.Plan.ActivePath,
+		NativeObjects: []domain.NativeObjectOwnership{owned},
+	}
+	other := request.Plan
+	other.DeclaredName = "different"
+	if finding, err := copilotInspectWholePlugin(other, binding, env.NativeConfig); err == nil || finding != clients.RegistryIndeterminate {
+		t.Fatalf("foreign logical identity treated as installed: %s %v", finding, err)
+	}
+}
