@@ -64,7 +64,7 @@ type ComponentDecision struct {
 
 type DeliveryPlan struct {
 	requiresNativeProjectionRefresh bool
-	nativePluginRegistration bool
+	nativePluginRegistration        bool
 
 	TargetContext              TargetContext           `json:"-"`
 	profileAuthority           *ProfileAuthority       `json:"-"`
