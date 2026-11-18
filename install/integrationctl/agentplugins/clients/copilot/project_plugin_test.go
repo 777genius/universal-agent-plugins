@@ -20,6 +20,7 @@ func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
 	request.Plan.InstallIntent = domain.InstallIntentAutomatic
 	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "review", Support: domain.SupportNative}}
 	request.DeclaredName = "review"
+	request.ProjectTrustConsent = true
 	request.Delivery = domain.StagedDelivery{ClientID: domain.ClientCopilot, ActivePath: request.Plan.ActivePath}
 	object, err := copilotProjectPluginObject(request.Plan)
 	if err != nil {
@@ -71,6 +72,7 @@ func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
 		t.Fatalf("project trust not remembered: %v", err)
 	}
 	request.PreviousNativeObjects = request.Delivery.NativeObjects
+	request.ProjectTrustConsent = false
 	repeat, err := New().Activate(t.Context(), env, request)
 	if err != nil || repeat.Activation != domain.ActivationPrepared {
 		t.Fatalf("repeat: %+v %v", repeat, err)
@@ -116,6 +118,11 @@ func TestCopilotWholePluginEligibilityKeepsLegacyProjectComponents(t *testing.T)
 		t.Fatal("whole plugin bypassed unsupported component admission")
 	}
 	plan.Components = plan.Components[:1]
+	in.Client.Version = "1.0.80"
+	if copilotWholePluginEligible(in, plan) {
+		t.Fatal("unsupported host claimed native plugin loading")
+	}
+	in.Client.Version = "1.0.82"
 	in.Envelope.FormatID = domain.FormatIDLegacyV1
 	if copilotWholePluginEligible(in, plan) {
 		t.Fatal("legacy package incorrectly treated as Agent Plugins 1.0")
