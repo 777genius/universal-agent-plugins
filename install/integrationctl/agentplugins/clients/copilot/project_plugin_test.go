@@ -376,3 +376,60 @@ func TestCopilotWholePluginSourceVerificationRejectsMissingAndSymlinkedDocs(t *t
 		t.Fatal("native marketplace reader followed a foreign symlink")
 	}
 }
+
+
+func TestCopilotSavedWholePluginKeepsStagedMarketplaceWithoutVersion(t *testing.T) {
+	_, request, _ := trustFixture(t)
+	request.Plan.DeclaredName = "review"
+	request.Plan.Components = []domain.ComponentDecision{{
+		Kind: domain.ComponentSkill, Name: "review", Support: domain.SupportNative,
+	}}
+	object, err := copilotProjectPluginObject(request.Plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := domain.PackageEnvelope{
+		FormatID: domain.FormatIDAgentPluginsV1,
+		Manifest: domain.PluginManifest{Name: "review", Version: "1.0.0"},
+		Skills: map[string]domain.Skill{"review": {Name: "review"}},
+	}
+	input := clients.PlanInput{
+		Client: request.Client, TargetContext: request.Plan.TargetContext,
+		Envelope: envelope, PreviousNativeObjects: []domain.NativeObjectOwnership{object},
+	}
+	plan := request.Plan
+	plan.PreviousNativeObjects = input.PreviousNativeObjects
+	if err := New().RefinePlan(t.Context(), input, &plan); err != nil {
+		t.Fatal(err)
+	}
+	if !plan.HasNativePluginRegistration() {
+		t.Fatal("optional version probe erased saved native whole-plugin delivery")
+	}
+	stage := filepath.Join(t.TempDir(), "staging")
+	if err := os.MkdirAll(stage, 0700); err != nil {
+		t.Fatal(err)
+	}
+	owned, err := New().Project(t.Context(), clients.ProjectionInput{Plan: plan, Envelope: envelope, StagingPath: stage})
+	if err != nil || len(owned) != 1 || owned[0] != object {
+		t.Fatalf("staging converted native registration to loose components: %v %+v", err, owned)
+	}
+	if _, err := os.Stat(filepath.Join(stage, ".github", "plugin", "marketplace.json")); err != nil {
+		t.Fatalf("saved marketplace was not staged: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(stage, ".github", "skills")); !os.IsNotExist(err) {
+		t.Fatalf("saved whole plugin emitted duplicate loose skills: %v", err)
+	}
+	input.Envelope.MCP.Servers = map[string]domain.MCPServer{
+		"runtime": {Name: "runtime", Type: "stdio",
+			StdioRequirement: &domain.StdioRequirement{Command: "./bin/probe", Kind: domain.ExecutableBundled}},
+	}
+	plan.Components = append(plan.Components, domain.ComponentDecision{
+		Kind: domain.ComponentMCPServer, Name: "runtime", Support: domain.SupportNative,
+	})
+	if err := New().RefinePlan(t.Context(), input, &plan); err != nil {
+		t.Fatal(err)
+	}
+	if plan.HasNativePluginRegistration() {
+		t.Fatal("new bundled stdio component failed to select managed launcher delivery")
+	}
+}
