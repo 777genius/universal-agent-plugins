@@ -187,25 +187,23 @@ func copilotPluginSettingsSnapshot(kernel nativeconfig.Kernel, path string) (nat
 // A settings entry alone cannot attest to a usable native plugin. The staged
 // package must still contain an ordinary Agent Plugins manifest and a matching
 // local marketplace that points only at its own root.
-func copilotVerifyProjectPluginSource(root string, plan domain.DeliveryPlan) error {
+func copilotVerifyProjectPluginSource(root string, plan domain.DeliveryPlan, kernel nativeconfig.Kernel) error {
 	manifestPath := filepath.Join(plan.ActivePath, "plugin.json")
 	marketplacePath := filepath.Join(plan.ActivePath, ".github", "plugin", "marketplace.json")
 	read := func(path string) (map[string]any, error) {
 		if err := pathpolicy.RequireContainedChild(root, path); err != nil {
 			return nil, err
 		}
-		info, err := os.Lstat(path)
+		// Use the shared bounded, no-follow native file reader. Lstat followed
+		// by ReadFile could follow a replaced symlink between the two calls.
+		file, err := kernel.ReadExactFileBounded(path, 1<<20)
 		if err != nil {
 			return nil, err
 		}
-		if !info.Mode().IsRegular() || info.Size() < 2 || info.Size() > 1<<20 {
-			return nil, fmt.Errorf("Copilot native plugin document is not a regular bounded file")
+		if !file.Exists || len(file.Body) < 2 {
+			return nil, fmt.Errorf("Copilot native plugin document is absent or empty")
 		}
-		body, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		return shared.DecodeStrictJSONObject(body)
+		return shared.DecodeStrictJSONObject(file.Body)
 	}
 	manifest, err := read(manifestPath)
 	if err != nil {
@@ -258,7 +256,7 @@ func copilotInspectWholePlugin(plan domain.DeliveryPlan, managed *domain.ClientB
 				return clients.RegistryIndeterminate, fmt.Errorf("Copilot project plugin binding name differs from selected package")
 			}
 		}
-		if err := copilotVerifyProjectPluginSource(root, plan); err != nil {
+		if err := copilotVerifyProjectPluginSource(root, plan, kernel); err != nil {
 			return clients.RegistryIndeterminate, err
 		}
 	}
