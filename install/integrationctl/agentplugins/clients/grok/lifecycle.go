@@ -74,13 +74,12 @@ func activateUser(ctx context.Context, env clients.Env, request domain.Activatio
 			return activationError(outcome, request, fmt.Errorf("uninstall previous Grok plugin: %w", err))
 		}
 		if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
-			if errors.Is(err, errUnknownList) {
-				outcome.NativeEffect = domain.NativeEffectUncertain
-				// A completed uninstall followed by an unreadable native list
-				// cannot inherit an earlier manual installation attestation.
-				return shared.FailedActivation(outcome, "inspect `grok plugin list --json` before retrying replacement", fmt.Errorf("verify previous Grok plugin removal: %w", err))
-			}
-			return activationError(outcome, request, fmt.Errorf("verify previous Grok plugin removal: %w", err))
+			// A successful native removal with unreadable or negative readback
+			// may have changed the registration. Never begin a second mutation
+			// or accept a stale manual attestation after this point.
+			outcome.NativeEffect = domain.NativeEffectUncertain
+			return shared.FailedActivation(outcome, "inspect Grok native registry before retrying replacement",
+				fmt.Errorf("verify previous Grok plugin removal: %w", err))
 		}
 	}
 	if _, err := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "install", "--trust", request.Delivery.ActivePath); err != nil {
@@ -106,6 +105,11 @@ func verifyActivation(ctx context.Context, env clients.Env, request domain.Activ
 	}
 	entry, found := findEntry(entries, request.DeclaredName)
 	if !found || !expectedEntry(entry, request.DeclaredName, request.Delivery.ActivePath) || entry.Status != "installed" || entry.Version != request.Plan.DeclaredVersion {
+		if installedNow {
+			// The install command completed, but native evidence contradicts
+			// the requested registration; its external effect is unresolved.
+			outcome.NativeEffect = domain.NativeEffectUncertain
+		}
 		return activationError(outcome, request, fmt.Errorf("%w: Grok plugin %q is absent, disabled, foreign, or has a different version", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
 	}
 	outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled
@@ -196,9 +200,9 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 	}
 	if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
 		outcome.ArtifactRemovalAllowed = false
-		if domain.IsUnclosedClientProbe(err) {
-			outcome.NativeEffect = domain.NativeEffectUncertain
-		}
+		// Unregister has already completed: any failed readback leaves
+		// uncertain external state, even if the listing process closed.
+		outcome.NativeEffect = domain.NativeEffectUncertain
 		return outcome, err
 	}
 	outcome.ExternalRemovalComplete = true

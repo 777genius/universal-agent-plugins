@@ -342,3 +342,76 @@ func TestGrokUserVerifyOnlyMayStillUseExplicitManualAttestation(t *testing.T) {
 		t.Fatalf("read-only manual attestation contract changed: %+v %v %+v", outcome, err, base.commands)
 	}
 }
+
+type grokMutationReadbackFailure struct {
+	base *fakeGrok
+	mutationComplete bool
+}
+
+func (r *grokMutationReadbackFailure) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	if len(command.Argv) > 2 && command.Argv[2] == "list" && r.mutationComplete {
+		r.base.commands = append(r.base.commands, append([]string(nil), command.Argv...))
+		return legacyports.CommandResult{}, errors.New("native Grok list failed after completed mutation")
+	}
+	result, err := r.base.Run(ctx, command)
+	if len(command.Argv) > 2 && (command.Argv[2] == "install" || command.Argv[2] == "uninstall") &&
+		err == nil && result.ExitCode == 0 {
+		r.mutationComplete = true
+	}
+	return result, err
+}
+
+func TestGrokUserReplacementFailedReadbackKeepsUncertainEffect(t *testing.T) {
+	request := grokRequest(t)
+	request.Replacing = true
+	request.ActivationComplete = true
+	base := &fakeGrok{entries: []pluginEntry{{Name: request.DeclaredName, Status: "installed",
+		Source: request.Delivery.ActivePath, Version: "1.0.0"}}}
+	outcome, err := New().Activate(t.Context(), clients.Env{Runner: &grokMutationReadbackFailure{base: base}}, request)
+	if err == nil || outcome.NativeEffect != domain.NativeEffectUncertain ||
+		outcome.Activation != domain.ActivationFailed || outcome.ActivationAttested ||
+		len(base.commands) != 3 || base.commands[0][2] != "list" ||
+		base.commands[1][2] != "uninstall" || base.commands[2][2] != "list" {
+		t.Fatalf("replacement continued without trustworthy post-uninstall state: %+v %v %+v", outcome, err, base.commands)
+	}
+}
+
+func TestGrokUserRemovalFailedReadbackKeepsUncertainEffect(t *testing.T) {
+	request := grokRequest(t)
+	base := &fakeGrok{entries: []pluginEntry{{Name: request.DeclaredName, Status: "installed",
+		Source: request.Delivery.ActivePath, Version: request.Plan.DeclaredVersion}}}
+	remove := domain.DeactivationRequest{Client: request.Client, DeclaredName: request.DeclaredName,
+		BackendExecutable: request.BackendExecutable, ManagedArtifactPath: request.Delivery.ActivePath, Confirmed: true}
+	outcome, err := New().Deactivate(t.Context(), clients.Env{Runner: &grokMutationReadbackFailure{base: base}}, remove)
+	if err == nil || outcome.NativeEffect != domain.NativeEffectUncertain ||
+		outcome.ExternalRemovalComplete || outcome.ArtifactRemovalAllowed ||
+		len(base.commands) != 3 || base.commands[0][2] != "list" ||
+		base.commands[1][2] != "uninstall" || base.commands[2][2] != "list" {
+		t.Fatalf("unverified native removal allowed artifact deletion: %+v %v %+v", outcome, err, base.commands)
+	}
+}
+
+type grokUnexpectedInstalledVersion struct {
+	base *fakeGrok
+}
+
+func (r *grokUnexpectedInstalledVersion) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	result, err := r.base.Run(ctx, command)
+	if len(command.Argv) > 2 && command.Argv[2] == "install" && err == nil && result.ExitCode == 0 {
+		r.base.entries[0].Version = "unexpected-native-version"
+	}
+	return result, err
+}
+
+func TestGrokUserPostInstallNegativeReadbackKeepsUncertainEffect(t *testing.T) {
+	request := grokRequest(t)
+	request.ActivationComplete = true
+	base := &fakeGrok{}
+	outcome, err := New().Activate(t.Context(), clients.Env{Runner: &grokUnexpectedInstalledVersion{base: base}}, request)
+	if err == nil || outcome.NativeEffect != domain.NativeEffectUncertain ||
+		outcome.Activation != domain.ActivationFailed || outcome.ActivationAttested ||
+		len(base.commands) != 3 || base.commands[0][2] != "list" ||
+		base.commands[1][2] != "install" || base.commands[2][2] != "list" {
+		t.Fatalf("negative readback after install lost native uncertainty: %+v %v %+v", outcome, err, base.commands)
+	}
+}
