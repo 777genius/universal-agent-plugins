@@ -209,8 +209,8 @@ func copilotVerifyProjectPluginSource(root string, plan domain.DeliveryPlan, ker
 	if err != nil {
 		return fmt.Errorf("Copilot project Agent Plugins manifest: %w", err)
 	}
-	if manifest["name"] != plan.DeclaredName {
-		return fmt.Errorf("Copilot project plugin manifest name differs from the selected package")
+	if manifest["name"] != plan.DeclaredName || manifest["$schema"] != domain.PluginSchemaV1 {
+		return fmt.Errorf("Copilot project plugin manifest must match the selected Agent Plugins 1.0 identity and schema")
 	}
 	marketplace, err := read(marketplacePath)
 	if err != nil {
