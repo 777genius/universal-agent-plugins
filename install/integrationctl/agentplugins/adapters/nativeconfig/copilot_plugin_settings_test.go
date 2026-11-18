@@ -134,3 +134,19 @@ func TestCopilotPluginSettingsRestoresOnlyCompletelyAbsentOwnedPair(t *testing.T
 		t.Fatalf("partial disabled pair was adopted: %v", err)
 	}
 }
+
+
+func TestCopilotPluginSettingsRefusesUnverifiableOversizeCommit(t *testing.T) {
+	registration := CopilotPluginRegistration{
+		Marketplace: "agentplugins-abc123", Plugin: "review",
+		Directory: ".uap/managed/clients/copilot/fixture",
+	}
+	base := `{"foreign":""}`
+	body := []byte(`{"foreign":"` + strings.Repeat("x", (1<<20)-len(base)) + `"}`)
+	if len(body) != 1<<20 {
+		t.Fatalf("invalid exact inspection-limit fixture: %d", len(body))
+	}
+	if _, _, err := PatchCopilotPluginSettings(body, registration, false, false); err == nil {
+		t.Fatal("settings registration exceeded its future readback bound")
+	}
+}
