@@ -3,6 +3,7 @@
 Runs the public source-built UAP CLI and real hash-pinned Devin without vendor
 credentials or model calls. Only file installation and native listing qualify.
 """
+import base64
 import hashlib
 import io
 import json
@@ -15,14 +16,21 @@ import tarfile
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from native_client_research import run_probe
 
 VERSION = "3000.12.57"
-URL = f"https://static.devin.ai/cli/{VERSION}/devin-{VERSION}-x86_64-unknown-linux.tar.gz"
-ARCHIVE_SHA = "0946784ef886d716e82a8026f76933bf0a6e4f0a804a23722bb62047e8c07d4a"
+# CognitionAI/devin-cli's own publish_npm.py builds this version-specific
+# platform archive from the hash-checked vendor manifest. The CDN original
+# currently returns HTTP 403 on hosted runners, so use the official npm copy
+# without relaxing the independently pinned original executable digest.
+PACKAGE_VERSION = VERSION + "-linux-x64"
+METADATA_URL = "https://registry.npmjs.org/devin/" + PACKAGE_VERSION
+TARBALL_URL = "https://registry.npmjs.org/devin/-/devin-" + PACKAGE_VERSION + ".tgz"
 BINARY_SHA = "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d"
+MAX_ARCHIVE = 96 << 20
+MAX_EXPANDED = 256 << 20
 SKILL = "uap-e2e-project-v57"
 STDIO = "uap_e2e_project_57_stdio"
 HTTP = "uap_e2e_project_57_http"
@@ -45,26 +53,95 @@ def command(argv, cwd, env, timeout=90):
     return stdout.decode("utf-8", errors="strict")
 
 
+def official_npm_bytes(url, limit):
+    with urlopen(Request(url, headers={"User-Agent": "uap-devin-native-e2e/1.0"}), timeout=90) as response:
+        body = response.read(limit + 1)
+    if len(body) > limit:
+        raise RuntimeError("official Devin npm response exceeded its fixed bound")
+    return body
+
+
+def npm_archive():
+    metadata = json.loads(official_npm_bytes(METADATA_URL, 1 << 16))
+    if (not isinstance(metadata, dict) or metadata.get("name") != "devin" or
+            metadata.get("version") != PACKAGE_VERSION or
+            metadata.get("os") != ["linux"] or metadata.get("cpu") != ["x64"]):
+        raise RuntimeError("official Devin platform metadata differs")
+    dist = metadata.get("dist")
+    if not isinstance(dist, dict) or dist.get("tarball") != TARBALL_URL:
+        raise RuntimeError("Devin npm tarball source is not the pinned platform")
+    integrity = dist.get("integrity")
+    if not isinstance(integrity, str) or not integrity.startswith("sha512-"):
+        raise RuntimeError("Devin npm platform is missing SHA-512 integrity")
+    try:
+        expected = base64.b64decode(integrity[7:], validate=True)
+    except ValueError as error:
+        raise RuntimeError("invalid Devin npm integrity encoding") from error
+    if len(expected) != 64:
+        raise RuntimeError("invalid Devin npm integrity length")
+    archive = official_npm_bytes(TARBALL_URL, MAX_ARCHIVE)
+    if hashlib.sha512(archive).digest() != expected:
+        raise RuntimeError("official Devin npm platform tarball integrity differs")
+    return archive, integrity
+
+
 def install_genuine_devin(root):
-    with urlopen(URL, timeout=60) as response:
-        archive = response.read((96 << 20) + 1)
-    if digest(archive) != ARCHIVE_SHA:
-        raise RuntimeError("pinned Devin archive digest differs")
+    archive, integrity = npm_archive()
+    target = root / "vendor-devin"
+    target.mkdir(mode=0o700)
     with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as package:
-        member = package.getmember("bin/devin")
-        if not member.isfile() or member.size <= 0 or member.size > 128 << 20:
-            raise RuntimeError("Devin archive executable is not an ordinary bounded file")
-        stream = package.extractfile(member)
-        if stream is None:
-            raise RuntimeError("Devin archive has no executable payload")
-        executable = stream.read((128 << 20) + 1)
-    if digest(executable) != BINARY_SHA:
-        raise RuntimeError("pinned Devin executable digest differs")
-    path = root / "bin" / "devin"
-    path.parent.mkdir()
-    path.write_bytes(executable)
+        members = package.getmembers()
+        if not 3 <= len(members) <= 512:
+            raise RuntimeError("unexpected Devin npm platform member count")
+        seen, total = set(), 0
+        for member in members:
+            name = member.name
+            parts = name.split("/")
+            if (not name.startswith("package/") or
+                    any(part in ("", ".", "..") for part in parts) or
+                    len(parts) > 16 or name in seen or
+                    not (member.isdir() or member.isfile()) or
+                    member.size < 0 or member.size > MAX_EXPANDED):
+                raise RuntimeError("unsafe Devin npm platform member")
+            seen.add(name)
+            total += member.size
+            if total > MAX_EXPANDED:
+                raise RuntimeError("Devin npm platform exceeds expanded size bound")
+            path = target.joinpath(*parts[1:])
+            if member.isdir():
+                path.mkdir(mode=0o700, parents=True, exist_ok=False)
+                continue
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            stream = package.extractfile(member)
+            if stream is None:
+                raise RuntimeError("Devin npm member is not readable")
+            with stream, path.open("xb") as output:
+                remaining = member.size
+                while remaining:
+                    chunk = stream.read(min(1 << 20, remaining))
+                    if not chunk:
+                        raise RuntimeError("short Devin npm platform member")
+                    output.write(chunk)
+                    remaining -= len(chunk)
+                if stream.read(1):
+                    raise RuntimeError("oversized Devin npm platform member")
+    manifest = json.loads((target / "package.json").read_text())
+    if (manifest.get("name") != "devin" or
+            manifest.get("version") != PACKAGE_VERSION or
+            manifest.get("os") != ["linux"] or manifest.get("cpu") != ["x64"] or
+            manifest.get("repository", {}).get("url") !=
+            "git+https://github.com/CognitionAI/devin-cli.git" or
+            (target / "distribution").read_text() != "npm"):
+        raise RuntimeError("Devin npm platform manifest/authority differs")
+    path = target / "bin" / "devin"
+    if not path.is_file():
+        raise RuntimeError("genuine Devin executable absent from npm platform")
+    with path.open("rb") as stream:
+        computed = hashlib.file_digest(stream, "sha256").hexdigest()
+    if computed != BINARY_SHA:
+        raise RuntimeError("npm executable differs from independently pinned original Devin binary")
     path.chmod(0o700)
-    return path
+    return path, integrity
 
 
 class InertMCP(BaseHTTPRequestHandler):
@@ -112,7 +189,9 @@ def main(root, report):
     actual = command(["git", "rev-parse", "HEAD"], checkout, os.environ).strip()
     if not re.fullmatch(r"[0-9a-f]{40}", expected) or actual != expected:
         raise RuntimeError("hosted source differs from exact PR commit")
-    binary = install_genuine_devin(root)
+    binary, integrity = install_genuine_devin(root)
+    report["npm_tarball_integrity"] = integrity
+    report["verified_binary_sha256"] = BINARY_SHA
     home = root / "home"
     config = home / "xdg-config"
     global_root = config / "devin"
@@ -226,7 +305,7 @@ def main(root, report):
 
 
 if __name__ == "__main__":
-    result = {"commit":os.environ.get("EXPECTED_COMMIT"), "version":VERSION, "archive_sha256":ARCHIVE_SHA,
+    result = {"commit":os.environ.get("EXPECTED_COMMIT"), "version":VERSION, "npm_package_version": PACKAGE_VERSION,
               "stages":[], "installation_discovery_e2e":False, "model_runtime_qualified":False}
     with tempfile.TemporaryDirectory(prefix="devin-project-v57-", dir=os.environ.get("RUNNER_TEMP")) as temp:
         directory = Path(temp)

@@ -1,5 +1,11 @@
 """Closed, inert contracts for the separate pinned Devin Project installation proof."""
+import base64
+import hashlib
+import io
 import json
+from pathlib import Path
+import tarfile
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -9,12 +15,69 @@ import devin_project_auto_install_e2e as subject
 class DevinProjectAutoInstallContracts(unittest.TestCase):
     def test_source_and_binary_are_pinned_to_exact_selected_version(self):
         self.assertEqual(subject.VERSION, "3000.12.57")
-        self.assertEqual(subject.URL,
-                         "https://static.devin.ai/cli/3000.12.57/"
-                         "devin-3000.12.57-x86_64-unknown-linux.tar.gz")
-        self.assertRegex(subject.ARCHIVE_SHA, r"^[0-9a-f]{64}$")
+        self.assertEqual(subject.PACKAGE_VERSION, "3000.12.57-linux-x64")
+        self.assertEqual(subject.METADATA_URL,
+                         "https://registry.npmjs.org/devin/3000.12.57-linux-x64")
+        self.assertEqual(subject.TARBALL_URL,
+                         "https://registry.npmjs.org/devin/-/devin-3000.12.57-linux-x64.tgz")
         self.assertRegex(subject.BINARY_SHA, r"^[0-9a-f]{64}$")
-        self.assertNotEqual(subject.ARCHIVE_SHA, subject.BINARY_SHA)
+
+    @staticmethod
+    def fixture_package(binary=b"fake-binary", symlink=False, traversal=False):
+        manifest = {"name":"devin","version":subject.PACKAGE_VERSION,"os":["linux"],
+                    "cpu":["x64"],"repository":{"url":"git+https://github.com/CognitionAI/devin-cli.git"}}
+        items = {"package/package.json":json.dumps(manifest).encode(),
+                 "package/distribution":b"npm","package/bin/devin":binary}
+        archive = io.BytesIO()
+        with tarfile.open(fileobj=archive, mode="w:gz") as output:
+            for name, contents in items.items():
+                if traversal and name == "package/bin/devin":
+                    name = "package/../escape"
+                member = tarfile.TarInfo(name)
+                if symlink and name == "package/bin/devin":
+                    member.type, member.linkname = tarfile.SYMTYPE, "../../outside"
+                else:
+                    member.size = len(contents)
+                output.addfile(member, io.BytesIO(contents) if member.isfile() else None)
+        payload = archive.getvalue()
+        metadata = {"name":"devin","version":subject.PACKAGE_VERSION,"os":["linux"],"cpu":["x64"],
+                    "dist":{"tarball":subject.TARBALL_URL,
+                            "integrity":"sha512-"+base64.b64encode(hashlib.sha512(payload).digest()).decode()}}
+        return json.dumps(metadata).encode(), payload
+
+    def test_pinned_npm_package_extracts_and_verifies_original_binary(self):
+        metadata, archive = self.fixture_package()
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(subject, "official_npm_bytes", side_effect=[metadata, archive]), \
+             patch.object(subject, "BINARY_SHA", hashlib.sha256(b"fake-binary").hexdigest()):
+            binary, integrity = subject.install_genuine_devin(Path(directory))
+            self.assertEqual(binary.read_bytes(), b"fake-binary")
+            self.assertTrue(integrity.startswith("sha512-"))
+
+    def test_npm_platform_rejects_corrupt_tarball_and_unsafe_members(self):
+        for label, metadata, archive in (
+            ("integrity", *self.fixture_package()),
+            ("symlink", *self.fixture_package(symlink=True)),
+            ("traversal", *self.fixture_package(traversal=True)),
+            ("binary", *self.fixture_package(binary=b"tampered")),
+        ):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                if label == "integrity":
+                    archive += b"tampered"
+                with patch.object(subject, "official_npm_bytes", side_effect=[metadata, archive]):
+                    with self.assertRaises(RuntimeError):
+                        subject.install_genuine_devin(Path(directory))
+
+    def test_npm_metadata_is_exact_not_any_platform_or_registry_tarball(self):
+        metadata, archive = self.fixture_package()
+        for field, value in (("version", "3000.12.58-linux-x64"), ("os", ["darwin"])):
+            changed = json.loads(metadata)
+            changed[field] = value
+            with self.subTest(field=field):
+                with patch.object(subject, "official_npm_bytes",
+                                  side_effect=[json.dumps(changed).encode(), archive]):
+                    with self.assertRaises(RuntimeError):
+                        subject.npm_archive()
 
     def test_native_skill_inventory_requires_exact_name_and_closed_shape(self):
         valid = json.dumps([{"name": subject.SKILL}, {"name": "foreign"}])
