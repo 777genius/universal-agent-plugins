@@ -25,6 +25,12 @@ func (*Adapter) RequiresUserVersion(client domain.DetectedClient) bool {
 	return client.ClientID == domain.ClientWindsurf && primaryDevinExecutable(client.ExecutablePath)
 }
 
+// Only observed native harness versions are eligible for automatic Devin configuration.
+// Project and Global share this admission; legacy Cascade remains separate.
+func supportedDevinNativeVersion(version string) bool {
+	return version == "3000.11.205" || version == "3000.12.57"
+}
+
 func primaryDevinExecutable(executable string) bool {
 	name := strings.ToLower(filepath.Base(executable))
 	return filepath.IsAbs(executable) && filepath.Clean(executable) == executable && (name == "devin" || name == "devin.exe")
