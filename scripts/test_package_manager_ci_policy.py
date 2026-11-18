@@ -130,6 +130,15 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertIn("uses: ./.github/workflows/agentplugins-published-version.yml", native)
         self.assertIn("require_trusted_publish: ${{ github.event_name == 'workflow_run' }}", native)
 
+    def test_legacy_firebase_capture_is_manual_diagnostic_only(self):
+        legacy = (WORKFLOW.parent / "agentplugins-windows-firebase-capture-probe.yml").read_text(
+            encoding="utf-8")
+        events = legacy.split("\nconcurrency:", 1)[0]
+        self.assertIn("  workflow_dispatch:", events)
+        self.assertNotRegex(events, r"(?m)^  (pull_request|push|workflow_run|schedule):")
+        self.assertIn("universal-agent-plugins@0.1.101", legacy)
+        self.assertIn("cancel-in-progress: false", legacy)
+
     def test_draft_only_runs_disposable_harness_preflight(self):
         self.assertIn("github.event_name == 'pull_request' && github.event.pull_request.draft", self.body)
         self.assertIn("name: draft evidence preflight", self.body)
