@@ -63,7 +63,8 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		if _, err := copilotPlanRoot(domain.DetectedClient{ConfigRoot: plan.TargetContext.UserConfigRoot}, plan); err != nil {
 			return nil, err
 		}
-		if plan.HasNativePluginRegistration() || copilotHasProjectPlugin(plan.PreviousNativeObjects) {
+		if plan.HasNativePluginRegistration() || copilotHasProjectPlugin(plan.PreviousNativeObjects) &&
+			copilotWholePluginContentEligible(envelope, plan.Components) {
 			if envelope.FormatID != domain.FormatIDAgentPluginsV1 {
 				return nil, fmt.Errorf("copilot native plugin registration requires Agent Plugins 1.0")
 			}
