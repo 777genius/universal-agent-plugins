@@ -173,6 +173,28 @@ func copilotValidateProjectPluginObjects(root string, physicalID string, objects
 	return nil
 }
 
+// Copilot's saved object receipt must also bind the exact declared plugin
+// name. A same-marketplace request naming another plugin must never report a
+// no-op native removal and retire the still-registered package directory.
+func copilotValidateProjectPluginName(root, physicalID, declaredName string, objects []domain.NativeObjectOwnership) error {
+	if err := copilotValidateProjectPluginObjects(root, physicalID, objects); err != nil {
+		return err
+	}
+	expected, err := copilotProjectPluginObjectAt(root, physicalID, declaredName)
+	if err != nil {
+		return err
+	}
+	for _, object := range objects {
+		if object.Kind == copilotProjectPluginKind {
+			if object != expected {
+				return fmt.Errorf("Copilot native project plugin identity differs from saved ownership")
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("Copilot native project plugin receipt is missing")
+}
+
 func copilotPluginSettingsSnapshot(kernel nativeconfig.Kernel, path string) (nativeconfig.FileSnapshot, error) {
 	file, err := kernel.ReadExactFileBounded(path, 1<<20)
 	if err != nil {
@@ -244,17 +266,8 @@ func copilotInspectWholePlugin(plan domain.DeliveryPlan, managed *domain.ClientB
 			managed.TargetLocator != plan.ActivePath || managed.NativeProfileRoot != "" && managed.NativeProfileRoot != root {
 			return clients.RegistryIndeterminate, fmt.Errorf("Copilot project plugin binding differs from selected package")
 		}
-		if err := copilotValidateProjectPluginObjects(root, plan.PhysicalArtifactID, managed.NativeObjects); err != nil {
+		if err := copilotValidateProjectPluginName(root, plan.PhysicalArtifactID, plan.DeclaredName, managed.NativeObjects); err != nil {
 			return clients.RegistryIndeterminate, err
-		}
-		want, err := copilotProjectPluginObject(plan)
-		if err != nil {
-			return clients.RegistryIndeterminate, err
-		}
-		for _, object := range managed.NativeObjects {
-			if object.Kind == copilotProjectPluginKind && object != want {
-				return clients.RegistryIndeterminate, fmt.Errorf("Copilot project plugin binding name differs from selected package")
-			}
 		}
 		if err := copilotVerifyProjectPluginSource(root, plan, kernel); err != nil {
 			return clients.RegistryIndeterminate, err
@@ -313,14 +326,14 @@ func copilotPreflightWholePlugin(env clients.Env, request domain.ActivationReque
 	if err != nil {
 		return err
 	}
-	if err := copilotValidateProjectPluginObjects(root, request.Plan.PhysicalArtifactID, request.Delivery.NativeObjects); err != nil {
+	if err := copilotValidateProjectPluginName(root, request.Plan.PhysicalArtifactID, request.Plan.DeclaredName, request.Delivery.NativeObjects); err != nil {
 		return err
 	}
 	if len(request.PreviousNativeObjects) > 0 && !copilotHasProjectPlugin(request.PreviousNativeObjects) {
 		return fmt.Errorf("Copilot project plugin cannot adopt a loose-component binding")
 	}
 	if copilotHasProjectPlugin(request.PreviousNativeObjects) {
-		if err := copilotValidateProjectPluginObjects(root, request.Plan.PhysicalArtifactID, request.PreviousNativeObjects); err != nil {
+		if err := copilotValidateProjectPluginName(root, request.Plan.PhysicalArtifactID, request.Plan.DeclaredName, request.PreviousNativeObjects); err != nil {
 			return err
 		}
 	}
