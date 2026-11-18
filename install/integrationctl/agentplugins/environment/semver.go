@@ -13,21 +13,7 @@ import (
 // checks use this strict expression even when a constraint explicitly includes
 // a prerelease.
 var (
-	stableVersion          = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)package environment
-
-import (
-	"fmt"
-	"regexp"
-	"strings"
-
-	semver "github.com/Masterminds/semver/v3"
-	modsemver "golang.org/x/mod/semver"
-)
-
-// Stable releases retain their existing exact version contract. Graph downgrade
-// checks use this strict expression even when a constraint explicitly includes
-// a prerelease.
-)
+	stableVersion          = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$`)
 	forbiddenVersionPrefix = regexp.MustCompile(`(^|[[:space:],|<>=~^])v\d`)
 	// Masterminds accepts coerced numeric operands such as 1.02.3; a package
 	// selector must not silently resolve such a value to a different version.
