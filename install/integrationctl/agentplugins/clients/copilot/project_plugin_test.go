@@ -124,6 +124,17 @@ func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
 	if present, exact, err := nativeconfig.InspectCopilotPluginSettings(trustRead(t, settingsPath), reg); err != nil || !present || !exact {
 		t.Fatalf("repaired Copilot native registration not verified: %v %v %v", present, exact, err)
 	}
+	// A forged or stale declared name must not turn uninstall into a
+	// successful no-op that leaves the original plugin dangling.
+	beforeWrongRemoval := trustRead(t, settingsPath)
+	_, mismatchErr := New().Deactivate(t.Context(), env, domain.DeactivationRequest{
+		Client: request.Client, TargetContext: request.Plan.TargetContext,
+		NativeRegistryRoot: request.Plan.NativeRegistryRoot, PhysicalArtifactID: request.Plan.PhysicalArtifactID,
+		DeclaredName: "another-plugin", NativeObjects: request.Delivery.NativeObjects, Confirmed: true,
+	})
+	if mismatchErr == nil || !bytes.Equal(beforeWrongRemoval, trustRead(t, settingsPath)) {
+		t.Fatal("Copilot removal changed or accepted a registration with the wrong plugin name")
+	}
 	removed, err := New().Deactivate(t.Context(), env, domain.DeactivationRequest{
 		Client: request.Client, TargetContext: request.Plan.TargetContext,
 		NativeRegistryRoot: request.Plan.NativeRegistryRoot, PhysicalArtifactID: request.Plan.PhysicalArtifactID,
