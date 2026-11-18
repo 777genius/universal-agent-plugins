@@ -32,8 +32,10 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 	if err := verifyCopilotTrust(env, request, false); err != nil {
 		return err
 	}
-	if request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.PreviousNativeObjects) ||
-		copilotHasProjectPlugin(request.Delivery.NativeObjects) {
+	if copilotSwitchesToComponents(request) {
+		return copilotPreflightComponentSwitch(env, request, root)
+	}
+	if request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.Delivery.NativeObjects) {
 		return copilotPreflightWholePlugin(env, request)
 	}
 	if shared.ComponentKindPresent(request.Plan.Components, domain.ComponentMCPServer) {
@@ -57,8 +59,7 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 	if err := New().PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
-	if request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.PreviousNativeObjects) ||
-		copilotHasProjectPlugin(request.Delivery.NativeObjects) {
+	if request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.Delivery.NativeObjects) {
 		return activateCopilotProjectPlugin(ctx, env, request, root)
 	}
 	layout, err := copilotComponents(root)
@@ -91,6 +92,9 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 				Previous: copilotNativeObjects(request.PreviousNativeObjects), Desired: copilotNativeObjects(request.Delivery.NativeObjects), Servers: servers, Kernel: env.NativeConfig}
 			if err := mutation.Preflight(ctx); err != nil {
 				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+			}
+			if copilotSwitchesToComponents(request) {
+				return copilotApplyComponentSwitch(ctx, env, request, root, mutation)
 			}
 			return withCopilotTrust(ctx, env, request, func() error { return mutation.Apply(ctx) })
 		},
