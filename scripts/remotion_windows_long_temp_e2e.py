@@ -12,6 +12,7 @@ from pathlib import Path
 import stat
 import subprocess
 import tempfile
+import traceback
 
 FIXTURE_SHA256 = "7399eaed15b3eb0981a6be12082dd8825529e896a59ea125b9500a666c21112e"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
@@ -109,25 +110,30 @@ def main():
                 raise RuntimeError("default Windows TEMP is not longer than runner TEMP")
         for label, root in (("runner-temp", short), ("default-windows-temp", long)):
             try:
+                stage = "native-case"
                 row = audit.do_case(str(cli), "codex", "skill", item, 24, root,
                                     fixtures["plugin_declared_names"], fixtures["signed_release_pins"])
                 evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
                                               "created_root_chars": created_lengths[label],
                                               "case": row}
+                stage = "native-proof"
                 if not row.get("codex_runtime_proof"):
                     raise RuntimeError("strict native Codex runtime proof is missing")
+                stage = "case-result"
                 if row.get("status") != "passed":
                     print(json.dumps({"case": label, "status": row.get("status"),
                                       **audit.failed_case_diagnostics(row)}), flush=True)
                     failures.append(f"{label}: native E2E case did not PASS")
             except Exception as error:
+                diagnostics = {"stage": stage, "error_type": type(error).__name__,
+                               "error": repr(error)[:1800],
+                               "error_traceback": traceback.format_exc(limit=-8)[-8192:]}
                 print(json.dumps({"case": label, "status": "harness-error",
-                                  **audit.failed_case_diagnostics({"error": str(error)})}), flush=True)
+                                  **diagnostics}), flush=True)
                 failures.append(f"{label}: {type(error).__name__}")
                 evidence["results"].setdefault(label, {
                     "root_chars": len(str(root / "skill-24")),
-                    "created_root_chars": created_lengths[label]}).update({
-                        "error_type": type(error).__name__, "error": str(error)[:1800]})
+                    "created_root_chars": created_lengths[label]}).update(diagnostics)
     except Exception as error:
         failures.append(f"TEMP setup: {type(error).__name__}")
         evidence["setup_error"] = {"error_type": type(error).__name__, "error": str(error)[:1800]}
