@@ -91,11 +91,17 @@ func TestCopilotPluginSettingsKeepsIndependentMarketplaces(t *testing.T) {
 	a := CopilotPluginRegistration{Marketplace: "agentplugins-aaa", Plugin: "first", Directory: ".uap/managed/clients/copilot/a"}
 	b := CopilotPluginRegistration{Marketplace: "agentplugins-bbb", Plugin: "second", Directory: ".uap/managed/clients/copilot/b"}
 	first, _, err := PatchCopilotPluginSettings(nil, a, false, false)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	both, _, err := PatchCopilotPluginSettings(first, b, false, false)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	after, _, err := PatchCopilotPluginSettings(both, a, true, true)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	if present, exact, err := InspectCopilotPluginSettings(after, b); err != nil || !present || !exact {
 		t.Fatalf("removal damaged sibling: %v %v %v", present, exact, err)
 	}
