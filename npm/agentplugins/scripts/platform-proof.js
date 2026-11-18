@@ -325,6 +325,22 @@ function main() {
   if (dryRun.schema_version !== 1 || dryRun.command !== "add" || dryRun.data.dry_run !== true) {
     fail("synthetic add dry-run contract failed");
   }
+  // The exact published binary must also expose standard-first authoring.
+  // This is an isolated filesystem journey, not a synthetic command stub.
+  const authored = path.join(root, "authored-package");
+  const authorInit = invokeJSON(["author", "init", authored, "--template", "skill",
+    "--name", "platform-proof-author", "--description", "Proof of published package authoring"]);
+  if (authorInit?.command !== "author.init" || authorInit.result !== "success") {
+    fail("published binary did not initialize a standard plugin");
+  }
+  const authoredManifest = JSON.parse(fs.readFileSync(path.join(authored, "plugin.json"), "utf8"));
+  if (authoredManifest.name !== "platform-proof-author") {
+    fail("author initialized a package with incorrect identity");
+  }
+  const authorValidate = invokeJSON(["author", "validate", authored]);
+  if (authorValidate?.command !== "author.validate" || authorValidate.result !== "success") {
+    fail("published binary did not validate the authored package");
+  }
   if (fs.existsSync(path.join(state, "state-v2.json"))) fail("dry-run wrote lifecycle state");
   if (fs.readdirSync(cursor).join(",") !== "platform-proof-marker") fail("dry-run changed the synthetic client root");
   if (fs.lstatSync(binaryPath).mtimeMs !== firstMtime) fail("warm launcher invocation replaced the verified cache entry");
@@ -371,6 +387,7 @@ function main() {
       version: true,
       list: true,
       doctor_read_only: true,
+      authoring_init_validate: true,
       public_catalog_search: true,
       synthetic_add_dry_run: true,
       warm_cache: true,
