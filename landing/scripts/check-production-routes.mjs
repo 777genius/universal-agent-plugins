@@ -4,6 +4,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { isDeepStrictEqual } from 'node:util';
 
 const origin = 'https://universal-agent-plugins.com';
 const maxBytes = 8 * 1024 * 1024;
@@ -101,7 +102,7 @@ export async function expectedAgentCommand(root, id) {
   const projection = JSON.parse(await readFile(path.join(root, '.pages-dist/api/registry/client', id), 'utf8'));
   // The Pages builder already authenticates and byte-verifies this mirror.
   // Reuse its projection oracle; neither HTML nor a candidate API selects trust.
-  assert.deepEqual(projection, projectRegistry(registry, { kind: 'client', value: id }),
+  assert(isDeepStrictEqual(projection, projectRegistry(registry, { kind: 'client', value: id })),
     `${id}: built projection differs from the verified catalog`);
   const plugins = catalogVisiblePlugins(projection.plugins).filter(plugin => plugin.trust_state !== 'conformant_unreviewed');
   const example = agentInstallExample(plugins, id);

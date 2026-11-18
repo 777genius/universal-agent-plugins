@@ -429,7 +429,7 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
               />
               <NativeCliCheckbox v-if="canInstall" />
               <p v-else class="plugin-card__unavailable" role="status">
-                {{ t('registryUi.install.scope.selectionUnavailable') }}
+                {{ t(targets.length > 1 ? 'registryUi.install.selectionRoutesUnavailable' : 'registryUi.install.scope.selectionUnavailable') }}
               </p>
             </div>
             <p v-if="guidedWebSelected && canInstall" class="plugin-card__author" role="status">

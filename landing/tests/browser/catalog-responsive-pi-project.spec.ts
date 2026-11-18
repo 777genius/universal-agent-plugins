@@ -20,7 +20,18 @@ function sentryFixture() {
   return index;
 }
 
-for (const [width, columns] of [[1280, 3], [1024, 3], [900, 2], [768, 2], [390, 1]] as const) {
+for (const [width, columns] of [
+  [1600, 5],
+  [1521, 5],
+  [1520, 3],
+  [1280, 3],
+  [1024, 3],
+  [981, 3],
+  [980, 2],
+  [900, 2],
+  [768, 2],
+  [390, 1],
+] as const) {
   test(`catalog filters use ${columns} columns at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 920 });
     const errors = await offline(page);
@@ -37,15 +48,25 @@ for (const [width, columns] of [[1280, 3], [1024, 3], [900, 2], [768, 2], [390, 
         pairDisplay: pair ? getComputedStyle(pair).display : '',
         searchWidth: search?.getBoundingClientRect().width ?? 0,
         controlsWidth: element.getBoundingClientRect().width,
+        searchTop: search?.getBoundingClientRect().top ?? 0,
+        sortTop: element.querySelector('.app-select__trigger')?.getBoundingClientRect().top ?? 0,
+        categoryTop:
+          element.querySelector('.app-combobox__anchor')?.getBoundingClientRect().top ?? 0,
         overflow: document.documentElement.scrollWidth > window.innerWidth,
       };
     });
     expect(geometry.columns).toBe(columns);
     expect(geometry.overflow).toBe(false);
-    if (width === 1280 || width === 1024) {
+    if (columns === 3) {
       expect(geometry.pairDisplay).toBe('contents');
+      expect(geometry.searchWidth).toBeLessThan(geometry.controlsWidth / 2);
+      expect(Math.abs(geometry.searchTop - geometry.sortTop)).toBeLessThan(3);
+      expect(Math.abs(geometry.searchTop - geometry.categoryTop)).toBeLessThan(3);
+    } else if (columns === 5) {
+      expect(geometry.searchWidth).toBeGreaterThan(geometry.controlsWidth / 3);
+      expect(geometry.searchWidth).toBeLessThan(geometry.controlsWidth / 2);
+    } else if (width === 900 || width === 980) {
       expect(geometry.searchWidth).toBeGreaterThan(geometry.controlsWidth - 3);
-    } else if (width === 900) {
       expect(geometry.pairDisplay).toBe('grid');
     }
     if (width > 720) {
@@ -91,31 +112,60 @@ for (const width of [1440, 390]) {
     await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     const pi = page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ });
     await expect(pi).toBeEnabled(); // User also offers the explicit source route, without a signed Pi grant.
-    await expect(pi).toContainText('Pinned Git source');
+    await expect(pi).toContainText(wording('en')('registryUi.install.pinnedSourceShort'));
     await page.keyboard.press('Escape');
 
     await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
     await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     await expect(pi).toBeEnabled();
-    await expect(pi).toContainText('Pinned Git source');
+    await expect(pi).toContainText(wording('en')('registryUi.install.pinnedSourceShort'));
     await pi.click();
     await page.keyboard.press('Escape');
     const direct = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/sentry';
     const add = `npx -y universal-agent-plugins@0.1.110 add ${direct} --target pi --scope project`;
     await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
+    const addSnippet = page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add');
+    expect(await addSnippet.locator('code').textContent()).toBe(add);
+    await expect(addSnippet.locator('.command-snippet__label')).toHaveText(wording('en')('registryUi.command.terminal'));
+    await expect(addSnippet.locator('button .v-icon')).toHaveCount(1);
     await expect(page.getByRole('dialog')).toContainText('The CLI checks components, dependencies and the selected scope first');
     await expect(page.getByRole('dialog').locator('.plugin-card__author').filter({ hasText: 'The CLI checks components, dependencies and the selected scope first' })).toHaveCount(1);
 
-    // Switching routes must not combine an unsigned Pi option with signed Codex.
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
-    await page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ }).click();
+    // Explicit choices stay selected; the shared Git route adds no signed Pi grant.
+    const dialog = page.getByRole('dialog');
+    const picker = dialog.locator('.app-multiselect__trigger');
+    const codex = page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ });
+    const commonAdd = `npx -y universal-agent-plugins@0.1.110 add ${direct} --target codex,pi --scope project`;
+    await picker.click();
+    await codex.click();
+    await expect(codex).toBeChecked();
+    await expect(pi).toBeChecked();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(
-      'npx -y universal-agent-plugins add sentry --target codex --scope project');
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
+    await expect(addSnippet.locator('code')).toHaveText(commonAdd);
+
+    // Removing Pi explicitly returns to Codex's signed Project route.
+    await picker.click();
     await pi.click();
+    await expect(pi).not.toBeChecked();
+    await expect(codex).toBeChecked();
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
+    await expect(addSnippet.locator('code')).toHaveText(
+      'npx -y universal-agent-plugins add sentry --target codex --scope project');
+
+    await picker.click();
+    await pi.click();
+    await expect(pi).toBeChecked();
+    await expect(codex).toBeChecked();
+    await page.keyboard.press('Escape');
+    await expect(addSnippet.locator('code')).toHaveText(commonAdd);
+
+    // Removing Codex explicitly restores the Pi-only source and saved intent.
+    await picker.click();
+    await codex.click();
+    await expect(codex).not.toBeChecked();
+    await expect(pi).toBeChecked();
+    await page.keyboard.press('Escape');
+    await expect(addSnippet.locator('code')).toHaveText(add);
     await page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(add);
     await testInfo.attach(`pi-project-card-${width}.png`, {

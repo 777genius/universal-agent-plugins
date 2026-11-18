@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { localizedPath } from '~/utils/localizedRoutes';
 import type { KnownLocale } from '~/data/i18n';
-import { mdiArrowLeft, mdiDownload, mdiOpenInNew } from '@mdi/js';
+import { mdiDownload, mdiOpenInNew } from '@mdi/js';
 import { clientLandingById } from '~/data/clients';
 import { productRootUrl, seoDescription, spdxLicenseUrl } from '~/utils/seo';
 import { isFullyRetired } from '~/utils/filter';
@@ -41,8 +41,7 @@ const clientDelivery = installTargets.flatMap((client) => {
     );
     return policy ? [{ client, delivery: policy.delivery, route: 'user' }] : [];
   }
-  if (user?.kind === 'pinned_git')
-    return [{ client, delivery: 'source', route: 'pinned_source' }];
+  if (user?.kind === 'pinned_git') return [{ client, delivery: 'source', route: 'pinned_source' }];
   const project = pluginInstallAvailability(plugin, [client.id], 'project');
   if (project?.kind === 'signed') {
     const policy = project.resolution.distribution?.targets.find(
@@ -184,22 +183,14 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
     <PageBackground />
     <section class="plugin-detail__hero section">
       <v-container>
-        <div class="plugin-detail__hero-topbar">
-          <v-btn
-            :to="localePath('/plugins/')"
-            variant="text"
-            icon
-            :aria-label="t('registryUi.detail.backToPluginDirectory')"
-            class="plugin-detail__back-cta"
-          >
-            <v-icon :icon="mdiArrowLeft" size="22" />
-          </v-btn>
-          <nav class="breadcrumbs" :aria-label="t('registryUi.detail.breadcrumb')">
-            <NuxtLink :to="localePath('/plugins/')">{{ t('registryUi.detail.plugins') }}</NuxtLink>
-            <span aria-hidden="true">/</span>
-            <span aria-current="page">{{ plugin.display_name }}</span>
-          </nav>
-        </div>
+        <DetailBreadcrumbs
+          class="plugin-detail__hero-topbar"
+          :back-to="localePath('/plugins/')"
+          :back-label="t('registryUi.detail.backToPluginDirectory')"
+          :label="t('registryUi.detail.breadcrumb')"
+          :parents="[{ label: t('registryUi.detail.plugins'), to: localePath('/plugins/') }]"
+          :current="plugin.display_name"
+        />
 
         <div class="plugin-detail__hero-shell">
           <div class="plugin-detail__hero-copy">
@@ -289,9 +280,10 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
                   v-for="client in group.clients"
                   :key="client.id"
                   :to="
-                    localePath(
-                      `/agents/${clientLandingById.get(client.id === 'chatgptweb' ? 'chatgpt' : client.id)?.slug}/`,
-                    )
+                    localePath({
+                      path: `/agents/${clientLandingById.get(client.id === 'chatgptweb' ? 'chatgpt' : client.id)?.slug}/`,
+                      query: { plugin: plugin.name },
+                    })
                   "
                   class="plugin-detail__client"
                 >
@@ -364,35 +356,6 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
 .plugin-detail__hero {
   padding-top: 12px;
   padding-bottom: 16px;
-}
-
-.plugin-detail__hero-topbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.plugin-detail__hero-topbar .breadcrumbs {
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 0.88rem;
-  line-height: 1.4;
-}
-
-.plugin-detail__hero-topbar .breadcrumbs a {
-  color: var(--primary-bright);
-  text-underline-offset: 3px;
-}
-
-.plugin-detail__hero-topbar .breadcrumbs [aria-current='page'] {
-  color: var(--text);
 }
 
 .plugin-detail__hero-shell {
@@ -542,17 +505,6 @@ usePageSeo(() => t('registryUi.detail.title', { name: plugin.display_name }), de
   font-size: 1rem;
   line-height: 1.8;
   max-width: 720px;
-}
-
-.plugin-detail__back-cta {
-  width: 42px !important;
-  height: 42px !important;
-  min-width: 42px !important;
-  padding: 0 !important;
-  color: var(--text) !important;
-  background: var(--surface-raised) !important;
-  border: 1px solid var(--line-strong) !important;
-  border-radius: 12px !important;
 }
 
 .plugin-detail__actions {

@@ -264,17 +264,18 @@
     },
     "dependencies": {
       "eyebrow": "Dependências conectadas",
-      "title": "Dois plugins. Uma dependência compartilhada.",
+      "title": "Dois plugins\nUma dependência compartilhada",
       "description": "Instale um plugin com suas dependências. Dependências compartilhadas da mesma versão compatível são instaladas uma única vez.",
       "demoPackage": "Pacote de demonstração",
       "installed": "Instalado",
       "alreadyInstalled": "Já instalado",
-      "shared": "compartilhada",
+      "shared": "Compartilhada pelos dois plugins",
       "caption": "Pacotes e grafo ilustrativos. Os dois pacotes compartilham Playwright; Context7 já está instalado.",
-      "graphDescription": "marketing-kit depende de Playwright, HubSpot e Notion. Web Design Kit depende do mesmo pacote Playwright, Figma e Context7. Todos os pacotes estão instalados; Context7 já estava instalado."
+      "graphDescription": "Versões de exemplo: marketing-kit v{marketingVersion} e Web Design Kit v{designVersion} reutilizam uma única dependência de ponte Playwright v{playwrightVersion}. Marketing Kit também usa HubSpot e Notion; Web Design Kit usa Figma e Context7.",
+      "exampleVersions": "Versões de exemplo"
     },
     "restore": {
-      "title": "As mesmas versões. Para toda a equipe.",
+      "title": "As mesmas versões\nPara toda a equipe",
       "guide": "Guia",
       "from": "Meu computador",
       "to": "Computador do colega",
@@ -599,7 +600,7 @@
       "more": "+{count} mais"
     },
     "command": {
-      "terminal": "Terminal",
+      "terminal": "Seu terminal",
       "copiedLabel": "Comando copiado",
       "copyLabel": "Copiar comando",
       "copied": "Copiado",
@@ -841,9 +842,10 @@
       "unsupportedPluginComponents": "{agent} não oferece suporte a todos os componentes deste plugin.",
       "dialogDescription": "Escolha os agentes e o escopo de instalação e execute o comando no terminal.",
       "closeDialog": "Fechar instalação",
-      "pinnedSourceShort": "Fonte Git fixada",
+      "pinnedSourceShort": "Instalar pelo Git",
       "desktopSourceShort": "Conexão local do Desktop",
-      "webSetupShort": "Configuração Web guiada"
+      "webSetupShort": "Configuração Web guiada",
+      "selectionRoutesUnavailable": "Os agentes selecionados são mantidos. Esta combinação não tem uma origem de instalação comum no escopo escolhido. Altere os agentes ou o escopo para obter um comando de instalação."
     },
     "authentication": {
       "not_required": "Nenhuma conta necessária",
