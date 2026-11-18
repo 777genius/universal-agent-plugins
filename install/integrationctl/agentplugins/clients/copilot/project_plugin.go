@@ -24,21 +24,33 @@ const copilotProjectPluginKind = "copilot_project_plugin_registration"
 // Existing loose-component bindings retain their previous behavior and never
 // silently migrate across two independent native configuration surfaces.
 func copilotWholePluginEligible(in clients.PlanInput, plan domain.DeliveryPlan) bool {
-	if !copilotSupportsProjectPlugin(in.Client.Version) || !copilotWholePluginSourceEligible(in.Envelope) ||
-		!copilotAllPluginComponentsNative(in.Envelope, plan.Components) {
+	if !copilotWholePluginContentEligible(in.Envelope, plan.Components) {
 		return false
 	}
-	// Managed stdio contracts require UAP's launcher and cannot be
-	// reinterpreted as native Copilot plugin command execution.
-	for _, server := range in.Envelope.MCP.Servers {
-		if requirement := server.StdioRequirement; requirement != nil &&
-			(requirement.Kind == domain.ExecutableBundled || requirement.UsesPluginData) {
-			return false
-		}
+	// Native capability was already established for a prior UAP-owned pair.
+	// A failed optional version probe must not migrate an unchanged package
+	// back to loose skills/MCP; new installations still require host evidence.
+	if !copilotSupportsProjectPlugin(in.Client.Version) && !copilotHasProjectPlugin(in.PreviousNativeObjects) {
+		return false
 	}
 	// Never silently convert an existing loose-component binding.
 	for _, object := range in.PreviousNativeObjects {
 		if object.Kind != "managed_package_directory" && object.Kind != copilotProjectPluginKind {
+			return false
+		}
+	}
+	return true
+}
+
+func copilotWholePluginContentEligible(envelope domain.PackageEnvelope, components []domain.ComponentDecision) bool {
+	if !copilotWholePluginSourceEligible(envelope) || !copilotAllPluginComponentsNative(envelope, components) {
+		return false
+	}
+	// Managed stdio contracts require UAP's launcher and cannot be
+	// reinterpreted as native Copilot plugin command execution.
+	for _, server := range envelope.MCP.Servers {
+		if requirement := server.StdioRequirement; requirement != nil &&
+			(requirement.Kind == domain.ExecutableBundled || requirement.UsesPluginData) {
 			return false
 		}
 	}
