@@ -1,7 +1,7 @@
 # Hermes completion: source sessions, native readiness and bounded recovery
 
 Date: 2026-11-18  
-Status: plan review round 1/7 completed; implementation has not started.  
+Status: plan review round 2/7 completed; implementation has not started.  
 Baseline: `fbab48c9d46219ba8e07d5361e6c2043eca9eb97` on `main`.  
 Owner: this PR; changes, including plan revisions, are committed and pushed immediately.
 
@@ -10,9 +10,10 @@ Owner: this PR; changes, including plan revisions, are committed and pushed imme
 A Hermes installation should have a clear, honest next step: UAP prepares the selected
 components automatically, verifies the native facts that it can actually observe,
 and refuses an unsafe or ambiguous runtime without touching another profile.
-The main new capability under investigation is an isolated Project MCP session
-for a precisely qualified source-installed Hermes runtime. It must fit the existing
-session and installer architecture, not introduce another installation engine.
+The concrete new capability is complete, disclosed native Project trust during
+fresh/repeated raw Skills add and repeated saved plugin add. Source-installed
+Project MCP and production native Ready promotion remain blocked by the pinned
+runtime contracts described below; neither is counted as completed in this PR.
 
 This PR contains the plan, its seven review rounds, implementation, focused
 regressions, native E2E evidence, review fixes and final merge. It does not publish
@@ -53,21 +54,16 @@ Overlaps to refresh before implementation and before merge:
 
 ### Included
 
-1. Resolve the source-runtime safety question with a pinned native experiment.
-2. If it passes, admit one explicit, fully described source installation shape
-   through a small Hermes-local runtime descriptor consumed by the existing
-   Project session authority.
-3. Improve Hermes native readiness only where a fresh, exact native observation
-   supports the claim. Start with pure Skills; mixed Skills/MCP remains Prepared
-   unless every relevant predicate is observed.
-4. Close the proven raw Skills add/picker consent-and-disclosure gap, for fresh
-   and exact prepared repeat installs; close repeated saved plugin-add completion
-   through a repair already shown in review. Reuse transient explicit-add consent
-   and prepared-setup contracts. Ordinary sync/update/repair gain no trust authority.
-5. Exercise interrupted installation recovery through existing transactions and
+1. Close raw Skills add/picker consent-and-disclosure gaps for fresh and exact
+   prepared repeat installs, using existing confirmation/review models.
+2. Complete repeated saved plugin add through an eligible repair shown before
+   confirmation and independently reselected during stale-plan checking.
+3. Keep Prepared truthful; improve guidance and native E2E evidence rather than
+   introduce an unqualified production observer.
+4. Exercise interrupted installation recovery through existing transactions and
    correct only demonstrated Hermes-specific gaps.
-6. Update Hermes technical documentation, actionable limitations and the evidence
-   record. Keep JSON shape and exit-code contracts stable.
+5. Document the source-runtime blocker and preserve inert source-MCP refusal,
+   standalone support, profile isolation, JSON shape and exit codes.
 
 ### Excluded
 
@@ -85,57 +81,51 @@ Overlaps to refresh before implementation and before merge:
 - Unrelated clients, public consent flags, default-scope changes, broad refactors,
   website translations, release publication, or unit tests for unchanged helpers.
 
-## 4. Source-runtime qualification gate
+## 4. Source-runtime decision: blocked, preserved and documented
 
-Before adding support, record these facts from the actual pinned installation:
+Pinned-source inspection resolves the current gate: do not expand source-installed
+Project MCP admission in this PR. The ordinary official launcher uses store Python,
+then home-indexed dependency preparation, update recovery and runtime activation.
+A fresh `<project>/.hermes/uap-session` can provision its own dependency state;
+suppressing lazy preparation alone leaves recovery/activation and can instead
+refuse because store Python has no selected dependencies.
 
-| Question | Required answer |
-| --- | --- |
-| Selected launcher and code | Exact physical launcher, code root, upstream revision and supported OS/architecture. |
-| Dependencies | Existing selected interpreter/generation; which home owns its state; whether Project home starts synchronization, adoption or recovery. |
-| Startup effects | Complete bounded set of expected writes and children; no unnoticed user-profile/source mutation or detached helper. |
-| Native configuration | Exact selected Project config path and complete MCP mapping, independent of User/profile fallback. |
-| Revalidation | Every mutable authority relevant to startup can be retained and rechecked before native work and final child. |
-| Official entrypoint | Existing upstream invocation only; no private replacement bootstrap or synthetic PM state. |
+There is no independent supported config-file override in the pinned execution
+path. Native named profiles can separate config from shared dependencies:
+`<actual-Hermes-root>/profiles/<name>` selects a separate config while sharing
+the original dependency root. This changes the ownership model: the directory
+is outside Project containment, while existing publication and session authority
+explicitly require Project containment and reject overlap with User authority.
+Native profile creation also has gateway/multiplexer side effects.
 
-Probe the normal official source install and a custom user home/external source
-directory. A narrower existing legacy installation shape may be investigated,
-but must not be described as general support for current official installers.
+The follow-up in [#942](https://github.com/777genius/universal-agent-plugins/issues/942)
+requires a separately reviewed cross-root publication/ownership contract, normal
+and custom-root native probes, runtime lease/recovery bounds, and selective
+removal. No legacy-venv-only admission, per-project PM preprovisioning, synthetic
+facts, native launcher substitution or path-policy exception in this PR.
 
-The probe must compare original User profile, Project A/B, source checkout,
-runtime facts/dependency generation and process cleanup. Check a native metadata
-command, config inspection and a real MCP tool call. A successful `--version`
-or `config get` alone does not establish passive startup.
+Primary source at `2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19`:
 
-If the gate fails, keep the refusal and document the concrete upstream dependency.
-Do not lower containment or transaction guarantees to make the test pass. Revisit
-the remaining deliverables and state any unmet source-support goal explicitly;
-a blocked capability is not counted as implemented.
+- [Dependency home and activation](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/pm/environments.py).
+- [Profile/root resolution](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_constants.py).
+- [Source preparation](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_cli/venv_sync.py).
+- [Official launcher](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_cli/_launchers.py).
+- [Bootstrap and recovery](https://github.com/NousResearch/hermes-agent/blob/2bd378ed1b8d6bf2192cb26e0a55ff3091e6bd19/hermes_bootstrap.py).
+
+Supported alternatives remain Project Skills, User MCP, or an explicit Project
+session using the qualified standalone bundle. Document these without implying
+that ordinary `hermes` automatically enters UAP's isolated Project session.
 
 ## 5. Minimal implementation design
 
-### 5.1 Runtime admission and session reuse
+### 5.1 Preserve existing runtime/session admission
 
-Keep `qualifyHermesBundle` and its standalone contract intact. If the experiment
-qualifies a source shape, introduce only a Hermes-private representation of the
-facts that differ: launcher, code root, runtime selection, physical identities,
-qualification commitment and expected native metadata.
+No production changes to `qualifyHermesBundle`, source bootstrap, runtime
+descriptor, session root publication, `hermesProjectAuthority` or the passive
+catalog are justified. Preserve refusal before Project mutation and exercise
+that boundary in the existing source-native lane. Planning must not execute
+`--print-runtime-command` as a discovery shortcut: that path can run recovery.
 
-Adapt these existing seams without a new public port unless genuinely necessary:
-
-- `Adapter.QualifyPlan`: inert capability admission before any install mutation.
-- `prepareProjectSessionEnvironment`: exact runtime facts in the existing source
-  commitment; no native execution while planning.
-- `captureSessionPassive`: explicit source startup predicates and retained roots,
-  without relaxing the standalone catalog.
-- `verifySessionMetadata` / `verifySessionNativeSource`: exact native revision,
-  install directory, config source and complete MCP mapping.
-- Existing original-root mutation authority, process runner, cancellation,
-  retained inspection and final revalidation remain the only execution path.
-
-Planning, add, verify, update, repair and remove must not start a source bootstrap
-as a discovery shortcut. `--print-runtime-command` is native execution because
-the upstream launcher can run update recovery first.
 
 ### 5.2 Native readiness
 
@@ -145,24 +135,15 @@ installed-runtime `find_all_skills` and `skill_view(preprocess=False)` instead.
 Moving that observer into production needs separately qualified runtime custody;
 `PreparedSetupCompleter` is not an observation transport. No table/JSON shortcut.
 
-Define the observable predicate before changing outcomes:
+Production outcome remains `Prepared`, including after successful trust.
+`PreparedSetupCompleter` only classifies eligible confirmed completion; it does
+not attest native discovery. No new observer, table parser, generic readiness
+model or active-status promotion in this PR.
 
-- Current selected runtime and profile, exact requested Skill identity, content
-  and location, effective project trust and quarantine/discovery behavior.
-- Same-name User, built-in or foreign content cannot satisfy a Project result.
-- Bounded output, deadline, cancellation and verified process-family cleanup.
-- Ownership/profile/runtime revalidation around the observation.
-- Missing, shadowed, disabled, quarantined, malformed, truncated or ambiguous
-  evidence retains Prepared or the existing typed failure.
-
-Use the current Hermes lifecycle/prepared-setup extension. Do not infer Ready
-from receipt existence, a trust list, config listing, a successful version command
-or an E2E fixture's discovery result. Keep component-level distinctions visible:
-file preparation, native discovery, MCP connection, tools/call and live model
-authentication are different observations.
-
-If no supported exact native observation exists, improve truthful guidance and
-native E2E evidence instead of adding a weak readiness heuristic.
+Native E2E independently proves discovery of exact selected Skill paths/content
+and trust behavior. Report file preparation, native discovery, MCP connection,
+tools/call and live-provider authentication separately. Missing or ambiguous
+native evidence cannot produce a stronger production status.
 
 ### 5.3 Explicit-add completion
 
@@ -249,10 +230,6 @@ into new suites.
 
 ### Add only tests for changed decision boundaries
 
-- One focused source-qualifier matrix for admitted shape and critical refused
-  drift/overlay/recovery cases, if source support is implemented.
-- Small pure-Skill discovery identity/ambiguity/cancellation tests, only if the
-  production observer changes.
 - Focused raw fresh/repeat Skills add and saved-repeat regressions: disclosure
   before confirmation, decline/dry-run preservation, exact reviewed repair,
   same IDs/pins and no-consent sync/update/repair controls.
@@ -265,12 +242,12 @@ Extend existing workflows, do not introduce a fourth overlapping matrix:
 | Lane | Required evidence |
 | --- | --- |
 | `hermes-native-e2e.yml` | Actual pinned source installation, User/Project Skills discovery, trust/revocation, fresh/repeat/repair/remove, preserved unrelated content. |
-| `hermes-project-install.yml` | Standalone regression, any newly qualified source Project shape, exact isolated config and User/Project A/B preservation. |
+| `hermes-project-install.yml` | Standalone regression, exact isolated config and User/Project A/B preservation. Source Project MCP stays refused in the source-native lane. |
 | `hermes-noauth-tool-call.yml` | Real native driver and MCP tools/call through a deterministic local provider; source/runtime identity recorded. |
 
-Linux, macOS and Windows must actually execute the claimed supported shape.
-A shape passing only one OS remains unsupported on others unless explicitly
-bounded and documented. Preserve unsupported outcomes rather than skip tests
+Linux, macOS and Windows must actually execute the changed source Skills/trust
+journeys and existing standalone Project MCP regression. No source Project MCP
+support claim follows from a successful source User-scope tool call. Preserve unsupported outcomes rather than skip tests
 and call the matrix green. Record exact UAP source SHA, vendor pin, launcher and
 native runtime, OS, scenario result, cleanup result and artifact/run URLs.
 
@@ -318,13 +295,15 @@ resolved with evidence; do not merely record three approvals.
 
 ## 10. Estimates and review log
 
-Source support has the highest uncertainty. A qualified source descriptor and
-integration may require roughly 400–900 production lines and 800–1,800 focused
-test/harness lines; this is a risk estimate, not a target. Native readiness and
-saved-add completion are scoped only after examining exact reusable contracts.
-If safe support requires Hermes dependency-state synthesis, stop that design.
+The bounded implementation is consent/disclosure propagation, reviewed repeat
+completion, focused regressions, technical guidance and affected native evidence.
+Expect roughly 100–350 production lines plus tests/harness changes; this is a
+planning estimate, not a target. Reuse existing contracts before adding abstractions.
+Source-installed Project MCP and native Ready promotion remain explicit unmet
+capabilities, deferred to their required runtime/authority designs.
 
 | Revision | Finding | Change / disposition | Evidence |
 | --- | --- | --- | --- |
 | Initial | Source launch mutates more than config; much baseline work already exists | Put native feasibility first, reuse current architecture, separate observable readiness and existing recovery | Baseline audit at fbab48; upstream pinned source; merged #923/#956/#994 |
 | Round 1 | Frozen 7ce3cfc4 omitted raw Skills consent/disclosure and treated proven saved-repeat gap as speculative | Made both explicit outcomes, required reviewed/rechecked repair and disclosure before trust; ruled out nonexistent CLI JSON inventory; baseline recovery remains regression-only | Reviewer: hermes_readiness_recovery; CLI skills_batch, deps_sync, environment_session and pinned native skills_hub inspected |
+| Round 2 | Frozen 9d375b70 promised a small source descriptor although modern source PM is home-indexed; readiness observer also unqualified | Explicitly deferred source Project MCP to #942 cross-root profile design; retained Prepared; removed speculative production qualifier/observer and narrowed E2E/estimates to concrete add gaps | Reviewer: hermes_source_design; pinned upstream runtime/profile code and transaction/project_root containment |
