@@ -82,8 +82,8 @@ func TestGrokUserFailedNativeMutationDoesNotIssueSecondCommand(t *testing.T) {
 				base.commands[0][2] != "list" || base.commands[1][2] != "install" {
 				t.Fatalf("failed install re-probed native state: %+v %v %+v", outcome, err, base.commands)
 			}
-			if uncertain && outcome.NativeEffect != domain.NativeEffectUncertain {
-				t.Fatalf("uncertain install effect lost: %+v", outcome)
+			if outcome.NativeEffect != domain.NativeEffectUncertain {
+				t.Fatalf("failed native install may have partial side effects: %+v", outcome)
 			}
 		})
 		t.Run("uninstall-"+name, func(t *testing.T) {
@@ -104,8 +104,8 @@ func TestGrokUserFailedNativeMutationDoesNotIssueSecondCommand(t *testing.T) {
 				len(base.commands) != 2 || base.commands[0][2] != "list" || base.commands[1][2] != "uninstall" {
 				t.Fatalf("failed removal re-probed or authorized cleanup: %+v %v %+v", outcome, err, base.commands)
 			}
-			if uncertain && outcome.NativeEffect != domain.NativeEffectUncertain {
-				t.Fatalf("uncertain removal effect lost: %+v", outcome)
+			if outcome.NativeEffect != domain.NativeEffectUncertain {
+				t.Fatalf("failed native unregister may have partial side effects: %+v", outcome)
 			}
 		})
 	}

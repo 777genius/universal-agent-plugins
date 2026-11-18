@@ -71,6 +71,8 @@ func activateUser(ctx context.Context, env clients.Env, request domain.Activatio
 	}
 	if found {
 		if _, err := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "uninstall", "--confirm", request.DeclaredName); err != nil {
+			// A failed native command may still have changed its registry.
+			outcome.NativeEffect = domain.NativeEffectUncertain
 			return activationError(outcome, request, fmt.Errorf("uninstall previous Grok plugin: %w", err))
 		}
 		if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
@@ -83,8 +85,9 @@ func activateUser(ctx context.Context, env clients.Env, request domain.Activatio
 		}
 	}
 	if _, err := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "install", "--trust", request.Delivery.ActivePath); err != nil {
-		// A failed or unclosed native installation cannot be rescued by a
-		// stale listing. Never launch another command after that failure.
+		// A failed or unclosed native installation may have partially changed
+		// its registry. Never re-probe or assume no external effect.
+		outcome.NativeEffect = domain.NativeEffectUncertain
 		return activationError(outcome, request, fmt.Errorf("install grok plugin: %w", err))
 	}
 	return verifyActivation(ctx, env, request, outcome, true)
@@ -192,10 +195,9 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 	}
 	if _, err := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "uninstall", "--confirm", request.DeclaredName); err != nil {
 		outcome.ArtifactRemovalAllowed = false
-		if domain.IsUnclosedClientProbe(shared.CompletionProbeFailure(err)) {
-			outcome.NativeEffect = domain.NativeEffectUncertain
-		}
-		// Do not perform a second native query after an unclosed mutation.
+		outcome.NativeEffect = domain.NativeEffectUncertain
+		// A failed native unregister may have partial effects; do not issue
+		// another native query or allow managed artifact deletion.
 		return outcome, fmt.Errorf("uninstall grok plugin: %w", err)
 	}
 	if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
