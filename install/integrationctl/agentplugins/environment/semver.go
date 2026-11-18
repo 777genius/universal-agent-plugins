@@ -18,6 +18,9 @@ var (
 	// Masterminds accepts coerced numeric operands such as 1.02.3; a package
 	// selector must not silently resolve such a value to a different version.
 	versionOperand = regexp.MustCompile(`(^|[[:space:],|<>=~^])(\d+(?:\.\d+){0,2})`)
+	// Match a complete comparator operand, never a version-like substring
+	// inside a prerelease or a +build metadata identifier.
+	prereleaseConstraintOperand = regexp.MustCompile(`(^|[[:space:],|<>=~^])(\d+\.\d+\.\d+-[0-9A-Za-z.-]+(?:\+[0-9A-Za-z.-]+)?)`)
 )
 
 // ParseRegistryVersionSelector is the single parser/classifier for registry
@@ -106,21 +109,17 @@ func SelectorMatchesVersion(selector Selector, version string) bool {
 // Keep this compatibility rule narrow: the library still parses and evaluates
 // every constraint. Only the npm prerelease eligibility rule is enforced here.
 func prereleaseMatchesNamedTuple(expression string, candidate *semver.Version) bool {
-	needle := fmt.Sprintf("%d.%d.%d-", candidate.Major(), candidate.Minor(), candidate.Patch())
 	for _, group := range strings.Split(expression, "||") {
-		for at := 0; at < len(group); {
-			i := strings.Index(group[at:], needle)
-			if i < 0 {
-				break
+		selected, err := semver.NewConstraint(group)
+		if err != nil || !selected.Check(candidate) {
+			continue
+		}
+		for _, operand := range prereleaseConstraintOperand.FindAllStringSubmatch(group, -1) {
+			named, err := semver.StrictNewVersion(operand[2])
+			if err == nil && named.Major() == candidate.Major() &&
+				named.Minor() == candidate.Minor() && named.Patch() == candidate.Patch() {
+				return true
 			}
-			i += at
-			if i == 0 || (group[i-1] != '.' && (group[i-1] < '0' || group[i-1] > '9')) {
-				selected, err := semver.NewConstraint(group)
-				if err == nil && selected.Check(candidate) {
-					return true
-				}
-			}
-			at = i + len(needle)
 		}
 	}
 	return false
