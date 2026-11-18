@@ -11,7 +11,7 @@ materializing **Skills and a scoped subset of MCP servers** into the native loca
 | Scope | Native Skills destination | MCP handling |
 | --- | --- | --- |
 | `--scope user` | `$HERMES_HOME/skills/<name>/SKILL.md` | Exact-member `mcp_servers` edits in `config.yaml` (stdio and Streamable HTTP) |
-| `--scope project` | `<project>/.hermes/skills/<name>/SKILL.md` | Only through an explicitly confirmed UAP Hermes project session with a standalone Hermes distribution that has a verified manifest. A Hermes installed from source is refused with a message to use `--scope user` or install Skills only. UAP never trusts a repository automatically |
+| `--scope project` | `<project>/.hermes/skills/<name>/SKILL.md` | Only through an explicitly confirmed UAP Hermes project session with a standalone Hermes distribution that has a verified manifest. A Hermes installed from source is refused with a message to use `--scope user` or install Skills only. An explicitly confirmed Project `add` can ask the native CLI to trust the exact Git root for Skills; plan, dry run, update and repair never grant that trust |
 
 Project MCP for a Hermes installed from source is not supported yet. Hermes has
 no project-level `config.yaml`, and UAP never writes a project server into the
