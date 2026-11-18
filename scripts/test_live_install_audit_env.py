@@ -26,6 +26,31 @@ def load_audit():
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
 
+    def test_gemini_repeat_snapshot_tracks_ordinary_empty_directory_deltas(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            profile = Path(temporary) / ".gemini"
+            chats = profile / "tmp" / "project" / "chats"
+            chats.mkdir(parents=True)
+            before = audit.snapshot([profile], include_directories=True)
+            ordinary_before = audit.snapshot([profile])
+            untracked = profile / "unexpected-empty"
+            untracked.mkdir()
+            after = audit.snapshot([profile], include_directories=True)
+            self.assertNotEqual(before, after)
+            self.assertIn("directory:.gemini/unexpected-empty", after)
+            # Other client snapshots intentionally keep the old contract.
+            self.assertEqual(audit.snapshot([profile]), ordinary_before)
+            untracked.rmdir()
+            # A valid journal under the same chats parents changes one file,
+            # not the directory identities used to reject foreign deltas.
+            (chats / "record.json").write_text("{}\\n")
+            journal = audit.snapshot([profile], include_directories=True)
+            self.assertEqual(set(journal) - set(before),
+                             {".gemini/tmp/project/chats/record.json"})
+            (chats / "record.json").unlink()
+            self.assertEqual(audit.snapshot([profile], include_directories=True), before)
+
     def test_marketing_kit_rejects_non_success_json_even_with_zero_exit(self):
         # A zero process exit with a refusal/partial response is not lifecycle PASS.
         from runpy import run_path
