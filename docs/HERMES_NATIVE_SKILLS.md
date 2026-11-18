@@ -1,6 +1,6 @@
 # Hermes Agent integration
 
-Published [native CLI 0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) (2026-11-13, source `8c3cfa28e332c533b0cc0845739c0275730a4285`) includes Hermes and Antigravity; [qualification](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) and [promotion](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) succeeded. Signed Directory package eligibility remains separate: client capability does not authorize a package target. Package-manager channels may lag; this is not an npm 0.1.108 publication claim.
+Published [native CLI 0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) (source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`) includes Hermes and Antigravity. UAP configures supported components automatically; follow the client-specific remaining actions. Signed Directory package eligibility remains separate. Installation does not prove native runtime activation or vendor authentication.
 
 Historical source lifecycle: Hermes 0.23.0 on Linux x64/macOS arm64/Windows x64 at UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`, [run 42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862). Subsequent [#884](https://github.com/777genius/universal-agent-plugins/pull/884) proves native User stdio `tools/call` on all three OS through the official legacy `run_agent.py` driver and a local scripted provider. Default `hermes chat`, vendor authentication and trusted Project Skills execution remain unqualified.
 
@@ -11,13 +11,15 @@ materializing **Skills and a scoped subset of MCP servers** into the native loca
 | Scope | Native Skills destination | MCP handling |
 | --- | --- | --- |
 | `--scope user` | `$HERMES_HOME/skills/<name>/SKILL.md` | Exact-member `mcp_servers` edits in `config.yaml` (stdio and Streamable HTTP) |
-| `--scope project` | `<project>/.hermes/skills/<name>/SKILL.md` | Only through an explicitly confirmed UAP Hermes project session with a standalone Hermes distribution that has a verified manifest. A Hermes installed from source is refused with a message to use `--scope user` or install Skills only. UAP never trusts a repository automatically |
+| `--scope project` | `<project>/.hermes/skills/<name>/SKILL.md` | MCP only in an explicitly confirmed isolated UAP session with a verified standalone Hermes bundle; source-installed Hermes supports Project Skills, not Project MCP |
 
 Project MCP for a Hermes installed from source is not supported yet. Hermes has
 no project-level `config.yaml`, and UAP never writes a project server into the
 user config, because it would run in every repository. A dedicated Hermes profile
-for the project looks like the most suitable option, but the approach is not
-decided and nothing is implemented. See issue #942.
+for source-installed Hermes remains undecided and unimplemented (issue #942).
+The verified standalone host instead uses the explicitly confirmed UAP project
+session described above; ordinary Hermes startup does not select that MCP home.
+This host-distribution requirement does not restrict plugin Git sources.
 
 The smoke selects an explicit isolated, nondefault `HERMES_HOME`. UAP captures
 this override and `HERMES_DATA_DIR_SUFFIX` from the environment. Without an
@@ -93,7 +95,7 @@ list under `skills` and `_config_version` in `config.yaml`; comments and other
 settings stay byte-for-byte (observed on Hermes 2bd378e). The lifecycle E2E
 still compares MCP settings and trusted roots semantically.
 
-**Strict scope:** source-verified Skills and User MCP install/update/repair/remove,
+**Strict scope:** owned Skills and scoped MCP install/update/repair/remove,
 no reuse of foreign skill/MCP names. User MCP uses the existing atomic native
 config kernel, strict bounded YAML parsing, per-entry receipts, and
 post-write verification while preserving unrelated settings and comments.
@@ -102,7 +104,7 @@ unsupported transport fails closed. No user YAML is ever changed by Project
 MCP. Packages requiring hooks or unqualified components are refused.
 
 **Historical source acceptance gate:** the recorded three-platform run satisfies the native
-lifecycle gate for its exact UAP head only. The public release qualification is linked above. The native smoke proves
+lifecycle gate for its exact UAP head only. The current published release and source are linked above; they do not extend this historical run's proof. The native smoke proves
 MCP listing, connection and tool discovery over loopback Streamable HTTP; it
 does not perform `tools/call`, a model turn or an authenticated provider session.
 The historical runs above observed Project discovery without trust; the current

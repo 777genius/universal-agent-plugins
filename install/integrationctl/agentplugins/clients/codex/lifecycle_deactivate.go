@@ -37,7 +37,12 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 	if strings.TrimSpace(request.PhysicalArtifactID) == "" {
 		return outcome, fmt.Errorf("managed Codex marketplace identity is missing")
 	}
-	return deactivateConfirmedCodex(ctx, env, request, outcome)
+	outcome, err := deactivateConfirmedCodex(ctx, env, request, outcome)
+	if domain.IsUnclosedClientProbe(err) {
+		outcome.NativeEffect = domain.NativeEffectUncertain
+		outcome.ArtifactRemovalAllowed = false
+	}
+	return outcome, err
 }
 
 func deactivateConfirmedCodex(ctx context.Context, env clients.Env, request domain.DeactivationRequest, outcome domain.DeactivationOutcome) (domain.DeactivationOutcome, error) {
@@ -51,7 +56,7 @@ func deactivateConfirmedCodex(ctx context.Context, env clients.Env, request doma
 		return outcome, err
 	}
 	if !shared.HasClientCLI(env, request.BackendExecutable) {
-		return deactivateCodexWithoutCLI(outcome, request, marketplace, registered, pluginEntryPresent)
+		return deactivateCodexWithoutCLI(ctx, outcome, request, marketplace, registered, pluginEntryPresent)
 	}
 	profileRoot := request.Client.ConfigRoot
 	if err := validateProfile(profileRoot, ""); err != nil {
@@ -71,13 +76,13 @@ func deactivateConfirmedCodex(ctx context.Context, env clients.Env, request doma
 		return outcome, err
 	}
 	outcome.ExternalRemovalComplete = true
-	return outcome, nil
+	return purgeRequestedNativeData(ctx, outcome, request, marketplace), nil
 }
 
 func verifyCodexNativeRemoval(ctx context.Context, env clients.Env, request domain.DeactivationRequest, marketplace string) error {
 	listed, err := runCodexPluginList(ctx, env, request.Client.ConfigRoot, request.BackendExecutable)
 	if err != nil {
-		return shared.NativeProbeFailure(listed, err)
+		return err
 	}
 	if CodexRegistryFinding(listed.Stdout, request.DeclaredName, marketplace, true) != clients.RegistryClear {
 		return fmt.Errorf("codex did not confirm exact managed plugin absence")
@@ -99,10 +104,10 @@ func verifyCodexNativeRemoval(ctx context.Context, env clients.Env, request doma
 	return nil
 }
 
-func deactivateCodexWithoutCLI(outcome domain.DeactivationOutcome, request domain.DeactivationRequest, marketplace string, registered, pluginEntryPresent bool) (domain.DeactivationOutcome, error) {
+func deactivateCodexWithoutCLI(ctx context.Context, outcome domain.DeactivationOutcome, request domain.DeactivationRequest, marketplace string, registered, pluginEntryPresent bool) (domain.DeactivationOutcome, error) {
 	if !registered && !pluginEntryPresent {
 		outcome.ExternalRemovalComplete = true
-		return outcome, nil
+		return purgeRequestedNativeData(ctx, outcome, request, marketplace), nil
 	}
 	outcome.Activation = domain.ActivationManual
 	outcome.ArtifactRemovalAllowed = false
@@ -112,7 +117,7 @@ func deactivateCodexWithoutCLI(outcome domain.DeactivationOutcome, request domai
 
 func removeCodexMarketplace(ctx context.Context, env clients.Env, root, executable, marketplace string) error {
 	remove, err := runCodex(ctx, env, root, executable, "plugin", "marketplace", "remove", marketplace, "--json")
-	if err != nil && !shared.CommandOutputContains(remove, "not configured or installed") {
+	if err != nil && (domain.IsUnclosedClientProbe(err) || !shared.CommandOutputContains(remove, "not configured or installed")) {
 		return fmt.Errorf("remove managed Codex marketplace %s: %w", marketplace, err)
 	}
 	return nil
@@ -120,7 +125,7 @@ func removeCodexMarketplace(ctx context.Context, env clients.Env, root, executab
 
 func removeCodexPlugin(ctx context.Context, env clients.Env, root, executable, pluginSpec string) error {
 	remove, err := runCodex(ctx, env, root, executable, "plugin", "remove", pluginSpec, "--json")
-	if err != nil && !shared.CommandOutputContains(remove, "not configured or installed") {
+	if err != nil && (domain.IsUnclosedClientProbe(err) || !shared.CommandOutputContains(remove, "not configured or installed")) {
 		return fmt.Errorf("remove managed Codex plugin %s: %w", pluginSpec, err)
 	}
 	return nil

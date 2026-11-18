@@ -43,8 +43,8 @@ func TestGeminiCycleActualStoreStagerAdapterMatchesAllThreeIndependentAuthoritie
 		geminiCycleStageActual(t, c, scope)
 		c.check(t)
 	}
-	if c.recipes["user"].Binding.Activation != domain.ActivationActive || c.recipes["a"].Binding.Activation != domain.ActivationPrepared {
-		t.Fatal("Gemini receipt statuses conflated")
+	if c.recipes["user"].Binding.Activation != domain.ActivationActive || c.recipes["a"].Binding.Activation != domain.ActivationActive || c.recipes["a"].Binding.Authentication != domain.AuthenticationNotRequired {
+		t.Fatal("Gemini synthetic earned receipt statuses differ")
 	}
 	for _, r := range c.recipes {
 		if err := geminiCycleAbsent(filepath.Join(r.Data, "native-marker.txt")); err != nil {

@@ -224,6 +224,41 @@ func TestGroupPreparedSetupIsReviewedAndCompletesWithoutRestaging(t *testing.T) 
 	}
 }
 
+// Regression: a completion that only re-verified the intact setup reported a
+// mutation, or neither a mutation nor no-change, and rewrote saved state. A
+// committed effect over the same lifecycle must still record both.
+func TestGroupPreparedSetupCompletionRecordsOnlyRealEffects(t *testing.T) {
+	for _, update := range []bool{false, true} {
+		for _, effect := range []domain.NativeEffectState{domain.NativeEffectUnchanged, domain.NativeEffectCommitted} {
+			t.Run(map[bool]string{false: "add ", true: "update "}[update]+string(effect), func(t *testing.T) {
+				f := newGroupSetupFixture(t)
+				f.service.Now = movingClock()
+				apply := f.service.AddGroup
+				if update {
+					apply = f.service.UpdateGroup
+				}
+				for _, binding := range f.before.Installations[0].Clients {
+					saved := lifecycleOutcome(binding)
+					saved.NativeEffect = effect
+					f.actors[domain.ClientID(binding.ClientID)].settled = &saved
+				}
+				result, err := apply(t.Context(), GroupInput{Targets: f.inputs, Confirmed: true})
+				after, loadErr := f.store.Load()
+				if err != nil || loadErr != nil {
+					t.Fatalf("completion: %v %v", err, loadErr)
+				}
+				committed := effect == domain.NativeEffectCommitted
+				for _, target := range result.Targets {
+					if target.NoChange == committed || target.Mutated != committed || f.actors[target.Plan.ClientID].acts != 1 {
+						t.Fatalf("effect %s completion result: %+v", effect, target)
+					}
+				}
+				assertCompletionRecord(t, f.before, after, result.Mutated, effect)
+			})
+		}
+	}
+}
+
 func TestGroupPreparedSetupRefusesUnclosedCancelledAndChangedAuthority(t *testing.T) {
 	for _, scenario := range []string{"unclosed", "canceled", "foreign", "package-changed", "binding-changed"} {
 		t.Run(scenario, func(t *testing.T) {

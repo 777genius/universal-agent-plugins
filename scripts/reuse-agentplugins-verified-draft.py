@@ -27,6 +27,15 @@ NEW_CLIENT_GATES = (
     "hermes-native-proof / Aggregate hermes release-native proofs",
     "antigravity-native-proof / Aggregate antigravity release-native proofs",
 )
+# Exact job names the producer workflow emits. A unit test derives them from
+# agentplugins-release.yml so the workflow and this verifier cannot drift.
+REQUIRED_SUCCESS_JOBS = (
+    "validate", "build", "stage-draft",
+    "platform-proof / Verify release and pack exact npm tarball",
+    *(f"platform-proof / native runtime E2E ({target})" for target in TARGETS),
+    "platform-proof / Aggregate all six native platform proofs", "verified-draft",
+)
+SCHEMA_TWO_QUALIFICATION_JOBS = ("qualify-go", "qualify-npm")
 
 
 def require(ok, message):
@@ -82,14 +91,7 @@ def authenticate(args):
     pages = api(f"{prefix}/runs/{args.run_id}/attempts/{args.run_attempt}/jobs?per_page=100",
                 "--paginate", "--slurp")
     jobs = [job for page in pages for job in page["jobs"]]
-    for name in ("validate",
-                 "build (darwin, amd64)", "build (darwin, arm64)",
-                 "build (linux, amd64)", "build (linux, arm64)",
-                 "build (windows, amd64, .exe)", "build (windows, arm64, .exe)",
-                 "stage-draft",
-                 "platform-proof / Verify release and pack exact npm tarball",
-                 *(f"platform-proof / native runtime E2E ({target})" for target in TARGETS),
-                 "platform-proof / Aggregate all six native platform proofs", "verified-draft"):
+    for name in REQUIRED_SUCCESS_JOBS:
         one_job(jobs, name, args.run_id, "success")
     one_job(jobs, "promote-release", args.run_id, "skipped")
     # Only current producer promotion opts in. Historical v1/v2 receipts and
@@ -141,7 +143,7 @@ def authenticate(args):
             and re.fullmatch(r"[0-9a-f]{64}", receipt.get("asset_set_digest", "")),
             "verified draft receipt identity mismatch")
     if receipt["schema_version"] == 2:
-        for name in ("qualify-go", "qualify-npm"):
+        for name in SCHEMA_TWO_QUALIFICATION_JOBS:
             one_job(jobs, name, args.run_id, "success")
     return receipt
 

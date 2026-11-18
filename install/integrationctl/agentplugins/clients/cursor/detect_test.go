@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestEditorLauncherDoesNotProveAgentCLI(t *testing.T) {
@@ -39,5 +41,21 @@ func TestEditorLauncherDoesNotProveAgentCLI(t *testing.T) {
 		if found["cursor_editor"] != (binaries["cursor"] != "") || found["cursor_agent"] != (binaries["cursor-agent"] != "") {
 			t.Errorf("separate binary presence: %+v", client.Surfaces)
 		}
+	}
+}
+
+// cursor-agent alone selects Cursor for project scope only, so the user-scope
+// adapter explains the other scope and the project adapter stays silent.
+func TestAgentOnlyHintIsUserScopeOnly(t *testing.T) {
+	t.Parallel()
+	agentOnly := []domain.ClientSurface{{ID: domain.CursorAgentSurfaceID, Detected: true}}
+	if hint := New().agentOnlyHint(agentOnly); !strings.Contains(hint, "--scope project") {
+		t.Fatalf("user scope hint = %q", hint)
+	}
+	if hint := NewProject().agentOnlyHint(agentOnly); hint != "" {
+		t.Fatalf("project scope hint = %q", hint)
+	}
+	if hint := New().agentOnlyHint([]domain.ClientSurface{{ID: "cursor_editor", Detected: true}}); hint != "" {
+		t.Fatalf("editor hint = %q", hint)
 	}
 }

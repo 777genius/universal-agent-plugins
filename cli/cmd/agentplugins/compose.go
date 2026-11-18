@@ -234,7 +234,7 @@ func assembleAgentpluginsApp(home, dataRoot, cacheRoot string, v2Store statev2.S
 		},
 		SecurityEvaluatorForDryRun: func(root string) ports.PackageSecurityEvaluator {
 			return securityscan.Evaluator{
-				Scanner: securityscan.ReleaseScanner{Root: filepath.Join(root, "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
+				Scanner: securityscan.ReleaseScanner{Root: filepath.Join(root, "lintai"), ReadOnlyRoot: filepath.Join(cacheRoot, "security", "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
 				Cache:   nil, Requirement: securityscan.DefaultRequirement(),
 			}
 		},

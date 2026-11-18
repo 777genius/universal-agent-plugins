@@ -27,9 +27,9 @@ func NewNativePrepared(executable, root string, environment []string, evidence V
 	return h
 }
 
-// NativeSnapshot preserves this immutable evidence through prepared-client
+// NativeObservationAuthority preserves immutable evidence through prepared-client
 // wrappers. The returned copy cannot retarget the original prepared host.
-func (h *NativePrepared) NativeSnapshot() *NativePrepared {
+func (h *NativePrepared) NativeObservationAuthority() *NativePrepared {
 	if h == nil {
 		return nil
 	}

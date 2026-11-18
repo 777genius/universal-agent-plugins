@@ -165,6 +165,73 @@ func TestObservedOpenCodeSkillAuthenticationRequiresFullOwnedProof(t *testing.T)
 			if test.allow && (actual.Activation != domain.ActivationActive || actual.ActivationAttested || actual.AuthenticationAttested) {
 				t.Fatalf("fresh owned Skill did not qualify native installation: %+v", actual)
 			}
+			if test.driftResource && actual.Activation != domain.ActivationPrepared {
+				t.Fatalf("changed resource retained native activation: %+v", actual)
+			}
+		})
+	}
+}
+
+func TestObservedOpenCodeEarnedAuthenticationNeedsCurrentOwnedProof(t *testing.T) {
+	for _, change := range []string{"unchanged", "missing receipt", "duplicate receipt", "resource changed during repeat"} {
+		t.Run(change, func(t *testing.T) {
+			request, env, outcome := observedOpenCodeSkillFixture(t)
+			skillRoot := request.Delivery.NativeObjects[0].Path
+			resource := filepath.Join(skillRoot, "reference.txt")
+			catalog, err := json.Marshal([]openCodeObservedSkill{{Name: "probe", Location: filepath.Join(skillRoot, "SKILL.md"), Content: "Expected body\n"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			repeating, calls := false, 0
+			env.Runner = skillObservationRunner(func(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+				calls++
+				if command.Dir != request.Plan.NativeRegistryRoot || len(command.Argv) != 3 || command.Argv[0] != request.Client.ExecutablePath {
+					t.Fatal("native repeat escaped selected authority")
+				}
+				if slices.Equal(command.Argv[1:], []string{"debug", "config"}) {
+					return legacyports.CommandResult{CleanupComplete: true, Stdout: []byte("{}")}, nil
+				}
+				if !slices.Equal(command.Argv[1:], []string{"debug", "skill"}) {
+					t.Fatalf("repeat started an unexpected native command: %v", command.Argv)
+				}
+				if repeating && change == "resource changed during repeat" {
+					if err := os.WriteFile(resource, []byte("changed while reading\n"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				return legacyports.CommandResult{CleanupComplete: true, Stdout: catalog}, nil
+			})
+			earned, err := observeOpenCodeNativeComponents(t.Context(), env, request, outcome)
+			if err != nil || earned.Authentication != domain.AuthenticationNotRequired || earned.Activation != domain.ActivationActive || calls != 3 {
+				t.Fatalf("initial installation did not earn readiness: %+v calls=%d err=%v", earned, calls, err)
+			}
+			request.VerifyOnly, repeating, calls = true, true, 0
+			switch change {
+			case "missing receipt":
+				request.Delivery.NativeObjects = nil
+			case "duplicate receipt":
+				request.Delivery.NativeObjects = append(slices.Clone(request.Delivery.NativeObjects), request.Delivery.NativeObjects[0])
+			}
+			earned.NativeObjects = slices.Clone(request.Delivery.NativeObjects)
+			actual, err := observeOpenCodeNativeComponents(t.Context(), env, request, earned)
+			wantActivation, wantCalls := domain.ActivationPrepared, 3
+			if change == "unchanged" {
+				wantActivation = domain.ActivationActive
+			}
+			if change == "missing receipt" || change == "duplicate receipt" {
+				wantCalls = 0
+			}
+			if err != nil || actual.Activation != wantActivation || actual.Authentication != domain.AuthenticationNotRequired ||
+				actual.Verification != domain.VerificationInstalled || actual.NativeEffect != domain.NativeEffectUnchanged || calls != wantCalls {
+				t.Fatalf("saved authentication replaced current owned proof: %+v calls=%d want=%d err=%v", actual, calls, wantCalls, err)
+			}
+			wantResource := "owned resource bytes\n"
+			if change == "resource changed during repeat" {
+				wantResource = "changed while reading\n"
+			}
+			if body, readErr := os.ReadFile(resource); readErr != nil || string(body) != wantResource {
+				t.Fatalf("read-only repeat replaced resource bytes: %q err=%v", body, readErr)
+			}
 		})
 	}
 }

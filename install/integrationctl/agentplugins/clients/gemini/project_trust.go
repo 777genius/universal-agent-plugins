@@ -20,24 +20,50 @@ func trustGeminiProject(env clients.Env, request domain.ActivationRequest) (bool
 	if request.VerifyOnly || request.Plan.Scope != domain.ScopeProject {
 		return false, nil
 	}
+	project, err := geminiTrustableProject(request)
+	if err != nil {
+		return false, err
+	}
+	return shared.UpdateProjectTrustFile(env.NativeConfig, filepath.Join(request.Client.ConfigRoot, "trustedFolders.json"), func(body []byte) ([]byte, error) { return geminiProjectTrustMapping(body, project) })
+}
+
+func geminiTrustableProject(request domain.ActivationRequest) (string, error) {
 	if os.Getenv("GEMINI_RESTRICTED_MODE") == "true" || os.Getenv("GEMINI_CLI_TRUST_WORKSPACE") == "false" {
-		return false, fmt.Errorf("gemini workspace trust is disabled by the existing environment policy")
+		return "", fmt.Errorf("gemini workspace trust is disabled by the existing environment policy")
 	}
 	if err := validateProfile(request.Client.ConfigRoot, ""); err != nil {
-		return false, err
+		return "", err
 	}
 	project := request.Plan.TargetContext.ProjectRoot
 	canonical, err := clients.CanonicalDirectory(project, os.Lstat, filepath.EvalSymlinks)
 	if err != nil || canonical != project {
-		return false, fmt.Errorf("gemini project trust requires the selected canonical project")
+		return "", fmt.Errorf("gemini project trust requires the selected canonical project")
 	}
 	if project == filepath.Dir(project) {
-		return false, fmt.Errorf("gemini project trust cannot grant trust to the filesystem root")
+		return "", fmt.Errorf("gemini project trust cannot grant trust to the filesystem root")
 	}
 	if home, err := clients.CanonicalDirectory(os.Getenv("HOME"), os.Lstat, filepath.EvalSymlinks); err == nil && home == project {
-		return false, fmt.Errorf("gemini project trust cannot grant trust to the entire home directory")
+		return "", fmt.Errorf("gemini project trust cannot grant trust to the entire home directory")
 	}
-	return shared.UpdateProjectTrustFile(env.NativeConfig, filepath.Join(request.Client.ConfigRoot, "trustedFolders.json"), func(body []byte) ([]byte, error) { return geminiProjectTrustMapping(body, project) })
+	return project, nil
+}
+
+// A preview may offer confirmed setup only for an exact missing, grantable trust preference.
+func geminiProjectTrustMissing(env clients.Env, request domain.ActivationRequest) (bool, error) {
+	project, err := geminiTrustableProject(request)
+	if err != nil {
+		return false, err
+	}
+	file, err := env.NativeConfig.ReadExactFile(filepath.Join(request.Client.ConfigRoot, "trustedFolders.json"))
+	if err != nil {
+		return false, err
+	}
+	body := file.Body
+	if !file.Exists {
+		body = []byte("{}")
+	}
+	next, err := geminiProjectTrustMapping(body, project)
+	return err == nil && !bytes.Equal(body, next), err
 }
 
 func geminiProjectTrustMapping(body []byte, project string) ([]byte, error) {

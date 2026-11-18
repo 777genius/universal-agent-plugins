@@ -25,7 +25,7 @@ if (!client) {
 }
 
 const registry = await useRegistryPage({ projection: { kind: 'client', value: client.id } });
-const { current } = useDirectoryStatus(true);
+const { current, expired } = useDirectoryStatus(true);
 
 const reviewedPlugins = catalogVisiblePlugins(registry.plugins).filter(
   (plugin) =>
@@ -53,10 +53,13 @@ const pinnedExample = exampleAvailability?.kind === 'pinned_git' ? exampleAvaila
 // after a snapshot expires, even though new source commands are withheld.
 const pinnedRepairLimitation = computed(() => pinnedCatalogRepairLimitation(pinnedExample));
 const exampleSource = pinnedExample?.selector ?? example?.plugin.install_source ?? './my-plugin';
-const installCommand = computed(() => pinnedExample
-  ? current.value ? pinnedCatalogCommands(example!.plugin, pinnedExample.client, 'user').add : ''
-  : example ? pluginCommands(example.plugin, [example.target]).add
-    : `npx -y universal-agent-plugins add ./my-plugin --target ${client.id}`);
+const installCommand = computed(() => {
+  if (!example) return `npx -y universal-agent-plugins add ./my-plugin --target ${client.id}`;
+  if (!current.value) return '';
+  return pinnedExample
+    ? pinnedCatalogCommands(example.plugin, pinnedExample.client, 'user').add
+    : pluginCommands(example.plugin, [example.target]).add;
+});
 const hasPinnedSource = reviewedPlugins.some(plugin =>
   pluginInstallAvailability(plugin, [client.id], 'user')?.kind === 'pinned_git' ||
   pluginInstallAvailability(plugin, [client.id], 'project')?.kind === 'pinned_git');
@@ -146,8 +149,24 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
                 kind="add"
                 :label="t('registryUi.agentPage.install')"
               />
+              <p v-if="!needsLocalExample && !current" role="status">
+                <strong>{{
+                  t(
+                    expired
+                      ? 'registryUi.install.commandsUnavailableStaleDirectory'
+                      : 'registryUi.install.commandsUnavailableInReviewPreview',
+                  )
+                }}</strong>
+                {{
+                  t(
+                    expired
+                      ? 'registryUi.install.thisSignedSnapshotHasExpiredBrowseItsHistoryThenReturnAfterAFreshSnapshotIsPublished'
+                      : 'registryUi.install.unresolvedDataIsForReviewOnlyProductionCommandsRequireAPublishedSignedDirectorySnapshot',
+                  )
+                }}
+              </p>
               <i18n-t
-                v-if="!needsLocalExample"
+                v-if="!needsLocalExample && current"
                 keypath="registryUi.agentPage.tryPlugin"
                 tag="p"
                 scope="global"
@@ -155,7 +174,9 @@ usePageSeo(title, () => t(`${client.presentationKey}.intro`), {
                   ><code>{{ exampleSource }}</code></template
                 ></i18n-t
               >
-              <p v-else>{{ t('registryUi.agentPage.packageExampleSourceHint') }}</p>
+              <p v-else-if="needsLocalExample">
+                {{ t('registryUi.agentPage.packageExampleSourceHint') }}
+              </p>
               <p v-if="hasPinnedSource">
                 {{ t('registryUi.install.pinnedCatalogSource') }}
                 <template v-if="pinnedRepairLimitation">

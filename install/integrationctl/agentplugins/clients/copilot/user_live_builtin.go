@@ -1,7 +1,6 @@
 package copilot
 
 import (
-	"bytes"
 	"path/filepath"
 	"strings"
 
@@ -11,19 +10,22 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-// This exact positive observation is separate from the shared legacy grammars.
-// A mismatch grants no finding and leaves each old caller's fallback intact.
-const copilotUserLiveBuiltinPrefix = "Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
-
-func copilotUserLiveWithDisabledBuiltin(stdout, stderr []byte, plan domain.DeliveryPlan, expectedPath, executable string) bool {
+// This exact positive observation is separate from the shared legacy grammars:
+// a leading builtin section followed by exactly one managed live entry. A
+// mismatch grants no finding and leaves each old caller's fallback intact.
+func copilotUserLiveWithBuiltins(stdout, stderr []byte, plan domain.DeliveryPlan, expectedPath, executable string) bool {
 	if len(stdout) > 8<<10 || len(stderr) != 0 || !copilotUserLivePlan(plan, expectedPath, executable) {
+		return false
+	}
+	listing, ok := splitBuiltinListing(string(stdout))
+	if !ok || !listing.leading || listing.lists(plan.DeclaredName) {
 		return false
 	}
 	identity := plan.DeclaredName + "@" + shared.ManagedMarketplaceName(plan.PhysicalArtifactID)
 	version := shared.MarketplaceVersion(plan.DeclaredVersion)
 	entry := "  • " + identity + " (v" + version + ") (enabled)"
 	live := shared.CopilotLiveHeader + "\n" + entry + "\n      from " + expectedPath + "\n"
-	if !bytes.Equal(stdout, []byte(copilotUserLiveBuiltinPrefix+live)) {
+	if listing.rest != live {
 		return false
 	}
 	status, recognized := shared.CopilotLivePluginStatus([]byte(live), identity, version, expectedPath)
@@ -32,7 +34,7 @@ func copilotUserLiveWithDisabledBuiltin(stdout, stderr []byte, plan domain.Deliv
 
 func copilotUserLivePlan(plan domain.DeliveryPlan, expectedPath, executable string) bool {
 	return copilotUserLiveScope(plan) && copilotUserLiveName(plan.DeclaredName) &&
-		!strings.EqualFold(plan.DeclaredName, "browser-use") && copilotUserLiveName(plan.PhysicalArtifactID) &&
+		copilotUserLiveName(plan.PhysicalArtifactID) &&
 		len(plan.DeclaredVersion) <= 256 && copilotUserLivePath(expectedPath) &&
 		expectedPath == plan.ActivePath && filepath.Base(expectedPath) == plan.PhysicalArtifactID &&
 		copilotUserLivePath(executable) && executable == plan.NativeRegistryExecutable
@@ -72,18 +74,21 @@ func copilotUserLiveActivation(stdout, stderr []byte, request domain.ActivationR
 	return request.Client.ClientID == domain.ClientCopilot && request.Delivery.ClientID == domain.ClientCopilot &&
 		request.DeclaredName == request.Plan.DeclaredName && request.BackendExecutable == request.Client.ExecutablePath &&
 		request.Delivery.ActivePath == request.Plan.ActivePath &&
-		copilotUserLiveWithDisabledBuiltin(stdout, stderr, request.Plan, request.Delivery.ActivePath, request.BackendExecutable)
+		copilotUserLiveWithBuiltins(stdout, stderr, request.Plan, request.Delivery.ActivePath, request.BackendExecutable)
 }
 
 func recognizeCopilotUserRegistry(listed legacyports.CommandResult, plan domain.DeliveryPlan, managed *domain.ClientBinding) (clients.RegistryFinding, bool) {
-	if copilotUserEmptyWithDisabledBuiltin(listed.Stdout, plan) {
+	if copilotUserEmptyWithBuiltins(listed.Stdout, plan) {
 		return clients.RegistryClear, true
+	}
+	if copilotOwnedInstalledRevision(listed, plan, managed) {
+		return clients.RegistryExpected, true
 	}
 	expectedPath := plan.ActivePath
 	if managed != nil && strings.TrimSpace(managed.TargetLocator) != "" {
 		expectedPath = managed.TargetLocator
 	}
-	if !copilotUserLiveManaged(plan, managed) || !copilotUserLiveWithDisabledBuiltin(listed.Stdout, listed.Stderr, plan, expectedPath, plan.NativeRegistryExecutable) {
+	if !copilotUserLiveManaged(plan, managed) || !copilotUserLiveWithBuiltins(listed.Stdout, listed.Stderr, plan, expectedPath, plan.NativeRegistryExecutable) {
 		return clients.RegistryIndeterminate, false
 	}
 	if managed == nil {
@@ -96,14 +101,16 @@ func recognizeCopilotUserActivation(listed legacyports.CommandResult, request do
 	return copilotUserLiveActivation(listed.Stdout, listed.Stderr, request)
 }
 
-// Copilot 1.0.103 appends this exact disabled builtin to an empty user registry.
-// Its presence proves neither ownership nor absence for a same-name request.
-// Keep this observed tuple separate from the generic Copilot/VS Code grammars.
-func copilotUserEmptyWithDisabledBuiltin(stdout []byte, plan domain.DeliveryPlan) bool {
-	const empty = "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n" +
-		"Built-in plugins:\n  • browser-use (v0.0.4) [disabled]\n"
+// Copilot appends its builtin section to an exact empty user registry. Builtins
+// prove neither ownership nor absence for a same-name request, which is refused.
+// Keep this observed shape separate from the generic Copilot/VS Code grammars.
+func copilotUserEmptyWithBuiltins(stdout []byte, plan domain.DeliveryPlan) bool {
+	const empty = "No plugins installed.\n\nUse 'copilot plugin install <source>' to install a plugin.\n"
 	name := plan.DeclaredName
-	return plan.ClientID == domain.ClientCopilot && plan.Scope == domain.ScopeUser &&
-		plan.TargetContext.Scope != domain.ScopeProject && name != "" && name == strings.TrimSpace(name) &&
-		!strings.EqualFold(name, "browser-use") && string(stdout) == empty
+	if plan.ClientID != domain.ClientCopilot || plan.Scope != domain.ScopeUser ||
+		plan.TargetContext.Scope == domain.ScopeProject || name == "" || name != strings.TrimSpace(name) {
+		return false
+	}
+	listing, ok := splitBuiltinListing(string(stdout))
+	return ok && !listing.leading && listing.rest == empty && !listing.lists(name)
 }

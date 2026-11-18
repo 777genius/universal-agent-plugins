@@ -185,7 +185,7 @@ def progress(stage):
     if stage in ("add-a", "add-b"):
         return b"Resolving and validating one Agent Plugin package for every selected target...\nInstalling native-proof for 1 selected clients...\n"
     if stage == "repeat-add-a":
-        return b"Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+        return b"Resolving and validating one Agent Plugin package for every selected target...\n"
     if "update" in stage:
         return b"Resolving and validating one updated Agent Plugin package for every selected target...\n"
     if "repair" in stage:

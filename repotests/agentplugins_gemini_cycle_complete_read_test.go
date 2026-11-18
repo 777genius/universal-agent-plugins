@@ -11,11 +11,13 @@ import (
 )
 
 type geminiCompleteCapture struct {
-	Files             map[string][]byte
-	Paths             map[string]string
-	Rows              map[string][]geminiCompleteRow
-	Proof             geminiCompleteProof
-	Started, Finished time.Time
+	PublicProbeSessions map[string]bool
+	PublicProbePIDs     map[int64]bool
+	Files               map[string][]byte
+	Paths               map[string]string
+	Rows                map[string][]geminiCompleteRow
+	Proof               geminiCompleteProof
+	Started, Finished   time.Time
 }
 
 func geminiCompleteLayout(value any) (map[string]string, error) {

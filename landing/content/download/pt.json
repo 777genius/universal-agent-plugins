@@ -9,7 +9,7 @@
         "brew": {
           "title": "Homebrew",
           "description": "CLI nativa em Go para macOS e Linux. Node.js não é necessário.",
-          "note": "Recomendado para uma instalação permanente com atualizações automáticas pelo Homebrew."
+          "note": "Recomendado para uma instalação permanente, com atualizações gerenciadas pelo Homebrew."
         },
         "npm": {
           "title": "npx · Node.js 22+",

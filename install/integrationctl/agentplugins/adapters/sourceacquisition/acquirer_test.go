@@ -360,6 +360,32 @@ func TestAcquireLocalRedactsInternalSnapshotPath(t *testing.T) {
 	}
 }
 
+// A mistyped local source is a user input error. Name the requested source and
+// the problem instead of the generic snapshot failure, before any snapshot root
+// is created.
+func TestAcquireLocalExplainsUnusableRequestedSource(t *testing.T) {
+	base := t.TempDir()
+	file := filepath.Join(base, "plugin.json")
+	if err := os.WriteFile(file, []byte(`{"name":"demo"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct{ name, source, want string }{
+		{"missing", filepath.Join(base, "does-not-exist"), "was not found"},
+		{"file", file, "must be a directory"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			tempRoot := t.TempDir()
+			_, err := (Acquirer{TempRoot: tempRoot}).AcquireLocal(context.Background(), test.source)
+			if err == nil || !strings.Contains(err.Error(), test.want) || !strings.Contains(err.Error(), test.source) {
+				t.Fatalf("local source error = %v, want %q naming %q", err, test.want, test.source)
+			}
+			if entries, readErr := os.ReadDir(tempRoot); readErr != nil || len(entries) != 0 {
+				t.Fatalf("refused local source created snapshot storage: %v %v", entries, readErr)
+			}
+		})
+	}
+}
+
 type failGitOperationRunner struct {
 	operation string
 	raw       string

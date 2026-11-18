@@ -31,6 +31,9 @@ on:
       - '.github/workflows/grok-enable-readonly.yml'
 permissions:
   contents: read
+concurrency:
+  group: grok-enable-readonly-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   readonly:
     runs-on: ubuntu-24.04

@@ -88,39 +88,42 @@ for (const width of [1440, 390]) {
     const card = page.locator('.plugin-card[data-install-source="sentry"]');
     await card.locator('.plugin-card__install-toggle').click();
 
-    await card.locator('.app-multiselect__trigger').click();
+    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     const pi = page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ });
     await expect(pi).toBeEnabled(); // User also offers the explicit source route, without a signed Pi grant.
-    await expect(pi).toContainText('The CLI checks components, dependencies and the selected scope first');
+    await expect(pi).toContainText('Pinned Git source');
     await page.keyboard.press('Escape');
 
-    await card.getByRole('button', { name: 'This project', exact: true }).click();
-    await card.locator('.app-multiselect__trigger').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
+    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     await expect(pi).toBeEnabled();
-    await expect(pi).toContainText('pinned Git source');
+    await expect(pi).toContainText('Pinned Git source');
     await pi.click();
     await page.keyboard.press('Escape');
     const direct = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/sentry';
-    const add = `npx -y universal-agent-plugins@0.1.108 add ${direct} --target pi --scope project`;
-    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
-    await expect(card).toContainText('The CLI checks components, dependencies and the selected scope first');
+    const add = `npx -y universal-agent-plugins@0.1.110 add ${direct} --target pi --scope project`;
+    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
+    await expect(page.getByRole('dialog')).toContainText('The CLI checks components, dependencies and the selected scope first');
+    await expect(page.getByRole('dialog').locator('.plugin-card__author').filter({ hasText: 'The CLI checks components, dependencies and the selected scope first' })).toHaveCount(1);
 
     // Switching routes must not combine an unsigned Pi option with signed Codex.
-    await card.locator('.app-multiselect__trigger').click();
+    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     await page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ }).click();
     await page.keyboard.press('Escape');
-    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(
+    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add sentry --target codex --scope project');
-    await card.locator('.app-multiselect__trigger').click();
+    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     await pi.click();
     await page.keyboard.press('Escape');
-    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
-    await card.locator('.plugin-card__install .command-snippet--add button').click();
+    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
+    await page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(add);
     await testInfo.attach(`pi-project-card-${width}.png`, {
-      body: await card.screenshot({ animations: 'disabled' }),
+      body: await page.getByRole('dialog').screenshot({ animations: 'disabled' }),
       contentType: 'image/png',
     });
+
+    await page.keyboard.press('Escape');
 
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.install-panel');
@@ -177,17 +180,18 @@ test('Pi direct install uses older release provenance without borrowing newer so
   const card = page.locator('.plugin-card[data-install-source="sentry"]');
   await expect(card.locator('.plugin-card__security')).toHaveCount(1);
   await card.locator('.plugin-card__install-toggle').click();
-  await card.getByRole('button', { name: 'This project', exact: true }).click();
-  await card.locator('.app-multiselect__trigger').click();
+  await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
+  await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
   await page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ }).click();
   await page.keyboard.press('Escape');
 
   const sourceUrl = 'https://github.com/777genius/universal-agent-plugins/tree/2ddbb99dd190c1792b79904f9875e6322bccd243/plugins/sentry';
-  await expect(card.locator('.plugin-card__install .command-snippet--add code'))
+  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code'))
     .toContainText('@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/sentry --target pi --scope project');
-  await expect(card.locator('.plugin-card__install a', { hasText: 'View source' }))
+  await expect(page.getByRole('dialog').locator('.plugin-card__install a', { hasText: 'View source' }))
     .toHaveAttribute('href', sourceUrl);
   await expect(card.locator('.plugin-card__security')).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await card.locator('.plugin-card__title-link').click();
   const panel = page.locator('.install-panel');
   await expect(panel.getByRole('link', { name: 'View package source' }))

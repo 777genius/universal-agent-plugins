@@ -5,8 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
@@ -19,6 +22,20 @@ type existingSetupActor struct {
 	marker            string
 	reads, acts       int
 	onRead            func()
+	// settled, when set, is the saved lifecycle that an acting pass finds
+	// again. Its NativeEffect, Unchanged when empty, says whether the pass
+	// rewrote anything, unlike an intact native projection.
+	settled *domain.ActivationOutcome
+}
+
+// movingClock returns a later time on every call, so an unwanted or a
+// missing rewrite of updated_at is visible.
+func movingClock() func() time.Time {
+	tick := 0
+	return func() time.Time {
+		tick++
+		return time.Date(2026, 8, 8, 12, 0, tick, 0, time.UTC)
+	}
 }
 
 func (a *existingSetupActor) VerifierAvailable(domain.DetectedClient, domain.DeliveryPlan, string) bool {
@@ -44,6 +61,14 @@ func (a *existingSetupActor) Activate(_ context.Context, r domain.ActivationRequ
 		}
 	} else {
 		a.acts++
+		if a.settled != nil && a.needsSetup {
+			outcome := *a.settled
+			if outcome.NativeEffect == "" {
+				outcome.NativeEffect = domain.NativeEffectUnchanged
+			}
+			outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), r.Delivery.NativeObjects...)
+			return outcome, nil
+		}
 		effect = domain.NativeEffectCommitted
 		objects = append([]domain.NativeObjectOwnership(nil), r.Delivery.NativeObjects...)
 		if a.needsSetup {
@@ -73,27 +98,37 @@ func (a existingLegacyVerifier) Deactivate(ctx context.Context, request domain.D
 	return a.inner.Deactivate(ctx, request)
 }
 
+// existingProjectSetupFixture returns a project-scoped service and confirmed
+// Claude add input whose fresh verifier observes a completable Prepared setup.
+func existingProjectSetupFixture(t *testing.T, source string) (Service, statev2.Store, AddInput, domain.ActivationOutcome) {
+	t.Helper()
+	service, store, _ := serviceFixture(t)
+	project := t.TempDir()
+	service.ProjectRoot = project
+	store.Path, store.ProjectRoot = filepath.Join(project, ".uap", "state-v2.json"), project
+	service.StateStore, service.Kernel.StateStore = store, store
+	service.CheckNamespace = func() error { return service.Paths.RequireContainedChild(project, store.Path) }
+	planner := plannertest.NewPlanner(clientplanner.Planner{ProjectRoot: project, ManagedRoot: filepath.Join(project, ".uap", "managed")})
+	service.Planner, service.Targets = planner, planner
+	client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "profile"), ExecutablePath: "/TEST/claude"}
+	input := addInput(t, client, source)
+	input.Scope = domain.ScopeProject
+	input.BackendExecutable = client.ExecutablePath
+	input.Confirmed = true
+	observed := domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Authentication: domain.AuthenticationNotChecked, Policy: domain.PolicyAllowed, NativeEffect: domain.NativeEffectUnchanged}
+	return service, store, input, observed
+}
+
 // Reproduces an older CLI's saved Active marketplace binding after exact setup
 // ceases to be ready. Only fresh scoped verification plus adapter opt-in may
 // authorize normal confirmed add/update to finish setup on the intact package.
 func TestExistingScopedVerifierCompletesPreparedSetupThroughNormalApply(t *testing.T) {
 	for _, mode := range []string{"confirmed-add", "confirmed-update", "prepared-binding", "preview", "dry-run", "online-preview", "declined", "denied", "unclosed", "no-opt-in", "binding-changed"} {
 		t.Run(mode, func(t *testing.T) {
-			service, store, _ := serviceFixture(t)
-			project := t.TempDir()
-			service.ProjectRoot = project
-			store.Path, store.ProjectRoot = filepath.Join(project, ".uap", "state-v2.json"), project
-			service.StateStore, service.Kernel.StateStore = store, store
-			service.CheckNamespace = func() error { return service.Paths.RequireContainedChild(project, store.Path) }
-			planner := plannertest.NewPlanner(clientplanner.Planner{ProjectRoot: project, ManagedRoot: filepath.Join(project, ".uap", "managed")})
-			service.Planner, service.Targets = planner, planner
-			client := domain.DetectedClient{ClientID: domain.ClientClaude, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), "profile"), ExecutablePath: "/TEST/claude"}
-			actor := &existingSetupActor{allow: true, marker: filepath.Join(t.TempDir(), "setup-effect"), observed: domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Authentication: domain.AuthenticationNotChecked, Policy: domain.PolicyAllowed, NativeEffect: domain.NativeEffectUnchanged}}
+			service, store, input, observed := existingProjectSetupFixture(t, "https://example.invalid/existing-scoped-setup")
+			client := input.Client
+			actor := &existingSetupActor{allow: true, marker: filepath.Join(t.TempDir(), "setup-effect"), observed: observed}
 			service.Activator = actor
-			input := addInput(t, client, "https://example.invalid/existing-scoped-setup")
-			input.Scope = domain.ScopeProject
-			input.BackendExecutable = client.ExecutablePath
-			input.Confirmed = true
 			added, err := service.Add(t.Context(), input)
 			if err != nil {
 				t.Fatal(err)
@@ -206,6 +241,90 @@ func TestExistingScopedVerifierCompletesPreparedSetupThroughNormalApply(t *testi
 		})
 	}
 }
+
+// Regression: closing the completion attempt's own marker reported a mutation
+// and rewrote updated_at although the repeated add changed nothing. A
+// committed effect over the same lifecycle must still record both, also when
+// refresh re-activates an unchanged projection.
+func TestExistingPreparedSetupCompletionRecordsOnlyRealEffects(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		refresh bool
+		effect  domain.NativeEffectState
+	}{
+		{name: "add unchanged", effect: domain.NativeEffectUnchanged},
+		{name: "add committed", effect: domain.NativeEffectCommitted},
+		{name: "refresh unchanged", refresh: true, effect: domain.NativeEffectUnchanged},
+		{name: "refresh committed", refresh: true, effect: domain.NativeEffectCommitted},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			service, store, input, observed := existingProjectSetupFixture(t, "https://example.invalid/prepared-setup-effect")
+			service.Now = movingClock()
+			actor := &existingSetupActor{allow: true, observed: observed}
+			service.Activator = actor
+			if _, err := service.Add(t.Context(), input); err != nil {
+				t.Fatal(err)
+			}
+			if tc.refresh {
+				// A Prepared binding makes refresh re-activate its unchanged projection.
+				prepareOnlyBinding(t, store)
+			}
+			before, err := store.Load()
+			if err != nil {
+				t.Fatal(err)
+			}
+			saved := lifecycleOutcome(onlyBinding(before.Installations[0]))
+			saved.NativeEffect = tc.effect
+			actor.settled, actor.needsSetup, actor.acts = &saved, true, 0
+			var out AddResult
+			if tc.refresh {
+				out, err = service.RefreshProjection(t.Context(), input)
+			} else {
+				out, err = service.Add(t.Context(), input)
+			}
+			after, loadErr := store.Load()
+			if err != nil || loadErr != nil || actor.acts != 1 {
+				t.Fatalf("completion: acts=%d %v %v", actor.acts, err, loadErr)
+			}
+			assertCompletionRecord(t, before, after, out.Mutated, tc.effect)
+			if !tc.refresh && out.NoChange == (tc.effect == domain.NativeEffectCommitted) {
+				t.Fatalf("no_change=%v for effect %s", out.NoChange, tc.effect)
+			}
+		})
+	}
+}
+
+func prepareOnlyBinding(t *testing.T, store statev2.Store) {
+	t.Helper()
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, binding := range state.Installations[0].Clients {
+		binding.Activation = domain.ActivationPrepared
+		state.Installations[0].Clients[key] = binding
+	}
+	if err := store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// assertCompletionRecord accepts a mutation and a new updated_at only for a
+// committed effect; otherwise saved state must stay byte for byte the same.
+func assertCompletionRecord(t *testing.T, before, after domain.StateFileV2, mutated bool, effect domain.NativeEffectState) {
+	t.Helper()
+	committed := effect == domain.NativeEffectCommitted
+	for key, previous := range before.Installations[0].Clients {
+		current := after.Installations[0].Clients[key]
+		if current.NativeActivationAttempt != "" || !sameLifecycleOutcome(lifecycleOutcome(current), lifecycleOutcome(previous)) || (current.UpdatedAt != previous.UpdatedAt) != committed {
+			t.Fatalf("effect %s recorded %+v over %+v", effect, current, previous)
+		}
+	}
+	if mutated != committed || !committed && !reflect.DeepEqual(before, after) {
+		t.Fatalf("effect %s: mutated=%v, state rewritten=%v", effect, mutated, !reflect.DeepEqual(before, after))
+	}
+}
+
 func btoi(v bool) int {
 	if v {
 		return 1

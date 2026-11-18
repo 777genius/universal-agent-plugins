@@ -136,21 +136,21 @@ func preparedOpenCodeSkillRequest(t *testing.T, scope domain.InstallScope) (Acti
 func requireDetachedOpenCodeSnapshot(t *testing.T, host domain.OpenCodeHostAuthority) {
 	t.Helper()
 	authority, ok := host.(interface {
-		NativeSnapshot() *opencodehost.NativePrepared
+		NativeObservationAuthority() *opencodehost.NativePrepared
 	})
 	if !ok {
 		t.Fatal("actual prepared CLI wrapper has no immutable native snapshot")
 	}
-	snapshot := authority.NativeSnapshot()
+	snapshot := authority.NativeObservationAuthority()
 	if snapshot == nil || snapshot.Evidence().Version != "1.18.34" {
 		t.Fatal("prepared snapshot lost its measured version")
 	}
 	*snapshot = opencodehost.NativePrepared{}
-	if authority.NativeSnapshot().Evidence().Version != "1.18.34" || host.ValidateNative(true, nil) != nil {
+	if authority.NativeObservationAuthority().Evidence().Version != "1.18.34" || host.ValidateNative(true, nil) != nil {
 		t.Fatal("mutating a returned snapshot changed the frozen CLI wrapper")
 	}
 	var absent *opencodehost.NativePrepared
-	if absent.NativeSnapshot() != nil {
+	if absent.NativeObservationAuthority() != nil {
 		t.Fatal("nil native authority acquired a snapshot")
 	}
 }

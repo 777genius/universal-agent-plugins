@@ -189,7 +189,7 @@ def require_verified_pin(pin):
         raise ValueError("unfilled or invalid archive pin; verify exact upstream archive before native dispatch")
 
 
-def verify_digest(body, pin):
+def verify_digest(body, pin, tool="archive"):
     require_verified_pin(pin)
     if pin.startswith("sha256:"):
         actual = "sha256:" + hashlib.sha256(body).hexdigest()
@@ -198,7 +198,11 @@ def verify_digest(body, pin):
     else:
         raise ValueError("unsupported archive digest")
     if actual != pin:
-        raise ValueError("archive integrity mismatch")
+        key = tool if tool in ("codex", "claude", "opencode", "lintai", "rg", "kimi") else "archive"
+        algorithm = "sha256" if pin.startswith("sha256:") else "sha512"
+        expected = pin[7:] if algorithm == "sha256" else base64.b64decode(pin[7:]).hex()
+        observed = actual[7:] if algorithm == "sha256" else base64.b64decode(actual[7:]).hex()
+        raise ValueError(f"archive integrity mismatch: tool={key} algorithm={algorithm} expected={expected} actual={observed}")
 
 
 def extract_binary(body, archive, basename):
@@ -229,7 +233,7 @@ def provision(pin, directory, name):
         with urllib.request.urlopen(url, timeout=180) as response:
             body = response.read(400 << 20)
         source = url
-    verify_digest(body, digest)
+    verify_digest(body, digest, name)
     binary = extract_binary(body, archive, basename)
     path = directory / (name + (".exe" if os.name == "nt" else ""))
     path.write_bytes(binary)

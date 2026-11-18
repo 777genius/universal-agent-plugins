@@ -21,14 +21,9 @@ func (f skillObservationRunner) Run(ctx context.Context, c legacyports.Command) 
 // A denied or shadowed skill still appears in OpenCode's catalog. Neither
 // observation may upgrade installed bytes into an active selected skill.
 func TestProjectSkillObservationRequiresExactUsableCatalog(t *testing.T) {
-	root := t.TempDir()
-	path := filepath.Join(root, ".opencode", "skills", "probe", "SKILL.md")
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte("---\nname: probe\ndescription: probe\n---\nExpected body\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	fixture, env, prepared := observedOpenCodeSkillFixture(t)
+	root := fixture.Plan.TargetContext.ProjectRoot
+	path := filepath.Join(fixture.Delivery.NativeObjects[0].Path, "SKILL.md")
 	for _, tc := range []struct {
 		name, config, location, content string
 		active                          bool
@@ -63,10 +58,10 @@ func TestProjectSkillObservationRequiresExactUsableCatalog(t *testing.T) {
 			if tc.mixed {
 				components = append(components, domain.ComponentDecision{Kind: domain.ComponentMCPServer, Name: "server"})
 			}
-			request := domain.ActivationRequest{Client: domain.DetectedClient{ExecutablePath: "/TEST/opencode", ConfigRoot: filepath.Join(root, "user-opencode")}, Plan: domain.DeliveryPlan{Scope: domain.ScopeProject, TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: root}, NativeRegistryRoot: root, Components: components}}
-			qualifyOpenCodeObservation(&request, "1.18.34")
+			request := fixture
+			request.Plan.Components = components
 			runner := skillObservationRunner(func(_ context.Context, c legacyports.Command) (legacyports.CommandResult, error) {
-				if c.Dir != root || len(c.Argv) != 3 || c.Argv[0] != "/TEST/opencode" || c.Argv[1] != "debug" || c.StdoutLimitBytes == 0 {
+				if c.Dir != root || len(c.Argv) != 3 || c.Argv[0] != request.Client.ExecutablePath || c.Argv[1] != "debug" || c.StdoutLimitBytes == 0 {
 					t.Fatalf("unbounded or misplaced native probe: %+v", c)
 				}
 				if c.Argv[2] == "config" {
@@ -75,8 +70,10 @@ func TestProjectSkillObservationRequiresExactUsableCatalog(t *testing.T) {
 				body, _ := json.Marshal([]openCodeObservedSkill{{Name: "probe", Location: tc.location, Content: tc.content}})
 				return legacyports.CommandResult{Stdout: body}, nil
 			})
-			outcome := domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, UserActions: []string{"restart OpenCode to load the installed plugin", "preserve cleanup warning"}}
-			actual, err := observeOpenCodeNativeComponents(t.Context(), clients.Env{Runner: runner}, request, outcome)
+			outcome := prepared
+			outcome.UserActions = []string{"restart OpenCode to load the installed plugin", "preserve cleanup warning"}
+			env.Runner = runner
+			actual, err := observeOpenCodeNativeComponents(t.Context(), env, request, outcome)
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -31,7 +31,7 @@ func (runner *unchangedSkillsRunner) Run(ctx context.Context, command legacyport
 	if runner.readOnly {
 		runner.observations++
 		if runner.unavailable {
-			return legacyports.CommandResult{}, errors.New("native inventory is unavailable")
+			return legacyports.CommandResult{CleanupComplete: true}, errors.New("native inventory is unavailable")
 		}
 	}
 	return runner.inner.Run(ctx, command)

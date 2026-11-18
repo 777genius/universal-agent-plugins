@@ -137,6 +137,7 @@ class Screen:
                         self.row = min(self.rows - 1, n - 1)
                         self.col = min(self.cols - 1, (nums[1] or 1) - 1) if len(nums) > 1 else 0
                     elif op == 'G': self.col = min(self.cols - 1, n - 1)
+                    elif op == 'Z': self.col = max(0, ((min(self.col, self.cols - 1) - 1) // 8 - n + 1) * 8)
                     elif op == 'K':
                         start, end = (0, self.cols) if nums[0] == 2 else ((0, self.col + 1) if nums[0] == 1 else (self.col, self.cols))
                         self.grid[self.row][start:end] = [' '] * (end - start)
@@ -160,6 +161,7 @@ class Screen:
                 if self.row >= self.rows:
                     self.grid.pop(0); self.grid.append([' '] * self.cols); self.row -= 1
             elif c == '\b': self.col = max(0, self.col - 1)
+            elif c == '\t': self.col = min(self.cols - 1, (self.col // 8 + 1) * 8)
             elif c >= ' ' and c != '\x7f':
                 if self.col >= self.cols:
                     self.col = 0; self.row += 1
@@ -484,7 +486,7 @@ class Session:
             while ready.encode() not in self.raw[offset:] and time.monotonic() < deadline: self.pump()
             check(ready.encode() in self.raw[offset:], 'restoration probe not ready')
             self.send((answer + '\n').encode())
-            while probe.poll() is None and time.monotonic() < deadline: self.pump()
+            while (probe.poll() is None or success.encode() not in self.raw[offset:]) and time.monotonic() < deadline: self.pump()
             self.drain()
             echo = answer.encode() in self.raw[offset:]
             ok = probe.poll() == 0 and success.encode() in self.raw[offset:]

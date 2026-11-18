@@ -4,6 +4,7 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
+	"maps"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -223,7 +224,13 @@ func (c *geminiCompleteCapture) protocol() error {
 		}
 		phases[row.Stage] = q
 	}
-	sessions, probeSessions, probePIDs := map[string]bool{}, map[string]bool{}, map[int64]bool{}
+	sessions, probeSessions, probePIDs := map[string]bool{}, maps.Clone(c.PublicProbeSessions), maps.Clone(c.PublicProbePIDs)
+	if probeSessions == nil {
+		probeSessions = map[string]bool{}
+	}
+	if probePIDs == nil {
+		probePIDs = map[int64]bool{}
+	}
 	nativeIndex, listingIndex := 0, 0
 	for index, command := range c.Rows["cycle-native-commands.jsonl"] {
 		kind, stage, _ := strings.Cut(command.Stage, ":")

@@ -2,13 +2,21 @@ name: Live installer audit (30 plugins + 30 Skills)
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/live-install-audit.py'
+      - 'scripts/published_codex_baseline.py'
+      - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/codex_runtime_audit.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/gemini_runtime_audit.py'
+      - 'scripts/gemini_windows_custody.py'
+      - 'scripts/test_gemini_windows_runtime_audit.py'
       - 'scripts/test_codex_runtime_audit.py'
+      - 'scripts/opencode_bootstrap_audit.py'
+      - 'scripts/test_opencode_bootstrap_audit.py'
       - 'tests/live-install/fixtures.json'
       - 'install/integrationctl/agentplugins/adapters/securityscan/scanner*.go'
       - '.github/workflows/live-install-audit.yml'
@@ -22,12 +30,13 @@ env:
   AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
 
 concurrency:
-  group: live-install-audit-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: live-install-audit-${{ github.event_name }}-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 
 jobs:
   native-pilot:
     name: Real ${{ matrix.target }} / ${{ matrix.kind }} source install (pilot)
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -64,7 +73,9 @@ jobs:
       - name: Refuse ambient native-profile and Git configuration leakage
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+          python3 -m unittest discover -s scripts -p 'test_gemini_windows_runtime_audit.py'
           python3 -m unittest discover -s scripts -p 'test_codex_runtime_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_opencode_bootstrap_audit.py'
       - name: Verify exact empty-stderr LintAI exit diagnostic
         run: go test ./install/integrationctl/agentplugins/adapters/securityscan -run '^TestCommandScannerIncludesNonzeroExitWhenStderrIsEmpty$' -count=1
       - name: Build actual PR CLI with current eligible directory version policy
@@ -108,6 +119,8 @@ jobs:
       - name: Install native Codex sandbox prerequisite
         shell: bash
         run: bash scripts/prepare-codex-linux-sandbox.sh
+      - name: Verify historical observer negative controls
+        run: python3 -m unittest discover -s scripts -p test_published_codex_baseline.py
       - name: Install the actual public npm installer and Codex
         id: published-install
         run: |
@@ -121,8 +134,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/published-proof"
           result=0
           for kind in plugin skill; do
+            # Keep this immutable release's lifecycle distinct from current Ready.
+            acceptance=native
+            if [ "$kind" = skill ]; then acceptance=published-0.1.95-codex-skills; fi
             python3 scripts/live-install-audit.py --cli "$(command -v agentplugins)" \
-              --target codex --kind "$kind" --limit 2 \
+              --target codex --kind "$kind" --limit 2 --acceptance "$acceptance" \
               --report-dir "$RUNNER_TEMP/published-proof" || result=1
           done
           exit "$result"

@@ -393,6 +393,7 @@ jobs:
                .proofs.version == true and
                .proofs.list == true and
                .proofs.doctor_read_only == true and
+               .proofs.authoring_init_validate == true and
                .proofs.synthetic_add_dry_run == true and
                .proofs.warm_cache == true and
                .proofs.warm_cache_without_proof_source == true and

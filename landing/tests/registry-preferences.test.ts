@@ -92,7 +92,7 @@ function card(props = packageProps()) {
   return setup(
     'RegistryPluginCard',
     { defineProps: () => props, withDefaults: (value: unknown) => value },
-    'targets, autoDetect, scope, projectAvailable, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
+    'targets, autoDetect, scope, projectAvailable, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall: selection.toggleInstall, deliverySummary, updateScope',
   );
 }
 
@@ -245,7 +245,7 @@ test('catalog SSR defaults do not populate install preferences; valid manual sel
   const remount = card();
   assert.deepEqual(Array.from(remount.state.targets.value), ['codex']);
   assert.equal(remount.state.autoDetect.value, false);
-  assert.equal(remount.state.installExpanded.value, true);
+  assert.equal(remount.state.installExpanded.value, false);
   assert.equal(remount.state.command.value, command);
   remount.stop();
 });

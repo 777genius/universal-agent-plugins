@@ -199,7 +199,9 @@ jobs:
           printf '%s\n' '#!/bin/sh' 'if [ "$1" = "--version" ]; then echo 0.0.0-public-proof; else exit 1; fi' > "${root}/fixture-bin/cursor"
           chmod 755 "${root}/fixture-bin/cursor"
           # OpenCode preflight verifies native bytes; shell/npm shims are rejected.
-          # This metadata-only fixture cannot execute client runtime actions.
+          # This metadata-only fixture cannot execute client runtime actions. The
+          # released CLI may only read it with --version and the read-only
+          # `debug config` observation; the fixture fails everything else.
           cat > "${root}/opencode-fixture.go" <<'GO'
           package main
           import ("encoding/json"; "fmt"; "os"; "path/filepath")
@@ -268,7 +270,7 @@ jobs:
           jq -e '.outcome == "completed" and (.actions | length) == 1 and .actions[0].action == "unchanged" and (.results | length) == 0' "${root}/locked-repeat.json" >/dev/null
           sha256sum --check "${root}/repeat-before.sha256"
           run_agentplugins deps status --format json > "${root}/saved-status.json"
-          jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified")' "${root}/saved-status.json" >/dev/null
+          jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified" or . == "activation_prepared")' "${root}/saved-status.json" >/dev/null
           # Only the portable agreement crosses into a second empty profile.
           # The released CLI must fetch and verify the same immutable digest.
           mkdir -p "${root}/transfer/state" "${root}/transfer/home" "${root}/transfer/config/opencode" "${root}/transfer/tmp"
@@ -281,7 +283,7 @@ jobs:
             jq -e '.outcome == "completed" and (.results | length) == 1 and .results[0].outcome == "completed"' "${root}/transfer-sync.json" >/dev/null
             cmp "${AGENTPLUGINS_HOME}/uap.lock" "${root}/state/uap.lock"
             run_agentplugins deps status --format json > "${root}/transfer-status.json"
-            jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified")' "${root}/transfer-status.json" >/dev/null
+            jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified" or . == "activation_prepared")' "${root}/transfer-status.json" >/dev/null
           )
           store_entry="${AGENTPLUGINS_HOME}/store/packages/agentplugins-tree-sha256-v1/${package_digest#sha256:}"
           test -s "${store_entry}/metadata.json"
@@ -312,4 +314,4 @@ jobs:
           sha256sum --check "${root}/retained-store.sha256"
           grep -Fx 'public-proof retained data' "${data_root}/release-proof.txt"
           test "$(sha256sum "${root}/fixture-bin/opencode" | cut -d' ' -f1)" = "${opencode_fixture_sha}"
-          jq -s -e 'length > 0 and all(.[]; . == ["--version"])' "${root}/fixture-bin/opencode-invocations.jsonl" >/dev/null
+          jq -s -e 'length > 0 and all(.[]; . == ["--version"] or . == ["debug","config"])' "${root}/fixture-bin/opencode-invocations.jsonl" >/dev/null

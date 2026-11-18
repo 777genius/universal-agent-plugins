@@ -64,7 +64,7 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 		ProjectReadiness   []projectReadinessRecord `json:"project_readiness"`
 		Findings           []doctorFinding          `json:"findings"`
 	}{ReadOnly: true, ToolVersion: normalizedToolVersion(app.Version), SupportedClients: doctorSupportedClients(), Clients: publicClients,
-		InstallationCount: len(publicInstallations(state, false)), OpenOperationCount: len(open)}
+		InstallationCount: len(publicInstallations(state, false)), OpenOperationCount: len(open) + len(unresolvedNativeAttempts(app, state))}
 	selected := (*domain.Installation)(nil)
 	if len(args) == 1 {
 		installation, err := selectInstallation(state, args[0])
@@ -176,6 +176,7 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 			findings = append(findings, doctorFinding{Status: "unknown", Code: "client_detection_failed", ClientID: string(client.ClientID), Message: "client configuration could not be inspected safely", RecoveryAction: "correct the client profile configuration and rerun doctor"})
 		}
 	}
+	unresolved := unresolvedNativeAttempts(app, state)
 	if len(open) > 0 {
 		findings = append(findings, degradedFinding("open_recovery_operations", "operations", "an interrupted managed-directory operation requires recovery", "rerun the intended add, update, or remove command to perform transactional recovery"))
 	}
@@ -202,6 +203,11 @@ func doctorFindings(ctx context.Context, app App, detected []domain.DetectedClie
 			}
 			if !plansWithoutHostPresence(bindingClient) && (!visible || (client.Status != domain.DetectionDetected && client.DetectionError == nil)) {
 				findings = append(findings, scopedFinding("degraded", "client_not_visible", installation, binding.ClientID, "the package is tracked but no current client visibility evidence was detected", "install or launch the client so its CLI, desktop application, or configuration directory is visible, then rerun doctor"))
+			}
+			if unresolved[binding.NativeActivationAttempt] {
+				// Only the confirming repair or removal is suggested for this binding.
+				findings = append(findings, unresolvedNativeAttemptFinding(app, installation, binding))
+				continue
 			}
 			if requiresPersonalMapping(bindingClient) {
 				inventoryCurrent := packageInventoryAppliesToBinding(installation, binding)
@@ -324,6 +330,44 @@ func doctorScopeFlag(binding domain.ClientBinding) string {
 		return " --scope project --project-root \"<PROJECT_ROOT>\""
 	}
 	return ""
+}
+
+// unresolvedNativeAttempts lists client changes whose effect was never
+// confirmed and that neither a persisted intent nor a native transition
+// journal (replayed by the next mutation) can reconcile. Every lifecycle
+// command refuses their bindings. A failed journal read reports them all.
+func unresolvedNativeAttempts(app App, state domain.StateFileV2) map[string]bool {
+	journaled := map[string]bool{}
+	if observer, ok := app.Lifecycle.Kernel.NativeRecovery.(ports.NativeTransitionObserver); ok {
+		pending, _ := observer.Pending()
+		for _, item := range pending {
+			if item.Root != "" {
+				journaled[item.OperationID] = true
+			}
+		}
+	}
+	attempts := map[string]bool{}
+	for _, installation := range state.Installations {
+		for _, binding := range installation.Clients {
+			attempt := binding.NativeActivationAttempt
+			if attempt != "" && binding.PendingNativeIntent == nil && !journaled[attempt] {
+				attempts[attempt] = true
+			}
+		}
+	}
+	return attempts
+}
+
+func unresolvedNativeAttemptFinding(app App, installation domain.Installation, binding domain.ClientBinding) doctorFinding {
+	if app.Lifecycle.ConfirmsInterruptedAttempt(domain.ClientID(binding.ClientID), domain.InstallScope(binding.Scope)) {
+		command := fmt.Sprintf("%s --target %s%s", installation.InstallationID, publicCLITargetName(domain.ClientID(binding.ClientID)), doctorScopeFlag(binding))
+		return scopedFinding("degraded", "native_attempt_unresolved", installation, binding.ClientID,
+			fmt.Sprintf("an interrupted client change (native attempt %s) was not confirmed; add and update refuse this target until repair or remove confirms it", binding.NativeActivationAttempt),
+			fmt.Sprintf("run `agentplugins repair %s --yes` to confirm the change from the client's own plugin state and finish the installation, or `agentplugins remove %s --yes` to finish a removal; --dry-run instead of --yes previews the check, which refuses while a client command of the interrupted run is still running", command, command))
+	}
+	return scopedFinding("degraded", "native_attempt_unresolved", installation, binding.ClientID,
+		fmt.Sprintf("an interrupted client change (native attempt %s) was not confirmed; add, update, repair and remove refuse this target", binding.NativeActivationAttempt),
+		"make sure no client command from the interrupted run is still running, then compare the client's own plugin list with this target; agentplugins cannot confirm this attempt automatically, so keep state-v2.json for manual recovery")
 }
 
 func degradedFinding(code, subject, message, action string) doctorFinding {
