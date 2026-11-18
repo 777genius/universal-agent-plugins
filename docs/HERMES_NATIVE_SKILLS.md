@@ -16,7 +16,15 @@ materializing **Skills and a scoped subset of MCP servers** into the native loca
 Project MCP for a Hermes installed from source is not supported yet. Hermes has
 no project-level `config.yaml`, and UAP never writes a project server into the
 user config, because it would run in every repository. A dedicated Hermes profile
-for source-installed Hermes remains undecided and unimplemented (issue #942).
+for source-installed Hermes remains undecided and unimplemented ([issue #942](https://github.com/777genius/universal-agent-plugins/issues/942)).
+The pinned official source launcher prepares home-indexed dependency state and
+performs update recovery before ordinary configuration handling. Pointing it at
+`<project>/.hermes/uap-session` can provision another dependency environment;
+disabling lazy installs alone does not make startup passive or supply missing
+dependencies. Named native profiles share their owner runtime but live outside
+UAP's current Project-contained ownership contract. UAP preserves the source
+refusal rather than bypassing the standalone manifest or creating synthetic
+package-manager state.
 The verified standalone host instead uses the explicitly confirmed UAP project
 session described above; ordinary Hermes startup does not select that MCP home.
 This host-distribution requirement does not restrict plugin Git sources.
@@ -57,11 +65,26 @@ Only an explicit `add` grants trust, including a repeated `add` that finishes
 an older Skills-only installation. Update, repair and `deps sync` never run the
 trust command, so a `hermes skills untrust` stays in effect; they report that
 UAP did not change trust and how to grant it manually. A saved `add` passes this
-consent only for the dependency closure it installs. Known limitations: a
-repeated saved `add` of an already installed dependency does not finish trust,
-and installer SDK hosts grant only when they set `Request.ProjectTrustConsent`
-for an explicit add and supply `LookupExecutable`; otherwise run
-`hermes skills trust` inside the project.
+consent only for its explicitly selected dependency closure. Installer SDK hosts
+grant only when they set `Request.ProjectTrustConsent` for an explicit add and
+supply `LookupExecutable`; otherwise run `hermes skills trust` inside the project.
+
+[Current source completion work (#1001)](https://github.com/777genius/universal-agent-plugins/pull/1001)
+adds the same disclosed confirmation to fresh/repeated raw `skills add` and the
+Skills picker. Repeating a saved plugin `add` with the single explicit target
+`--target hermes` can finish eligible prepared Project setup through the existing
+reviewed repair. The complete source must be valid and Skills-only for this new
+repeat-repair consent; mixed Skills/MCP or other components cannot qualify via a
+Skills subset, including when repair must recreate an absent projection. This
+paragraph describes source behavior under qualification, not a newer published
+CLI release.
+
+A newly reviewed and confirmed re-add can intentionally restore trust after a
+user revoked it. Ordinary maintenance and automatic retries cannot reuse that
+old confirmation. Preparation, review, recheck, decline and dry run do not invoke
+native trust or write configuration. Installation, binding identity and source
+pins remain unchanged during an exact repeat. Trust still leaves production
+status **Prepared**: native discovery and activation are distinct facts.
 
 UAP never edits `config.yaml` for trust and never uses `hermes config set`,
 because a sticky active profile can make a bare `hermes` read another file. It
@@ -164,3 +187,32 @@ runner OS/architecture, lifecycle exit and observed MCP methods. A queued,
 skipped or failed run is not qualification, and earlier Linux evidence cannot
 qualify a newer candidate head or another operating system. Keep platform and
 release promotion gated on the applicable current-head results.
+
+### Source completion acceptance
+
+The existing `hermes-native-e2e.yml` source-only Linux, macOS and Windows lanes
+run the external current-source UAP lifecycle first. They then execute two
+bounded public-Cobra journeys in a compiled CLI test executable: raw HTTPS
+Skills fresh/repeat add, and saved Skills-only TLS Git plugin repeated add.
+Acquisition and security use the existing inert local fixtures. Client detection,
+version probing, native process supervision, installer composition, native trust
+commands and installed Hermes runtime are real. The in-process Cobra tests do
+not qualify a separately released executable.
+
+Each journey checks native untrust, maintenance without regrant, newly confirmed
+re-add, unchanged source pins/installation/binding identity, selected Skill path
+and content from `skill_view(preprocess=False)`, retained foreign User/Project
+content and trust persistence after removal. Explicit test-owned native untrust
+cleans up after that persistence assertion; it is not installer rollback.
+Original streams, source/tree and executable hashes, vendor pin, both scenario
+results and process settlement are retained. A skipped or empty test selection
+cannot produce a successful native receipt. These new checks are disabled for
+release-tag calls, whose existing released-binary proof remains separate.
+
+This source acceptance is pending execution on the final PR source; no new native
+PASS is claimed here. The local environment lacks the proc children interface
+required by the production process supervisor and refuses before child startup.
+Native acceptance therefore requires actual GitHub-hosted jobs. No hosted-state
+spoofing or unsupervised fallback is used. Source-installed Project MCP, native
+Ready promotion, modern `hermes chat` model execution and live-provider
+authentication remain outside this proof.
