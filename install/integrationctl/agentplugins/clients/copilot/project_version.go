@@ -33,7 +33,7 @@ func (*Adapter) RequiresDisposableVersionProbeProfile() bool { return true }
 func (*Adapter) VersionProbeEnvironment(root string) ([]string, error) {
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root || filepath.Dir(root) == root ||
 		strings.TrimSpace(root) != root || strings.ContainsAny(root, "\x00\r\n") {
-		return nil, fmt.Errorf("Copilot version probe requires a canonical absolute profile")
+		return nil, fmt.Errorf("copilot version probe requires a canonical absolute profile")
 	}
 	return []string{"COPILOT_HOME=" + root}, nil
 }
