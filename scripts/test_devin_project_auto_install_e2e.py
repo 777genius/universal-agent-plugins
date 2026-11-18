@@ -1,7 +1,7 @@
 """Closed, inert contracts for the separate pinned Devin Project installation proof."""
 import json
-import re
 import unittest
+from unittest.mock import patch
 
 import devin_project_auto_install_e2e as subject
 
@@ -26,6 +26,20 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
             with self.subTest(inventory=inventory):
                 with self.assertRaises((RuntimeError, ValueError)):
                     subject.available_skill(inventory, subject.SKILL)
+
+    def test_all_native_commands_use_bounded_supervised_capture(self):
+        with patch.object(subject, "run_probe", return_value=(
+                {"error": None, "exit": 0}, b"observed\\n", b"")) as probe:
+            self.assertEqual(subject.command(["devin", "mcp", "list"], "/tmp", {}, timeout=11), "observed\\n")
+            self.assertTrue(probe.call_args.kwargs["memory_only"])
+            self.assertEqual(probe.call_args.kwargs["limit"], 1 << 20)
+            self.assertEqual(probe.call_args.kwargs["timeout"], 11)
+        for error, exit_code in (("deadline", None), (None, 1)):
+            with self.subTest(error=error, exit_code=exit_code):
+                with patch.object(subject, "run_probe", return_value=(
+                        {"error": error, "exit": exit_code}, b"", b"private")):
+                    with self.assertRaises(RuntimeError):
+                        subject.command(["devin", "--version"], "/tmp", {})
 
     def test_mcp_inventory_does_not_accept_same_name_prefix_or_suffix(self):
         self.assertTrue(subject.available_mcp(subject.STDIO + "\n", subject.STDIO))
