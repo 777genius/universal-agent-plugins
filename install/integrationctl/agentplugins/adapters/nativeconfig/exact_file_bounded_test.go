@@ -128,3 +128,38 @@ func TestBoundedExactReadChecksCustomResultAndClonesBytes(t *testing.T) {
 		t.Fatalf("custom bounded reader silently created disk data: %v", err)
 	}
 }
+
+
+func TestBoundedExactWriterCapturesOnlyUnderLimitAndReleasesOnError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.local.json")
+	body := bytes.Repeat([]byte("x"), 1025)
+	if err := os.WriteFile(path, body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	kernel := New()
+	if _, err := kernel.BeginExactFileBounded(path, 1024); !errors.Is(err, atomicfile.ErrFileTooLarge) {
+		t.Fatalf("locked bounded writer accepted oversized settings: %v", err)
+	}
+	if current, err := os.ReadFile(path); err != nil || !bytes.Equal(current, body) {
+		t.Fatalf("bounded refusal changed settings: %v", err)
+	}
+	file, err := kernel.BeginExactFileBounded(path, int64(len(body)))
+	if err != nil {
+		t.Fatal("failed writer lease was not released:", err)
+	}
+	if !bytes.Equal(file.Original().Body, body) {
+		t.Fatal("locked bounded snapshot changed original bytes")
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestBoundedExactWriterCannotFallBackToUnboundedBackend(t *testing.T) {
+	files := &unboundedExactTestIO{}
+	path := filepath.Join(t.TempDir(), "virtual-settings.local.json")
+	_, err := NewWithFileIO(files).BeginExactFileBounded(path, 1<<20)
+	if !errors.Is(err, ErrBoundedReadUnavailable) || files.calls != 0 {
+		t.Fatalf("bounded writer used unbounded adapter: calls=%d err=%v", files.calls, err)
+	}
+}
