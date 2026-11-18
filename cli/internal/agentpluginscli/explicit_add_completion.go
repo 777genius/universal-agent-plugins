@@ -103,6 +103,9 @@ func skillsRetryTrustAuthorityCovered(original, next *PreparedSkillsBatch) bool 
 		if next.app.scope() != domain.ScopeProject || !domain.ClientTraitsFor(id).SavedProjectRepairOnAdd {
 			continue
 		}
+		if !skillsRetryDisclosureCovered(original.Warnings(), next.Warnings()) {
+			return false
+		}
 		before, found := original.request.detected[id]
 		after, selected := next.request.detected[id]
 		if !found || !selected || original.app.scope() != domain.ScopeProject || original.app.ProjectRoot != next.app.ProjectRoot ||
