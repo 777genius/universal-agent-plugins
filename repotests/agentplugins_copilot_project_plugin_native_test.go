@@ -119,9 +119,9 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 	skills := f.command(t, "whole-plugin-skills", f.base.Project, f.env(),
 		[]string{f.client, "skill", "list", "--json"}, 30*time.Second)
 	var skillRows []struct {
-		Name string `json:"name"`
-		Path string `json:"path"`
-		Enabled bool `json:"enabled"`
+		Name    string `json:"name"`
+		Path    string `json:"path"`
+		Enabled bool   `json:"enabled"`
 	}
 	if err := json.Unmarshal(skills.Stdout, &skillRows); err != nil {
 		t.Fatalf("real Copilot skill list is not structured native discovery: %v", err)
@@ -163,9 +163,9 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 func copilotNativePluginListed(t *testing.T, body []byte, name, marketplace string) bool {
 	t.Helper()
 	var rows []struct {
-		Name string `json:"name"`
+		Name        string `json:"name"`
 		Marketplace string `json:"marketplace"`
-		Enabled bool `json:"enabled"`
+		Enabled     bool   `json:"enabled"`
 	}
 	if err := json.Unmarshal(body, &rows); err != nil {
 		t.Fatalf("Copilot native plugin listing is not a valid JSON array: %v", err)
