@@ -64,14 +64,12 @@ type ComponentDecision struct {
 
 type DeliveryPlan struct {
 	requiresNativeProjectionRefresh bool
+	nativePluginRegistration bool
 
 	TargetContext              TargetContext           `json:"-"`
 	profileAuthority           *ProfileAuthority       `json:"-"`
 	profileNamespace           string                  `json:"-"`
 	PreviousNativeObjects      []NativeObjectOwnership `json:"-"`
-	// NativePluginRegistration is a transient Copilot project projection choice.
-	// The persisted native-object kind records ownership for later removal.
-	NativePluginRegistration bool `json:"-"`
 	LocalEntryObservation      *LocalEntryObservation  `json:"-"`
 	SelectedDelivery           SelectedDelivery        `json:"-"`
 	OpenCodeHost               OpenCodeHostAuthority   `json:"-"`
@@ -116,6 +114,11 @@ type DeliveryPlan struct {
 // DeliveryTarget contains deterministic operational paths computed from the
 // configured client roots. Persisted state must be checked against this value
 // before any destructive operation.
+// SetNativePluginRegistration selects transient native project registration without
+// changing public DTOs or the planner's recorded golden snapshots.
+func (p *DeliveryPlan) SetNativePluginRegistration(yes bool) { p.nativePluginRegistration = yes }
+func (p DeliveryPlan) HasNativePluginRegistration() bool { return p.nativePluginRegistration }
+
 type DeliveryTarget struct {
 	TargetContext      TargetContext     `json:"-"`
 	NativeRegistryRoot string            `json:"-"`
