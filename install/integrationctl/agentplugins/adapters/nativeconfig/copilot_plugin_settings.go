@@ -166,7 +166,7 @@ func PatchCopilotPluginSettings(body []byte, r CopilotPluginRegistration, owned,
 	// Match the native file reader's exact 1 MiB bound before any CAS.
 	// A valid near-limit preimage must never become an unreadable commit.
 	if len(next) > 1<<20 {
-		return nil, false, fmt.Errorf("Copilot project settings would exceed the 1 MiB inspection limit")
+		return nil, false, fmt.Errorf("copilot project settings would exceed the 1 MiB inspection limit")
 	}
 	return next, true, nil
 }
