@@ -44,21 +44,51 @@ func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, 
 		// without targeted probing must never execute unrelated clients.
 		return nil
 	}
-	probed, err := targeted.DetectTargetsWithVersionProbe(ctx, requested)
-	if err != nil {
-		return fmt.Errorf("targets %v version detection failed; no target was changed: %w", requested, err)
+	// Preserve the mandatory selection as one atomic probe. Optional
+	// client capabilities are queried separately so their failure never
+	// suppresses a mandatory host-version requirement.
+	mandatory := make([]domain.ClientID, 0, len(requested))
+	optional := make([]domain.ClientID, 0, 1)
+	for _, id := range requested {
+		probe, ok := clients.As[clients.BestEffortProjectVersionProbe](app.ClientRegistry, id)
+		if app.scope() == domain.ScopeProject && ok && probe.ProjectVersionProbeBestEffort() {
+			optional = append(optional, id)
+		} else {
+			mandatory = append(mandatory, id)
+		}
 	}
 	versions := make(map[domain.ClientID]string, len(requested))
-	for _, id := range requested {
-		version, err := selectedProjectVersion(detected[id], probed)
+	if len(mandatory) > 0 {
+		probed, err := targeted.DetectTargetsWithVersionProbe(ctx, mandatory)
 		if err != nil {
+			return fmt.Errorf("targets %v version detection failed; no target was changed: %w", mandatory, err)
+		}
+		for _, id := range mandatory {
+			version, err := selectedProjectVersion(detected[id], probed)
+			if err != nil {
+				return err
+			}
+			versions[id] = version
+		}
+	}
+	for _, id := range optional {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-		versions[id] = version
+		probed, err := targeted.DetectTargetsWithVersionProbe(ctx, []domain.ClientID{id})
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			continue
+		}
+		if version, err := selectedProjectVersion(detected[id], probed); err == nil {
+			versions[id] = version
+		}
 	}
-	for _, id := range requested {
+	for id, version := range versions {
 		client := detected[id]
-		client.Version = versions[id]
+		client.Version = version
 		detected[id] = client
 	}
 	return nil
