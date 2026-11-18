@@ -57,6 +57,15 @@ func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(staging, "mcp.json")); !os.IsNotExist(err) {
 		t.Fatalf("native registration duplicated MCP settings: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(staging, "plugin.json"), []byte("{\"name\":\"review\"}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(request.Plan.ActivePath), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(staging, request.Plan.ActivePath); err != nil {
+		t.Fatal("publish staged Agent Plugin:", err)
+	}
 	outcome, err := New().Activate(t.Context(), env, request)
 	if err != nil || outcome.Verification != domain.VerificationInstalled || outcome.Activation != domain.ActivationPrepared {
 		t.Fatalf("Copilot project automatic registration: %+v %v", outcome, err)
