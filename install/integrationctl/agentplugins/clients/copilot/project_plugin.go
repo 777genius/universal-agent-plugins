@@ -387,8 +387,27 @@ func copilotMutateProjectPlugin(ctx context.Context, kernel nativeconfig.Kernel,
 	return nil
 }
 
+func copilotPluginNativeObjects(objects []domain.NativeObjectOwnership) []domain.NativeObjectOwnership {
+	selected := make([]domain.NativeObjectOwnership, 0, 1)
+	for _, object := range objects {
+		if object.Kind == copilotProjectPluginKind {
+			selected = append(selected, object)
+		}
+	}
+	return selected
+}
+
 func activateCopilotProjectPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest, root string) (domain.ActivationOutcome, error) {
-	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
+	// An intact saved registration needs verification, not a second native
+	// mutation. Reuse the same lifecycle policy as Cursor and OpenCode.
+	projected := request
+	previous, desired := copilotPluginNativeObjects(request.PreviousNativeObjects), copilotPluginNativeObjects(request.Delivery.NativeObjects)
+	if shared.IntactNativeReplacement(request, previous, desired, func() error {
+		return copilotVerifyWholePlugin(env, request)
+	}) {
+		projected.VerifyOnly = true
+	}
+	outcome, err := shared.CompleteNativeConfigActivation(ctx, projected, shared.NativeConfigActivation{
 		Automatic: request.Plan.InstallIntent == domain.InstallIntentAutomatic && (request.Plan.NativePluginRegistration || copilotHasProjectPlugin(request.PreviousNativeObjects) || copilotHasProjectPlugin(request.Delivery.NativeObjects)),
 		UnavailableAction: "select an admitted Agent Plugins 1.0 package for native project registration",
 		RepairAction: "repair the exact UAP-owned Copilot project marketplace registration",
