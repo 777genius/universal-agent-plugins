@@ -237,7 +237,6 @@ func TestGrokUserRemovalRequiresPositiveNativeReadback(t *testing.T) {
 	}
 }
 
-
 // --external-uninstalled is an attestation for an unavailable client, not a
 // bypass of a runnable Grok CLI's live registration. Never remove managed
 // bytes while an existing registration could still refer to those bytes.
