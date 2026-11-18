@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	_ clients.ProjectVersionRequirement     = (*Adapter)(nil)
+
 	_ clients.VersionProbeEnvironment       = (*Adapter)(nil)
 	_ clients.DisposableVersionProbeProfile = (*Adapter)(nil)
 )
@@ -21,6 +21,10 @@ var (
 func (*Adapter) RequiresProjectVersion(client domain.DetectedClient) bool {
 	return client.ClientID == domain.ClientCopilot
 }
+
+// Probe the genuine CLI only when available. Legacy Copilot project files
+// continue to work if version discovery fails or is unrecognized.
+func (*Adapter) ProjectVersionProbeBestEffort() bool { return true }
 
 // --version runs only against a disposable profile, not the selected user's
 // profile or ambient COPILOT_HOME, and cannot confer native registry authority.
