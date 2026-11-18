@@ -109,3 +109,28 @@ func TestCopilotPluginSettingsKeepsIndependentMarketplaces(t *testing.T) {
 		t.Fatal("removed package retained enabled key")
 	}
 }
+
+
+func TestCopilotPluginSettingsRestoresOnlyCompletelyAbsentOwnedPair(t *testing.T) {
+	reg := CopilotPluginRegistration{Marketplace: "agentplugins-abc123", Plugin: "review", Directory: ".uap/managed/clients/copilot/fixture"}
+	foreign := []byte("// other data stays\n{\"enabledPlugins\":{\"foreign@other\":false},\"other\":17}\n")
+	if unchanged, changed, err := PatchCopilotPluginSettings(foreign, reg, true, true); err != nil || changed || !bytes.Equal(foreign, unchanged) {
+		t.Fatalf("removal of already-absent owned pair changed foreign bytes: %v", err)
+	}
+	restored, changed, err := PatchCopilotPluginSettings(foreign, reg, true, false)
+	if err != nil || !changed {
+		t.Fatalf("owned missing pair was not restored: %v", err)
+	}
+	if present, exact, err := InspectCopilotPluginSettings(restored, reg); err != nil || !present || !exact {
+		t.Fatalf("restored pair is not exact: %v %v %v", present, exact, err)
+	}
+	if !bytes.Contains(restored, []byte("// other data stays")) || !bytes.Contains(restored, []byte("foreign@other")) {
+		t.Fatal("restoration damaged foreign configuration")
+	}
+	if _, _, err := PatchCopilotPluginSettings(foreign, reg, false, false); err != nil {
+		t.Fatalf("fresh unowned namespace should be installable: %v", err)
+	}
+	if _, _, err := PatchCopilotPluginSettings([]byte("{\"enabledPlugins\":{\"review@agentplugins-abc123\":false}}"), reg, true, false); !errors.Is(err, ErrNotOwned) {
+		t.Fatalf("partial disabled pair was adopted: %v", err)
+	}
+}
