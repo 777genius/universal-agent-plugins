@@ -167,7 +167,16 @@ func TestCopilotWholePluginEligibilityKeepsLegacyProjectComponents(t *testing.T)
 	if copilotWholePluginEligible(in, plan) {
 		t.Fatal("legacy component registration migrated without ownership transaction")
 	}
+	in.PreviousNativeObjects = []domain.NativeObjectOwnership{{Kind: copilotProjectPluginKind}}
+	in.Client.Version = ""
+	if !copilotWholePluginEligible(in, plan) {
+		t.Fatal("missing optional Copilot version lost existing whole-plugin registration")
+	}
 	in.PreviousNativeObjects = nil
+	if copilotWholePluginEligible(in, plan) {
+		t.Fatal("missing Copilot version enabled a fresh whole-plugin install")
+	}
+	in.Client.Version = "1.0.82"
 	plan.Components = append(plan.Components, domain.ComponentDecision{Kind: domain.ComponentMCPServer, Name: "blocked", Support: domain.SupportUnsupported})
 	if copilotWholePluginEligible(in, plan) {
 		t.Fatal("whole plugin bypassed unsupported component admission")
