@@ -55,15 +55,14 @@ func copilotSupportsProjectPlugin(version string) bool {
 		values[i] = value
 	}
 	major, minor, patch := values[0], values[1], values[2]
-	if major > 1 || major == 1 && (minor > 0 || patch > 81) {
-		return true
+	// A higher-looking prerelease is not evidence of this native capability.
+	// Admit only the measured 1.0.81-N build family as an explicit exception.
+	if prerelease {
+		if major != 1 || minor != 0 || patch != 81 {
+			return false
+		}
+		build, err := strconv.Atoi(suffix)
+		return err == nil && build >= 8
 	}
-	if major != 1 || minor != 0 || patch != 81 {
-		return false
-	}
-	if !prerelease {
-		return true
-	}
-	build, err := strconv.Atoi(suffix)
-	return err == nil && build >= 8
+	return major > 1 || major == 1 && (minor > 0 || patch >= 81)
 }
