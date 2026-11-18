@@ -136,7 +136,7 @@ class ReadonlyFixtureTests(unittest.TestCase):
             self.assertEqual(evidence["delegated_parent_mounts"], dict(qualification=False,
                 producer="actual delegated Python parent", private=True, mount_count=1, unbindable_count=0))
             self.assertEqual(len(calls), 5)
-            self.assertIn("-test.run=^TestProjectGrokNativeSavedEnablementLifecycle$", calls[4])
+            self.assertIn("-test.run=^Test(ProjectGrokNativeSavedEnablementLifecycle|GrokNativeUserSignedRepeatIsFreshAndReadOnly)$", calls[4])
             self.assertTrue(evidence["public_native_saved_lifecycle_passed"])
             self.assertEqual(status, 1)
             self.assertFalse(evidence["passed"])
