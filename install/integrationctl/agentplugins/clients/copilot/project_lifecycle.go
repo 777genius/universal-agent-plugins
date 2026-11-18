@@ -108,7 +108,7 @@ func deactivateCopilotProject(ctx context.Context, env clients.Env, request doma
 		return outcome, err
 	}
 	if copilotHasProjectPlugin(request.NativeObjects) {
-		if err := copilotValidateProjectPluginObjects(root, request.PhysicalArtifactID, request.NativeObjects); err != nil {
+		if err := copilotValidateProjectPluginName(root, request.PhysicalArtifactID, request.DeclaredName, request.NativeObjects); err != nil {
 			return outcome, err
 		}
 		if !request.Confirmed {
