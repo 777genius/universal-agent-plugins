@@ -3,6 +3,12 @@ import { clientSupportRows, clientSupportCapabilityKeys } from '~/data/clientSup
 import { clientLandingById } from '~/data/clients';
 
 const { asset } = useSite();
+const stickyScroll = ref<HTMLElement>();
+const columnWidths = ['24%', '14%', '14%', '12%', '36%'];
+function syncHeader(event: Event) {
+  if (stickyScroll.value)
+    stickyScroll.value.scrollLeft = (event.currentTarget as HTMLElement).scrollLeft;
+}
 const { t, locale } = useI18n();
 const capabilityLabel = (value: string) => {
   const key = clientSupportCapabilityKeys[value as keyof typeof clientSupportCapabilityKeys];
@@ -32,57 +38,91 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
       <p>{{ t('shell.clientSupport.description') }}</p>
     </header>
 
-    <div
-      class="registry-client-support__scroll"
-      role="region"
-      :aria-label="t('shell.clientSupport.tableLabel')"
-      tabindex="0"
-    >
-      <table>
-        <caption class="sr-only">{{ t('shell.clientSupport.tableCaption') }}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{{ t('shell.clientSupport.columns.agent') }}</th>
-            <th scope="col">{{ t('shell.clientSupport.columns.user') }}</th>
-            <th scope="col">{{ t('shell.clientSupport.columns.project') }}</th>
-            <th scope="col">{{ t('shell.clientSupport.columns.setup') }}</th>
-            <th scope="col">{{ t('shell.clientSupport.columns.nextStep') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="client in clients" :key="client.name">
-            <th scope="row">
-              <span class="registry-client-support__agent">
-                <img
-                  :src="asset(`client-icons/${client.icon}`)"
-                  :class="{ 'registry-client-support__icon--contrast': monochromeIcons.has(client.id) }"
-                  class="registry-client-support__icon"
-                  alt=""
-                  aria-hidden="true"
-                  width="24"
-                  height="24"
-                  loading="lazy"
-                  decoding="async"
-                >
-                <span>{{ client.name }}</span>
-              </span>
-            </th>
-            <td>{{ capabilityLabel(client.user) }}</td>
-            <td :class="{ 'registry-client-support__unavailable': client.project === 'Not supported' }">
-              {{ capabilityLabel(client.project) }}
-            </td>
-            <td>
-              <span
-                class="registry-client-support__setup"
-                :class="`registry-client-support__setup--${client.setup.toLowerCase()}`"
+    <div class="registry-client-support__table">
+      <div class="registry-client-support__sticky">
+        <div ref="stickyScroll" class="registry-client-support__sticky-scroll" aria-hidden="true">
+          <table>
+            <colgroup>
+              <col v-for="width in columnWidths" :key="width" :style="{ width }" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>{{ t('shell.clientSupport.columns.agent') }}</th>
+                <th>{{ t('shell.clientSupport.columns.user') }}</th>
+                <th>{{ t('shell.clientSupport.columns.project') }}</th>
+                <th>{{ t('shell.clientSupport.columns.setup') }}</th>
+                <th>{{ t('shell.clientSupport.columns.nextStep') }}</th>
+              </tr>
+            </thead>
+          </table>
+        </div>
+      </div>
+      <div
+        class="registry-client-support__scroll"
+        role="region"
+        :aria-label="t('shell.clientSupport.tableLabel')"
+        tabindex="0"
+        @scroll="syncHeader"
+      >
+        <table>
+          <colgroup>
+            <col v-for="width in columnWidths" :key="width" :style="{ width }" />
+          </colgroup>
+          <caption class="sr-only">
+            {{
+              t('shell.clientSupport.tableCaption')
+            }}
+          </caption>
+          <thead class="sr-only">
+            <tr>
+              <th scope="col">{{ t('shell.clientSupport.columns.agent') }}</th>
+              <th scope="col">{{ t('shell.clientSupport.columns.user') }}</th>
+              <th scope="col">{{ t('shell.clientSupport.columns.project') }}</th>
+              <th scope="col">{{ t('shell.clientSupport.columns.setup') }}</th>
+              <th scope="col">{{ t('shell.clientSupport.columns.nextStep') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="client in clients" :key="client.name">
+              <th scope="row">
+                <span class="registry-client-support__agent">
+                  <img
+                    :src="asset(`client-icons/${client.icon}`)"
+                    :class="{
+                      'registry-client-support__icon--contrast': monochromeIcons.has(client.id),
+                    }"
+                    class="registry-client-support__icon"
+                    alt=""
+                    aria-hidden="true"
+                    width="24"
+                    height="24"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span>{{ client.name }}</span>
+                </span>
+              </th>
+              <td>{{ capabilityLabel(client.user) }}</td>
+              <td
+                :class="{
+                  'registry-client-support__unavailable': client.project === 'Not supported',
+                }"
               >
-                {{ t(`shell.clientSupport.setup.${client.setup.toLowerCase()}`) }}
-              </span>
-            </td>
-            <td>{{ t(`shell.clientSupport.nextSteps.${client.id}`) }}</td>
-          </tr>
-        </tbody>
-      </table>
+                {{ capabilityLabel(client.project) }}
+              </td>
+              <td>
+                <span
+                  class="registry-client-support__setup"
+                  :class="`registry-client-support__setup--${client.setup.toLowerCase()}`"
+                >
+                  {{ t(`shell.clientSupport.setup.${client.setup.toLowerCase()}`) }}
+                </span>
+              </td>
+              <td>{{ t(`shell.clientSupport.nextSteps.${client.id}`) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
     <p class="registry-client-support__scroll-hint">{{ t('shell.clientSupport.scrollHint') }}</p>
     <p class="registry-client-support__note">
@@ -91,7 +131,8 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
         href="https://github.com/777genius/universal-agent-plugins/blob/main/docs/PROJECT_CLIENT_SUPPORT.md"
         target="_blank"
         rel="noopener noreferrer"
-      >{{ t('shell.clientSupport.details') }}</a>.
+        >{{ t('shell.clientSupport.details') }}</a
+      >.
     </p>
   </section>
 </template>
@@ -108,11 +149,23 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
     font-size: clamp(1.8rem, 3.4vw, 2.8rem);
   }
 
+  &__table {
+    border: 1px solid var(--line-strong);
+    border-radius: 16px;
+  }
+  &__sticky {
+    position: sticky;
+    top: var(--app-header-height, 64px);
+    z-index: 10;
+    background: var(--surface-solid);
+  }
+  &__sticky-scroll {
+    overflow: hidden;
+  }
   &__scroll {
     max-width: 100%;
     overflow-x: auto;
-    border: 1px solid var(--line-strong);
-    border-radius: 16px;
+
     background: var(--surface);
     box-shadow: 0 14px 38px color-mix(in srgb, var(--text) 4%, transparent);
     overscroll-behavior-inline: contain;
@@ -121,6 +174,7 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
   table {
     width: 100%;
     min-width: 900px;
+    table-layout: fixed;
     border-collapse: collapse;
     text-align: start;
     line-height: 1.45;
@@ -241,7 +295,7 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
     padding-block: 48px 56px;
 
     table {
-      min-width: 880px;
+      min-width: 900px;
     }
     &__scroll-hint {
       display: block;

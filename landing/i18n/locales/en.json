@@ -532,7 +532,7 @@
       "terminal": "In your terminal",
       "refreshNotice": "Plugin data is refreshing. Try again shortly.",
       "otherMethods": "Other installation methods",
-      "supportedFormats": "Supported formats",
+      "supportedFormats": "Standards",
       "watchDemo": "Watch demo",
       "demoVideoTitle": "Universal Agent Plugins install demo",
       "supportedClients": "Supported clients",
@@ -606,6 +606,7 @@
       "empty": "No matching categories"
     },
     "multi": {
+      "search": "Search agents…",
       "agents": "{count} agent | {count} agents",
       "selected": "{count} selected",
       "auto": "Auto-detect",

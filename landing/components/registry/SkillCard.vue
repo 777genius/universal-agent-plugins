@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { mdiGithub } from '@mdi/js';
 import type { SkillListing } from '~/types/skillsCatalog';
 import type { InstallScope } from '~/types/registry';
 import { skillClients } from '~/data/skillClients';
@@ -103,9 +104,16 @@ function updateScope(value: InstallScope) {
           <span v-else>{{ skill.title }}</span>
         </h3>
         <p class="plugin-card__source-label">
-          <a v-if="repositoryUrl" :href="repositoryUrl" target="_blank" rel="noreferrer">{{
-            repositoryName
-          }}</a>
+          <a
+            v-if="repositoryUrl"
+            :href="repositoryUrl"
+            target="_blank"
+            rel="noreferrer"
+            class="skill-card__repository"
+            ><svg viewBox="0 0 24 24" aria-hidden="true">
+              <path :d="mdiGithub" fill="currentColor" /></svg
+            >{{ repositoryName }}</a
+          >
           <a
             v-else-if="publisherUrl"
             :href="publisherUrl"
@@ -135,13 +143,6 @@ function updateScope(value: InstallScope) {
         t(`registryUi.skills.metric.${skill.metrics.window}`, { count: n(skill.metrics.installs) })
       }}
     </p>
-    <div v-if="repositoryUrl || publisherUrl" class="skill-card__links">
-      <a :href="repositoryUrl || publisherUrl" target="_blank" rel="noreferrer noopener"
-        >{{
-          t(repositoryUrl ? 'registryUi.skills.githubSource' : 'registryUi.skills.publisherSource')
-        }}<span aria-hidden="true"> ↗</span></a
-      >
-    </div>
     <div class="plugin-card__bottom">
       <InstallDialog
         v-if="command"
@@ -178,18 +179,15 @@ function updateScope(value: InstallScope) {
               @update:model-value="updateTargets"
               @update:auto-selected="updateTerminal"
             />
-            <CommandSnippet
-              :command="command"
-              :label="t('registryUi.card.add')"
-              kind="add"
-              compact
-            />
           </div>
           <p v-if="needsManualSelection" class="plugin-card__unavailable">
             {{ t('registryUi.skills.manualSkillSelection') }}
           </p>
-          <NativeCliCheckbox />
         </div>
+        <template #footer>
+          <CommandSnippet :command="command" :label="t('registryUi.card.add')" kind="add" compact />
+          <NativeCliCheckbox />
+        </template>
       </InstallDialog>
       <p v-else class="plugin-card__unavailable">
         {{

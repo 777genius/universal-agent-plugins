@@ -515,7 +515,7 @@
       "terminal": "В терминале",
       "refreshNotice": "Данные плагина обновляются. Повторите попытку чуть позже.",
       "otherMethods": "Другие способы установки",
-      "supportedFormats": "Поддерживаемые форматы",
+      "supportedFormats": "Стандарты",
       "watchDemo": "Смотреть демо",
       "demoVideoTitle": "Демонстрация установки Universal Agent Plugins",
       "supportedClients": "Поддерживаемые клиенты",
@@ -589,6 +589,7 @@
       "empty": "Нет подходящих категорий"
     },
     "multi": {
+      "search": "Поиск агентов…",
       "agents": "{count} агент | {count} агента | {count} агентов",
       "selected": "{count} выбрано",
       "auto": "Определить автоматически",

@@ -378,7 +378,7 @@
       "terminal": "في الطرفية لديك",
       "refreshNotice": "جارٍ تحديث بيانات المكونات الإضافية. حاول مرة أخرى بعد قليل.",
       "otherMethods": "طرق تثبيت أخرى",
-      "supportedFormats": "التنسيقات المدعومة",
+      "supportedFormats": "المعايير",
       "watchDemo": "شاهد العرض التوضيحي",
       "demoVideoTitle": "عرض توضيحي لتثبيت Universal Agent Plugins",
       "supportedClients": "العملاء المدعومون",
@@ -589,6 +589,7 @@
       "empty": "لا توجد فئات مطابقة"
     },
     "multi": {
+      "search": "ابحث عن الوكلاء…",
       "agents": "{count} وكيل | {count} وكلاء",
       "selected": "{count} محدد",
       "auto": "اكتشاف تلقائي",

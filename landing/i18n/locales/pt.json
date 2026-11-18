@@ -378,7 +378,7 @@
       "terminal": "No seu terminal",
       "refreshNotice": "Os dados de plugins estão sendo atualizados. Tente novamente em instantes.",
       "otherMethods": "Outros métodos de instalação",
-      "supportedFormats": "Formatos suportados",
+      "supportedFormats": "Padrões",
       "watchDemo": "Ver demonstração",
       "demoVideoTitle": "Demonstração de instalação do Universal Agent Plugins",
       "supportedClients": "Clientes compatíveis",
@@ -589,6 +589,7 @@
       "empty": "Nenhuma categoria correspondente"
     },
     "multi": {
+      "search": "Buscar agentes…",
       "agents": "{count} agente | {count} agentes",
       "selected": "Selecionados: {count}",
       "auto": "Detectar automaticamente",

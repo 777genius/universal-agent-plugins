@@ -515,7 +515,7 @@
       "terminal": "在您的终端中",
       "refreshNotice": "插件数据正在更新，请稍后重试。",
       "otherMethods": "其他安装方式",
-      "supportedFormats": "支持的格式",
+      "supportedFormats": "标准",
       "watchDemo": "观看演示",
       "demoVideoTitle": "Universal Agent Plugins 安装演示",
       "supportedClients": "支持的客户端",
@@ -589,6 +589,7 @@
       "empty": "没有匹配的类别"
     },
     "multi": {
+      "search": "搜索代理…",
       "agents": "{count} 个客户端 | {count} 个客户端",
       "selected": "已选 {count} 项",
       "auto": "自动检测",

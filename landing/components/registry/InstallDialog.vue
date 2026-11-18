@@ -43,6 +43,7 @@ const { t } = useI18n();
           }}</DialogDescription>
           <slot />
         </div>
+        <footer v-if="$slots.footer" class="install-dialog__footer"><slot name="footer" /></footer>
       </DialogContent>
     </DialogPortal>
   </DialogRoot>
@@ -81,12 +82,14 @@ const { t } = useI18n();
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 14px;
-  padding: 22px 26px;
+  gap: 10px;
+  padding: 10px 18px;
   border-bottom: 1px solid var(--line);
 }
 .install-dialog__header > img {
   flex-shrink: 0;
+  width: 26px;
+  height: 26px;
   object-fit: contain;
 }
 .install-dialog__identity {
@@ -95,25 +98,25 @@ const { t } = useI18n();
   overflow-wrap: anywhere;
 }
 .install-dialog__title {
-  margin: 0 0 5px;
-  font-size: clamp(1.15rem, 3vw, 1.5rem);
+  margin: 0 0 2px;
+  font-size: 1rem;
   line-height: 1.3;
 }
 .install-dialog__identity :is(a, span) {
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.72rem;
 }
 .install-dialog__close {
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface-raised);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text);
-  font-size: 1.7rem;
+  font-size: 1.4rem;
   cursor: pointer;
 }
 .install-dialog__close:focus-visible {
@@ -125,6 +128,28 @@ const { t } = useI18n();
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 22px 26px 26px;
+}
+.install-dialog__footer {
+  flex-shrink: 0;
+  padding: 12px 26px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-solid);
+}
+.install-dialog__footer :deep(.native-cli-checkbox) {
+  margin-top: 8px;
+  gap: 7px;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+.install-dialog__footer :deep(.native-cli-checkbox input) {
+  width: 15px;
+  height: 15px;
+}
+.install-dialog__footer :deep(.command-snippet pre) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 22dvh;
+  overflow-y: auto;
 }
 .install-dialog__description {
   margin: 0 0 20px;
@@ -165,8 +190,11 @@ const { t } = useI18n();
     border-radius: 16px;
   }
   .install-dialog__header {
-    padding: 14px;
-    gap: 10px;
+    padding: 9px 12px;
+    gap: 9px;
+  }
+  .install-dialog__footer {
+    padding: 10px 14px;
   }
   .install-dialog__body {
     padding: 18px 14px;

@@ -172,6 +172,7 @@
   width: 100%;
 }
 .skill-card h3 {
+  font-size: 1rem;
   text-transform: none;
 }
 .skill-card h3 a {
@@ -248,4 +249,19 @@
   color: var(--muted);
   font-size: 0.82rem;
   line-height: 1.5;
+}
+
+.skills-catalog .plugin-grid {
+  align-items: stretch;
+  grid-auto-rows: 1fr;
+}
+.skill-card__repository {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.skill-card__repository svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
 }
