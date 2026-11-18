@@ -18,7 +18,7 @@ func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
 	env, request, trustPath := trustFixture(t)
 	request.Client.ClientID = domain.ClientCopilot
 	request.Plan.DeclaredName = "review"
-	request.Plan.NativePluginRegistration = true
+	request.Plan.SetNativePluginRegistration(true)
 	request.Plan.InstallIntent = domain.InstallIntentAutomatic
 	request.Plan.Components = []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "review", Support: domain.SupportNative}}
 	request.DeclaredName = "review"
@@ -86,7 +86,7 @@ func TestCopilotProjectWholePluginLifecycleWithoutClientCLI(t *testing.T) {
 	request.ProjectTrustConsent = false
 	// Saved bindings outlive transient planner fields. Read-only verification
 	// must recognize their native receipt without rewriting settings or trust.
-	request.Plan.NativePluginRegistration = false
+	request.Plan.SetNativePluginRegistration(false)
 	request.Plan.PreviousNativeObjects = request.PreviousNativeObjects
 	request.VerifyOnly = true
 	observed, err := New().Activate(t.Context(), env, request)
@@ -219,7 +219,7 @@ func TestCopilotWholePluginRegistrationRefusesDriftAndForeignReplacement(t *test
 func TestCopilotWholePluginRepairCannotRestoreRevokedProjectTrust(t *testing.T) {
 	env, request, trustPath := trustFixture(t)
 	request.Plan.DeclaredName = "review"
-	request.Plan.NativePluginRegistration = true
+	request.Plan.SetNativePluginRegistration(true)
 	request.Plan.InstallIntent = domain.InstallIntentAutomatic
 	request.Plan.Components = []domain.ComponentDecision{{
 		Kind: domain.ComponentSkill, Name: "review", Support: domain.SupportNative,
@@ -255,7 +255,7 @@ func TestCopilotWholePluginRepairCannotRestoreRevokedProjectTrust(t *testing.T) 
 func TestCopilotWholePluginInspectRejectsDifferentOwnedPluginName(t *testing.T) {
 	env, request, _ := trustFixture(t)
 	request.Plan.DeclaredName = "review"
-	request.Plan.NativePluginRegistration = true
+	request.Plan.SetNativePluginRegistration(true)
 	request.Plan.InstallIntent = domain.InstallIntentAutomatic
 	request.Plan.Components = []domain.ComponentDecision{{
 		Kind: domain.ComponentSkill, Name: "review", Support: domain.SupportNative,
