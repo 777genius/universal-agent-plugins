@@ -61,6 +61,16 @@ func copilotWholePluginEligible(in clients.PlanInput, plan domain.DeliveryPlan) 
 			return false
 		}
 	}
+	// Whole-plugin loading leaves the authored MCP declaration untouched.
+	// Keep UAP's managed stdio projection for bundled executables or
+	// PLUGIN_DATA contracts requiring its verified launcher, rather than
+	// silently dropping the path/ownership guarantees of that adapter.
+	for _, server := range in.Envelope.MCP.Servers {
+		if requirement := server.StdioRequirement; requirement != nil &&
+			(requirement.Kind == domain.ExecutableBundled || requirement.UsesPluginData) {
+			return false
+		}
+	}
 	for _, object := range in.PreviousNativeObjects {
 		if object.Kind != "managed_package_directory" && object.Kind != copilotProjectPluginKind {
 			return false
