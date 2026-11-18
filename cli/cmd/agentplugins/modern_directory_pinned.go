@@ -41,7 +41,7 @@ func newPinnedModernDirectoryClient(dataRoot string, approved pinnedModernDirect
 		return nil, err
 	}
 	if approved.KeyID == "" || approved.KeyID != strings.TrimSpace(approved.KeyID) ||
-		(approved.KeyID == defaultDirectoryKeyID || approved.KeyID == nextDirectoryKeyID) {
+		approved.KeyID == defaultDirectoryKeyID || approved.KeyID == nextDirectoryKeyID {
 		return nil, fmt.Errorf("modern Directory requires a distinct pinned signing key ID")
 	}
 	raw, err := base64.StdEncoding.Strict().DecodeString(approved.PublicKeyBase64)
