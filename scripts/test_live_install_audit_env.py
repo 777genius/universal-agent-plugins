@@ -10519,7 +10519,9 @@ class ClaudeRetirementDiagnosticContracts(unittest.TestCase):
         metadata = projection["metadata"]
         diagnose.__globals__["_DARWIN"] = darwin
         cls = darwin["Metadata"]
-        for presence in ((False, False, False), (True, True, True)):
+        # All-absent extended security is now a legitimate no-ACL header.
+        # This diagnostic must exercise only refused partial/ACL headers.
+        for presence in ((True, False, False), (True, True, True)):
             with self.subTest(presence=presence):
                 native = object.__new__(cls)
                 released = []
