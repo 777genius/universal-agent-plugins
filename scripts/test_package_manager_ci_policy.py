@@ -53,8 +53,10 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
                 self.assertIn("Agentplugins NPM Publish", body)
                 self.assertIn("schedule:", body)
                 self.assertIn("AUDIT_LIMIT:", body)
-                self.assertIn('["codex","claude","opencode","gemini","copilot"]', body)
-                self.assertIn('["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]', body)
+                self.assertIn("target: [codex, claude, opencode, gemini, copilot, cline, kimi, qoder, pi]", body)
+                self.assertIn("exclude:", body)
+                self.assertIn("- target: pi", body)
+                self.assertIn("require_trusted_publish: true", body)
                 self.assertIn("kind: plugin", body)
                 self.assertIn("kind: [plugin, skill]", body)
                 self.assertIn("scripts/live-install-audit.py", body)
@@ -74,23 +76,53 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
     def test_deep_macos_docker_hub_has_genuine_cli_prerequisite(self):
         macos = (WORKFLOW.parent / "agentplugins-published-macos-audit.yml").read_text(
             encoding="utf-8")
-        # Docker Hub's frozen manifest demands an actual docker executable.
-        # The restricted older workflow and trusted full-evidence PR expansion
-        # are both fail-closed: ordinary PRs cannot install Docker.
-        original_guard = "if: ${{ github.event_name != 'pull_request' && matrix.kind == 'plugin' }}"
-        trusted_guard = (
-            "if: ${{ matrix.kind == 'plugin' && (github.event_name != 'pull_request' || "
-            "(github.event.pull_request.head.repo.full_name == github.repository && "
-            "contains(github.event.pull_request.title, '[full-published-e2e]'))) }}"
-        )
-        self.assertTrue(
-            original_guard in macos or trusted_guard in macos,
-            "Docker CLI must be restricted to deep published plugin E2E",
-        )
+        # Published audits no longer run on PRs. The full plugin lane retains
+        # the real Docker CLI prerequisite; it cannot be skipped for publishing.
+        self.assertIn("if: ${{ matrix.kind == 'plugin' }}", macos)
         self.assertIn("brew install docker", macos)
         self.assertIn("command -v docker", macos)
         self.assertIn("docker --version", macos)
         self.assertNotIn("continue-on-error: true", macos)
+
+
+    def test_published_audits_only_run_after_qualified_publish_or_explicit_window(self):
+        root = WORKFLOW.parent
+        for workflow in (
+            "agentplugins-published-windows-audit.yml",
+            "agentplugins-published-macos-audit.yml",
+            "agentplugins-published-catalog-audit.yml",
+            "agentplugins-published-other-clients-audit.yml",
+        ):
+            body = (root / workflow).read_text(encoding="utf-8")
+            with self.subTest(workflow=workflow):
+                events = body.split("\npermissions:", 1)[0]
+                self.assertNotRegex(events, r"(?m)^  (pull_request|push):")
+                self.assertIn("  workflow_run:", events)
+                self.assertIn("    workflows: ['Agentplugins NPM Publish']", events)
+                self.assertIn("    types: [completed]", events)
+                self.assertIn("  schedule:", events)
+                self.assertIn("  workflow_dispatch:", events)
+                self.assertIn("require_trusted_publish: true", body)
+                self.assertIn("github.event.workflow_run.conclusion == 'success'", body)
+                self.assertIn("permissions:\n  contents: read\n  actions: read", body)
+                self.assertIn("cancel-in-progress: false", body)
+                self.assertNotIn("continue-on-error: true", body)
+
+    def test_trusted_publish_resolver_rejects_staging_only_runs(self):
+        root = WORKFLOW.parent
+        version = (root / "agentplugins-published-version.yml").read_text(encoding="utf-8")
+        native = (root / "agentplugins-native-install.yml").read_text(encoding="utf-8")
+        self.assertIn("require_trusted_publish:", version)
+        self.assertIn("PUBLISH_RUN_ID:", version)
+        self.assertIn("PUBLISH_HEAD_REF:", version)
+        self.assertIn("Verify public npm provenance and lifecycle", version)
+        self.assertIn("Publish npm package with trusted provenance", version)
+        self.assertIn('requested="${PUBLISH_HEAD_REF#agentplugins-v}"', version)
+        self.assertIn("actions: read", version)
+        # The native installer remains a resolver caller, without requiring
+        # the publisher's run identity on manual or PR executions.
+        self.assertIn("actions: read", native)
+        self.assertIn("uses: ./.github/workflows/agentplugins-published-version.yml", native)
 
     def test_draft_only_runs_disposable_harness_preflight(self):
         self.assertIn("github.event_name == 'pull_request' && github.event.pull_request.draft", self.body)

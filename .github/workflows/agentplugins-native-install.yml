@@ -35,6 +35,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 # Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
