@@ -48,6 +48,8 @@ jobs:
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}
+      # A prepare-only workflow is not evidence that npm was published.
+      require_trusted_publish: ${{ github.event_name == 'workflow_run' }}
 
   unix:
     needs: release-version

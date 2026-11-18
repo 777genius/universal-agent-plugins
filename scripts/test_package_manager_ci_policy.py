@@ -123,6 +123,7 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         # the publisher's run identity on manual or PR executions.
         self.assertIn("actions: read", native)
         self.assertIn("uses: ./.github/workflows/agentplugins-published-version.yml", native)
+        self.assertIn("require_trusted_publish: ${{ github.event_name == 'workflow_run' }}", native)
 
     def test_draft_only_runs_disposable_harness_preflight(self):
         self.assertIn("github.event_name == 'pull_request' && github.event.pull_request.draft", self.body)
