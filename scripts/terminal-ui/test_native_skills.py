@@ -1,4 +1,5 @@
 """Stream and inert owned-process controls for the keyboard driver; no agent runs."""
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
@@ -129,6 +130,55 @@ class NativeSkillsProgressTests(unittest.TestCase):
 
 
 
+
+class NativeSkillsScreenControls(unittest.TestCase):
+    def test_tab_redraw_preserves_strict_skill_and_target_selection_markers(self):
+        # Pinned Bubble Tea/Ultraviolet skips unchanged prefixes with HT/CBT.
+        # These are parser controls, not an invented native-agent transcript.
+        for label, parse, expected in (
+                ("7. docx · skills/docx", n.skill_rows, "docx · skills/docx"),
+                ("8. frontend-design · skills/frontend-design", n.skill_rows,
+                 "frontend-design · skills/frontend-design"),
+                ("Claude Code (claude)", n.target_rows, "claude"),
+                ("OpenAI Codex (codex)", n.target_rows, "codex")):
+            with self.subTest(label=label):
+                prefix = "┃ > [ ] "
+                raw = (prefix + "old option\r\t" + label + "\x1b[K").encode()
+                session = StreamSession(raw, [])
+                self.assertEqual(n.skill_rows(label), [])
+                self.assertEqual(n.target_rows(label), [])
+                self.assertEqual(parse(n.screen(session)), [(" ", expected)])
+                # Move back through the prefix to the checkbox cell, then
+                # repaint the label by tabbing over the unchanged marker.
+                session.raw.extend(("\r\t\x1b[Z\x1b[5C•\r\t" + label + "\x1b[K").encode())
+                self.assertEqual(parse(n.screen(session)), [("•", expected)])
+                session.raw.extend(("\r\t\x1b[Z\x1b[5C \r\t" + label + "\x1b[K").encode())
+                self.assertEqual(parse(n.screen(session)), [(" ", expected)])
+
+    def test_tab_stops_keep_exact_eight_column_and_edge_semantics(self):
+        for start, sequence, expected in (
+                (0, b"\t", 8), (7, b"\t", 8), (8, b"\t", 16),
+                (16, b"\t", 19), (19, b"\t", 19), (20, b"\t", 19),
+                (0, b"\x1b[Z", 0), (8, b"\x1b[Z", 0),
+                (9, b"\x1b[Z", 8), (19, b"\x1b[0Z", 16), (19, b"\x1b[2Z", 8),
+                (19, b"\x1b[9Z", 0)):
+            with self.subTest(start=start, sequence=sequence):
+                screen = n.Screen(2, 20)
+                screen.col = start
+                for value in sequence:
+                    screen.feed(bytes([value]))
+                self.assertEqual((screen.row, screen.col), (0, expected))
+                self.assertEqual(screen.snapshot(), "\n")
+                self.assertEqual(screen.unknown, set())
+        for sequence, expected in ((b"\t", 16), (b"\x1b[Z", 8)):
+            with self.subTest(pending_wrap=sequence):
+                screen = n.Screen(2, 17)
+                screen.feed(b"x" * 17 + sequence + b"!")
+                self.assertEqual((screen.row, screen.col), (0, expected + 1))
+                self.assertEqual(screen.grid[0][expected], "!")
+                self.assertEqual(screen.grid[1], [" "] * 17)
+
+
 class NativeSkillsFailureControls(unittest.TestCase):
     def test_exit_visible_after_empty_read_drains_queued_progress_with_same_deadline(self):
         transcript = QUEUED + PROGRESS + FINISHED + VERIFIED
@@ -155,6 +205,27 @@ class NativeSkillsFailureControls(unittest.TestCase):
         self.assertEqual(expired.chunks, [transcript])
         self.assertNotIn("install-progress", expired.frames)
 
+
+    def test_accepted_final_drain_is_parsed_without_another_clock_or_read(self):
+        transcript = QUEUED + PROGRESS + FINISHED + VERIFIED
+        session = StreamSession(b"", [b"", transcript])
+        session.process.poll = lambda: 0
+        with patch.object(session, "pump", wraps=session.pump) as pump, \
+                patch.object(n.time, "monotonic", side_effect=[0, 0, 4, 5]) as clock:
+            n.wait_install_progress(session, 0)
+        self.assertEqual([call.args for call in pump.call_args_list], [(0.1,), (0,)])
+        self.assertEqual(clock.call_count, 3)
+        self.assertIn("0/2 preparing", session.frames["install-progress"])
+        self.assertEqual(bytes(session.raw), transcript)
+
+        # An accepted but incomplete read cannot extend the same deadline.
+        incomplete = StreamSession(b"", [b"", QUEUED])
+        incomplete.process.poll = lambda: 0
+        with patch.object(n.time, "monotonic", side_effect=[0, 0, 4, 5]):
+            with self.assertRaisesRegex(AssertionError, "timeout waiting"):
+                n.wait_install_progress(incomplete, 0)
+        self.assertNotIn("install-progress", incomplete.frames)
+
     def test_missing_events_or_failed_close_always_retains_a_failed_report(self):
         import hashlib
         for closed, contents, expected in (
@@ -178,6 +249,83 @@ class NativeSkillsFailureControls(unittest.TestCase):
                 self.assertEqual(saved["transcript"]["sha256"], hashlib.sha256(raw).hexdigest())
                 if contents != "valid":
                     self.assertIn("terminal_evidence_error", saved)
+
+
+    def test_partial_frame_keeps_structured_failure_and_complete_frames(self):
+        for partial in (False, True):
+            with self.subTest(partial=partial), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                evidence = root / "evidence"
+                evidence.mkdir()
+                events = {"exit": 0, "forced_cleanup": False, "restoration": {
+                    key: True for key in ("termios_equal", "cursor_restored", "next_line_read", "echo")}}
+                (evidence / "events.json").write_text(json.dumps(events))
+                (evidence / "complete.frame.txt").write_text("complete text")
+                (evidence / "complete.frame.svg").write_text("<svg>complete</svg>")
+                if partial:
+                    (evidence / "partial.frame.txt").write_text("retained partial text")
+                report = {"status": "passed", "verified_result": True}
+                n.preserve(SimpleNamespace(raw=b"retained"), report, root, evidence, closed=True)
+                saved = json.loads((root / "native-terminal-skills.json").read_text())
+                self.assertTrue(saved["closure_verified"])
+                self.assertEqual(saved["status"], "failed" if partial else "passed")
+                self.assertEqual(saved["frames"][0], {"name": "complete.frame",
+                                 "text": "complete text", "svg": "<svg>complete</svg>"})
+                self.assertEqual(len(saved["frames"]), 2 if partial else 1)
+                if partial:
+                    frame = saved["frames"][1]
+                    self.assertEqual(frame["text"], "retained partial text")
+                    self.assertNotIn("svg", frame)
+                    self.assertIn("FileNotFoundError", frame["svg_error"])
+                    self.assertLessEqual(len(frame["svg_error"]), 512)
+
+    def test_close_capture_overflow_cannot_exit_success_with_verified_closure(self):
+        for overflow in (False, True):
+            with self.subTest(overflow=overflow), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                project, installer = root / "project", root / "installer"
+                project.mkdir()
+                installer.write_text("inert fixture; never executed")
+                evidence = root / "terminal-ui"
+                session = SimpleNamespace(
+                    raw=bytearray(b"verified before close"), events=[],
+                    owner=SimpleNamespace(returncode=0),
+                    wait=lambda *a, **k: None, finish=lambda *a: None,
+                    frame=lambda *a: None)
+
+                def close():
+                    if overflow:
+                        session.raw.extend(b"x" * n.LIMIT)
+                    events = {"exit": 0, "forced_cleanup": False, "restoration": {
+                        key: True for key in ("termios_equal", "cursor_restored", "next_line_read", "echo")}}
+                    (evidence / "events.json").write_text(json.dumps(events))
+
+                session.close = close
+                args = SimpleNamespace(installer=str(installer), root=str(root),
+                                       project=str(project), source="inert-fixture")
+                with ExitStack() as stack:
+                    stack.enter_context(patch.object(n.sys, "platform", "linux"))
+                    stack.enter_context(patch.dict(n.os.environ, {
+                        "AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED": "1",
+                        "GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted"}, clear=True))
+                    stack.enter_context(patch.object(n.argparse.ArgumentParser, "parse_args", return_value=args))
+                    stack.enter_context(patch.object(n, "NativeSession", return_value=session))
+                    stack.enter_context(patch.object(n.signal, "signal"))
+                    for name in ("choose_skills", "choose_targets", "confirm_review", "key",
+                                 "verified_result", "screen"):
+                        stack.enter_context(patch.object(n, name, return_value=None))
+                    stack.enter_context(patch.object(n, "unchanged_before_confirmation", return_value={}))
+                    stack.enter_context(patch.object(n, "wait_install_progress", return_value=0))
+                    if overflow:
+                        with self.assertRaisesRegex(AssertionError, "evidence failed"):
+                            n.main()
+                    else:
+                        n.main()
+                saved = json.loads((root / "native-terminal-skills.json").read_text())
+                self.assertTrue(saved["closure_verified"])
+                self.assertEqual(saved["status"], "failed" if overflow else "passed")
+                self.assertIs(saved["transcript"]["truncated"], overflow)
+                self.assertLessEqual((root / "native-terminal-skills.log").stat().st_size, n.LIMIT)
 
     def test_failure_screen_redacts_exact_and_wrapped_private_prefixes(self):
         project = Path("/private/fixture[1]/project")
@@ -267,12 +415,17 @@ print("complete response consumed; next RPC aligned")
                       "connection.sendall(b'live\\n'); time.sleep(30)")
         job = ("import subprocess,sys,time; "
                "subprocess.Popen([sys.executable,'-I','-c',sys.argv[1],sys.argv[2]]); time.sleep(30)")
-        with TemporaryDirectory() as temporary, socket.socket(socket.AF_UNIX) as listener:
-            root = Path(temporary)
+        with (TemporaryDirectory() as temporary,
+              TemporaryDirectory(prefix="uap-sock-", dir="/tmp") as socket_directory,
+              socket.socket(socket.AF_UNIX) as listener):
+            root = Path(temporary) / ("long-fixture-" * 10)
+            root.mkdir()
             project, evidence = root / "project", root / "evidence"
             project.mkdir()
             evidence.mkdir()
-            address = str(root / "liveness.sock")
+            address = str(Path(socket_directory) / "liveness.sock")
+            self.assertGreater(len(os.fsencode(root / "liveness.sock")), 108)
+            self.assertLess(len(os.fsencode(address)), 108)
             listener.bind(address)
             listener.listen(1)
             listener.settimeout(3)

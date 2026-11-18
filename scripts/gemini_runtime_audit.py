@@ -256,7 +256,7 @@ class GeminiRepeatAudit:
                 self._open(self.chats / name, 1 << 20)
             self._guard()
         except (OSError, ValueError, RuntimeError, UnicodeError, TypeError) as error:
-            self.reason = str(error)[:512]
+            self.reason = "os-error" if isinstance(error, OSError) else str(error)[:512]
             self.close()
 
     def _hold(self, path):
@@ -369,7 +369,7 @@ class GeminiRepeatAudit:
             self.command_finished = finished
             self.baseline_observed = True
         except (OSError, ValueError, RuntimeError, UnicodeError, TypeError) as error:
-            self.reason = str(error)[:512]
+            self.reason = "os-error" if isinstance(error, OSError) else str(error)[:512]
 
     def checkpoint(self, label, snapshot, *, interval=None):
         if self.reason:
@@ -420,7 +420,7 @@ class GeminiRepeatAudit:
             self.command_finished = finished
             self.phases.append(label)
         except (OSError, ValueError, RuntimeError, UnicodeError, TypeError) as error:
-            self.reason = str(error)[:512]
+            self.reason = "os-error" if isinstance(error, OSError) else str(error)[:512]
 
     def finish(self, snapshot):
         if not self.reason:
@@ -432,7 +432,7 @@ class GeminiRepeatAudit:
                     raise ValueError("Gemini runtime final snapshot differs from the public phases")
                 self.complete = True
             except (OSError, ValueError, RuntimeError, TypeError) as error:
-                self.reason = str(error)[:512]
+                self.reason = "os-error" if isinstance(error, OSError) else str(error)[:512]
         return self.complete and not self.reason
 
     def evidence(self):

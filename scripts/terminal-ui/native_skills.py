@@ -85,8 +85,10 @@ def wait_install_progress(session, after):
     rendered = Screen(session.screen.rows, session.screen.cols)
     offset, rendered_to, rows = after, 0, {}
     deadline = time.monotonic() + session.timeout
-    while time.monotonic() < deadline:
-        received = session.pump(0.1)
+    drained = False
+    while drained or time.monotonic() < deadline:
+        received = drained or session.pump(0.1)
+        drained = False
         check(len(session.raw) <= LIMIT, "terminal transcript exceeded 1 MiB")
         raw = bytes(session.raw)
         while (end := raw.find(b"\n", offset)) >= 0:
@@ -126,6 +128,8 @@ def wait_install_progress(session, after):
             # Exit may become visible after the timed read. Consume bytes that
             # were queued before exit without extending this same deadline.
             if time.monotonic() < deadline and session.pump(0):
+                # Parse this accepted read before checking the clock again.
+                drained = True
                 continue
             raise AssertionError("public CLI exited before install-progress")
     raise AssertionError("timeout waiting for terminal screen: install-progress")
@@ -249,9 +253,16 @@ def preserve(session, report, root, evidence, *, closed):
                 ("termios_equal", "cursor_restored", "next_line_read", "echo")))
     if not report["closure_verified"] or len(raw) > LIMIT:
         report["status"] = "failed"
-    report["frames"] = [{"name": path.stem, "text": path.read_text(),
-                         "svg": path.with_suffix(".svg").read_text()}
-                        for path in sorted(evidence.glob("*.frame.txt"))]
+    report["frames"] = []
+    for path in sorted(evidence.glob("*.frame.txt")):
+        frame = {"name": path.stem}
+        for kind, source in (("text", path), ("svg", path.with_suffix(".svg"))):
+            try:
+                frame[kind] = source.read_text()
+            except (OSError, UnicodeError) as error:
+                frame[kind + "_error"] = repr(error)[:512]
+                report["status"] = "failed"
+        report["frames"].append(frame)
     body = json.dumps(report, indent=2) + "\n"
     check(len(body.encode()) <= LIMIT, "terminal structured evidence exceeded 1 MiB")
     (root / "native-terminal-skills.json").write_text(body)
@@ -320,7 +331,8 @@ def main():
             if closed and report["verified_result"] and "error" not in report:
                 report["status"] = "passed"
             preserve(session, report, root, evidence, closed=closed)
-    check(report["closure_verified"], "native Skills keyboard terminal was not restored and closed")
+    check(report["status"] == "passed" and report["closure_verified"],
+          "native Skills keyboard evidence failed or terminal was not restored and closed")
 
 
 if __name__ == "__main__":

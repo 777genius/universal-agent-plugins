@@ -464,7 +464,7 @@ def repeat_native_phase_evidence(before, after_add, after_list, after_native):
 
 def failed_case_diagnostics(row):
     """Expose existing failed-case evidence in logs; never change qualification."""
-    keys = ("codex_public_add_ready", "codex_public_repeat_ready",
+    keys = ("codex_public_add_ready", "codex_public_repeat_ready", "public_skill_ready",
             "repeat_native_unchanged", "repeat_native_runtime_only", "repeat_native_changes",
             "repeat_native_phases", "repeat_verified",
             "removal_verified", "sentinels_preserved", "public_target_states")
@@ -1477,7 +1477,8 @@ def signed_release_public_observation(response, identity, target):
     return evidence[:3]
 
 
-def public_target_state_observation(response, identity, target):
+def public_target_state_observation(response, identity, target, *,
+                                    installation_ids=None, skill_source=None):
     """Bounded public enum projection; never installation acceptance evidence."""
     if response is None:
         return {"status": "unobserved"}
@@ -1499,7 +1500,11 @@ def public_target_state_observation(response, identity, target):
         if not isinstance(node, dict):
             invalid_rows += 1
             continue
-        if node.get("name") != identity:
+        selected = (node.get("name") == identity if installation_ids is None else (
+            (isinstance(node.get("installation_id"), str)
+             and node["installation_id"] in installation_ids)
+            or (skill_source is not None and node.get("source") == skill_source)))
+        if not selected:
             continue
         selected_nodes += 1
         clients = node.get("clients")
@@ -2165,6 +2170,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     codex_runtime = None
     gemini_runtime = None
     gemini_native_baseline = None
+    gemini_settings = gemini_settings_identity = None
+    gemini_settings_text = '{"context":{"includeDirectoryTree":false}}\n'
     gemini_skill_case = (target == "gemini" and kind == "skill"
                          and AGENT_BINARIES.get("gemini")
                          and GEMINI_RUNTIME_AUDIT["pinned_version"](client_version))
@@ -2193,6 +2200,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                          *(project / rel for rel in project_skill_roots)):
                 if not path_inside_case(path, case_root):
                     raise ValueError("audit case native/project ancestor was redirected")
+            if gemini_settings is not None:
+                if (GEMINI_RUNTIME_AUDIT["_FILES"]["identity"](gemini_settings.lstat())
+                        != gemini_settings_identity
+                        or copilot_settings_read(gemini_settings, case_root) != (gemini_settings_text, None)):
+                    raise ValueError("Gemini audit context settings changed after external execution")
             if codex_runtime is not None:
                 codex_runtime.guard()
             if codex_plugin_sqlite is not None:
@@ -2211,6 +2223,15 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_plugin_sqlite.checkpoint("after-public-command")
         return outcome
 
+    if gemini_skill_case:
+        # The pinned native list initializes a model context even without a model call.
+        # Its optional tree includes transient UAP package snapshots; discovery is unchanged.
+        assert_case_unchanged()
+        gemini_settings = home / ".gemini/settings.json"
+        with gemini_settings.open("xb") as stream:
+            stream.write(gemini_settings_text.encode("utf-8"))
+        gemini_settings_identity = GEMINI_RUNTIME_AUDIT["_FILES"]["identity"](gemini_settings.lstat())
+        assert_case_unchanged()
     if kind == "skill" and target in ("kimi", "grok"):
         # Grok inspect reports projectRoot from Git discovery. Never weaken its
         # strict native project identity contract to accept a missing root.
@@ -2362,9 +2383,16 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             home, project, gemini_baseline_before, client_version)
         audits.callback(gemini_runtime.close)
         if gemini_runtime.reason is None:
+            # Match runGeminiInventory: locale/timezone and other inherited variables
+            # are absent from its explicit child environment, including model context.
+            native_env = {"GEMINI_CLI_HOME": env["GEMINI_CLI_HOME"]}
+            native_env.update({key: env[key] for key in (
+                "PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR",
+                "GEMINI_RESTRICTED_MODE", "GEMINI_CLI_TRUST_WORKSPACE") if key in env})
+            native_env.update(NO_COLOR="1", TERM="dumb")
             native_started = datetime.now(timezone.utc)
             native_observed = audited_call(
-                [AGENT_BINARIES["gemini"], "skills", "list", "--all"], env, project, 30)
+                [AGENT_BINARIES["gemini"], "skills", "list", "--all"], native_env, project, 30)
             native_finished = datetime.now(timezone.utc)
             native_observed.pop("_json", None)
             gemini_baseline_after = snapshot(native_roots)
@@ -2778,9 +2806,16 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "listed_identity": listed_identity, "prepared_binding": prepared_binding,
             "signed_release_observation": signed_observation,
             "public_target_states": {
-                "after-add": public_target_state_observation(listed_json, identity, target),
-                "repeat-add": public_target_state_observation(repeat_list_json, identity, target),
-                "after-remove": public_target_state_observation(post_list_json, identity, target)},
+                "after-add": public_target_state_observation(
+                    listed_json, identity, target,
+                    installation_ids=old_ids if kind == "skill" else None),
+                "repeat-add": public_target_state_observation(
+                    repeat_list_json, identity, target,
+                    installation_ids=repeat_identity_ids if kind == "skill" else None),
+                "after-remove": public_target_state_observation(
+                    post_list_json, identity, target,
+                    installation_ids=old_ids | set(repeat_identity_ids) if kind == "skill" else None,
+                    skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None)},
             "public_skill_ready": skill_public_ready,
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,

@@ -5033,6 +5033,7 @@ module.exports = {
         import shutil
         audit = load_audit()
         item = {"name": "demo-skill", "source": "https://github.com/example/repo",
+                "repo": "example/repo", "folder": "demo-skill",
                 "skill_md_git_blob_sha1": "a" * 40}
         installed = [{"name": "demo-skill", "installation_id": "owned-install",
                       "clients": [{"client_id": "claude"}]}]
@@ -5543,6 +5544,7 @@ module.exports = {
             "stdout": "private native output",
         }
         row = {"status": "repeat-add-unqualified", "repeat_verified": False,
+               "public_skill_ready": {"after-add": False, "repeat-add": True},
                "removal_verified": True, "gemini_runtime_proof": proof}
         original = json.dumps(row, sort_keys=True)
         observed = audit.failed_case_diagnostics(row)
@@ -5556,6 +5558,7 @@ module.exports = {
         }
         expected["failure_facts"]["record_shapes_truncated"] = False
         self.assertEqual(observed, {"repeat_verified": False, "removal_verified": True,
+                                   "public_skill_ready": {"after-add": False, "repeat-add": True},
                                    "gemini_runtime_proof": expected})
         self.assertNotIn("private", json.dumps(observed))
         self.assertEqual(json.dumps(row, sort_keys=True), original)
@@ -5593,6 +5596,50 @@ module.exports = {
         self.assertLess(len(json.dumps(observed).encode()), 4096)
         self.assertNotIn("private", json.dumps(observed))
         self.assertEqual(json.dumps(proof, sort_keys=True), original)
+
+    def test_public_target_states_select_skill_ids_and_reminted_exact_source(self):
+        audit = load_audit()
+        source = "private-repo/skills/owned-test"
+        state = {"materialization": "materialized", "activation": "active",
+                 "authentication": "not_required", "policy": "allowed",
+                 "verification": "installation_verified"}
+        owned = {"name": "private-generated-name", "installation_id": "private-old-id",
+                 "source": source, "clients": [
+                     dict(state, client_id="kiro", activation="failed"),
+                     dict(state, client_id="claude", path="/private/native/skill")]}
+        response = {"data": {"installations": [
+            {"name": "owned-test", "installation_id": "private-foreign-id",
+             "source": source + "-other", "clients": [dict(state, client_id="claude", activation="failed")]},
+            owned,
+            {"name": "owned-test", "installation_id": {"private": "malformed"},
+             "source": source + "/other", "clients": [dict(state, client_id="claude")]},
+        ]}}
+        for installation_id in ("private-old-id", "private-repeat-id"):
+            with self.subTest(installation_id=installation_id):
+                owned["installation_id"] = installation_id
+                observed = audit.public_target_state_observation(
+                    response, "owned-test", "claude", installation_ids={installation_id})
+                self.assertEqual(observed["selected_installations"], 1)
+                self.assertEqual(observed["selected_bindings"], 1)
+                self.assertEqual(observed["states"], [state])
+                self.assertNotIn("private", json.dumps(observed))
+        self.assertEqual(audit.public_target_state_observation(
+            response, "owned-test", "claude", installation_ids=set())["selected_bindings"], 0)
+        owned.update(name="private-renamed", installation_id="private-reminted-id")
+        owned["clients"][1]["verification"] = "failed"
+        ids = {"private-old-id", "private-repeat-id"}
+        self.assertEqual(audit.public_target_state_observation(
+            response, "owned-test", "claude", installation_ids=ids)["selected_bindings"], 0)
+        observed = audit.public_target_state_observation(
+            response, "owned-test", "claude", installation_ids=ids, skill_source=source)
+        self.assertEqual(observed["selected_installations"], 1)
+        self.assertEqual(observed["selected_bindings"], 1)
+        self.assertEqual(observed["states"], [dict(state, verification="failed")])
+        self.assertNotIn("private", json.dumps(observed))
+        owned["source"] = source + "/other"
+        self.assertEqual(audit.public_target_state_observation(
+            response, "owned-test", "claude", installation_ids=ids,
+            skill_source=source)["selected_bindings"], 0)
 
     def test_public_target_states_bound_rows_and_redact_invalid_values(self):
         audit = load_audit()
@@ -7268,6 +7315,7 @@ module.exports = {
     def test_qoder_foreign_skill_is_never_placed_in_uap_managed_bundle(self):
         audit = load_audit()
         item = {"name": "frontend-design", "source": "unused-fixture",
+                "repo": "example/skills", "folder": "frontend-design",
                 "skill_md_git_blob_sha1": "0" * 40}
         refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
                    "timeout": False, "_json": {"data": {"installations": []}}}
@@ -8345,6 +8393,10 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
                             'source': 'unused', 'skill_md_git_blob_sha1': '0' * 40}
                     row = audit.do_case('/inert/uap', 'claude', 'skill', item, 0, root, {})
                 self.assertEqual(operations, ['add', 'list', 'add', 'list', 'remove', 'list'])
+                for phase in ("after-add", "repeat-add"):
+                    self.assertEqual(row["public_target_states"][phase]["selected_installations"], 1)
+                    self.assertEqual(row["public_target_states"][phase]["selected_bindings"], 1)
+                self.assertEqual(row["public_target_states"]["after-remove"]["selected_bindings"], 0)
                 self.assertTrue(row['native_residuals'])
                 self.assertEqual(row['status'], 'passed' if mutation is None else 'cleanup-failed')
                 if mutation is None:
@@ -8925,6 +8977,56 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                 self.assertFalse(case['observer'].finish(case['before']))
                 self.assertEqual(case['observer'].evidence()['phases'], [])
 
+    def test_os_error_reasons_are_redacted_before_failed_case_projection(self):
+        facts = {"phase": "after-public-repeat-add", "role": "new-chat",
+                 "operation": "record-framing", "bytes": 1234, "lf_count": 3,
+                 "final_lf": True, "record_shapes": [
+                     "metadata-fields", "user-text-fields", "last-updated-fields"]}
+        finite_reason = "Gemini startup environment framing differs"
+        for stage in ("constructor", "baseline", "checkpoint", "finish"):
+            for kind in ("missing", "custom", "finite"):
+                with self.subTest(stage=stage, kind=kind), self.fixture() as case:
+                    private_path = str(case["chats"] / "private-secret-session.jsonl")
+                    error = (FileNotFoundError(2, "No such file or directory", private_path)
+                             if kind == "missing" else OSError("custom filesystem detail " + private_path)
+                             if kind == "custom" else ValueError(finite_reason))
+                    subject = case["observer"]
+                    if stage == "constructor":
+                        with patch.object(type(subject), "_guard", side_effect=error):
+                            subject = type(subject)(
+                                case["home"], case["project"], case["before"], self.VERSION)
+                    else:
+                        subject.failure_facts = dict(facts)
+                        with patch.object(subject, "_guard", side_effect=error):
+                            interval = (case["phase_started"], datetime.now(timezone.utc))
+                            if stage == "baseline":
+                                subject.baseline(case["before"], interval=interval)
+                            elif stage == "checkpoint":
+                                subject.checkpoint("after-public-repeat-add", case["before"], interval=interval)
+                            else:
+                                self.assertFalse(subject.finish(case["before"]))
+                    try:
+                        self.assertFalse(subject.finish(case["before"]))
+                        proof = subject.evidence()
+                        observed = case["audit"].failed_case_diagnostics(
+                            {"gemini_runtime_proof": proof})["gemini_runtime_proof"]
+                        self.assertEqual(proof["reason"], finite_reason if kind == "finite" else "os-error")
+                        self.assertEqual(observed["reason"], proof["reason"])
+                        self.assertEqual(proof["status"], "unqualified")
+                        self.assertEqual(observed["status"], "unqualified")
+                        self.assertEqual(proof["phases"], [])
+                        self.assertEqual(observed["phases"], [])
+                        if stage != "constructor":
+                            self.assertEqual(proof["failure_facts"], facts)
+                            self.assertEqual(observed["failure_facts"],
+                                             dict(facts, record_shapes_truncated=False))
+                        self.assertNotIn(private_path, json.dumps(observed))
+                        self.assertNotIn("private-secret-session", json.dumps(observed))
+                    finally:
+                        subject.close()
+                        self.assertEqual(subject.parents, {})
+                        self.assertEqual(subject.leaves, {})
+
     def test_incomplete_snapshots_refuse_at_every_observation(self):
         markers = (('.gemini/denied-file', 'unreadable'),
                    ('.gemini/denied/.walk-error', 'unreadable'),
@@ -9286,6 +9388,22 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                     operation = ('native-list' if argv[0] == '/unused/gemini' else
                                  argv[2] if argv[1] == 'skills' else argv[1])
                     operations.append(operation)
+                    settings = profile / 'settings.json'
+                    self.assertEqual(settings.read_bytes(), b'{"context":{"includeDirectoryTree":false}}\n')
+                    self.assertEqual(cwd, project)
+                    if operation == 'native-list':
+                        self.assertEqual(argv, ['/unused/gemini', 'skills', 'list', '--all'])
+                        self.assertEqual(timeout, 30)
+                        self.assertEqual(env['GEMINI_CLI_HOME'], str(profile.parent))
+                        self.assertEqual((env['NO_COLOR'], env['TERM']), ('1', 'dumb'))
+                        self.assertFalse(set(env) & {'LANG', 'LC_ALL', 'TZ', 'HTTP_PROXY'})
+                        self.assertLessEqual(set(env), {
+                            'GEMINI_CLI_HOME', 'PATH', 'HOME', 'USERPROFILE', 'SYSTEMROOT',
+                            'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'GEMINI_RESTRICTED_MODE',
+                            'GEMINI_CLI_TRUST_WORKSPACE', 'NO_COLOR', 'TERM'})
+                    else:
+                        self.assertEqual(env['LC_ALL'], 'fr_FR.UTF-8')
+                        self.assertEqual(env['TZ'], 'Pacific/Auckland')
                     if operation == 'add':
                         skill.parent.mkdir(parents=True, exist_ok=True)
                         skill.write_text('---\nname: owned-test\n---\n')
@@ -9324,6 +9442,9 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                             '_json': response}
                 with (patch.dict(audit.AGENT_BINARIES, {'gemini': '/unused/gemini'}, clear=True),
                       patch.dict(audit.GEMINI_RUNTIME_AUDIT, {'GeminiRepeatAudit': observe}),
+                      patch.dict(os.environ, {'LANG': 'de_DE.UTF-8', 'LC_ALL': 'fr_FR.UTF-8',
+                                              'TZ': 'Pacific/Auckland',
+                                              'HTTP_PROXY': 'http://proxy.invalid:8080'}),
                       patch.object(audit, 'call', side_effect=fake_call),
                       patch.object(audit, 'matching_installations', return_value=matched),
                       patch.object(audit, 'locked_skill_is_pinned',
@@ -9344,6 +9465,52 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                     with self.assertRaises(OSError):
                         os.fstat(fd)
 
+    def test_public_gemini_context_fixture_is_exclusive_and_preserved_before_each_call(self):
+        for changed in ('preexisting', 'bytes', 'same-byte-replacement', 'link'):
+            with self.subTest(changed=changed), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                root = Path(temporary).resolve()
+                profile = root / 'skill-00/home/.gemini'
+                settings = profile / 'settings.json'
+                original = b'{"context":{"includeDirectoryTree":false}}\n'
+                foreign = root / 'foreign-settings.json'
+                foreign.write_bytes(original)
+                if changed == 'preexisting':
+                    profile.mkdir(parents=True)
+                    settings.write_bytes(b'{"context":{"includeDirectoryTree":true}}\n')
+                calls = []
+
+                def call(argv, env, cwd, timeout=105):
+                    calls.append(argv)
+                    self.assertEqual(settings.read_bytes(), original)
+                    if changed == 'bytes':
+                        settings.write_bytes(b'{"context":{"includeDirectoryTree":true}}\n')
+                    elif changed == 'same-byte-replacement':
+                        settings.rename(root / 'held-context-settings.json')
+                        settings.write_bytes(original)
+                    elif changed == 'link':
+                        settings.unlink()
+                        settings.symlink_to(foreign)
+                    return {'exit_code': 0, 'stdout_tail': '', 'stderr_tail': '',
+                            'timeout': False, '_json': {}}
+
+                item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
+                        'source': 'unused', 'skill_md_git_blob_sha1': '0' * 40}
+                with (patch.dict(audit.AGENT_BINARIES, {'gemini': '/unused/gemini'}, clear=True),
+                      patch.object(audit, 'call', side_effect=call)):
+                    if changed == 'preexisting':
+                        with self.assertRaises(FileExistsError):
+                            audit.do_case('/unused/agentplugins', 'gemini', 'skill', item, 0, root, {},
+                                          client_version=self.VERSION)
+                        self.assertEqual(calls, [])
+                        self.assertEqual(settings.read_bytes(),
+                                         b'{"context":{"includeDirectoryTree":true}}\n')
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'Gemini audit context settings changed'):
+                            audit.do_case('/unused/agentplugins', 'gemini', 'skill', item, 0, root, {},
+                                          client_version=self.VERSION)
+                        self.assertEqual(len(calls), 1)
+                self.assertEqual(foreign.read_bytes(), original)
 
 
 
