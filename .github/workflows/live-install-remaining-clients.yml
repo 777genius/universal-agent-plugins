@@ -65,6 +65,31 @@ jobs:
         id: host-node
         with:
           node-version: '24'
+      - name: Supply verified bubblewrap for ChatGPT native discovery
+        if: matrix.target == 'chatgpt' && matrix.kind == 'plugin'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Codex app-server emits a warning on stderr without this Linux sandbox
+          # prerequisite; the native discovery gate must stay fail-closed.
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends bubblewrap
+          sudo dpkg --verify bubblewrap
+          python3 - <<'BWRAP'
+          import os, shutil, stat, subprocess
+          from pathlib import Path
+          expected = Path('/usr/bin/bwrap')
+          selected = shutil.which('bwrap', path='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin')
+          if not selected or Path(selected).resolve(strict=True) != expected:
+              raise SystemExit('unexpected bubblewrap PATH executable')
+          info = expected.lstat()
+          if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+                  or info.st_mode & 0o022 or not info.st_mode & 0o111):
+              raise SystemExit('untrusted bubblewrap executable')
+          observed = subprocess.run([str(expected), '--version'], capture_output=True, text=True, timeout=10, check=True)
+          if not observed.stdout.startswith('bubblewrap ') or observed.stderr:
+              raise SystemExit('unexpected bubblewrap version response')
+          BWRAP
       - name: Retain the selected Node runtime for Kiro
         if: matrix.target == 'kiro'
         id: kiro-node
