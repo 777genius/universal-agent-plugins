@@ -24,7 +24,7 @@ const copilotProjectPluginKind = "copilot_project_plugin_registration"
 // Existing loose-component bindings retain their previous behavior and never
 // silently migrate across two independent native configuration surfaces.
 func copilotWholePluginEligible(in clients.PlanInput, plan domain.DeliveryPlan) bool {
-	if in.Envelope.FormatID != domain.FormatIDAgentPluginsV1 || len(plan.Components) == 0 ||
+	if !copilotSupportsProjectPlugin(in.Client.Version) || in.Envelope.FormatID != domain.FormatIDAgentPluginsV1 || len(plan.Components) == 0 ||
 		in.Envelope.App.Present || len(in.Envelope.Commands) != 0 || len(in.Envelope.InvalidCommands) != 0 ||
 		len(in.Envelope.MCP.InvalidServer) != 0 || len(in.Envelope.Inventory.InvalidSkills) != 0 ||
 		in.Envelope.Inventory.InvalidSkillsRoot {
