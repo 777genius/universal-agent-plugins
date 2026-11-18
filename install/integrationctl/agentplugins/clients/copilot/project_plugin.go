@@ -336,7 +336,12 @@ func copilotMutateProjectPlugin(ctx context.Context, kernel nativeconfig.Kernel,
 	if err != nil {
 		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if !remove {
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+		}
+	}
+	if err := pathpolicy.RequireContainedChild(root, path); err != nil {
 		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
 	file, err := kernel.BeginExactFile(path)
