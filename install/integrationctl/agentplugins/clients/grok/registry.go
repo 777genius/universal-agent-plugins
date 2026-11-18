@@ -50,8 +50,13 @@ func parseList(body []byte) ([]pluginEntry, error) {
 	seen := make(map[string]bool, len(values))
 	for _, value := range values {
 		entry, err := parseEntry(value)
-		if err != nil || seen[shared.FoldJSONKey(entry.Name)] {
+		if err != nil {
 			return nil, errUnknownList
+		}
+		if seen[shared.FoldJSONKey(entry.Name)] {
+			// Conflicting native identity is known negative evidence, never
+			// an unknown JSON format eligible for manual attestation.
+			return nil, fmt.Errorf("%w: duplicate Grok plugin identity %q", shared.ErrRecognizedNegativeEvidence, entry.Name)
 		}
 		seen[shared.FoldJSONKey(entry.Name)] = true
 		entries = append(entries, entry)

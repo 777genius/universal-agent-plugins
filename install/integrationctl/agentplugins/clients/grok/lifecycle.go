@@ -102,7 +102,9 @@ func activationError(outcome domain.ActivationOutcome, request domain.Activation
 	err = shared.CompletionProbeFailure(err)
 	if domain.IsUnclosedClientProbe(err) {
 		outcome.NativeEffect = domain.NativeEffectUncertain
-		return shared.FailedActivation(outcome, "resolve the unclosed Grok process before retrying", err)
+		failed, cause := shared.FailedActivation(outcome, "resolve the unclosed Grok process before retrying", err)
+		failed.UserActions = []string{"resolve uncertain Grok process cleanup before attempting another installation"}
+		return failed, cause
 	}
 	if errors.Is(err, errUnknownList) {
 		if attested, ok := shared.AttestedUnknownVerification(outcome, request); ok {

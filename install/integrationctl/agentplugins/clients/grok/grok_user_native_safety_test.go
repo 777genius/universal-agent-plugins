@@ -13,8 +13,8 @@ import (
 func TestGrokUserRejectsCaseFoldedRegistryAliases(t *testing.T) {
 	for _, names := range [][2]string{{"demo", "DEMO"}, {"K", "K"}} {
 		body := []byte("[{\"name\":\"" + names[0] + "\",\"status\":\"installed\"},{\"name\":\"" + names[1] + "\",\"status\":\"installed\"}]")
-		if entries, err := parseList(body); err == nil {
-			t.Fatalf("native registry admitted folded aliases: %+v", entries)
+		if entries, err := parseList(body); err == nil || errors.Is(err, errUnknownList) {
+			t.Fatalf("native alias did not return known negative evidence: %+v %v", entries, err)
 		}
 	}
 
@@ -108,5 +108,20 @@ func TestGrokUserFailedNativeMutationDoesNotIssueSecondCommand(t *testing.T) {
 				t.Fatalf("uncertain removal effect lost: %+v", outcome)
 			}
 		})
+	}
+}
+
+func TestGrokUserCannotAttestDuplicatedNativeRegistration(t *testing.T) {
+	request := grokRequest(t)
+	request.ActivationComplete = true
+	runner := &fakeGrok{entries: []pluginEntry{
+		{Name: "demo", Status: "installed", Source: request.Delivery.ActivePath, Version: request.Plan.DeclaredVersion},
+		{Name: "DEMO", Status: "installed", Source: request.Delivery.ActivePath, Version: request.Plan.DeclaredVersion},
+	}}
+	outcome, err := New().Activate(context.Background(), clients.Env{Runner: runner}, request)
+	if err == nil || outcome.ActivationAttested || outcome.Activation == domain.ActivationActive ||
+		outcome.Verification == domain.VerificationInstalled || !outcome.AuthoritativeObservation ||
+		len(runner.commands) != 1 || runner.commands[0][2] != "list" {
+		t.Fatalf("duplicate native identities became attested activation: %+v %v %+v", outcome, err, runner.commands)
 	}
 }
