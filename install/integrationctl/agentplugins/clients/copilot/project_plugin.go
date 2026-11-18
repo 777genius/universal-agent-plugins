@@ -24,59 +24,69 @@ const copilotProjectPluginKind = "copilot_project_plugin_registration"
 // Existing loose-component bindings retain their previous behavior and never
 // silently migrate across two independent native configuration surfaces.
 func copilotWholePluginEligible(in clients.PlanInput, plan domain.DeliveryPlan) bool {
-	if !copilotSupportsProjectPlugin(in.Client.Version) || in.Envelope.FormatID != domain.FormatIDAgentPluginsV1 || len(plan.Components) == 0 ||
-		in.Envelope.App.Present || len(in.Envelope.Commands) != 0 || len(in.Envelope.InvalidCommands) != 0 ||
-		len(in.Envelope.MCP.InvalidServer) != 0 || len(in.Envelope.Inventory.InvalidSkills) != 0 ||
-		in.Envelope.Inventory.InvalidSkillsRoot {
+	if !copilotSupportsProjectPlugin(in.Client.Version) || !copilotWholePluginSourceEligible(in.Envelope) ||
+		!copilotAllPluginComponentsNative(in.Envelope, plan.Components) {
 		return false
 	}
-	for _, diagnostic := range in.Envelope.Diagnostics {
-		if diagnostic.Severity == domain.SeverityError {
-			return false
-		}
-	}
-	// A full native plugin exposes every bundled component. Never use this
-	// path when the plan filtered or rejected even one source component.
-	if len(plan.Components) != len(in.Envelope.Skills)+len(in.Envelope.MCP.Servers)+len(in.Envelope.Manifest.Extensions) {
-		return false
-	}
-	for _, component := range plan.Components {
-		if component.Support != domain.SupportNative {
-			return false
-		}
-		switch component.Kind {
-		case domain.ComponentSkill:
-			if _, ok := in.Envelope.Skills[component.Name]; !ok {
-				return false
-			}
-		case domain.ComponentMCPServer:
-			if _, ok := in.Envelope.MCP.Servers[component.Name]; !ok {
-				return false
-			}
-		case domain.ComponentExtension:
-			if _, ok := in.Envelope.Manifest.Extensions[component.Name]; !ok {
-				return false
-			}
-		default:
-			return false
-		}
-	}
-	// Whole-plugin loading leaves the authored MCP declaration untouched.
-	// Keep UAP's managed stdio projection for bundled executables or
-	// PLUGIN_DATA contracts requiring its verified launcher, rather than
-	// silently dropping the path/ownership guarantees of that adapter.
+	// Managed stdio contracts require UAP's launcher and cannot be
+	// reinterpreted as native Copilot plugin command execution.
 	for _, server := range in.Envelope.MCP.Servers {
 		if requirement := server.StdioRequirement; requirement != nil &&
 			(requirement.Kind == domain.ExecutableBundled || requirement.UsesPluginData) {
 			return false
 		}
 	}
+	// Never silently convert an existing loose-component binding.
 	for _, object := range in.PreviousNativeObjects {
 		if object.Kind != "managed_package_directory" && object.Kind != copilotProjectPluginKind {
 			return false
 		}
 	}
 	return true
+}
+
+func copilotWholePluginSourceEligible(envelope domain.PackageEnvelope) bool {
+	if envelope.FormatID != domain.FormatIDAgentPluginsV1 || envelope.App.Present ||
+		len(envelope.Commands) != 0 || len(envelope.InvalidCommands) != 0 ||
+		len(envelope.MCP.InvalidServer) != 0 || len(envelope.Inventory.InvalidSkills) != 0 ||
+		envelope.Inventory.InvalidSkillsRoot {
+		return false
+	}
+	for _, diagnostic := range envelope.Diagnostics {
+		if diagnostic.Severity == domain.SeverityError {
+			return false
+		}
+	}
+	return true
+}
+
+func copilotAllPluginComponentsNative(envelope domain.PackageEnvelope, components []domain.ComponentDecision) bool {
+	if len(components) == 0 ||
+		len(components) != len(envelope.Skills)+len(envelope.MCP.Servers)+len(envelope.Manifest.Extensions) {
+		return false
+	}
+	for _, component := range components {
+		if component.Support != domain.SupportNative || !copilotNativeComponentExists(envelope, component) {
+			return false
+		}
+	}
+	return true
+}
+
+func copilotNativeComponentExists(envelope domain.PackageEnvelope, component domain.ComponentDecision) bool {
+	switch component.Kind {
+	case domain.ComponentSkill:
+		_, ok := envelope.Skills[component.Name]
+		return ok
+	case domain.ComponentMCPServer:
+		_, ok := envelope.MCP.Servers[component.Name]
+		return ok
+	case domain.ComponentExtension:
+		_, ok := envelope.Manifest.Extensions[component.Name]
+		return ok
+	default:
+		return false
+	}
 }
 
 func copilotProjectPluginSettingsPath(root string) (string, error) {
@@ -148,17 +158,17 @@ func copilotValidateProjectPluginObjects(root string, physicalID string, objects
 			continue
 		}
 		if object.Kind != copilotProjectPluginKind {
-			return fmt.Errorf("Copilot project plugin registration cannot mix loose native components")
+			return fmt.Errorf("copilot project plugin registration cannot mix loose native components")
 		}
 		registered = append(registered, object)
 	}
 	if len(registered) != 1 {
-		return fmt.Errorf("Copilot project plugin requires exactly one owned registration")
+		return fmt.Errorf("copilot project plugin requires exactly one owned registration")
 	}
 	marketplace := shared.ManagedMarketplaceName(physicalID)
 	suffix := "@" + marketplace
 	if !strings.HasSuffix(registered[0].LogicalName, suffix) {
-		return fmt.Errorf("Copilot project plugin marketplace differs from binding")
+		return fmt.Errorf("copilot project plugin marketplace differs from binding")
 	}
 	plugin := strings.TrimSuffix(registered[0].LogicalName, suffix)
 	// Receipt reconstruction uses only canonical binding facts; it does not
@@ -168,7 +178,7 @@ func copilotValidateProjectPluginObjects(root string, physicalID string, objects
 		return err
 	}
 	if registered[0] != expected {
-		return fmt.Errorf("Copilot project plugin ownership differs from selected registration")
+		return fmt.Errorf("copilot project plugin ownership differs from selected registration")
 	}
 	return nil
 }
@@ -187,12 +197,12 @@ func copilotValidateProjectPluginName(root, physicalID, declaredName string, obj
 	for _, object := range objects {
 		if object.Kind == copilotProjectPluginKind {
 			if object != expected {
-				return fmt.Errorf("Copilot native project plugin identity differs from saved ownership")
+				return fmt.Errorf("copilot native project plugin identity differs from saved ownership")
 			}
 			return nil
 		}
 	}
-	return fmt.Errorf("Copilot native project plugin receipt is missing")
+	return fmt.Errorf("copilot native project plugin receipt is missing")
 }
 
 func copilotPluginSettingsSnapshot(kernel nativeconfig.Kernel, path string) (nativeconfig.FileSnapshot, error) {
@@ -201,7 +211,7 @@ func copilotPluginSettingsSnapshot(kernel nativeconfig.Kernel, path string) (nat
 		return file, err
 	}
 	if file.Exists && len(file.Body) == 0 {
-		return file, fmt.Errorf("Copilot project settings is an empty existing file")
+		return file, fmt.Errorf("copilot project settings is an empty existing file")
 	}
 	return file, nil
 }
@@ -223,31 +233,31 @@ func copilotVerifyProjectPluginSource(root string, plan domain.DeliveryPlan, ker
 			return nil, err
 		}
 		if !file.Exists || len(file.Body) < 2 {
-			return nil, fmt.Errorf("Copilot native plugin document is absent or empty")
+			return nil, fmt.Errorf("copilot native plugin document is absent or empty")
 		}
 		return shared.DecodeStrictJSONObject(file.Body)
 	}
 	manifest, err := read(manifestPath)
 	if err != nil {
-		return fmt.Errorf("Copilot project Agent Plugins manifest: %w", err)
+		return fmt.Errorf("copilot project Agent Plugins manifest: %w", err)
 	}
 	if manifest["name"] != plan.DeclaredName || manifest["$schema"] != domain.PluginSchemaV1 {
-		return fmt.Errorf("Copilot project plugin manifest must match the selected Agent Plugins 1.0 identity and schema")
+		return fmt.Errorf("copilot project plugin manifest must match the selected Agent Plugins 1.0 identity and schema")
 	}
 	marketplace, err := read(marketplacePath)
 	if err != nil {
-		return fmt.Errorf("Copilot project marketplace: %w", err)
+		return fmt.Errorf("copilot project marketplace: %w", err)
 	}
 	if marketplace["name"] != shared.ManagedMarketplaceName(plan.PhysicalArtifactID) {
-		return fmt.Errorf("Copilot project marketplace name differs from the selected package")
+		return fmt.Errorf("copilot project marketplace name differs from the selected package")
 	}
 	plugins, ok := marketplace["plugins"].([]any)
 	if !ok || len(plugins) != 1 {
-		return fmt.Errorf("Copilot project marketplace must contain exactly one local plugin")
+		return fmt.Errorf("copilot project marketplace must contain exactly one local plugin")
 	}
 	entry, ok := plugins[0].(map[string]any)
 	if !ok || entry["name"] != plan.DeclaredName || entry["source"] != "." {
-		return fmt.Errorf("Copilot project marketplace must point at the selected plugin root")
+		return fmt.Errorf("copilot project marketplace must point at the selected plugin root")
 	}
 	return nil
 }
@@ -264,7 +274,7 @@ func copilotInspectWholePlugin(plan domain.DeliveryPlan, managed *domain.ClientB
 	if managed != nil {
 		if managed.Scope != string(domain.ScopeProject) || managed.PhysicalArtifact != plan.PhysicalArtifactID ||
 			managed.TargetLocator != plan.ActivePath || managed.NativeProfileRoot != "" && managed.NativeProfileRoot != root {
-			return clients.RegistryIndeterminate, fmt.Errorf("Copilot project plugin binding differs from selected package")
+			return clients.RegistryIndeterminate, fmt.Errorf("copilot project plugin binding differs from selected package")
 		}
 		if err := copilotValidateProjectPluginName(root, plan.PhysicalArtifactID, plan.DeclaredName, managed.NativeObjects); err != nil {
 			return clients.RegistryIndeterminate, err
@@ -294,7 +304,7 @@ func copilotInspectWholePlugin(plan domain.DeliveryPlan, managed *domain.ClientB
 		return clients.RegistryClear, nil
 	}
 	if !exact {
-		return clients.RegistryIndeterminate, fmt.Errorf("Copilot owned project plugin settings were changed or partially removed")
+		return clients.RegistryIndeterminate, fmt.Errorf("copilot owned project plugin settings were changed or partially removed")
 	}
 	return clients.RegistryExpected, nil
 }
@@ -309,7 +319,7 @@ func copilotVerifyWholePlugin(env clients.Env, request domain.ActivationRequest)
 		return err
 	}
 	if finding != clients.RegistryExpected {
-		return fmt.Errorf("Copilot project plugin registration is not installed")
+		return fmt.Errorf("copilot project plugin registration is not installed")
 	}
 	return verifyCopilotTrust(env, request, true)
 }
@@ -330,7 +340,7 @@ func copilotPreflightWholePlugin(env clients.Env, request domain.ActivationReque
 		return err
 	}
 	if len(request.PreviousNativeObjects) > 0 && !copilotHasProjectPlugin(request.PreviousNativeObjects) {
-		return fmt.Errorf("Copilot project plugin cannot adopt a loose-component binding")
+		return fmt.Errorf("copilot project plugin cannot adopt a loose-component binding")
 	}
 	if copilotHasProjectPlugin(request.PreviousNativeObjects) {
 		if err := copilotValidateProjectPluginName(root, request.Plan.PhysicalArtifactID, request.Plan.DeclaredName, request.PreviousNativeObjects); err != nil {
@@ -370,7 +380,7 @@ func copilotMutateProjectPlugin(ctx context.Context, kernel nativeconfig.Kernel,
 	original := file.Original()
 	if original.Exists && len(original.Body) == 0 {
 		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged,
-			Err: errors.Join(fmt.Errorf("Copilot project settings is an empty existing file"), file.Close())}
+			Err: errors.Join(fmt.Errorf("copilot project settings is an empty existing file"), file.Close())}
 	}
 	next, changed, err := nativeconfig.PatchCopilotPluginSettings(original.Body, reg, owned, remove)
 	if err == nil {
