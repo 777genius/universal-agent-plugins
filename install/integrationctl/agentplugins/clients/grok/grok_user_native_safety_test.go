@@ -415,3 +415,18 @@ func TestGrokUserPostInstallNegativeReadbackKeepsUncertainEffect(t *testing.T) {
 		t.Fatalf("negative readback after install lost native uncertainty: %+v %v %+v", outcome, err, base.commands)
 	}
 }
+
+func TestGrokUserFailedNativeMutationCannotUseUnknownListAttestation(t *testing.T) {
+	request := grokRequest(t)
+	request.ActivationComplete = true
+	base := &fakeGrok{entries: []pluginEntry{}}
+	outcome, err := New().Activate(t.Context(), clients.Env{Runner: &grokFaultRunner{
+		other: base, verb: "install", err: errUnknownList,
+	}}, request)
+	if err == nil || outcome.NativeEffect != domain.NativeEffectUncertain ||
+		outcome.Activation == domain.ActivationActive || outcome.ActivationAttested ||
+		outcome.Verification == domain.VerificationInstalled || len(base.commands) != 2 ||
+		base.commands[0][2] != "list" || base.commands[1][2] != "install" {
+		t.Fatalf("failed native mutation reused manual list attestation: %+v %v %+v", outcome, err, base.commands)
+	}
+}
