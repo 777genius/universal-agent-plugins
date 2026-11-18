@@ -284,7 +284,7 @@ func TestCopilotWholePluginInspectRejectsDifferentOwnedPluginName(t *testing.T) 
 	other := request.Plan
 	other.DeclaredName = "different"
 	if finding, err := copilotInspectWholePlugin(other, binding, env.NativeConfig); err == nil || finding != clients.RegistryIndeterminate {
-		t.Fatalf("foreign logical identity treated as installed: %s %v", finding, err)
+		t.Fatalf("foreign logical identity treated as installed: %v %v", finding, err)
 	}
 }
 
