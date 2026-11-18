@@ -164,9 +164,9 @@ jobs:
           AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
           AUDIT_TARGET: ${{ matrix.target }}
           AUDIT_KIND: ${{ matrix.kind }}
-          # Trusted, explicitly titled E2E PRs run all 30 frozen source cases.
-          # Ordinary PRs/forks retain the original cheap two-source smoke.
-          AUDIT_LIMIT: ${{ inputs.cases || '20' }}
+          # Qualify all 30 frozen sources once after a trusted npm publication.
+          # Scheduled/manual audits retain the selectable (default 20) budget.
+          AUDIT_LIMIT: ${{ github.event_name == 'workflow_run' && '30' || inputs.cases || '20' }}
         run: |
           set -euo pipefail
           [[ "$AUDIT_PR_HEAD_SHA" =~ ^[a-f0-9]{40}$ ]] || exit 2
