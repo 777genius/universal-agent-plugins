@@ -395,7 +395,7 @@ func copilotMutateProjectPluginResult(ctx context.Context, kernel nativeconfig.K
 	if err := pathpolicy.RequireContainedChild(root, path); err != nil {
 		return unchanged(err)
 	}
-	file, err := kernel.BeginExactFile(path)
+	file, err := kernel.BeginExactFileBounded(path, 1<<20)
 	if err != nil {
 		return unchanged(err)
 	}
