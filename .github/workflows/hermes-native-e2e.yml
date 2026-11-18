@@ -12,6 +12,7 @@ on:
       - 'cli/internal/agentpluginscli/skills_batch*'
       - 'cli/internal/agentpluginscli/deps_sync*'
       - 'cli/internal/agentpluginscli/explicit_add_completion.go'
+      - 'cli/internal/agentpluginscli/saved_add_completion.go'
       - 'cli/internal/agentpluginscli/skills_retry.go'
       - 'cli/internal/agentpluginscli/deps_apply.go'
       - 'cli/internal/agentpluginscli/environment_session.go'
