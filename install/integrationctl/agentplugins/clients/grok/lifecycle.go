@@ -127,7 +127,7 @@ func activationError(outcome domain.ActivationOutcome, request domain.Activation
 		failed.UserActions = []string{"resolve uncertain Grok process cleanup before attempting another installation"}
 		return failed, cause
 	}
-	if errors.Is(err, errUnknownList) {
+	if errors.Is(err, errUnknownList) && outcome.NativeEffect != domain.NativeEffectUncertain {
 		if attested, ok := shared.AttestedUnknownVerification(outcome, request); ok {
 			return attested, nil
 		}
