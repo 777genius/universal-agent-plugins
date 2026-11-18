@@ -51,6 +51,55 @@ def wait_screen(session, label, predicate):
     raise AssertionError("timeout waiting for terminal screen: " + label)
 
 
+def wait_install_progress(session, after):
+    # groupProgressBoard writes two newline-terminated agent rows per frame.
+    # Inspect those boundaries in byte order, even when several frames and the
+    # final result arrive in one PTY read. Never count a pre-confirmation frame.
+    check(0 <= after <= len(session.raw), "invalid confirmation transcript offset")
+    rendered = Screen(session.screen.rows, session.screen.cols)
+    offset, rendered_to, rows = after, 0, {}
+    deadline = time.monotonic() + session.timeout
+    while time.monotonic() < deadline:
+        received = session.pump(0.1)
+        check(len(session.raw) <= LIMIT, "terminal transcript exceeded 1 MiB")
+        raw = bytes(session.raw)
+        while (end := raw.find(b"\n", offset)) >= 0:
+            end += 1
+            rendered.feed(raw[rendered_to:end].replace(b"\x1bM", b"\x1b[1A"))
+            chunk = raw[offset:end]
+            if b"\x1b[2A" in chunk:  # Start of the next live two-row board.
+                rows.clear()
+            line = clean(chunk).strip()
+            offset = rendered_to = end
+            check("Skills installation verified." not in line,
+                  "terminal verified before an observed post-confirmation progress frame")
+            row = re.fullmatch(r"(Claude Code|OpenAI Codex)\s+[·●✓!×] [0-2]/2 [^\r\n]+", line)
+            if row is None:
+                rows.clear()
+                continue
+            if row[1] in rows:
+                rows.clear()
+            rows[row[1]] = line
+            if len(rows) != 2:
+                continue
+            active = re.search(r"\b[01]/2 (preparing|installing)\b", "\n".join(rows.values()))
+            rows.clear()
+            view = rendered.snapshot()
+            if active and "Claude Code" in view and "OpenAI Codex" in view and \
+                    re.search(r"\b[01]/2 (preparing|installing)\b", view) is not None and \
+                    "Skills installation verified." not in view:
+                latest = session.screen
+                try:
+                    session.screen = rendered
+                    session.frame("install-progress")
+                    session.events[-1]["offset"] = end
+                finally:
+                    session.screen = latest
+                return end
+        check(session.process.poll() is None or received, "public CLI exited before install-progress")
+    raise AssertionError("timeout waiting for terminal screen: install-progress")
+
+
 def key(session, value):
     session.events.append({"event": "raw-key", "hex": value.hex(), "offset": len(session.raw)})
     session.send(value)
@@ -204,13 +253,12 @@ def main():
         confirm_review(session, project)
         report["preconfirmation"] = unchanged_before_confirmation(root, project, os.environ, before)
         report["unchanged_before_confirmation"] = True
+        confirmed_at = len(session.raw)
         key(session, b"\r")
         report["confirmations"], report["phase"] = 1, "install"
-        wait_screen(session, "install-progress", lambda v: "Claude Code" in v and "OpenAI Codex" in v and
-                    re.search(r"\b[01]/2 (preparing|installing)\b", v) is not None and
-                    "Skills installation verified." not in v)
+        progress_at = wait_install_progress(session, confirmed_at)
         report["progress_observed"] = True
-        session.wait(r"Skills installation verified\.", "complete")
+        session.wait(r"Skills installation verified\.", "complete", after=progress_at)
         session.finish(0)
         verified_result(session.raw)
         screen(session)

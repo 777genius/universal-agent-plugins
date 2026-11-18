@@ -8717,7 +8717,8 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                 home, project, before, self.VERSION)
             self.assertIsNone(observer.reason)
             case = dict(audit=audit, observer=observer, home=home, project=project,
-                        profile=profile, chats=chats, old=old, before=before)
+                        profile=profile, chats=chats, old=old, before=before,
+                        phase_started=datetime.now(timezone.utc))
             try:
                 yield case
             finally:
@@ -8752,9 +8753,104 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
         return path
 
     def phase(self, case, label):
+        finished = datetime.now(timezone.utc)
         current = case['audit'].snapshot([case['profile']])
-        case['observer'].checkpoint(label, current)
+        case['observer'].checkpoint(
+            label, current, interval=(case['phase_started'], finished))
+        case['phase_started'] = datetime.now(timezone.utc)
         return current
+
+    def test_metadata_only_checkpoints_receive_their_exact_command_intervals(self):
+        with self.fixture() as case:
+            validate = case['audit'].GEMINI_RUNTIME_AUDIT['_metadata']
+            observed = []
+            def capture(body, filename, project_hash, started, finished, diagnostic=None):
+                observed.append((started, finished))
+                return validate(body, filename, project_hash, started, finished, diagnostic)
+            intervals = []
+            for index, label in enumerate(
+                    ('after-public-repeat-add', 'after-public-repeat-list'), 1):
+                started = datetime.now(timezone.utc)
+                self.record(case, index)
+                finished = datetime.now(timezone.utc)
+                intervals.append((started, finished))
+                after = case['audit'].snapshot([case['profile']])
+                with patch.dict(validate.__globals__, {'_metadata': capture}):
+                    case['observer'].checkpoint(label, after, interval=(started, finished))
+                self.assertIsNone(case['observer'].reason)
+            self.assertEqual(observed, intervals)
+            self.assertTrue(case['observer'].finish(after))
+
+    def test_metadata_only_phase_boundaries_and_between_phase_records(self):
+        validate = load_audit().GEMINI_RUNTIME_AUDIT['_metadata']
+        base = datetime(2026, 11, 17, 12, 0, 0, tzinfo=timezone.utc)
+        for phase, previous_end, lower, upper in (('add', 10, 20, 30), ('list', 30, 40, 50)):
+            started = base + timedelta(milliseconds=lower, microseconds=999)
+            finished = base + timedelta(milliseconds=upper, microseconds=999)
+            for position, offset, accepted in (
+                    ('first-millisecond', lower, True), ('last-millisecond', upper, True),
+                    ('between-phases', previous_end + 1, False),
+                    ('before', lower - 1, False), ('after', upper + 1, False)):
+                with self.subTest(phase=phase, position=position):
+                    when = base + timedelta(milliseconds=offset)
+                    timestamp = when.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+                    body = json.dumps({'sessionId': 'skills-list-session', 'projectHash': 'a' * 64,
+                                       'startTime': timestamp, 'lastUpdated': timestamp}).encode() + b'\n'
+                    name = f'session-{when:%Y-%m-%dT%H-%M}-1-skills-l.jsonl'
+                    if accepted:
+                        validate(body, name, 'a' * 64, started, finished)
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'outside the repeat interval'):
+                            validate(body, name, 'a' * 64, started, finished)
+
+    def test_metadata_only_missing_overlapping_and_future_intervals_refuse(self):
+        for mutation in ('missing', 'overlap', 'future'):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                now = datetime.now(timezone.utc)
+                interval = (None if mutation == 'missing' else
+                    (case['observer'].observed_at - timedelta(milliseconds=1), now)
+                    if mutation == 'overlap' else (now, now + timedelta(days=1)))
+                case['observer'].checkpoint('after-public-repeat-add', case['before'],
+                                            interval=interval)
+                self.assertEqual(case['observer'].reason,
+                    'Gemini startup command interval is invalid' if mutation == 'missing' else
+                    'Gemini startup command intervals overlap or are in the future')
+                self.assertFalse(case['observer'].finish(case['before']))
+                self.assertEqual(case['observer'].evidence()['phases'], [])
+
+    def test_incomplete_snapshots_refuse_at_every_observation(self):
+        markers = (('.gemini/denied-file', 'unreadable'),
+                   ('.gemini/denied/.walk-error', 'unreadable'),
+                   (r'.gemini\denied\.walk-error', '0' * 64))
+        stages = ('admission', 'baseline', 'after-public-repeat-add',
+                  'after-public-repeat-list', 'finish')
+        for stage in stages:
+            for path, digest in markers:
+                with self.subTest(stage=stage, path=path), self.fixture() as case:
+                    observer = case['observer']
+                    if stage in ('after-public-repeat-list', 'finish'):
+                        self.phase(case, 'after-public-repeat-add')
+                    if stage == 'finish':
+                        self.phase(case, 'after-public-repeat-list')
+                    snapshot = {**case['audit'].snapshot([case['profile']]), path: digest}
+                    if stage == 'admission':
+                        observer = case['audit'].GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit'](
+                            case['home'], case['project'], snapshot, self.VERSION)
+                    try:
+                        if stage == 'baseline':
+                            now = datetime.now(timezone.utc)
+                            observer.baseline(snapshot, interval=(now, now))
+                        elif stage.startswith('after-public-'):
+                            observer.checkpoint(stage, snapshot,
+                                interval=(case['phase_started'], datetime.now(timezone.utc)))
+                        elif stage == 'finish':
+                            observer.finish(snapshot)
+                        self.assertEqual(observer.reason, 'Gemini runtime snapshot is incomplete')
+                        self.assertFalse(observer.finish(snapshot))
+                        self.assertEqual(observer.evidence()['status'], 'unqualified')
+                    finally:
+                        if stage == 'admission':
+                            observer.close()
 
     def test_windows_registry_and_marker_require_exact_producer_spelling(self):
         if sys.platform != "win32":
@@ -8928,7 +9024,8 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                     path.symlink_to(case["old"].name)
                 after = case["audit"].snapshot([case["profile"]])
                 with patch.object(os, "open", side_effect=AssertionError("must refuse before open")) as opened:
-                    case["observer"].checkpoint("after-public-repeat-add", after)
+                    case["observer"].checkpoint("after-public-repeat-add", after,
+                        interval=(case["phase_started"], datetime.now(timezone.utc)))
                 opened.assert_not_called()
                 self.assertFalse(case["observer"].finish(after))
                 proof = case["observer"].evidence()
@@ -9237,7 +9334,7 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
 
     def test_actual_startup_template_two_phases_and_old_bytes(self):
         with self.fixture() as c:
-            old = next(c['chats'].glob('*'))
+            old = c['old']
             raw = old.read_bytes()
             self.phase(c, 1)
             after, _ = self.phase(c, 2)
@@ -9247,6 +9344,48 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
             self.assertFalse(e['producer_attribution'])
             self.assertFalse(e['writer_closure'])
             self.assertEqual([x['records'] for x in e['files']], [3, 3])
+
+    def test_startup_accepts_separate_ordered_millisecond_clock_reads(self):
+        when = datetime(2026, 11, 17, 12, 0, 0, tzinfo=timezone.utc)
+        validate = GEMINI_STARTUP_MODULE['_startup']
+        for separation in (0, 1):
+            with self.subTest(metadata_separation_ms=separation), self.fixture() as c:
+                def change(values):
+                    values[0]['lastUpdated'] = (
+                        when + timedelta(milliseconds=separation)
+                    ).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+                path = self.write(c, 1, when, change)
+                project_hash = hashlib.sha256(str(c['project']).encode()).hexdigest()
+                for interval in ((when, when + timedelta(milliseconds=3)),
+                                 (when + timedelta(microseconds=999),
+                                  when + timedelta(milliseconds=2, microseconds=999))):
+                    self.assertEqual(validate(path.read_bytes(), path.name, project_hash,
+                                              interval, c['chats'].parent),
+                                     c['observer'].startup_template)
+
+    def test_startup_clock_order_window_and_precision_refuse(self):
+        when = datetime(2026, 11, 17, 12, 0, 0, tzinfo=timezone.utc)
+        stamp = lambda offset: (when + timedelta(milliseconds=offset)).isoformat(
+            timespec='milliseconds').replace('+00:00', 'Z')
+        changes = {
+            'metadata-order': lambda v: v[0].update(startTime=stamp(1), lastUpdated=stamp(0)),
+            'message-order': lambda v: v[0].update(lastUpdated=stamp(2)),
+            'update-order': lambda v: v[2]['$set'].update(lastUpdated=stamp(0)),
+            'before-window': lambda v: v[0].update(startTime=stamp(-1)),
+            'after-window': lambda v: v[2]['$set'].update(lastUpdated=stamp(3)),
+            'submillisecond': lambda v: v[0].update(
+                startTime=when.isoformat(timespec='microseconds').replace('+00:00', 'Z')),
+        }
+        for mutation, change in changes.items():
+            with self.subTest(mutation=mutation), self.fixture() as c:
+                path = self.write(c, 1, when, change)
+                interval = (when + timedelta(microseconds=999),
+                            when + timedelta(milliseconds=2, microseconds=999))
+                with self.assertRaisesRegex(ValueError, 'Gemini (runtime|startup) record time'):
+                    GEMINI_STARTUP_MODULE['_startup'](
+                        path.read_bytes(), path.name,
+                        hashlib.sha256(str(c['project']).encode()).hexdigest(),
+                        interval, c['chats'].parent)
 
     def test_changed_template_identity_project_extra_keys_tools_and_times_refuse(self):
         changes = {'text': lambda v: v[1]['content'][0].update(text=v[1]['content'][0]['text'] + 'x'), 'id': lambda v: v[1].update(id='f' * 32), 'project': lambda v: v[0].update(projectHash='f' * 64), 'keys': lambda v: v[1].update(model='x'), 'tool': lambda v: v[1]['content'].append({'functionCall': {}}), 'extra': lambda v: v.append({'type': 'user', 'content': 'hello'}), 'time': lambda v: v[2]['$set'].update(lastUpdated='2000-01-01T00:00:00.000Z')}
@@ -9260,7 +9399,7 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
         for mutation in ('interval', 'swap'):
             with self.subTest(mutation=mutation), self.fixture() as c:
                 if mutation == 'swap':
-                    p = next(c['chats'].glob('*'))
+                    p = c['old']
                     b = p.read_bytes()
                     p.unlink()
                     p.write_bytes(b)
@@ -9271,15 +9410,19 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
         for mutation in ('duplicate', 'window'):
             with self.subTest(mutation=mutation), self.fixture() as c:
                 start = datetime.now(timezone.utc)
-                p = self.write(c, 1, start)
+                p = self.write(c, 1, c['start'] if mutation == 'window' else start)
                 if mutation == 'duplicate':
                     p.write_bytes(p.read_bytes().replace(b'{', b'{"sessionId":"x",', 1))
                 after = gemini_startup_snapshot([c['profile']])
                 import time
                 time.sleep(0.006)
-                interval = (c['start'], c['finish']) if mutation == 'window' else (start - timedelta(milliseconds=1), datetime.now(timezone.utc))
+                interval = (start, datetime.now(timezone.utc))
+                self.assertGreaterEqual(interval[0], c['finish'])
                 c['observer'].checkpoint('after-public-repeat-add', after, interval=interval)
                 self.assertFalse(c['observer'].finish(after))
+                self.assertEqual(c['observer'].reason,
+                    'Gemini runtime record time is outside the repeat interval'
+                    if mutation == 'window' else 'duplicate JSON member')
 
     def test_startup_baseline_is_validated_and_previous_snapshot_preserved(self):
         for mutation in ('id', 'frame', 'project', 'keys', 'duplicate', 'old-key'):

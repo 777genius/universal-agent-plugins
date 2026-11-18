@@ -18,6 +18,7 @@ on:
       - 'repotests/agentplugins_copilot_project_trust_native_test.go'
       - 'repotests/agentplugins_copilot_cycle_*test.go'
       - 'repotests/agentplugins_gemini_cycle_*test.go'
+      - 'install/integrationctl/agentplugins/clients/gemini/**'
       - 'install/integrationctl/agentplugins/clients/copilot/**'
       - 'install/integrationctl/agentplugins/adapters/nativeconfig/copilot_trust*.go'
       - 'repotests/agentplugins_windsurf_cycle_*test.go'

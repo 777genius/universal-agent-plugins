@@ -1096,8 +1096,101 @@ def process_running(pid):
         return False
 
 
+@unittest.skipUnless(sys.platform.startswith("linux"), "Linux proc diagnostic controls")
+class CodexGroupDiagnosticTest(unittest.TestCase):
+    def member(self, root, pid, parent, group, state, started=1234, comm="inert"):
+        directory = root / str(pid)
+        directory.mkdir()
+        fields = [state, str(parent), str(group), str(group)] + ["0"] * 15 + [str(started)]
+        (directory / "stat").write_bytes(
+            (str(pid) + " (" + comm + ") " + " ".join(fields) + "\n").encode())
+        return directory
+
+    def test_snapshot_retains_live_and_zombie_members_without_foreign_processes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.member(root, 101, 1, 42, "Z", 333, "inert ) ( name")
+            self.member(root, 102, 99, 42, "S", 444)
+            self.member(root, 103, 99, 90, "R")
+            with patch.object(audit, "_posix_group_active", return_value=True):
+                result = audit._posix_group_diagnostic(42, proc_root=root)
+            self.assertTrue(result["group_exists"])
+            self.assertTrue(result["diagnostic_only"])
+            self.assertTrue(result["scan_complete"])
+            self.assertEqual(result["unreadable"], 0)
+            self.assertEqual(result["members"], [
+                {"pid": 101, "ppid": 1, "pgid": 42, "sid": 42, "state": "Z", "start_ticks": 333},
+                {"pid": 102, "ppid": 99, "pgid": 42, "sid": 42, "state": "S", "start_ticks": 444}])
+
+    def test_member_count_file_bound_and_redirection_are_visible(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for pid in range(101, 110):
+                self.member(root, pid, 1, 42, "Z")
+            with patch.object(audit, "_posix_group_active", return_value=True):
+                result = audit._posix_group_diagnostic(42, proc_root=root)
+            self.assertEqual(len(result["members"]), 8)
+            self.assertTrue(result["truncated"])
+            self.assertFalse(result["scan_complete"])
+            self.assertTrue(result["group_exists"], "zombies must not count as a closed group")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            oversized = self.member(root, 101, 1, 42, "S")
+            (oversized / "stat").write_bytes(b"x" * 4097)
+            redirected = self.member(root, 102, 1, 42, "S")
+            (redirected / "stat").unlink()
+            foreign = root / "foreign"
+            foreign.write_bytes(b"foreign diagnostic bytes\n")
+            (redirected / "stat").symlink_to(foreign)
+            with patch.object(audit, "_posix_group_active", return_value=True):
+                result = audit._posix_group_diagnostic(42, proc_root=root)
+            self.assertEqual(result["members"], [])
+            self.assertEqual(result["unreadable"], 2)
+            self.assertTrue(result["group_exists"])
+            self.assertEqual(foreign.read_bytes(), b"foreign diagnostic bytes\n")
+
+    def test_failure_notes_keep_original_exception_and_exact_bounded_wire_prefix(self):
+        failure = TimeoutError()
+        cause = RuntimeError("original cause")
+        failure.__cause__ = cause
+        process = SimpleNamespace(pid=42, returncode=0)
+        wire = b'{"id":1,"result":{}}\n' + b"x" * 2048
+        snapshot = {"pgid": 42, "group_exists": True, "members": [{"pid": 101, "state": "Z"}],
+                    "diagnostic_only": True}
+        with patch.object(audit, "_posix_group_diagnostic", return_value=snapshot):
+            audit._note_group_drain_failure(failure, process, "before-owned-cleanup", [wire])
+            audit._note_group_drain_failure(failure, process, "after-owned-cleanup")
+        self.assertEqual(repr(failure), "TimeoutError()")
+        self.assertIs(failure.__cause__, cause)
+        prefix = "Codex native group diagnostic: "
+        before, after = [json.loads(note.removeprefix(prefix)) for note in failure.__notes__]
+        self.assertTrue(all(len(note) < 3200 for note in failure.__notes__))
+        self.assertEqual(before["phase"], "group-drain")
+        self.assertEqual(before["rpc_stdout"], {
+            "bytes": len(wire), "messages": 1, "sha256": audit.hashlib.sha256(wire).hexdigest(),
+            "prefix_hex": wire[:256].hex(), "prefix_truncated": True})
+        self.assertEqual(before["group"], snapshot)
+        self.assertEqual(after["when"], "after-owned-cleanup")
+        self.assertNotIn("rpc_stdout", after)
+
+    def test_diagnostic_failure_or_excess_does_not_replace_the_original_failure(self):
+        failure = TimeoutError()
+        process = SimpleNamespace(pid=42, returncode=0)
+        with patch.object(audit, "_posix_group_diagnostic", side_effect=RuntimeError("inert")):
+            audit._note_group_drain_failure(failure, process, "before-owned-cleanup")
+        self.assertEqual(repr(failure), "TimeoutError()")
+        self.assertIn("diagnostic unavailable: RuntimeError", failure.__notes__[-1])
+        with patch.object(audit, "_posix_group_diagnostic", return_value={"padding": "x" * 10000}):
+            audit._note_group_drain_failure(failure, process, "after-owned-cleanup")
+        note = failure.__notes__[-1]
+        self.assertLess(len(note), 3200)
+        detail = json.loads(note.removeprefix("Codex native group diagnostic: "))
+        self.assertTrue(detail["diagnostic_truncated"])
+        self.assertGreater(detail["bytes"], 3072)
+
+
 class CodexNativeProcessCleanupTest(unittest.TestCase):
-    def observed_exit(self, exit_code, stderr):
+    def observed_exit(self, exit_code, stderr, *, orphan=False):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             profile = root / "profile"
@@ -1114,13 +1207,36 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
                 print(json.dumps({'id': second['id'], 'result': {'data': []}}), flush=True)
                 sys.stdin.read()
             """)
+            if orphan:
+                self.orphan_cleanup_complete = False
+                # This child has no capture pipes; only its owned process group
+                # keeps the otherwise successful exchange from completing.
+                script += textwrap.dedent("""
+                    import subprocess
+                    from pathlib import Path
+                    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'],
+                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    Path('owned-orphan-pid').write_text(str(child.pid))
+                """)
             script += f"sys.stderr.buffer.write(bytes.fromhex({stderr.hex()!r}))\n"
             script += f"sys.stderr.buffer.flush()\nraise SystemExit({exit_code})\n"
             (root / "app-server").write_text(script, encoding="utf-8")
             environment = {key: value for key, value in os.environ.items()
                            if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR"}}
             environment.update(HOME=str(root), USERPROFILE=str(root), CODEX_HOME=str(profile))
-            return asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment))
+            try:
+                return asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment))
+            finally:
+                # Keep the inert fixture bounded even if the observer regresses.
+                marker = root / "owned-orphan-pid"
+                if orphan and marker.exists():
+                    pid = int(marker.read_text())
+                    deadline = time.monotonic() + 3
+                    while process_running(pid) and time.monotonic() < deadline:
+                        time.sleep(.02)
+                    self.orphan_cleanup_complete = not process_running(pid)
+                    if not self.orphan_cleanup_complete:
+                        os.kill(pid, signal.SIGKILL)
 
     def test_nonzero_exit_still_refuses_with_observed_diagnostic(self):
         self.assertEqual(self.observed_exit(0, b""), {"data": []})
@@ -1138,6 +1254,30 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
         self.assertNotIn("\x1b", message)
         self.assertNotIn("omitted-tail", message)
         self.assertLess(len(message), 4 * 2048 + 160)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux proc group-drain evidence")
+    def test_group_drain_timeout_retains_observations_and_still_refuses(self):
+        with self.assertRaises(TimeoutError) as raised:
+            self.observed_exit(0, b"", orphan=True)
+        prefix = "Codex native group diagnostic: "
+        notes = [json.loads(note.removeprefix(prefix)) for note in raised.exception.__notes__
+                 if note.startswith(prefix)]
+        self.assertEqual([note["when"] for note in notes],
+                         ["before-owned-cleanup", "after-owned-cleanup"])
+        before, after = notes
+        self.assertEqual(before["phase"], "group-drain")
+        self.assertEqual(before["exit_code"], 0)
+        self.assertEqual(before["rpc_stdout"]["messages"], 2)
+        self.assertGreater(before["rpc_stdout"]["bytes"], 0)
+        self.assertEqual(len(before["rpc_stdout"]["sha256"]), 64)
+        self.assertTrue(before["group"]["group_exists"])
+        self.assertTrue(any(member["state"] not in ("Z", "X")
+                            for member in before["group"]["members"]),
+                        "inert live orphan was not observed at the group-drain refusal")
+        self.assertTrue(after["group"]["diagnostic_only"])
+        # A post-kill zombie is retained as a member, never promoted to closure.
+        # Check production cleanup before the fixture's independent safety kill.
+        self.assertTrue(self.orphan_cleanup_complete, "owned inert child survived observer cleanup")
 
     def test_exited_launcher_with_child_held_pipes_cannot_pass_or_leak(self):
         with tempfile.TemporaryDirectory() as temporary:

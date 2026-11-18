@@ -1,7 +1,6 @@
 package pluginkitairepo_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"maps"
@@ -104,6 +103,36 @@ func nativeProjectSkillsLifecycle(t *testing.T, surface string, install func(*te
 	evidence["status"], evidence["final_bindings"], evidence["foreign_preserved"] = "passed", 0, true
 }
 
+const nativeTerminalDriverLogLimit = 1 << 20
+
+type nativeTerminalDriverOutput struct {
+	body     [nativeTerminalDriverLogLimit]byte
+	size     int
+	overflow bool
+}
+
+func (output *nativeTerminalDriverOutput) Write(body []byte) (int, error) {
+	n := copy(output.body[output.size:], body)
+	output.size += n
+	output.overflow = output.overflow || n < len(body)
+	// Keep draining both pipes even after the retained diagnostic is full.
+	return len(body), nil
+}
+
+func (output *nativeTerminalDriverOutput) Bytes() []byte {
+	return output.body[:output.size]
+}
+
+func nativeTerminalDriverCommand(ctx context.Context, executable string, args ...string) *exec.Cmd {
+	command := exec.CommandContext(ctx, executable, args...)
+	// The Python handler closes its Session and preserves failure evidence.
+	// WaitDelay still kills an unresponsive driver; its control-socket EOF
+	// leaves cleanup of owned PTY jobs to the existing persistent owner.
+	command.Cancel = func() error { return command.Process.Signal(os.Interrupt) }
+	command.WaitDelay = 5 * time.Second
+	return command
+}
+
 func nativeTerminalProjectSkillsInstall(t *testing.T, f *browserProjectFixture) {
 	t.Helper()
 	python := nativeBinary(t, "AGENTPLUGINS_NATIVE_BROWSER_PYTHON")
@@ -114,18 +143,18 @@ func nativeTerminalProjectSkillsInstall(t *testing.T, f *browserProjectFixture) 
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
-	command := exec.CommandContext(ctx, python, driver, "--installer", f.codex.installer,
+	command := nativeTerminalDriverCommand(ctx, python, driver, "--installer", f.codex.installer,
 		"--root", f.codex.base.Root, "--project", f.codex.base.Project, "--source", nativeAnthropicSource)
-	command.Dir, command.WaitDelay = source, 5*time.Second
+	command.Dir = source
 	command.Env = append(append([]string(nil), f.env...), "TERM=xterm-256color", "CI=1",
 		"AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED=1", "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted")
-	var output bytes.Buffer
+	var output nativeTerminalDriverOutput
 	command.Stdout, command.Stderr = &output, &output
 	err := command.Run()
-	if output.Len() > 1<<20 {
+	nativeWrite(t, filepath.Join(f.codex.base.Root, "native-terminal-driver.log"), output.Bytes(), 0600)
+	if output.overflow {
 		t.Fatal("terminal/native driver diagnostic exceeded its 1 MiB evidence bound")
 	}
-	nativeWrite(t, filepath.Join(f.codex.base.Root, "native-terminal-driver.log"), output.Bytes(), 0600)
 	if err != nil || ctx.Err() != nil {
 		t.Fatalf("terminal/native install failed: %v; deadline=%v\n%s", err, ctx.Err(), nativeBrowserReportTail(output.Bytes()))
 	}
