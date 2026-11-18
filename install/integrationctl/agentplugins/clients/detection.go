@@ -106,6 +106,13 @@ type ProjectVersionRequirement interface {
 	RequiresProjectVersion(client domain.DetectedClient) bool
 }
 
+// BestEffortProjectVersionProbe is for clients where an observed native
+// version unlocks an optional capability. A missing or failed probe must not
+// break the preexisting version-independent project delivery path.
+type BestEffortProjectVersionProbe interface {
+	ProjectVersionProbeBestEffort() bool
+}
+
 // UserVersionRequirement is a narrowly selected user-scope version gate.
 // It does not imply that every installation of the same logical client uses
 // that executable or has native user capabilities.
