@@ -373,7 +373,7 @@ func grokSignedUserInventory(t *testing.T, body []byte, journey projectJourney, 
 	t.Helper()
 	var rows []struct {
 		Name, Status, Source, Version, Path string
-		RepoKey string `json:"repo_key"`
+		RepoKey                             string `json:"repo_key"`
 	}
 	if err := json.Unmarshal(body, &rows); err != nil {
 		t.Fatal(err)
