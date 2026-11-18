@@ -24,9 +24,14 @@ func (*Adapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *doma
 		if _, err := copilotTrustPath(in.Client, *plan); err != nil {
 			return err
 		}
-		shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, shared.OnlyNativeComponents(plan.Components))
+		plan.NativePluginRegistration = copilotWholePluginEligible(in, *plan)
+		shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, plan.NativePluginRegistration || shared.OnlyNativeComponents(plan.Components))
 		plan.Activation = domain.ActivationPrepared
-		plan.UserActions = shared.AppendUnique(plan.UserActions, "install project skills and MCP servers, and let Copilot remember trust for this project; tool permissions stay unchanged")
+		if plan.NativePluginRegistration {
+			plan.UserActions = shared.AppendUnique(plan.UserActions, "register this complete Agent Plugin natively for the selected Copilot project without copying or separately installing its skills and MCP servers")
+		} else {
+			plan.UserActions = shared.AppendUnique(plan.UserActions, "install project skills and MCP servers, and let Copilot remember trust for this project; tool permissions stay unchanged")
+		}
 		plan.LocalActions = shared.AppendUnique(plan.LocalActions, fmt.Sprintf("Copilot will trust %s for future sessions using profile %s; this choice remains after plugin removal", plan.TargetContext.ProjectRoot, plan.TargetContext.UserConfigRoot))
 		return nil
 	}
