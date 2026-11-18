@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: published-other-clients-${{ github.run_id }}
@@ -29,6 +30,7 @@ jobs:
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}
+      require_trusted_publish: true
 
   published-additional-clients:
     needs: resolve-release

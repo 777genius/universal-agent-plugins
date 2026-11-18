@@ -23,6 +23,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: published-windows-client-audit-${{ github.run_id }}
@@ -34,6 +35,7 @@ jobs:
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}
+      require_trusted_publish: true
 
   windows-native-install:
     needs: resolve-release
