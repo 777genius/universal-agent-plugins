@@ -11,7 +11,8 @@ import (
 )
 
 var (
-
+	_ clients.ProjectVersionRequirement     = (*Adapter)(nil)
+	_ clients.BestEffortProjectVersionProbe = (*Adapter)(nil)
 	_ clients.VersionProbeEnvironment       = (*Adapter)(nil)
 	_ clients.DisposableVersionProbeProfile = (*Adapter)(nil)
 )
