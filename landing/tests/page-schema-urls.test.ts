@@ -49,6 +49,8 @@ for (const base of ['/', '/universal-agent-plugins/']) {
           await runInNewContext(`(async () => {${stripTypeScriptTypes(source)}\n})()`, {
             computed,
             ref,
+            // Server rendering registers no client mounted effects.
+            onMounted: () => {},
             isKnownLocale,
             catalogVisiblePlugins,
             pluginBenefit,
@@ -64,7 +66,7 @@ for (const base of ['/', '/universal-agent-plugins/']) {
             seoDescription,
             spdxLicenseUrl,
             useI18n: () => ({ t: (key: string) => key, locale: ref(locale) }),
-            useLocalePath: () => (value: string) => value,
+            useLocalePath: () => (value: string) => localizedPath(value, locale),
             useRuntimeConfig: () => ({
               app: { baseURL: base },
               public: {

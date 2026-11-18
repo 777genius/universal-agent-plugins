@@ -83,7 +83,7 @@ func prepareSkillsRetry(cmd *cobra.Command, app App, opts *options, original *Pr
 	if err != nil {
 		return nil, fmt.Errorf("could not prepare the retry: %w", err)
 	}
-	if !coveredByReview(reviewed, next.Actions()) {
+	if !coveredByReview(reviewed, next.Actions()) || !skillsRetryTrustAuthorityCovered(original, next) {
 		if err := confirmChangedRetry(cmd, app, opts, next); err != nil {
 			next.Close()
 			return nil, err

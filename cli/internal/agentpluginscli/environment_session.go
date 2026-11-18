@@ -8,14 +8,12 @@ import (
 	"os"
 	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/manifestedit"
 
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -105,8 +103,7 @@ func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot en
 	return applyDependencySync(cmd, app, opts, request, mutationConfirmed(app, opts))
 }
 
-func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation, targets []string) (dependencySyncRequest, error) {
-	request := dependencySyncRequest{}
+func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation, targets []string) (request dependencySyncRequest, err error) {
 	if err := validateDependencyTargets(app, requirements); err != nil {
 		return request, err
 	}
@@ -135,7 +132,10 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	if err != nil {
 		return request, err
 	}
-	prepared.Bindings = reviewedCopilotSavedAddActions(cmd, app, opts, targets, prepared.Bindings)
+	prepared.Bindings, err = reviewedSavedAddActions(cmd, app, opts, targets, prepared.Bindings)
+	if err != nil {
+		return request, err
+	}
 	detected, err := detectDependencyClients(cmd.Context(), app)
 	if err != nil {
 		return request, err
@@ -158,27 +158,6 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	}
 	request = dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, intent: snapshot.intent(manifest, body), prepared: actions, detected: detected, consent: consent, aliases: aliases, attestation: attest}
 	return request, nil
-}
-
-// Saved add may review native trust with explicit installation consent or the
-// existing interactive confirmation. A matching package receipt alone does not
-// prove folder trust; ordinary deps sync and other projects stay unchanged.
-func reviewedCopilotSavedAddActions(cmd *cobra.Command, app App, opts *options, targets []string, actions []dependencyAction) []dependencyAction {
-	canReview := opts.yes || strings.TrimSpace(opts.target) != "" || (app.Terminal && opts.format == "human")
-	if cmd.Name() != "add" || !canReview || app.scope() != domain.ScopeProject ||
-		len(targets) != 1 || !domain.ClientTraitsFor(domain.ClientID(targets[0])).SavedProjectRepairOnAdd {
-		return actions
-	}
-	for i, action := range actions {
-		if action.Action != environment.ActionUnchanged || action.ClientID != targets[0] ||
-			action.Authority == nil || action.Authority.ReceiptID == "" || action.Package == nil {
-			continue
-		}
-		reviewed := managementNativeRepair(action)
-		reviewed.Reason = "Verify and finish selected Copilot project folder trust if missing"
-		actions[i] = reviewed
-	}
-	return actions
 }
 
 // Replaced only by disposable failure-injection tests.
@@ -252,6 +231,13 @@ func verifyUnselectedPins(previous, locked environment.Lock, aliases []string) e
 	return nil
 }
 
+func manifestDependencyGroup(dev bool) string {
+	if dev {
+		return "dev-dependencies"
+	}
+	return "dependencies"
+}
+
 func dependencyIntentEdits(previous, wanted environment.Requirements) []manifestedit.DependencyEdit {
 	var edits []manifestedit.DependencyEdit
 	aliases := map[string]bool{}
@@ -269,44 +255,58 @@ func dependencyIntentEdits(previous, wanted environment.Requirements) []manifest
 	for _, alias := range names {
 		old, oldOK := previous.Dependencies[alias]
 		value, ok := wanted.Dependencies[alias]
-		if ok && oldOK && reflect.DeepEqual(old, value) {
+		oldDev, newDev := previous.Development[alias], wanted.Development[alias]
+		if ok && oldOK && reflect.DeepEqual(old, value) && oldDev == newDev {
 			continue
 		}
-		edit := manifestedit.DependencyEdit{Alias: alias}
+		if oldOK && ok && oldDev != newDev {
+			// A group move is remove+add, not a rewrite of unrelated data.
+			edits = append(edits, manifestedit.DependencyEdit{Alias: alias, Group: manifestDependencyGroup(oldDev)})
+		}
+		edit := manifestedit.DependencyEdit{Alias: alias, Group: manifestDependencyGroup(newDev)}
+		if !ok {
+			edit.Group = manifestDependencyGroup(oldDev)
+		}
 		if ok {
-			v := &manifestedit.Dependency{}
-			if value.Web != nil {
-				v.Website, v.Kind, v.Skill = value.Web.URL, environment.SkillKind, value.Web.Skill
-			} else if value.Git != nil {
-				v.Git = value.Git.Endpoint()
-				v.Path = value.Git.Path
-				v.Kind, v.Skill = value.Git.Kind, value.Git.Skill
-				switch value.Git.Selector.Kind {
-				case environment.SelectorCommit:
-					v.Commit = value.Git.Selector.Value
-				case environment.SelectorRef:
-					v.Ref = value.Git.Selector.Value
-				}
-			} else if value.Archive != nil {
-				v.Archive = value.Archive.URL
-				v.SHA256 = value.Archive.SHA256
-				v.Path = value.Archive.Path
-			} else {
-				v.Registry = "uap"
-				v.Distribution = value.Registry.Distribution
-				if value.Registry.Selector.Kind == environment.SelectorVersion || value.Registry.Selector.Kind == environment.SelectorRange {
-					v.Version = value.Registry.Selector.Value
-					v.Registry, v.Distribution = "", ""
-				} else {
-					v.Release = value.Registry.Selector.Value
-				}
-			}
-			edit.Value = v
+			edit.Value = manifestDependencyValue(value)
 		}
 		edits = append(edits, edit)
 	}
 
 	return edits
+}
+
+// manifestDependencyValue maps one validated requirement to its TOML edit.
+// It keeps source-specific serialization separate from intent diffing.
+func manifestDependencyValue(value environment.Requirement) *manifestedit.Dependency {
+	v := &manifestedit.Dependency{}
+	if value.Web != nil {
+		v.Website, v.Kind, v.Skill = value.Web.URL, environment.SkillKind, value.Web.Skill
+	} else if value.Git != nil {
+		v.Git = value.Git.Endpoint()
+		v.Path = value.Git.Path
+		v.Kind, v.Skill = value.Git.Kind, value.Git.Skill
+		switch value.Git.Selector.Kind {
+		case environment.SelectorCommit:
+			v.Commit = value.Git.Selector.Value
+		case environment.SelectorRef:
+			v.Ref = value.Git.Selector.Value
+		}
+	} else if value.Archive != nil {
+		v.Archive = value.Archive.URL
+		v.SHA256 = value.Archive.SHA256
+		v.Path = value.Archive.Path
+	} else {
+		v.Registry = "uap"
+		v.Distribution = value.Registry.Distribution
+		if value.Registry.Selector.Kind == environment.SelectorVersion || value.Registry.Selector.Kind == environment.SelectorRange {
+			v.Version = value.Registry.Selector.Value
+			v.Registry, v.Distribution = "", ""
+		} else {
+			v.Release = value.Registry.Selector.Value
+		}
+	}
+	return v
 }
 
 func targetIntentEdits(previous, wanted environment.Requirements) []manifestedit.TargetEdit {

@@ -556,10 +556,91 @@ def _posix_group_active(pid):
         return False
 
 
-async def _start_native(binary, project, environment):
+def _posix_group_diagnostic(pid, *, proc_root=Path("/proc")):
+    """Bounded, non-atomic observations only; never an alternative closure gate."""
+    result = {"pgid": pid, "group_exists": None, "members": [],
+              "scan_complete": False, "unreadable": 0, "diagnostic_only": True}
+    try:
+        result["group_exists"] = _posix_group_active(pid)
+        if not sys.platform.startswith("linux"):
+            result["unavailable"] = "Linux proc stat is unavailable on this platform"
+            return result
+        deadline = time.monotonic() + .25
+        with os.scandir(proc_root) as entries:
+            for scanned, entry in enumerate(entries, 1):
+                if scanned > 4096 or time.monotonic() >= deadline:
+                    result["truncated"] = True
+                    break
+                if not entry.name.isdecimal():
+                    continue
+                try:
+                    if not entry.is_dir(follow_symlinks=False):
+                        continue
+                    descriptor = os.open(Path(entry.path) / "stat",
+                                         os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+                    try:
+                        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                            raise ValueError("nonregular proc stat")
+                        raw = os.read(descriptor, 4097)
+                    finally:
+                        os.close(descriptor)
+                    if len(raw) > 4096 or not raw.endswith(b"\n"):
+                        raise ValueError("unbounded or incomplete proc stat")
+                    observed, _ = raw.split(b" (", 1)
+                    fields = raw.rsplit(b") ", 1)[1].split()
+                    if observed != entry.name.encode("ascii") or len(fields) < 20:
+                        raise ValueError("inexact proc identity")
+                    numbers = fields[1:4] + fields[19:20]
+                    if (len(fields[0]) != 1 or not fields[0].isalpha()
+                            or any(not value.isdigit() or len(value) > 20 for value in numbers)):
+                        raise ValueError("inexact proc fields")
+                    parent, group, session, started = map(int, numbers)
+                    if group != pid:
+                        continue
+                    if len(result["members"]) == 8:
+                        result["truncated"] = True
+                        break
+                    result["members"].append({"pid": int(entry.name), "ppid": parent,
+                                              "pgid": group, "sid": session,
+                                              "state": fields[0].decode("ascii"), "start_ticks": started})
+                except (OSError, ValueError, IndexError, UnicodeError):
+                    result["unreadable"] += 1
+            else:
+                result["scan_complete"] = True
+    except Exception as error:
+        result["observation_error"] = type(error).__name__
+    result["members"].sort(key=lambda member: member["pid"])
+    return result
+
+
+def _note_group_drain_failure(error, process, when, transcript=None):
+    # Exception notes survive the existing bounded harness traceback report.
+    # Retain no argv, environment, comm or unrelated-process metadata.
+    try:
+        detail = {"phase": "group-drain", "when": when, "pid": process.pid,
+                  "exit_code": process.returncode, "group": _posix_group_diagnostic(process.pid)}
+        if transcript is not None:
+            received = b"".join(transcript)
+            detail["rpc_stdout"] = {
+                "bytes": len(received), "messages": len(transcript),
+                "sha256": hashlib.sha256(received).hexdigest()}
+        body = json.dumps(detail, sort_keys=True, separators=(",", ":"))
+        if len(body) > 3072:
+            body = json.dumps({"phase": "group-drain", "when": when, "pid": process.pid,
+                               "diagnostic_truncated": True, "bytes": len(body),
+                               "sha256": hashlib.sha256(body.encode()).hexdigest(),
+                               "prefix": body[:1024]}, separators=(",", ":"))
+        error.add_note("Codex native group diagnostic: " + body)
+    except Exception as diagnostic:
+        error.add_note("Codex native group diagnostic unavailable: " + type(diagnostic).__name__)
+
+
+async def _start_native(binary, project, environment, *, sqlite_baseline=False):
     windows = os.name == "nt"
-    argv = ([sys.executable, str(Path(__file__).resolve()), "--windows-native-start", str(binary)]
-            if windows else [str(binary), "app-server"])
+    baseline_args = ["--disable", "plugins"] if sqlite_baseline else []
+    bootstrap_args = ["--sqlite-baseline"] if sqlite_baseline else []
+    argv = ([sys.executable, str(Path(__file__).resolve()), "--windows-native-start", str(binary),
+             *bootstrap_args] if windows else [str(binary), *baseline_args, "app-server"])
     options = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if windows else {"start_new_session": True}
     process = await asyncio.create_subprocess_exec(
         *argv, cwd=project, env=environment,
@@ -622,11 +703,12 @@ async def _finish_native(process, job, completed, readers):
             await _close_native_transport(process)
 
 
-async def _exchange(binary, project, profile, environment):
-    process, job = await _start_native(binary, project, environment)
+async def _exchange(binary, project, profile, environment, *, sqlite_baseline=False):
+    startup = {"sqlite_baseline": True} if sqlite_baseline else {}
+    process, job = await _start_native(binary, project, environment, **startup)
     errors = asyncio.create_task(_drain(process.stderr, 1 << 20))
     readers, completed = [errors], False
-    transcript, total = [], 0
+    transcript, total, group_drain = [], 0, False
 
     async def send(message):
         process.stdin.write((json.dumps(message) + "\n").encode())
@@ -640,7 +722,7 @@ async def _exchange(binary, project, profile, environment):
             if not line or total > 4 << 20:
                 raise ValueError("Codex native discovery ended or exceeded output bound")
             message = json.loads(line)
-            transcript.append(message)
+            transcript.append(line)
             if message.get("id") == identity:
                 if "error" in message or not isinstance(message.get("result"), dict):
                     raise ValueError("Codex native discovery returned an error")
@@ -675,18 +757,27 @@ async def _exchange(binary, project, profile, environment):
                     "Codex native discovery did not exit cleanly: "
                     f"exit_code={process.returncode}, stderr_bytes={len(stderr)}, "
                     f"stderr_prefix={stderr[:2048]!r}")
+            group_drain = True
             while _windows_active(job) if job is not None else _posix_group_active(process.pid):
                 await asyncio.sleep(.02)  # Still inside the same finite 15-second budget.
             completed = True
             return listing
     finally:
         failure = sys.exception()
+        diagnose = failure is not None and group_drain and job is None
         try:
-            await _finish_native(process, job, completed, readers)
-        except Exception as cleanup:
-            if failure is not None:
-                raise RuntimeError(f"Codex discovery failed ({failure}); owned cleanup failed ({cleanup})") from failure
-            raise
+            if diagnose:
+                _note_group_drain_failure(failure, process, "before-owned-cleanup", transcript)
+        finally:
+            try:
+                await _finish_native(process, job, completed, readers)
+            except Exception as cleanup:
+                if failure is not None:
+                    raise RuntimeError(f"Codex discovery failed ({failure}); owned cleanup failed ({cleanup})") from failure
+                raise
+            finally:
+                if diagnose:
+                    _note_group_drain_failure(failure, process, "after-owned-cleanup")
 
 
 def _path_equal(value, expected):
@@ -817,8 +908,11 @@ class CodexPluginSQLiteAudit:
                       if key.upper() in {"PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR",
                                          "TEMP", "TMP", "TMPDIR"}}
         native_env["CODEX_HOME"] = str(self.profile)
+        # This preinstall exchange initializes only SQLite and builtin Skills.
+        # Suppress unrelated curated-plugin Git startup for this process alone;
+        # public plugin lifecycle and native verification keep default features.
         listing = asyncio.run(_exchange(
-            Path(binary), project, self.profile, native_env))
+            Path(binary), project, self.profile, native_env, sqlite_baseline=True))
         self.native_version = "0.153.4"
         self.guard()
         rows = listing.get("data")
@@ -899,7 +993,12 @@ class CodexRuntimeAudit:
     def checkpoint(self, phase, present):
         self.guard()
         selected_bytes = _regular_bytes(self.selected, FILE_LIMIT) if present else None
-        listing = asyncio.run(_exchange(self.binary, self.project, self.profile, self.environment))
+        try:
+            listing = asyncio.run(_exchange(self.binary, self.project, self.profile, self.environment))
+        except Exception as error:
+            error.add_note(f"Codex native skill inventory phase={phase!r}; "
+                           f"command={[str(self.binary), 'app-server']!r}")
+            raise
         self.guard()
         if present and _regular_bytes(self.selected, FILE_LIMIT) != selected_bytes:
             raise ValueError("Codex selected Skill bytes changed during native discovery")
@@ -933,11 +1032,18 @@ class CodexRuntimeAudit:
                 "runtime_baseline": self.baseline, "observations": self.observations}
 
 
-if __name__ == "__main__":
-    if os.name != "nt" or len(sys.argv) != 3 or sys.argv[1] != "--windows-native-start":
+def _windows_native_start(argv):
+    if (os.name != "nt" or len(argv) not in (3, 4)
+            or argv[1] != "--windows-native-start"
+            or argv[3:] not in ([], ["--sqlite-baseline"])):
         raise SystemExit("private Windows native observer bootstrap required")
     # Exactly one unbuffered byte: no JSON protocol input can be consumed here.
     if os.read(0, 1) != b"!":
         raise SystemExit("native observer process ownership was not established")
-    raise SystemExit(subprocess.call([sys.argv[2], "app-server"], stdin=sys.stdin,
-                                    stdout=sys.stdout, stderr=sys.stderr))
+    baseline_args = ["--disable", "plugins"] if argv[3:] else []
+    return subprocess.call([argv[2], *baseline_args, "app-server"], stdin=sys.stdin,
+                           stdout=sys.stdout, stderr=sys.stderr)
+
+
+if __name__ == "__main__":
+    raise SystemExit(_windows_native_start(sys.argv))

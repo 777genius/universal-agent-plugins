@@ -53,6 +53,12 @@ var (
 )
 
 func main() {
+	// This private process protocol must remain available in every build mode.
+	// In particular, release command routing must not reinterpret its argv as
+	// installer flags before the native stdio launcher can handle it.
+	if handled, code := managedstdio.Dispatch(os.Args[1:], os.Stderr); handled {
+		os.Exit(code)
+	}
 	if commands.IsRelease() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -60,9 +66,6 @@ func main() {
 			os.Exit(exitx.Code(err))
 		}
 		return
-	}
-	if handled, code := managedstdio.Dispatch(os.Args[1:], os.Stderr); handled {
-		os.Exit(code)
 	}
 	if commands.IsEnabled() && commands.IsAuthorInvocation(os.Args[1:], agentpluginscli.NewRoot(agentpluginscli.App{Version: version})) {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

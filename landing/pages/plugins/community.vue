@@ -57,11 +57,13 @@ usePageSeo(
   <div class="registry-surface plugin-page community-plugin-page">
     <PageBackground />
     <div class="container">
-      <nav class="breadcrumbs" :aria-label="t('registryUi.community.breadcrumb')">
-        <NuxtLink :to="localePath('/plugins/')"> {{ t('registryUi.community.plugins') }} </NuxtLink
-        ><span aria-hidden="true">/</span
-        ><span>{{ plugin?.display_name ?? t('registryUi.community.communityPlugin') }}</span>
-      </nav>
+      <DetailBreadcrumbs
+        :back-to="localePath('/plugins/')"
+        :back-label="t('registryUi.detail.backToPluginDirectory')"
+        :label="t('registryUi.community.breadcrumb')"
+        :parents="[{ label: t('registryUi.community.plugins'), to: localePath('/plugins/') }]"
+        :current="plugin?.display_name ?? t('registryUi.community.communityPlugin')"
+      />
 
       <div v-if="plugin" class="plugin-page__grid">
         <article class="plugin-profile">

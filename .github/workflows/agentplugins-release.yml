@@ -216,6 +216,7 @@ jobs:
       - name: Build exact-version binaries
         env:
           TAG: ${{ inputs.tag }}
+          SOURCE_COMMIT: ${{ needs.validate.outputs.commit }}
         working-directory: cli
         run: |
           set -euo pipefail
@@ -232,7 +233,7 @@ jobs:
               if [ "${GOOS}" = windows ]; then SUFFIX=.exe; fi
               export GOOS GOARCH
               asset="agentplugins_${version}_${GOOS}_${GOARCH}${SUFFIX}"
-              if ! CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${version}" -o "${RUNNER_TEMP}/${asset}" ./cmd/agentplugins; then
+              if ! CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X main.version=${version} -X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Enabled=release-cli-contract-v1 -X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Revision=${SOURCE_COMMIT}" -o "${RUNNER_TEMP}/${asset}" ./cmd/agentplugins; then
                 echo "::error::go build failed for ${GOOS}/${GOARCH}"
                 failed="${failed} ${GOOS}/${GOARCH}"
               fi

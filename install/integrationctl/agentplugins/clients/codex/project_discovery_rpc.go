@@ -116,6 +116,13 @@ func verifyCodexSkillEntries(skills []any, wanted map[string]string, scope, plug
 			continue
 		}
 		plugin := skill["pluginId"]
+		// Codex retains built-in system skills beside same-named repository
+		// skills. Only the exact enabled repository entry proves installation.
+		nativePath, _ := skill["path"].(string)
+		if scope == "repo" && skill["scope"] == "system" && codexPluginMatches(plugin, "") &&
+			cleanAbsolute(filepath.FromSlash(nativePath)) && !codexDiscoveryPathMatches(nativePath, expected) {
+			continue
+		}
 		if found[name] || !codexDiscoveryPathMatches(skill["path"], expected) || skill["scope"] != scope || skill["enabled"] != true || !codexPluginMatches(plugin, pluginID) {
 			return fmt.Errorf("codex did not discover the exact enabled project skill %q", name)
 		}

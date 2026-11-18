@@ -66,7 +66,8 @@ for (const width of [1440, 390, 320]) {
     const before = (await demo.boundingBox())!;
     const supported = (await page.locator('.client-section').boundingBox())!;
     expect(before.y).toBeGreaterThanOrEqual(supported.y + supported.height - 1);
-    expect(before.width).toBeGreaterThanOrEqual(Math.min(width - 32, 1600) - 4);
+    expect(before.width).toBeGreaterThanOrEqual(Math.min(width - 32, 800) - 4);
+    expect(before.width).toBeLessThanOrEqual(800);
     await expect(page.locator('.hero__demo .hero-demo-video')).toHaveCount(0);
     await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
     const overlay = await button.evaluate((element) => {
@@ -237,4 +238,29 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
     if (directory) await page.screenshot({ path: resolve(directory, `hero-video-playing-${width}.png`) });
     await video.evaluate((element: HTMLVideoElement) => element.pause());
   }
+});
+
+
+test('whole demo poster hover and keyboard focus animate the invitation without starting playback', async ({ page }) => {
+  await setSignedMirrorTestTime(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('./');
+  await hydrated(page);
+  const demo = page.locator('.hero-demo-video');
+  const launch = demo.locator('.hero-demo-video__launch');
+  const icon = launch.locator('svg');
+  await demo.hover({ position: { x: 12, y: 12 } });
+  await expect(icon).not.toHaveCSS('transform', 'none');
+  await expect(demo.locator('iframe:not(.hero-demo-video__preload)')).toHaveCount(0);
+  await page.mouse.move(0, 0);
+  await launch.focus();
+  await expect(icon).not.toHaveCSS('transform', 'none');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(icon).toHaveCSS('transform', 'none');
+  // The shared reduced-motion rule caps transitions at 0.01ms.
+  const durations = await icon.evaluate((element) =>
+    getComputedStyle(element).transitionDuration.split(',').map((value) =>
+      parseFloat(value) / (value.trim().endsWith('ms') ? 1000 : 1)),
+  );
+  expect(durations.every((duration) => duration <= 0.00001)).toBe(true);
 });

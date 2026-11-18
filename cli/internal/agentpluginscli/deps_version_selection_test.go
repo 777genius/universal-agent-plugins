@@ -16,7 +16,8 @@ func TestVersionSelectionManifestForms(t *testing.T) {
 		valid      bool
 	}{
 		{"1.2.3", true}, {"^1.2", true}, {"^0.2.3", true}, {"^0.0", true},
-		{"", false}, {"v1.2.3", false}, {"1.2", false}, {"^1", false}, {"1.2.3-beta", false}, {"1.2.3+build", false}, {" >=1.2.3", false},
+		{"1.2", true}, {"~1.2.3", true}, {">=1.2.3 <2.0.0", true}, {"^1.2 || ^2.0", true}, {"1.2.3-beta", true}, {"1.2.3+build", true}, {"*", true},
+		{"", false}, {"v1.2.3", false}, {" >=1.2.3", false},
 	} {
 		t.Run(test.expression, func(t *testing.T) {
 			body := []byte("schema_version = 1\n[dependencies]\n# keep dependency context\ncontext7 = \"" + test.expression + "\" # keep inline\n[dependencies.legacy]\ngit = \"acme/tools\"\nref = \"main\"\n[targets]\ncodex = [\"context7\", \"legacy\"]\n")
@@ -35,9 +36,9 @@ func TestVersionSelectionManifestForms(t *testing.T) {
 				t.Fatalf("unchanged intent rewrote bytes: %s %v", unchanged, err)
 			}
 			selector := req.Dependencies["context7"].Registry.Selector
-			wantKind := environment.SelectorVersion
-			if strings.HasPrefix(test.expression, "^") {
-				wantKind = environment.SelectorRange
+			wantKind := environment.SelectorRange
+			if test.expression == "1.2.3" || test.expression == "1.2.3-beta" || test.expression == "1.2.3+build" {
+				wantKind = environment.SelectorVersion
 			}
 			if selector.Kind != wantKind || selector.Value != test.expression {
 				t.Fatalf("selector = %+v", selector)

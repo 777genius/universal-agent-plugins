@@ -14,12 +14,14 @@ import (
 // The public Project completer runs skills list, then mcp list. The pinned
 // inventory commands respectively initialize/list and only initialize each
 // selected server. Neither phase receives model or tools/call authority.
+// Repeated add/update perform two separate inventory probes before those
+// completion phases.
 func geminiCyclePublicInventoryPhases(label string) []int {
 	switch label {
-	case "add-a", "add-b", "update-a", "missing-repair-a":
+	case "add-a", "add-b", "update-a", "intact-repair-a", "missing-repair-a":
 		return []int{2, 1}
-	case "repeat-add-a", "unchanged-update-a", "intact-repair-a":
-		return []int{2, 2, 1}
+	case "repeat-add-a", "unchanged-update-a":
+		return []int{2, 2, 2, 1}
 	default:
 		return nil
 	}

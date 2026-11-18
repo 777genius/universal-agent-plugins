@@ -264,17 +264,18 @@
     },
     "dependencies": {
       "eyebrow": "تبعيات مترابطة",
-      "title": "إضافتان. تبعية مشتركة واحدة.",
+      "title": "إضافتان\nتبعية مشتركة واحدة",
       "description": "ثبّت الإضافة مع تبعياتها. تُثبّت التبعيات المشتركة ذات الإصدار المتوافق نفسه مرة واحدة فقط.",
       "demoPackage": "حزمة توضيحية",
       "installed": "مثبّتة",
       "alreadyInstalled": "مثبّتة مسبقًا",
-      "shared": "مشتركة",
+      "shared": "مشتركة بين الإضافتين",
       "caption": "الحزم ومخطط التبعيات للتوضيح. تشترك الحزمتان في Playwright؛ وContext7 مثبّتة مسبقًا.",
-      "graphDescription": "تعتمد marketing-kit على Playwright وHubSpot وNotion. وتعتمد Web Design Kit على حزمة Playwright نفسها وFigma وContext7. جميع الحزم مثبّتة؛ وكانت Context7 مثبّتة مسبقًا."
+      "graphDescription": "إصدارات توضيحية: يعيد marketing-kit v{marketingVersion} وWeb Design Kit v{designVersion} استخدام تبعية جسر Playwright واحدة بالإصدار v{playwrightVersion}. يستخدم Marketing Kit أيضًا HubSpot وNotion، ويستخدم Web Design Kit كلًا من Figma وContext7.",
+      "exampleVersions": "إصدارات توضيحية"
     },
     "restore": {
-      "title": "إصدارات الإضافات نفسها. لكل فريقك.",
+      "title": "إصدارات الإضافات نفسها\nلكل فريقك",
       "guide": "الدليل",
       "from": "جهازي",
       "to": "كمبيوتر زميلي",
@@ -599,7 +600,7 @@
       "more": "+{count} إضافية"
     },
     "command": {
-      "terminal": "الطرفية",
+      "terminal": "الطرفية لديك",
       "copiedLabel": "تم نسخ الأمر",
       "copyLabel": "انسخ الأمر",
       "copied": "تم النسخ",
@@ -841,9 +842,10 @@
       "unsupportedPluginComponents": "لا يدعم {agent} جميع مكونات هذا الملحق.",
       "dialogDescription": "اختر الوكلاء ونطاق التثبيت، ثم شغّل الأمر في الطرفية.",
       "closeDialog": "إغلاق التثبيت",
-      "pinnedSourceShort": "مصدر Git مثبت",
+      "pinnedSourceShort": "التثبيت من Git",
       "desktopSourceShort": "اتصال Desktop محلي",
-      "webSetupShort": "إعداد Web بإرشادات"
+      "webSetupShort": "إعداد Web بإرشادات",
+      "selectionRoutesUnavailable": "تم الاحتفاظ بالوكلاء المحددين. لا يوجد مصدر تثبيت مشترك لهذه المجموعة ضمن النطاق المحدد. غيّر الوكلاء أو النطاق للحصول على أمر تثبيت."
     },
     "authentication": {
       "not_required": "لا يلزم حساب",
