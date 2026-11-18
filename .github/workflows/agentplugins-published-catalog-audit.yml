@@ -1,16 +1,8 @@
 name: Published npm stable catalog installation audit
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
-    paths:
-      - 'scripts/prepare-codex-linux-sandbox.sh'
-      - '.github/workflows/agentplugins-published-catalog-audit.yml'
-      - '.github/workflows/agentplugins-published-version.yml'
-      - 'scripts/live-install-audit.py'
-      - 'scripts/test_live_install_audit_components.py'
-  # Qualify the newest published npm release after trusted npm publication,
-  # and retain a full source-backed weekly regression audit.
+  # Release-channel E2E only: after trusted npm publish, scheduled, or manual.
+  # Current-source PRs are qualified by native/runtime and fast contract gates.
   workflow_run:
     workflows: ['Agentplugins NPM Publish']
     types: [completed]
@@ -28,12 +20,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: published-catalog-audit-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.event_name == 'pull_request' && github.run_id || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
+  group: published-catalog-audit-${{ github.event_name }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   resolve-release:
-    if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && (github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}
@@ -98,7 +90,7 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           # Pull request checkout is a synthetic merge commit; attest the exact PR tip.
-          AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AUDIT_PR_HEAD_SHA: ${{ github.sha }}
           AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
           AUDIT_KIND: ${{ matrix.kind }}
           AUDIT_TARGET: ${{ matrix.client }}

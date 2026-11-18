@@ -1,28 +1,8 @@
 name: Published npm stable macOS ARM64 native client E2E
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - '.github/workflows/agentplugins-published-macos-audit.yml'
-      - '.github/workflows/agentplugins-published-version.yml'
-      - 'scripts/live-install-audit.py'
-      - 'scripts/test_live_install_audit_env.py'
-      - 'scripts/test_live_install_audit_components.py'
-      - 'scripts/run-native-client-matrix.py'
-      - 'tests/live-install/fixtures.json'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/agentplugins-published-macos-audit.yml'
-      - '.github/workflows/agentplugins-published-version.yml'
-      - 'scripts/live-install-audit.py'
-      - 'scripts/test_live_install_audit_env.py'
-      - 'scripts/test_live_install_audit_components.py'
-      - 'scripts/run-native-client-matrix.py'
-      - 'tests/live-install/fixtures.json'
-  # Deep real-client catalog is weekly; two-source smoke stays on PRs.
-  # Newly published npm releases are requalified after the publisher completes.
+  # Release-channel E2E only: after trusted npm publish, scheduled, or manual.
+  # Current-source PRs are qualified by native/runtime and fast contract gates.
   workflow_run:
     workflows: ['Agentplugins NPM Publish']
     types: [completed]
@@ -45,26 +25,26 @@ permissions:
   contents: read
 
 concurrency:
-  group: published-macos-client-audit-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: published-macos-client-audit-${{ github.event_name }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   resolve-release:
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
-      version: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && '0.1.102' || inputs.version }}
+      version: ${{ inputs.version }}
 
   macos-native-install:
     needs: resolve-release
     name: macOS ARM64 npm stable / ${{ matrix.target }} / ${{ matrix.kind }}
     runs-on: macos-15
-    timeout-minutes: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && 120 || github.event_name == 'pull_request' && 45 || 80 }}
+    timeout-minutes: 80
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
-        target: ${{ fromJSON(github.event_name == 'pull_request' && github.event.pull_request.draft && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]')) && '["codex","claude","opencode","gemini","copilot"]' || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
+        target: [codex, claude, opencode, gemini, copilot, cline, kimi, qoder, pi]
         kind: [plugin, skill]
         exclude:
           - target: pi
@@ -98,7 +78,7 @@ jobs:
       # prerequisite for all plugin targets, never by a synthetic stub.
       # No Docker daemon or authenticated MCP execution is claimed here.
       - name: Install real Docker CLI for published Docker Hub source
-        if: ${{ matrix.kind == 'plugin' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]'))) }}
+        if: ${{ matrix.kind == 'plugin' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -178,13 +158,13 @@ jobs:
         if: ${{ !cancelled() }}
         shell: bash
         env:
-          AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AUDIT_PR_HEAD_SHA: ${{ github.sha }}
           AUDIT_VENDOR_OUTCOME: ${{ steps.bootstrap.outcome }}
           AUDIT_TARGET: ${{ matrix.target }}
           AUDIT_KIND: ${{ matrix.kind }}
           # Trusted, explicitly titled E2E PRs run all 30 frozen source cases.
           # Ordinary PRs/forks retain the original cheap two-source smoke.
-          AUDIT_LIMIT: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.title, '[full-published-e2e]') && '30' || github.event_name == 'pull_request' && '2' || github.event_name == 'push' && '30' || github.event_name == 'schedule' && '20' || inputs.cases || '20' }}
+          AUDIT_LIMIT: ${{ github.event_name == 'workflow_run' && '30' || github.event_name == 'schedule' && '20' || inputs.cases || '20' }}
         run: |
           set -euo pipefail
           [[ "$AUDIT_PR_HEAD_SHA" =~ ^[a-f0-9]{40}$ ]] || exit 2
