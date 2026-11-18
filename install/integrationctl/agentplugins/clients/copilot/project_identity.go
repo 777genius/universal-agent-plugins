@@ -10,7 +10,8 @@ import (
 )
 
 func inspectCopilotProject(plan domain.DeliveryPlan, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
-	if plan.NativePluginRegistration {
+	if plan.NativePluginRegistration || copilotHasProjectPlugin(plan.PreviousNativeObjects) ||
+		managed != nil && copilotHasProjectPlugin(managed.NativeObjects) {
 		return copilotInspectWholePlugin(plan, managed, kernel)
 	}
 	layout, err := copilotComponents(plan.NativeRegistryRoot)
