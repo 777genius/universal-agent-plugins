@@ -67,6 +67,9 @@ for (const width of [1440, 390]) {
     await checkChoices(page, dialog);
     await page.keyboard.press('Escape');
     await card.locator('.plugin-card__title-link').click();
+    await expect(page).toHaveURL(/\/plugins\/i18n-state-00\/$/);
+    // Nuxt finishes the route's smooth scroll after rendering the detail page.
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     const panel = page.locator('.install-panel');
     await checkChoices(page, panel);
     await expect(panel.locator('.command-snippet--add code')).toHaveText(nativeAdd);
@@ -112,6 +115,9 @@ test('incompatible local and Web routes remain selected with an explicit explana
   await expect(dialog).toContainText(wording('en')('registryUi.install.selectionRoutesUnavailable'));
   await page.keyboard.press('Escape');
   await card.locator('.plugin-card__title-link').click();
+  await expect(page).toHaveURL(/\/plugins\/i18n-state-00\/$/);
+  // Wait for the completed route before opening a viewport-anchored picker.
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   const panel = page.locator('.install-panel');
   await expect(panel.locator('.command-snippet--add')).toHaveCount(0);
   await expect(panel).toContainText(wording('en')('registryUi.install.selectionRoutesUnavailable'));
