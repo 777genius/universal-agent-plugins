@@ -184,6 +184,54 @@ func copilotPluginSettingsSnapshot(kernel nativeconfig.Kernel, path string) (nat
 	return file, nil
 }
 
+// A settings entry alone cannot attest to a usable native plugin. The staged
+// package must still contain an ordinary Agent Plugins manifest and a matching
+// local marketplace that points only at its own root.
+func copilotVerifyProjectPluginSource(root string, plan domain.DeliveryPlan) error {
+	manifestPath := filepath.Join(plan.ActivePath, "plugin.json")
+	marketplacePath := filepath.Join(plan.ActivePath, ".github", "plugin", "marketplace.json")
+	read := func(path string) (map[string]any, error) {
+		if err := pathpolicy.RequireContainedChild(root, path); err != nil {
+			return nil, err
+		}
+		info, err := os.Lstat(path)
+		if err != nil {
+			return nil, err
+		}
+		if !info.Mode().IsRegular() || info.Size() < 2 || info.Size() > 1<<20 {
+			return nil, fmt.Errorf("Copilot native plugin document is not a regular bounded file")
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		return shared.DecodeStrictJSONObject(body)
+	}
+	manifest, err := read(manifestPath)
+	if err != nil {
+		return fmt.Errorf("Copilot project Agent Plugins manifest: %w", err)
+	}
+	if manifest["name"] != plan.DeclaredName {
+		return fmt.Errorf("Copilot project plugin manifest name differs from the selected package")
+	}
+	marketplace, err := read(marketplacePath)
+	if err != nil {
+		return fmt.Errorf("Copilot project marketplace: %w", err)
+	}
+	if marketplace["name"] != shared.ManagedMarketplaceName(plan.PhysicalArtifactID) {
+		return fmt.Errorf("Copilot project marketplace name differs from the selected package")
+	}
+	plugins, ok := marketplace["plugins"].([]any)
+	if !ok || len(plugins) != 1 {
+		return fmt.Errorf("Copilot project marketplace must contain exactly one local plugin")
+	}
+	entry, ok := plugins[0].(map[string]any)
+	if !ok || entry["name"] != plan.DeclaredName || entry["source"] != "." {
+		return fmt.Errorf("Copilot project marketplace must point at the selected plugin root")
+	}
+	return nil
+}
+
 func copilotInspectWholePlugin(plan domain.DeliveryPlan, managed *domain.ClientBinding, kernel nativeconfig.Kernel) (clients.RegistryFinding, error) {
 	root, err := copilotPlanRoot(domain.DetectedClient{ConfigRoot: plan.TargetContext.UserConfigRoot}, plan)
 	if err != nil {
@@ -209,6 +257,9 @@ func copilotInspectWholePlugin(plan domain.DeliveryPlan, managed *domain.ClientB
 			if object.Kind == copilotProjectPluginKind && object != want {
 				return clients.RegistryIndeterminate, fmt.Errorf("Copilot project plugin binding name differs from selected package")
 			}
+		}
+		if err := copilotVerifyProjectPluginSource(root, plan); err != nil {
+			return clients.RegistryIndeterminate, err
 		}
 	}
 	file, err := copilotPluginSettingsSnapshot(kernel, path)
