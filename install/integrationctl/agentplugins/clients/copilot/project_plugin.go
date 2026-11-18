@@ -344,18 +344,31 @@ func copilotPreflightWholePlugin(env clients.Env, request domain.ActivationReque
 	if err := env.NativeConfig.RequireFileIO(); err != nil {
 		return err
 	}
-	reg, path, err := copilotProjectRegistration(root, request.Plan.PhysicalArtifactID, request.Plan.DeclaredName)
+	// Group preflight runs before staging: it has the selected plan but no
+	// delivery or request-level name/receipts yet. Check the prospective
+	// namespace now, and require exact staged receipts at activation time.
+	preview := request.Delivery.ClientID == "" && request.Delivery.ActivePath == "" && len(request.Delivery.NativeObjects) == 0
+	name, previous := request.DeclaredName, request.PreviousNativeObjects
+	if preview {
+		if !request.Plan.HasNativePluginRegistration() {
+			return fmt.Errorf("copilot native project preview requires a selected whole-plugin plan")
+		}
+		name, previous = request.Plan.DeclaredName, request.Plan.PreviousNativeObjects
+	}
+	reg, path, err := copilotProjectRegistration(root, request.Plan.PhysicalArtifactID, name)
 	if err != nil {
 		return err
 	}
-	if err := copilotValidateProjectPluginName(root, request.Plan.PhysicalArtifactID, request.Plan.DeclaredName, request.Delivery.NativeObjects); err != nil {
-		return err
+	if !preview {
+		if err := copilotValidateProjectPluginName(root, request.Plan.PhysicalArtifactID, name, request.Delivery.NativeObjects); err != nil {
+			return err
+		}
 	}
-	if len(request.PreviousNativeObjects) > 0 && !copilotHasProjectPlugin(request.PreviousNativeObjects) {
+	if len(previous) > 0 && !copilotHasProjectPlugin(previous) {
 		return fmt.Errorf("copilot project plugin cannot adopt a loose-component binding")
 	}
-	if copilotHasProjectPlugin(request.PreviousNativeObjects) {
-		if err := copilotValidateProjectPluginName(root, request.Plan.PhysicalArtifactID, request.Plan.DeclaredName, request.PreviousNativeObjects); err != nil {
+	if copilotHasProjectPlugin(previous) {
+		if err := copilotValidateProjectPluginName(root, request.Plan.PhysicalArtifactID, name, previous); err != nil {
 			return err
 		}
 	}
@@ -363,7 +376,7 @@ func copilotPreflightWholePlugin(env clients.Env, request domain.ActivationReque
 	if err != nil {
 		return err
 	}
-	_, _, err = nativeconfig.PatchCopilotPluginSettings(file.Body, reg, copilotHasProjectPlugin(request.PreviousNativeObjects), false)
+	_, _, err = nativeconfig.PatchCopilotPluginSettings(file.Body, reg, copilotHasProjectPlugin(previous), false)
 	return err
 }
 

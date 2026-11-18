@@ -3,6 +3,7 @@ package copilot
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -430,5 +431,65 @@ func TestCopilotSavedWholePluginKeepsStagedMarketplaceWithoutVersion(t *testing.
 	}
 	if plan.HasNativePluginRegistration() {
 		t.Fatal("new bundled stdio component failed to select managed launcher delivery")
+	}
+}
+
+func TestCopilotWholePluginGroupPreflightBeforeStaging(t *testing.T) {
+	env, request, _ := trustFixture(t)
+	request.Plan.DeclaredName = "review"
+	request.Plan.SetNativePluginRegistration(true)
+	// A group previews the selected plan before a StagedDelivery or
+	// request-level DeclaredName exists. No settings or receipts are written.
+	if err := New().PreflightActivation(env, request); err != nil {
+		t.Fatalf("native project group preflight rejected an unstaged plan: %v", err)
+	}
+	reg, settings, err := copilotProjectRegistration(request.Plan.NativeRegistryRoot,
+		request.Plan.PhysicalArtifactID, request.Plan.DeclaredName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(settings); !os.IsNotExist(err) {
+		t.Fatalf("preview changed Copilot settings: %v", err)
+	}
+
+	// Even without a staged receipt, the preview must refuse an occupied
+	// namespace instead of deferring a collision until after other targets act.
+	foreign, changed, err := nativeconfig.PatchCopilotPluginSettings(
+		[]byte("{\"foreign\":42}\n"), reg, false, false)
+	if err != nil || !changed {
+		t.Fatalf("test namespace construction: changed=%v err=%v", changed, err)
+	}
+	if err := os.MkdirAll(filepath.Dir(settings), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(settings, foreign, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := New().PreflightActivation(env, request); !errors.Is(err, nativeconfig.ErrCollision) {
+		t.Fatalf("unstaged preflight adopted a foreign registration: %v", err)
+	}
+
+	object, err := copilotProjectPluginObject(request.Plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Plan.PreviousNativeObjects = []domain.NativeObjectOwnership{object}
+	if err := New().PreflightActivation(env, request); err != nil {
+		t.Fatalf("early preflight rejected an exactly owned registration: %v", err)
+	}
+
+	// After staging, the full receipt check must still be mandatory.
+	request.DeclaredName = request.Plan.DeclaredName
+	request.PreviousNativeObjects = request.Plan.PreviousNativeObjects
+	request.Delivery = domain.StagedDelivery{ClientID: domain.ClientCopilot, ActivePath: request.Plan.ActivePath}
+	if err := New().PreflightActivation(env, request); err == nil {
+		t.Fatal("staged activation admitted a missing native registration receipt")
+	}
+	request.Delivery.NativeObjects = []domain.NativeObjectOwnership{object}
+	if err := New().PreflightActivation(env, request); err != nil {
+		t.Fatalf("staged preflight rejected an exact owned receipt: %v", err)
+	}
+	if actual := trustRead(t, settings); !bytes.Equal(actual, foreign) {
+		t.Fatal("preflight mutated the foreign Copilot settings document")
 	}
 }
