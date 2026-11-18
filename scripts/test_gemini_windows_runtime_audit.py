@@ -123,13 +123,39 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
     VERSION = _contracts.GeminiEmptySessionRuntimeContracts.VERSION
     fixture = _contracts.GeminiEmptySessionRuntimeContracts.fixture
     record = _contracts.GeminiEmptySessionRuntimeContracts.record
-    test_windows_registry_and_marker_require_exact_producer_spelling = (
-        _contracts.GeminiEmptySessionRuntimeContracts
-        .test_windows_registry_and_marker_require_exact_producer_spelling)
     phase = _contracts.GeminiEmptySessionRuntimeContracts.phase
+    test_protected_profile_file_replacement_and_empty_directory_changes_refuse = (
+        _contracts.GeminiEmptySessionRuntimeContracts
+        .test_protected_profile_file_replacement_and_empty_directory_changes_refuse)
     test_strict_existing_metadata_negatives = getattr(
         _contracts.GeminiEmptySessionRuntimeContracts,
         "test_conversation_foreign_duplicate_partial_and_unbounded_records_refuse")
+
+    def test_windows_registry_and_marker_require_exact_producer_spelling(self):
+        for mutation in ("registry", "marker"):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                project = str(case["project"])
+                self.assertNotEqual(project, project.lower())
+                case["observer"].close()
+                if mutation == "registry":
+                    (case["profile"] / "projects.json").write_text(
+                        json.dumps({"projects": {project: "project"}}))
+                else:
+                    (case["chats"].parent / ".project_root").write_text(project)
+                before = case["audit"].snapshot([case["profile"]])
+                observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
+                    case["home"], case["project"], before, self.VERSION,
+                    profile_snapshot=case["audit"].scoped_snapshot)
+                try:
+                    self.assertIsNotNone(observer.windows)
+                    self.assertEqual(observer.reason,
+                        "Gemini runtime registry does not bind the exact project"
+                        if mutation == "registry" else "Gemini runtime ownership marker differs")
+                    self.assertFalse(observer.finish(before))
+                    if mutation == "registry":
+                        self.assertIs(observer.evidence()["failure_facts"]["exact_key_present"], False)
+                finally:
+                    observer.close()
 
     def saved(self, backend):
         return ([handle for handle, _facts in backend.parents.values()],
@@ -374,7 +400,7 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
             changed[key.replace("\\", "/")] = snapshot[key]
             case["observer"].checkpoint(
                 "after-public-repeat-add", changed,
-                interval=(case["phase_started"], _contracts.datetime.now(_contracts.timezone.utc)))
+                interval=(case["phase_started"], case['clock'].now()))
             self.assertFalse(case["observer"].finish(changed))
             self.assertIn("outside exact list-session files", case["observer"].reason)
         with self.fixture() as case:
@@ -383,7 +409,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
             (nested / "foreign.jsonl").write_bytes(b"foreign\n")
             snapshot = case["audit"].snapshot([case["profile"]])
             observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
-                case["home"], case["project"], snapshot, self.VERSION)
+                case["home"], case["project"], snapshot, self.VERSION,
+                profile_snapshot=case["audit"].scoped_snapshot)
             try:
                 self.assertIn("not flat", observer.reason)
                 self.assertFalse(observer.windows.parents)
@@ -410,8 +437,9 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                 operations, held, native_calls, public_lists = [], [], [], []
                 parent_changed, injected_parent_facts = [False], []
                 real_observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
-                def observe(*args):
-                    observer = real_observer(*args)
+                clock = _contracts.GeminiFixtureClock()
+                def observe(*args, **kwargs):
+                    observer = real_observer(*args, **kwargs)
                     self.assertIsNone(observer.reason)
                     self.assertIsNotNone(observer.windows)
                     native = observer.windows
@@ -442,7 +470,7 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                         self.assertEqual(timeout, 30)
                         native_calls.append(tuple(argv))
                         # Existing fixture emits millisecond timestamps inside this call.
-                        self.record({'project': project, 'chats': chats}, 100, startup=True)
+                        self.record({'project': project, 'chats': chats, 'clock': clock}, 100, startup=True)
                     elif operation == 'add':
                         skill.parent.mkdir(parents=True, exist_ok=True)
                         skill.write_text('---\nname: owned-test\n---\n')
@@ -456,11 +484,11 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                         elif changed_parent:
                             parent_changed[0] = True
                         else:
-                            self.record({'project': project, 'chats': chats}, 1, startup=True)
+                            self.record({'project': project, 'chats': chats, 'clock': clock}, 1, startup=True)
                     elif operation == 'list':
                         public_lists.append(tuple(argv))
                         if len(public_lists) == 2 and not changed_parent:
-                            self.record({'project': project, 'chats': chats}, 2, startup=True)
+                            self.record({'project': project, 'chats': chats, 'clock': clock}, 2, startup=True)
                     elif operation == 'remove':
                         skill.unlink()
                         skill.parent.rmdir()
@@ -472,6 +500,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                             '_json': response}
                 with (patch.dict(audit.AGENT_BINARIES, {'gemini': gemini}, clear=True),
                       patch.dict(audit.GEMINI_RUNTIME_AUDIT, {'GeminiRepeatAudit': observe}),
+                      patch.dict(real_observer.__init__.__globals__, {'_now': clock.now}),
+                      patch.object(audit, 'datetime', clock),
                       patch.object(audit, 'call', side_effect=fake_call),
                       patch.object(audit, 'matching_installations', return_value=matched),
                       patch.object(audit, 'locked_skill_is_pinned',

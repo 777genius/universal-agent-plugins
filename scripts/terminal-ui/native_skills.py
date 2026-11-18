@@ -7,16 +7,30 @@ import os
 from pathlib import Path
 import re
 import signal
+import stat
 import sys
 import time
 from types import SimpleNamespace
 
-from harness import Session, Screen, check, clean, hashes
+from harness import Session, Screen, check, clean, hashes as directory_hashes
 
 
 SKILLS = ("docx", "frontend-design")
 TARGETS = ("claude", "codex")
 LIMIT = 1 << 20
+CONFIRMED = "Skills installation confirmed."
+
+
+def hashes(root):
+    # The root itself is authority too; rglob on a root symlink follows it.
+    try:
+        info = root.lstat()
+    except FileNotFoundError:
+        return {".": "absent"}
+    if stat.S_ISLNK(info.st_mode):
+        return {".": "link:" + os.readlink(root)}
+    check(stat.S_ISDIR(info.st_mode), "native Skill root is not a directory: " + str(root))
+    return {".": "directory", **directory_hashes(root)}
 
 
 class NativeSession(Session):
@@ -80,12 +94,14 @@ def wait_screen(session, label, predicate):
 def wait_install_progress(session, after):
     # groupProgressBoard writes two newline-terminated agent rows per frame.
     # Inspect those boundaries in byte order, even when several frames and the
-    # final result arrive in one PTY read. Never count a pre-confirmation frame.
+    # final result arrive in one PTY read. The CLI acknowledgment, not when a
+    # read happened, separates confirmation from previously queued output.
     check(0 <= after <= len(session.raw), "invalid confirmation transcript offset")
     rendered = Screen(session.screen.rows, session.screen.cols)
     offset, rendered_to, rows = after, 0, {}
     deadline = time.monotonic() + session.timeout
     drained = False
+    acknowledged = False
     while drained or time.monotonic() < deadline:
         received = drained or session.pump(0.1)
         drained = False
@@ -99,12 +115,19 @@ def wait_install_progress(session, after):
                 rows.clear()
             line = clean(chunk).strip()
             offset = rendered_to = end
+            if line == CONFIRMED:
+                check(not acknowledged, "duplicate CLI confirmation acknowledgment")
+                acknowledged = True
+                rows.clear()
+                session.events.append({"event": "confirmation-accepted", "offset": end})
+                continue
             check("Skills installation verified." not in line,
                   "terminal verified before an observed post-confirmation progress frame")
             row = re.fullmatch(r"(Claude Code|OpenAI Codex)\s+[·●✓!×] [0-2]/2 [^\r\n]+", line)
             if row is None:
                 rows.clear()
                 continue
+            check(acknowledged, "terminal progress before CLI confirmation acknowledgment")
             if row[1] in rows:
                 rows.clear()
             rows[row[1]] = line
@@ -213,7 +236,9 @@ def confirm_review(session, project):
     wait_screen(session, "review-consent", lambda v: compact(warning) in compact(v) and
                 "Thispreferenceremainsafterremoval." in compact(v))
     key(session, b"d")
-    wait_screen(session, "review-paths", lambda v: "d hide paths" in v and compact(str(project)) in compact(v))
+    destination = r"\(" + re.escape(compact(str(project))) + r"(?:/|\))"
+    wait_screen(session, "review-paths", lambda v: "d hide paths" in v and
+                re.search(destination, compact(v)) is not None)
 
 
 def verified_result(raw):
@@ -230,13 +255,13 @@ def verified_result(raw):
         check(refused not in result, "terminal result still requires action: " + refused)
 
 
-def preserve(session, report, root, evidence, *, closed):
+def preserve(session, report, root, evidence, *, closed, name="skills"):
     # The native collector copies top-level JSON/log files only. Keep the
     # actual transcript and rendered frames there, including on failure.
     raw = bytes(session.raw)
     report["transcript"] = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
                             "truncated": len(raw) > LIMIT}
-    (root / "native-terminal-skills.log").write_bytes(raw[-LIMIT:])
+    (root / f"native-terminal-{name}.log").write_bytes(raw[-LIMIT:])
     events = {}
     try:
         events = json.loads((evidence / "events.json").read_text())
@@ -264,8 +289,33 @@ def preserve(session, report, root, evidence, *, closed):
                 report["status"] = "failed"
         report["frames"].append(frame)
     body = json.dumps(report, indent=2) + "\n"
+    if len(body.encode()) > LIMIT:
+        # Large frames or events must not replace the original failure with a
+        # serialization error and leave no machine-readable evidence at all.
+        summary = {key: report[key] for key in (
+            "schema_version", "phase", "error", "closure_error", "terminal_evidence_error",
+            "closure_verified", "transcript", "verified_result", "progress_observed",
+            "confirmations", "unchanged_before_confirmation") if key in report}
+        for key in ("error", "closure_error", "terminal_evidence_error"):
+            if key in summary and len(summary[key]) > 16384:
+                summary[key + "_truncated"] = True
+                summary[key + "_sha256"] = hashlib.sha256(summary[key].encode()).hexdigest()
+                summary[key] = summary[key][:16384]
+        summary.update(status="failed", frames=[], structured_evidence_truncated=True,
+                       structured_evidence_bytes=len(body.encode()),
+                       structured_evidence_sha256=hashlib.sha256(body.encode()).hexdigest(),
+                       evidence_error="terminal structured evidence exceeded 1 MiB")
+        summary["terminal"] = {
+            "exit": events.get("exit") if type(events.get("exit")) is int else None,
+            "forced_cleanup": events.get("forced_cleanup") if type(events.get("forced_cleanup")) is bool else None,
+            "restoration": {key: restoration.get(key) is True for key in
+                            ("termios_equal", "cursor_restored", "next_line_read", "echo")}
+                           if isinstance(restoration, dict) else None}
+        report.clear()
+        report.update(summary)
+        body = json.dumps(report, indent=2) + "\n"
     check(len(body.encode()) <= LIMIT, "terminal structured evidence exceeded 1 MiB")
-    (root / "native-terminal-skills.json").write_text(body)
+    (root / f"native-terminal-{name}.json").write_text(body)
 
 
 def main():

@@ -196,6 +196,11 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Installation canceled. No changes applied.")
 			return err
 		}
+		if opts.format == "human" {
+			if _, err := fmt.Fprintln(&planWriter{writer: cmd.OutOrStdout()}, "\nSkills installation confirmed."); err != nil {
+				return err
+			}
+		}
 	}
 	return applySkillsWithRecovery(cmd, app, opts, prepared, confirm && opts.format != "json")
 }

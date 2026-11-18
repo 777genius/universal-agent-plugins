@@ -12,7 +12,6 @@ from pathlib import Path
 import stat
 import subprocess
 import tempfile
-import traceback
 
 FIXTURE_SHA256 = "7399eaed15b3eb0981a6be12082dd8825529e896a59ea125b9500a666c21112e"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
@@ -127,7 +126,7 @@ def main():
             except Exception as error:
                 diagnostics = {"stage": stage, "error_type": type(error).__name__,
                                "error": repr(error)[:1800],
-                               "error_traceback": traceback.format_exc(limit=-8)[-8192:]}
+                               "error_traceback": audit.bounded_error_traceback(error)}
                 print(json.dumps({"case": label, "status": "harness-error",
                                   **diagnostics}), flush=True)
                 failures.append(f"{label}: {type(error).__name__}")

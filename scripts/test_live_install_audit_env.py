@@ -5268,9 +5268,7 @@ module.exports = {
                 self.assertIn("command=['/isolated/codex', 'app-server']", detail)
                 self.assertNotIn("do-not-capture-local-value", detail)
                 self.assertLessEqual(len(detail), 8192)
-                if large_cause:
-                    self.assertEqual(len(detail), 8192)
-                else:
+                if not large_cause:
                     self.assertIn("ValueError: inner diagnostic cause", detail)
                     self.assertIn("direct cause", detail)
                 logged = json.loads(printed.call_args_list[0].args[0])
@@ -5525,6 +5523,68 @@ module.exports = {
         self.assertEqual(audit.failed_case_diagnostics(
             {"public_target_states": {"after-add": observed}}),
             {"public_target_states": {"after-add": observed}})
+
+    def test_unqualified_skill_source_remains_visible_without_qualifying_its_binding(self):
+        for failed_phase in ('after-add', 'repeat-add'):
+            for verification in ('package_validated', 'failed'):
+                with self.subTest(phase=failed_phase, verification=verification), TemporaryDirectory() as temp:
+                    audit = load_audit()
+                    root = Path(temp).resolve()
+                    project = root / 'skill-00/project'
+                    skill = project / '.gemini/skills/owned-test/SKILL.md'
+                    body = b'---\nname: owned-test\ndescription: selected fixture\n---\n'
+                    item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
+                            'source': 'unused', 'skill_md_git_blob_sha1': hashlib.sha1(
+                                b'blob ' + str(len(body)).encode() + b'\0' + body).hexdigest()}
+                    source = 'example/skills/skills/owned-test'
+                    operations, rejected = [], []
+
+                    def perform(argv, env, cwd, timeout=105):
+                        operation = argv[2] if argv[1] == 'skills' else argv[1]
+                        operations.append(operation)
+                        response = {'readiness': 'ready', 'next_actions': []}
+                        if operation == 'add':
+                            skill.parent.mkdir(parents=True, exist_ok=True)
+                            skill.write_bytes(body)
+                            (project / 'uap.toml').write_text('owned-test')
+                            (project / 'uap.lock').write_text('owned-test')
+                        elif operation == 'remove':
+                            skill.unlink()
+                            skill.parent.rmdir()
+                            (project / 'uap.lock').unlink()
+                        elif operation == 'list':
+                            invalid = operations.count('list') == (1 if failed_phase == 'after-add' else 2)
+                            state = {'client_id': 'gemini', 'materialization': 'materialized',
+                                     'activation': 'active', 'authentication': 'not_required', 'policy': 'allowed',
+                                     'verification': verification if invalid else 'installation_verified'}
+                            selected = {'installation_id': 'selected-id', 'name': 'skill-generated-name',
+                                        'source': source, 'clients': [state]}
+                            neighbor = dict(selected, installation_id='other-id', source=source + '-other',
+                                            clients=[dict(state, verification='not_run')])
+                            response = {'data': {'installations': [] if 'remove' in operations else
+                                                 [selected, neighbor]}}
+                            if invalid:
+                                rejected.append(response)
+                        return {'exit_code': 0, 'stdout_tail': '', 'stderr_tail': '',
+                                'timeout': False, '_json': response}
+
+                    with (patch.object(audit, 'call', side_effect=perform),
+                          patch.object(audit, 'locked_skill_is_pinned',
+                                       side_effect=lambda *a: (project / 'uap.lock').exists())):
+                        row = audit.do_case('/inert/uap', 'gemini', 'skill', item, 0, root, {})
+                    self.assertEqual(len(rejected), 1)
+                    self.assertEqual(audit.matching_installations(
+                        rejected[0], item['name'], 'gemini', 'skill', item), [])
+                    state = row['public_target_states'][failed_phase]
+                    self.assertEqual((state['selected_installations'], state['selected_bindings']), (1, 1))
+                    self.assertEqual([v['verification'] for v in state['states']], [verification])
+                    self.assertNotEqual(row['status'], 'passed')
+                    self.assertFalse(row['repeat_verified'])
+                    self.assertEqual(row['repeat_installation_ids'], [])
+                    self.assertEqual(row['matched_installation_ids'],
+                                     [] if failed_phase == 'after-add' else ['selected-id'])
+                    self.assertEqual(operations, ['add', 'list'] if failed_phase == 'after-add' else
+                                     ['add', 'list', 'add', 'list', 'remove', 'list'])
 
     def test_failed_case_diagnostics_projects_gemini_refusal_without_journal_contents(self):
         audit = load_audit()
@@ -8363,7 +8423,8 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
 
     def test_do_case_requires_every_old_gate_and_never_hides_raw_residuals(self):
         audit = load_audit()
-        for mutation in (None, 'post-list', 'sentinel', 'outside'):
+        for mutation in (None, 'post-list', 'sentinel', 'outside',
+                         'reminted-source', 'source-neighbor', 'other-target'):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve(); f = {}; operations = []
                 def perform(argv, env, cwd, timeout=105, **kwargs):
@@ -8380,10 +8441,18 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
                         if mutation == 'sentinel': (f['project'] / 'foreign-untouched.txt').write_text('changed')
                         if mutation == 'outside': (f['profile'] / 'owned-test.json').write_text('owned-test')
                     removed = 'remove' in operations
+                    retained = []
+                    if removed and mutation in ('reminted-source', 'source-neighbor', 'other-target'):
+                        entry = dict(f['public'], installation_id='reminted-id', name='renamed-generated-skill')
+                        if mutation == 'source-neighbor':
+                            entry['source'] += '-other'
+                        elif mutation == 'other-target':
+                            entry['clients'] = [dict(entry['clients'][0], client_id='codex')]
+                        retained.append(entry)
                     return {'exit_code': 1 if removed and operation == 'list' and mutation == 'post-list' else 0,
                             'stdout_tail': '', 'stderr_tail': '', 'timeout': False,
                             '_json': f['added'] if operation == 'add' else f['cleanup'] if operation == 'remove' else
-                                     {'data': {'installations': [] if removed else [f['public']]}}}
+                                     {'data': {'installations': retained if removed else [f['public']]}}}
                 with (patch.dict(audit.AGENT_BINARIES, {}, clear=True),
                       patch.object(audit, 'call', side_effect=perform),
                       patch.object(audit, 'matching_installations', side_effect=lambda *a: [f['public']]),
@@ -8396,14 +8465,18 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
                 for phase in ("after-add", "repeat-add"):
                     self.assertEqual(row["public_target_states"][phase]["selected_installations"], 1)
                     self.assertEqual(row["public_target_states"][phase]["selected_bindings"], 1)
-                self.assertEqual(row["public_target_states"]["after-remove"]["selected_bindings"], 0)
+                self.assertEqual(row["public_target_states"]["after-remove"]["selected_bindings"],
+                                 1 if mutation == 'reminted-source' else 0)
                 self.assertTrue(row['native_residuals'])
-                self.assertEqual(row['status'], 'passed' if mutation is None else 'cleanup-failed')
-                if mutation is None:
+                accepted = mutation in (None, 'source-neighbor', 'other-target')
+                self.assertEqual(row['status'], 'passed' if accepted else 'cleanup-failed')
+                if accepted:
                     self.assertEqual(row['claude_cache_retirement']['status'],
                                      'verified-cache-retirement-at-checkpoint')
                 else:
                     self.assertFalse(row['removal_verified'])
+                    if mutation == 'reminted-source':
+                        self.assertIsNone(row.get('claude_cache_retirement'))
 
 
 class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
@@ -8852,6 +8925,22 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
             self.assertEqual(result["exit_code"], 0)
 
 
+class GeminiFixtureClock:
+    """Synthetic command/journal UTC clock; filesystem custody stays real."""
+
+    def __init__(self):
+        self.value = datetime(2026, 11, 17, 12, 0, 0, tzinfo=timezone.utc)
+
+    def advance(self, milliseconds=1):
+        self.value += timedelta(milliseconds=milliseconds)
+        return self.value
+
+    def now(self, zone=timezone.utc):
+        if zone != timezone.utc:
+            raise AssertionError('fixture clock requires UTC')
+        return self.advance()
+
+
 @unittest.skipUnless(sys.platform in ("linux", "darwin"), "Linux/macOS descriptor custody contract")
 class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
     VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0"}
@@ -8859,7 +8948,10 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
     @contextmanager
     def fixture(self):
         audit = load_audit()
-        with TemporaryDirectory() as temporary:
+        observer_type = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
+        clock = GeminiFixtureClock()
+        with TemporaryDirectory() as temporary, patch.dict(
+                observer_type.__init__.__globals__, {'_now': clock.now}):
             root = Path(temporary).resolve()
             home, project = root / 'home', root / 'Project'
             profile = home / '.gemini'
@@ -8871,23 +8963,22 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
             (chats.parent / '.project_root').write_text(registry_project)
             old = chats / 'foreign-session.jsonl'
             old.write_bytes(b'pre-existing conversation must stay byte-for-byte\n')
+            (profile / 'foreign-neighbor.txt').write_bytes(b'protected foreign profile file\n')
+            (profile / 'foreign-empty').mkdir()
             before = audit.snapshot([profile])
-            observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit'](
-                home, project, before, self.VERSION)
+            observer = observer_type(home, project, before, self.VERSION,
+                                     profile_snapshot=audit.scoped_snapshot)
             self.assertIsNone(observer.reason)
             case = dict(audit=audit, observer=observer, home=home, project=project,
-                        profile=profile, chats=chats, old=old, before=before,
-                        phase_started=datetime.now(timezone.utc))
+                        profile=profile, chats=chats, old=old, before=before, clock=clock,
+                        phase_started=clock.now())
             try:
                 yield case
             finally:
                 observer.close()
 
     def record(self, case, index, transform=None, *, startup=False):
-        if startup:
-            import time
-            time.sleep(0.002)
-        now = datetime.now(timezone.utc)
+        now = case['clock'].now()
         timestamp = now.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
         value = {'sessionId': 'skills-list-session',
                  'projectHash': hashlib.sha256(str(case['project']).encode()).hexdigest(),
@@ -8912,11 +9003,11 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
         return path
 
     def phase(self, case, label):
-        finished = datetime.now(timezone.utc)
+        finished = case['clock'].now()
         current = case['audit'].snapshot([case['profile']])
         case['observer'].checkpoint(
             label, current, interval=(case['phase_started'], finished))
-        case['phase_started'] = datetime.now(timezone.utc)
+        case['phase_started'] = case['clock'].now()
         return current
 
     def test_metadata_only_checkpoints_receive_their_exact_command_intervals(self):
@@ -8929,9 +9020,9 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
             intervals = []
             for index, label in enumerate(
                     ('after-public-repeat-add', 'after-public-repeat-list'), 1):
-                started = datetime.now(timezone.utc)
+                started = case['clock'].now()
                 self.record(case, index)
-                finished = datetime.now(timezone.utc)
+                finished = case['clock'].now()
                 intervals.append((started, finished))
                 after = case['audit'].snapshot([case['profile']])
                 with patch.dict(validate.__globals__, {'_metadata': capture}):
@@ -8965,7 +9056,7 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
     def test_metadata_only_missing_overlapping_and_future_intervals_refuse(self):
         for mutation in ('missing', 'overlap', 'future'):
             with self.subTest(mutation=mutation), self.fixture() as case:
-                now = datetime.now(timezone.utc)
+                now = case['clock'].now()
                 interval = (None if mutation == 'missing' else
                     (case['observer'].observed_at - timedelta(milliseconds=1), now)
                     if mutation == 'overlap' else (now, now + timedelta(days=1)))
@@ -8994,11 +9085,12 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                     if stage == "constructor":
                         with patch.object(type(subject), "_guard", side_effect=error):
                             subject = type(subject)(
-                                case["home"], case["project"], case["before"], self.VERSION)
+                                case["home"], case["project"], case["before"], self.VERSION,
+                                profile_snapshot=case["audit"].scoped_snapshot)
                     else:
                         subject.failure_facts = dict(facts)
                         with patch.object(subject, "_guard", side_effect=error):
-                            interval = (case["phase_started"], datetime.now(timezone.utc))
+                            interval = (case["phase_started"], case['clock'].now())
                             if stage == "baseline":
                                 subject.baseline(case["before"], interval=interval)
                             elif stage == "checkpoint":
@@ -9044,14 +9136,15 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                     snapshot = {**case['audit'].snapshot([case['profile']]), path: digest}
                     if stage == 'admission':
                         observer = case['audit'].GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit'](
-                            case['home'], case['project'], snapshot, self.VERSION)
+                            case['home'], case['project'], snapshot, self.VERSION,
+                            profile_snapshot=case['audit'].scoped_snapshot)
                     try:
                         if stage == 'baseline':
-                            now = datetime.now(timezone.utc)
+                            now = case['clock'].now()
                             observer.baseline(snapshot, interval=(now, now))
                         elif stage.startswith('after-public-'):
                             observer.checkpoint(stage, snapshot,
-                                interval=(case['phase_started'], datetime.now(timezone.utc)))
+                                interval=(case['phase_started'], case['clock'].now()))
                         elif stage == 'finish':
                             observer.finish(snapshot)
                         self.assertEqual(observer.reason, 'Gemini runtime snapshot is incomplete')
@@ -9061,31 +9154,44 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                         if stage == 'admission':
                             observer.close()
 
-    def test_windows_registry_and_marker_require_exact_producer_spelling(self):
-        if sys.platform != "win32":
-            self.skipTest("Windows producer serialization contract")
-        for mutation in ("registry", "marker"):
-            with self.subTest(mutation=mutation), self.fixture() as case:
-                project = str(case["project"])
-                self.assertNotEqual(project, project.lower())
-                case["observer"].close()
-                if mutation == "registry":
-                    (case["profile"] / "projects.json").write_text(
-                        json.dumps({"projects": {project: "project"}}))
-                else:
-                    (case["chats"].parent / ".project_root").write_text(project)
-                before = case["audit"].snapshot([case["profile"]])
-                observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
-                    case["home"], case["project"], before, self.VERSION)
-                try:
-                    self.assertEqual(observer.reason,
-                        "Gemini runtime registry does not bind the exact project"
-                        if mutation == "registry" else "Gemini runtime ownership marker differs")
-                    self.assertFalse(observer.finish(before))
-                    if mutation == "registry":
-                        self.assertIs(observer.evidence()["failure_facts"]["exact_key_present"], False)
-                finally:
-                    observer.close()
+    def test_protected_profile_file_replacement_and_empty_directory_changes_refuse(self):
+        for stage in ('baseline', 'after-public-repeat-add', 'after-public-repeat-list', 'finish'):
+            for mutation in ('same-byte-file', 'new-empty', 'removed-empty', 'replaced-empty'):
+                with self.subTest(stage=stage, mutation=mutation), self.fixture() as case:
+                    observer = case['observer']
+                    if stage in ('after-public-repeat-list', 'finish'):
+                        self.phase(case, 'after-public-repeat-add')
+                    if stage == 'finish':
+                        self.phase(case, 'after-public-repeat-list')
+                    path = case['profile'] / ('foreign-neighbor.txt' if mutation == 'same-byte-file'
+                                              else 'foreign-empty')
+                    if mutation in ('same-byte-file', 'replaced-empty'):
+                        previous = path.lstat()
+                        body = path.read_bytes() if mutation == 'same-byte-file' else None
+                        path.rename(case['home'].parent / 'held-protected-entry')
+                        if body is None:
+                            path.mkdir()
+                        else:
+                            path.write_bytes(body)
+                            self.assertEqual(path.read_bytes(), body)
+                        self.assertFalse(os.path.samestat(previous, path.lstat()))
+                    elif mutation == 'new-empty':
+                        (case['profile'] / 'unrelated-empty').mkdir()
+                    else:
+                        path.rmdir()
+                    after = case['audit'].snapshot([case['profile']])
+                    # These mutations defeat content-only snapshots by construction.
+                    self.assertEqual(after, case['before'])
+                    if stage == 'baseline':
+                        now = case['clock'].now()
+                        observer.baseline(after, interval=(now, now))
+                    elif stage == 'finish':
+                        self.assertFalse(observer.finish(after))
+                    else:
+                        self.phase(case, stage)
+                    self.assertEqual(observer.reason, 'Gemini protected profile entries changed')
+                    self.assertFalse(observer.finish(after))
+                    self.assertEqual(observer.evidence()['status'], 'unqualified')
 
     def test_six_empty_records_keep_raw_changes_and_exact_old_conversation(self):
         with self.fixture() as case:
@@ -9234,7 +9340,7 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                 after = case["audit"].snapshot([case["profile"]])
                 with patch.object(os, "open", side_effect=AssertionError("must refuse before open")) as opened:
                     case["observer"].checkpoint("after-public-repeat-add", after,
-                        interval=(case["phase_started"], datetime.now(timezone.utc)))
+                        interval=(case["phase_started"], case['clock'].now()))
                 opened.assert_not_called()
                 self.assertFalse(case["observer"].finish(after))
                 proof = case["observer"].evidence()
@@ -9268,7 +9374,8 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                 (case["profile"] / "projects.json").write_text(json.dumps({"projects": projects}))
                 before = case["audit"].snapshot([case["profile"]])
                 observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
-                    case["home"], case["project"], before, self.VERSION)
+                    case["home"], case["project"], before, self.VERSION,
+                    profile_snapshot=case["audit"].scoped_snapshot)
                 self.assertEqual(observer.reason, "Gemini runtime registry does not bind the exact project")
                 self.assertFalse(observer.finish(before))
                 proof = observer.evidence()
@@ -9380,8 +9487,9 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                             'clients': [{'client_id': 'gemini'}]}]
                 operations, held = [], []
                 real_observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
-                def observe(*args):
-                    observer = real_observer(*args)
+                clock = GeminiFixtureClock()
+                def observe(*args, **kwargs):
+                    observer = real_observer(*args, **kwargs)
                     held.extend(fd for fd, _ in (*observer.parents.values(), *observer.leaves.values()))
                     return observer
                 def fake_call(argv, env, cwd, timeout=105):
@@ -9420,17 +9528,15 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                             for previous in held.iterdir():
                                 (chats / previous.name).write_bytes(previous.read_bytes())
                         else:
-                            self.record({'project': project, 'chats': chats}, 1, startup=startup)
+                            self.record({'project': project, 'chats': chats, 'clock': clock}, 1, startup=startup)
                     elif operation == 'native-list':
-                        import time
-                        time.sleep(0.002)
-                        self.record({'project': project, 'chats': chats}, 100, startup=startup)
+                        self.record({'project': project, 'chats': chats, 'clock': clock}, 100, startup=startup)
                         if failure:
                             return {'exit_code': None if failure == 'timeout' else 7,
                                     'stdout_tail': '', 'stderr_tail': '',
                                     'timeout': failure == 'timeout', '_json': None}
                     elif operation == 'list' and operations.count('list') == 2 and not replaced:
-                        self.record({'project': project, 'chats': chats}, 2, startup=startup)
+                        self.record({'project': project, 'chats': chats, 'clock': clock}, 2, startup=startup)
                     elif operation == 'remove':
                         skill.unlink()
                         skill.parent.rmdir()
@@ -9442,6 +9548,8 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                             '_json': response}
                 with (patch.dict(audit.AGENT_BINARIES, {'gemini': '/unused/gemini'}, clear=True),
                       patch.dict(audit.GEMINI_RUNTIME_AUDIT, {'GeminiRepeatAudit': observe}),
+                      patch.dict(real_observer.__init__.__globals__, {'_now': clock.now}),
+                      patch.object(audit, 'datetime', clock),
                       patch.dict(os.environ, {'LANG': 'de_DE.UTF-8', 'LC_ALL': 'fr_FR.UTF-8',
                                               'TZ': 'Pacific/Auckland',
                                               'HTTP_PROXY': 'http://proxy.invalid:8080'}),
@@ -9530,7 +9638,10 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
 
     @contextmanager
     def fixture(self, baseline_mutation=None):
-        with TemporaryDirectory() as temp:
+        clock = GeminiFixtureClock()
+        observer_type = GEMINI_STARTUP_MODULE['GeminiRepeatAudit']
+        with TemporaryDirectory() as temp, patch.dict(
+                observer_type.__init__.__globals__, {'_now': clock.now}):
             root = Path(temp).resolve()
             home = root / 'home'
             project = root / 'project'
@@ -9548,12 +9659,12 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
             old = chats / 'foreign-before-list.jsonl'
             old.write_bytes(b'foreign startup authority stays unchanged')
             before = gemini_startup_snapshot([profile])
-            o = GEMINI_STARTUP_MODULE['GeminiRepeatAudit'](
-                home, project, before, GEMINI_STARTUP_VERSION)
+            o = observer_type(home, project, before, GEMINI_STARTUP_VERSION,
+                              profile_snapshot=GEMINI_STARTUP_AUDIT.scoped_snapshot)
             self.assertIsNone(o.reason)
-            start = datetime.now(timezone.utc)
+            start = clock.now()
             c = dict(home=home, project=project, profile=profile, chats=chats,
-                     template=template, old=old)
+                     template=template, old=old, clock=clock)
             p = self.write(c, 0, start + timedelta(milliseconds=1))
             values = [json.loads(line) for line in p.read_bytes().splitlines()]
             if baseline_mutation == 'id':
@@ -9574,9 +9685,7 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
             if baseline_mutation == 'duplicate':
                 body = body.replace(b'{', b'{"sessionId":"other",', 1)
             p.write_bytes(body)
-            import time
-            time.sleep(0.006)
-            finish = datetime.now(timezone.utc)
+            finish = clock.advance(4)
             observed = gemini_startup_snapshot([profile])
             o.baseline(observed, interval=(start, finish))
             c.update(observer=o, before=observed, start=start, finish=finish)
@@ -9602,11 +9711,9 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
         return p
 
     def phase(self, c, n, mutate=None, interval=True):
-        start = datetime.now(timezone.utc)
+        start = c['clock'].now()
         p = self.write(c, n, start + timedelta(milliseconds=1), mutate)
-        finish = datetime.now(timezone.utc) + timedelta(milliseconds=4)
-        import time
-        time.sleep(0.006)
+        finish = c['clock'].advance(4)
         after = gemini_startup_snapshot([c['profile']])
         c['observer'].checkpoint(('after-public-repeat-add', 'after-public-repeat-list')[n - 1], after, interval=(start, finish) if interval else None)
         return (after, p)
@@ -9696,14 +9803,12 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
     def test_duplicate_json_and_wrong_phase_window_refuse(self):
         for mutation in ('duplicate', 'window'):
             with self.subTest(mutation=mutation), self.fixture() as c:
-                start = datetime.now(timezone.utc)
+                start = c['clock'].now()
                 p = self.write(c, 1, c['start'] if mutation == 'window' else start)
                 if mutation == 'duplicate':
                     p.write_bytes(p.read_bytes().replace(b'{', b'{"sessionId":"x",', 1))
                 after = gemini_startup_snapshot([c['profile']])
-                import time
-                time.sleep(0.006)
-                interval = (start, datetime.now(timezone.utc))
+                interval = (start, c['clock'].advance(4))
                 self.assertGreaterEqual(interval[0], c['finish'])
                 c['observer'].checkpoint('after-public-repeat-add', after, interval=interval)
                 self.assertFalse(c['observer'].finish(after))
@@ -9737,15 +9842,14 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
                 (case['chats'] / f'old-{index}.jsonl').write_bytes(b'held old conversation')
             before = gemini_startup_snapshot([case['profile']])
             observer = GEMINI_STARTUP_MODULE['GeminiRepeatAudit'](
-                case['home'], case['project'], before, GEMINI_STARTUP_VERSION)
+                case['home'], case['project'], before, GEMINI_STARTUP_VERSION,
+                profile_snapshot=GEMINI_STARTUP_AUDIT.scoped_snapshot)
             try:
                 self.assertIsNone(observer.reason)
-                started = datetime.now(timezone.utc)
+                started = case['clock'].now()
                 self.write(case, 200, started + timedelta(milliseconds=1))
-                import time
-                time.sleep(0.006)
                 observer.baseline(gemini_startup_snapshot([case['profile']]),
-                                  interval=(started, datetime.now(timezone.utc)))
+                                  interval=(started, case['clock'].advance(4)))
                 self.assertEqual(observer.reason, 'Gemini pre-repeat chat count exceeds its bound')
             finally:
                 observer.close()
