@@ -252,6 +252,13 @@ func verifyUnselectedPins(previous, locked environment.Lock, aliases []string) e
 	return nil
 }
 
+func manifestDependencyGroup(dev bool) string {
+	if dev {
+		return "dev-dependencies"
+	}
+	return "dependencies"
+}
+
 func dependencyIntentEdits(previous, wanted environment.Requirements) []manifestedit.DependencyEdit {
 	var edits []manifestedit.DependencyEdit
 	aliases := map[string]bool{}
@@ -269,44 +276,58 @@ func dependencyIntentEdits(previous, wanted environment.Requirements) []manifest
 	for _, alias := range names {
 		old, oldOK := previous.Dependencies[alias]
 		value, ok := wanted.Dependencies[alias]
-		if ok && oldOK && reflect.DeepEqual(old, value) {
+		oldDev, newDev := previous.Development[alias], wanted.Development[alias]
+		if ok && oldOK && reflect.DeepEqual(old, value) && oldDev == newDev {
 			continue
 		}
-		edit := manifestedit.DependencyEdit{Alias: alias}
+		if oldOK && ok && oldDev != newDev {
+			// A group move is remove+add, not a rewrite of unrelated data.
+			edits = append(edits, manifestedit.DependencyEdit{Alias: alias, Group: manifestDependencyGroup(oldDev)})
+		}
+		edit := manifestedit.DependencyEdit{Alias: alias, Group: manifestDependencyGroup(newDev)}
+		if !ok {
+			edit.Group = manifestDependencyGroup(oldDev)
+		}
 		if ok {
-			v := &manifestedit.Dependency{}
-			if value.Web != nil {
-				v.Website, v.Kind, v.Skill = value.Web.URL, environment.SkillKind, value.Web.Skill
-			} else if value.Git != nil {
-				v.Git = value.Git.Endpoint()
-				v.Path = value.Git.Path
-				v.Kind, v.Skill = value.Git.Kind, value.Git.Skill
-				switch value.Git.Selector.Kind {
-				case environment.SelectorCommit:
-					v.Commit = value.Git.Selector.Value
-				case environment.SelectorRef:
-					v.Ref = value.Git.Selector.Value
-				}
-			} else if value.Archive != nil {
-				v.Archive = value.Archive.URL
-				v.SHA256 = value.Archive.SHA256
-				v.Path = value.Archive.Path
-			} else {
-				v.Registry = "uap"
-				v.Distribution = value.Registry.Distribution
-				if value.Registry.Selector.Kind == environment.SelectorVersion || value.Registry.Selector.Kind == environment.SelectorRange {
-					v.Version = value.Registry.Selector.Value
-					v.Registry, v.Distribution = "", ""
-				} else {
-					v.Release = value.Registry.Selector.Value
-				}
-			}
-			edit.Value = v
+			edit.Value = manifestDependencyValue(value)
 		}
 		edits = append(edits, edit)
 	}
 
 	return edits
+}
+
+// manifestDependencyValue maps one validated requirement to its TOML edit.
+// It keeps source-specific serialization separate from intent diffing.
+func manifestDependencyValue(value environment.Requirement) *manifestedit.Dependency {
+	v := &manifestedit.Dependency{}
+	if value.Web != nil {
+		v.Website, v.Kind, v.Skill = value.Web.URL, environment.SkillKind, value.Web.Skill
+	} else if value.Git != nil {
+		v.Git = value.Git.Endpoint()
+		v.Path = value.Git.Path
+		v.Kind, v.Skill = value.Git.Kind, value.Git.Skill
+		switch value.Git.Selector.Kind {
+		case environment.SelectorCommit:
+			v.Commit = value.Git.Selector.Value
+		case environment.SelectorRef:
+			v.Ref = value.Git.Selector.Value
+		}
+	} else if value.Archive != nil {
+		v.Archive = value.Archive.URL
+		v.SHA256 = value.Archive.SHA256
+		v.Path = value.Archive.Path
+	} else {
+		v.Registry = "uap"
+		v.Distribution = value.Registry.Distribution
+		if value.Registry.Selector.Kind == environment.SelectorVersion || value.Registry.Selector.Kind == environment.SelectorRange {
+			v.Version = value.Registry.Selector.Value
+			v.Registry, v.Distribution = "", ""
+		} else {
+			v.Release = value.Registry.Selector.Value
+		}
+	}
+	return v
 }
 
 func targetIntentEdits(previous, wanted environment.Requirements) []manifestedit.TargetEdit {

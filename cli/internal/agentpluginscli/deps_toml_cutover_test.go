@@ -24,7 +24,7 @@ func TestDependencyTOMLMixedSourceLifecycleAndRestore(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(repo, "b"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	dependencyWrite(t, filepath.Join(repo, "b", "uap.toml"), "schema_version = 1\n[dependencies.c]\nregistry = \"uap\"\ndistribution = \"acme/c\"\nrelease = 1\n[targets]\nauthor-only = [\"unknown-local-entry\"]\n")
+	dependencyWrite(t, filepath.Join(repo, "b", "uap.toml"), "schema_version = 1\n[dependencies.c]\nregistry = \"uap\"\ndistribution = \"acme/c\"\nrelease = 1\n[dev-dependencies]\nbuild-only = \"^1.0\"\n[targets]\nauthor-only = [\"unknown-local-entry\"]\n")
 	freshRestorePackage(t, original, repo, "b", "1.0.0", "b", "", 1, false)
 	if err := os.MkdirAll(filepath.Join(repo, "a"), 0700); err != nil {
 		t.Fatal(err)
