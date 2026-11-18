@@ -182,6 +182,17 @@ func TestCopilotWholePluginEligibilityKeepsLegacyProjectComponents(t *testing.T)
 	if copilotWholePluginEligible(in, plan) {
 		t.Fatal("legacy package incorrectly treated as Agent Plugins 1.0")
 	}
+	in.Envelope.FormatID = domain.FormatIDAgentPluginsV1
+	in.Envelope.MCP.Servers = map[string]domain.MCPServer{
+		"runtime": {Name: "runtime", Type: "stdio",
+			StdioRequirement: &domain.StdioRequirement{Command: "./bin/run", Kind: domain.ExecutableBundled}},
+	}
+	plan.Components = append(plan.Components, domain.ComponentDecision{
+		Kind: domain.ComponentMCPServer, Name: "runtime", Support: domain.SupportNative,
+	})
+	if copilotWholePluginEligible(in, plan) {
+		t.Fatal("bundled stdio executable bypassed the managed launcher")
+	}
 }
 
 func TestCopilotWholePluginRegistrationRefusesDriftAndForeignReplacement(t *testing.T) {
