@@ -69,7 +69,16 @@ jobs:
             exit 1
           fi
           if [[ -z "$requested" ]]; then
-            tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+            # GitHub can publish a Release before the environment-approved npm
+            # publish. Select only the npm latest stable version for ordinary
+            # native installer checks, then verify its exact public GitHub tag.
+            # An unpublished GitHub Release must not poison PR/weekly smoke.
+            current="$(npm view universal-agent-plugins dist-tags.latest 2>/dev/null || true)"
+            [[ "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "::error::npm latest is missing or not a stable version ('$current')" >&2
+              exit 2
+            }
+            tag="agentplugins-v$current"
           else
             tag="agentplugins-v$requested"
           fi
