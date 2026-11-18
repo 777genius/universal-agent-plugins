@@ -318,7 +318,7 @@ func (f *grokMalformedInstallReadback) Run(ctx context.Context, command legacypo
 func TestGrokUserPostInstallUnknownReadbackCannotReuseManualAttestation(t *testing.T) {
 	request := grokRequest(t)
 	request.ActivationComplete = true
-	base := &fakeGrok{}
+	base := &fakeGrok{entries: []pluginEntry{}}
 	runner := &grokMalformedInstallReadback{base: base}
 	outcome, err := New().Activate(t.Context(), clients.Env{Runner: runner}, request)
 	if !errors.Is(err, errUnknownList) || outcome.Activation != domain.ActivationFailed ||
