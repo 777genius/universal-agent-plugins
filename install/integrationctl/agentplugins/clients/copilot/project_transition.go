@@ -33,6 +33,11 @@ func copilotPreflightComponentSwitch(env clients.Env, request domain.ActivationR
 	if !shared.OnlyNativeComponents(request.Plan.Components) {
 		return fmt.Errorf("copilot native-to-component update requires supported skills or MCP components")
 	}
+	if shared.ComponentKindPresent(request.Plan.Components, domain.ComponentMCPServer) {
+		if err := validateCopilotConfig(env.NativeConfig, layout.ConfigPaths.JSON); err != nil {
+			return err
+		}
+	}
 	if err := layout.ValidateObjects(copilotNativeObjects(request.Delivery.NativeObjects)); err != nil {
 		return err
 	}
