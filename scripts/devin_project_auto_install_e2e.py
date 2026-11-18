@@ -10,13 +10,14 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
 import tarfile
 import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import urlopen
+
+from native_client_research import run_probe
 
 VERSION = "3000.12.57"
 URL = f"https://static.devin.ai/cli/{VERSION}/devin-{VERSION}-x86_64-unknown-linux.tar.gz"
@@ -32,10 +33,16 @@ def digest(data):
 
 
 def command(argv, cwd, env, timeout=90):
-    result = subprocess.run(argv, cwd=cwd, env=env, capture_output=True, timeout=timeout)
-    if result.returncode or len(result.stdout) > 1 << 20 or len(result.stderr) > 1 << 20:
-        raise RuntimeError(f"command {Path(argv[0]).name} failed, exit={result.returncode}, stderr_sha256={digest(result.stderr)}")
-    return result.stdout.decode("utf-8", errors="strict")
+    # Share the repository's bounded, supervised process runner with all other
+    # native collectors. A timed-out CLI cannot leave orphaned subprocesses.
+    record, stdout, stderr = run_probe(
+        argv, Path(cwd), env, Path("/tmp"), "devin-project-e2e",
+        timeout=timeout, limit=1 << 20, memory_only=True)
+    if record["error"] is not None or record["exit"] != 0:
+        raise RuntimeError(
+            f"command {Path(argv[0]).name} failed, exit={record['exit']}, "
+            f"capture={record['error']}, stderr_sha256={digest(stderr)}")
+    return stdout.decode("utf-8", errors="strict")
 
 
 def install_genuine_devin(root):
