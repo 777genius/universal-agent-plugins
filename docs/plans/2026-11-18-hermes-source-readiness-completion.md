@@ -1,7 +1,7 @@
 # Hermes completion: source sessions, native readiness and bounded recovery
 
 Date: 2026-11-18  
-Status: plan review round 5/7 completed; implementation has not started.  
+Status: plan review round 6/7 completed; implementation has not started.  
 Baseline: `fbab48c9d46219ba8e07d5361e6c2043eca9eb97` on `main`.  
 Owner: this PR; changes, including plan revisions, are committed and pushed immediately.
 
@@ -348,6 +348,54 @@ support claim follows from a successful source User-scope tool call. Preserve un
 and call the matrix green. Record exact UAP source SHA, vendor pin, launcher and
 native runtime, OS, scenario result, cleanup result and artifact/run URLs.
 
+### Concrete changed native journeys
+
+Add one gated source-native public-Cobra test file, with two scenarios:
+
+1. Raw HTTPS Skill: inspect/decline or dry run without trust; fresh confirmed add;
+   exact native selected-path/content discovery; explicit native untrust; repeat
+   add; same pin/installation/binding identity; native regrant/discovery; removal.
+2. Saved Skills-only TLS Git plugin: initial add; explicit native untrust; ordinary
+   sync without regrant; repeated explicit add with the reviewed repair; same
+   IDs/pin/intent; native regrant/discovery; removal with persistent trust retained.
+
+Reuse `newProjectSkillsSource("https")` and
+`newProjectJourneyTransportIn(..., "git", callerRoot)`; remove the latter's MCP
+fixture before its disposable source commit. These are real local TLS/Git sources
+through the existing acquisition seams. No production URL rewrite, TLS bypass,
+new live repository or host certificate change.
+
+The new test runs public Cobra in process with fixture acquisition/security
+boundaries, production composition and the real installed Hermes detector,
+runner, version and runtime. Describe that honestly; the separately built
+external UAP binary runs the existing Python lifecycle and provides separate
+provenance. Preserve actual installed `HERMES_HOME` and native home after Git
+fixture setup; do not create a fresh source dependency home as a shortcut.
+
+Reuse the installed-runtime observer with `skill_view(preprocess=False)`, joining
+the selected name, physical directory, content marker and trusted exact Git root.
+Run new scenarios after the existing Python lifecycle, whose initial trust list
+must be empty. A fixture's deliberate native untrust is a test/user action, never
+installer rollback.
+
+### Execution and evidence
+
+- Fix both source-native checkouts to use
+  `inputs.frozen_commit || github.event.pull_request.head.sha || github.sha`.
+  Assert clean actual HEAD against the recorded source, rather than trust an env
+  string naming a different synthetic merge.
+- Compile the gated native CLI test executable and run through the existing
+  supervised process owner on actual GitHub-hosted Linux/macOS/Windows. Extend
+  the existing workflow's path filter for the changed fixture/backend seams.
+- Record test-binary hash, external UAP hash/tree, vendor pin, launcher/runtime,
+  original streams, scenario outcomes and process settlement in retained artifacts.
+- The local supervisor preflight actually refused before starting a child
+  (`NoChildStarted=true`) because the proc children interface is unavailable.
+  Local native acceptance is blocked; no unsupervised fallback or hosted-variable
+  spoofing. Compile/pure tests/lint can still provide their own limited evidence.
+- Ordinary Go test runs may skip the deliberately gated native fixture; those
+  skips are not native PASS. Only the actual bounded native lane counts.
+
 ## 8. Delivery sequence and seven plan reviews
 
 Initial plan is committed/pushed before the review sequence. Every revised plan
@@ -407,3 +455,4 @@ capabilities, deferred to their required runtime/authority designs.
 | Round 3 | Frozen 39c68603 had ambiguous revoked-trust exclusion and alias-only wording; repeated mixed bindings and readback needed explicit bounds | Bound consent to existing reviewed action/receipt/target; zero trust writes before Apply; whole-binding Skills-only completion; new confirmed re-add may regrant, maintenance may not; preserved independent readback and path-safe disclosure | Reviewer: hermes_native_evidence; current Hermes trust/classifier and native fixture contracts |
 | Round 4 | Frozen 2fa17552 lacked saved disclosure transport and raw warning recheck; retry coverage did not imply trust coverage | Chose existing Reason/Warnings fields, retained/recomputed review, explicit existing lifecycle sequence and failure boundaries; selected trait-backed reviewed repair with final whole-binding effect gate; no new recovery/retry engine | Reviewer: hermes_readiness_recovery; deps_apply/deps_sync, skills batch/retry and current lint configuration |
 | Round 5 | Frozen 7dd6a921 incorrectly treated CanCompletePreparedSetup as the only repair effect gate; incomplete projection reapply bypasses it | Added complete immutable-envelope repair-consent gate before installer request, preserved fresh mixed behavior, required incomplete-mixed regression; fixed unconditional Prepared and existing optional-trust/typed-error exit semantics | Reviewer: hermes_source_design; usecase/repair_native, hermesTrustApplies and prepareDependencyPackage |
+| Round 6 | Frozen 0001a0dc lacked exact changed native journeys and source provenance; local process supervision is unavailable | Selected existing TLS raw/Git fixtures with real public-Cobra/native composition; exact installed-runtime discovery; corrected head checkout; three existing hosted matrices and explicit local-blocked/skip semantics | Reviewer: hermes_native_evidence; native workflows, cold composition and TLS fixture sources; actual local NoChildStarted preflight |
