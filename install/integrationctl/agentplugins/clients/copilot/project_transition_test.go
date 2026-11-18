@@ -121,7 +121,6 @@ func TestCopilotWholePluginToComponentsCollisionPreservesOldNativeRegistration(t
 	}
 }
 
-
 func TestCopilotComponentSwitchUnregisterCloseFailureRemainsUncertain(t *testing.T) {
 	env, request, settings, layout := copilotComponentSwitchFixture(t)
 	failure := errors.New("forced native settings lock cleanup failure")
@@ -151,7 +150,6 @@ func TestCopilotComponentSwitchUnregisterCloseFailureRemainsUncertain(t *testing
 		t.Fatal("test did not exercise committed unregister and degraded lock cleanup")
 	}
 }
-
 
 func TestCopilotComponentSwitchRestoresPreviousPairAfterCancellation(t *testing.T) {
 	env, request, settings, layout := copilotComponentSwitchFixture(t)
@@ -212,7 +210,6 @@ func TestCopilotComponentSwitchDoesNotResurrectPreviouslyAbsentPair(t *testing.T
 		t.Fatal("switch changed foreign skill after late collision")
 	}
 }
-
 
 func TestCopilotComponentSwitchRefusesBareMCPBeforeUnregister(t *testing.T) {
 	env, request, settings, layout := copilotComponentSwitchFixture(t)

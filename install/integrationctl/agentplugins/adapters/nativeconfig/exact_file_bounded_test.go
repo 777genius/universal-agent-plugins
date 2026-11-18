@@ -129,7 +129,6 @@ func TestBoundedExactReadChecksCustomResultAndClonesBytes(t *testing.T) {
 	}
 }
 
-
 func TestBoundedExactWriterCapturesOnlyUnderLimitAndReleasesOnError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.local.json")
 	body := bytes.Repeat([]byte("x"), 1025)

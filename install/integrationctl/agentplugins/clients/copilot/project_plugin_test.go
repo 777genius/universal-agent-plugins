@@ -377,7 +377,6 @@ func TestCopilotWholePluginSourceVerificationRejectsMissingAndSymlinkedDocs(t *t
 	}
 }
 
-
 func TestCopilotSavedWholePluginKeepsStagedMarketplaceWithoutVersion(t *testing.T) {
 	_, request, _ := trustFixture(t)
 	request.Plan.DeclaredName = "review"
