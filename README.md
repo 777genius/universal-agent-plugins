@@ -62,6 +62,8 @@ setup on another computer or with your team.
 - [Contributing](#contributing)
 - [License](#license)
 
+**Build plugins:** [authoring guide](website/source/en/build/index.md) · [package layout](website/source/en/build/layout.md) · [validate package](website/source/en/build/checks.md). Source-built `agentplugins author` supports scaffolding and diagnostics, but **native CLI 0.1.110 does not ship it yet**. Standard-first bundle export and marketplace publication are not part of the current `author` command.
+
 ## Use plugins
 
 ### Quick start
@@ -145,7 +147,9 @@ For AI-agent / headless installation, see the [agent-first CLI guide](docs/AGENT
 | Multiple agents | `add --target codex,claude` with separate outcomes and any remaining activation steps. |
 | Standalone Skills | `skills add` with a browser picker or explicit `--skill` selections; see [Skills installation](https://universal-agent-plugins.com/docs/en/use/install.html#install-agent-skills). |
 | Sources outside the registry | Reviewed local package directories, Git/SSH sources and complete ZIP/TAR archives; see [source formats](docs/DIRECT_PACKAGE_SOURCES.md). |
-| Team/project reproducibility | Commit `uap.toml` and `uap.lock`, then run `install --locked --scope project`. |
+| Team/project reproducibility | Commit `uap.toml` and `uap.lock`, then run `install --locked --scope project`; see [dependency environments](docs/UAP_DEPENDENCIES.md). |
+| Package creation and checks | [Authoring guide](website/source/en/build/index.md) for source-build templates, validation and compatibility checks (not in 0.1.110 native CLI). |
+| Development-only roots | `[dev-dependencies]` in `uap.toml` with explicit targets, omitted from consumers; requires a release containing this feature. |
 | Moving a user setup | `deps export` and `deps import --install`; no credentials or live data are exported. |
 | Maintenance | `doctor`, `outdated`, `update --dry-run`, `repair --dry-run`, explicit remove and scope flags. |
 | Application integration | [Go Installer](https://universal-agent-plugins.com/docs/en/sdk/go-installer.html) or [TypeScript Management SDK](https://universal-agent-plugins.com/docs/en/sdk/typescript-management.html). |

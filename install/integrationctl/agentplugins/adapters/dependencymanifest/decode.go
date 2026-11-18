@@ -59,47 +59,71 @@ func Decode(body []byte, source string) (Document, error) {
 	if !ok || schema != environment.ManifestSchemaVersion {
 		return Document{}, manifestError(source, body, errors.New("schema_version must be integer 1"), "schema_version")
 	}
-	dependencies, err := decodeDependencies(raw, source, body)
+	dependencies, err := decodeDependencySection(raw, source, body, "dependencies")
 	if err != nil {
 		return Document{}, err
+	}
+	dev, err := decodeDependencySection(raw, source, body, "dev-dependencies")
+	if err != nil {
+		return Document{}, err
+	}
+	var development map[string]bool
+	if len(dev) > 0 {
+		development = make(map[string]bool, len(dev))
+		bySource := map[string]string{}
+		for alias, req := range dependencies {
+			key, _ := req.SourceKey()
+			bySource[key] = alias
+		}
+		for alias, req := range dev {
+			if _, exists := dependencies[alias]; exists {
+				return Document{}, manifestError(source, body, fmt.Errorf("alias %q appears in both dependencies and dev-dependencies", alias), "dev-dependencies", alias)
+			}
+			key, _ := req.SourceKey()
+			if old, exists := bySource[key]; exists {
+				return Document{}, manifestError(source, body, fmt.Errorf("dev-dependencies %q and %q select the same source", alias, old), "dev-dependencies", alias)
+			}
+			dependencies[alias] = req
+			development[alias] = true
+		}
 	}
 	targets, err := decodeTargets(raw, source, body)
 	if err != nil {
 		return Document{}, err
 	}
-	reqs := environment.Requirements{SchemaVersion: int(schema), Dependencies: dependencies, Targets: targets}
+	reqs := environment.Requirements{SchemaVersion: int(schema), Dependencies: dependencies, Development: development, Targets: targets}
 	return Document{source: source, body: append([]byte(nil), body...), requirements: reqs}, nil
 }
 
-func decodeDependencies(raw map[string]any, source string, body []byte) (map[string]environment.Requirement, error) {
+func decodeDependencySection(raw map[string]any, source string, body []byte, section string) (map[string]environment.Requirement, error) {
 	dependencies := map[string]environment.Requirement{}
-	value, exists := raw["dependencies"]
+	value, exists := raw[section]
 	if !exists {
 		return dependencies, nil
 	}
 	entries, ok := value.(map[string]any)
 	if !ok {
-		return nil, manifestError(source, body, errors.New("dependencies must be a table"), "dependencies")
+		return nil, manifestError(source, body, fmt.Errorf("%s must be a table", section), section)
 	}
 	sources := map[string]string{}
 	for _, alias := range sortedKeys(entries) {
 		item, err := decodeRawDependency(entries[alias])
 		if err != nil {
-			return nil, manifestError(source, body, err, "dependencies", alias)
+			return nil, manifestError(source, body, err, section, alias)
 		}
 		req, err := requirementFromRaw(alias, item)
 		if err == nil {
 			err = req.Validate()
 		}
 		if err != nil {
-			return nil, manifestError(source, body, fmt.Errorf("dependencies.%s: %w", alias, err), "dependencies", alias)
+			return nil, manifestError(source, body, fmt.Errorf("%s.%s: %w", section, alias, err), section, alias)
 		}
 		key, err := req.SourceKey()
 		if err != nil {
-			return nil, manifestError(source, body, err, "dependencies", alias)
+			return nil, manifestError(source, body, err, section, alias)
 		}
 		if previous, exists := sources[key]; exists {
-			return nil, manifestError(source, body, fmt.Errorf("dependencies %q and %q use the same source %q", previous, alias, key), "dependencies", alias)
+			return nil, manifestError(source, body, fmt.Errorf("%s %q and %q use the same source %q", section, previous, alias, key), section, alias)
 		}
 		sources[key] = alias
 		dependencies[alias] = req
@@ -152,6 +176,10 @@ func (doc Document) Package() (map[string]environment.Requirement, error) {
 		return nil, manifestError(doc.source, doc.body, errors.New("schema_version must be integer 1"), "schema_version")
 	}
 	reqs := doc.clone()
+	// Build-only dependencies must never be requirements of a consumer.
+	for alias := range reqs.Development {
+		delete(reqs.Dependencies, alias)
+	}
 	for _, alias := range sortedKeys(reqs.Dependencies) {
 		req := reqs.Dependencies[alias]
 		if req.Registry != nil && strings.Count(req.Registry.Distribution, "/") != 1 {
@@ -163,6 +191,12 @@ func (doc Document) Package() (map[string]environment.Requirement, error) {
 
 func (doc Document) clone() environment.Requirements {
 	reqs := environment.Requirements{SchemaVersion: doc.requirements.SchemaVersion, Dependencies: map[string]environment.Requirement{}, Targets: map[string][]string{}}
+	if len(doc.requirements.Development) > 0 {
+		reqs.Development = make(map[string]bool, len(doc.requirements.Development))
+		for alias := range doc.requirements.Development {
+			reqs.Development[alias] = true
+		}
+	}
 	for key, value := range doc.requirements.Dependencies {
 		if value.Git != nil {
 			source := *value.Git
@@ -297,11 +331,7 @@ func rawSelector(raw rawDependency) (environment.Selector, error) {
 		return environment.Selector{Kind: environment.SelectorDefault}, nil
 	}
 	if raw.Version != "" {
-		kind := environment.SelectorVersion
-		if strings.HasPrefix(raw.Version, "^") {
-			kind = environment.SelectorRange
-		}
-		return environment.Selector{Kind: kind, Value: raw.Version}, nil
+		return environment.ParseRegistryVersionSelector(raw.Version)
 	}
 	if raw.Archive != "" {
 		return environment.Selector{Kind: environment.SelectorArchive, Value: raw.SHA256}, nil
@@ -337,39 +367,41 @@ func rawSelector(raw rawDependency) (environment.Selector, error) {
 
 func rejectManifestUnknown(path string, body []byte, generic map[string]any) error {
 	for _, key := range sortedKeys(generic) {
-		if key != "schema_version" && key != "dependencies" && key != "targets" {
+		if key != "schema_version" && key != "dependencies" && key != "dev-dependencies" && key != "targets" {
 			return manifestError(path, body, fmt.Errorf("unknown top-level field %q", key), key)
 		}
 	}
-	dependencies, _ := generic["dependencies"].(map[string]any)
-	for _, alias := range sortedKeys(dependencies) {
-		if err := validateDependencyFields(path, body, alias, dependencies[alias]); err != nil {
-			return err
+	for _, section := range []string{"dependencies", "dev-dependencies"} {
+		dependencies, _ := generic[section].(map[string]any)
+		for _, alias := range sortedKeys(dependencies) {
+			if err := validateDependencyFields(path, body, section, alias, dependencies[alias]); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func validateDependencyFields(path string, body []byte, alias string, value any) error {
+func validateDependencyFields(path string, body []byte, section string, alias string, value any) error {
 	if expression, ok := value.(string); ok {
 		if expression == "" {
-			return manifestError(path, body, errors.New("dependency version must not be empty"), "dependencies", alias)
+			return manifestError(path, body, errors.New("dependency version must not be empty"), section, alias)
 		}
 		return nil
 	}
 	fields, ok := value.(map[string]any)
 	if !ok {
-		return manifestError(path, body, fmt.Errorf("dependencies.%s must be a version string or table", alias), "dependencies", alias)
+		return manifestError(path, body, fmt.Errorf("%s.%s must be a version string or table", section, alias), section, alias)
 	}
 	for _, key := range sortedKeys(fields) {
 		switch key {
 		case "website", "git", "path", "ref", "commit", "registry", "distribution", "archive", "sha256", "kind", "skill":
 			if _, ok := fields[key].(string); !ok {
-				return manifestError(path, body, fmt.Errorf("dependencies.%s.%s must be a string", alias, key), "dependencies", alias, key)
+				return manifestError(path, body, fmt.Errorf("%s.%s.%s must be a string", section, alias, key), section, alias, key)
 			}
 		case "release":
 		default:
-			return manifestError(path, body, fmt.Errorf("dependencies.%s contains unknown field %q", alias, key), "dependencies", alias, key)
+			return manifestError(path, body, fmt.Errorf("%s.%s contains unknown field %q", section, alias, key), section, alias, key)
 		}
 	}
 	return nil
