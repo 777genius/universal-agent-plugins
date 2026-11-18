@@ -23,7 +23,7 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 		}
 		if in.Plan.HasNativePluginRegistration() {
 			if in.Envelope.FormatID != domain.FormatIDAgentPluginsV1 {
-				return nil, fmt.Errorf("Copilot native plugin registration requires Agent Plugins 1.0")
+				return nil, fmt.Errorf("copilot native plugin registration requires Agent Plugins 1.0")
 			}
 			if err := shared.ProjectCopilotMarketplace(in.StagingPath, in.Envelope, in.Plan); err != nil {
 				return nil, err
@@ -65,7 +65,7 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		}
 		if plan.HasNativePluginRegistration() {
 			if envelope.FormatID != domain.FormatIDAgentPluginsV1 {
-				return nil, fmt.Errorf("Copilot native plugin registration requires Agent Plugins 1.0")
+				return nil, fmt.Errorf("copilot native plugin registration requires Agent Plugins 1.0")
 			}
 			object, err := copilotProjectPluginObject(plan)
 			if err != nil {
