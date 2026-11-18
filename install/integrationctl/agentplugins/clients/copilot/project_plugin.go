@@ -46,11 +46,17 @@ func copilotWholePluginEligible(in clients.PlanInput, plan domain.DeliveryPlan) 
 		}
 		switch component.Kind {
 		case domain.ComponentSkill:
-			if _, ok := in.Envelope.Skills[component.Name]; !ok { return false }
+			if _, ok := in.Envelope.Skills[component.Name]; !ok {
+				return false
+			}
 		case domain.ComponentMCPServer:
-			if _, ok := in.Envelope.MCP.Servers[component.Name]; !ok { return false }
+			if _, ok := in.Envelope.MCP.Servers[component.Name]; !ok {
+				return false
+			}
 		case domain.ComponentExtension:
-			if _, ok := in.Envelope.Manifest.Extensions[component.Name]; !ok { return false }
+			if _, ok := in.Envelope.Manifest.Extensions[component.Name]; !ok {
+				return false
+			}
 		default:
 			return false
 		}
@@ -178,11 +184,21 @@ func copilotInspectWholePlugin(plan domain.DeliveryPlan, managed *domain.ClientB
 		return clients.RegistryIndeterminate, err
 	}
 	if managed != nil {
-		if managed.Scope != string(domain.ScopeProject) || managed.PhysicalArtifact != plan.PhysicalArtifactID || managed.TargetLocator != plan.ActivePath {
+		if managed.Scope != string(domain.ScopeProject) || managed.PhysicalArtifact != plan.PhysicalArtifactID ||
+			managed.TargetLocator != plan.ActivePath || managed.NativeProfileRoot != "" && managed.NativeProfileRoot != root {
 			return clients.RegistryIndeterminate, fmt.Errorf("Copilot project plugin binding differs from selected package")
 		}
 		if err := copilotValidateProjectPluginObjects(root, plan.PhysicalArtifactID, managed.NativeObjects); err != nil {
 			return clients.RegistryIndeterminate, err
+		}
+		want, err := copilotProjectPluginObject(plan)
+		if err != nil {
+			return clients.RegistryIndeterminate, err
+		}
+		for _, object := range managed.NativeObjects {
+			if object.Kind == copilotProjectPluginKind && object != want {
+				return clients.RegistryIndeterminate, fmt.Errorf("Copilot project plugin binding name differs from selected package")
+			}
 		}
 	}
 	file, err := copilotPluginSettingsSnapshot(kernel, path)
@@ -208,7 +224,8 @@ func copilotInspectWholePlugin(plan domain.DeliveryPlan, managed *domain.ClientB
 func copilotVerifyWholePlugin(env clients.Env, request domain.ActivationRequest) error {
 	finding, err := copilotInspectWholePlugin(request.Plan, &domain.ClientBinding{
 		Scope: string(domain.ScopeProject), PhysicalArtifact: request.Plan.PhysicalArtifactID,
-		TargetLocator: request.Plan.ActivePath, NativeObjects: request.Delivery.NativeObjects,
+		TargetLocator: request.Plan.ActivePath, NativeProfileRoot: request.Plan.NativeRegistryRoot,
+		NativeObjects: request.Delivery.NativeObjects,
 	}, env.NativeConfig)
 	if err != nil {
 		return err
@@ -234,7 +251,10 @@ func copilotPreflightWholePlugin(env clients.Env, request domain.ActivationReque
 	if err := copilotValidateProjectPluginObjects(root, request.Plan.PhysicalArtifactID, request.Delivery.NativeObjects); err != nil {
 		return err
 	}
-	if len(request.PreviousNativeObjects) > 0 && copilotHasProjectPlugin(request.PreviousNativeObjects) {
+	if len(request.PreviousNativeObjects) > 0 && !copilotHasProjectPlugin(request.PreviousNativeObjects) {
+		return fmt.Errorf("Copilot project plugin cannot adopt a loose-component binding")
+	}
+	if copilotHasProjectPlugin(request.PreviousNativeObjects) {
 		if err := copilotValidateProjectPluginObjects(root, request.Plan.PhysicalArtifactID, request.PreviousNativeObjects); err != nil {
 			return err
 		}
@@ -297,7 +317,6 @@ func copilotMutateProjectPlugin(ctx context.Context, kernel nativeconfig.Kernel,
 	return nil
 }
 
-
 func activateCopilotProjectPlugin(ctx context.Context, env clients.Env, request domain.ActivationRequest, root string) (domain.ActivationOutcome, error) {
 	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
 		Automatic: request.Plan.InstallIntent == domain.InstallIntentAutomatic && request.Plan.NativePluginRegistration,
@@ -309,11 +328,20 @@ func activateCopilotProjectPlugin(ctx context.Context, env clients.Env, request 
 			return copilotVerifyWholePlugin(env, request)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
-			return withCopilotTrust(ctx, env, request, func() error {
+			register := func() error {
 				return copilotMutateProjectPlugin(ctx, env.NativeConfig, root,
 					request.Plan.PhysicalArtifactID, request.Plan.DeclaredName,
 					copilotHasProjectPlugin(request.PreviousNativeObjects), false)
-			})
+			}
+			if request.ProjectTrustConsent {
+				return withCopilotTrust(ctx, env, request, register)
+			}
+			// A repair or dependency sync may use existing trust, but must not
+			// grant permanent trust anew after the user revoked it.
+			if err := verifyCopilotTrust(env, request, true); err != nil {
+				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+			}
+			return register()
 		},
 	})
 	if err == nil && outcome.Verification == domain.VerificationInstalled {
