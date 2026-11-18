@@ -31,9 +31,9 @@ export function pluginTargetDescription(
 
   const available = pluginInstallAvailability(plugin, [client.id], context.scope);
   if (available?.kind === 'pinned_git' && context.current)
-    return message('registryUi.install.pinnedCatalogSource');
+    return message('registryUi.install.pinnedSourceShort');
   if (available?.kind === 'guided_web')
-    return message('registryUi.install.guidedChatgptSetup');
+    return message('registryUi.install.webSetupShort');
   const canonical = canonicalInstallTarget(client.id);
   const target = available?.kind === 'signed'
     ? available.resolution.distribution?.targets.find(item => item.client === canonical)
@@ -46,7 +46,7 @@ export function pluginTargetDescription(
     return message(context.scope === 'project' &&
       pluginInstallAvailability(plugin, [client.id], 'user')
       ? 'registryUi.install.useComputerScope'
-      : target ? 'registryUi.desktopGuide.description'
+      : target ? 'registryUi.install.desktopSourceShort'
         : 'registryUi.install.noActiveReleaseSupportsThisClient');
   if (target) return message(`registryUi.delivery.${target.delivery}`);
   if (context.scope === 'project' && !available &&

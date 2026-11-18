@@ -62,14 +62,7 @@ func activateClaudeProjectMarketplace(ctx context.Context, env clients.Env, requ
 		return fail(fmt.Errorf("%w: exact Claude project plugin content is not enabled", shared.ErrRecognizedNegativeEvidence))
 	}
 	if err := installClaudeProjectMarketplace(ctx, env, request, command, registered, observation.state, &outcome.NativeEffect); err != nil {
-		return fail(err)
-	}
-	listed, err := runPreparedClaudeList(ctx, env, command)
-	if err == nil {
-		err = verifyClaudeProjectInstalled(ctx, request, listed.Stdout)
-	}
-	if err != nil {
-		outcome.NativeEffect = domain.NativeEffectUncertain
+		settleClaudeProjectInstall(ctx, env, request, command, claudeProjectState{state: observation.state, registered: registered}, &outcome, err)
 		return fail(err)
 	}
 	outcome.NativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
@@ -85,22 +78,35 @@ func claudeProjectInstallPreflight(ctx context.Context, env clients.Env, request
 	if err != nil {
 		return nil, false, claudeMarketplaceObservation{}, err
 	}
-	observation := inspectClaudeMarketplacePlugin(listed.Stdout, request.DeclaredName, request.Plan.PhysicalArtifactID, request.Plan.ActivePath, request.Plan.TargetContext.ProjectRoot, request.Client.ConfigRoot, "")
-	if observation.state == projectListUnknown || observation.state == projectListForeign || observation.state != projectListAbsent && !registered {
-		return nil, false, observation, fmt.Errorf("the Claude project plugin registration does not match the owned source")
-	}
 	if registered && !request.Replacing && !request.VerifyOnly {
-		return nil, false, observation, fmt.Errorf("the Claude project marketplace was registered before this installation")
+		return nil, false, claudeMarketplaceObservation{}, fmt.Errorf("the Claude project marketplace was registered before this installation")
 	}
-	err = verifyClaudeProjectBindings(request.Client.ConfigRoot, request.DeclaredName, request.Plan.PhysicalArtifactID, request.Plan.TargetContext.ProjectRoot, observation.cache)
+	observation, err := inspectClaudeProjectInstall(ctx, request, listed.Stdout, registered)
+	return listed.Stdout, registered, observation, err
+}
+
+// inspectClaudeProjectInstall classifies one fresh listing together with the
+// owned registration, the native installation index and every owned cache. Only
+// a state accepted here can be continued by a later exact installation.
+func inspectClaudeProjectInstall(ctx context.Context, request domain.ActivationRequest, body []byte, registered bool) (claudeMarketplaceObservation, error) {
+	observation := inspectClaudeMarketplacePlugin(body, request.DeclaredName, request.Plan.PhysicalArtifactID, request.Plan.ActivePath, request.Plan.TargetContext.ProjectRoot, request.Client.ConfigRoot, "")
+	if observation.state == projectListUnknown || observation.state == projectListForeign || observation.state != projectListAbsent && !registered {
+		return observation, fmt.Errorf("the Claude project plugin registration does not match the owned source")
+	}
+	err := verifyClaudeProjectBindings(request.Client.ConfigRoot, request.DeclaredName, request.Plan.PhysicalArtifactID, request.Plan.TargetContext.ProjectRoot, observation.cache)
 	if err == nil && observation.cache != "" {
 		err = verifyClaudeProjectCache(ctx, request.Client.ConfigRoot, request.DeclaredName, request.Plan.PhysicalArtifactID, request.Plan.TargetContext.ProjectRoot, observation.cache, request.PreviousNativeObjects, false)
 	}
 	if err == nil {
 		cache := filepath.Join(request.Client.ConfigRoot, "plugins", "cache", ProjectMarketplaceName(request.Plan.PhysicalArtifactID, request.Plan.TargetContext.ProjectRoot), request.DeclaredName, claudeProjectVersion(request.Plan.DeclaredVersion))
 		err = verifyClaudeProjectCache(ctx, request.Client.ConfigRoot, request.DeclaredName, request.Plan.PhysicalArtifactID, request.Plan.TargetContext.ProjectRoot, cache, request.PreviousNativeObjects, true)
+		if err != nil && observation.state == projectListAbsent {
+			// An update interrupted after Claude's own uninstall leaves the owned
+			// cache marked orphaned; the reinstall refreshes exactly that cache.
+			err = verifyClaudeOwnedCache(ctx, request.Client.ConfigRoot, request.DeclaredName, request.Plan.PhysicalArtifactID, request.Plan.TargetContext.ProjectRoot, cache, request.PreviousNativeObjects, true)
+		}
 	}
-	return listed.Stdout, registered, observation, err
+	return observation, err
 }
 
 func verifyClaudeProjectInstalled(ctx context.Context, request domain.ActivationRequest, body []byte) error {
@@ -118,6 +124,10 @@ func verifyClaudeProjectInstalled(ctx context.Context, request domain.Activation
 	return verifyClaudeProjectCache(ctx, request.Client.ConfigRoot, request.DeclaredName, request.Plan.PhysicalArtifactID, request.Plan.TargetContext.ProjectRoot, observed.cache, request.Delivery.NativeObjects, false)
 }
 
+// installClaudeProjectMarketplace runs Claude's own commands and the listing
+// that verifies them. Until that listing confirms the exact install, a landed
+// install is an uncertain effect, so an interrupted or failed verification is
+// settled like an interrupted command.
 func installClaudeProjectMarketplace(ctx context.Context, env clients.Env, request domain.ActivationRequest, command legacyports.Command, registered bool, state projectListState, effect *domain.NativeEffectState) error {
 	marketplace := ProjectMarketplaceName(request.Plan.PhysicalArtifactID, request.Plan.TargetContext.ProjectRoot)
 	id := request.DeclaredName + "@" + marketplace
@@ -134,29 +144,23 @@ func installClaudeProjectMarketplace(ctx context.Context, env clients.Env, reque
 			return err
 		}
 	}
-	return mutateClaudeProject(ctx, env, command, effect, "plugin", "install", id, "--scope", "project")
+	if err := mutateClaudeProject(ctx, env, command, effect, "plugin", "install", id, "--scope", "project"); err != nil {
+		return err
+	}
+	listed, err := runPreparedClaudeList(ctx, env, command)
+	if err == nil {
+		err = verifyClaudeProjectInstalled(ctx, request, listed.Stdout)
+	}
+	if err != nil {
+		*effect = domain.NativeEffectUncertain
+	}
+	return err
 }
 
 func deactivateClaudeProjectMarketplace(ctx context.Context, env clients.Env, request domain.DeactivationRequest, body []byte) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
 	outcome.NativeEffect = domain.NativeEffectUnchanged
-	observed := inspectClaudeMarketplacePlugin(body, request.DeclaredName, request.PhysicalArtifactID, request.ManagedArtifactPath, request.TargetContext.ProjectRoot, request.Client.ConfigRoot, "")
-	registered, err := claudeProjectMarketplaceRegistered(request.Client.ConfigRoot, request.ManagedArtifactPath, request.PhysicalArtifactID)
-	if err != nil {
-		return outcome, err
-	}
-	if observed.state == projectListUnknown || observed.state == projectListForeign || observed.state != projectListAbsent && !registered {
-		return outcome, fmt.Errorf("the Claude project identity is not exact before removal")
-	}
-	if err := verifyClaudeProjectBindings(request.Client.ConfigRoot, request.DeclaredName, request.PhysicalArtifactID, request.TargetContext.ProjectRoot, observed.cache); err != nil {
-		return outcome, err
-	}
-	if observed.cache != "" {
-		if err := verifyClaudeProjectCache(ctx, request.Client.ConfigRoot, request.DeclaredName, request.PhysicalArtifactID, request.TargetContext.ProjectRoot, observed.cache, request.NativeObjects, false); err != nil {
-			return outcome, err
-		}
-	}
-	cache, err := claudeProjectRemovalCache(ctx, request, observed.state == projectListAbsent)
+	before, err := inspectClaudeProjectRemoval(ctx, request, body)
 	if err != nil {
 		return outcome, err
 	}
@@ -164,18 +168,52 @@ func deactivateClaudeProjectMarketplace(ctx context.Context, env clients.Env, re
 	if err != nil {
 		return outcome, err
 	}
-	err = uninstallClaudeProjectMarketplace(ctx, env, request, command, observed.state, registered, &outcome.NativeEffect)
-	if err != nil {
-		return outcome, err
+	settle := func(cause error) (domain.DeactivationOutcome, error) {
+		settleClaudeProjectRemoval(ctx, env, request, command, before, &outcome, cause)
+		return outcome, cause
+	}
+	if err := uninstallClaudeProjectMarketplace(ctx, env, request, command, before.state, before.registered, &outcome.NativeEffect); err != nil {
+		return settle(err)
 	}
 	if err := verifyClaudeProjectBindings(request.Client.ConfigRoot, request.DeclaredName, request.PhysicalArtifactID, request.TargetContext.ProjectRoot, ""); err != nil {
-		return outcome, err
+		return settle(err)
 	}
-	if err := removeClaudeProjectCache(ctx, request, cache, &outcome.NativeEffect); err != nil {
+	effect := outcome.NativeEffect
+	if err := removeClaudeProjectCache(ctx, request, before.cache, &outcome.NativeEffect); err != nil {
+		if outcome.NativeEffect == effect {
+			// The cache retirement had not started; only Claude's own commands acted.
+			return settle(err)
+		}
 		return outcome, err
 	}
 	outcome.ExternalRemovalComplete = true
 	return outcome, nil
+}
+
+// inspectClaudeProjectRemoval reads the exact owned native state a removal acts
+// on: listing, registration, installation index and the owned cache receipt.
+func inspectClaudeProjectRemoval(ctx context.Context, request domain.DeactivationRequest, body []byte) (claudeProjectState, error) {
+	observed := inspectClaudeMarketplacePlugin(body, request.DeclaredName, request.PhysicalArtifactID, request.ManagedArtifactPath, request.TargetContext.ProjectRoot, request.Client.ConfigRoot, "")
+	registered, err := claudeProjectMarketplaceRegistered(request.Client.ConfigRoot, request.ManagedArtifactPath, request.PhysicalArtifactID)
+	if err != nil {
+		return claudeProjectState{}, err
+	}
+	if observed.state == projectListUnknown || observed.state == projectListForeign || observed.state != projectListAbsent && !registered {
+		return claudeProjectState{}, fmt.Errorf("the Claude project identity is not exact before removal")
+	}
+	if err := verifyClaudeProjectBindings(request.Client.ConfigRoot, request.DeclaredName, request.PhysicalArtifactID, request.TargetContext.ProjectRoot, observed.cache); err != nil {
+		return claudeProjectState{}, err
+	}
+	if observed.cache != "" {
+		if err := verifyClaudeProjectCache(ctx, request.Client.ConfigRoot, request.DeclaredName, request.PhysicalArtifactID, request.TargetContext.ProjectRoot, observed.cache, request.NativeObjects, false); err != nil {
+			return claudeProjectState{}, err
+		}
+	}
+	cache, err := claudeProjectRemovalCache(ctx, request, observed.state == projectListAbsent)
+	if err != nil {
+		return claudeProjectState{}, err
+	}
+	return claudeProjectState{state: observed.state, registered: registered, cache: cache}, nil
 }
 
 func uninstallClaudeProjectMarketplace(ctx context.Context, env clients.Env, request domain.DeactivationRequest, command legacyports.Command, state projectListState, registered bool, effect *domain.NativeEffectState) error {

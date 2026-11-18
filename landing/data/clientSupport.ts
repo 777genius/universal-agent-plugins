@@ -126,7 +126,8 @@ const publishedClientSupportRows: ClientSupport[] = [
     user: 'Skills, MCP',
     project: 'Skills, MCP',
     setup: 'Guided',
-    nextStep: 'Sign in, approve access, and restart Kiro if prompted.',
+    nextStep:
+      'The CLI configures supported Skills and MCP automatically; sign in, approve access, and restart if prompted.',
   },
   {
     id: 'grok',
@@ -134,15 +135,17 @@ const publishedClientSupportRows: ClientSupport[] = [
     user: 'Skills, MCP',
     project: 'Skills, MCP (prepared)',
     setup: 'Guided',
-    nextStep: 'Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP.',
+    nextStep:
+      'Open the selected project in Grok, review trust, and follow any remaining enablement or reload steps; verify Skills and MCP.',
   },
   {
     id: 'hermes',
     name: 'Hermes Agent',
     user: 'Skills, MCP',
-    project: 'Skills only',
+    project: 'Skills, MCP (prepared)',
     setup: 'Guided',
-    nextStep: 'Restart Hermes, trust the selected Git project, and verify Skills and User MCP; Project MCP is unsupported.',
+    nextStep:
+      'Restart Hermes and trust the project; Project MCP requires a verified standalone Hermes bundle and an explicitly confirmed UAP project session.',
   },
   {
     id: 'antigravity',
@@ -150,7 +153,8 @@ const publishedClientSupportRows: ClientSupport[] = [
     user: 'Plugins, Skills, MCP',
     project: 'Plugins, Skills, MCP',
     setup: 'Prepared',
-    nextStep: 'Open or reload Antigravity; review trust and verify the prepared plugin is discovered and enabled in the selected scope.',
+    nextStep:
+      'Open or reload Antigravity; review trust and verify the prepared plugin is discovered and enabled in the selected scope.',
   },
   {
     id: 'vscode',

@@ -2,12 +2,15 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/managedstdio"
 )
 
 func TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride(t *testing.T) {
@@ -24,7 +27,7 @@ func TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride(t *testing.T) {
 		binary += ".exe"
 	}
 	goExecutable := filepath.Join(runtime.GOROOT(), "bin", "go")
-	build := exec.Command(goExecutable, "build", "-trimpath", "-ldflags=-s -w -X main.version=release-binary-test", "-o", binary, "./cmd/agentplugins")
+	build := exec.CommandContext(t.Context(), goExecutable, "build", "-trimpath", "-ldflags=-s -w -X main.version=release-binary-test -X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Enabled=release-cli-contract-v1 -X github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands.Revision=1111111111111111111111111111111111111111", "-o", binary, "./cmd/agentplugins")
 	build.Dir = moduleRoot
 	build.Env = replaceEnvironment(os.Environ(), map[string]string{
 		"CGO_ENABLED": "0", "GOWORK": "off", "GOTOOLCHAIN": "local", "GOFLAGS": "-buildvcs=false -p=1",
@@ -51,7 +54,7 @@ func TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride(t *testing.T) {
 	for _, variable := range forbiddenProductionDirectoryVariables {
 		malicious[variable] = filepath.Join(t.TempDir(), "caller-controlled")
 	}
-	command := exec.Command(binary, "version")
+	command := exec.CommandContext(t.Context(), binary, "version")
 	command.Env = replaceEnvironment(os.Environ(), malicious)
 	output, err := command.CombinedOutput()
 	if err != nil {
@@ -59,6 +62,23 @@ func TestReleaseBuiltBinaryHasNoConformanceEnvironmentOverride(t *testing.T) {
 	}
 	if strings.TrimSpace(string(output)) != "agentplugins release-binary-test" {
 		t.Fatalf("release-built binary output = %q", output)
+	}
+	author := exec.CommandContext(t.Context(), binary, "author", "--help")
+	author.Env = replaceEnvironment(os.Environ(), malicious)
+	authorOut, authorErr := author.CombinedOutput()
+	if authorErr != nil || !bytes.Contains(authorOut, []byte("init")) || !bytes.Contains(authorOut, []byte("validate")) {
+		t.Fatalf("release-built author help missing: %v\n%s", authorErr, authorOut)
+	}
+	// A release build must preserve the existing private MCP stdio protocol.
+	// An incomplete invocation is rejected by its own dispatcher with exit 126,
+	// not misrouted into installer/author command parsing.
+	private := exec.CommandContext(t.Context(), binary, managedstdio.Mode)
+	private.Env = replaceEnvironment(os.Environ(), malicious)
+	privateOut, privateErr := private.CombinedOutput()
+	var privateExit *exec.ExitError
+	if !errors.As(privateErr, &privateExit) || privateExit.ExitCode() != 126 ||
+		!bytes.HasPrefix(privateOut, []byte("managed stdio:")) {
+		t.Fatalf("release-built binary lost private stdio dispatch: %v\n%s", privateErr, privateOut)
 	}
 	if _, err := os.Lstat(home); !os.IsNotExist(err) {
 		t.Fatalf("release-built binary mutated AGENTPLUGINS_HOME while rejecting caller conformance data: %v", err)

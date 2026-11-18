@@ -33,11 +33,15 @@ translationRequired: false
 
 ## Hermes وAntigravity: الدعم في إصدار CLI المنشور {#hermes-antigravity-source}
 
-نُشر CLI الأصلي **0.1.108** في 2026-11-13 ويتضمن Hermes وAntigravity. نجح التحقق من الإصدار وترقيته؛ وتبقى أهلية كل حزمة في Directory الموقّع مستقلة. لا يعني ذلك نشر npm 0.1.108 أو مصادقة المزوّد أو التفعيل التلقائي.
+يتضمن CLI الأصلي **0.1.110** كلًا من Hermes وAntigravity. يضبط UAP المكونات المدعومة تلقائيًا؛ أكمل الإجراءات المتبقية المطبوعة لعميلك. تبقى أهلية حزم Directory الموقّع مستقلة. لا يثبت التثبيت مصادقة المزوّد أو تفعيل وقت التشغيل.
 
-[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+[0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) · source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`.
 
-**أدلة دورة الحياة التاريخية (2026-11-10):**
+يكون Project MCP في Hermes بحالة **Prepared** فقط مع توزيع مستقل لمضيف Hermes يتحقق UAP من بيان حزمته، ثم جلسة مشروع UAP مؤكدة صراحةً. لا يختار التشغيل العادي لـ Hermes إعداد MCP هذا. لا يستطيع مضيف Hermes المثبّت من شفرته المصدرية استخدام Project MCP؛ استخدم User MCP أو Project Skills فقط. لا يقيّد شرط المضيف هذا تثبيت الإضافات من Git. ما زالت Project Skills تتطلب الثقة وجلسة جديدة. تحتفظ الملاحظات المؤرخة أدناه بنطاقها التاريخي.
+
+**أدلة دورة الحياة التاريخية (2026-11-10–13):**
+
+[0.1.108 (2026-11-13)](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
 
 **Hermes 0.23.0:** مهارات Skills للمستخدم وإعدادات MCP عبر stdio/Streamable HTTP التي يملكها UAP؛ وفي المشروع، Skills فقط. يُرفض Project MCP دون تحويله إلى إعدادات المستخدم. اجتازت Linux x64 وmacOS arm64 وWindows x64 الأصلية الإضافة الأولى والمكررة والتحديث والإصلاح والإزالة والاكتشاف في مشروع غير موثوق والعزل بين A وB: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862)، عند مصدر UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. تثبت أربع تبادلات HTTP عبر الحلقة المحلية لكل نظام `initialize`/`tools/list` الاتصال واكتشاف الأدوات؛ ولا تثبت `tools/call` أو استخدام نموذج أو المصادقة أو التنفيذ في مشروع موثوق. لا يُدعم SSE أو hooks. تُحوّل الأوامر المحمولة إلى Skills؛ وتُحجب الأوامر التي تتطلب استدعاءً صريحًا فقط عندما لا يستطيع العميل فرض ذلك.
 

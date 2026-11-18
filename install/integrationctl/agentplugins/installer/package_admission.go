@@ -83,9 +83,16 @@ func requiresExecutable(registry *clients.Registry, id domain.ClientID, scopes .
 	if len(scopes) > 0 && scopes[0] != "" {
 		scope = scopes[0]
 	}
-	if (domain.SelectedDelivery{}).EffectiveTraitsForScope(id, scope).LifecycleKind == domain.LifecycleCLIRegistry {
+	if (domain.SelectedDelivery{}).EffectiveTraitsForScope(id, scope).LifecycleKind == domain.LifecycleCLIRegistry && !userExecutableOptional(registry, id, scope) {
 		return true
 	}
 	consumer, ok := clients.As[clients.OpenCodeHostProfileConsumer](registry, id)
 	return ok && consumer.UsesOpenCodeHostProfile()
+}
+
+// userExecutableOptional admits a User lane that only prepares files without a
+// launcher. Project scope and every other lane keep their executable authority.
+func userExecutableOptional(registry *clients.Registry, id domain.ClientID, scope domain.InstallScope) bool {
+	lane, ok := clients.As[clients.UserExecutableOptional](registry, id)
+	return scope == domain.ScopeUser && ok && lane.UserScopeRunsNoClient()
 }

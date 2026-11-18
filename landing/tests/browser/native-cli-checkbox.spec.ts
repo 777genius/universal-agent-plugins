@@ -33,35 +33,38 @@ test('native CLI checkbox changes Skills, plugin install and copy commands acros
   await navigate(page, '/plugins/', 'en', '?tab=skills&skillScan=all');
   const skillCard = page.locator('.skills-catalog .skill-card').first();
   await skillCard.getByRole('button', { name: 'Install frontend-design' }).click();
-  await skillCard.getByRole('button', { name: 'This project' }).click();
-  const skillCode = skillCard.locator('.command-snippet--add code');
+  await page.getByRole('dialog').getByRole('button', { name: 'This project' }).click();
+  const skillCode = page.getByRole('dialog').locator('.command-snippet--add code');
   await expect(skillCode).toHaveText(npxSkillCommand);
   await expect(skillCard).not.toContainText('The CLI checks the source and Skill before installation.');
 
-  const checkbox = skillCard.getByRole('checkbox', { name: checkboxName });
+  const checkbox = page.getByRole('dialog').getByRole('checkbox', { name: checkboxName });
   await expect(checkbox).not.toBeChecked();
   await checkbox.check();
   await expect(skillCode).toHaveText(nativeSkillCommand);
-  await skillCard.getByRole('button', { name: 'Copy command' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Copy command' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toBe(nativeSkillCommand);
 
+  await page.keyboard.press('Escape');
   await page.locator('.catalog-modes').getByRole('link', { name: 'Plugins', exact: true }).click();
   const plugin = page.locator('[data-install-source="i18n-state-00"]').first();
   await plugin.locator('.plugin-card__install-toggle').click();
-  await expect(plugin.locator('.command-snippet--add code')).toHaveText(/^agentplugins add\s+i18n-state-00/);
-  await plugin.getByRole('button', { name: 'Copy command' }).click();
+  await expect(page.getByRole('dialog').locator('.command-snippet--add code')).toHaveText(/^agentplugins add\s+i18n-state-00/);
+  await page.getByRole('dialog').getByRole('button', { name: 'Copy command' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toMatch(/^agentplugins add i18n-state-00/);
 
+  await page.keyboard.press('Escape');
   await page.locator('.catalog-modes').getByRole('link', { name: 'Skills', exact: true }).click();
   const restoredCard = page.locator('.skills-catalog .skill-card').first();
   // Per-package install choices intentionally belong to the last opened card.
   // Only the CLI invocation preference is global across catalog types.
   await restoredCard.getByRole('button', { name: 'Install frontend-design' }).click();
-  await restoredCard.getByRole('button', { name: 'This project' }).click();
-  await expect(restoredCard.getByRole('checkbox', { name: checkboxName })).toBeChecked();
-  await expect(restoredCard.locator('.command-snippet--add code')).toHaveText(nativeSkillCommand);
+  await page.getByRole('dialog').getByRole('button', { name: 'This project' }).click();
+  await expect(page.getByRole('dialog').getByRole('checkbox', { name: checkboxName })).toBeChecked();
+  await expect(page.getByRole('dialog').locator('.command-snippet--add code')).toHaveText(nativeSkillCommand);
+  await page.keyboard.press('Escape');
   await restoredCard.getByRole('link', { name: 'frontend-design' }).click();
   const detail = page.locator('#skill-install');
   await expect(detail.locator('.command-snippet code')).toHaveText(nativeSkillCommand);

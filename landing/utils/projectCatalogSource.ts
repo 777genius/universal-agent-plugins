@@ -11,7 +11,7 @@ import type { ClientID, ComponentID, DistributionResolution, InstallScope, Plugi
 // delivery, NOT exact MCP-transport approval or runtime/activation evidence.
 // The released CLI checks actual package bytes, dependencies and native policy.
 const clientCapabilities = new Map(capabilities.map((client) => [client.id, client] as const));
-export const PINNED_CATALOG_CLI_VERSION: string = '0.1.108';
+export const PINNED_CATALOG_CLI_VERSION: string = '0.1.110';
 
 // Broad capability preview only: the signed release does not expose which MCP
 // transports a package needs (including SSE-only). The CLI decides exact fit.
@@ -20,10 +20,6 @@ export function projectComponentSupported(client: ClientID, component: Component
 }
 
 export function scopedComponentSupported(client: ClientID, component: ComponentID, scope: InstallScope): boolean {
-  // The generated matrix describes current source. Published CLI 0.1.108
-  // still refuses Hermes Project MCP; keep its install commands unavailable.
-  if (PINNED_CATALOG_CLI_VERSION === '0.1.108' && client === 'hermes' &&
-      scope === 'project' && component === 'mcp') return false;
   const row = clientCapabilities.get(client);
   const scoped = scope === 'user' ? row : row && 'project' in row ? row.project : undefined;
   if (!scoped) return false;

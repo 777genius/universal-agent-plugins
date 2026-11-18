@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -68,6 +69,14 @@ func CompleteNativeConfigActivation(ctx context.Context, request domain.Activati
 	outcome.Verification = domain.VerificationInstalled
 	outcome.UserActions = append(outcome.UserActions, client.CompletedAction)
 	return outcome, nil
+}
+
+// IntactNativeReplacement reports a replacing activation whose exact owned
+// native objects are already installed. It needs verification and client
+// completion, not a rewrite that reports a committed effect for an unchanged
+// installation. Missing or changed objects keep the ordinary repair path.
+func IntactNativeReplacement(request domain.ActivationRequest, previous, desired []domain.NativeObjectOwnership, verify func() error) bool {
+	return !request.VerifyOnly && request.Replacing && len(previous) > 0 && reflect.DeepEqual(previous, desired) && verify() == nil
 }
 
 // CommittedNativeCleanup records that the native config write committed but

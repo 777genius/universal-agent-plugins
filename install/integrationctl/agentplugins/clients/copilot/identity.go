@@ -24,7 +24,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 		}
 		return inspectCopilotProject(plan, managed, env.NativeConfig)
 	}
-	bound, err := userProfileEnv(env, client.ConfigRoot, plan.NativeRegistryRoot, plan.TargetContext.UserConfigRoot)
+	bound, err := userProfileEnv(env, plan.DeclaredName, client.ConfigRoot, plan.NativeRegistryRoot, plan.TargetContext.UserConfigRoot)
 	if err != nil {
 		return clients.RegistryIndeterminate, err
 	}

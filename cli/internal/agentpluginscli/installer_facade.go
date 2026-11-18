@@ -68,7 +68,13 @@ func runInstallerFacadeLocalAdd(ctx context.Context, cmd *cobra.Command, app App
 		ClientExecutable: backendExecutable(selected, detected, app.scope()), ClientVersion: selected.Version, OperationID: operationID,
 		RequiredComponents: requiredFacadeComponents(loaded.envelope), Assessment: &assessment,
 	}
-	prepared, err := app.Installer.Prepare(ctx, request)
+	// A dry-run stages in disposable roots, never in the project's .uap namespace.
+	staging, cleanup, err := dependencyPreviewApp(app, opts)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	prepared, err := staging.Installer.Prepare(ctx, request)
 	if err != nil {
 		return err
 	}

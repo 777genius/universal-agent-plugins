@@ -309,8 +309,18 @@ class NativeMatrixTests(unittest.TestCase):
         body = b"native-client-fixture"
         for pin in ["sha256:" + hashlib.sha256(body).hexdigest(), "sha512-" + base64.b64encode(hashlib.sha512(body).digest()).decode()]:
             matrix.verify_digest(body, pin)
-            with self.assertRaises(ValueError):
-                matrix.verify_digest(body + b"changed", pin)
+            changed = body + b"changed"
+            algorithm = "sha256" if pin.startswith("sha256:") else "sha512"
+            expected = hashlib.new(algorithm, body).hexdigest()
+            actual = hashlib.new(algorithm, changed).hexdigest()
+            for tool, label in (("opencode", "opencode"), ("/private/credential-token", "archive")):
+                with self.subTest(algorithm=algorithm, tool=label):
+                    with self.assertRaises(ValueError) as refused:
+                        matrix.verify_digest(changed, pin, tool)
+                    self.assertEqual(str(refused.exception),
+                                     f"archive integrity mismatch: tool={label} algorithm={algorithm} expected={expected} actual={actual}")
+                    self.assertNotIn("native-client-fixture", str(refused.exception))
+                    self.assertNotIn("credential-token", str(refused.exception))
 
     def test_tar_selects_only_regular_exact_binary(self):
         archive = io.BytesIO()

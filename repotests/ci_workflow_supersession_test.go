@@ -35,6 +35,7 @@ func TestCISupersession_RegularPRChecksOnly(t *testing.T) {
 	for name, prefix := range map[string]string{
 		"agentplugins-windows-firebase-capture-probe.yml": "firebase-capture-",
 		"docs-canary.yml":                          "docs-canary-",
+		"grok-enable-readonly.yml":                 "grok-enable-readonly-",
 		"remotion-windows-source-diagnostic.yml":   "remotion-win-diagnostic-",
 		"remotion-windows-source-longtemp-e2e.yml": "remotion-win-longtemp-",
 		"scaffold-node-lock-e2e.yml":               "scaffold-node-lock-",

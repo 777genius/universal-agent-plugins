@@ -30,3 +30,20 @@ func TestPreparedInteractiveInstallDoesNotRequestAttestation(t *testing.T) {
 		t.Fatalf("prepared install requested another answer: output=%q remaining=%d", output.String(), input.Len())
 	}
 }
+
+// Regression: the planner's "the plugin's" authentication review was repeated
+// as "this plugin's" in every Copilot user-scope next action.
+func TestLifecycleActionDoesNotRepeatAuthenticationReview(t *testing.T) {
+	result := usecase.AddResult{
+		Plan: domain.DeliveryPlan{ClientID: domain.ClientCopilot, UserActions: []string{"verify the plugin's authentication requirements before using it"}},
+		Activation: domain.ActivationOutcome{Activation: domain.ActivationActive, Verification: domain.VerificationInstalled,
+			Authentication: domain.AuthenticationNotChecked},
+	}
+	if got := nextLifecycleAction(result); got != "verify the plugin's authentication requirements before using it" {
+		t.Fatalf("next action = %q", got)
+	}
+	result.Plan.UserActions = []string{"reload the client"}
+	if got := nextLifecycleAction(result); got != "reload the client; verify this plugin's authentication requirements before using it" {
+		t.Fatalf("next action = %q", got)
+	}
+}

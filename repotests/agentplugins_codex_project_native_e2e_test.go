@@ -22,7 +22,7 @@ func TestAgentpluginsCodexNativeProjectComponentsLifecycle(t *testing.T) {
 	}
 	f := newCodexProjectNativeFixture(t)
 	stages := map[string]nativeStage{}
-	for _, name := range []string{"project_install", "project_unchanged_add", "project_unchanged_update", "project_update", "project_missing_skill_repair", "project_remove", "project_raw_skills_install", "project_raw_skills_repeat", "project_raw_skills_remove", "project_foreign_preservation"} {
+	for _, name := range []string{"project_install", "project_unchanged_add", "project_unchanged_update", "project_update", "project_missing_skill_repair", "project_remove", "project_raw_skills_install", "project_raw_skills_repeat", "project_raw_skills_remove", "project_system_skill_install", "project_system_skill_repeat", "project_system_skill_remove", "project_foreign_preservation"} {
 		stages[name] = nativeStage{Status: "not_evaluated", Reason: "not reached"}
 	}
 	stages["native_mcp_initialization"] = nativeStage{Status: "not_evaluated", Reason: "skills-only fixture; no trust mutation or MCP initialization"}
@@ -40,6 +40,7 @@ func TestAgentpluginsCodexNativeProjectComponentsLifecycle(t *testing.T) {
 	codexNativeProjectRepair(t, f, stages)
 	codexNativeProjectRemove(t, f, stages)
 	codexNativeProjectRawSkills(t, f, stages)
+	codexNativeProjectSystemSkill(t, f, stages)
 	f.requireForeign(t)
 	stages["project_foreign_preservation"] = nativeStage{Status: "passed", Reason: "user config/cache and both projects' foreign configuration and skills retain exact bytes"}
 }

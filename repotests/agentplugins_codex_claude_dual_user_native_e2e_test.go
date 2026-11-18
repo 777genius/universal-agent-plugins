@@ -88,6 +88,11 @@ func dualNativeRawUserResult(t *testing.T, result map[string]any, runErr error, 
 	if !found["codex"] || !found["claude"] {
 		t.Fatalf("dual native items omitted a selected client: %+v", rows)
 	}
+	actions, actionsOK := result["next_actions"].([]any)
+	if result["readiness"] != "ready" ||
+		result["next_actions"] != nil && (!actionsOK || len(actions) != 0) {
+		t.Fatalf("dual native User Skills still require setup: %+v", result)
+	}
 }
 
 // TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle proves both native

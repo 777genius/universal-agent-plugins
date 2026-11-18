@@ -222,7 +222,7 @@
         "nextStep": "Após a instalação"
       },
       "scrollHint": "Role a tabela para os lados para ver todas as colunas.",
-      "note": "Automático: o UAP instala os componentes compatíveis. Guiado: siga as instruções do agente. Preparado: ative os arquivos preparados. Manual: conclua a configuração no aplicativo. A instalação não faz login nem concede confiança automaticamente. A disponibilidade depende do plugin e da versão do agente. Referência: CLI nativo 0.1.108. A publicação no npm é independente e pode atrasar. O suporte a um agente não garante uma versão assinada do catálogo compatível com cada plugin e escopo.",
+      "note": "Automático: o UAP instala os componentes compatíveis. Guiado: siga as instruções do agente. Preparado: ative os arquivos preparados. Manual: conclua a configuração no aplicativo. Após a confirmação, o UAP conclui a configuração nativa compatível e informa as etapas restantes de confiança, login ou recarga. A disponibilidade depende do plugin e da versão do agente. Referência: CLI nativo 0.1.110. A publicação no npm é independente e pode atrasar. O suporte a um agente não garante uma versão assinada do catálogo compatível com cada plugin e escopo.",
       "details": "Ver detalhes de compatibilidade",
       "capabilities": {
         "pluginsSkillsMcp": "Plugins, habilidades, MCP",
@@ -254,11 +254,11 @@
         "windsurf": "Abra ou reinicie o Devin no projeto selecionado e revise o acesso.",
         "kimi": "Execute /reload ou /new e revise as permissões MCP.",
         "cline": "Selecione o caminho das configurações MCP do projeto e recarregue o Cline.",
-        "kiro": "Faça login, autorize o acesso e reinicie o Kiro se solicitado.",
-        "grok": "Abra o projeto no Grok, ative o plugin e conceda confiança; recarregue e verifique Skills e MCP.",
+        "kiro": "A CLI configura automaticamente os Skills e MCP compatíveis; entre, autorize o acesso e reinicie se solicitado.",
+        "grok": "Abra o projeto escolhido no Grok, revise a confiança e conclua as etapas restantes de ativação ou reinício; verifique os Skills e MCP.",
         "vscode": "Abra a pasta, confie nela e revise e habilite os servidores MCP.",
         "chatgpt": "Desktop: instalação local via Codex CLI; Web: conecte ou instale o aplicativo no ChatGPT.",
-        "hermes": "Reinicie o Hermes, confie no projeto Git selecionado e verifique Skills e MCP do usuário; MCP de projeto não é compatível.",
+        "hermes": "Reinicie o Hermes e confie no projeto; o MCP de projeto exige um pacote autônomo verificado do Hermes e uma sessão de projeto UAP confirmada explicitamente.",
         "antigravity": "Abra ou recarregue o Antigravity; revise a confiança e verifique se o plugin preparado foi descoberto e ativado no escopo selecionado."
       }
     },
@@ -595,7 +595,8 @@
       "automaticHelp": "A CLI verifica os agentes locais instalados e permite confirmar destinos compatíveis. ChatGPT Desktop é local; a configuração do ChatGPT Web termina dentro do ChatGPT.",
       "manualHelp": "Selecione os agentes onde instalar. Pelo menos um deve permanecer selecionado.",
       "summary": "{label}: {summary}",
-      "manualHelpWithAuto": "Selecione os agentes onde instalar. Limpe a última seleção para escolher no terminal."
+      "manualHelpWithAuto": "Selecione os agentes onde instalar. Limpe a última seleção para escolher no terminal.",
+      "more": "+{count} mais"
     },
     "command": {
       "terminal": "Terminal",
@@ -837,7 +838,12 @@
       "guidedChatgptSetup": "Configuração guiada do ChatGPT Web; conclua a conexão dentro do ChatGPT.",
       "catalogReleasePending": "Este plugin ainda não foi publicado para {agent}.",
       "useComputerScope": "Para este plugin, escolha Este computador.",
-      "unsupportedPluginComponents": "{agent} não oferece suporte a todos os componentes deste plugin."
+      "unsupportedPluginComponents": "{agent} não oferece suporte a todos os componentes deste plugin.",
+      "dialogDescription": "Escolha os agentes e o escopo de instalação e execute o comando no terminal.",
+      "closeDialog": "Fechar instalação",
+      "pinnedSourceShort": "Fonte Git fixada",
+      "desktopSourceShort": "Conexão local do Desktop",
+      "webSetupShort": "Configuração Web guiada"
     },
     "authentication": {
       "not_required": "Nenhuma conta necessária",
@@ -915,8 +921,8 @@
         "note": "Skills e configuração MCP gerenciadas",
         "status": "Compatível",
         "intro": "Instale Agent Plugins 1.0 para o Kiro a partir do mesmo pacote portável usado por outros agentes de IA.",
-        "delivery": "A CLI instala as Skills e as entradas MCP do Kiro que gerencia, preservando as demais configurações globais.",
-        "activation": "Conclua a etapa de OAuth ou reinicialização indicada. A preparação para macOS e Windows não comprova verificação automática de execução."
+        "delivery": "A CLI instala automaticamente seus Skills e a configuração MCP para versões compatíveis do Kiro CLI, preservando outras configurações. MCP exige a distribuição CLI completa compatível e configuração gravável.",
+        "activation": "Entre, autorize o acesso e reinicie se solicitado. A preparação explícita continua Prepared; os arquivos instalados não comprovam carregamento nativo, autenticação nem execução real de MCP."
       },
       "claude": {
         "note": "Configuração MCP gerenciada",
@@ -944,13 +950,13 @@
         "status": "Compatível",
         "intro": "Instale Agent Plugins 1.0 compatíveis para o Cline sem reconstruir a configuração MCP para cada plugin.",
         "delivery": "A CLI prepara e rastreia a configuração MCP compatível do Cline.",
-        "activation": "Recarregue o Cline quando solicitado e conclua a autenticação do provedor fora do pacote do plugin."
+        "activation": "Recarregue o Cline e autentique-se no provedor. O MCP de projeto exige a sessão gerenciada escolhida explicitamente e seu CLINE_MCP_SETTINGS_PATH; a inicialização normal não seleciona essa configuração."
       },
       "windsurf": {
         "note": "Pacote preparado; ativação manual obrigatória",
         "status": "Preparado pela CLI",
         "intro": "Prepare Agent Plugins 1.0 para o Windsurf com um único comando da CLI e depois conclua explicitamente a etapa de ativação específica do cliente.",
-        "delivery": "A CLI valida e prepara o pacote compatível do Windsurf sem declarar ativação automática.",
+        "delivery": "A CLI grava seus Skills e a configuração MCP para Devin de usuário 3000.11.205 ou 3000.12.57 e de projeto 3000.11.205. A preparação não comprova descoberta, confiança, entrada nem execução real.",
         "activation": "Siga exatamente o caminho de ativação manual exibido após a preparação."
       },
       "grok": {
@@ -958,7 +964,7 @@
         "status": "Compatível",
         "intro": "Instale Skills e servidores MCP portáteis do Agent Plugins 1.0 para o Grok Build pela mesma CLI usada para outros clientes.",
         "delivery": "A CLI grava um manifesto nativo .grok-plugin no diretório de plugins do usuário do Grok e gerencia o registro pela Grok CLI, quando disponível.",
-        "activation": "Recarregue o Grok Build após a instalação. Se a Grok CLI não estiver disponível, instale-a e execute novamente o comando update para verificação nativa."
+        "activation": "No Linux com Grok Build 1.0.70, o UAP pode ativar o plugin de projeto exato preservando a confiança e as desativações existentes. Revise a confiança separadamente; em outros ambientes siga as etapas exibidas, recarregue e verifique."
       },
       "kimi": {
         "note": "Plugin de usuário gerenciado com Skills e MCP",
@@ -975,11 +981,11 @@
         "activation": "Recarregue os plugins do Qoder ou reinicie o Qoder após a instalação. As conexões MCP em execução e a autenticação do provedor ainda precisam ser confirmadas no Qoder."
       },
       "hermes": {
-        "note": "Skills e MCP de usuário; Skills de projeto sem MCP de projeto",
+        "note": "Skills/MCP de usuário; Skills e MCP preparado de projeto",
         "status": "Compatível",
-        "intro": "Instale Skills nativas do Hermes Agent para seu usuário ou um projeto Git selecionado, além de servidores MCP de usuário, sem alterar configurações de terceiros.",
-        "delivery": "O UAP gerencia as pastas Skills que pertencem a ele e entradas MCP específicas no config.yaml do usuário. A instalação em projeto nunca altera a configuração MCP do usuário.",
-        "activation": "Reinicie o Hermes para recarregar a integração. Verifique a confiança no repositório antes de usar Skills de projeto; descoberta e autenticação ainda exigem confirmação separada."
+        "intro": "Instale Skills e servidores MCP nativos do Hermes Agent para seu usuário ou um projeto Git escolhido. O MCP de projeto exige um pacote autônomo verificado do cliente Hermes.",
+        "delivery": "O UAP gerencia seus Skills e as entradas exatas de MCP de usuário em config.yaml. O MCP de projeto usa uma sessão gerenciada confirmada explicitamente. A instalação de projeto nunca modifica o MCP de usuário.",
+        "activation": "Inicie uma nova sessão do Hermes e revise a confiança do repositório. O MCP de projeto usa a sessão UAP confirmada; a inicialização normal não a seleciona. Verifique também a autenticação e a execução real de MCP."
       },
       "antigravity": {
         "note": "Plugins nativos de usuário e projeto; ativação precisa de verificação",

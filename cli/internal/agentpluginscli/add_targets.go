@@ -78,7 +78,7 @@ func selectExplicitClient(target domain.ClientID, rawTarget string, detectedMap 
 		ok = true
 	}
 	if !ok || (client.Status != domain.DetectionDetected && !plansWithoutHostPresence(target)) {
-		return domain.DetectedClient{}, fmt.Errorf("target %q was not detected", rawTarget)
+		return domain.DetectedClient{}, fmt.Errorf("target %q was not detected%s", rawTarget, undetectedTargetHint(client))
 	}
 	return client, nil
 }

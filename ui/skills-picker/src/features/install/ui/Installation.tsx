@@ -74,7 +74,7 @@ export function InstallActions({ controller, request, progressHeading, feedback 
       <Diagnostics items={operation.data.diagnostics}/>
       {operation.data.result && <>{!showReadiness && <p>{operation.data.result.message}</p>}{operation.data.result.repairInstructions.map((instruction) => <p key={instruction} className="notice">{instruction}</p>)}</>}
     </section>}
-    <Modal open={controller.reviewOpen && !!plan && !uncertain} returnFocus={() => {
+    <Modal open={controller.reviewOpen && !!plan && !uncertain} closeDisabled={apply.isPending} returnFocus={() => {
       if (window.matchMedia('(max-width:759px)').matches) {
         if (failed) return feedback.current;
         if (accepted) return progressHeading.current;

@@ -1003,7 +1003,7 @@
       "title": "Homebrew",
       "description": "Native Go CLI for macOS and Linux. Node.js is not required.",
       "href": "https://github.com/777genius/homebrew-agentplugins",
-      "note": "Recommended for a permanent install with automatic Homebrew upgrades.",
+      "note": "Recommended for a permanent install, with upgrades managed through Homebrew.",
       "command": "brew install 777genius/agentplugins/agentplugins",
       "invocation": "agentplugins",
       "recommended": true

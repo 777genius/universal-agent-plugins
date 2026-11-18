@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -100,14 +101,14 @@ func validCodexEnvironmentName(key string) bool {
 func runCodex(ctx context.Context, env clients.Env, root, executable string, args ...string) (legacyports.CommandResult, error) {
 	command, err := codexCommand(root, executable, os.Environ(), args...)
 	if err != nil {
-		return legacyports.CommandResult{}, err
+		return legacyports.CommandResult{NoChildStarted: true}, err
 	}
 	if env.Runner == nil {
-		return legacyports.CommandResult{}, fmt.Errorf("%s runner is unavailable", codexCLIName)
+		return legacyports.CommandResult{NoChildStarted: true}, fmt.Errorf("%s runner is unavailable", codexCLIName)
 	}
 	result, err := env.Runner.Run(ctx, command)
 	if err != nil {
-		return result, fmt.Errorf("start %s: %w", codexCLIName, err)
+		return result, fmt.Errorf("run %s: %w", codexCLIName, shared.NativeProbeFailure(result, err))
 	}
 	if result.ExitCode != 0 {
 		return result, fmt.Errorf("%s command failed with exit code %d", codexCLIName, result.ExitCode)
@@ -124,5 +125,5 @@ func runCodexPluginList(ctx context.Context, env clients.Env, root, executable s
 	if err == nil {
 		err = bounded.Err()
 	}
-	return result, err
+	return result, shared.NativeProbeFailure(result, err)
 }

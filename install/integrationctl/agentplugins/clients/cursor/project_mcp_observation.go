@@ -17,7 +17,11 @@ import (
 
 // Cursor's supported MCP commands do not require a model or account login.
 // A Skill still requires independent native discovery; MCP cannot qualify it.
-type cursorProjectMCPObservation struct{ Initialized, Complete bool }
+// ApprovalPending is reported only by a read-only pass with no refusal.
+// Approved records a written approval, even when observation then fails.
+type cursorProjectMCPObservation struct{ Initialized, Complete, ApprovalPending, Approved bool }
+
+const cursorNeedsApprovalStatus = "not loaded (needs approval)"
 
 func observeCursorProjectMCP(ctx context.Context, env clients.Env, request domain.ActivationRequest) (cursorProjectMCPObservation, error) {
 	if env.Runner == nil || env.LookupExecutable == nil {
@@ -47,19 +51,28 @@ func observeCursorProjectMCP(ctx context.Context, env clients.Env, request domai
 	if err != nil {
 		return cursorProjectMCPObservation{}, err
 	}
+	observed := cursorProjectMCPObservation{}
 	for _, name := range names {
-		if ready, err := observeCursorServer(ctx, env, request, name, result.Stdout); err != nil || !ready {
-			return cursorProjectMCPObservation{}, err
+		ready, approved, err := observeCursorServer(ctx, env, request, name, result.Stdout)
+		observed.Approved = observed.Approved || approved
+		if err != nil {
+			return observed, err
+		}
+		if !ready {
+			status, _ := cursorMCPStatus(result.Stdout, name)
+			observed.ApprovalPending = request.VerifyOnly && status == cursorNeedsApprovalStatus
+			return observed, nil
 		}
 	}
 
 	if err := layout.Verify(cursorNativeObjects(request.Delivery.NativeObjects), false, env.NativeConfig); err != nil {
-		return cursorProjectMCPObservation{}, err
+		return observed, err
 	}
 	if err := cursorMCPPolicyAvailable(env, request, names); err != nil {
-		return cursorProjectMCPObservation{}, err
+		return observed, err
 	}
-	return cursorProjectMCPObservation{Initialized: true, Complete: allMCP}, nil
+	observed.Initialized, observed.Complete = true, allMCP
+	return observed, nil
 }
 
 func cursorSelectedMCP(components []domain.ComponentDecision) ([]string, bool) {
@@ -92,8 +105,13 @@ func runCursorNative(ctx context.Context, env clients.Env, request domain.Activa
 		return legacyports.CommandResult{}, fmt.Errorf("cursor CLI profile overrides differ from the selected native profile; existing policy remains unchanged")
 	}
 	project := request.Plan.TargetContext.ProjectRoot
-	if filepath.Base(root) != ".cursor" || !filepath.IsAbs(executable) || filepath.Clean(executable) != executable || !cursorExactNativeProject(project) {
+	if filepath.Base(root) != ".cursor" || !filepath.IsAbs(executable) || filepath.Clean(executable) != executable {
 		return legacyports.CommandResult{}, fmt.Errorf("cursor native profile or project authority is unavailable")
+	}
+	if !cursorExactNativeProject(project) {
+		// cursor-agent keys MCP configuration and approvals by the enclosing Git
+		// root, so observing or approving from a nested folder would be wrong.
+		return legacyports.CommandResult{}, fmt.Errorf("cursor-agent uses the enclosing Git repository root as its project and does not read this folder's .cursor/mcp.json; MCP servers were not approved (install at the repository root to use them from cursor-agent)")
 	}
 	environment := []string{"HOME=" + filepath.Dir(root), "USERPROFILE=" + filepath.Dir(root), "CURSOR_CONFIG_DIR=" + root, "CURSOR_DATA_DIR=" + root, "NO_COLOR=1", "TERM=dumb"}
 	for _, key := range []string{"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR"} {
@@ -183,29 +201,30 @@ func cursorObservedLocalMCPAuthentication(plan domain.DeliveryPlan) bool {
 	return plan.Authentication == domain.AuthenticationNotChecked && slices.Contains(plan.Warnings, "authentication_not_catalog_verified")
 }
 
-func observeCursorServer(ctx context.Context, env clients.Env, request domain.ActivationRequest, name string, listing []byte) (bool, error) {
+// observeCursorServer reports readiness and whether it wrote an approval.
+func observeCursorServer(ctx context.Context, env clients.Env, request domain.ActivationRequest, name string, listing []byte) (ready, approved bool, err error) {
 	status, ok := cursorMCPStatus(listing, name)
 	if !ok {
-		return false, fmt.Errorf("cursor did not list the exact selected MCP server")
+		return false, false, fmt.Errorf("cursor did not list the exact selected MCP server")
 	}
 	if status == "disabled" {
-		return false, fmt.Errorf("preserved explicit Cursor MCP disablement for %q", name)
+		return false, false, fmt.Errorf("preserved explicit Cursor MCP disablement for %q", name)
 	}
-	if status == "not loaded (needs approval)" && !request.VerifyOnly {
-		if err := approveCursorMCP(ctx, env, request, name); err != nil {
-			return false, err
+	if status == cursorNeedsApprovalStatus && !request.VerifyOnly {
+		if approved, err = approveCursorMCP(ctx, env, request, name); err != nil {
+			return false, approved, err
 		}
 	} else if status != "ready" {
-		return false, nil
+		return false, false, nil
 	}
 	tools, err := runCursorInventory(ctx, env, request, "list-tools", name)
 	if err != nil {
-		return false, err
+		return false, approved, err
 	}
 	if !cursorToolsListed(tools.Stdout, name) {
-		return false, fmt.Errorf("cursor MCP initialization remains unobserved for %q", name)
+		return false, approved, fmt.Errorf("cursor MCP initialization remains unobserved for %q", name)
 	}
-	return true, nil
+	return true, approved, nil
 }
 
 func cursorNativeProfileEnvironment(root string) bool {

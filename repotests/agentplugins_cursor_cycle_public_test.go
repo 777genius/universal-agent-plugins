@@ -155,7 +155,11 @@ func (c *cursorMCPProjectCycle) publicProof(t *testing.T, r *cursorCycleRecipe, 
 		return
 	}
 	document, err := cursorCyclePublicDocument(result.Stdout)
-	if err != nil || string(result.Stderr) != grokCycleProgress(step.label, cursorCycleName) {
+	expectedProgress := grokCycleProgress(step.label, cursorCycleName)
+	if step.label == "repeat-add-a" {
+		expectedProgress = "Resolving and validating one Agent Plugin package for every selected target...\n"
+	}
+	if err != nil || string(result.Stderr) != expectedProgress {
 		t.Fatal("Cursor exact public JSON/progress differs", err)
 	}
 	if step.verb == "remove" {

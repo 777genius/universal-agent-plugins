@@ -41,15 +41,15 @@ for (const width of [1440, 390]) {
 
     const card = page.locator('[data-install-source="context7"]').first();
     await card.locator('.plugin-card__install-toggle').click();
-    await card.locator('.app-multiselect__trigger').click();
+    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     const web = page.getByRole('checkbox', { name: /^ChatGPT Web/ });
     await expect(web).toBeEnabled();
-    await expect(web).toContainText('Guided ChatGPT Web setup');
+    await expect(web).toContainText('Guided web setup');
     await web.click();
     await page.keyboard.press('Escape');
-    await expect(card.locator('.command-snippet code')).toContainText('add context7 --target chatgptweb');
-    await expect(card).toContainText('Guided ChatGPT Web setup');
-    await testInfo.attach(`guided-web-card-${width}.png`, { body: await card.screenshot({ animations: 'disabled' }), contentType: 'image/png' });
+    await expect(page.getByRole('dialog').locator('.command-snippet code')).toContainText('add context7 --target chatgptweb');
+    await expect(page.getByRole('dialog')).toContainText('Guided ChatGPT Web setup');
+    await testInfo.attach(`guided-web-card-${width}.png`, { body: await page.getByRole('dialog').screenshot({ animations: 'disabled' }), contentType: 'image/png' });
 
     await navigate(page, '/plugins/context7/');
     await expect(page.locator('.install-panel .command-snippet--add code')).toContainText('add context7 --target chatgptweb');

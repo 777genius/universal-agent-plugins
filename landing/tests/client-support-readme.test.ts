@@ -61,9 +61,9 @@ test('English support translations preserve source-matrix capabilities and next 
 test('new client rows retain guided trust and prepared activation boundaries', () => {
   const hermes = clientSupportRows.find((row) => row.id === 'hermes')!;
   assert.equal(hermes.user, 'Skills, MCP');
-  assert.equal(hermes.project, 'Skills only');
+  assert.equal(hermes.project, 'Skills, MCP (prepared)');
   assert.equal(hermes.setup, 'Guided');
-  assert.match(hermes.nextStep, /trust.*Project MCP is unsupported/);
+  assert.match(hermes.nextStep, /trust.*verified standalone Hermes bundle.*explicitly confirmed UAP project session/);
   const antigravity = clientSupportRows.find((row) => row.id === 'antigravity')!;
   assert.equal(antigravity.user, 'Plugins, Skills, MCP');
   assert.equal(antigravity.project, 'Plugins, Skills, MCP');

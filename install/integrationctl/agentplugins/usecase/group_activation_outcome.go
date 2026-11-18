@@ -63,11 +63,13 @@ func (session *groupSession) preserveNoChangeActivation(target plannedGroupTarge
 
 func (session *groupSession) assignActivationOutcome(target plannedGroupTarget, outcome domain.ActivationOutcome, activationErr, persistErr error, lifecycleChanged bool) {
 	mutated := !target.noChange || lifecycleChanged || outcome.NativeEffect == domain.NativeEffectCommitted
+	// A setup completion that only re-verified the existing setup changed nothing.
+	settled := target.completePreparedSetup && !mutated && activationErr == nil && persistErr == nil
 	for _, resultIndex := range target.resultIndexes {
 		session.result.Targets[resultIndex].Activation = outcome
 		session.result.Targets[resultIndex].Mutated = mutated
-		if mutated {
-			session.result.Targets[resultIndex].NoChange = false
+		if mutated || settled {
+			session.result.Targets[resultIndex].NoChange = settled
 		}
 		session.result.Mutated = session.result.Mutated || session.result.Targets[resultIndex].Mutated
 		switch {
@@ -94,6 +96,9 @@ func groupActivationStopReason(ctx context.Context, cause error) (string, string
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		return "deadline", "processing stopped because the operation deadline was exceeded before remaining clients could be activated safely"
+	case domain.IsUnclosedClientProbe(context.Cause(ctx)) && !errors.Is(context.Cause(ctx), context.DeadlineExceeded):
+		// A sibling stopped the group; the cancellation is its consequence, not the cause.
+		return "activation", "processing stopped because client process cleanup could not be confirmed before remaining clients could be activated safely"
 	case errors.Is(ctx.Err(), context.Canceled), errors.Is(cause, context.Canceled):
 		return "canceled", "processing stopped because the operation was canceled before remaining clients could be activated safely"
 	case domain.IsUnclosedClientProbe(cause) && !errors.Is(cause, context.DeadlineExceeded):

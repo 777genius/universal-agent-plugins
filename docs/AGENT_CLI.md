@@ -1,10 +1,10 @@
 # AI-agent CLI workflow: discover, preview, apply, verify
 
-**Availability:** The agent-first improvements described here are source changes
-under Draft PR #748 (2026-11-06), **not** a published CLI release. The currently
-published native CLI is [0.1.95](../README.md#install-the-cli). Check
-`agentplugins version`; package-manager channels may lag. Commands without a
-new feature note below are supported by the documented released CLI.
+**Release baseline:** This guide is verified against [CLI 0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110)
+(source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`). The agent-first commands
+and machine metadata described below are included in that release. Check
+`agentplugins version` before relying on them; package-manager channels may lag.
+Installation evidence does not establish native runtime activation or authentication.
 
 UAP has one installer engine for interactive people and automated agents.
 The browser/TUI is optional; automated clients should use an explicit package,
@@ -20,7 +20,7 @@ agentplugins info context7 --scope user --format json
 agentplugins doctor --scope user --format json
 ```
 
-Current source builds also accept `--yes` on `add` and `install <source>`:
+CLI 0.1.110 accepts `--yes` on `add` and `install <source>`:
 
 ```sh
 agentplugins add context7 --target codex --scope user --yes --format json
@@ -38,7 +38,7 @@ foreign ownership, a client's approval UI or authentication.
 
 ## Raw Skills: discover then install into one project
 
-Source-only `skills list` uses the *existing bounded source scanner*, not
+`skills list` uses the existing bounded source scanner, not
 a browser, code execution, external service or new installer. It reports all
 discovered candidates (available, invalid or unavailable), exact source paths
 and whether scanning was complete. Multiple Skills may have the same name;
@@ -72,11 +72,12 @@ For exact reproducibility, commit `uap.toml` and `uap.lock`, then run:
 agentplugins install --locked --scope project --project-root "$PWD" --yes --format json
 ```
 
-Project placement for *signed Directory short names* in `add` is still
-source-only after PR #725; published 0.1.95 needs an eligible pinned full-SHA
-Git source. Review [Project installation](PROJECT_INSTALLATION.md) before using
-short Directory aliases in a project. The standalone Skills Project flow is
-available in released CLI 0.1.93+.
+CLI 0.1.110 accepts signed Directory short names in project-scoped `add`
+when the package and its mandatory dependencies are eligible for the selected
+targets. A reviewed exact commit-pinned Git source is another supported option.
+Review [Project installation](PROJECT_INSTALLATION.md) for source eligibility
+and client activation limits. The standalone Skills Project flow has been
+available since CLI 0.1.93.
 
 ## Machine output: interpret evidence, not just the exit status
 
@@ -87,7 +88,7 @@ available in released CLI 0.1.93+.
   `deps` and `skills add` top-level fields remain available. New machine
   metadata is additive. Do not assume every subcommand has identical legacy
   shape.
-- Source builds add a normalized `readiness` projection where supported:
+- CLI 0.1.110 includes a normalized `readiness` projection where supported:
   `ready` = the recorded installer lifecycle is verified, **not** a real tool
   invocation; `needs_action` = activation/auth/native check remains;
   `failed` = recorded failed state; `unknown` = insufficient facts/preview.
@@ -112,7 +113,7 @@ set `--project-root` to the exact intended directory. Omitting scope on
 `add` or `skills add` still selects `user`. Only **argumentless**
 `agentplugins install` may automatically select Project from a regular
 `uap.toml` in its *exact current working directory*. It never searches
-parent directories. The source additions explain the effective selection as
+parent directories. Machine output explains the effective selection as
 `explicit`, `default_user` or `argumentless_project_manifest`.
 
 ## Never make these assumptions

@@ -56,15 +56,21 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, request d
 		return domain.ActivationOutcome{}, err
 	}
 	automatic := automaticallyActivatesOpenCode(request)
-	outcome, err := shared.CompleteNativeConfigActivation(ctx, request, shared.NativeConfigActivation{
+	verify := func() error {
+		return verifyOpenCodeNativeLayout(layout, request.Delivery.ActivePath, request.Delivery.NativeObjects, env.NativeConfig, false)
+	}
+	// Intact owned objects need only native discovery, not a rewrite.
+	projection := request
+	if automatic && shared.IntactNativeReplacement(request, OpenCodeObjects(request.PreviousNativeObjects), OpenCodeObjects(request.Delivery.NativeObjects), verify) {
+		projection.VerifyOnly = true
+	}
+	outcome, err := shared.CompleteNativeConfigActivation(ctx, projection, shared.NativeConfigActivation{
 		Automatic:         automatic,
 		UnavailableAction: "rerun with a detected OpenCode config root",
 		RepairAction:      "repair the managed OpenCode skills and MCP configuration",
 		RetryAction:       "retry the managed OpenCode native installation",
 		CompletedAction:   "restart OpenCode to load the installed plugin",
-		Verify: func() error {
-			return verifyOpenCodeNativeLayout(layout, request.Delivery.ActivePath, request.Delivery.NativeObjects, env.NativeConfig, false)
-		},
+		Verify:            verify,
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
 			if crossOpenCodeDialect(request.PreviousNativeObjects, request.Delivery.NativeObjects) {
 				return applyOpenCodeTransition(ctx, request, env.NativeConfig, env.OpenCodeTransitions)

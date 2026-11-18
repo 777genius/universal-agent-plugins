@@ -100,6 +100,8 @@ func readGeminiProjectSettings(kernel nativeconfig.Kernel, root string) (geminiP
 
 // These are configured user/workspace restrictions, not a second Gemini
 // settings engine. Higher system policy and session trust remain unobserved.
+// Only native decisions have a .gemini projection that settings or a workspace
+// .agents alias can affect; other decisions carry no Gemini component name.
 func geminiProjectConditions(kernel nativeconfig.Kernel, request domain.ActivationRequest) ([]string, error) {
 	user, err := readGeminiProjectSettings(kernel, request.Client.ConfigRoot)
 	if err != nil {
@@ -111,7 +113,7 @@ func geminiProjectConditions(kernel nativeconfig.Kernel, request domain.Activati
 	}
 	conditions := geminiConfiguredRestrictions(user, workspace, request.Plan.Components)
 	for _, component := range request.Plan.Components {
-		if component.Kind != domain.ComponentSkill {
+		if component.Kind != domain.ComponentSkill || component.Support != domain.SupportNative {
 			continue
 		}
 		if err := pathpolicy.ValidateLeafID(component.Name); err != nil {
@@ -143,6 +145,9 @@ func geminiConfiguredRestrictions(user, workspace geminiProjectSettings, compone
 	}
 	disabled := append(slices.Clone(user.Skills.Disabled), workspace.Skills.Disabled...)
 	for _, component := range components {
+		if component.Support != domain.SupportNative {
+			continue
+		}
 		if component.Kind == domain.ComponentSkill && (!skills || !adminSkills || slices.Contains(disabled, component.Name)) {
 			conditions = append(conditions, fmt.Sprintf("preserved Gemini user/workspace settings disable skill %q; it remains configured pending native discovery", component.Name))
 		}

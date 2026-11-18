@@ -15,21 +15,18 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 		Short: "Safely update a tracked Agent Plugin across selected or installed clients",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
+			app, err := lifecycleCommandApp(app, opts)
+			if err != nil {
+				return err
 			}
-			if err := validateCommonOptions(opts); err != nil {
+			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
 				return err
 			}
 			operationApp := app
 			operationApp.Lifecycle.PrepareHostsForPreview = !opts.dryRun
 			if all {
-				if len(args) > 0 {
-					return fmt.Errorf("choose either one installation or --all")
-				}
-				if strings.TrimSpace(opts.target) != "" {
-					return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
+				if err := validateUpdateAll(args, opts); err != nil {
+					return err
 				}
 				return runUpdateAllRetryable(cmd, operationApp, opts)
 			}
@@ -59,6 +56,16 @@ func newUpdateCommand(app App, opts *options) *cobra.Command {
 	return command
 }
 
+func validateUpdateAll(args []string, opts *options) error {
+	if len(args) > 0 {
+		return fmt.Errorf("choose either one installation or --all")
+	}
+	if strings.TrimSpace(opts.target) != "" {
+		return fmt.Errorf("--target cannot be combined with --all; every installation keeps its recorded targets")
+	}
+	return nil
+}
+
 func newRepairCommand(app App, opts *options) *cobra.Command {
 	command := &cobra.Command{
 		Use: "repair <name-or-installation-id>", Short: "Explicitly restore a missing or modified managed package",
@@ -67,11 +74,14 @@ func newRepairCommand(app App, opts *options) *cobra.Command {
 			if err := validatePluginEnablementSelection(cmd, app, opts); err != nil {
 				return err
 			}
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
+			app, err := lifecycleCommandApp(app, opts)
+			if err != nil {
+				return err
 			}
-			if err := validateCommonOptions(opts); err != nil {
+			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
+				return err
+			}
+			if handled, err := confirmInterruptedClientChanges(cmd, app, opts, args[0], "repair"); handled || err != nil {
 				return err
 			}
 			operationApp := app
@@ -113,15 +123,15 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 		Short: "Safely remove selected targets while retaining plugin data by default",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			app, scopeErr := app.forOptions(opts)
-			if scopeErr != nil {
-				return scopeErr
-			}
-			if err := validateCommonOptions(opts); err != nil {
+			app, err := lifecycleCommandApp(app, opts)
+			if err != nil {
 				return err
 			}
 			if opts.yes && strings.TrimSpace(opts.target) == "" && !opts.purgeData {
 				return CLIUsageError{Code: "TARGET_REQUIRED", Message: "remove --yes requires explicit --target"}
+			}
+			if handled, err := confirmInterruptedClientChanges(cmd, app, opts, args[0], "remove"); handled || err != nil {
+				return err
 			}
 			if handled, err := runSavedLifecycleRetryable(cmd, app, opts, args[0], "remove"); handled || err != nil {
 				return err
@@ -133,6 +143,10 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 				if err := requireNonInteractiveMutation(app, opts, "removal"); err != nil {
 					return err
 				}
+			}
+			// Before target selection: a committed removal no longer lists its target.
+			if err := finishInterruptedOperations(cmd.Context(), app, opts); err != nil {
+				return err
 			}
 			if strings.TrimSpace(opts.target) == "" && app.Terminal && !opts.purgeData {
 				selection, err := promptBoundTargets(cmd, app, args[0], opts.scope)
@@ -168,4 +182,14 @@ func dispatchSelectedRemoval(cmd *cobra.Command, app App, opts *options, selecto
 		return runRemove(cmd.Context(), cmd, app, opts, selector)
 	}
 	return runRemoveMany(cmd.Context(), cmd, app, opts, selector, targets)
+}
+
+// lifecycleCommandApp applies the scope options and the option checks every
+// lifecycle command starts with.
+func lifecycleCommandApp(app App, opts *options) (App, error) {
+	scoped, err := app.forOptions(opts)
+	if err != nil {
+		return app, err
+	}
+	return scoped, validateCommonOptions(opts)
 }

@@ -21,12 +21,12 @@ const openCodeMCPConfirmationAction = "confirm installation to start OpenCode an
 // permission, exact Skills and selected MCP observations must still agree.
 func openCodeV1DiscoverySupported(request domain.ActivationRequest) bool {
 	authority, ok := request.Plan.OpenCodeHost.(interface {
-		NativeSnapshot() *opencodehost.NativePrepared
+		NativeObservationAuthority() *opencodehost.NativePrepared
 	})
 	if !ok {
 		return false
 	}
-	host := authority.NativeSnapshot()
+	host := authority.NativeObservationAuthority()
 	if host == nil {
 		return false
 	}

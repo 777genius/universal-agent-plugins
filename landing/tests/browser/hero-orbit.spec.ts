@@ -341,7 +341,7 @@ test('installation works with WebGL forbidden and the orbit has no canvas or opt
   const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT Web / });
   if (guidedSetupEligible) {
     await expect(chatgpt).toBeEnabled();
-    await expect(chatgpt).toContainText('Guided ChatGPT Web setup; finish connecting inside ChatGPT.');
+    await expect(chatgpt.locator('small')).toHaveText('Guided web setup');
     await chatgpt.click();
     await expect(chatgpt).toBeChecked();
     await expect(page.locator('.hero__demo .command-snippet')).toContainText(
@@ -392,7 +392,7 @@ test('guided ChatGPT preparation remains available for an eligible deterministic
     .click();
   const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT Web / });
   await expect(chatgpt).toBeEnabled();
-  await expect(chatgpt).toContainText('Guided ChatGPT Web setup; finish connecting inside ChatGPT.');
+  await expect(chatgpt.locator('small')).toHaveText('Guided web setup');
   await chatgpt.click();
   await expect(chatgpt).toBeChecked();
   await expect(page.locator('.hero__demo .command-snippet')).toContainText(

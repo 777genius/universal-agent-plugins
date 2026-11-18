@@ -76,7 +76,10 @@ test('staged Skills interface renders every live catalog install command truthfu
   await cards.nth(firstInstall).getByRole('button', {
     name: `Install ${displayed[firstInstall]!.title}`, exact: true,
   }).click();
-  await expect(cards.nth(firstInstall).locator('.command-snippet code')).toHaveText(
+  await expect(
+    page.getByRole('dialog', { name: `Install ${displayed[firstInstall]!.title}`, exact: true })
+      .locator('.command-snippet code'),
+  ).toHaveText(
     skillInstallCommand(displayed[firstInstall]!)!,
   );
   console.log(JSON.stringify({

@@ -1,6 +1,7 @@
 name: Kiro no-auth installation E2E
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - '.github/workflows/kiro-no-auth-installation.yml'
       - 'scripts/project_native_kiro_no_auth.py'
@@ -33,17 +34,19 @@ on:
       - 'cli/**'
       - 'install/integrationctl/**'
       - 'go.work*'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: kiro-no-auth-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: kiro-no-auth-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.event_name == 'pull_request' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 env:
   EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
   PYTHONDONTWRITEBYTECODE: '1'
 jobs:
   lifecycle:
     name: UAP composed lifecycle (${{ matrix.os }})
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     strategy:
       fail-fast: false
       matrix:
@@ -165,6 +168,7 @@ jobs:
           retention-days: 14
   native:
     name: Pinned Kiro no-auth observations
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -189,7 +193,7 @@ jobs:
   acceptance:
     name: Kiro no-auth acceptance
     needs: [lifecycle, native]
-    if: ${{ always() }}
+    if: ${{ always() && (github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-24.04
     steps:
       - name: Require actual completed lifecycle and native contracts

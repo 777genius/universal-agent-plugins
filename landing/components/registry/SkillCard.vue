@@ -2,21 +2,30 @@
 import type { SkillListing } from '~/types/skillsCatalog';
 import type { InstallScope } from '~/types/registry';
 import { skillClients } from '~/data/skillClients';
-import { skillDetailIdAvailable, skillDetailRoute, skillInstallCommand, skillNeedsManualSelection, skillPublisherUrl, skillRepositoryUrl } from '~/utils/skillsCatalog';
+import {
+  skillDetailIdAvailable,
+  skillDetailRoute,
+  skillInstallCommand,
+  skillNeedsManualSelection,
+  skillPublisherUrl,
+  skillRepositoryUrl,
+} from '~/utils/skillsCatalog';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import { recommendedSkillKey, recommendedSkillDescription } from '~/data/catalogCuration';
 
 const props = defineProps<{ skill: SkillListing }>();
 const localePath = useLocalePath();
 const selectedSkill = useState<SkillListing | null>('skills-catalog:selected-skill', () => null);
-function rememberSkill() { selectedSkill.value = props.skill; }
+function rememberSkill() {
+  selectedSkill.value = props.skill;
+}
 const { t, n } = useI18n({ useScope: 'parent' });
 const { asset } = useSite();
 const preferences = useInstallPreferencesStore();
 const identity = `skill:${props.skill.id}`;
 const allowed = skillClients.map((client) => client.id);
 const saved = preferences.readPackage(identity, allowed);
-const expanded = ref(saved.expanded);
+const expanded = ref(false);
 const chooseInTerminal = ref(saved.autoDetect);
 const targets = ref(saved.targetIds.length ? saved.targetIds : ['codex']);
 const scope = ref<InstallScope>(saved.scope);
@@ -24,17 +33,21 @@ const repositoryUrl = computed(() => skillRepositoryUrl(props.skill));
 const editorialKey = computed(() => recommendedSkillKey(props.skill));
 // Use only the URL already validated by skillRepositoryUrl; never pass an
 // arbitrary upstream DTO field to the public SkillSpector repository lookup.
-const repositoryName = computed(() =>
-  /^https:\/\/(?:github\.com|raw\.githubusercontent\.com)\/([^/]+\/[^/]+)/.exec(repositoryUrl.value ?? '')?.[1]);
+const repositoryName = computed(
+  () =>
+    /^https:\/\/(?:github\.com|raw\.githubusercontent\.com)\/([^/]+\/[^/]+)/.exec(
+      repositoryUrl.value ?? '',
+    )?.[1],
+);
 const publisherUrl = computed(() => skillPublisherUrl(props.skill));
-const detailAvailable = computed(() =>
-  Boolean(repositoryUrl.value || publisherUrl.value) && skillDetailIdAvailable(props.skill.id),
+const detailAvailable = computed(
+  () =>
+    Boolean(repositoryUrl.value || publisherUrl.value) && skillDetailIdAvailable(props.skill.id),
 );
 const needsManualSelection = computed(() => skillNeedsManualSelection(props.skill));
 const command = computed(() =>
   skillInstallCommand(props.skill, chooseInTerminal.value ? undefined : targets.value, scope.value),
 );
-const panelId = `skill-install-${useId()}`;
 const options = computed(() =>
   skillClients.map((client) => ({
     value: client.id,
@@ -50,13 +63,14 @@ const terminalOption = computed(() => ({
 function saveChoice() {
   preferences.selectPackage(
     identity,
-    { targetIds: targets.value, autoDetect: chooseInTerminal.value, expanded: expanded.value, scope: scope.value },
+    {
+      targetIds: targets.value,
+      autoDetect: chooseInTerminal.value,
+      expanded: expanded.value,
+      scope: scope.value,
+    },
     allowed,
   );
-}
-function toggleInstall() {
-  expanded.value = !expanded.value;
-  saveChoice();
 }
 function updateTargets(values: string[]) {
   const next = values.filter((id) => allowed.includes(id as (typeof allowed)[number]));
@@ -76,7 +90,7 @@ function updateScope(value: InstallScope) {
 </script>
 
 <template>
-  <CatalogCard :expanded="expanded" class="skill-card" :data-skill-id="skill.id">
+  <CatalogCard class="skill-card" :data-skill-id="skill.id">
     <div class="plugin-card__identity">
       <div class="plugin-card__identity-copy">
         <h3 :title="skill.title">
@@ -84,14 +98,21 @@ function updateScope(value: InstallScope) {
             v-if="detailAvailable"
             :to="localePath(skillDetailRoute(skill))"
             @click="rememberSkill"
-          >{{ skill.title }}</NuxtLink>
+            >{{ skill.title }}</NuxtLink
+          >
           <span v-else>{{ skill.title }}</span>
         </h3>
         <p class="plugin-card__source-label">
           <a v-if="repositoryUrl" :href="repositoryUrl" target="_blank" rel="noreferrer">{{
             repositoryName
           }}</a>
-          <a v-else-if="publisherUrl" :href="publisherUrl" target="_blank" rel="noreferrer noopener">{{ publisherUrl.replace('https://', '') }}</a>
+          <a
+            v-else-if="publisherUrl"
+            :href="publisherUrl"
+            target="_blank"
+            rel="noreferrer noopener"
+            >{{ publisherUrl.replace('https://', '') }}</a
+          >
           <span v-else>{{ t('registryUi.skills.externalSource') }}</span>
         </p>
       </div>
@@ -116,34 +137,30 @@ function updateScope(value: InstallScope) {
     </p>
     <div v-if="repositoryUrl || publisherUrl" class="skill-card__links">
       <a :href="repositoryUrl || publisherUrl" target="_blank" rel="noreferrer noopener"
-        >{{ t(repositoryUrl ? 'registryUi.skills.githubSource' : 'registryUi.skills.publisherSource') }}<span aria-hidden="true"> ↗</span></a
+        >{{
+          t(repositoryUrl ? 'registryUi.skills.githubSource' : 'registryUi.skills.publisherSource')
+        }}<span aria-hidden="true"> ↗</span></a
       >
     </div>
     <div class="plugin-card__bottom">
-      <button
+      <InstallDialog
         v-if="command"
-        type="button"
-        class="plugin-card__install-toggle"
-        :aria-expanded="expanded"
-        :aria-controls="panelId"
-        :aria-label="t('registryUi.card.installName', { name: skill.title })"
-        @click="toggleInstall"
+        v-model:open="expanded"
+        :title="t('registryUi.card.installName', { name: skill.title })"
+        :source="repositoryName || publisherUrl || t('registryUi.skills.externalSource')"
+        :source-url="repositoryUrl || publisherUrl || undefined"
+        @update:open="saveChoice"
       >
-        {{ t('registryUi.card.install') }}
-      </button>
-      <p v-else class="plugin-card__unavailable">
-        {{
-          t(
-            repositoryUrl
-              ? 'registryUi.skills.unsupportedName'
-              : publisherUrl
-                ? 'registryUi.skills.invalidPublisherName'
-                : 'registryUi.skills.unsupportedSource',
-          )
-        }}
-      </p>
-      <Transition name="plugin-install">
-        <div v-if="expanded && command" :id="panelId" class="plugin-card__install-panel">
+        <template #trigger>
+          <button
+            type="button"
+            class="plugin-card__install-toggle"
+            :aria-label="t('registryUi.card.installName', { name: skill.title })"
+          >
+            {{ t('registryUi.card.install') }}
+          </button>
+        </template>
+        <div class="plugin-card__install-panel">
           <div class="plugin-card__install">
             <InstallScopeSelect
               :model-value="scope"
@@ -156,6 +173,7 @@ function updateScope(value: InstallScope) {
               :auto-option="terminalOption"
               :label="t('registryUi.skills.chooseAgents')"
               :options="options"
+              full-width
               :automatic-help="t('registryUi.skills.chooseInTerminalHelp')"
               @update:model-value="updateTargets"
               @update:auto-selected="updateTerminal"
@@ -167,10 +185,23 @@ function updateScope(value: InstallScope) {
               compact
             />
           </div>
-          <p v-if="needsManualSelection" class="plugin-card__unavailable">{{ t('registryUi.skills.manualSkillSelection') }}</p>
+          <p v-if="needsManualSelection" class="plugin-card__unavailable">
+            {{ t('registryUi.skills.manualSkillSelection') }}
+          </p>
           <NativeCliCheckbox />
         </div>
-      </Transition>
+      </InstallDialog>
+      <p v-else class="plugin-card__unavailable">
+        {{
+          t(
+            repositoryUrl
+              ? 'registryUi.skills.unsupportedName'
+              : publisherUrl
+                ? 'registryUi.skills.invalidPublisherName'
+                : 'registryUi.skills.unsupportedSource',
+          )
+        }}
+      </p>
     </div>
   </CatalogCard>
 </template>

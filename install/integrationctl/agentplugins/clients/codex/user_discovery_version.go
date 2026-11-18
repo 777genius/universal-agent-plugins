@@ -16,7 +16,7 @@ import (
 func codexNativeUserVersion(ctx context.Context, env clients.Env, request domain.ActivationRequest) (string, error) {
 	listed, err := runCodexPluginList(ctx, env, request.Client.ConfigRoot, request.BackendExecutable)
 	if err != nil {
-		return "", shared.NativeProbeFailure(listed, err)
+		return "", err
 	}
 	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
 	if CodexRegistryFinding(listed.Stdout, request.DeclaredName, marketplace, true) != clients.RegistryExpected {
