@@ -69,15 +69,10 @@ for (const width of [1440, 390]) {
         .toHaveText(`${cli} ${action} ${manifestName} --target pi`);
     await expect(detail).not.toContainText(repairNotice);
     await detail.getByRole('button', { name: 'This project', exact: true }).click();
-    await detail.locator('.app-multiselect__trigger').click();
-    await expect(page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ })).toBeEnabled();
-    await page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ }).click();
-    await page.keyboard.press('Escape');
+    await targets(page, detail, ['Hermes Agent']);
     await expect(detail.locator('.command-snippet--add code'))
       .toHaveText(`${cli} add ${selector} --target hermes --scope project`);
-    await detail.locator('.app-multiselect__trigger').click();
-    await page.getByRole('checkbox', { name: /^Google Antigravity(?:\s|$)/ }).click();
-    await page.keyboard.press('Escape');
+    await targets(page, detail, ['Google Antigravity']);
     await expect(detail.locator('.command-snippet--add code'))
       .toHaveText(`${cli} add ${selector} --target antigravity --scope project`);
     await expect(detail).not.toContainText(repairNotice);
