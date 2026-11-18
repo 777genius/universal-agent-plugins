@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -62,22 +63,31 @@ func copilotApplyComponentSwitch(ctx context.Context, env clients.Env,
 		return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
 	}
 	// Remove only our exact settings pair before exposing loose skills/MCP.
-	if err := copilotMutateProjectPlugin(ctx, env.NativeConfig, root,
-		request.Plan.PhysicalArtifactID, request.Plan.DeclaredName, true, true); err != nil {
-		// Removal can commit while releasing the native writer lock fails.
-		// Components have not started yet: never classify this partial
-		// transition as a successfully installed new component projection.
+	removed, err := copilotMutateProjectPluginResult(ctx, env.NativeConfig, root,
+		request.Plan.PhysicalArtifactID, request.Plan.DeclaredName, true, true)
+	if err != nil {
+		// A committed unregister with failed lock cleanup is not proof of a
+		// completed switch: new components have not been installed yet.
 		if nativeconfig.IsCommittedCleanup(err) {
 			return &shared.NativeEffectError{Effect: domain.NativeEffectUncertain, Err: err}
 		}
 		return err
 	}
 	if err := mutation.Apply(ctx); err != nil {
+		if nativeconfig.IsCommittedCleanup(err) {
+			// Components committed; let shared completion record their ownership.
+			return err
+		}
 		var observed *shared.NativeEffectError
 		if errors.As(err, &observed) && observed.Effect == domain.NativeEffectUnchanged {
-			// ProjectComponentMutation proved it did not change native state.
-			// Conditional CAS restores only our original exact names.
-			restore := copilotMutateProjectPlugin(ctx, env.NativeConfig, root,
+			if !removed {
+				return err // User already removed the pair; do not resurrect it.
+			}
+			// Cancellation of the caller must not cancel compensation. The
+			// bounded cleanup context still checks receipt and foreign writes.
+			restoreCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			restore := copilotMutateProjectPlugin(restoreCtx, env.NativeConfig, root,
 				request.Plan.PhysicalArtifactID, request.Plan.DeclaredName, true, false)
 			if restore == nil {
 				return err
