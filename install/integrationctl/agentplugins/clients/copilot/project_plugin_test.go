@@ -215,7 +215,6 @@ func TestCopilotWholePluginRegistrationRefusesDriftAndForeignReplacement(t *test
 	}
 }
 
-
 func TestCopilotWholePluginRepairCannotRestoreRevokedProjectTrust(t *testing.T) {
 	env, request, trustPath := trustFixture(t)
 	request.Plan.DeclaredName = "review"
