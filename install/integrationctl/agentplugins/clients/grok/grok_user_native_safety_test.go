@@ -69,7 +69,7 @@ func TestGrokUserFailedNativeMutationDoesNotIssueSecondCommand(t *testing.T) {
 		}
 		t.Run("install-"+name, func(t *testing.T) {
 			request := grokRequest(t)
-			base := &fakeGrok{}
+			base := &fakeGrok{entries: []pluginEntry{}}
 			env := clients.Env{Runner: base}
 			if uncertain {
 				env.Runner = &grokFaultRunner{other: base, verb: "install", err: &domain.UnclosedClientProbe{
