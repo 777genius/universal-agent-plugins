@@ -15,6 +15,7 @@ on:
       - 'sdks/typescript/**'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/terminal-ui/native_browser.py'
+      - 'scripts/terminal-ui/native_skills.py'
       - 'scripts/terminal-ui/harness.py'
       - 'scripts/terminal-ui/pty_owner.py'
       - 'ui/skills-picker/**'

@@ -1,5 +1,8 @@
 """Prevent the live acceptance harness from touching ambient client profiles."""
 import importlib.util
+from contextlib import contextmanager
+from datetime import datetime, timezone, timedelta
+import hashlib
 import json
 import os
 import subprocess
@@ -8688,6 +8691,671 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
                 result = audit.call(command, self.environment(root), root, timeout=5, capture_full=True)
             self.assertEqual(result["stdout_full"], '{"result":"success"}')
             self.assertEqual(result["exit_code"], 0)
+
+
+@unittest.skipUnless(sys.platform in ("linux", "darwin"), "Linux/macOS descriptor custody contract")
+class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
+    VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0"}
+
+    @contextmanager
+    def fixture(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            home, project = root / 'home', root / 'Project'
+            profile = home / '.gemini'
+            chats = profile / 'tmp/project/chats'
+            project.mkdir()
+            chats.mkdir(parents=True)
+            registry_project = str(project).lower() if sys.platform == 'win32' else str(project)
+            (profile / 'projects.json').write_text(json.dumps({'projects': {registry_project: 'project'}}))
+            (chats.parent / '.project_root').write_text(registry_project)
+            old = chats / 'foreign-session.jsonl'
+            old.write_bytes(b'pre-existing conversation must stay byte-for-byte\n')
+            before = audit.snapshot([profile])
+            observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit'](
+                home, project, before, self.VERSION)
+            self.assertIsNone(observer.reason)
+            case = dict(audit=audit, observer=observer, home=home, project=project,
+                        profile=profile, chats=chats, old=old, before=before)
+            try:
+                yield case
+            finally:
+                observer.close()
+
+    def record(self, case, index, transform=None, *, startup=False):
+        if startup:
+            import time
+            time.sleep(0.002)
+        now = datetime.now(timezone.utc)
+        timestamp = now.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        value = {'sessionId': 'skills-list-session',
+                 'projectHash': hashlib.sha256(str(case['project']).encode()).hexdigest(),
+                 'startTime': timestamp, 'lastUpdated': timestamp}
+        body = json.dumps(value, separators=(',', ':')).encode() + b'\n'
+        if startup:
+            records = [json.loads(line) for line in GEMINI_STARTUP_RECORD_FIXTURE.splitlines()]
+            records[0] = {**value, 'kind': 'main'}
+            records[1]['timestamp'] = timestamp
+            records[2]['$set']['lastUpdated'] = timestamp
+            text = records[1]['content'][0]['text'].replace(
+                'My operating system is: linux', 'My operating system is: ' + sys.platform)
+            records[1]['content'][0]['text'] = text.replace(
+                '<PINNED_PROJECT_TEMP>', str(case['chats'].parent)).replace(
+                '<PINNED_PROJECT>', str(case['project']))
+            body = b''.join(json.dumps(record).encode() + b'\n' for record in records)
+        if transform:
+            body = transform(body)
+        name = f"session-{now:%Y-%m-%dT%H-%M}-{index}-skills-l.jsonl"
+        path = case['chats'] / name
+        path.write_bytes(body)
+        return path
+
+    def phase(self, case, label):
+        current = case['audit'].snapshot([case['profile']])
+        case['observer'].checkpoint(label, current)
+        return current
+
+    def test_windows_registry_and_marker_require_exact_producer_spelling(self):
+        if sys.platform != "win32":
+            self.skipTest("Windows producer serialization contract")
+        for mutation in ("registry", "marker"):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                project = str(case["project"])
+                self.assertNotEqual(project, project.lower())
+                case["observer"].close()
+                if mutation == "registry":
+                    (case["profile"] / "projects.json").write_text(
+                        json.dumps({"projects": {project: "project"}}))
+                else:
+                    (case["chats"].parent / ".project_root").write_text(project)
+                before = case["audit"].snapshot([case["profile"]])
+                observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
+                    case["home"], case["project"], before, self.VERSION)
+                try:
+                    self.assertEqual(observer.reason,
+                        "Gemini runtime registry does not bind the exact project"
+                        if mutation == "registry" else "Gemini runtime ownership marker differs")
+                    self.assertFalse(observer.finish(before))
+                    if mutation == "registry":
+                        self.assertIs(observer.evidence()["failure_facts"]["exact_key_present"], False)
+                finally:
+                    observer.close()
+
+    def test_six_empty_records_keep_raw_changes_and_exact_old_conversation(self):
+        with self.fixture() as case:
+            for index in range(1, 5):
+                self.record(case, index)
+            self.phase(case, 'after-public-repeat-add')
+            self.assertIsNone(case['observer'].reason)
+            for index in (5, 6):
+                self.record(case, index, lambda body: body[:-2] + b',"kind":"main"}\n')
+            after = self.phase(case, 'after-public-repeat-list')
+            self.assertTrue(case['observer'].finish(after))
+            self.assertNotEqual(case['before'], after)
+            evidence = case['observer'].evidence()
+            self.assertEqual(evidence['status'], 'metadata-only-new-records')
+            self.assertEqual(evidence['platform'], sys.platform)
+            for fd, _ in (*case['observer'].parents.values(), *case['observer'].leaves.values()):
+                self.assertFalse(os.get_inheritable(fd))
+            self.assertEqual(len(evidence['files']), 6)
+            self.assertFalse(evidence['producer_attribution'])
+            self.assertFalse(evidence['writer_closure'])
+            self.assertEqual(case['old'].read_bytes(), b'pre-existing conversation must stay byte-for-byte\n')
+
+    def test_conversation_foreign_duplicate_partial_and_unbounded_records_refuse(self):
+        changes = {
+            'message-record': lambda b: b + b'{"type":"user","content":"hello"}\n',
+            'messages-field': lambda b: b[:-2] + b',"messages":[]}\n',
+            'foreign-session': lambda b: b.replace(b'skills-list-session', b'conversation-session'),
+            'foreign-project': lambda b: b.replace(b'"projectHash":"', b'"projectHash":"foreign'),
+            'subagent': lambda b: b[:-2] + b',"kind":"subagent"}\n',
+            'null-kind': lambda b: b[:-2] + b',"kind":null}\n',
+            'nonfinite': lambda b: b[:-2] + b',"tokens":NaN}\n',
+            'duplicate': lambda b: b.replace(b'{', b'{"sessionId":"other",', 1),
+            'old-time': lambda b: json.dumps({**json.loads(b), 'startTime': '2000-01-01T00:00:00.000Z'}).encode() + b'\n',
+            'future-time': lambda b: json.dumps({**json.loads(b), 'lastUpdated': '2099-01-01T00:00:00.000Z'}).encode() + b'\n',
+            'partial': lambda b: b[:-1],
+            'blank-line': lambda b: b + b'\n',
+            'oversized': lambda b: b + b' ' * 4096,
+        }
+        for name, transform in changes.items():
+            with self.subTest(name=name), self.fixture() as case:
+                self.record(case, 1, transform)
+                after = self.phase(case, 'after-public-repeat-add')
+                self.assertFalse(case['observer'].finish(after))
+                self.assertEqual(case['observer'].evidence()['status'], 'unqualified')
+
+
+    def test_failure_facts_keep_multirecord_and_partial_private_payloads_unqualified(self):
+        private = b'{"type":"user","content":"private startup context"}\n{"$set":{"private":"value"}}\n'
+        for label, transform, count, final in (
+                ("partial", lambda body: body[:-1], 0, False),
+                ("multiple", lambda body: body + private, 3, True)):
+            with self.subTest(label=label), self.fixture() as case:
+                path = self.record(case, 1, transform)
+                metadata = case["audit"].GEMINI_RUNTIME_AUDIT["_metadata"]
+                parsed_sizes = []
+                original_json = metadata.__globals__["_json"]
+                def diagnostic_json(body):
+                    parsed_sizes.append(len(body))
+                    return original_json(body)
+                with patch.dict(metadata.__globals__, {"_json": diagnostic_json}):
+                    after = self.phase(case, "after-public-repeat-add")
+                self.assertEqual(len(parsed_sizes), 3 if label == "multiple" else 0)
+                self.assertTrue(all(size <= 4096 for size in parsed_sizes))
+                self.assertFalse(case["observer"].finish(after))
+                proof = case["observer"].evidence()
+                self.assertEqual(proof["status"], "unqualified")
+                self.assertEqual(proof["files"], [])
+                self.assertEqual(proof["phases"], [])
+                facts = proof["failure_facts"]
+                self.assertEqual(facts, {
+                    "phase": "after-public-repeat-add", "role": "new-chat",
+                    "operation": "record-framing", "bytes": path.stat().st_size,
+                    "lf_count": count, "final_lf": final,
+                    **({"record_shapes": ["metadata-fields", "other", "other"]}
+                       if label == "multiple" else {})})
+                encoded = json.dumps(facts)
+                self.assertNotIn("private", encoded)
+                self.assertNotIn(str(case["project"]), encoded)
+                self.assertNotIn(path.name, encoded)
+        with self.fixture() as case:
+            self.record(case, 1)
+            self.phase(case, "after-public-repeat-add")
+            self.assertNotIn("failure_facts", case["observer"].evidence())
+            case["old"].write_bytes(b"changed old private data")
+            after = self.phase(case, "after-public-repeat-list")
+            self.assertFalse(case["observer"].finish(after))
+            self.assertNotIn("failure_facts", case["observer"].evidence())
+
+    def test_three_line_shape_facts_never_accept_private_history_or_swallow_cancellation(self):
+        def records(body):
+            return body + json.dumps({
+                "id": "PRIVATE-ID", "timestamp": "PRIVATE-TIME", "type": "user",
+                "content": [{"text": "PRIVATE startup context\nPRIVATE second line"}],
+            }).encode() + b"\n" + b'{"$set":{"lastUpdated":"PRIVATE-TIME"}}\n'
+        with self.fixture() as case:
+            path = self.record(case, 1, records)
+            after = self.phase(case, "after-public-repeat-add")
+            self.assertFalse(case["observer"].finish(after))
+            proof = case["observer"].evidence()
+            self.assertEqual(proof["status"], "unqualified")
+            self.assertEqual(proof["reason"], "Gemini runtime is not one complete initial record")
+            self.assertEqual(proof["files"], [])
+            self.assertEqual(proof["phases"], [])
+            facts = proof["failure_facts"]
+            self.assertEqual(facts["record_shapes"],
+                             ["metadata-fields", "user-text-fields", "last-updated-fields"])
+            self.assertNotIn("PRIVATE", json.dumps(facts))
+            self.assertNotIn(str(case["project"]), json.dumps(facts))
+            self.assertNotIn(path.name, json.dumps(facts))
+        with self.fixture() as case:
+            self.record(case, 1, lambda body: body + b"PRIVATE malformed\n[]\n")
+            after = self.phase(case, "after-public-repeat-add")
+            self.assertFalse(case["observer"].finish(after))
+            self.assertEqual(case["observer"].evidence()["failure_facts"]["record_shapes"],
+                             ["metadata-fields", "json-refused", "other"])
+        for failure in (ValueError, KeyboardInterrupt):
+            with self.subTest(failure=failure), self.fixture() as case:
+                self.record(case, 1, records)
+                metadata = case["audit"].GEMINI_RUNTIME_AUDIT["_metadata"]
+                def broken(body):
+                    raise failure("PRIVATE helper failure")
+                with patch.dict(metadata.__globals__, {"_refused_record_shapes": broken}):
+                    if failure is KeyboardInterrupt:
+                        with self.assertRaises(KeyboardInterrupt):
+                            self.phase(case, "after-public-repeat-add")
+                    else:
+                        after = self.phase(case, "after-public-repeat-add")
+                        self.assertFalse(case["observer"].finish(after))
+                        self.assertEqual(case["observer"].evidence()["reason"],
+                                         "Gemini runtime is not one complete initial record")
+                        self.assertNotIn("record_shapes", case["observer"].evidence()["failure_facts"])
+
+    def test_file_admission_facts_distinguish_bounds_and_links_without_extra_open(self):
+        for mutation in ("zero", "oversized", "hardlink", "symlink"):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                path = self.record(case, 1)
+                if mutation == "zero":
+                    path.write_bytes(b"")
+                elif mutation == "oversized":
+                    path.write_bytes(b"private" * 600)
+                elif mutation == "hardlink":
+                    os.link(path, case["project"].parent / "private-linked-name")
+                else:
+                    path.unlink()
+                    path.symlink_to(case["old"].name)
+                after = case["audit"].snapshot([case["profile"]])
+                with patch.object(os, "open", side_effect=AssertionError("must refuse before open")) as opened:
+                    case["observer"].checkpoint("after-public-repeat-add", after)
+                opened.assert_not_called()
+                self.assertFalse(case["observer"].finish(after))
+                proof = case["observer"].evidence()
+                self.assertEqual(proof["status"], "unqualified")
+                self.assertEqual(proof["files"], [])
+                self.assertEqual(proof["phases"], [])
+                facts = proof["failure_facts"]
+                self.assertEqual(facts["phase"], "after-public-repeat-add")
+                self.assertEqual(facts["role"], "new-chat")
+                self.assertEqual(facts["operation"], "file-admission")
+                self.assertEqual(facts["regular"], mutation != "symlink")
+                self.assertEqual(facts["single_link"], mutation != "hardlink")
+                self.assertEqual(facts["positive_size"], mutation != "zero")
+                self.assertEqual(facts["within_limit"], mutation != "oversized")
+                self.assertTrue(facts["descriptor_capacity"])
+                self.assertEqual(facts["bytes"], None if mutation == "oversized" else path.lstat().st_size)
+                for key in ("regular", "single_link", "positive_size", "within_limit", "descriptor_capacity"):
+                    self.assertIs(type(facts[key]), bool)
+                self.assertNotIn("private", json.dumps(facts))
+                self.assertNotIn(str(case["project"]), json.dumps(facts))
+
+        for mutation in ("missing", "nonstring", "grammar", "duplicate"):
+            with self.subTest(registry=mutation), self.fixture() as case:
+                case["observer"].close()
+                project = str(case["project"])
+                projects = {project: "project"}
+                if mutation == "missing": projects = {"private-foreign-key": "project"}
+                elif mutation == "nonstring": projects[project] = False
+                elif mutation == "grammar": projects[project] = "PRIVATE/value"
+                else: projects.update({"private-other": "project", "private-third": "project"})
+                (case["profile"] / "projects.json").write_text(json.dumps({"projects": projects}))
+                before = case["audit"].snapshot([case["profile"]])
+                observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
+                    case["home"], case["project"], before, self.VERSION)
+                self.assertEqual(observer.reason, "Gemini runtime registry does not bind the exact project")
+                self.assertFalse(observer.finish(before))
+                proof = observer.evidence()
+                self.assertEqual((proof["status"], proof["files"], proof["phases"]), ("unqualified", [], []))
+                facts = proof["failure_facts"]
+                self.assertEqual(facts, {
+                    "phase": "pre-repeat", "role": "registry", "operation": "project-binding",
+                    "exact_key_present": mutation != "missing",
+                    "slug_is_string": mutation not in ("missing", "nonstring"),
+                    "slug_matches_pattern": mutation == "duplicate",
+                    "slug_binding_count": 2 if mutation == "duplicate" else None})
+                for key in ("exact_key_present", "slug_is_string", "slug_matches_pattern"):
+                    self.assertIs(type(facts[key]), bool)
+                self.assertNotIn("private", json.dumps(facts).lower())
+                self.assertNotIn(project, json.dumps(facts))
+                self.assertEqual((observer.parents, observer.leaves), ({}, {}))
+
+    def test_old_and_observed_leaf_replacement_parent_alias_and_foreign_delta_refuse(self):
+        for mutation in ('old-replaced', 'new-replaced', 'new-deleted', 'parent-replaced',
+                         'parent-alias', 'registry-replaced', 'foreign-delta', 'hardlink', 'symlink'):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                new = self.record(case, 1)
+                self.phase(case, 'after-public-repeat-add')
+                self.assertIsNone(case['observer'].reason)
+                if mutation in ('old-replaced', 'new-replaced', 'registry-replaced'):
+                    path = (case['old'] if mutation == 'old-replaced' else new if
+                            mutation == 'new-replaced' else case['profile'] / 'projects.json')
+                    body = path.read_bytes()
+                    path.unlink()
+                    path.write_bytes(body)
+                elif mutation == 'new-deleted':
+                    new.unlink()
+                elif mutation in ('parent-replaced', 'parent-alias'):
+                    moved = case['chats'].with_name('old-chats')
+                    case['chats'].rename(moved)
+                    if mutation == 'parent-alias':
+                        case['chats'].symlink_to(moved, target_is_directory=True)
+                    else:
+                        case['chats'].mkdir()
+                elif mutation == 'foreign-delta':
+                    (case['profile'] / 'foreign-settings.json').write_text('{}')
+                elif mutation == 'hardlink':
+                    os.link(new, case['chats'] / 'another-link')
+                else:
+                    new.unlink()
+                    new.symlink_to(case['old'])
+                after = self.phase(case, 'after-public-repeat-list')
+                self.assertFalse(case['observer'].finish(after))
+
+    def test_record_count_phase_order_version_and_during_read_swap_refuse(self):
+        with self.fixture() as case:
+            for index in range(1, 18):
+                self.record(case, index)
+            after = self.phase(case, 'after-public-repeat-add')
+            self.assertFalse(case['observer'].finish(after))
+        with self.fixture() as case:
+            self.record(case, 1)
+            after = self.phase(case, 'after-public-repeat-list')
+            self.assertFalse(case['observer'].finish(after))
+        with self.fixture() as case:
+            check = case['audit'].GEMINI_RUNTIME_AUDIT['pinned_version']
+            for version in (None, {}, {**self.VERSION, 'value': '0.67.0'},
+                            {**self.VERSION, 'exit_code': False},
+                            {**self.VERSION, 'exit_code': 1}):
+                self.assertFalse(check(version))
+            with patch.object(os, 'supports_dir_fd', set()):
+                self.assertFalse(check(self.VERSION))
+            for flag in ('O_DIRECTORY', 'O_NOFOLLOW', 'O_CLOEXEC', 'O_NONBLOCK'):
+                with self.subTest(flag=flag), patch.object(os, flag, 0):
+                    self.assertFalse(check(self.VERSION))
+        with self.fixture() as case:
+            new = self.record(case, 1)
+            original_read = os.read
+            changed = []
+            def replace_during_read(fd, count):
+                body = original_read(fd, count)
+                if not changed:
+                    original = new.read_bytes()
+                    new.unlink()
+                    new.write_bytes(original)
+                    changed.append(True)
+                return body
+            with (patch.object(os, 'open', wraps=os.open) as opened,
+                  patch.object(os, 'read', side_effect=replace_during_read)):
+                self.assertTrue(case['audit'].GEMINI_RUNTIME_AUDIT['pinned_version'](self.VERSION))
+                after = self.phase(case, 'after-public-repeat-add')
+            self.assertTrue(any(call.kwargs.get('dir_fd') is not None
+                                for call in opened.call_args_list))
+            self.assertEqual(changed, [True])
+            self.assertEqual(case['observer'].reason,
+                             'Gemini runtime previous file changed or replaced')
+            self.assertFalse(case['observer'].finish(after))
+
+
+    def test_public_repeat_gate_preserves_raw_delta_and_refuses_same_byte_parent_replacement(self):
+        for replaced, startup, failure in ((False, False, None), (True, False, None),
+                                            (False, True, None), (True, True, None),
+                                            (False, True, 'timeout'), (False, True, 'exit')):
+            with self.subTest(replaced=replaced, startup=startup, failure=failure), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                root = Path(temporary).resolve()
+                project = root / 'skill-00/project'
+                profile = root / 'skill-00/home/.gemini'
+                chats = profile / 'tmp/project/chats'
+                skill = project / '.gemini/skills/owned-test/SKILL.md'
+                item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
+                        'source': 'unused', 'skill_md_git_blob_sha1': '0' * 40}
+                matched = [{'installation_id': 'owned-id', 'name': 'owned-test',
+                            'clients': [{'client_id': 'gemini'}]}]
+                operations, held = [], []
+                real_observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
+                def observe(*args):
+                    observer = real_observer(*args)
+                    held.extend(fd for fd, _ in (*observer.parents.values(), *observer.leaves.values()))
+                    return observer
+                def fake_call(argv, env, cwd, timeout=105):
+                    operation = ('native-list' if argv[0] == '/unused/gemini' else
+                                 argv[2] if argv[1] == 'skills' else argv[1])
+                    operations.append(operation)
+                    if operation == 'add':
+                        skill.parent.mkdir(parents=True, exist_ok=True)
+                        skill.write_text('---\nname: owned-test\n---\n')
+                        (project / 'uap.toml').write_text('owned-test')
+                        (project / 'uap.lock').write_text('owned-test')
+                        if operations.count('add') == 1:
+                            chats.mkdir(parents=True)
+                            (profile / 'projects.json').write_text(json.dumps({'projects': {str(project): 'project'}}))
+                            (chats.parent / '.project_root').write_text(str(project))
+                        elif replaced:
+                            held = project.parent / 'held-old-chats'
+                            chats.rename(held)
+                            chats.mkdir()
+                            for previous in held.iterdir():
+                                (chats / previous.name).write_bytes(previous.read_bytes())
+                        else:
+                            self.record({'project': project, 'chats': chats}, 1, startup=startup)
+                    elif operation == 'native-list':
+                        import time
+                        time.sleep(0.002)
+                        self.record({'project': project, 'chats': chats}, 100, startup=startup)
+                        if failure:
+                            return {'exit_code': None if failure == 'timeout' else 7,
+                                    'stdout_tail': '', 'stderr_tail': '',
+                                    'timeout': failure == 'timeout', '_json': None}
+                    elif operation == 'list' and operations.count('list') == 2 and not replaced:
+                        self.record({'project': project, 'chats': chats}, 2, startup=startup)
+                    elif operation == 'remove':
+                        skill.unlink()
+                        skill.parent.rmdir()
+                        (project / 'uap.lock').unlink()
+                    response = {'data': {'installations': [] if 'remove' in operations else matched}}
+                    if operation == 'add':
+                        response.update(readiness='ready', next_actions=[])
+                    return {'exit_code': 0, 'stdout_tail': '', 'stderr_tail': '', 'timeout': False,
+                            '_json': response}
+                with (patch.dict(audit.AGENT_BINARIES, {'gemini': '/unused/gemini'}, clear=True),
+                      patch.dict(audit.GEMINI_RUNTIME_AUDIT, {'GeminiRepeatAudit': observe}),
+                      patch.object(audit, 'call', side_effect=fake_call),
+                      patch.object(audit, 'matching_installations', return_value=matched),
+                      patch.object(audit, 'locked_skill_is_pinned',
+                                   side_effect=lambda *args: (project / 'uap.lock').exists()),
+                      patch.object(audit, 'matches_pinned_skill_bytes', return_value=True)):
+                    row = audit.do_case('/unused/agentplugins', 'gemini', 'skill', item, 0, root, {},
+                                        client_version=self.VERSION)
+                self.assertEqual(operations, ['add', 'list', 'native-list', 'add', 'list', 'remove', 'list'])
+                self.assertTrue(row['removal_verified'])
+                self.assertTrue(row['sentinels_preserved'])
+                self.assertEqual(row['repeat_native_unchanged'], replaced)
+                self.assertEqual(row['repeat_native_runtime_only'], not replaced and not failure)
+                self.assertEqual(row['repeat_verified'], not replaced and not failure)
+                self.assertEqual(row['status'], 'repeat-add-unqualified' if replaced or failure else 'passed')
+                self.assertTrue(held)
+                for fd in held:
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+
+
+
+
+
+# Native 0.66.0 three-record journal fixture; only private fixture paths replaced.
+GEMINI_STARTUP_RECORD_FIXTURE = '{"sessionId":"skills-list-session","projectHash":"6545b9ca63e68521b25565d8b8adfd1bc89c7d29202af280f0ac10aa6796099a","startTime":"2026-11-17T21:52:38.592Z","lastUpdated":"2026-11-17T21:52:38.592Z","kind":"main"}\n{"id":"d04923d38bb0f6017037e74183378ef4","timestamp":"2026-11-17T21:52:38.593Z","type":"user","content":[{"text":"<session_context>\\nThis is the Gemini CLI. We are setting up the context for our chat.\\nToday\'s date is Tuesday, November 17, 2026 (formatted according to the user\'s locale).\\nMy operating system is: linux\\nThe project\'s temporary directory is: <PINNED_PROJECT_TEMP>\\n- **Workspace Directories:**\\n  - <PINNED_PROJECT>\\n- **Directory Structure:**\\n\\nShowing up to 200 items (files + folders). Folders or files indicated with ... contain more items not shown, were ignored, or the display limit (200 items) was reached.\\n\\n<PINNED_PROJECT>/\\n├───.gemini/\\n│   └───skills/\\n│       └───native-list-probe/\\n│           └───SKILL.md\\n└───.git/...\\n\\n\\n</session_context>"}]}\n{"$set":{"lastUpdated":"2026-11-17T21:52:38.593Z"}}\n'
+GEMINI_STARTUP_AUDIT = load_audit()
+GEMINI_STARTUP_MODULE = GEMINI_STARTUP_AUDIT.GEMINI_RUNTIME_AUDIT
+gemini_startup_snapshot = GEMINI_STARTUP_AUDIT.snapshot
+GEMINI_STARTUP_VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0"}
+
+class GeminiStartupEnvironmentContracts(unittest.TestCase):
+
+    @contextmanager
+    def fixture(self, baseline_mutation=None):
+        with TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            home = root / 'home'
+            project = root / 'project'
+            project.mkdir()
+            profile = home / '.gemini'
+            chats = profile / 'tmp/project/chats'
+            chats.mkdir(parents=True)
+            registry_project = str(project).lower() if sys.platform == 'win32' else str(project)
+            (profile / 'projects.json').write_text(json.dumps({'projects': {registry_project: 'project'}}))
+            (chats.parent / '.project_root').write_text(registry_project)
+            template = [json.loads(x) for x in GEMINI_STARTUP_RECORD_FIXTURE.splitlines()]
+            text = template[1]['content'][0]['text'].replace(
+                'My operating system is: linux', 'My operating system is: ' + sys.platform)
+            template[1]['content'][0]['text'] = text.replace('<PINNED_PROJECT_TEMP>', str(chats.parent)).replace('<PINNED_PROJECT>', str(project))
+            old = chats / 'foreign-before-list.jsonl'
+            old.write_bytes(b'foreign startup authority stays unchanged')
+            before = gemini_startup_snapshot([profile])
+            o = GEMINI_STARTUP_MODULE['GeminiRepeatAudit'](
+                home, project, before, GEMINI_STARTUP_VERSION)
+            self.assertIsNone(o.reason)
+            start = datetime.now(timezone.utc)
+            c = dict(home=home, project=project, profile=profile, chats=chats,
+                     template=template, old=old)
+            p = self.write(c, 0, start + timedelta(milliseconds=1))
+            values = [json.loads(line) for line in p.read_bytes().splitlines()]
+            if baseline_mutation == 'id':
+                values[1]['id'] = 'f' * 32
+            elif baseline_mutation == 'frame':
+                values[1]['content'][0]['text'] = 'arbitrary user prompt'
+            elif baseline_mutation == 'project':
+                values[0]['projectHash'] = 'f' * 64
+            elif baseline_mutation == 'keys':
+                values[2]['$set']['other'] = 'x'
+            elif baseline_mutation == 'old-key':
+                old.write_bytes(b'changed foreign startup authority')
+            elif baseline_mutation == 'old-swap':
+                body = old.read_bytes()
+                old.unlink()
+                old.write_bytes(body)
+            body = b''.join(json.dumps(value).encode() + b'\n' for value in values)
+            if baseline_mutation == 'duplicate':
+                body = body.replace(b'{', b'{"sessionId":"other",', 1)
+            p.write_bytes(body)
+            import time
+            time.sleep(0.006)
+            finish = datetime.now(timezone.utc)
+            observed = gemini_startup_snapshot([profile])
+            o.baseline(observed, interval=(start, finish))
+            c.update(observer=o, before=observed, start=start, finish=finish)
+            if baseline_mutation is None:
+                self.assertIsNone(o.reason)
+
+            try:
+                yield c
+            finally:
+                o.close()
+
+    def write(self, c, n, when, mutate=None):
+        v = json.loads(json.dumps(c['template']))
+        t = lambda dt: dt.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        v[0].update(projectHash=hashlib.sha256(str(c['project']).encode()).hexdigest(), startTime=t(when), lastUpdated=t(when))
+        v[1]['timestamp'] = t(when + timedelta(milliseconds=1))
+        v[2]['$set']['lastUpdated'] = t(when + timedelta(milliseconds=2))
+        if mutate:
+            mutate(v)
+        b = b''.join((json.dumps(x, separators=(',', ':')).encode() + b'\n' for x in v))
+        p = c['chats'] / f'session-{when:%Y-%m-%dT%H-%M}-{n + 1}-skills-l.jsonl'
+        p.write_bytes(b)
+        return p
+
+    def phase(self, c, n, mutate=None, interval=True):
+        start = datetime.now(timezone.utc)
+        p = self.write(c, n, start + timedelta(milliseconds=1), mutate)
+        finish = datetime.now(timezone.utc) + timedelta(milliseconds=4)
+        import time
+        time.sleep(0.006)
+        after = gemini_startup_snapshot([c['profile']])
+        c['observer'].checkpoint(('after-public-repeat-add', 'after-public-repeat-list')[n - 1], after, interval=(start, finish) if interval else None)
+        return (after, p)
+
+    def test_actual_startup_template_two_phases_and_old_bytes(self):
+        with self.fixture() as c:
+            old = next(c['chats'].glob('*'))
+            raw = old.read_bytes()
+            self.phase(c, 1)
+            after, _ = self.phase(c, 2)
+            self.assertTrue(c['observer'].finish(after))
+            self.assertEqual(old.read_bytes(), raw)
+            e = c['observer'].evidence()
+            self.assertFalse(e['producer_attribution'])
+            self.assertFalse(e['writer_closure'])
+            self.assertEqual([x['records'] for x in e['files']], [3, 3])
+
+    def test_changed_template_identity_project_extra_keys_tools_and_times_refuse(self):
+        changes = {'text': lambda v: v[1]['content'][0].update(text=v[1]['content'][0]['text'] + 'x'), 'id': lambda v: v[1].update(id='f' * 32), 'project': lambda v: v[0].update(projectHash='f' * 64), 'keys': lambda v: v[1].update(model='x'), 'tool': lambda v: v[1]['content'].append({'functionCall': {}}), 'extra': lambda v: v.append({'type': 'user', 'content': 'hello'}), 'time': lambda v: v[2]['$set'].update(lastUpdated='2000-01-01T00:00:00.000Z')}
+        for name, change in changes.items():
+            with self.subTest(name=name), self.fixture() as c:
+                after, _ = self.phase(c, 1, change)
+                self.assertFalse(c['observer'].finish(after))
+                self.assertEqual(c['observer'].evidence()['files'], [])
+
+    def test_interval_absence_and_held_inode_replacement_refuse(self):
+        for mutation in ('interval', 'swap'):
+            with self.subTest(mutation=mutation), self.fixture() as c:
+                if mutation == 'swap':
+                    p = next(c['chats'].glob('*'))
+                    b = p.read_bytes()
+                    p.unlink()
+                    p.write_bytes(b)
+                after, _ = self.phase(c, 1, interval=mutation != 'interval')
+                self.assertFalse(c['observer'].finish(after))
+
+    def test_duplicate_json_and_wrong_phase_window_refuse(self):
+        for mutation in ('duplicate', 'window'):
+            with self.subTest(mutation=mutation), self.fixture() as c:
+                start = datetime.now(timezone.utc)
+                p = self.write(c, 1, start)
+                if mutation == 'duplicate':
+                    p.write_bytes(p.read_bytes().replace(b'{', b'{"sessionId":"x",', 1))
+                after = gemini_startup_snapshot([c['profile']])
+                import time
+                time.sleep(0.006)
+                interval = (c['start'], c['finish']) if mutation == 'window' else (start - timedelta(milliseconds=1), datetime.now(timezone.utc))
+                c['observer'].checkpoint('after-public-repeat-add', after, interval=interval)
+                self.assertFalse(c['observer'].finish(after))
+
+    def test_startup_baseline_is_validated_and_previous_snapshot_preserved(self):
+        for mutation in ('id', 'frame', 'project', 'keys', 'duplicate', 'old-key'):
+            with self.subTest(mutation=mutation), self.fixture(mutation) as case:
+                self.assertIsNotNone(case['observer'].reason)
+                self.assertFalse(case['observer'].finish(case['before']))
+
+    def test_pre_first_list_same_byte_old_object_swap_refuses(self):
+        for replaced in (False, True):
+            with self.subTest(replaced=replaced), self.fixture('old-swap' if replaced else None) as case:
+                if replaced:
+                    self.assertEqual(case['old'].read_bytes(),
+                                     b'foreign startup authority stays unchanged')
+                    self.assertIsNotNone(case['observer'].reason)
+                    self.assertFalse(case['observer'].finish(case['before']))
+                else:
+                    self.phase(case, 1)
+                    after, _ = self.phase(case, 2)
+                    self.assertTrue(case['observer'].finish(after))
+
+    def test_first_list_keeps_existing_pre_repeat_chat_bound(self):
+        with self.fixture() as case:
+            case['observer'].close()
+            for index in range(62):
+                (case['chats'] / f'old-{index}.jsonl').write_bytes(b'held old conversation')
+            before = gemini_startup_snapshot([case['profile']])
+            observer = GEMINI_STARTUP_MODULE['GeminiRepeatAudit'](
+                case['home'], case['project'], before, GEMINI_STARTUP_VERSION)
+            try:
+                self.assertIsNone(observer.reason)
+                started = datetime.now(timezone.utc)
+                self.write(case, 200, started + timedelta(milliseconds=1))
+                import time
+                time.sleep(0.006)
+                observer.baseline(gemini_startup_snapshot([case['profile']]),
+                                  interval=(started, datetime.now(timezone.utc)))
+                self.assertEqual(observer.reason, 'Gemini pre-repeat chat count exceeds its bound')
+            finally:
+                observer.close()
+
+
+
+
+class LiveAuditNativeVersionRoutingTests(unittest.TestCase):
+    def test_catalog_entrypoint_passes_observed_version_to_gemini_skills_and_opencode(self):
+        from io import StringIO
+
+        for target, kind, forwarded in (("gemini", "skill", True),
+                                        ("gemini", "plugin", False),
+                                        ("opencode", "skill", True),
+                                        ("opencode", "plugin", True)):
+            with self.subTest(target=target, kind=kind), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                native_version = {"status": "reported", "exit_code": 0,
+                                  "value": "0.66.0" if target == "gemini" else "1.18.34"}
+                installer_version = {"status": "reported", "exit_code": 0, "value": "0.1.95"}
+                argv = ["live-install-audit.py", "--cli", sys.executable, "--target", target,
+                        "--kind", kind, "--limit", "1", "--report-dir", temporary]
+
+                def version(command, _env, _cwd):
+                    return native_version if command[-1] == "--version" else installer_version
+
+                with (patch.object(sys, "argv", argv),
+                      patch.object(sys, "stdout", StringIO()),
+                      patch.dict(audit.AGENT_BINARIES, {target: sys.executable}, clear=True),
+                      patch.object(audit, "vendor_bootstrap_attested", return_value=True),
+                      patch.object(audit, "version_evidence", side_effect=version) as probe,
+                      patch.object(audit, "do_case", return_value={"status": "passed"}) as case):
+                    self.assertEqual(audit.main(), 0)
+                self.assertEqual(probe.call_count, 2)
+                self.assertEqual(case.call_count, 1)
+                self.assertEqual(case.call_args.args[1:3], (target, kind))
+                self.assertEqual(case.call_args.kwargs,
+                                 {"client_version": native_version} if forwarded else {})
+                report = json.loads((Path(temporary) / f"{target}-{kind}.json").read_text())
+                self.assertEqual(report["client_version"], native_version)
 
 
 if __name__ == "__main__":

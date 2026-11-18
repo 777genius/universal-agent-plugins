@@ -242,7 +242,7 @@ def _public_result(raw,label):
 
 def progress(label):
     if label in ("add-user","add-a","add-b"): return b"Resolving and validating one Agent Plugin package for every selected target...\nInstalling uap-gemini-cycle for 1 selected clients...\n"
-    if label=="repeat-add-a": return b"Resolving and validating one Agent Plugin package for every selected target...\n"
+    if label=="repeat-add-a": return b"Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
     if label in ("unchanged-update-a","update-a"): return b"Resolving and validating one updated Agent Plugin package for every selected target...\n"
     if label in ("intact-repair-a","missing-repair-a"): return b"Resolving and validating each unique exact installed package revision once...\n"
     return b""

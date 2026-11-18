@@ -1,14 +1,18 @@
 package pluginkitairepo_test
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // This is an additional project case. The required user/global browser
@@ -21,9 +25,26 @@ func TestAgentpluginsCodexClaudeNativeBrowserProjectSkillsLifecycle(t *testing.T
 		t.Fatal("project browser proof requires both qualified native clients on Linux")
 	}
 	nativeRequireDisposable(t)
+	for _, surface := range []struct {
+		name    string
+		install func(*testing.T, *browserProjectFixture)
+	}{
+		{"browser", func(t *testing.T, f *browserProjectFixture) {
+			nativeBrowserSkillsScenario(t, f.codex.base, f.codex.installer, f.env, "project-anthropic", nativeAnthropicSource)
+		}},
+		{"terminal", nativeTerminalProjectSkillsInstall},
+	} {
+		t.Run(surface.name, func(t *testing.T) {
+			nativeProjectSkillsLifecycle(t, surface.name, surface.install)
+		})
+	}
+}
+
+func nativeProjectSkillsLifecycle(t *testing.T, surface string, install func(*testing.T, *browserProjectFixture)) {
+	t.Helper()
 	f := newBrowserProjectFixture(t)
 	base := f.codex.base
-	evidence := map[string]any{"source": nativeAnthropicSource, "scope": "project", "model_request": false,
+	evidence := map[string]any{"source": nativeAnthropicSource, "scope": "project", "surface": surface, "model_request": false,
 		"source_identity": nativeBrowserProjectIdentity(t), "installer_sha256": nativeSHA(t, f.codex.installer),
 		"codex_sha256": nativeSHA(t, f.codex.client), "claude_sha256": nativeSHA(t, f.claude.client),
 		"codex_version": os.Getenv("AGENTPLUGINS_CODEX_VERSION"), "claude_version": os.Getenv("AGENTPLUGINS_CLAUDE_VERSION"),
@@ -31,7 +52,7 @@ func TestAgentpluginsCodexClaudeNativeBrowserProjectSkillsLifecycle(t *testing.T
 	defer func() { nativeJSON(t, filepath.Join(base.Root, "native-project-example-evidence.json"), evidence) }()
 	f.trust(t, false)
 	f.codexInventory(t, "example-before", map[string]bool{})
-	nativeBrowserSkillsScenario(t, base, f.codex.installer, f.env, "project-anthropic", nativeAnthropicSource)
+	install(t, f)
 	wanted := map[string]bool{"docx/codex": true, "docx/claude": true, "frontend-design/codex": true, "frontend-design/claude": true}
 	original := f.state(t, wanted)
 	f.trust(t, true)
@@ -81,6 +102,50 @@ func TestAgentpluginsCodexClaudeNativeBrowserProjectSkillsLifecycle(t *testing.T
 	f.claudeInventory(t, "example-removed", original, false)
 	f.trust(t, true)
 	evidence["status"], evidence["final_bindings"], evidence["foreign_preserved"] = "passed", 0, true
+}
+
+func nativeTerminalProjectSkillsInstall(t *testing.T, f *browserProjectFixture) {
+	t.Helper()
+	python := nativeBinary(t, "AGENTPLUGINS_NATIVE_BROWSER_PYTHON")
+	source := os.Getenv("AGENTPLUGINS_NATIVE_BROWSER_SOURCE")
+	driver := filepath.Join(source, "scripts", "terminal-ui", "native_skills.py")
+	if info, err := os.Stat(driver); !filepath.IsAbs(source) || err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("terminal/native tooling file unavailable: %s: %v", driver, err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, python, driver, "--installer", f.codex.installer,
+		"--root", f.codex.base.Root, "--project", f.codex.base.Project, "--source", nativeAnthropicSource)
+	command.Dir, command.WaitDelay = source, 5*time.Second
+	command.Env = append(append([]string(nil), f.env...), "TERM=xterm-256color", "CI=1",
+		"AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED=1", "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted")
+	var output bytes.Buffer
+	command.Stdout, command.Stderr = &output, &output
+	err := command.Run()
+	if output.Len() > 1<<20 {
+		t.Fatal("terminal/native driver diagnostic exceeded its 1 MiB evidence bound")
+	}
+	nativeWrite(t, filepath.Join(f.codex.base.Root, "native-terminal-driver.log"), output.Bytes(), 0600)
+	if err != nil || ctx.Err() != nil {
+		t.Fatalf("terminal/native install failed: %v; deadline=%v\n%s", err, ctx.Err(), nativeBrowserReportTail(output.Bytes()))
+	}
+	body, err := os.ReadFile(filepath.Join(f.codex.base.Root, "native-terminal-skills.json"))
+	var report struct {
+		Status                      string   `json:"status"`
+		SelectedSkills              []string `json:"selected_skills"`
+		SelectedTargets             []string `json:"selected_targets"`
+		Confirmations               int      `json:"confirmations"`
+		UnchangedBeforeConfirmation bool     `json:"unchanged_before_confirmation"`
+		ProgressObserved            bool     `json:"progress_observed"`
+		VerifiedResult              bool     `json:"verified_result"`
+		ClosureVerified             bool     `json:"closure_verified"`
+	}
+	if err != nil || len(body) > 1<<20 || json.Unmarshal(body, &report) != nil || report.Status != "passed" ||
+		!reflect.DeepEqual(report.SelectedSkills, []string{"docx", "frontend-design"}) ||
+		!reflect.DeepEqual(report.SelectedTargets, []string{"claude", "codex"}) || report.Confirmations != 1 ||
+		!report.UnchangedBeforeConfirmation || !report.ProgressObserved || !report.VerifiedResult || !report.ClosureVerified {
+		t.Fatalf("terminal/native proof did not complete its keyboard/consent/closure contract: %+v; %v", report, err)
+	}
 }
 
 func newBrowserProjectFixture(t *testing.T) *browserProjectFixture {

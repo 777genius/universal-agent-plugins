@@ -219,7 +219,7 @@ def fixture(nonces=None, omit_user_a=False):
         elif not label.startswith("git-"):
             verb = {"repeat-add-a": "add", "unchanged-update-a": "update", "intact-repair-a": "repair", "missing-repair-a": "repair"}.get(label, label.split("-")[0])
             stdout = raw({"schema_version": 1, "command": verb, "result": "success", "data": public_data(*by_stage[label], label, paths)})
-        phases = [2, 1] if label in ("add-a", "add-b", "update-a", "missing-repair-a") else [2, 2, 1] if label in ("repeat-add-a", "unchanged-update-a", "intact-repair-a") else []
+        phases = [2, 1] if label in ("add-a", "add-b", "update-a", "intact-repair-a", "missing-repair-a") else [2, 2, 2, 1] if label in ("repeat-add-a", "unchanged-update-a") else []
         inventory_rows = []
         for phase_index, method_count in enumerate(phases):
             for selected_index, key in enumerate(("user", cycle.scope(label))):
@@ -387,6 +387,67 @@ class GeminiCompleteTests(unittest.TestCase):
                         inventory["stream"] = stream(b"".join(raw(row)+b"\n" for row in events))
                     bodies[key] = raw(command)
                 self.refuses(change)
+
+    def test_repeated_public_inventory_requires_all_four_fresh_phases(self):
+        for label in ("repeat-add-a", "unchanged-update-a"):
+            bodies, source = fixture()
+            command = runtime.strict_json(bodies[label + ".command.json"])
+            events = [runtime.strict_json(line) for line in complete.stream(command["inventory"]["stream"]).splitlines()]
+            self.assertEqual(len(events), 14)
+            self.assertEqual(len({event["session"] for event in events}), 8)
+            self.assertEqual(len({event["pid"] for event in events}), 8)
+            self.assertTrue(self.admit(bodies, source)["runtime_attempt_complete"])
+            for mutation in ("missing-phase", "missing", "extra", "reordered", "foreign", "call", "facts",
+                             "provider", "phase-pid", "phase-session", "prior-pid", "prior-session", "phase-clock", "late"):
+                with self.subTest(label=label, mutation=mutation):
+                    def change(bodies, _source):
+                        key = label + ".command.json"
+                        command = runtime.strict_json(bodies[key])
+                        inventory = command["inventory"]
+                        events = [runtime.strict_json(line) for line in complete.stream(inventory["stream"]).splitlines()]
+                        if mutation == "missing-phase":
+                            del events[4:8]
+                            self.assertEqual(len(events), 10)
+                        elif mutation == "missing":
+                            events.pop()
+                        elif mutation == "extra":
+                            events.append(copy.deepcopy(events[-1]))
+                        elif mutation == "reordered":
+                            events[8]["method"], events[9]["method"] = "tools/list", "initialize"
+                        elif mutation == "foreign":
+                            for event in events[8:10]:
+                                event["nonce"] = "0" * 32
+                        elif mutation == "call":
+                            events[-1]["method"] = "tools/call"
+                        elif mutation == "facts":
+                            events[-1]["facts"] = {"unearned": True}
+                        elif mutation == "provider":
+                            inventory["provider_requests"] = 1
+                        elif mutation in ("phase-pid", "phase-session", "prior-pid", "prior-session"):
+                            field = mutation.split("-")[1]
+                            earlier = events[0]
+                            if mutation.startswith("prior-"):
+                                prior = runtime.strict_json(bodies["add-a.command.json"])
+                                earlier = runtime.strict_json(complete.stream(prior["inventory"]["stream"]).splitlines()[0])
+                            for event in events[8:10]:
+                                event[field] = earlier[field]
+                        elif mutation == "phase-clock":
+                            for index, event in enumerate(events):
+                                event["timestamp"] = BASE + ("01.100Z" if index < 4 else "01.600Z" if index < 8 else
+                                                             "01.500Z" if index < 12 else "01.900Z")
+                        elif mutation == "late":
+                            events[-1]["timestamp"] = stamp(3)
+                        inventory["stream"] = stream(rows(events))
+                        bodies[key] = raw(command)
+                    self.refuses(change)
+
+    def test_repeat_progress_requires_the_actual_transactional_apply_line(self):
+        expected = (b"Resolving and validating one Agent Plugin package for every selected target...\n"
+                    b"Applying transactional client package...\n")
+        self.assertEqual(cycle.progress("repeat-add-a"), expected)
+        for invalid in (expected.splitlines(keepends=True)[0], expected + b"unexpected progress\n"):
+            with self.subTest(stderr=invalid):
+                self.refuses(lambda bodies, _source, value=invalid: bodies.update({"repeat-add-a.stderr.log": value}))
 
     def test_full_coherent_independent57_member_fixture_and_read_only_result(self):
         bodies, source = fixture()

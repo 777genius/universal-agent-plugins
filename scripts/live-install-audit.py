@@ -25,6 +25,7 @@ FIXTURES = ROOT / "tests/live-install/fixtures.json"
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
 HISTORICAL_CODEX = run_path(str(ROOT / "scripts/published_codex_baseline.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
+GEMINI_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/gemini_runtime_audit.py"))
 OPENCODE_BOOTSTRAP_AUDIT = run_path(str(ROOT / "scripts/opencode_bootstrap_audit.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
@@ -2125,6 +2126,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     env = isolated_client_env(home, case_root, data)
     codex_skill_case = target == "codex" and kind == "skill"
     codex_runtime = None
+    gemini_runtime = None
+    gemini_native_baseline = None
+    gemini_skill_case = (target == "gemini" and kind == "skill"
+                         and AGENT_BINARIES.get("gemini")
+                         and GEMINI_RUNTIME_AUDIT["pinned_version"](client_version))
     codex_plugin_sqlite = None
     codex_system_metadata = None
     codex_system_skill_proof = None
@@ -2313,6 +2319,30 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         (kind == "plugin" or
          (bool(skill_path) and lock_pinned and skill_bytes_match))
     )
+    if gemini_skill_case and installed:
+        gemini_baseline_before = snapshot(native_roots)
+        gemini_runtime = GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
+            home, project, gemini_baseline_before, client_version)
+        audits.callback(gemini_runtime.close)
+        if gemini_runtime.reason is None:
+            native_started = datetime.now(timezone.utc)
+            native_observed = audited_call(
+                [AGENT_BINARIES["gemini"], "skills", "list", "--all"], env, project, 30)
+            native_finished = datetime.now(timezone.utc)
+            native_observed.pop("_json", None)
+            gemini_baseline_after = snapshot(native_roots)
+            gemini_native_baseline = {
+                "operation": "native-skills-list-baseline",
+                "started": native_started.isoformat(), "finished": native_finished.isoformat(),
+                "observation": native_observed, "selected_skill_discovery_claimed": False,
+                "native_changes": snapshot_change_evidence(
+                    gemini_baseline_before, gemini_baseline_after),
+            }
+            if native_observed["exit_code"] == 0 and not native_observed["timeout"]:
+                gemini_runtime.baseline(gemini_baseline_after,
+                                        interval=(native_started, native_finished))
+            else:
+                gemini_runtime.reason = "Gemini native baseline command did not complete cleanly"
     if codex_runtime is not None and installed:
         codex_runtime.checkpoint("installed", True)
         codex_add_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](added_json, matching, identity)
@@ -2348,13 +2378,25 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 for path in lock_paths
             )
         before_repeat_lock = lock_state()
+        repeat_add_started = datetime.now(timezone.utc)
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
                                   **capture_option)
-        after_repeat_add = snapshot(native_roots) if codex_runtime is not None else None
+        repeat_add_finished = datetime.now(timezone.utc)
+        after_repeat_add = (snapshot(native_roots)
+                            if codex_runtime is not None or gemini_runtime is not None else None)
+        if gemini_runtime is not None:
+            gemini_runtime.checkpoint("after-public-repeat-add", after_repeat_add,
+                                      interval=(repeat_add_started, repeat_add_finished))
         repeat_add_json = repeat_add.pop("_json", None)
+        repeat_list_started = datetime.now(timezone.utc)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
-        after_repeat_list = snapshot(native_roots) if codex_runtime is not None else None
+        repeat_list_finished = datetime.now(timezone.utc)
+        after_repeat_list = (snapshot(native_roots)
+                             if codex_runtime is not None or gemini_runtime is not None else None)
+        if gemini_runtime is not None:
+            gemini_runtime.checkpoint("after-public-repeat-list", after_repeat_list,
+                                      interval=(repeat_list_started, repeat_list_finished))
         repeat_list_json = repeat_list.pop("_json", None)
         repeat_matches = (grok_prepared_skill_installations(
             repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
@@ -2367,7 +2409,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
                 repeat_add_json, repeat_matches, identity)
         after_repeat_native = snapshot(native_roots)
-        if codex_runtime is not None:
+        gemini_repeat_valid = (gemini_runtime.finish(after_repeat_native)
+                              if gemini_runtime is not None else False)
+        if codex_runtime is not None or gemini_runtime is not None:
             repeat_native_phases = repeat_native_phase_evidence(
                 before_repeat_native, after_repeat_add, after_repeat_list, after_repeat_native)
         repeat_native_unchanged = after_repeat_native == before_repeat_native
@@ -2377,6 +2421,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             if codex_runtime is not None:
                 repeat_native_runtime_only = codex_runtime.repeat_runtime_only(
                     before_repeat_native, after_repeat_native, before_repeat_runtime)
+            elif gemini_runtime is not None:
+                repeat_native_runtime_only = gemini_repeat_valid
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
@@ -2388,7 +2434,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             and (not grok_prepared or repeat_project_unchanged)
         )
         repeat_verified = bool(historical_repeat_lifecycle_verified
-                               and (not codex_skill_case or codex_repeat_ready))
+                               and (not codex_skill_case or codex_repeat_ready)
+                               and (gemini_runtime is None or gemini_repeat_valid))
         if historical_observer is not None:
             historical_repeat_add_verified = HISTORICAL_CODEX["historical_add"](
                 repeat_add_json, repeat_matches, item, project / skill_path, repeated=True)
@@ -2728,6 +2775,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
             "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
             "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
+            "gemini_runtime_proof": gemini_runtime.evidence() if gemini_runtime is not None else None,
+            "gemini_native_baseline": gemini_native_baseline,
             **({"codex_plugin_sqlite_proof": codex_plugin_sqlite.evidence()}
                if codex_plugin_sqlite is not None else {}),
             "copilot_disabled_setting_retained": copilot_disabled_setting_retained,
@@ -2942,7 +2991,8 @@ def main():
                                  doc["plugin_declared_names"],
                                  doc["signed_release_pins"],
                                  **({"client_version": report.get("client_version")}
-                                    if args.target == "opencode" else {}),
+                                    if (args.target, args.kind) == ("gemini", "skill")
+                                    or args.target == "opencode" else {}),
                                  **({"historical_baseline": True} if historical_baseline else {}))
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,

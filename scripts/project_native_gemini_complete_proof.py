@@ -256,7 +256,7 @@ def public_inventory(value, label, paths, context, start, end):
     finish = window(row["finished_at"], begin, end)
     require(finish-begin <= 30_000_000_000, "public inventory bounded window")
     body = stream(row["stream"])
-    phases = [2, 1] if label in ("add-a", "add-b", "update-a", "missing-repair-a") else [2, 2, 1] if label in ("repeat-add-a", "unchanged-update-a", "intact-repair-a") else []
+    phases = [2, 1] if label in ("add-a", "add-b", "update-a", "intact-repair-a", "missing-repair-a") else [2, 2, 2, 1] if label in ("repeat-add-a", "unchanged-update-a") else []
     if not phases:
         require(not body, "unexpected public inventory")
         return
