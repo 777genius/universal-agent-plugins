@@ -46,7 +46,9 @@ jobs:
           test "$(uname -m)" = x86_64
           test "$(go env GOVERSION)" = go1.26.11
           test "$(go env GOARCH)" = amd64
-          test "$(stat -f %T "$RUNNER_TEMP")" = apfs
+          # macOS stat %T reports file type, not filesystem type.
+          # df -t filters by actual filesystem type; require a data row.
+          df -P -t apfs "$RUNNER_TEMP" | awk 'NR == 2 { found = 1 } END { exit !found }'
           # All existing APFS device/link/rename/read-only/writable negative
           # contracts must execute on the actual Intel kernel; no mock or skip.
           go test -count=1 -timeout=38m ./install/integrationctl/agentplugins/adapters/packageview
