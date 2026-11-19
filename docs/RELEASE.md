@@ -69,6 +69,11 @@ For an owner-authorized release, after choosing and reporting the exact version:
 6. Record the native and npm artifact identities, attestations, checksums,
    workflow run IDs, commit SHA, approvals, and any truthful limitation.
 
+A pull request that only prepares the release (notes, changelog, documentation,
+non-executable version references) is merged immediately once mergeable; see
+"Release-preparation pull requests" in the runbook. The candidate commit's
+required checks are still mandatory before tagging.
+
 Do not reuse or move a stable tag, overwrite a published package version, use an
 unpinned `latest` binary, or treat a draft as a public release.
 
