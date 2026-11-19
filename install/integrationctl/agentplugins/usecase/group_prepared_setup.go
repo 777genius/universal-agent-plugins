@@ -60,6 +60,8 @@ func (session *groupSession) setGroupPreparedSetupResults(target plannedGroupTar
 
 func (session *groupSession) groupPreparedSetupProbe(target plannedGroupTarget) applySession {
 	input := target.input
+	// This internal preview inherits observation permission from the outer operation.
+	input.OnlinePreview = !session.input.DryRun || target.input.OnlinePreview
 	input.DryRun, input.Confirmed = true, false
 	return applySession{
 		service: session.service, ctx: session.ctx, input: input, state: session.state,

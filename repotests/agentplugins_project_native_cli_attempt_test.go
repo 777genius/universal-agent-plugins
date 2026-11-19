@@ -47,7 +47,7 @@ func projectNativeCLISpecification(client string) (projectNativeCLISpec, error) 
 	case "kiro":
 		return projectNativeCLISpec{client, "AGENTPLUGINS_KIRO_BIN", "AGENTPLUGINS_KIRO_PROJECT_RUNTIME_ATTEMPT", "2.34.0", "11dce9286cf7401079cf4eac02a3d5982daac16a346d880109ec7b4a0b941040", "kirocli/bin/kiro-cli", "94cae7e349f76869a19eae335a5b392fba8515743b1c2822b9ea33128c067cc6", "kiro-cli 2.34.0\n", 43027744, true}, nil
 	case "windsurf":
-		return projectNativeCLISpec{client, "AGENTPLUGINS_WINDSURF_BIN", "AGENTPLUGINS_WINDSURF_PROJECT_RUNTIME_ATTEMPT", "3000.11.205", "2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4", "bin/devin", "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4", "devin 3000.11.205 (6dea39440ae3)\n", 217494824, true}, nil
+		return projectNativeCLISpec{client, "AGENTPLUGINS_WINDSURF_BIN", "AGENTPLUGINS_WINDSURF_PROJECT_RUNTIME_ATTEMPT", "3000.12.57", "5d68aef0e2e932a946e39ced31b73b8467d3e910ea0350ef97eeb2e88114ac33", "package/bin/devin", "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d", "devin 3000.12.57 (96542e930752)\n", 213734376, true}, nil
 	default:
 		return projectNativeCLISpec{}, fmt.Errorf("unregistered native CLI attempt")
 	}

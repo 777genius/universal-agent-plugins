@@ -110,7 +110,7 @@ class ReadonlyFixtureTests(unittest.TestCase):
             elif len(calls) == 4:
                 output = b"GROK_READONLY_NATIVE_INVENTORY_PASS\n"
             elif len(calls) == 5:
-                output = b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS\n"
+                output = b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS\nGROK_NATIVE_USER_SIGNED_REPEAT_PASS\n"
             else:
                 raise AssertionError("unexpected process call")
             return SimpleNamespace(returncode=0, stdout=output, stderr=b"")
@@ -136,7 +136,7 @@ class ReadonlyFixtureTests(unittest.TestCase):
             self.assertEqual(evidence["delegated_parent_mounts"], dict(qualification=False,
                 producer="actual delegated Python parent", private=True, mount_count=1, unbindable_count=0))
             self.assertEqual(len(calls), 5)
-            self.assertIn("-test.run=^TestProjectGrokNativeSavedEnablementLifecycle$", calls[4])
+            self.assertIn("-test.run=^Test(ProjectGrokNativeSavedEnablementLifecycle|GrokNativeUserSignedRepeatIsFreshAndReadOnly)$", calls[4])
             self.assertTrue(evidence["public_native_saved_lifecycle_passed"])
             self.assertEqual(status, 1)
             self.assertFalse(evidence["passed"])

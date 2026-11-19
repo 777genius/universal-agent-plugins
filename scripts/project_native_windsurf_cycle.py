@@ -414,7 +414,7 @@ def skillrow(name,description,provider,base,triggers=("model","user")):
 
 
 def native(raw,stage,paths,held):
-    if stage=="version":require(raw==b"devin 3000.11.205 (6dea39440ae3)\n");return
+    if stage=="version":require(raw==b"devin 3000.12.57 (96542e930752)\n");return
     selected=scope(stage)
     current=held.get(selected)
     owned=current is not None and not current["removed"] and stage!="damaged-a-skills"
@@ -571,11 +571,11 @@ def pins(result,paths):
     a=result["acquisition"];obj(a,"client acquisition node runtime_files")
     require(a["client"]=="windsurf" and a["node"] is None)
     acq=a["acquisition"];obj(acq,"sha256 pin_verified members")
-    require(acq["sha256"]=="2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4" and acq["pin_verified"] is True and type(acq["members"]) is list and len(acq["members"])==250
-            and sha(compact(acq["members"]))=="7942bfe5cb303d6b4ba5f2c87e869ad24c1b3400de323aa9615341896e3e6884")
-    root=posixpath.dirname(posixpath.dirname(paths["client"]))
+    require(acq["sha256"]=="5d68aef0e2e932a946e39ced31b73b8467d3e910ea0350ef97eeb2e88114ac33" and acq["pin_verified"] is True and type(acq["members"]) is list and len(acq["members"])==236
+            and sha(compact(acq["members"]))=="0c39686c9dbdfd559df2e2b467a24815238596c531b81a542133c8e5fc041c09")
+    root=posixpath.dirname(posixpath.dirname(posixpath.dirname(paths["client"])))
     files=[{"path":root+"/"+row["Name"],"sha256":row["sha256"]} for row in acq["members"] if row["Kind"]=="file"]
-    require(paths["client"]==root+"/bin/devin" and len(files)==234 and same(a["runtime_files"],files))
+    require(paths["client"]==root+"/package/bin/devin" and len(files)==236 and same(a["runtime_files"],files))
     require(same(result["scanner"],{"archive_sha256":"2b3d176db752433b904a4b42375543ff398f4841d22e48f7d4f23ded925b72da","binary_sha256":"b6723451f155eb49e84acb34d1f06de929bddfcff6238cd4e38cdc6519396fba","platform":"linux-amd64","route":"prepopulated supported scanner cache; ordinary CLI security assessment","source_tag":"v0.1.3","version":"0.1.3"}))
 
 
@@ -650,7 +650,7 @@ def cache_diagnostic(value, summary, commands):
     require(stage == summary["attempt_stage"] == value["stage"]
             and stage not in PUBLIC and stage != "version" and not stage.startswith("git-")
             and value["root_sha256"] == sha((paths["root"] + "/xdg-cache/devin").encode())
-            and value["native_binary_sha256"] == "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4"
+            and value["native_binary_sha256"] == "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d"
             and value["started_at"] == cmd["started_at"] and value["ended_at"] == cmd["ended_at"])
     count = value["changed_records"]
     require(type(count) is int and 1 <= count <= 4096)
@@ -686,7 +686,7 @@ def admit(bodies,source_identity):
     require(set(bodies)=={"runtime-attempt.json",*MEMBERS} and all(type(raw) is bytes and len(raw)<=1<<20 and not (aggregate_private(raw) if name in MEMBERS else private(raw)) for name,raw in bodies.items()) and sum(map(len,bodies.values()))<=16<<20)
     r=load(bodies["runtime-attempt.json"])
     obj(r,"acquisition activation attempt_stage capture_mode capture_review_required client component_layout elapsed_ms fixture_authored_updater_config qualification real_model_qualified runtime_attempt_complete scanner source_identity test_failed vendor_authentication_qualified version qualification_scope cycle_command_stages cycle_proof_stages cycle_observed_complete cycle_nonce cycle_tool_pins","native_cache_delta")
-    require(r["client"]=="windsurf" and r["version"]=="3000.11.205" and r["capture_mode"]==MODE and r["capture_review_required"] is False and r["activation"]=="prepared" and r["vendor_authentication_qualified"] is False and r["real_model_qualified"] is False and r["qualification_scope"]==SCOPE)
+    require(r["client"]=="windsurf" and r["version"]=="3000.12.57" and r["capture_mode"]==MODE and r["capture_review_required"] is False and r["activation"]=="prepared" and r["vendor_authentication_qualified"] is False and r["real_model_qualified"] is False and r["qualification_scope"]==SCOPE)
     require(same(r["source_identity"],{"installer_base_commit":source_identity["source_commit"],"installer_tree":source_identity["source_tree"],"installer_source_state":"committed","installer_patch_sha256":[]}))
     done=r["runtime_attempt_complete"]
     require(type(done) is bool and type(r["test_failed"]) is bool and type(r["cycle_observed_complete"]) is bool and type(r["elapsed_ms"]) is int and 0<=r["elapsed_ms"]<=180000 and same(r["qualification"],{key:done and key in FLAGS[:2] for key in FLAGS}))
