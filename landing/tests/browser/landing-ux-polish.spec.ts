@@ -7,8 +7,8 @@ for (const width of [1440, 390]) {
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('./');
-    const table = page.locator('#agent-support table');
-    const header = table.locator('thead th:first-child');
+    const table = page.locator('#agent-support .registry-client-support__scroll table');
+    const header = page.locator('#agent-support .registry-client-support__sticky thead th:first-child');
     const icons = table.locator('tbody th:first-child img');
     await expect(icons).toHaveCount(clientSupportRows.length);
     // An offscreen scroll-reveal section has zero opacity even though its

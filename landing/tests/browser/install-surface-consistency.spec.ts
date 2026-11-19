@@ -41,12 +41,10 @@ for (const width of [1440, 390]) {
 
     const card = page.locator('[data-install-source="context7"]').first();
     await card.locator('.plugin-card__install-toggle').click();
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     const web = page.getByRole('checkbox', { name: /^ChatGPT Web/ });
     await expect(web).toBeEnabled();
     await expect(web).toContainText('Guided web setup');
     await web.click();
-    await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog').locator('.command-snippet code')).toContainText('add context7 --target chatgptweb');
     await expect(page.getByRole('dialog')).toContainText('Guided ChatGPT Web setup');
     await testInfo.attach(`guided-web-card-${width}.png`, { body: await page.getByRole('dialog').screenshot({ animations: 'disabled' }), contentType: 'image/png' });
@@ -58,9 +56,7 @@ for (const width of [1440, 390]) {
     await expect(page.locator('.install-panel')).not.toContainText('ChatGPT preparation does not save a dependency.');
     await expect(page.locator('.install-panel')).not.toContainText('No single source serves this target set');
     await testInfo.attach(`guided-web-detail-${width}.png`, { body: await page.locator('.install-panel').screenshot({ animations: 'disabled' }), contentType: 'image/png' });
-    await page.locator('.install-panel .app-multiselect__trigger').click();
     await page.getByRole('checkbox', { name: /^Codex CLI/ }).click();
-    await page.keyboard.press('Escape');
     await expect(page.locator('.install-panel .command-snippet')).toHaveCount(4);
     await expect(page.locator('.install-panel .command-snippet--add code'))
       .toHaveText(/add context7 --target (chatgptweb,codex|codex,chatgptweb) --no-save$/);
@@ -77,7 +73,6 @@ test('a different source does not inherit Context7 guided Web setup', async ({ p
   index.plugins[0]!.distributions[0]!.releases[0]!.source.repository = 'other/context7';
   await projections(page, index);
   await navigate(page, '/plugins/context7/');
-  await page.locator('.install-panel .app-multiselect__trigger').click();
-  await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toHaveCount(0);
   expect(errors).toEqual([]);
 });

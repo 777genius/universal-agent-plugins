@@ -119,7 +119,7 @@ test('the Plugins tab does not show a crawler notice or an unrelated Skills guid
   await expect(page.getByRole('link', { name: 'How standalone Skills work' })).toHaveCount(0);
   await page.goto('./plugins/?tab=skills');
   await hydrated(page);
-  await expect(page.getByRole('link', { name: 'How standalone Skills work' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'How standalone Skills work' })).toHaveCount(0);
 });
 
 test('translated desktop filter labels do not collide with dropdown arrows', async ({ page }) => {

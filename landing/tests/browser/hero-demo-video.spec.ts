@@ -131,6 +131,29 @@ for (const width of [1440, 390, 320]) {
   });
 }
 
+for (const width of [1440, 390]) {
+  test(`native fullscreen exit restores the poster at ${width}px`, async ({ page }) => {
+    await setSignedMirrorTestTime(page);
+    await page.route('https://player.mux.com/**', route =>
+      route.fulfill({ contentType: 'text/html', body: fakePlayer }),
+    );
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto('./');
+    await hydrated(page);
+    const demo = page.locator('.hero-demo-video');
+    const launch = demo.getByRole('button', { name: 'Watch demo' });
+    await launch.click();
+    await expect.poll(() => demo.evaluate(element => document.fullscreenElement === element)).toBe(true);
+    await expect(demo.locator('iframe')).toBeVisible();
+    await page.evaluate(() => document.exitFullscreen());
+    await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+    await expect(demo.locator('iframe')).toHaveCount(0);
+    await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+    await expect(launch).toBeVisible();
+    await expect(launch).toBeFocused();
+  });
+}
+
 test('denied fullscreen still launches a viewport-filling autoplay player on one click', async ({ page }) => {
   await setSignedMirrorTestTime(page);
   await page.route('https://player.mux.com/**', (route) =>
