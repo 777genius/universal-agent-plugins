@@ -2503,6 +2503,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
                      if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)
+    # Preserve the existing VS Code manual-only observation contract. These
+    # values are inert for every other client, including the active E2E matrix.
+    vscode_user = target == "vscode" and kind == "plugin"
+    vscode_roots = (runroot, case_root, home, data, project)
+    vscode_native_before = scoped_snapshot(native_roots) if vscode_user else None
+    vscode_roots_before = vscode_root_identities(vscode_roots) if vscode_user else None
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)
         args = ["add", item, "--target", target, "--scope", "user", "--format", "json"]
