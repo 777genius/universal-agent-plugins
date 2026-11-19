@@ -84,6 +84,7 @@ func (adapter *Adapter) activateDevinProject(ctx context.Context, env clients.En
 	if err == nil && outcome.Verification == domain.VerificationInstalled {
 		outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
 		outcome.UserActions = shared.AppendUnique(outcome.UserActions, DevinProjectAction)
+		return completeDevinSkills(ctx, env, request, outcome)
 	}
 	return outcome, err
 }

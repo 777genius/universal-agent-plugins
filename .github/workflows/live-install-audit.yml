@@ -9,6 +9,7 @@ on:
       - 'scripts/published_codex_baseline.py'
       - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/codex_plugin_retention_audit.py'
       - 'scripts/gemini_windows_custody.py'
@@ -76,6 +77,7 @@ jobs:
       - name: Refuse ambient native-profile and Git configuration leakage
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+          python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
           python3 -m unittest discover -s scripts -p 'test_gemini_windows_runtime_audit.py'
           python3 -m unittest discover -s scripts -p 'test_opencode_bootstrap_audit.py'
           python3 -m unittest discover -s scripts -p 'test_codex_runtime_audit.py'

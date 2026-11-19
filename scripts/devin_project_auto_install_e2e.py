@@ -36,22 +36,70 @@ MAX_EXPANDED = 256 << 20
 SKILL = "uap-e2e-project-v57"
 STDIO = "uap_e2e_project_57_stdio"
 HTTP = "uap_e2e_project_57_http"
+RAW_SOURCE = "https://github.com/777genius/universal-agent-plugins/tree/b5d80336b53397be5bbb72c84f680e5885a6ac0d/tests/fixtures/uap_apm/skills"
+RAW_SKILL = "benchmark-note"
+RAW_DESCRIPTION = "An inert note for checking Agent Skills 1.0 installation."
+RAW_SKILL_SHA = "53e39c4f1dcaa4c2ed1196654678ede091b71fb837f77a1beb07ba556abc1198"
+RAW_REFERENCE_SHA = "674bbf87f1469969103f15f60ea1389829fe431dfca5439da1fc57da211d1f2f"
+RAW_MANIFEST_SHA = "c9bbd0b5bbb39d2ae168390ee53a28d4e825de8c0b5334dbc4a55e300b095ab0"
 
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def command(argv, cwd, env, timeout=90):
+def command_diagnostic(body, env):
+    """Reuse the bounded redacted-tail policy; redact before truncation."""
+    text = body.decode("utf-8", errors="replace")
+    for key, value in env.items():
+        if isinstance(value, str) and len(value) >= 4 and re.search(
+                r"(?i)token|password|secret|api[_-]?key|authorization|credential", key):
+            text = text.replace(value, "<redacted>")
+            text = text.replace(json.dumps(value)[1:-1], "<redacted>")
+    # Header schemes are open-ended; redact the value without consuming the next line.
+    text = re.sub(r"""(?i)(["']?Authorization["']?[ \t]*:[ \t]*)[^\r\n]*""",
+                  r"\1<redacted>", text)
+    text = re.sub(r"""(?i)((?:token|password|secret|api[_-]?key|credential)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}]+)""",
+                  r"\1<redacted>", text)
+    return text[-2048:]
+
+
+def command(argv, cwd, env, timeout=90, receipt=None):
     # Share the repository's bounded, supervised process runner with all other
     # native collectors. A timed-out CLI cannot leave orphaned subprocesses.
     record, stdout, stderr = run_probe(
         argv, Path(cwd), env, Path("/tmp"), "devin-project-e2e",
         timeout=timeout, limit=1 << 20, memory_only=True)
+    if receipt is not None:
+        receipt["result"] = {
+            "exit_code": record["exit"],
+            "capture_error": (command_diagnostic(str(record["error"]).encode(), env)
+                              if record["error"] is not None else None),
+            "elapsed_seconds": record.get("elapsed_seconds"),
+            "stdout_bytes": len(stdout), "stdout_sha256": digest(stdout),
+            "stderr_bytes": len(stderr), "stderr_sha256": digest(stderr),
+        }
+        if record["error"] is not None or record["exit"] != 0:
+            receipt["result"]["stderr_diagnostic"] = command_diagnostic(stderr, env)
+            try:
+                public = json.loads(stdout)
+            except (ValueError, UnicodeError):
+                public = None
+            allowed = {"command": ("skills add", "remove"), "result": ("success", "failure"),
+                       "status": ("succeeded", "failed", "partial", "interrupted"),
+                       "readiness": ("ready", "needs_action", "failed", "unknown")}
+            if isinstance(public, dict):
+                receipt["result"]["public_status"] = {
+                    key: public[key] for key, values in allowed.items()
+                    if isinstance(public.get(key), str) and public[key] in values}
     if record["error"] is not None or record["exit"] != 0:
+        stage = receipt.get("stage", "unspecified") if receipt is not None else "unspecified"
+        capture = (command_diagnostic(str(record["error"]).encode(), env)[:128]
+                   if record["error"] is not None else None)
+        diagnostic = command_diagnostic(stderr, env)
         raise RuntimeError(
-            f"command {Path(argv[0]).name} failed, exit={record['exit']}, "
-            f"capture={record['error']}, stderr_sha256={digest(stderr)}")
+            f"command {Path(argv[0]).name} stage={stage} failed, exit={record['exit']}, "
+            f"capture={capture}, stderr={diagnostic[:512]}, stderr_sha256={digest(stderr)}")
     return stdout.decode("utf-8", errors="strict")
 
 
@@ -207,34 +255,13 @@ def external_http_fixture(root):
         child.wait(timeout=5)
 
 
-def available_skill(body, name, project):
-    # Exact pinned Devin 3000.12.57 native JSON identifies the source, not
-    # merely the display name. A user/foreign Skill with the same name is not
-    # proof that the selected Project Skill is visible to Devin.
-    rows = json.loads(body)
-    if isinstance(rows, dict):
-        rows = rows.get("skills")
-    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+def available_skill(body, name):
+    data = json.loads(body)
+    if isinstance(data, dict):
+        data = data.get("skills")
+    if not isinstance(data, list):
         raise RuntimeError("genuine Devin Skill inventory has an unknown shape")
-    scoped_name = f"{project}:{name}"
-    matching = [row for row in rows
-                if row.get("display_name") == name or row.get("name") in (name, scoped_name)]
-    if len(matching) > 1:
-        raise RuntimeError("genuine Devin Skill inventory has duplicate selected names")
-    if not matching:
-        return False
-    row = matching[0]
-    schema = {"name", "description", "triggers", "provider", "base_dir",
-              "display_name", "warnings", "errors"}
-    if (set(row) != schema or row["name"] not in (name, scoped_name) or
-            row["display_name"] != name or row["provider"] != "Devin" or
-            row["base_dir"] != str(Path(project) / ".devin" / "skills" / name) or
-            not isinstance(row["description"], str) or
-            not isinstance(row["triggers"], list) or
-            any(not isinstance(trigger, str) for trigger in row["triggers"]) or
-            row["warnings"] != [] or row["errors"] != []):
-        raise RuntimeError("genuine Devin Skill selected source or metadata differs")
-    return True
+    return any(isinstance(row, dict) and row.get("name") == name for row in data)
 
 
 def available_mcp(body, name, config_path, transport):
@@ -256,6 +283,222 @@ def available_mcp(body, name, config_path, transport):
             row["source"] != str(config_path)):
         raise RuntimeError("genuine Devin MCP selected source or enabled state differs")
     return True
+
+
+
+def raw_skill_present(body, expected_path):
+    """Qualify the selected raw Skill, never a Cascade import or name alone."""
+    rows = json.loads(body)
+    if not isinstance(rows, list) or len(rows) > 128 or any(not isinstance(row, dict) for row in rows):
+        raise RuntimeError("raw Skill inventory has an unknown shape")
+    matches = [row for row in rows if row.get("name") == RAW_SKILL]
+    if not matches:
+        return False
+    expected = {"name": RAW_SKILL, "description": RAW_DESCRIPTION, "provider": "Devin",
+                "base_dir": str(expected_path), "display_name": RAW_SKILL,
+                "triggers": ["user", "model"], "warnings": [], "errors": []}
+    if matches != [expected]:
+        raise RuntimeError("raw Skill native metadata or selected Project path differs")
+    return True
+
+
+def raw_ready_output(body, repeated=False):
+    result = json.loads(body)
+    if (not isinstance(result, dict) or result.get("schema_version") != 1
+            or result.get("command") != "skills add" or result.get("result") != "success"
+            or result.get("status") != "succeeded" or result.get("readiness") != "ready"
+            or not isinstance(result.get("items"), list) or len(result["items"]) != 1
+            or result.get("next_actions")):
+        raise RuntimeError("public raw Project Skills did not establish automatic native Ready")
+    item = result["items"][0]
+    if (not isinstance(item, dict) or item.get("alias") != RAW_SKILL
+            or item.get("targetId") != "windsurf"
+            or item.get("status") != ("unchanged" if repeated else "succeeded")):
+        raise RuntimeError("raw Project Skills selected item or repeat status differs")
+    return result
+
+
+def raw_repeat_snapshot(managed, native, project_root):
+    """Finite owned payload/state/lock identities, without exporting their bodies."""
+    paths = [project_root / ".uap" / "state-v2.json", project_root / "uap.toml", project_root / "uap.lock"]
+    for root in (managed, native):
+        paths.append(root)
+        for path in root.rglob("*"):
+            paths.append(path)
+            if len(paths) > 256:
+                raise RuntimeError("raw repeat owned snapshot exceeds its entry bound")
+    result, total = {}, 0
+    for path in paths:
+        info = path.lstat()
+        if path.is_symlink() or not (path.is_file() or path.is_dir()) or info.st_size > 1 << 20:
+            raise RuntimeError("raw repeat snapshot requires ordinary bounded owned paths")
+        row = {"mode": info.st_mode, "device": info.st_dev, "inode": info.st_ino}
+        if path.is_file():
+            with path.open("rb") as stream:
+                body = stream.read((1 << 20) + 1)
+            total += len(body)
+            if len(body) > 1 << 20 or total > 4 << 20:
+                raise RuntimeError("raw repeat owned snapshot exceeds its byte bound")
+            row.update(bytes=len(body), sha256=digest(body), modified_ns=info.st_mtime_ns)
+        result[str(path)] = row
+    return result
+
+
+def raw_state_installations(document):
+    if (not isinstance(document, dict) or type(document.get("schema_version")) is not int
+            or document["schema_version"] != 5 or not isinstance(document.get("installations"), list)):
+        raise RuntimeError("raw Project saved state schema differs")
+    seen = set()
+    for item in document["installations"]:
+        if (not isinstance(item, dict) or not isinstance(item.get("installation_id"), str)
+                or not item["installation_id"] or item["installation_id"] in seen
+                or not isinstance(item.get("clients"), dict)):
+            raise RuntimeError("raw Project saved installation shape differs")
+        seen.add(item["installation_id"])
+        for key, client in item["clients"].items():
+            if (not isinstance(key, str) or not key or not isinstance(client, dict)
+                    or client.get("client_binding_id") != key or client.get("client_id") != "windsurf"
+                    or client.get("scope") != "project" or not isinstance(client.get("target_locator"), str)
+                    or not client["target_locator"]):
+                raise RuntimeError("raw Project saved client shape differs")
+    return document["installations"]
+
+
+def raw_pinned_resources(managed, native):
+    skill_files = {"SKILL.md": RAW_SKILL_SHA, "references/fixture.txt": RAW_REFERENCE_SHA}
+    expected = ({"plugin.json": RAW_MANIFEST_SHA,
+                 **{"skills/" + RAW_SKILL + "/" + name: sha for name, sha in skill_files.items()}}, skill_files)
+    evidence = {}
+    for root, pinned in zip((managed, native), expected):
+        if root.is_symlink() or not root.is_dir():
+            raise RuntimeError("raw Project pinned tree is not an ordinary directory")
+        found = {}
+        for index, path in enumerate(root.rglob("*")):
+            if index >= 32 or path.is_symlink():
+                raise RuntimeError("raw Project pinned tree exceeds bounds or contains a symlink")
+            if path.is_dir():
+                continue
+            relative = path.relative_to(root).as_posix()
+            if not path.is_file() or relative not in pinned or path.stat().st_size > 1 << 20:
+                raise RuntimeError("raw Project pinned file set differs")
+            found[relative] = digest(path.read_bytes())
+        if found != pinned:
+            raise RuntimeError("raw Project pinned resources differ")
+        evidence[str(root)] = found
+    return evidence
+
+
+def raw_project_skills(root, report, binary, cli, base_env):
+    # Reuse the same pinned native runtime, public CLI and bounded runner. A
+    # separate owned profile makes the exact read-only global policy explicit.
+    case = root / "raw-project-skills"
+    home, config = case / "home", case / "config"
+    global_root = config / "devin"
+    projects = [case / "project-a", case / "project-b"]
+    outside = case / "outside"
+    for path in (home, global_root, outside, *projects):
+        path.mkdir(parents=True)
+    env = dict(base_env, HOME=str(home), XDG_CONFIG_HOME=str(config),
+               XDG_DATA_HOME=str(case / "data"), XDG_STATE_HOME=str(case / "state"),
+               XDG_CACHE_HOME=str(case / "cache"))
+    protected = {}
+    def seed(path, body):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+        path.chmod(0o600)
+        protected[path] = (path.read_bytes(), path.stat().st_mode)
+    seed(global_root / "config.json", '{"version":1,"auto_update":false}\n')
+    for index, path in enumerate((global_root, home / ".codeium" / "windsurf", *(p / ".devin" for p in projects))):
+        seed(path / "mcp_config.json", '{"mcpServers":{"foreign":{"url":"https://foreign.invalid/mcp","disabled":true}}}\n')
+        name = "foreign-raw-case-" + str(index)
+        seed(path / "skills" / name / "SKILL.md",
+             f"---\nname: {name}\ndescription: Inert foreign Skill\n---\nLeave unchanged.\n")
+    evidence = {"source": RAW_SOURCE, "skill_sha256": RAW_SKILL_SHA,
+                "commands": [], "public": {}, "inventories": []}
+    report["raw_project_skills"] = evidence
+    def run(label, argv, cwd, timeout=90):
+        receipt = {"stage": label, "argv": argv, "cwd": str(cwd)}
+        evidence["commands"].append(receipt)
+        return command(argv, cwd, env, timeout=timeout, receipt=receipt)
+    def preserved():
+        for path, (body, mode) in protected.items():
+            if path.is_symlink() or path.read_bytes() != body or path.stat().st_mode != mode:
+                raise RuntimeError("raw Project Skills changed foreign, Global or Cascade bytes/mode")
+    def inventory(label, present):
+        for index, cwd in enumerate([*projects, outside]):
+            body = run(label + "-" + str(index), [str(binary), "skills", "list", "--json"], cwd, 45)
+            evidence["inventories"].append({"stage": label, "scope": ("a", "b", "user")[index],
+                                            "cwd": str(cwd), "rows": json.loads(body)})
+            if raw_skill_present(body, projects[0] / ".devin" / "skills" / RAW_SKILL) != (present and index == 0):
+                raise RuntimeError("raw Project Skill escaped A or is absent from its exact native source")
+        preserved()
+    # An explicit Project root, not the caller cwd, selects the delivery target.
+    add_argv = [str(cli), "skills", "add", RAW_SOURCE, "--skill", RAW_SKILL,
+                "--target", "windsurf", "--scope", "project", "--project-root", str(projects[0]),
+                "--yes", "--no-ui", "--format", "json"]
+    inventory("before-add", False)
+    body = run("skills-add", add_argv, outside)
+    evidence["public"]["add"] = json.loads(body)
+    raw_ready_output(body)
+    document = json.loads((projects[0] / ".uap" / "state-v2.json").read_text())
+    installations = raw_state_installations(document)
+    if len(installations) != 1:
+        raise RuntimeError("raw Project saved installation shape differs")
+    installation = installations[0]
+    if installation.get("source", {}).get("resolved_revision") != "b5d80336b53397be5bbb72c84f680e5885a6ac0d":
+        raise RuntimeError("raw Project saved source differs from the immutable public commit")
+    bindings = list(installation.get("clients", {}).values())
+    if len(bindings) != 1:
+        raise RuntimeError("raw Project saved client count differs")
+    binding = bindings[0]
+    expected = {"client_id": "windsurf", "scope": "project", "activation": "active",
+                "authentication": "not_required", "policy": "allowed", "verification": "installation_verified",
+                "native_profile_root": str(projects[0] / ".devin")}
+    if any(binding.get(key) != value for key, value in expected.items()):
+        raise RuntimeError("raw Project binding lacks exact automatic native proof")
+    managed = Path(binding.get("target_locator", ""))
+    if managed.parent != projects[0] / ".uap" / "managed" / "clients" / "windsurf" or managed.is_symlink() or not managed.is_dir():
+        raise RuntimeError("raw Project managed target escaped its selected scope")
+    skill = projects[0] / ".devin" / "skills" / RAW_SKILL / "SKILL.md"
+    if skill.is_symlink() or digest(skill.read_bytes()) != RAW_SKILL_SHA:
+        raise RuntimeError("raw Project Skill differs from pinned public source bytes")
+    evidence["pinned_resources"] = raw_pinned_resources(managed, skill.parent)
+    evidence["binding"] = binding
+    evidence["installation_source"] = installation.get("source")
+    inventory("after-add", True)
+    state_root = projects[0] / ".uap"
+    before = raw_repeat_snapshot(managed, skill.parent, projects[0])
+    body = run("skills-repeat", add_argv, outside)
+    evidence["public"]["repeat"] = json.loads(body)
+    raw_ready_output(body, repeated=True)
+    repeated_rows = raw_state_installations(json.loads((state_root / "state-v2.json").read_text()))
+    if len(repeated_rows) != 1:
+        raise RuntimeError("raw Project repeated installation count differs")
+    repeated = repeated_rows[0]
+    after = raw_repeat_snapshot(managed, skill.parent, projects[0])
+    evidence["repeat_continuity"] = {"before": before, "after": after,
+        "installation_id": repeated.get("installation_id"), "binding": list(repeated.get("clients", {}).values())}
+    if (repeated.get("installation_id") != installation["installation_id"]
+            or list(repeated.get("clients", {}).values()) != [binding] or before != after):
+        raise RuntimeError("raw Project repeat changed installation, binding, payload, state or lock")
+    inventory("after-repeat", True)
+    removed = json.loads(run("remove", [str(cli), "remove", installation["installation_id"],
+        "--target", "windsurf", "--scope", "project", "--project-root", str(projects[0]),
+        "--yes", "--format", "json"], outside))
+    evidence["public"]["remove"] = removed
+    if removed.get("result") != "success":
+        raise RuntimeError("raw Project ordinary removal failed")
+    inventory("after-remove", False)
+    if managed.exists() or managed.is_symlink() or skill.parent.exists() or skill.parent.is_symlink():
+        raise RuntimeError("raw Project removal retained owned files")
+    remaining = json.loads((projects[0] / ".uap" / "state-v2.json").read_text())
+    if any(item["clients"] for item in raw_state_installations(remaining)):
+        raise RuntimeError("raw Project removal retained an active client binding")
+    report["raw_project_skills_native_ready"] = True
+
+
+def qualified(report):
+    return report.get("installation_discovery_e2e") is True and report.get("raw_project_skills_native_ready") is True
 
 
 def main(root, report):
@@ -326,7 +569,7 @@ def main(root, report):
                 skill_output = command([str(binary), "skills", "list", "--json"], project, env, timeout=45)
                 mcp_output = command([str(binary), "mcp", "list", "--json"], project, env, timeout=45)
                 selected_mcp = project / ".devin" / "mcp_config.json"
-                found = [available_skill(skill_output, SKILL, project),
+                found = [available_skill(skill_output, SKILL),
                          available_mcp(mcp_output, STDIO, selected_mcp, "stdio"),
                          available_mcp(mcp_output, HTTP, selected_mcp, "http")]
                 want = present if index == 0 else False
@@ -450,6 +693,7 @@ def main(root, report):
             raise RuntimeError("Project A removal changed original MCP or retained owned objects")
         preserved("after-remove")
         report["installation_discovery_e2e"] = True
+    raw_project_skills(root, report, binary, cli, env)
 
 
 
@@ -460,7 +704,7 @@ if __name__ == "__main__":
     if len(sys.argv) != 1:
         raise SystemExit("unsupported Devin E2E invocation")
     result = {"commit":os.environ.get("EXPECTED_COMMIT"), "version":VERSION, "npm_package_version": PACKAGE_VERSION,
-              "stages":[], "installation_discovery_e2e":False, "model_runtime_qualified":False}
+              "stages":[], "installation_discovery_e2e":False, "raw_project_skills_native_ready":False, "model_runtime_qualified":False}
     with tempfile.TemporaryDirectory(prefix="devin-project-v57-", dir=os.environ.get("RUNNER_TEMP")) as temp:
         directory = Path(temp)
         try:
@@ -470,5 +714,6 @@ if __name__ == "__main__":
         report_path = Path(os.environ["RUNNER_TEMP"]) / "devin-project-v57-e2e.json"
         report_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
         print(json.dumps({"commit": result["commit"], "installation_discovery_e2e":result["installation_discovery_e2e"],
+                          "raw_project_skills_native_ready":result["raw_project_skills_native_ready"],
                           "failure":result.get("failure")}, sort_keys=True))
-    sys.exit(0 if result["installation_discovery_e2e"] else 1)
+    sys.exit(0 if qualified(result) else 1)

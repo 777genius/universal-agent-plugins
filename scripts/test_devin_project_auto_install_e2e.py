@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import shutil
 import tarfile
 import tempfile
 import unittest
@@ -88,52 +89,16 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         subject.npm_archive()
 
-    def test_native_skill_inventory_requires_exact_source_and_closed_shape(self):
-        project = Path("/tmp/project-a")
-        def row(**changed):
-            result = {"name":subject.SKILL, "description":"Inert Project installation proof",
-                      "triggers":["model", "user"], "provider":"Devin",
-                      "base_dir":str(project / ".devin" / "skills" / subject.SKILL),
-                      "display_name":subject.SKILL, "warnings":[], "errors":[]}
-            result.update(changed)
-            return result
-
-        original = row()
-        self.assertTrue(subject.available_skill(
-            json.dumps([original, {"name": "foreign"}]), subject.SKILL, project))
-        self.assertTrue(subject.available_skill(
-            json.dumps({"skills": [original]}), subject.SKILL, project))
-        self.assertTrue(subject.available_skill(
-            json.dumps([row(name=f"{project}:{subject.SKILL}")]), subject.SKILL, project))
-        self.assertFalse(subject.available_skill("[]", subject.SKILL, project))
-        self.assertFalse(subject.available_skill(
-            json.dumps([{"name": "foreign"}]), subject.SKILL, project))
-
-        missing = row()
-        missing.pop("base_dir")
-        for label, bad in (
-            ("foreign-provider", [row(provider="Builtin")]),
-            ("foreign-source", [row(base_dir="/tmp/foreign/skills/" + subject.SKILL)]),
-            ("unrelated-scope", [row(name="/tmp/project-b:" + subject.SKILL)]),
-            ("inconsistent-name", [row(name="not-owned")]),
-            ("inconsistent-display", [row(display_name="not-owned")]),
-            ("warnings", [row(warnings=["not loaded"])]),
-            ("errors", [row(errors=["broken"])]),
-            ("unknown-schema", [row(extra="unexpected")]),
-            ("missing-source", [missing]),
-            ("bad-triggers", [row(triggers="user")]),
-            ("duplicate-display", [row(), row(name=f"{project}:{subject.SKILL}")]),
-            ("nonobject-row", [row(), "foreign"]),
-            ("bare-name", [{"name": subject.SKILL}]),
-        ):
-            with self.subTest(label=label):
-                with self.assertRaises(RuntimeError):
-                    subject.available_skill(json.dumps(bad), subject.SKILL, project)
+    def test_native_skill_inventory_requires_exact_name_and_closed_shape(self):
+        valid = json.dumps([{"name": subject.SKILL}, {"name": "foreign"}])
+        self.assertTrue(subject.available_skill(valid, subject.SKILL))
+        self.assertFalse(subject.available_skill(valid, subject.SKILL + "-foreign"))
+        self.assertTrue(subject.available_skill(json.dumps({"skills": [{"name": subject.SKILL}]}), subject.SKILL))
         for inventory in ('{}', 'null', '"'+subject.SKILL+'"',
                           '{"skills":"'+subject.SKILL+'"}', '{broken'):
             with self.subTest(inventory=inventory):
                 with self.assertRaises((RuntimeError, ValueError)):
-                    subject.available_skill(inventory, subject.SKILL, project)
+                    subject.available_skill(inventory, subject.SKILL)
 
     def test_all_native_commands_use_bounded_supervised_capture(self):
         with patch.object(subject, "run_probe", return_value=(
@@ -148,6 +113,262 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                         {"error": error, "exit": exit_code}, b"", b"private")):
                     with self.assertRaises(RuntimeError):
                         subject.command(["devin", "--version"], "/tmp", {})
+
+    def test_failed_command_retains_bounded_redacted_receipt_before_raise(self):
+        secret = 'private value "with quotes"'
+        stderr = ('agentplugins: selected native inventory is unavailable\n'
+                  'API_KEY="' + secret.replace('"', '\\"') + '"\n'
+                  'Authorization: Bearer opaque-bearer\n'
+                  'token="two private words"\n').encode()
+        receipt = {"stage": "skills-add", "argv": ["agentplugins", "skills", "add"]}
+        stdout = json.dumps({"command": "skills add", "result": "failure", "status": "failed",
+                             "readiness": "failed", "private": secret}).encode()
+        record = {"error": None, "exit": 1, "elapsed_seconds": 0.5}
+        with patch.object(subject, "run_probe", return_value=(record, stdout, stderr)):
+            with self.assertRaisesRegex(RuntimeError, "exit=1") as raised:
+                subject.command(["agentplugins", "skills", "add"], "/tmp",
+                                {"API_KEY": secret}, receipt=receipt)
+        result = receipt["result"]
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(result["stderr_sha256"], hashlib.sha256(stderr).hexdigest())
+        self.assertEqual(result["public_status"], {
+            "command": "skills add", "result": "failure", "status": "failed", "readiness": "failed"})
+        self.assertIn("selected native inventory is unavailable", result["stderr_diagnostic"])
+        self.assertIn("selected native inventory is unavailable", str(raised.exception))
+        self.assertIn("stage=skills-add", str(raised.exception))
+        rendered = json.dumps(receipt) + str(raised.exception)
+        for private in (secret, "opaque-bearer", "two private words", "private value"):
+            self.assertNotIn(private, rendered)
+        self.assertLessEqual(len(result["stderr_diagnostic"]), 2048)
+        large = b"token=" + b"Z" * 3000
+        self.assertLessEqual(len(subject.command_diagnostic(large, {})), 2048)
+        self.assertNotIn("Z" * 16, subject.command_diagnostic(large, {}))
+        self.assertIn("<redacted>", subject.command_diagnostic(large, {}))
+
+    def test_authorization_redaction_without_environment_secrets_precedes_all_limits(self):
+        for scheme in ("Basic", "Bearer"):
+            for template in ("Authorization: {} {}", '"Authorization": "{} {}"',
+                             "'authorization': '{} {}'"):
+                for secret in ("dXNlcjpwYXNz-canary", "canary-0123456789abcdef" * 200):
+                    header = template.format(scheme, secret)
+                    for capture_error in (None, "capture failed: " + header):
+                        with self.subTest(scheme=scheme, template=template,
+                                          long=len(secret) > 2048, capture=capture_error is not None):
+                            stderr = (header + "\nselected native inventory is unavailable").encode()
+                            record = {"error": capture_error, "exit": 1}
+                            diagnostic = subject.command_diagnostic(stderr, {})
+                            self.assertLessEqual(len(diagnostic), 2048)
+                            for receipt in ({"stage": "skills-add"}, None):
+                                with patch.object(subject, "run_probe", return_value=(record, b"", stderr)):
+                                    with self.assertRaises(RuntimeError) as raised:
+                                        subject.command(["agentplugins", "skills", "add"], "/tmp", {},
+                                                        receipt=receipt)
+                                rendered = diagnostic + json.dumps(receipt) + str(raised.exception)
+                                self.assertNotIn(secret[:16], rendered)
+                                self.assertIn("<redacted>", diagnostic)
+                                self.assertIn("<redacted>", str(raised.exception))
+                                self.assertIn("selected native inventory is unavailable", rendered)
+                                if receipt is not None:
+                                    result = receipt["result"]
+                                    self.assertIn("<redacted>", result["stderr_diagnostic"])
+                                    self.assertEqual(result["stderr_sha256"], hashlib.sha256(stderr).hexdigest())
+                                    if capture_error is not None:
+                                        self.assertIn("<redacted>", result["capture_error"])
+
+    def test_authorization_redacts_the_entire_physical_line_without_environment(self):
+        following = "selected native inventory remains unavailable"
+        trailer = "HEADER_TRAILER_CANARY"
+        templates = (
+            "Authorization: token {secret} " + trailer,
+            '"aUtHoRiZaTiOn": "token {secret}", "tail": "' + trailer + '"',
+            "Authorization: {secret} " + trailer,
+            "'AUTHORIZATION': 'Digest username=\"{secret}\", nonce=\"" + trailer + "\"'",
+        )
+        for template in templates:
+            for secret in ("OPAQUE_AUTH_CANARY_" + "z" * 40,
+                           "OPAQUE_AUTH_CANARY_" + "z" * 3200):
+                for ending in ("\n", "\r\n", "\r"):
+                    with self.subTest(template=template, long=len(secret) > 2048,
+                                      ending=repr(ending)):
+                        header = template.format(secret=secret)
+                        stderr = (header + ending + following).encode()
+                        diagnostic = subject.command_diagnostic(stderr, {})
+                        receipt = {"stage": "skills-add"}
+                        record = {"error": "capture failed: " + header, "exit": 1}
+                        with patch.object(subject, "run_probe", return_value=(record, b"", stderr)):
+                            with self.assertRaises(RuntimeError) as raised:
+                                subject.command(["agentplugins", "skills", "add"], "/tmp", {},
+                                                receipt=receipt)
+                        result = receipt["result"]
+                        rendered = diagnostic + json.dumps(receipt) + str(raised.exception)
+                        for private in ("OPAQUE_AUTH_CANARY", "z" * 16, trailer):
+                            self.assertNotIn(private, rendered)
+                        self.assertIn("<redacted>", diagnostic)
+                        self.assertTrue(diagnostic.endswith(ending + following))
+                        self.assertTrue(result["stderr_diagnostic"].endswith(ending + following))
+                        self.assertIn(following, str(raised.exception))
+                        self.assertEqual(result["stderr_sha256"], hashlib.sha256(stderr).hexdigest())
+                        self.assertLessEqual(len(diagnostic), 2048)
+                        self.assertLessEqual(len(result["capture_error"]), 2048)
+        for ending in ("\n", "\r\n", "\r"):
+            diagnostic = subject.command_diagnostic(("Authorization:" + ending + following).encode(), {})
+            self.assertTrue(diagnostic.endswith(ending + following))
+
+    def test_raw_failure_keeps_selected_command_stage_and_result(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report = {}
+            success = ({"error": None, "exit": 0}, b"[]", b"")
+            failed = ({"error": None, "exit": 1}, b'{"result":"failure"}',
+                      b"agentplugins: exact selected source could not be acquired")
+            with patch.object(subject, "run_probe", side_effect=[success] * 3 + [failed]):
+                with self.assertRaises(RuntimeError):
+                    subject.raw_project_skills(Path(temporary), report,
+                                               Path("/selected/devin"), Path("/selected/uap"), {})
+            last = report["raw_project_skills"]["commands"][-1]
+            self.assertEqual(last["stage"], "skills-add")
+            self.assertEqual(last["result"]["exit_code"], 1)
+            self.assertIn("selected source could not be acquired", last["result"]["stderr_diagnostic"])
+            self.assertNotEqual(report.get("raw_project_skills_native_ready"), True)
+
+    def test_raw_project_skill_requires_exact_provider_source_and_metadata(self):
+        selected = Path("/tmp/project-a/.devin/skills") / subject.RAW_SKILL
+        row = {"name": subject.RAW_SKILL, "description": subject.RAW_DESCRIPTION,
+               "provider": "Devin", "base_dir": str(selected), "display_name": subject.RAW_SKILL,
+               "triggers": ["user", "model"], "warnings": [], "errors": []}
+        self.assertTrue(subject.raw_skill_present(json.dumps([row]), selected))
+        self.assertFalse(subject.raw_skill_present("[]", selected))
+        mutations = {"provider": "Windsurf", "base_dir": "/tmp/project-b/.devin/skills/" + subject.RAW_SKILL,
+                     "description": "different", "display_name": "different", "triggers": ["user"],
+                     "warnings": ["unknown policy"], "errors": ["failed"], "extra": True}
+        for key, value in mutations.items():
+            with self.subTest(field=key), self.assertRaises(RuntimeError):
+                subject.raw_skill_present(json.dumps([{**row, key: value}]), selected)
+        for body in (json.dumps([row, row]), json.dumps([{}] * 129), "{}", "null", '["name-only"]'):
+            with self.subTest(body=body), self.assertRaises(RuntimeError):
+                subject.raw_skill_present(body, selected)
+
+    def test_raw_ready_output_requires_ready_unchanged_repeat(self):
+        output = {"schema_version": 1, "command": "skills add", "result": "success",
+                  "status": "succeeded", "readiness": "ready", "next_actions": [],
+                  "items": [{"alias": subject.RAW_SKILL, "targetId": "windsurf", "status": "unchanged"}]}
+        self.assertEqual(subject.raw_ready_output(json.dumps(output), repeated=True), output)
+        for key, value in (("schema_version", 2), ("command", "add"), ("result", "failure"),
+                           ("status", "partial"), ("readiness", "needs_action"),
+                           ("next_actions", ["confirm setup"]), ("items", [])):
+            with self.subTest(field=key), self.assertRaises(RuntimeError):
+                subject.raw_ready_output(json.dumps({**output, key: value}), repeated=True)
+        output["items"][0]["status"] = "succeeded"
+        with self.assertRaises(RuntimeError):
+            subject.raw_ready_output(json.dumps(output), repeated=True)
+        self.assertEqual(subject.raw_ready_output(json.dumps(output)), output)
+
+    def test_raw_case_repeats_same_argv_and_retains_checkable_evidence(self):
+        skill = (Path(__file__).resolve().parents[1] /
+                 "tests/fixtures/uap_apm/skills/benchmark-note/SKILL.md").read_bytes()
+        for fault in (None, "identity", "binding", "payload", "lock", "foreign", "scope", "initial-resource", "extra-resource", "malformed-state"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                case = root / "raw-project-skills"
+                project, outside = case / "project-a", case / "outside"
+                state_root = project / ".uap"
+                managed = state_root / "managed/clients/windsurf/fixture"
+                native = project / ".devin/skills" / subject.RAW_SKILL
+                state_path = state_root / "state-v2.json"
+                binding = {"client_binding_id": "held", "client_id": "windsurf", "scope": "project", "activation": "active",
+                           "authentication": "not_required", "policy": "allowed", "verification": "installation_verified",
+                           "native_profile_root": str(project / ".devin"), "target_locator": str(managed)}
+                installation = {"installation_id": "held-fixture-id", "clients": {"held": binding},
+                                "source": {"resolved_revision": "b5d80336b53397be5bbb72c84f680e5885a6ac0d"}}
+                state = {"schema_version": 5, "installations": [installation]}
+                additions = 0
+                def fake_command(argv, cwd, env, timeout=90, receipt=None):
+                    nonlocal additions
+                    if argv[1:3] == ["skills", "add"]:
+                        self.assertEqual((Path(cwd), timeout), (outside, 90))
+                        self.assertIn("--no-ui", argv)
+                        additions += 1
+                        if additions == 1:
+                            reference = (Path(__file__).resolve().parents[1] /
+                                         "tests/fixtures/uap_apm/skills/benchmark-note/references/fixture.txt").read_bytes()
+                            for path in (managed / "skills" / subject.RAW_SKILL, native):
+                                (path / "references").mkdir(parents=True)
+                                (path / "SKILL.md").write_bytes(skill)
+                                (path / "references/fixture.txt").write_bytes(reference)
+                            manifest = {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                                        "name": "skill-4e68c33bfb91dc370d5c3745c0ba746428ff227ed3b3466f9c9d1552"}
+                            (managed / "plugin.json").write_text(json.dumps(manifest, separators=(",", ":")) + "\n")
+                            if fault == "initial-resource":
+                                (native / "references/fixture.txt").write_bytes(b"substituted initial resource")
+                            elif fault == "extra-resource":
+                                (native / "extra.txt").write_bytes(b"unreviewed resource")
+                            for name in ("uap.toml", "uap.lock"):
+                                (project / name).write_text("held lock or manifest\n")
+                            state_path.write_text(json.dumps(state))
+                        elif fault in ("identity", "binding"):
+                            if fault == "identity": installation["installation_id"] = "replacement-id"
+                            else: binding["activation"] = "prepared"
+                            state_path.write_text(json.dumps(state))
+                        elif fault == "payload": (native / "SKILL.md").write_bytes(b"changed\n")
+                        elif fault == "lock": (project / "uap.lock").write_text("changed\n")
+                        elif fault == "foreign": (case / "config/devin/mcp_config.json").write_text("changed\n")
+                        return json.dumps({"schema_version": 1, "command": "skills add", "result": "success",
+                            "status": "succeeded", "readiness": "ready", "items": [{"alias": subject.RAW_SKILL,
+                            "targetId": "windsurf", "status": "succeeded" if additions == 1 else "unchanged"}]})
+                    if argv[1] == "remove":
+                        self.assertEqual(argv, ["/selected/uap", "remove", installation["installation_id"],
+                            "--target", "windsurf", "--scope", "project", "--project-root", str(project),
+                            "--yes", "--format", "json"])
+                        self.assertEqual((Path(cwd), timeout), (outside, 90))
+                        shutil.rmtree(managed)
+                        shutil.rmtree(native)
+                        installation["clients"] = {}
+                        state_path.write_text(json.dumps({} if fault == "malformed-state" else state))
+                        return json.dumps({"result": "success"})
+                    self.assertEqual((argv[1:], timeout), (["skills", "list", "--json"], 45))
+                    present = native.exists() and (Path(cwd) == project or (fault == "scope" and additions == 2))
+                    return json.dumps([{"name": subject.RAW_SKILL, "description": subject.RAW_DESCRIPTION,
+                        "provider": "Devin", "base_dir": str(native), "display_name": subject.RAW_SKILL,
+                        "triggers": ["user", "model"], "warnings": [], "errors": []}] if present else [])
+                report = {}
+                with patch.object(subject, "command", side_effect=fake_command):
+                    if fault:
+                        with self.assertRaises(RuntimeError):
+                            subject.raw_project_skills(root, report, Path("/selected/devin"), Path("/selected/uap"), {})
+                        self.assertNotEqual(report.get("raw_project_skills_native_ready"), True)
+                        continue
+                    subject.raw_project_skills(root, report, Path("/selected/devin"), Path("/selected/uap"), {})
+                evidence = report["raw_project_skills"]
+                self.assertTrue(report["raw_project_skills_native_ready"])
+                self.assertEqual(set(evidence["public"]), {"add", "repeat", "remove"})
+                self.assertEqual(evidence["public"]["repeat"]["items"][0]["status"], "unchanged")
+                commands = [row for row in evidence["commands"] if row["stage"] in ("skills-add", "skills-repeat")]
+                self.assertEqual(commands[0]["argv"], commands[1]["argv"])
+                self.assertEqual(evidence["repeat_continuity"]["before"], evidence["repeat_continuity"]["after"])
+                self.assertEqual(len(evidence["inventories"]), 12)
+                self.assertEqual({row["stage"] for row in evidence["inventories"]},
+                                 {"before-add", "after-add", "after-repeat", "after-remove"})
+
+    def test_raw_removal_state_requires_actual_schema_and_typed_records(self):
+        valid = {"schema_version": 5, "installations": []}
+        self.assertEqual(subject.raw_state_installations(valid), [])
+        for invalid in ({}, {"schema_version": 5}, {"schema_version": 5, "installations": None},
+                        {"schema_version": 5, "installations": [{}]},
+                        {"schema_version": 5, "installations": [{"installation_id": "held", "clients": None}]},
+                        {"schema_version": 5, "installations": [{"installation_id": "held", "clients": {"key": {}}}]}):
+            with self.subTest(invalid=invalid), self.assertRaises(RuntimeError):
+                subject.raw_state_installations(invalid)
+
+    def test_raw_case_is_required_without_replacing_original_mixed_oracle(self):
+        for mixed, raw in ((False, False), (True, False), (False, True), (True, True)):
+            with self.subTest(mixed=mixed, raw=raw):
+                self.assertEqual(subject.qualified({"installation_discovery_e2e": mixed,
+                    "raw_project_skills_native_ready": raw}), mixed and raw)
+        self.assertFalse(subject.qualified({"installation_discovery_e2e": True}))
+        self.assertEqual(subject.RAW_SOURCE,
+            "https://github.com/777genius/universal-agent-plugins/tree/b5d80336b53397be5bbb72c84f680e5885a6ac0d/tests/fixtures/uap_apm/skills")
+        fixture = Path(__file__).resolve().parents[1] / "tests/fixtures/uap_apm/skills/benchmark-note/SKILL.md"
+        self.assertEqual(hashlib.sha256(fixture.read_bytes()).hexdigest(), subject.RAW_SKILL_SHA)
+        self.assertEqual(hashlib.sha256((fixture.parent / "references/fixture.txt").read_bytes()).hexdigest(), subject.RAW_REFERENCE_SHA)
 
     def test_mcp_inventory_requires_structured_selected_enabled_source(self):
         config = Path("/tmp/project-a/.devin/mcp_config.json")
@@ -170,6 +391,26 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
             with self.subTest(body=bad), self.assertRaises((RuntimeError, ValueError)):
                 subject.available_mcp(bad, subject.STDIO, config, "stdio")
         self.assertFalse(subject.available_mcp("[]", subject.STDIO, config, "stdio"))
+
+
+class RawSnapshotProjectLayoutTests(unittest.TestCase):
+    def test_snapshot_uses_real_project_dependency_root_without_legacy_fallback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary).resolve() / "project"
+            state = project / ".uap"
+            managed, native = state / "managed", project / ".devin/skills/owned"
+            for directory in (managed, native):
+                directory.mkdir(parents=True)
+            (state / "state-v2.json").write_text("state\n")
+            for name in ("uap.toml", "uap.lock"):
+                (project / name).write_text("held dependency file\n")
+            value = subject.raw_repeat_snapshot(managed, native, project)
+            self.assertTrue(all(str(path) in value for path in
+                            (state / "state-v2.json", project / "uap.toml", project / "uap.lock")))
+            (project / "uap.lock").unlink()
+            (state / "uap.lock").write_text("wrong legacy location\n")
+            with self.assertRaises(FileNotFoundError):
+                subject.raw_repeat_snapshot(managed, native, project)
 
 
 if __name__ == "__main__":

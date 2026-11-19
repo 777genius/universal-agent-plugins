@@ -156,7 +156,7 @@
     "Error": "grok plugin list JSON contract is not recognized",
     "Outcome": {
       "Activation": "not_required",
-      "ArtifactRemovalAllowed": true,
+      "ArtifactRemovalAllowed": false,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
       "NativeEffect": "",

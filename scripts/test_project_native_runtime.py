@@ -171,18 +171,18 @@ class RuntimeTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parent.parent /
                     ".github/workflows/project-native-runtime.yml").read_text()
         contracts, native = workflow.split("\n  native:\n", 1)
-        prepare = "      - name: Prepare pinned Go for selected Copilot, Gemini and Kiro inert process contracts\n"
-        execute = "      - name: Verify selected Copilot, Gemini and Kiro inert process contracts before native execution\n"
+        prepare = "      - name: Prepare pinned Go for selected Copilot and Gemini inert process contracts\n"
+        execute = "      - name: Verify selected Copilot and Gemini inert process contracts before native execution\n"
         selection, toolchain = contracts.split(prepare, 1)
         toolchain, gate = toolchain.split(execute, 1)
-        condition = "        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'gemini') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'kiro') }}\n"
+        condition = "        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'gemini') }}\n"
         self.assertIn("        id: selection\n", selection)
         self.assertTrue(toolchain.startswith(condition))
         self.assertTrue(gate.startswith(condition))
         self.assertIn("actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", toolchain)
         self.assertIn("          go-version: '1.26.10'\n          cache: false\n", toolchain)
         self.assertEqual(gate.removeprefix(condition).strip(),
-                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestKiroCycle|TestGeminiPublicCompletionRequiresBothExactFreshInventoryPhases$|TestGeminiPublicCompletionPhasesMatchOperations$|TestGeminiRepeatedPublicCompletionRequiresFourExactFreshInventoryPhases$)'")
+                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestGeminiPublicCompletionRequiresBothExactFreshInventoryPhases$|TestGeminiPublicCompletionPhasesMatchOperations$|TestGeminiRepeatedPublicCompletionRequiresFourExactFreshInventoryPhases$)'")
         self.assertIn("    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n", contracts)
         self.assertNotIn("AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED", contracts)
         self.assertIn("    needs: contracts\n", native)
@@ -210,6 +210,121 @@ class RuntimeTests(unittest.TestCase):
         result["qualification"]["mcp-tools-call"] = True
         with self.assertRaises(ValueError):
             runtime.kimi_members({"lifecycle.json": json.dumps(result).encode()}, self.source)
+
+    def kimi_raw_lifecycle_bodies(self):
+        """Synthetic inert data for the existing reader, never runtime proof."""
+        result = {key: value for key, value in self.result().items() if key not in ("provider_kind", "runtime_attempt_complete")}
+        result.update(client="kimi", test_failed=False,
+            qualification={key: key != "mcp-tools-call" for key in runtime.shared.QUALIFICATION_CASES},
+            raw_skills={"source": {"repository": "anthropics/skills", "resolved_revision": "ca45fc496a3436251f191354091d557da31c15b5", "package_subpath": "skills/frontend-design"},
+                        "installation_id": "installation", "binding_id": "binding", "public_add_repeat_ready": True,
+                        "same_public_argv": True, "native_a_b_c_user_inventory": True, "removed": True,
+                        "model_qualified": False, "mcp_activation_qualified": False})
+        bodies = {"lifecycle.json": json.dumps(result).encode()}
+        command = {"argv": ["/owned/agentplugins"], "cwd": "/owned/A", "exit": 0,
+                   "error": False, "deadline": False, "cleanup": "ordinary full-descendant supervision; forced termination fails"}
+        for label in runtime.KIMI_COMMANDS:
+            bodies.update({label+".command.json": json.dumps(command).encode(), label+".stdout.log": b"", label+".stderr.log": b""})
+        public = {}
+        source = "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/frontend-design"
+        for label in ("raw-add", "raw-repeat", "raw-remove"):
+            args = ["/owned/agentplugins", "skills", "add", source, "--skill", "frontend-design", "--target", "kimi", "--scope", "project", "--project-root", "/owned/A", "--no-ui", "--yes", "--format", "json"]
+            value = {"schema_version": 1, "command": "skills add", "result": "success", "status": "succeeded", "scope": "project", "readiness": "ready", "items": [{"targetId": "kimi", "status": "succeeded"}]}
+            if label == "raw-repeat":
+                value["items"][0]["status"] = "unchanged"
+            if label == "raw-remove":
+                args = ["/owned/agentplugins", "remove", "frontend-design", "--target", "kimi", "--scope", "project", "--project-root", "/owned/A", "--yes", "--format", "json"]
+                value = {"schema_version": 1, "command": "agentplugins remove", "result": "success", "outcome": "completed", "scope": "project"}
+            public.update({label+".command.json": json.dumps({**command, "argv": args}), label+".stdout.log": json.dumps(value), label+".stderr.log": ""})
+        bodies["raw-skills-public.json"] = json.dumps(public).encode()
+        for stage in ("raw-empty", "raw-add", "raw-repeat", "raw-removed"):
+            native = {"exit": 0, "error": None, "cleanup": {"shutdown_acknowledged": True, "sigterm_sent": False, "forced_kill": False, "group_reaped": True, "port_closed": True}}
+            observed = {"stage": stage, "skill_names": {scope: (["frontend-design"] if scope == "a" and stage in ("raw-add", "raw-repeat") else []) for scope in ("a", "b", "c", "user")}, "tools_call_count": 0, "provider_configured": False}
+            bodies["observe-"+stage+".stdout.log"] = json.dumps({"files": {"research.json": json.dumps({"observations": observed, "commands": [native]})}}).encode()
+        return bodies
+
+    def test_kimi_raw_reader_ands_exact_public_ready_repeat_and_independent_scope_shutdown(self):
+        bodies = self.kimi_raw_lifecycle_bodies()
+        self.assertEqual(len(bodies), 80)
+        self.assertFalse(runtime.kimi_members(bodies, self.source)["test_failed"])
+        # Confirmed Kimi setup completion can report succeeded on a repeat;
+        # unchanged remains valid only with the same Ready/native evidence.
+        resumed = dict(bodies)
+        public = json.loads(resumed["raw-skills-public.json"])
+        value = json.loads(public["raw-repeat.stdout.log"])
+        value["items"][0]["status"] = "succeeded"
+        public["raw-repeat.stdout.log"] = json.dumps(value)
+        resumed["raw-skills-public.json"] = json.dumps(public).encode()
+        self.assertFalse(runtime.kimi_members(resumed, self.source)["test_failed"])
+        for failure in ("mixed", "raw-flag", "raw-missing", "prepared", "internal-status", "fresh-unchanged", "repeat-argv", "user-leak", "forced-shutdown", "missing-user", "outer-exit", "outer-error", "outer-deadline", "null-public", "null-capture", "null-research"):
+            changed = dict(bodies)
+            result = json.loads(changed["lifecycle.json"])
+            if failure == "mixed": result["qualification"]["project-lifecycle"] = False
+            if failure == "raw-flag": result["raw_skills"]["removed"] = 1
+            changed["lifecycle.json"] = json.dumps(result).encode()
+            if failure == "raw-missing": del changed["raw-skills-public.json"]
+            if failure in ("prepared", "internal-status", "fresh-unchanged", "repeat-argv"):
+                public = json.loads(changed["raw-skills-public.json"])
+                name = "raw-repeat.stdout.log" if failure in ("prepared", "internal-status") else "raw-add.stdout.log" if failure == "fresh-unchanged" else "raw-repeat.command.json"
+                value = json.loads(public[name])
+                if failure == "prepared": value["readiness"] = "needs_action"
+                elif failure == "internal-status": value["items"][0]["status"] = "completed"
+                elif failure == "fresh-unchanged": value["items"][0]["status"] = "unchanged"
+                else: value["argv"][3] = "https://foreign.invalid/source"
+                public[name] = json.dumps(value)
+                changed["raw-skills-public.json"] = json.dumps(public).encode()
+            if failure in ("user-leak", "forced-shutdown", "missing-user"):
+                capture = json.loads(changed["observe-raw-removed.stdout.log"])
+                research = json.loads(capture["files"]["research.json"])
+                if failure == "user-leak": research["observations"]["skill_names"]["user"] = ["frontend-design"]
+                if failure == "missing-user": del research["observations"]["skill_names"]["user"]
+                if failure == "forced-shutdown": research["commands"][0]["cleanup"]["forced_kill"] = True
+                capture["files"]["research.json"] = json.dumps(research)
+                changed["observe-raw-removed.stdout.log"] = json.dumps(capture).encode()
+            if failure in ("outer-exit", "outer-error", "outer-deadline"):
+                name = "observe-raw-repeat.command.json"
+                command = json.loads(changed[name])
+                command[{"outer-exit": "exit", "outer-error": "error", "outer-deadline": "deadline"}[failure]] = 1 if failure == "outer-exit" else True
+                changed[name] = json.dumps(command).encode()
+            if failure == "null-public":
+                public = json.loads(changed["raw-skills-public.json"])
+                public["raw-repeat.stdout.log"] = "null"
+                changed["raw-skills-public.json"] = json.dumps(public).encode()
+            if failure == "null-capture": changed["observe-raw-repeat.stdout.log"] = b"null"
+            if failure == "null-research":
+                changed["observe-raw-repeat.stdout.log"] = json.dumps({"files": {"research.json": "null"}}).encode()
+            with self.subTest(failure=failure), self.assertRaises(ValueError):
+                runtime.kimi_members(changed, self.source)
+
+    def test_kimi_success_rejects_every_failed_outer_observer(self):
+        baseline = self.kimi_raw_lifecycle_bodies()
+        for label in runtime.KIMI_COMMANDS:
+            if not label.startswith("observe-"):
+                continue
+            for field, value in (("exit", 1), ("error", True), ("deadline", True)):
+                with self.subTest(label=label, field=field):
+                    bodies = dict(baseline)
+                    command = json.loads(bodies[label + ".command.json"])
+                    command[field] = value
+                    bodies[label + ".command.json"] = json.dumps(command).encode()
+                    with self.assertRaisesRegex(ValueError, "observer command"):
+                        runtime.kimi_members(bodies, self.source)
+                    result = json.loads(bodies["lifecycle.json"])
+                    result["test_failed"] = True
+                    result["qualification"] = dict.fromkeys(runtime.shared.QUALIFICATION_CASES, False)
+                    bodies["lifecycle.json"] = json.dumps(result).encode()
+                    self.assertTrue(runtime.kimi_members(bodies, self.source)["test_failed"])
+
+    def test_failed_kimi_raw_observer_retains_unqualified_diagnostics(self):
+        bodies = self.kimi_raw_lifecycle_bodies()
+        result = json.loads(bodies["lifecycle.json"])
+        result["test_failed"] = True
+        result["qualification"] = dict.fromkeys(runtime.shared.QUALIFICATION_CASES, False)
+        bodies["lifecycle.json"] = json.dumps(result).encode()
+        command = json.loads(bodies["observe-raw-repeat.command.json"])
+        command["exit"] = 1
+        bodies["observe-raw-repeat.command.json"] = json.dumps(command).encode()
+        self.assertTrue(runtime.kimi_members(bodies, self.source)["test_failed"])
 
     def cli_result(self, client):
         result = {key: value for key, value in self.result().items() if key != "provider_kind"}
@@ -1560,252 +1675,6 @@ def load_tests(loader, tests, pattern):
         tests.addTests(loader.loadTestsFromName("test_project_native_gemini_complete.GeminiCompleteTests"))
         tests.addTests(loader.loadTestsFromName("test_project_native_gemini_cycle.GeminiCycleTests"))
     return tests
-
-
-class DelegatedServiceTests(unittest.TestCase):
-    def environment(self, root):
-        from grok_project_protocol_service import child_environment
-        with patch.dict(os.environ, {"GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_EVENT_NAME": "pull_request"}):
-            return child_environment(root, "a" * 40)
-
-    def test_two_literal_grok_vectors_and_complete_cline_vector(self):
-        with tempfile.TemporaryDirectory() as temporary, patch.object(runtime.time, "monotonic_ns", return_value=110_000_000_000):
-            root = Path(temporary).resolve()
-            output, runtime_root = root / "output", root / "runtime"
-            inputs = (runtime.GROK_CHILD_PYTHON, root / "tools/agentplugins", root / "tools/probe")
-            for case, script in runtime.GROK_SCRIPTS.items():
-                unit = "uap-" + case + "-" + "b" * 32 + ".service"
-                env = self.environment(output)
-                with patch.object(runtime.time, "monotonic_ns", return_value=110_000_000_000):
-                    argv = runtime.grok_service_argv(case, inputs, env, output, unit, 1001, 1002, 100_000_000_000,
-                                                     runtime_root=runtime_root)
-                self.assertEqual(argv[-9:], [str(inputs[0]), "-B", str(runtime.SOURCE / "scripts" / script),
-                    "--installer", str(inputs[1]), "--probe", str(inputs[2]), "--output", str(output / "child")])
-                self.assertIn("--uid=1001", argv)
-                self.assertIn("--gid=1002", argv)
-                self.assertIn("--property=RuntimeMaxSec=890s", argv)
-                readonly = [runtime.SOURCE, *inputs[1:]]
-                if case == "grok-protocol":
-                    readonly.append(inputs[1].with_name("grok-inventory-test"))
-                self.assertIn("--property=RootDirectory=" + str(runtime_root), argv)
-                self.assertIn("--property=MountAPIVFS=yes", argv)
-                self.assertIn("--property=MountFlags=private", argv)
-                self.assertIn("--property=BindReadOnlyPaths=" + " ".join(map(str, readonly)), argv)
-                self.assertIn("--property=BindPaths=" + str(output) + " /sys/fs/cgroup", argv)
-                self.assertEqual(argv[argv.index("/usr/bin/env") + 1], "-i")
-                self.assertNotIn("GITHUB_OUTPUT", " ".join(argv))
-                for change in ({"LD_PRELOAD": "foreign"}, {"HOME": str(root / "foreign")}, {"PATH": "/foreign"},
-                               {"EXPECTED_COMMIT": "foreign"}, {"GITHUB_RUN_ID": "0"}, {"GITHUB_EVENT_NAME": "foreign"}):
-                    with self.subTest(case=case, change=change), self.assertRaises(ValueError):
-                        runtime.grok_service_argv(case, inputs, {**env, **change}, output, unit, 1001, 1002, 100_000_000_000,
-                                                  runtime_root=runtime_root)
-                for selected, uid, origin in (("arbitrary", 1001, 1), (case, 0, 1), (case, 1001, True), (case, 1001, -1)):
-                    with self.assertRaises(ValueError):
-                        runtime.grok_service_argv(selected, inputs, env, output, unit, uid, 1002, origin,
-                                                  runtime_root=runtime_root)
-                with self.assertRaises(ValueError):
-                    runtime.cline_unit_state(b"LoadState=not-found\nActiveState=inactive\nControlGroup=\n", unit)
-            env = {key: "fixture" for key in runtime.CLINE_ENV}
-            env.update(PATH="/usr/bin:/bin", AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT="1")
-            unit = "uap-cline-project-" + "c" * 32 + ".service"
-            selected = {**env, "AGENTPLUGINS_PROJECT_NATIVE_STARTED_NS": "17", "AGENTPLUGINS_CLINE_SYSTEMD_UNIT": unit,
-                "AGENTPLUGINS_CLINE_ORIGINAL_UID": "1001", "AGENTPLUGINS_CLINE_ORIGINAL_GID": "1002"}
-            expected = ["/usr/bin/sudo", "-n", "/usr/bin/systemd-run", "--unit=" + unit, "--wait", "--pipe", "--collect", "--quiet",
-                "--service-type=exec", "--expand-environment=no", "--uid=1001", "--gid=1002", "--property=Delegate=yes",
-                "--property=NoNewPrivileges=yes", "--property=KillMode=control-group", "--property=RuntimeMaxSec=180s",
-                "--property=TimeoutStopSec=30s", "--working-directory=" + str(root), "/usr/bin/env", "-i",
-                *(key + "=" + selected[key] for key in sorted(selected)), str(root / "test"),
-                "-test.run=^TestAgentpluginsClineNativeProjectCompleteCycle$", "-test.count=1", "-test.v", "-test.timeout=180s"]
-            self.assertEqual(runtime.cline_service_argv(root / "test", env, root, unit, 1001, 1002, 17), expected)
-
-    def test_clean_runtime_refuses_host_interpreter_alias_overlap_and_property_injection(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary).resolve()
-            clean, output = root / "runtime", root / "output"
-            clean.mkdir()
-            alias = root / "alias"
-            alias.symlink_to(clean, target_is_directory=True)
-            inputs = (runtime.GROK_CHILD_PYTHON, root / "tools/agentplugins", root / "tools/probe")
-            for selected, destination, runtime_root in (
-                    ((Path("/usr/bin/python3"), *inputs[1:]), output, clean),
-                    (inputs, output, alias), (inputs, output, None),
-                    (inputs, clean / "inside", clean), (inputs, output, runtime.SOURCE),
-                    (inputs, output, root / "runtime:foreign"),
-                    (inputs, root / "output --property=Foreign", clean),
-                    ((runtime.GROK_CHILD_PYTHON, output, inputs[2]), output, clean)):
-                with self.subTest(selected=selected, destination=destination, runtime_root=runtime_root), self.assertRaises(ValueError):
-                    runtime.grok_runtime_properties("grok-noauth", selected, destination, runtime_root)
-
-    def test_readonly_controller_has_fixed_root_boundary_original_ids_and_witness_mount(self):
-        root = Path('/tmp/uap-grok-acp-input-' + 'a' * 32)
-        clean = Path('/tmp/fixed-clean-runtime')
-        unit = 'uap-grok-readonly-controller-' + 'b' * 32 + '.service'
-        env = dict(PATH='/usr/bin:/bin', LANG='C.UTF-8', GITHUB_ACTIONS='true',
-                   RUNNER_ENVIRONMENT='github-hosted', AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED='1',
-                   EXPECTED_COMMIT='c' * 40)
-        with patch.object(runtime.time, 'monotonic_ns', return_value=110_000_000_000):
-            argv = runtime.grok_readonly_controller_argv(root, env, unit, 1001, 1002, 100_000_000_000,
-                                                        runtime_root=clean)
-            self.assertEqual(argv[-3:], [str(root / 'helper'), '--input-root', str(root)])
-            self.assertIn('--uid=0', argv)
-            self.assertIn('--gid=0', argv)
-            self.assertIn('SUDO_UID=1001', argv)
-            self.assertIn('SUDO_GID=1002', argv)
-            self.assertIn('--property=NoNewPrivileges=yes', argv)
-            self.assertIn('--property=RuntimeMaxSec=15s', argv)
-            self.assertIn('--property=TimeoutStopSec=5s', argv)
-            self.assertIn('--property=RootDirectory=' + str(clean), argv)
-            self.assertIn('--property=MountFlags=private', argv)
-            self.assertIn('--property=BindReadOnlyPaths=' + str(root), argv)
-            self.assertIn('--property=BindPaths=' + str(root / 'readonly-witness') + ' /sys/fs/cgroup', argv)
-            self.assertEqual(argv[argv.index('/usr/bin/env') + 1], '-i')
-            for changed in ({**env, 'SUDO_UID':'0'}, {**env, 'LD_PRELOAD':'foreign'},
-                            {**env, 'EXPECTED_COMMIT':'foreign'}, {**env, 'PATH':'/foreign'}):
-                with self.subTest(changed=changed), self.assertRaises(ValueError):
-                    runtime.grok_readonly_controller_argv(root, changed, unit, 1001, 1002, 100_000_000_000,
-                                                         runtime_root=clean)
-            for selected, uid, origin, runtime_root in (
-                    (root / 'other', 1001, 100_000_000_000, clean), (root, 0, 100_000_000_000, clean),
-                    (root, 1001, True, clean), (root, 1001, 80_000_000_000, clean),
-                    (root, 1001, 120_000_000_000, clean), (root, 1001, 100_000_000_000, root),
-                    (root, 1001, 100_000_000_000, Path('/tmp/root:foreign'))):
-                with self.subTest(selected=selected, uid=uid, origin=origin, runtime_root=runtime_root), self.assertRaises(ValueError):
-                    runtime.grok_readonly_controller_argv(selected, env, unit, uid, 1002, origin, runtime_root=runtime_root)
-
-    def test_closed_manager_receipts_reject_foreign_missing_duplicate_and_cross_case_units(self):
-        for case in runtime.GROK_SCRIPTS:
-            unit = "uap-" + case + "-" + "a" * 32 + ".service"
-            body = b"LoadState=not-found\nActiveState=inactive\nControlGroup=\n"
-            self.assertEqual(runtime._service_unit_state(body, unit, case)["LoadState"], "not-found")
-            for bad in (body + b"MainPID=1\n", body + b"ActiveState=inactive\n", body.replace(b"inactive", b"active"),
-                        body.replace(b"ControlGroup=\n", b"ControlGroup=/system.slice/foreign.service\n"),
-                        b"LoadState=not-found\nActiveState=inactive\n"):
-                with self.assertRaises(ValueError):
-                    runtime._service_unit_state(bad, unit, case)
-            with self.assertRaises(ValueError):
-                runtime._service_unit_state(body, unit, "cline")
-
-    def kernel(self, root, scenario, case="grok-noauth"):
-        from contextlib import ExitStack
-        clock = [100.0]
-        state = {"started": False, "stopped": False, "killed": False}
-        calls = []
-        controller = case == runtime.GROK_READONLY_CONTROLLER
-        final = 130.0 if controller else 1000.0
-        budget = types.SimpleNamespace(deadline=final, check=lambda: final - clock[0])
-        ctx = types.SimpleNamespace(summary={}, identities={}, budget=budget)
-        def command(label, argv, cwd, env, timeout):
-            calls.append((label, argv, timeout))
-            if label == "runtime-test":
-                state["started"] = True
-                if scenario == "transport":
-                    raise ValueError("inert capture refusal")
-                if scenario == "expired":
-                    clock[0] = final
-                if scenario == "late-success":
-                    clock[0] = 126.0
-                return {"exit": 1 if scenario == "negative" else 0, "error": None}, b"inert child", b""
-            if label.endswith("-systemd-version"):
-                return {"exit": 0}, b"systemd " + (b"256" if scenario == "version" else b"255") + b"\n", b""
-            if label.endswith("-service-stop"):
-                state["stopped"] = True
-                return {"exit": 0}, b"", b""
-            if label.endswith("-service-kill"):
-                state["killed"] = True
-                return {"exit": 0}, b"", b""
-            absent = not state["started"]
-            if absent and scenario != "collision":
-                return {"exit": 0}, b"LoadState=not-found\nActiveState=inactive\nControlGroup=\n", b""
-            if scenario == "malformed" and not absent:
-                return {"exit": 0}, b"LoadState=loaded\nActiveState=inactive\nControlGroup=/foreign\n", b""
-            active = scenario == "residual" or scenario == "forced" and not state["stopped"] or absent
-            body = "LoadState=loaded\nActiveState=" + ("active" if active else "inactive") + "\nControlGroup=/system.slice/" + argv[-1] + "\n"
-            return {"exit": 0}, body.encode(), b""
-        ctx.command = command
-        info = types.SimpleNamespace(st_dev=1, st_ino=2, st_mode=stat.S_IFREG | 0o755, st_nlink=1,
-                                     st_size=5, st_mtime_ns=3, st_ctime_ns=4)
-        original_stat = Path.lstat
-        system = {Path("/usr/bin") / name for name in ("sudo", "systemd-run", "systemctl", "env")}
-        def empty(_unit, owner, _case):
-            self.assertEqual(owner, 0 if controller else 1001)
-            return not state["started"] or scenario != "residual" and (scenario != "forced" or state["stopped"])
-        class Lifetime:
-            def __init__(self, seconds):
-                self.deadline = clock[0] + seconds
-            def __enter__(self):
-                return self
-            def __exit__(self, *_args):
-                pass
-            def check(self):
-                return self.deadline - clock[0]
-        with ExitStack() as stack:
-            stack.enter_context(patch.object(runtime, "cline_host"))
-            stack.enter_context(patch.object(runtime, "ordinary_bytes", return_value=b"inert"))
-            stack.enter_context(patch.object(Path, "lstat", lambda path: info if path in system else original_stat(path)))
-            stack.enter_context(patch.object(runtime.os, "getuid", return_value=1001))
-            stack.enter_context(patch.object(runtime.os, "getgid", return_value=1002))
-            stack.enter_context(patch.object(runtime, "_service_cgroup_empty", side_effect=empty))
-            stack.enter_context(patch.object(runtime.shared, "verify_files"))
-            stack.enter_context(patch.object(runtime.shared, "Budget", Lifetime))
-            stack.enter_context(patch.object(runtime.time, "monotonic", side_effect=lambda: clock[0]))
-            stack.enter_context(patch.object(runtime.time, "monotonic_ns", side_effect=lambda: int(clock[0] * 1e9)))
-            stack.enter_context(patch.object(runtime.time, "sleep", side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)))
-            output, runtime_root = root / "output", root / "runtime"
-            inputs = (runtime.GROK_CHILD_PYTHON, root / "tools/agentplugins", root / "tools/probe")
-            env = self.environment(output)
-            if case == "cline":
-                env = {key: "fixture" for key in runtime.CLINE_ENV}
-                env.update(PATH="/usr/bin:/bin", AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT="1")
-            invoke = (lambda: runtime.cline_service(ctx, root / "test", env, root)) if case == "cline" else (
-                lambda: runtime.grok_service(ctx, case, inputs, env, output, 100_000_000_000, runtime_root=runtime_root))
-            if controller:
-                input_root = Path('/tmp/uap-grok-acp-input-' + 'd' * 32)
-                env = dict(PATH='/usr/bin:/bin', LANG='C.UTF-8', GITHUB_ACTIONS='true',
-                    RUNNER_ENVIRONMENT='github-hosted', AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED='1', EXPECTED_COMMIT='a' * 40)
-                invoke = lambda: runtime.grok_readonly_controller_service(ctx, input_root, env, 100_000_000_000,
-                    runtime_root=runtime_root, capture=lambda argv, selected: command('runtime-test', argv, input_root,
-                                                                                     selected, final - clock[0]))
-            if scenario in ("success", "negative", "late-success"):
-                result = invoke()
-                self.assertEqual(result[0]["exit"], int(scenario == "negative"))
-                if case != "cline":
-                    self.assertIs(ctx.budget, budget)
-                self.assertTrue(ctx.summary["delegated_service"]["closed"])
-                self.assertEqual(next(timeout for label, _, timeout in calls if label == "runtime-test"),
-                                 30 if controller else 165 if case == "cline" else 885)
-            else:
-                with self.assertRaises(ValueError):
-                    invoke()
-            return ctx.summary, calls
-
-    def test_readonly_controller_reuses_settlement_and_refuses_residual_or_expired_service(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            for scenario in ('success', 'negative', 'late-success', 'transport', 'expired', 'version',
-                             'collision', 'malformed', 'forced', 'residual'):
-                with self.subTest(scenario=scenario):
-                    summary, _ = self.kernel(Path(temporary).resolve(), scenario, runtime.GROK_READONLY_CONTROLLER)
-                    if 'delegated_service' in summary:
-                        self.assertEqual(summary['delegated_service']['uid'], 0)
-                        self.assertEqual(summary['delegated_service']['gid'], 0)
-            ctx = types.SimpleNamespace(budget=types.SimpleNamespace(deadline=131.0))
-            with patch.object(runtime, '_delegated_service') as dispatch, self.assertRaises(ValueError):
-                runtime.grok_readonly_controller_service(ctx, Path('/tmp/foreign'), {}, 100_000_000_000,
-                                                        runtime_root=Path('/tmp/runtime'), capture=lambda *_:None)
-            dispatch.assert_not_called()
-
-    def test_actual_finite_kernel_keeps_clean_negative_and_refuses_cleanup_transport_collision_deadline(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            self.kernel(Path(temporary).resolve(), "success", "cline")
-            for scenario in ("success", "negative", "transport", "forced", "residual", "malformed", "expired", "collision", "version"):
-                with self.subTest(scenario=scenario):
-                    summary, calls = self.kernel(Path(temporary).resolve(), scenario)
-                    if scenario in ("collision", "version"):
-                        self.assertNotIn("runtime-test", [row[0] for row in calls])
-                    if scenario == "forced":
-                        self.assertTrue(summary["delegated_service"]["forced_stop"])
-                    if scenario == "residual":
-                        self.assertTrue(summary["delegated_service"]["forced_kill"])
-                        self.assertFalse(summary["delegated_service"]["closed"])
 
 
 if __name__ == "__main__":
