@@ -167,10 +167,10 @@
     "Error": "grok plugin \"demo\" remains registered",
     "Outcome": {
       "Activation": "not_required",
-      "ArtifactRemovalAllowed": true,
+      "ArtifactRemovalAllowed": false,
       "ExternalRemovalComplete": false,
       "LocalActions": null,
-      "NativeEffect": "",
+      "NativeEffect": "uncertain",
       "SettledPartialRemoval": false,
       "UserActions": null
     }
