@@ -149,7 +149,14 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                         "missing", "deadline", "invalid-state"})
                     if mutation in ("stage-data", "stage-root", "stage-manifest"):
                         self.assertEqual(result["refusal_phase"], "staging-binding")
-                    elif mutation in ("owner-state", "owner-digest", "owner-id"):
+                        self.assertEqual(result["refusal_detail"], {
+                            "stage-data": "staging-data-parent",
+                            "stage-root": "staging-root",
+                            "stage-manifest": "staging-manifest",
+                        }[mutation])
+                    elif result["refusal_phase"] == "staging-binding":
+                        self.assertEqual(result["refusal_detail"], "unclassified")
+                    if mutation in ("owner-state", "owner-digest", "owner-id"):
                         self.assertEqual(result["refusal_phase"], "owned-data")
                     elif mutation == "extra-log":
                         self.assertEqual(result["refusal_phase"], "npm-cache")

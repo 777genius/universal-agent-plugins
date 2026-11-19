@@ -107,19 +107,23 @@ def collect(case):
     def staged_backend(path, skills, data):
         manifest = json.loads(read(path / ".claude-plugin/plugin.json", 16384), object_pairs_hook=_unique)
         servers = json.loads(read(path / ".mcp.json", 65536), object_pairs_hook=_unique)
-        if (not isinstance(manifest, dict) or manifest.get("name") != "firebase"
-                or not isinstance(servers, dict) or len(servers) != 1):
-            raise ValueError("staged projection")
+        if not isinstance(manifest, dict) or manifest.get("name") != "firebase":
+            raise ValueError("staging-manifest")
+        if not isinstance(servers, dict) or len(servers) != 1:
+            raise ValueError("staging-server")
         server = next(iter(servers.values()))
         env = server.get("env") if isinstance(server, dict) else None
         if not isinstance(env, dict) or not isinstance(env.get("PLUGIN_DATA"), str):
-            raise ValueError("staged data binding")
+            raise ValueError("staging-env")
         backend = Path(env["PLUGIN_DATA"])
-        if (not backend.is_absolute() or backend.parent != data
-                or not re.fullmatch(r"firebase-[a-f0-9]{12}", backend.name)
-                or env["PLUGIN_DATA"] != str(data / backend.name)
-                or env.get("PLUGIN_ROOT") != str(skills / backend.name / ".agentplugins-runtime")):
-            raise ValueError("staged source binding")
+        if not backend.is_absolute() or backend.parent != data:
+            raise ValueError("staging-data-parent")
+        if not re.fullmatch(r"firebase-[a-f0-9]{12}", backend.name):
+            raise ValueError("staging-data-identity")
+        if env["PLUGIN_DATA"] != str(data / backend.name):
+            raise ValueError("staging-data-canonical")
+        if env.get("PLUGIN_ROOT") != str(skills / backend.name / ".agentplugins-runtime"):
+            raise ValueError("staging-root")
         directory(backend)
         return backend.name
 
@@ -260,6 +264,15 @@ def collect(case):
         # Fixed identifiers only: no exception strings, paths or npm log content.
         # These are refusal locations, never product attribution or qualification.
         refused["refusal_phase"] = refusal_phase
+        # Only enumerated, source-owned categories; never include exception text,
+        # captured paths, native config values or npm log contents.
+        if refusal_phase == "staging-binding":
+            known = {"staging-manifest", "staging-server", "staging-env",
+                     "staging-data-parent", "staging-data-identity",
+                     "staging-data-canonical", "staging-root"}
+            refused["refusal_detail"] = (
+                str(error) if isinstance(error, ValueError) and str(error) in known
+                else "unclassified")
         refused["refusal_class"] = (
             "missing" if isinstance(error, FileNotFoundError)
             else "deadline" if isinstance(error, TimeoutError) or (
