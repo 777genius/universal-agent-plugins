@@ -43,18 +43,23 @@ func TestSharedGroupHumanReviewIdentifiesLogicalTargets(t *testing.T) {
 	}
 }
 
+// A collision names the failed target precisely and leaves the other selected
+// target installed.
 func TestGroupCollisionErrorIncludesSelectedTargetContext(t *testing.T) {
 	f := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientKiro)})
 	f.app.Lifecycle.NativeObserver = selectiveNativeObserver{foreign: domain.ClientCursor}
 	_, _, err := f.execute(false, "add", writeCLIPlugin(t), "--target", "cursor,kiro")
-	if err == nil || !strings.Contains(err.Error(), "selected targets: [cursor kiro]") ||
-		!strings.Contains(err.Error(), "target cursor identity preflight") ||
-		!strings.Contains(err.Error(), "unmanaged") || !strings.Contains(err.Error(), "no target was changed") {
+	if err == nil || !strings.Contains(err.Error(), "cursor: target cursor identity preflight") || !strings.Contains(err.Error(), "unmanaged") {
 		t.Fatalf("collision error: %v", err)
 	}
 	state, loadErr := f.store.Load()
-	if loadErr != nil || len(state.Installations) != 0 {
-		t.Fatalf("collision mutated state: %+v, %v", state, loadErr)
+	if loadErr != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+		t.Fatalf("collision state: %+v, %v", state, loadErr)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.ClientID != string(domain.ClientKiro) {
+			t.Fatalf("collision installed %s", binding.ClientID)
+		}
 	}
 }
 

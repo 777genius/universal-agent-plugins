@@ -51,7 +51,7 @@ func failureKindOf(err error) failureKind {
 		return failureTargetUnsupported
 	case errors.Is(err, installer.ErrUpdateRequired):
 		return failureUpdateRequired
-	case errors.Is(err, installer.ErrPlanChanged), errors.Is(err, ErrSkillsPlanStale), errors.Is(err, environment.ErrSourceChange):
+	case errors.Is(err, installer.ErrPlanChanged), errors.Is(err, ErrSkillsPlanStale), errors.Is(err, environment.ErrSourceChange), hostChangedSinceReview(err):
 		return failureEnvironmentChange
 	case errors.Is(err, context.DeadlineExceeded):
 		return failureTimeout

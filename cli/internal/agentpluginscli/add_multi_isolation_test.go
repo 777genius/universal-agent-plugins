@@ -37,6 +37,12 @@ func permissionDenied(client domain.ClientID) error {
 	return fmt.Errorf("create client target root: %w", &fs.PathError{Op: "mkdir", Path: "/project/." + string(client) + "/skills", Err: syscall.EACCES})
 }
 
+// unavailable is a cause with a plain explanation; its path must stay out of
+// the report.
+func unavailable(client domain.ClientID) error {
+	return fmt.Errorf("probe /project/.%s: %w", client, installer.ErrTargetFactsUnavailable)
+}
+
 var isolationClients = []domain.ClientID{domain.ClientCodex, domain.ClientCursor, domain.ClientKiro}
 
 func newIsolationFixture(t *testing.T, fail map[domain.ClientID]error) cliFixture {
@@ -100,7 +106,7 @@ func TestGroupAddInstallsPeersWhenOneAgentCannotBePrepared(t *testing.T) {
 		t.Run(string(failing), func(t *testing.T) {
 			t.Parallel()
 			plugin := writeCLIPlugin(t)
-			fixture := newIsolationFixture(t, map[domain.ClientID]error{failing: permissionDenied(failing)})
+			fixture := newIsolationFixture(t, map[domain.ClientID]error{failing: unavailable(failing)})
 			stdout, _, err := fixture.execute(false, "add", plugin, "--target", all)
 			if err == nil || err.Error() != "1 of 3 client installations failed; see results above" {
 				t.Fatalf("partial error = %v\n%s", err, stdout)
@@ -133,6 +139,19 @@ func TestGroupAddInstallsPeersWhenOneAgentCannotBePrepared(t *testing.T) {
 				t.Fatalf("retry did not complete the selection:\n got %v\nwant %v", got, want)
 			}
 		})
+	}
+}
+
+// A cause without a plain explanation is shown precisely in the row and in
+// the command's error, as the whole-group refusal showed it before.
+func TestGroupAddNamesUnexplainedCausesPrecisely(t *testing.T) {
+	t.Parallel()
+	cause := errors.New("stage cursor: the fixture broke in an unusual way")
+	fixture := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientCursor: cause})
+	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
+	want := "1 of 3 client installations failed; see results above; cursor: " + cause.Error()
+	if err == nil || err.Error() != want || !strings.Contains(stdout, "  "+cause.Error()+"\n") {
+		t.Fatalf("error = %v\nwant %s\n%s", err, want, stdout)
 	}
 }
 
@@ -256,7 +275,7 @@ func TestGroupAddPartialJSONUsesExistingContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stdout, _, err := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientCursor: permissionDenied(domain.ClientCursor)}).
+	stdout, _, err := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientCursor: unavailable(domain.ClientCursor)}).
 		execute(false, "add", plugin, "--target", "codex,cursor,kiro", "--format", "json")
 	if err == nil {
 		t.Fatal("partial JSON run succeeded")

@@ -10,7 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func TestOpenCodeNamespaceCLIGroupRefusesBeforeMutation(t *testing.T) {
+func TestOpenCodeNamespaceCLIGroupRefusesOnlyOpenCode(t *testing.T) {
 	openCode := fixtureClient(t, domain.ClientOpenCode)
 	// This direct usecase fixture bypasses Engine.Prepare and supplies explicit
 	// qualified authority; the namespace guard still inspects the actual config.
@@ -34,9 +34,15 @@ func TestOpenCodeNamespaceCLIGroupRefusesBeforeMutation(t *testing.T) {
 	if strings.Contains(stdout, openCodeNamespaceNotice) {
 		t.Fatalf("failed preflight claimed namespace success: %s", stdout)
 	}
+	// Only OpenCode is refused; Cursor installs as if selected alone.
 	state, loadErr := fixture.store.Load()
-	if loadErr != nil || len(state.Installations) != 0 {
-		t.Fatalf("failed CLI preflight changed state: %+v, %v", state, loadErr)
+	if loadErr != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+		t.Fatalf("failed OpenCode preflight state: %+v, %v", state, loadErr)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.ClientID != string(domain.ClientCursor) {
+			t.Fatalf("refused OpenCode target was bound: %+v", binding)
+		}
 	}
 	if body, readErr := os.ReadFile(config); readErr != nil || string(body) != string(foreign) {
 		t.Fatalf("failed CLI preflight changed OpenCode config: %s, %v", body, readErr)

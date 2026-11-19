@@ -983,7 +983,8 @@ func TestThirdTargetNativeCollisionLeavesOnlyThatTargetUnchanged(t *testing.T) {
 	})
 	fixture.app.Lifecycle.NativeObserver = selectiveNativeObserver{foreign: domain.ClientKiro}
 	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
-	if err == nil || err.Error() != "1 of 3 client installations failed; see results above" || !strings.Contains(stdout, "Retry: run the same command with --target kiro") {
+	if err == nil || !strings.HasPrefix(err.Error(), "1 of 3 client installations failed; see results above; kiro: target kiro identity preflight") ||
+		!strings.Contains(err.Error(), "unmanaged") || !strings.Contains(stdout, "Retry: run the same command with --target kiro") {
 		t.Fatalf("third-target collision error = %v\n%s", err, stdout)
 	}
 	state, loadErr := fixture.store.Load()

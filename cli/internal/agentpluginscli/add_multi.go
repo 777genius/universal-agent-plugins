@@ -349,6 +349,9 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err := renderAddMultiResult(cmd, opts, combined, loaded.envelope); err != nil {
 		return err
 	}
+	if err := isolation.excludedError(combined); err != nil {
+		return err
+	}
 	if combined.Failed > 0 {
 		return batchActivationAggregateError(combined)
 	}

@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/hostprep"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
@@ -138,6 +140,12 @@ func failureStaysWithTarget(err error) bool {
 	return true
 }
 
+// hostChangedSinceReview reports that an agent's host no longer matches the
+// snapshot reviewed before consent, so the reviewed plan no longer holds.
+func hostChangedSinceReview(err error) bool {
+	return errors.Is(err, clientdetect.ErrProbeTargetChanged) || errors.Is(err, hostprep.ErrPlanChanged)
+}
+
 // withExcluded returns the rows of every selected agent in selection order:
 // rows[position] belongs to the active agent at that position, and each agent
 // left out gets its failure row.
@@ -177,7 +185,12 @@ func (isolation *groupIsolation) excludedRow(index int, dryRun bool, sourceArg s
 		failure.Kind = failureTargetUnsupported
 		failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
 	}
-	targetFailure := &usecase.GroupTargetFailure{Stage: "preparation", Message: failure.Summary + " " + failure.Next}
+	message := failure.Summary + " " + failure.Next
+	if failure.Kind == failureUnknown {
+		// No plain explanation exists for this cause; show it precisely.
+		message = failure.Detail
+	}
+	targetFailure := &usecase.GroupTargetFailure{Stage: "preparation", Message: message}
 	result.GroupPhase, result.Failure = usecase.GroupTargetExternalFailed, targetFailure
 	output := newAddResultData(isolation.inputs[index].Envelope, result, dryRun)
 	output.NextAction = failure.Next
@@ -209,15 +222,21 @@ func (isolation *groupIsolation) excludedNotice() []string {
 }
 
 // excludedError is the result of a dry run or an apply in which some agents
-// were left out and the others succeeded.
+// were left out. Causes without a plain explanation are named precisely.
 func (isolation *groupIsolation) excludedError(combined addMultiResult) error {
 	if len(isolation.excluded) == 0 {
 		return nil
 	}
+	summary := batchActivationAggregateError(combined).Error()
 	if combined.DryRun {
-		return fmt.Errorf("%d of %d selected clients cannot be installed; no target was changed (dry run); see results above", len(isolation.excluded), len(isolation.selected))
+		summary = fmt.Sprintf("%d of %d selected clients cannot be installed; no target was changed (dry run); see results above", len(isolation.excluded), len(isolation.selected))
 	}
-	return batchActivationAggregateError(combined)
+	for _, row := range combined.Targets {
+		if row.failure != nil && row.failure.Kind == failureUnknown {
+			summary += "; " + row.Target + ": " + row.failure.Detail
+		}
+	}
+	return errors.New(summary)
 }
 
 // boardResults aligns the final rows with the clients shown on the progress
