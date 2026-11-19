@@ -73,6 +73,20 @@ Changes after `v1.2.4` land here.
 The following `agentplugins` changes are breaking. They ship in the next minor
 0.x release without a compatibility layer; each item says how to move.
 
+- **One agent that cannot be prepared no longer stops the others.** In
+  `agentplugins add <plugin> --target a,b,c`, an agent whose own preflight or
+  package preparation fails for a cause that concerns only it (permission
+  denied, read-only location, agent program missing, agent facts unavailable,
+  unsupported agent, something UAP does not own at its install location) is
+  left out; the other agents install exactly as if only they had been
+  selected. Every other cause, unclassified ones included, still stops every
+  agent with "no selected client was changed", as does a selection with VS
+  Code. How to move: automation must treat a non-zero exit with
+  `status: "external_partial_failure"` as "some agents installed" and read the
+  per-target rows. A failed row with `error.stage: "preparation"` means that
+  agent was not prepared and nothing was applied for it; `external_failed` now
+  also has this meaning. Retry it with the same command and `--target <agent>`;
+  the retry is pinned to the package already installed for its peers.
 - **`io.github.777genius.agentplugins/commands/` is now read.** Every entry in
   it except dotfiles must be a valid command; an invalid one is reported and
   not delivered. Move unrelated files elsewhere, and add the CI check from
@@ -133,15 +147,6 @@ The following `agentplugins` changes are breaking. They ship in the next minor
 
 ### Fixed
 
-- `agentplugins add <plugin> --target a,b,c` no longer refuses every agent when
-  one agent fails its own preflight or package preparation (for example a
-  read-only `<project>/.claude`). The other agents install as if selected
-  alone, the failed agent is reported with its cause and a retry step, and the
-  command exits non-zero with status `external_partial_failure`. Automation
-  that relied on "no selected client was changed" for such failures should
-  check the per-target rows. Group-wide causes (recovery, security block,
-  unconfirmed process cleanup, plan, source or host changes, timeout,
-  cancellation) and selections with VS Code still stop every agent.
 - A pending ChatGPT registration no longer cancels a multi-client Context7
   installation. Other selected clients are installed and ChatGPT is reported
   as a separate setup step with a ChatGPT-only resume command.

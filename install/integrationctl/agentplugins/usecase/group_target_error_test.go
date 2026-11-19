@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -130,5 +131,78 @@ func TestGroupAttributesOnlyTargetLocalFailures(t *testing.T) {
 				t.Fatalf("refused group changed state: %+v %v", state.Installations, loadErr)
 			}
 		})
+	}
+}
+
+// samePathPlanner gives every client the active path of the first plan, so two
+// targets collide on one physical location.
+type samePathPlanner struct {
+	ports.DeliveryPlanner
+	first *domain.DeliveryPlan
+}
+
+func (planner samePathPlanner) Plan(ctx context.Context, request domain.PlanRequest) (domain.DeliveryPlan, error) {
+	plan, err := planner.DeliveryPlanner.Plan(ctx, request)
+	if err != nil {
+		return plan, err
+	}
+	if planner.first.ActivePath == "" {
+		*planner.first = plan
+		return plan, nil
+	}
+	plan.ActivePath, plan.TargetRoot = planner.first.ActivePath, planner.first.TargetRoot
+	return plan, nil
+}
+
+// A collision between two selected targets concerns both of them and is never
+// attributed to one.
+func TestGroupCollisionBetweenTargetsIsNotAttributed(t *testing.T) {
+	t.Parallel()
+	service, store, cursor := serviceFixture(t)
+	service.Planner = samePathPlanner{DeliveryPlanner: service.Planner, first: &domain.DeliveryPlan{}}
+	kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+	result, err := service.AddGroup(context.Background(), GroupInput{
+		Targets: []AddInput{addInput(t, cursor, "https://example.com/collision"), addInput(t, kiro, "https://example.com/collision")}, OperationGroupID: "collision", Confirmed: true,
+	})
+	var attributed *GroupTargetError
+	if err == nil || !strings.Contains(err.Error(), "collide") || errors.As(err, &attributed) || result.Mutated {
+		t.Fatalf("collision = %v (attributed %v)", err, attributed)
+	}
+	if state, loadErr := store.Load(); loadErr != nil || len(state.Installations) != 0 {
+		t.Fatalf("collision changed state: %+v %v", state.Installations, loadErr)
+	}
+}
+
+// An unresolved native activation recorded for an existing binding is a state
+// problem of the installation, not of one target, and is never attributed.
+func TestGroupExistingBindingProblemIsNotAttributed(t *testing.T) {
+	t.Parallel()
+	service, store, cursor := serviceFixture(t)
+	kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+	seeded, err := service.AddGroup(context.Background(), GroupInput{
+		Targets: []AddInput{addInput(t, cursor, "https://example.com/binding"), addInput(t, kiro, "https://example.com/binding")}, OperationGroupID: "binding-seed", Confirmed: true,
+	})
+	if err != nil {
+		t.Fatalf("seed = %v", err)
+	}
+	state, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, binding := range state.Installations[0].Clients {
+		if binding.ClientID == string(domain.ClientKiro) {
+			binding.NativeActivationAttempt = "attempt-1"
+			state.Installations[0].Clients[key] = binding
+		}
+	}
+	if err := store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	first, second := addInput(t, cursor, "https://example.com/binding"), addInput(t, kiro, "https://example.com/binding")
+	first.InstallationID, second.InstallationID = seeded.InstallationID, seeded.InstallationID
+	_, err = service.AddGroup(context.Background(), GroupInput{Targets: []AddInput{first, second}, OperationGroupID: "binding", Confirmed: true})
+	var attributed *GroupTargetError
+	if err == nil || !strings.Contains(err.Error(), "native activation attempt") || errors.As(err, &attributed) {
+		t.Fatalf("binding problem = %v (attributed %v)", err, attributed)
 	}
 }

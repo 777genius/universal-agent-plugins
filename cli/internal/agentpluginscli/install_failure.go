@@ -41,17 +41,17 @@ func failureKindOf(err error) failureKind {
 		return failureRecovery
 	case errors.Is(err, installer.ErrAssessmentRejected):
 		return failureSecurityBlocked
-	case errors.Is(err, installer.ErrForeignSkillDestination), errors.Is(err, nativeconfig.ErrCollision), errors.Is(err, nativeconfig.ErrNotOwned):
+	case errors.Is(err, installer.ErrForeignSkillDestination), errors.Is(err, nativeconfig.ErrCollision), errors.Is(err, nativeconfig.ErrNotOwned), errors.Is(err, domain.ErrForeignNativeIdentity):
 		return failureForeignTarget
-	case errors.Is(err, installer.ErrManagedSkillChanged):
+	case errors.Is(err, installer.ErrManagedSkillChanged), errors.Is(err, domain.ErrManagedPackageChanged):
 		return failureManagedChanged
 	case errors.Is(err, installer.ErrTargetFactsUnavailable), errors.Is(err, installer.ErrCompatibilityUnavailable):
 		return failureTargetUnavailable
-	case errors.Is(err, installer.ErrUnsupported), errors.Is(err, installer.ErrIncomplete):
+	case errors.Is(err, installer.ErrUnsupported), errors.Is(err, installer.ErrIncomplete), errors.Is(err, domain.ErrTargetUnsupported):
 		return failureTargetUnsupported
 	case errors.Is(err, installer.ErrUpdateRequired):
 		return failureUpdateRequired
-	case errors.Is(err, installer.ErrPlanChanged), errors.Is(err, ErrSkillsPlanStale), errors.Is(err, environment.ErrSourceChange), hostChangedSinceReview(err):
+	case errors.Is(err, installer.ErrPlanChanged), errors.Is(err, ErrSkillsPlanStale), errors.Is(err, environment.ErrSourceChange):
 		return failureEnvironmentChange
 	case errors.Is(err, context.DeadlineExceeded):
 		return failureTimeout

@@ -983,8 +983,9 @@ func TestThirdTargetNativeCollisionLeavesOnlyThatTargetUnchanged(t *testing.T) {
 	})
 	fixture.app.Lifecycle.NativeObserver = selectiveNativeObserver{foreign: domain.ClientKiro}
 	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
-	if err == nil || !strings.HasPrefix(err.Error(), "1 of 3 client installations failed; see results above; kiro: target kiro identity preflight") ||
-		!strings.Contains(err.Error(), "unmanaged") || !strings.Contains(stdout, "Retry: run the same command with --target kiro") {
+	// The person must move the foreign object first, so no plain retry is offered.
+	if err == nil || err.Error() != "1 of 3 client installations failed; see results above" ||
+		!strings.Contains(stdout, "Something UAP does not own already exists at the install location.") || strings.Contains(stdout, "Retry:") {
 		t.Fatalf("third-target collision error = %v\n%s", err, stdout)
 	}
 	state, loadErr := fixture.store.Load()
@@ -994,7 +995,7 @@ func TestThirdTargetNativeCollisionLeavesOnlyThatTargetUnchanged(t *testing.T) {
 	if len(state.Installations) != 1 {
 		t.Fatalf("peers were not installed: %+v", state)
 	}
-	var installed []string
+	installed := make([]string, 0, len(state.Installations[0].Clients))
 	for _, binding := range state.Installations[0].Clients {
 		installed = append(installed, binding.ClientID)
 	}

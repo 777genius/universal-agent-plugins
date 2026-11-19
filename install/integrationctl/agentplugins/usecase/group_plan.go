@@ -86,7 +86,7 @@ func (session *groupSession) planAndPreflightGroupTarget(targetIndex int, target
 		session.result.Targets[targetIndex].Plan = plan
 	}
 	if plan.Status == domain.PlanUnsupported {
-		return domain.DeliveryPlan{}, fmt.Errorf("target %s is unsupported; group preflight caused no mutation", target.Client.ClientID)
+		return domain.DeliveryPlan{}, &domain.TypedError{Text: fmt.Sprintf("target %s is unsupported; group preflight caused no mutation", target.Client.ClientID), Kind: domain.ErrTargetUnsupported}
 	}
 	if err := session.service.preflightActivation(*target, plan); err != nil {
 		return domain.DeliveryPlan{}, err

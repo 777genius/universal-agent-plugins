@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -78,7 +81,7 @@ func installedProjection(t *testing.T, fixture cliFixture) []string {
 			}
 			receipts := make([]string, 0, len(client.Receipts))
 			for _, receipt := range client.Receipts {
-				receipts = append(receipts, string(receipt.MutationType)+":"+string(receipt.Phase))
+				receipts = append(receipts, receipt.MutationType+":"+receipt.Phase)
 			}
 			out = append(out, fmt.Sprintf("client %s %s %s %s %s %s %v %v %v", client.ClientID, client.Scope, client.Materialization,
 				client.Activation, client.Authentication, client.Verification, client.PackageRevision != nil && client.PackageRevision.TreeDigest == installation.Source.TreeDigest, kinds, receipts))
@@ -144,16 +147,18 @@ func TestGroupAddInstallsPeersWhenOneAgentCannotBePrepared(t *testing.T) {
 	}
 }
 
-// A cause without a plain explanation is shown precisely in the row and in
-// the command's error, as the whole-group refusal showed it before.
-func TestGroupAddNamesUnexplainedCausesPrecisely(t *testing.T) {
+// An unclassified cause stops every agent, exactly as before.
+func TestGroupAddUnclassifiedCauseStopsEveryAgent(t *testing.T) {
 	t.Parallel()
 	cause := errors.New("stage cursor: the fixture broke in an unusual way")
 	fixture := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientCursor: cause})
-	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
-	want := "1 of 3 client installations failed; see results above; cursor: " + cause.Error()
-	if err == nil || err.Error() != want || !strings.Contains(stdout, "  "+cause.Error()+"\n") {
-		t.Fatalf("error = %v\nwant %s\n%s", err, want, stdout)
+	_, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
+	want := fmt.Sprintf("group preparation failed before client changes (selected targets: [codex cursor kiro]): %v; no selected client was changed", cause)
+	if err == nil || err.Error() != want {
+		t.Fatalf("error = %v\nwant %s", err, want)
+	}
+	if got := installedProjection(t, fixture); len(got) != 0 {
+		t.Fatalf("unclassified cause changed state: %v", got)
 	}
 }
 
@@ -161,10 +166,11 @@ func TestGroupAddNamesUnexplainedCausesPrecisely(t *testing.T) {
 // the whole selection always reported: the first agent's cause.
 func TestGroupAddEveryAgentFailingKeepsTheWholeSelectionResult(t *testing.T) {
 	t.Parallel()
-	// Unclassified causes keep this test about isolation, not about wording.
+	// Each agent fails for its own target-local cause, so each is left out in
+	// turn until none remains.
 	fail := map[domain.ClientID]error{}
 	for _, client := range isolationClients {
-		fail[client] = fmt.Errorf("stage %s: broken fixture", client)
+		fail[client] = unavailable(client)
 	}
 	fixture := newIsolationFixture(t, fail)
 	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
@@ -204,37 +210,72 @@ func TestGroupAddGroupWideCausesStillStopEveryAgent(t *testing.T) {
 	}
 }
 
+// Only causes that concern one agent leave the others to install. Everything
+// else, unclassified causes and mixtures with a group-wide cause included,
+// stops every agent.
 func TestFailureStaysWithTargetClassifiesEveryCause(t *testing.T) {
 	t.Parallel()
 	cases := map[string]struct {
 		err   error
 		local bool
 	}{
-		"permission":         {permissionDenied(domain.ClientClaude), true},
-		"foreign":            {fmt.Errorf("x: %w", nativeconfig.ErrCollision), true},
-		"target unavailable": {fmt.Errorf("x: %w", installer.ErrTargetFactsUnavailable), true},
-		"unsupported":        {fmt.Errorf("x: %w", installer.ErrIncomplete), true},
-		"unclassified":       {errors.New("something odd"), true},
-		"cleanup":            {fmt.Errorf("x: %w", &domain.UnclosedClientProbe{}), false},
-		"recovery":           {fmt.Errorf("x: %w", installer.ErrRecoveryRequired), false},
-		"security":           {fmt.Errorf("x: %w", installer.ErrAssessmentRejected), false},
-		"managed changed":    {fmt.Errorf("x: %w", installer.ErrManagedSkillChanged), false},
-		"update required":    {fmt.Errorf("x: %w", installer.ErrUpdateRequired), false},
-		"plan changed":       {fmt.Errorf("x: %w", installer.ErrPlanChanged), false},
-		"source changed":     {fmt.Errorf("x: %w", environment.ErrSourceChange), false},
-		"timeout":            {fmt.Errorf("x: %w", context.DeadlineExceeded), false},
-		"canceled":           {fmt.Errorf("x: %w", context.Canceled), false},
+		"foreign":                         {fmt.Errorf("x: %w", nativeconfig.ErrCollision), true},
+		"foreign identity":                {&domain.TypedError{Text: "unmanaged", Kind: domain.ErrForeignNativeIdentity}, true},
+		"target unavailable":              {fmt.Errorf("x: %w", installer.ErrTargetFactsUnavailable), true},
+		"unsupported":                     {fmt.Errorf("x: %w", installer.ErrIncomplete), true},
+		"unsupported target":              {&domain.TypedError{Text: "unsupported", Kind: domain.ErrTargetUnsupported}, true},
+		"unclassified":                    {errors.New("something odd"), false},
+		"wrapped unclassified":            {fmt.Errorf("stage: %w", errors.New("something odd")), false},
+		"edited copy":                     {&domain.TypedError{Text: "managed package was changed", Kind: domain.ErrManagedPackageChanged, Cause: unavailable(domain.ClientCodex)}, false},
+		"verification":                    {fmt.Errorf("x: %w", &ports.VerificationError{Kind: ports.VerificationDigestMismatch, Err: installer.ErrTargetFactsUnavailable}), false},
+		"disk full":                       {fmt.Errorf("write: %w", &fs.PathError{Op: "write", Path: "/p", Err: syscall.ENOSPC}), false},
+		"network":                         {fmt.Errorf("fetch: %w", &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("no route")}), false},
+		"join collision and plan change":  {errors.Join(nativeconfig.ErrCollision, installer.ErrPlanChanged), false},
+		"join unavailable and update":     {errors.Join(installer.ErrTargetFactsUnavailable, installer.ErrUpdateRequired), false},
+		"two-%w incomplete and source":    {fmt.Errorf("%w; %w", installer.ErrIncomplete, environment.ErrSourceChange), false},
+		"join collision and cleanup":      {errors.Join(nativeconfig.ErrCollision, &domain.UnclosedClientProbe{Err: installer.ErrTargetFactsUnavailable}), false},
+		"join collision and unclassified": {errors.Join(nativeconfig.ErrCollision, errors.New("something odd")), false},
+		"join two target-local causes":    {errors.Join(nativeconfig.ErrCollision, installer.ErrTargetFactsUnavailable), true},
+		"attributed target-local":         {&usecase.GroupTargetError{Clients: []domain.ClientID{domain.ClientKiro}, Err: unavailable(domain.ClientKiro)}, true},
+		"cleanup":                         {fmt.Errorf("x: %w", &domain.UnclosedClientProbe{}), false},
+		"recovery":                        {fmt.Errorf("x: %w", installer.ErrRecoveryRequired), false},
+		"security":                        {fmt.Errorf("x: %w", installer.ErrAssessmentRejected), false},
+		"managed changed":                 {fmt.Errorf("x: %w", installer.ErrManagedSkillChanged), false},
+		"update required":                 {fmt.Errorf("x: %w", installer.ErrUpdateRequired), false},
+		"plan changed":                    {fmt.Errorf("x: %w", installer.ErrPlanChanged), false},
+		"source changed":                  {fmt.Errorf("x: %w", environment.ErrSourceChange), false},
+		"timeout":                         {fmt.Errorf("x: %w", context.DeadlineExceeded), false},
+		"canceled":                        {fmt.Errorf("x: %w", context.Canceled), false},
 	}
 	for name, tc := range cases {
 		if got := failureStaysWithTarget(tc.err); got != tc.local {
 			t.Errorf("%s: failureStaysWithTarget = %v, want %v", name, got, tc.local)
 		}
 	}
+	// Machine problems a person fixes for one agent stay with it once the
+	// classifier names them; until then they are unclassified and group-wide.
+	for name, tc := range map[string]struct {
+		err  error
+		kind failureKind
+	}{
+		"permission":    {permissionDenied(domain.ClientClaude), "PERMISSION_DENIED"},
+		"read-only":     {fmt.Errorf("x: %w", &fs.PathError{Op: "mkdir", Path: "/p", Err: syscall.EROFS}), "READ_ONLY_LOCATION"},
+		"agent missing": {fmt.Errorf("x: %w", &exec.Error{Name: "claude", Err: exec.ErrNotFound}), "AGENT_PROGRAM_MISSING"},
+	} {
+		if got, want := failureStaysWithTarget(tc.err), failureKindOf(tc.err) == tc.kind; got != want {
+			t.Errorf("%s: failureStaysWithTarget = %v, want %v (kind %s)", name, got, want, failureKindOf(tc.err))
+		}
+	}
+	for _, kind := range []failureKind{"DISK_FULL", "NETWORK_UNAVAILABLE", failureUnknown, failureSkipped, failureRecovery, failureProcessCleanup} {
+		if targetLocalKinds[kind] {
+			t.Errorf("%s must stop every agent", kind)
+		}
+	}
 }
 
 func TestTargetLocalGroupFailureRequiresAnUnchangedAttributedGroup(t *testing.T) {
 	t.Parallel()
-	attributed := &usecase.GroupTargetError{Clients: []domain.ClientID{domain.ClientKiro}, Err: permissionDenied(domain.ClientKiro)}
+	attributed := &usecase.GroupTargetError{Clients: []domain.ClientID{domain.ClientKiro}, Err: unavailable(domain.ClientKiro)}
 	canceled, cancel := context.WithCancel(context.Background())
 	cancel()
 	cases := map[string]struct {
@@ -247,7 +288,7 @@ func TestTargetLocalGroupFailureRequiresAnUnchangedAttributedGroup(t *testing.T)
 		"preflight":        {context.Background(), usecase.GroupResult{Phase: usecase.GroupPhasePlanned}, fmt.Errorf("wrapped: %w", attributed), true},
 		"mutated":          {context.Background(), usecase.GroupResult{Phase: usecase.GroupPhasePreparationFailed, Mutated: true}, attributed, false},
 		"after commit":     {context.Background(), usecase.GroupResult{Phase: usecase.GroupPhaseManagedCommitted}, attributed, false},
-		"not attributed":   {context.Background(), usecase.GroupResult{Phase: usecase.GroupPhasePreparationFailed}, permissionDenied(domain.ClientKiro), false},
+		"not attributed":   {context.Background(), usecase.GroupResult{Phase: usecase.GroupPhasePreparationFailed}, unavailable(domain.ClientKiro), false},
 		"canceled context": {canceled, usecase.GroupResult{Phase: usecase.GroupPhasePreparationFailed}, attributed, false},
 		"group-wide cause": {context.Background(), usecase.GroupResult{Phase: usecase.GroupPhasePlanned}, &usecase.GroupTargetError{Clients: []domain.ClientID{domain.ClientKiro}, Err: installer.ErrRecoveryRequired}, false},
 		"success":          {context.Background(), usecase.GroupResult{Phase: usecase.GroupPhaseCompleted}, nil, false},
@@ -296,7 +337,8 @@ func TestGroupAddPartialJSONUsesExistingContract(t *testing.T) {
 		t.Fatalf("partial summary = %v %v %v", data["status"], data["failed"], data["succeeded"])
 	}
 	allowed := map[string]bool{"target": true, "status": true, "next_action": true, "error": true, "retry_command": true, "output": true}
-	var order, okOrder []string
+	targets := data["targets"].([]any)
+	order, okOrder := make([]string, 0, len(targets)), make([]string, 0, len(targets))
 	for _, raw := range okData["targets"].([]any) {
 		okOrder = append(okOrder, raw.(map[string]any)["target"].(string))
 	}
@@ -383,7 +425,7 @@ func TestExcludedDryRunCauseIsTerminalSafe(t *testing.T) {
 }
 
 // VS Code is frozen and shares its delivery with Copilot, so a selection with
-// it keeps the whole-selection behaviour.
+// it keeps the whole-selection behavior.
 func TestGroupIsolationIsOffWhenVSCodeIsSelected(t *testing.T) {
 	t.Parallel()
 	with := newGroupIsolation([]domain.DetectedClient{{ClientID: domain.ClientCopilot}, {ClientID: domain.ClientVSCode}}, nil, "op")
@@ -433,11 +475,238 @@ func TestGroupAddLaterRefusalBeforePlanningReportsTheWholeSelection(t *testing.T
 	fixture.app.Lifecycle.Stager = flaggingStager{PackageStager: fixture.app.Lifecycle.Stager, client: domain.ClientCodex, err: unavailable(domain.ClientCodex), failed: &failed}
 	fixture.app.Lifecycle.Lock = lockAfterFailure{MutationLock: fixture.app.Lifecycle.Lock, failed: &failed, err: busy}
 	_, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
-	want := fmt.Sprintf("group preparation failed before client changes (selected targets: [codex cursor kiro]): %v; no selected client was changed", busy)
-	if err == nil || err.Error() != want {
+	// Nothing was planned by the refused attempt, so this is a preflight refusal.
+	want := fmt.Sprintf("group apply preflight failed; no target was changed (selected targets: [codex cursor kiro]): %v", busy)
+	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Fatalf("later refusal = %v\nwant %s", err, want)
 	}
 	if got := installedProjection(t, fixture); len(got) != 0 {
 		t.Fatalf("later refusal changed state: %v", got)
+	}
+}
+
+// recordingStager remembers every operation id it staged and can fail one
+// client's staging or every discard.
+type recordingStager struct {
+	ports.PackageStager
+	fail       map[domain.ClientID]error
+	discardErr error
+	operations *[]string
+}
+
+func (stager recordingStager) Stage(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints) (domain.StagedDelivery, error) {
+	*stager.operations = append(*stager.operations, string(plan.ClientID)+"@"+operationID)
+	if err := stager.fail[plan.ClientID]; err != nil {
+		return domain.StagedDelivery{}, err
+	}
+	return stager.PackageStager.Stage(ctx, envelope, plan, operationID, hints)
+}
+
+func (stager recordingStager) Discard(ctx context.Context, delivery domain.StagedDelivery) error {
+	if stager.discardErr != nil {
+		return stager.discardErr
+	}
+	return stager.PackageStager.Discard(ctx, delivery)
+}
+
+func stagingLeftovers(t *testing.T, root string) []string {
+	t.Helper()
+	var found []string
+	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err == nil && strings.Contains(entry.Name(), ".agentplugins-staging-") {
+			found = append(found, path)
+		}
+		return nil
+	})
+	return found
+}
+
+// The retry is a new operation: a new operation id, and nothing staged by the
+// failed attempt is left behind or reused.
+func TestGroupAddRetryIsANewCleanOperation(t *testing.T) {
+	t.Parallel()
+	var operations []string
+	fixture := newIsolationFixture(t, nil)
+	fixture.app.Lifecycle.Stager = recordingStager{PackageStager: fixture.app.Lifecycle.Stager,
+		fail: map[domain.ClientID]error{domain.ClientKiro: unavailable(domain.ClientKiro)}, operations: &operations}
+	if _, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro"); err == nil {
+		t.Fatal("partial run succeeded")
+	}
+	groups := map[string]bool{}
+	for _, operation := range operations {
+		id := operation[strings.Index(operation, "@")+1:]
+		groups[id[:strings.LastIndex(id, "-")]] = true
+	}
+	if len(operations) != 5 || len(groups) != 2 {
+		t.Fatalf("attempts must use distinct operation ids: %v", operations)
+	}
+	if leftovers := stagingLeftovers(t, fixture.root); len(leftovers) != 0 {
+		t.Fatalf("the failed attempt left staged packages: %v", leftovers)
+	}
+}
+
+// When the failed attempt cannot remove what it staged, its state is not known
+// to be clean, so every agent stops.
+func TestGroupAddCleanupFailureStopsEveryAgent(t *testing.T) {
+	t.Parallel()
+	var operations []string
+	discard := errors.New("discard refused")
+	fixture := newIsolationFixture(t, nil)
+	fixture.app.Lifecycle.Stager = recordingStager{PackageStager: fixture.app.Lifecycle.Stager,
+		fail: map[domain.ClientID]error{domain.ClientKiro: unavailable(domain.ClientKiro)}, discardErr: discard, operations: &operations}
+	_, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
+	if err == nil || !errors.Is(err, discard) || !strings.Contains(err.Error(), "no selected client was changed") {
+		t.Fatalf("cleanup failure = %v", err)
+	}
+	if got := installedProjection(t, fixture); len(got) != 0 {
+		t.Fatalf("cleanup failure changed state: %v", got)
+	}
+}
+
+// An edited installed copy stops the whole selection, exactly as before.
+func TestGroupAddEditedInstalledCopyStopsEveryAgent(t *testing.T) {
+	t.Parallel()
+	plugin := writeCLIPlugin(t)
+	fixture := newIsolationFixture(t, nil)
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "codex"); err != nil {
+		t.Fatal(err)
+	}
+	state, err := fixture.store.Load()
+	if err != nil || len(state.Installations) != 1 {
+		t.Fatalf("seed: %+v %v", state, err)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if err := os.WriteFile(filepath.Join(binding.TargetLocator, "plugin.json"), []byte(`{"edited":true}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _, err = fixture.execute(false, "add", plugin, "--target", "codex,cursor")
+	if err == nil || !strings.Contains(err.Error(), "group preflight failed; no target was changed") {
+		t.Fatalf("edited copy = %v", err)
+	}
+	after, _ := fixture.store.Load()
+	if len(after.Installations) != 1 || len(after.Installations[0].Clients) != 1 {
+		t.Fatalf("edited copy let a peer install: %+v", after)
+	}
+}
+
+// The person confirms only what will be applied: the plan lists the agents
+// that remain, and the notice names the agent left out and why.
+func TestGroupAddConfirmationShowsOnlyTheAppliedSubset(t *testing.T) {
+	t.Parallel()
+	fixture := newIsolationFixture(t, nil)
+	fixture.app.Lifecycle.NativeObserver = selectiveNativeObserver{foreign: domain.ClientKiro}
+	stdout, _, err := fixture.executeInput(true, "\ny\n", "add", writeCLIPlugin(t))
+	if err == nil {
+		t.Fatalf("partial run succeeded:\n%s", stdout)
+	}
+	review := stdout
+	if cut := strings.Index(stdout, "installation finished with issues"); cut > 0 {
+		review = stdout[:cut]
+	}
+	if !strings.Contains(review, "kiro will not be installed: Something UAP does not own already exists at the install location.") {
+		t.Fatalf("notice missing before confirmation:\n%s", stdout)
+	}
+	if strings.Contains(review, "Target: kiro") || !strings.Contains(review, "Target: codex") || !strings.Contains(review, "Target: cursor") {
+		t.Fatalf("confirmed plan differs from the applied subset:\n%s", review)
+	}
+}
+
+// A group refused later for a group-wide cause keeps the earlier agent's own
+// failure instead of reporting it as not attempted.
+func TestGroupAddLeftOutRowSurvivesLaterPreparationFailure(t *testing.T) {
+	t.Parallel()
+	fixture := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientCursor: fmt.Errorf("stage cursor: %w", installer.ErrRecoveryRequired)})
+	fixture.app.Lifecycle.NativeObserver = selectiveNativeObserver{foreign: domain.ClientKiro}
+	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro", "--format", "json")
+	if err == nil || !errors.Is(err, installer.ErrRecoveryRequired) {
+		t.Fatalf("later failure = %v", err)
+	}
+	var envelope struct {
+		Data struct {
+			Status  string `json:"status"`
+			Targets []struct {
+				Target string                      `json:"target"`
+				Status string                      `json:"status"`
+				Error  *usecase.GroupTargetFailure `json:"error"`
+				Output struct {
+					Result struct {
+						InstallationID string `json:"installation_id"`
+					} `json:"result"`
+				} `json:"output"`
+			} `json:"targets"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+	if envelope.Data.Status != "preparation_failed" || len(envelope.Data.Targets) != 3 {
+		t.Fatalf("summary = %+v", envelope.Data)
+	}
+	for _, row := range envelope.Data.Targets {
+		switch row.Target {
+		case "kiro":
+			if row.Status != string(usecase.GroupTargetExternalFailed) || row.Error == nil || row.Error.Stage != "preparation" || row.Output.Result.InstallationID != "" {
+				t.Fatalf("left-out row = %+v", row)
+			}
+		default:
+			if row.Status != string(usecase.GroupTargetExternalNotAttempted) {
+				t.Fatalf("remaining row = %+v", row)
+			}
+		}
+	}
+}
+
+// Three selected and one remaining: the remaining agent is installed as a
+// one-target group, the same as selecting only it.
+func TestGroupAddSingleRemainingAgentEqualsSelectingOnlyIt(t *testing.T) {
+	t.Parallel()
+	plugin := writeCLIPlugin(t)
+	fixture := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientCodex: unavailable(domain.ClientCodex), domain.ClientKiro: unavailable(domain.ClientKiro)})
+	_, _, err := fixture.execute(false, "add", plugin, "--target", "codex,cursor,kiro")
+	if err == nil || err.Error() != "2 of 3 client installations failed; see results above" {
+		t.Fatalf("partial = %v", err)
+	}
+	alone := newIsolationFixture(t, nil)
+	if _, _, err := alone.execute(false, "add", plugin, "--target", "cursor"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := installedProjection(t, fixture), installedProjection(t, alone); !reflect.DeepEqual(got, want) {
+		t.Fatalf("single remaining agent differs:\n got %v\nwant %v", got, want)
+	}
+}
+
+// The retry adds the agent to the installation of its peers, so it can only
+// install the same package bytes; a changed package is refused.
+func TestGroupAddRetryIsPinnedToThePeersPackage(t *testing.T) {
+	t.Parallel()
+	plugin := writeCLIPlugin(t)
+	fixture := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientKiro: unavailable(domain.ClientKiro)})
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "codex,cursor,kiro"); err == nil {
+		t.Fatal("partial run succeeded")
+	}
+	writeCLIPluginVersion(t, plugin, "1.0.1")
+	delete(fixture.app.Lifecycle.Stager.(clientFailingCLIStager).fail, domain.ClientKiro)
+	_, _, err := fixture.execute(false, "add", plugin, "--target", "kiro")
+	if err == nil || !strings.Contains(err.Error(), "recorded desired package bytes") {
+		t.Fatalf("retry with a changed package = %v", err)
+	}
+	if got := installedProjection(t, fixture); len(got) != 3 {
+		t.Fatalf("changed-package retry changed state: %v", got)
+	}
+}
+
+// VS Code is frozen: a selection with it keeps the whole-selection behavior.
+func TestGroupAddWithVSCodeKeepsWholeSelectionBehaviour(t *testing.T) {
+	t.Parallel()
+	vscode := fixtureClient(t, domain.ClientVSCode)
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor), vscode})
+	fixture.app.Lifecycle.Stager = clientFailingCLIStager{PackageStager: fixture.app.Lifecycle.Stager, fail: map[domain.ClientID]error{domain.ClientCursor: unavailable(domain.ClientCursor)}}
+	_, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "cursor,vscode")
+	if err == nil || !strings.Contains(err.Error(), "no selected client was changed") {
+		t.Fatalf("vscode selection = %v", err)
+	}
+	if got := installedProjection(t, fixture); len(got) != 0 {
+		t.Fatalf("vscode selection changed state: %v", got)
 	}
 }

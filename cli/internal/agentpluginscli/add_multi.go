@@ -217,7 +217,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		}
 		if opts.format == "human" {
 			for _, line := range isolation.excludedNotice() {
-				_, _ = fmt.Fprintln(cmd.OutOrStdout(), prompt.SafeText(line))
+				_, _ = fmt.Fprintln(reviewWriter(cmd, app), prompt.SafeText(line))
 			}
 		}
 		accepted, err := confirmInstall(ctx, cmd, app, loaded, humanAddGroupPlans(reviewed))
@@ -438,10 +438,9 @@ func renderAddMultiApplySummary(writer io.Writer, result addMultiResult, envelop
 			if _, err := fmt.Fprintf(writer, "    %s\n", prompt.SafeText(target.RetryCommand)); err != nil {
 				return err
 			}
-		} else if target.failure != nil && target.failure.Retryable && !result.DryRun && (target.Error == nil || target.Error.Stage != "cleanup") {
+		} else if excludedRetryOffered(target, result.DryRun) {
 			// An agent left out of its group is retried with the person's own
-			// command, which keeps scope, project root and saving. Unconfirmed
-			// process cleanup stops every retry.
+			// command, which keeps scope, project root and saving.
 			if _, err := fmt.Fprintf(writer, "  Retry: run the same command with --target %s\n", prompt.SafeText(publicCLITargetName(domain.ClientID(target.Target)))); err != nil {
 				return err
 			}

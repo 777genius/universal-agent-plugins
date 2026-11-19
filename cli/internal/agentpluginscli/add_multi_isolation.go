@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/hostprep"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
@@ -67,11 +66,13 @@ func (isolation *groupIsolation) addGroup(ctx context.Context, service usecase.S
 	if !isolation.enabled() {
 		return first, firstErr
 	}
-	// restore reports the whole selection with the given cause. Only refusals
-	// before any change reach it, so the selection is unchanged.
-	restore := func(err error) (usecase.GroupResult, error) {
+	// restore reports the whole selection with the given cause and phase. Only
+	// refusals before any change reach it, so the selection is unchanged.
+	restore := func(phase usecase.GroupPhase, err error) (usecase.GroupResult, error) {
 		isolation.active, isolation.operationID = startActive, startID
-		return first, err
+		whole := first
+		whole.Phase = phase
+		return whole, err
 	}
 	result, err := first, firstErr
 	left := map[int]isolatedTarget{}
@@ -80,33 +81,26 @@ func (isolation *groupIsolation) addGroup(ctx context.Context, service usecase.S
 		if len(failed) == 0 {
 			if len(left) > 0 && ctx.Err() == nil && refusedBeforeChange(result, err) {
 				// The others were refused for a reason that concerns them all.
-				return restore(err)
+				phase := result.Phase
+				if phase == "" {
+					phase = usecase.GroupPhasePlanned // Refused before planning any target.
+				}
+				return restore(phase, err)
 			}
 			for index, target := range left {
 				isolation.excluded[index] = target
 			}
 			return result, err
 		}
-		keep := make([]int, 0, len(isolation.active))
-		for position, index := range isolation.active {
-			if !failed[isolation.selected[index].ClientID] {
-				keep = append(keep, index)
-				continue
-			}
-			row := usecase.AddResult{}
-			if position < len(result.Targets) {
-				row = result.Targets[position]
-			}
-			left[index] = isolatedTarget{result: row, cause: err}
-		}
+		keep := isolation.leaveOut(failed, result, err, left)
 		if len(keep) == 0 || len(keep) == len(isolation.active) {
 			// Every agent failed on its own, or the failure named none of them:
 			// nothing changed, so report the selection as before.
-			return restore(firstErr)
+			return restore(first.Phase, firstErr)
 		}
 		operationID, idErr := newOperationGroupID()
 		if idErr != nil {
-			return restore(firstErr)
+			return restore(first.Phase, firstErr)
 		}
 		isolation.active, isolation.operationID = keep, operationID
 		input.Targets, input.OperationGroupID = isolation.activeInputs(), isolation.operationID
@@ -114,9 +108,27 @@ func (isolation *groupIsolation) addGroup(ctx context.Context, service usecase.S
 	}
 }
 
+// leaveOut records the failed active agents in left and returns the others,
+// in selection order.
+func (isolation *groupIsolation) leaveOut(failed map[domain.ClientID]bool, result usecase.GroupResult, err error, left map[int]isolatedTarget) []int {
+	keep := make([]int, 0, len(isolation.active))
+	for position, index := range isolation.active {
+		if !failed[isolation.selected[index].ClientID] {
+			keep = append(keep, index)
+			continue
+		}
+		row := usecase.AddResult{}
+		if position < len(result.Targets) {
+			row = result.Targets[position]
+		}
+		left[index] = isolatedTarget{result: row, cause: err}
+	}
+	return keep
+}
+
 // enabled reports whether agents may be left out. VS Code shares its physical
 // delivery with Copilot and is frozen, so a selection with it keeps the
-// whole-selection behaviour.
+// whole-selection behavior.
 func (isolation *groupIsolation) enabled() bool {
 	for _, client := range isolation.selected {
 		if client.ClientID == domain.ClientVSCode {
@@ -154,25 +166,60 @@ func targetLocalGroupFailure(ctx context.Context, result usecase.GroupResult, er
 	return failed
 }
 
-// failureStaysWithTarget reports whether a cause concerns only the agent it was
-// attributed to. These causes stop every agent instead: unconfirmed process
-// cleanup and pending recovery need attention first, a security block concerns
-// the package, edited or differently versioned installed copies need repair or
-// update first, changed state invalidates the reviewed plan, and a timeout or
-// cancellation ends the operation.
-func failureStaysWithTarget(err error) bool {
-	switch failureKindOf(err) {
-	case failureProcessCleanup, failureRecovery, failureSecurityBlocked, failureManagedChanged,
-		failureUpdateRequired, failureEnvironmentChange, failureTimeout, failureCanceled:
-		return false
-	}
-	return true
+// targetLocalKinds are the only causes that leave the other agents to install:
+// problems with one agent's own folder, program, facts, support or install
+// location. PERMISSION_DENIED, READ_ONLY_LOCATION and AGENT_PROGRAM_MISSING are
+// produced by failureKindOf's plain machine-problem classification. Disk full
+// and network problems concern the whole machine and stop every agent, as do
+// all other and unclassified causes.
+var targetLocalKinds = map[failureKind]bool{
+	failureForeignTarget:     true,
+	failureTargetUnavailable: true,
+	failureTargetUnsupported: true,
+	"PERMISSION_DENIED":      true,
+	"READ_ONLY_LOCATION":     true,
+	"AGENT_PROGRAM_MISSING":  true,
 }
 
-// hostChangedSinceReview reports that an agent's host no longer matches the
-// snapshot reviewed before consent, so the reviewed plan no longer holds.
-func hostChangedSinceReview(err error) bool {
-	return errors.Is(err, clientdetect.ErrProbeTargetChanged) || errors.Is(err, hostprep.ErrPlanChanged)
+// failureStaysWithTarget reports whether a cause concerns only the agent it was
+// attributed to. It fails closed: the cause and every cause in its chain,
+// joined causes included, must be target-local; a single group-wide cause
+// anywhere, such as recovery, unconfirmed cleanup, a security block, an edited
+// installed copy, a changed plan, source or host, a timeout or cancellation,
+// stops every agent.
+func failureStaysWithTarget(err error) bool {
+	var verification *ports.VerificationError
+	if err == nil || errors.As(err, &verification) || !targetLocalKinds[failureKindOf(err)] {
+		return false
+	}
+	return everyCauseStaysWithTarget(err)
+}
+
+// everyCauseStaysWithTarget walks the cause tree. A cause the classifier
+// recognizes must be target-local, and every innermost cause must be one.
+func everyCauseStaysWithTarget(err error) bool {
+	kind := failureKindOf(err)
+	var causes []error
+	switch wrapped := err.(type) { //nolint:errorlint // Walking the cause tree needs each node's own Unwrap.
+	case interface{ Unwrap() []error }:
+		causes = wrapped.Unwrap()
+	case interface{ Unwrap() error }:
+		if inner := wrapped.Unwrap(); inner != nil {
+			causes = []error{inner}
+		}
+	}
+	if len(causes) == 0 {
+		return targetLocalKinds[kind]
+	}
+	if kind != failureUnknown && !targetLocalKinds[kind] {
+		return false
+	}
+	for _, cause := range causes {
+		if cause != nil && !everyCauseStaysWithTarget(cause) {
+			return false
+		}
+	}
+	return true
 }
 
 // withExcluded returns the rows of every selected agent in selection order:
@@ -218,12 +265,7 @@ func (isolation *groupIsolation) excludedRow(index int, dryRun bool) addTargetRe
 		failure.Kind = failureTargetUnsupported
 		failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
 	}
-	message := failure.Summary + " " + failure.Next
-	if failure.Kind == failureUnknown {
-		// No plain explanation exists for this cause; show it precisely.
-		message = failure.Detail
-	}
-	targetFailure := &usecase.GroupTargetFailure{Stage: "preparation", Message: message}
+	targetFailure := &usecase.GroupTargetFailure{Stage: "preparation", Message: failure.Summary + " " + failure.Next}
 	result.GroupPhase, result.Failure = usecase.GroupTargetExternalFailed, targetFailure
 	output := newAddResultData(isolation.inputs[index].Envelope, result, dryRun)
 	output.NextAction = failure.Next
@@ -233,6 +275,18 @@ func (isolation *groupIsolation) excludedRow(index int, dryRun bool) addTargetRe
 		failure: failure,
 	}
 	return row
+}
+
+// excludedRetryOffered reports whether a left-out agent's row ends with the
+// retry step. Its next step already says what to fix; a retry line is added
+// only when a rerun can then succeed. A destination UAP does not own needs the
+// person to move it first, an unsupported agent needs another choice, and
+// unconfirmed process cleanup stops every retry.
+func excludedRetryOffered(target addTargetResult, dryRun bool) bool {
+	if dryRun || target.failure == nil || !target.failure.Retryable || target.failure.Kind == failureForeignTarget {
+		return false
+	}
+	return target.Error == nil || target.Error.Stage != "cleanup"
 }
 
 // excludedNotice tells a person reviewing the plan which agents were left out
@@ -252,21 +306,15 @@ func (isolation *groupIsolation) excludedNotice() []string {
 }
 
 // excludedError is the result of a dry run or an apply in which some agents
-// were left out. Causes without a plain explanation are named precisely.
+// were left out.
 func (isolation *groupIsolation) excludedError(combined addMultiResult) error {
 	if len(isolation.excluded) == 0 {
 		return nil
 	}
-	summary := batchActivationAggregateError(combined).Error()
 	if combined.DryRun {
-		summary = fmt.Sprintf("%d of %d selected clients cannot be installed; no target was changed (dry run); see results above", len(isolation.excluded), len(isolation.selected))
+		return fmt.Errorf("%d of %d selected clients cannot be installed; no target was changed (dry run); see results above", len(isolation.excluded), len(isolation.selected))
 	}
-	for _, row := range combined.Targets {
-		if row.failure != nil && row.failure.Kind == failureUnknown {
-			summary += "; " + row.Target + ": " + row.failure.Detail
-		}
-	}
-	return errors.New(summary)
+	return batchActivationAggregateError(combined)
 }
 
 // boardResults aligns the final rows with the clients shown on the progress
