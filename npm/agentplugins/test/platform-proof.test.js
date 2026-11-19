@@ -54,7 +54,7 @@ test("Windows npm shim retains spaced authoring arguments and rejects cmd expans
     '"Proof of published package authoring"', "--format", "json"
   ]);
   assert.deepEqual(windowsShimArgs({ shell: false, args: argv }), argv);
-  for (const unsafe of ["a&whoami", "%PATH%", 'literal"quote', "value|exit", "value^escape", "line\\nbreak"]) {
+  for (const unsafe of ["a&whoami", "%PATH%", 'literal"quote', "value|exit", "value^escape", "line\nbreak"]) {
     assert.throws(() => windowsShimArgs({ shell: true, args: [unsafe] }), /unsafe Windows npm shim argument/);
   }
 });
