@@ -41,7 +41,7 @@ for (const locale of publishedLocales) {
     const support = page.locator('#agent-support');
     const tableCopy = copy.shell.clientSupport;
     await expect(support.locator('h2')).toHaveText(tableCopy.title);
-    await expect(support.locator('thead th')).toHaveText([
+    await expect(support.locator('.registry-client-support__sticky thead th')).toHaveText([
       tableCopy.columns.agent, tableCopy.columns.user, tableCopy.columns.project,
       tableCopy.columns.setup, tableCopy.columns.nextStep,
     ]);
