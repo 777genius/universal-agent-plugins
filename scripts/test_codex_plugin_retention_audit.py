@@ -503,121 +503,58 @@ class RetentionTests(unittest.TestCase):
                 self.assertFalse(API["lifecycle_ready"](**dict(fields, **{key: value})))
 
 
-@unittest.skipUnless(sys.platform == "linux", "Linux retention integration")
+@unittest.skipUnless(sys.platform == "linux", "Linux current-source Codex integration")
 class RetentionLifecycleIntegrationTests(unittest.TestCase):
-    def run_case(self, *, native_completed=True, custody_error=False):
-        import importlib.util
-        path = Path(__file__).with_name("live-install-audit.py")
-        spec = importlib.util.spec_from_file_location("retention_live_control", path)
-        audit = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(audit)
-        events, commands, removed = [], [], [False]
-        source = "github:owner/repo@" + "a" * 40
-        public = {"installation_id": "installed", "name": "selected", "source": "owner/repo",
-                  "clients": [{"client_id": "codex", "scope": "user",
-                               "materialization": "materialized", "activation": "active",
-                               "verification": "installation_verified",
-                               "package_revision": {"resolved_revision": "a" * 40}}]}
-        class SQLite:
-            native_version = "0.162.0"
-            def __init__(self, *args):
-                events.append("native-warm")
-            def guard(self):
-                pass
-            def checkpoint(self, phase):
-                events.append("sqlite:" + phase)
-            def evidence(self):
-                return {"synthetic": True}
-        class Retention:
-            def __init__(self, profile, version):
-                events.append("baseline-custody")
-                self.profile = profile
-            def before_remove(self, data, selected, identity, **kwargs):
-                events.append("before-remove-custody")
-                if custody_error:
-                    raise ValueError("injected custody refusal")
-            def finish(self, residuals):
-                events.append("retention-finish")
-                return {"status": "verified-unchanged-or-preserved-at-checkpoint",
-                        "residuals": [{"raw": value} for value in residuals]}
-            def close(self):
-                events.append("retention-close")
-        def call(argv, env, cwd, *args, **kwargs):
-            command = argv[1]
-            commands.append(list(argv))
-            events.append("public:" + command)
-            if command == "add":
-                file = Path(env["CODEX_HOME"]) / "catalog/selected.txt"
-                if not file.exists():
-                    file.parent.mkdir()
-                    file.write_text("selected native identity")
-                document = {"data": {"actions": []}}
-            elif command == "remove":
-                removed[0] = True
-                document = {"data": {}}
-            elif command == "list":
-                document = {"data": {"installations": [] if removed[0] else [public]}}
-            else:
-                raise AssertionError("unexpected public command")
-            return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
-                    "timeout": False, "_json": copy.deepcopy(document)}
-        def uninstall(*args):
-            events.append("native-uninstall")
-            return {"completed": native_completed}
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp).resolve() / "run"
-            with patch.object(audit, "AGENT_BINARIES", {"codex": "/inert/codex"}), \
-                 patch.dict(audit.CODEX_RUNTIME_AUDIT, CodexPluginSQLiteAudit=SQLite), \
-                 patch.dict(audit.CODEX_RETENTION_AUDIT, CodexPluginRetention=Retention), \
-                 patch.object(audit, "call", call), \
-                 patch.object(audit, "uninstall_native_codex_plugin", uninstall):
-                row = audit.do_case("/inert/uap", "chatgpt", "plugin", source, 0, root,
-                                    {source: "selected"}, {})
-        return row, events, commands
+    """Observe the supported 0.153.4 path, not an uncomposed 0.162.0 feature.
 
-    def test_actual_do_case_orders_custody_and_preserves_raw_findings(self):
-        row, events, commands = self.run_case()
-        self.assertEqual([argv[1] for argv in commands],
-                         ["add", "list", "add", "list", "remove", "list"])
-        source = "github:owner/repo@" + "a" * 40
-        add = ["/inert/uap", "add", source, "--target", "chatgpt", "--scope", "user",
-               "--format", "json"]
-        listing = ["/inert/uap", "list", "--target", "chatgpt", "--scope", "user",
-                   "--format", "json"]
-        remove = ["/inert/uap", "remove", "selected", "--target", "chatgpt", "--scope", "user",
-                  "--external-uninstalled", "--format", "json"]
-        self.assertEqual(commands, [add, listing, add, listing, remove, listing])
-        self.assertLess(events.index("native-warm"), events.index("baseline-custody"))
-        self.assertLess(events.index("before-remove-custody"), events.index("native-uninstall"))
-        self.assertLess(events.index("native-uninstall"), events.index("public:remove"))
-        self.assertLess(events.index("public:remove"), events.index("retention-finish"))
-        self.assertEqual(row["native_residuals"], [".codex/catalog/selected.txt"])
-        self.assertEqual(row["codex_plugin_retention_proof"]["residuals"],
-                         [{"raw": ".codex/catalog/selected.txt"}])
+    The standalone 0.162.0 retention reader is fully exercised above, but
+    production currently pins CodexPluginSQLiteAudit to genuine 0.153.4.
+    Integration must use that real source composition and never construct a
+    hypothetical future observer through a test-only monkeypatch.
+    """
+
+    def run_case(self, mutation=None, *, system=True, kind="plugin"):
+        from scripts.test_live_install_audit_env import CodexPluginSQLiteLifecycleTest
+        return CodexPluginSQLiteLifecycleTest().run_case(
+            mutation, system=system, kind=kind)
+
+    def test_current_native_retains_only_exact_verified_system_objects(self):
+        row, commands = self.run_case()
         self.assertEqual(row["status"], "passed")
+        self.assertEqual(row["codex_plugin_sqlite_proof"]["native_version"], "0.153.4")
+        self.assertTrue(row["codex_plugin_sqlite_proof"]["runtime_semantics_unchanged"])
+        self.assertEqual([item[1] for item in commands],
+                         ["add", "list", "add", "list", "native-uninstall", "remove", "list"])
+        self.assertTrue(row["native_uninstall"]["completed"])
+        self.assertTrue(row["repeat_verified"])
+        self.assertTrue(row["removal_verified"])
+        self.assertTrue(row["sentinels_preserved"])
+        proof = row["codex_system_skill_retention"]
+        self.assertEqual(proof["status"],
+                         "verified-unchanged-pinned-system-files-at-checkpoint")
+        self.assertEqual(set(proof["residuals"]), set(row["native_residuals"]))
+        self.assertFalse(proof["writer_closure_claimed"])
+        self.assertFalse(proof["atomic_snapshot_claimed"])
+        # Never report the separate future 0.162.0 reader as live evidence.
+        self.assertNotIn("codex_plugin_retention_proof", row)
 
-    def test_reached_native_negative_prevents_retention_override(self):
-        row, events, commands = self.run_case(native_completed=False)
-        self.assertEqual([argv[1] for argv in commands],
-                         ["add", "list", "add", "list", "remove", "list"])
-        self.assertIn("before-remove-custody", events)
-        self.assertIn("native-uninstall", events)
-        self.assertNotIn("retention-finish", events)
-        self.assertFalse(row["removal_verified"])
-        self.assertEqual(row["native_residuals"], [".codex/catalog/selected.txt"])
+    def test_public_unready_skill_cannot_be_promoted_by_retention(self):
+        row, _ = self.run_case("system-needs-action", kind="skill")
+        self.assertEqual(row["status"], "incomplete-native-proof")
+        self.assertFalse(row["codex_public_add_ready"])
+        self.assertFalse(row["codex_public_repeat_ready"])
+        self.assertTrue(row["removal_verified"])
+        self.assertIn("codex_system_skill_retention", row)
+
+    def test_changed_custody_or_foreign_residual_never_passes(self):
+        for mutation in ("system-changed", "system-extra", "system-swapped",
+                         "system-scan-swap"):
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                self.run_case(mutation)
+        row, _ = self.run_case("system-unrelated-identity")
         self.assertEqual(row["status"], "cleanup-failed")
-
-    def test_reached_custody_error_preserves_cleanup_and_failure(self):
-        row, events, commands = self.run_case(custody_error=True)
-        self.assertEqual([argv[1] for argv in commands],
-                         ["add", "list", "add", "list", "remove", "list"])
-        self.assertIn("native-uninstall", events)
-        self.assertNotIn("retention-finish", events)
         self.assertFalse(row["removal_verified"])
-        self.assertEqual(row["codex_plugin_retention_proof"]["status"],
-                         "unresolved-plugin-retention-owner")
-        self.assertEqual(row["native_residuals"], [".codex/catalog/selected.txt"])
-        self.assertIn("retention-close", events)
+        self.assertNotIn("codex_system_skill_retention", row)
 
 
 if __name__ == "__main__":
