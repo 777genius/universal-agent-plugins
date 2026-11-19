@@ -5327,7 +5327,12 @@ module.exports = {
                     observed.append(binary)
                     return binary, {"source": "https://example.invalid/pinned-archive"}
 
-                module = SimpleNamespace(PINS={"linux-amd64": {"codex": pin}}, provision=provision)
+                def selected_pin(args, name):
+                    self.assertEqual((args.target, args.release_state, name),
+                                     ("linux-amd64", "public", "codex"))
+                    return pin
+
+                module = SimpleNamespace(selected_pin=selected_pin, provision=provision)
                 spec = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda _module: None))
                 with patch("sys.argv", ["bootstrap", str(root)]), \
                         patch("sys.platform", "linux"), patch("platform.machine", return_value="x86_64"), \
@@ -5344,7 +5349,7 @@ module.exports = {
                     value = json.loads(proof.read_text())
                     self.assertEqual((value["public_target"], value["canonical_client_id"],
                                       value["pin_family"], value["executable"]),
-                                     ("chatgpt", "codex", "full-catalog", str(observed[0])))
+                                     ("chatgpt", "codex", "current-source", str(observed[0])))
                 else:
                     self.assertFalse(proof.exists())
 
