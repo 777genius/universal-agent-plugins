@@ -310,7 +310,7 @@ jobs:
           jq -e '(.packages // []) | all(.[]; .alias != "context7")' "${AGENTPLUGINS_HOME}/uap.lock" >/dev/null
           # Retain private post-removal evidence without printing package paths
           # or original status facts into the public release job log.
-          if ! run_agentplugins deps status --format json > "${root}/post-remove-status.json"; then
+          if ! run_agentplugins deps status --format json > "${root}/post-remove-status.json" 2> "${root}/post-remove-stderr.log"; then
             echo "::error::Post-remove deps status command failed" >&2
             exit 1
           fi
