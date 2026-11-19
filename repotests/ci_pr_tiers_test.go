@@ -71,16 +71,9 @@ type heavyPRLane struct {
 }
 
 // heavyPRLaneWorkflows run native clients or wide GitHub-hosted matrices on
-// pull requests. Release-called and authoring workflows keep their own rules.
+// pull requests. Published npm audits (now postpublish/weekly/manual only)
+// are asserted by scripts/test_package_manager_ci_policy.py, not this PR-tier map.
 var heavyPRLaneWorkflows = map[string]heavyPRLane{
-	"agentplugins-published-catalog-audit.yml": {
-		[]string{"pull_request", "schedule", "workflow_dispatch", "workflow_run"},
-		"published-catalog-audit-", "github.ref",
-	},
-	"agentplugins-published-other-clients-audit.yml": {
-		[]string{"pull_request", "schedule", "workflow_dispatch", "workflow_run"},
-		"published-other-clients-", "github.ref",
-	},
 	"cline-managed-session.yml": {
 		[]string{"pull_request", "push", "workflow_dispatch"},
 		"cline-managed-session-${{ github.event_name }}-", "github.run_id",

@@ -1,17 +1,13 @@
-name: Windows published Firebase native capture probe
+name: Legacy Windows Firebase/Claude 0.1.101 diagnostic
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/agentplugins-windows-firebase-capture-probe.yml'
-      - 'scripts/live-install-audit.py'
-      - 'scripts/test_live_install_audit_env.py'
+  # Legacy 0.1.101 flaky-client diagnostic only; not a release gate.
   workflow_dispatch:
 
-# Replace superseded PR checks; preserve exact push, scheduled and manual runs.
+# Manual diagnostic runs are independent; do not silently cancel.
 concurrency:
-  group: firebase-capture-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: firebase-capture-${{ github.run_id }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
