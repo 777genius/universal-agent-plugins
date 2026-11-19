@@ -65,6 +65,8 @@ const localizedRoutes = expandLocalizedRoutes(htmlRoutes);
 const sitemapRoutes = localizedRoutes.filter((route) => route.indexable);
 
 export default defineNuxtConfig({
+  // DevTools deeply watches the large catalog payload on every UI state change.
+  devtools: { enabled: false },
   // GHSA-mjrq-cffv-q4qc: keep the development workspace at this project root.
   workspaceDir: '.',
   compatibilityDate: '2026-01-19',

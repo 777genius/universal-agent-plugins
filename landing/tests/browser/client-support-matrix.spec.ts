@@ -8,7 +8,8 @@ test('home lists the complete scope matrix immediately before FAQ', async ({ pag
   await page.goto('./');
 
   const section = page.locator('#agent-support');
-  const table = section.getByRole('table');
+  const table = section.locator('.registry-client-support__scroll').getByRole('table');
+  await expect(section.locator('.registry-client-support__sticky')).toHaveCSS('position', 'sticky');
   await expect(table.locator('tbody tr')).toHaveCount(clientSupportRows.length);
   expect(clientSupportRows.map((row) => row.id).sort()).toEqual(
     clientIds.filter((id) => !hiddenPublicClientIds.has(id)).sort(),

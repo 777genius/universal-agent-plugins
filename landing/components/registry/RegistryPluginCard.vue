@@ -420,16 +420,14 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
                   {{ t('registryUi.card.viewSource') }}
                 </a>
               </p>
-              <CommandSnippet
-                v-if="canInstall"
-                :label="t('registryUi.card.add')"
-                kind="add"
-                :command="command"
-                compact
-              />
-              <NativeCliCheckbox v-if="canInstall" />
-              <p v-else class="plugin-card__unavailable" role="status">
-                {{ t(targets.length > 1 ? 'registryUi.install.selectionRoutesUnavailable' : 'registryUi.install.scope.selectionUnavailable') }}
+              <p v-if="!canInstall" class="plugin-card__unavailable" role="status">
+                {{
+                  t(
+                    targets.length > 1
+                      ? 'registryUi.install.selectionRoutesUnavailable'
+                      : 'registryUi.install.scope.selectionUnavailable',
+                  )
+                }}
               </p>
             </div>
             <p v-if="guidedWebSelected && canInstall" class="plugin-card__author" role="status">
@@ -437,6 +435,16 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
             </p>
             <ChatGPTDesktopGuide v-if="showDesktopGuide" />
           </div>
+          <template v-if="canInstall" #footer>
+            <CommandSnippet
+              v-if="canInstall"
+              :label="t('registryUi.card.add')"
+              kind="add"
+              :command="command"
+              compact
+            />
+            <NativeCliCheckbox v-if="canInstall" />
+          </template>
         </InstallDialog>
         <a
           v-else-if="vendorInstall"

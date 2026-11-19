@@ -14,14 +14,54 @@ const {
   assertInstalledShimInvocation,
   assertPublicJSONPathFree,
   assertSyntheticInfo,
+  createProofRoot,
   frozenReleaseAsset,
   installedShimInvocation,
   lifecycleCommands,
   lifecycleResult,
   npmInvocation,
   parseBootstrapMode,
-  parseLifecycle
+  parseLifecycle,
+  windowsShimArgs
 } = require(script);
+
+test("platform proof resolves symlinked temporary parents before author init", (t) => {
+  const parent = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agentplugins-proof-parent-"));
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+  const actual = path.join(parent, "actual");
+  const alias = path.join(parent, "alias");
+  fs.mkdirSync(actual);
+  try {
+    fs.symlinkSync(actual, alias, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    if (process.platform === "win32" && ["EPERM", "EACCES", "ENOTSUP"].includes(error.code)) {
+      t.skip("Windows runner does not allow creating junction fixtures");
+      return;
+    }
+    throw error;
+  }
+  const created = createProofRoot(alias);
+  assert.equal(path.dirname(created), fs.realpathSync(actual));
+  assert.equal(created, fs.realpathSync(created));
+  assert.equal(fs.statSync(created).isDirectory(), true);
+});
+
+test("Windows npm shim retains spaced authoring arguments and rejects cmd expansion", () => {
+  const destination = "C:\\Users\\Test Runner\\AppData\\Local\\Temp\\authored-package";
+  const argv = ["author", "init", destination, "--description", "Proof of published package authoring", "--format", "json"];
+  assert.deepEqual(windowsShimArgs({ shell: true, args: argv }), [
+    "author", "init", '"' + destination + '"', "--description",
+    '"Proof of published package authoring"', "--format", "json"
+  ]);
+  assert.deepEqual(windowsShimArgs({ shell: false, args: argv }), argv);
+  // CMD treats parentheses as grouping characters even without spaces.
+  const groupedPath = "C:\\build(1)\\authored";
+  assert.deepEqual(windowsShimArgs({ shell: true, args: ["author", "init", groupedPath] }),
+    ["author", "init", '"' + groupedPath + '"']);
+  for (const unsafe of ["a&whoami", "%PATH%", 'literal"quote', "value|exit", "value^escape", "line\nbreak"]) {
+    assert.throws(() => windowsShimArgs({ shell: true, args: [unsafe] }), /unsafe Windows npm shim argument/);
+  }
+});
 
 test("platform proof binds assets.json producer commit in staged and public modes", () => {
   const version = "1.2.3";

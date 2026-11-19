@@ -65,6 +65,12 @@ function mkdir(directory) {
   fs.mkdirSync(directory, { recursive: true });
 }
 
+// macOS TMPDIR may traverse /var -> /private/var. Scaffold correctly refuses
+// symlink ancestors, so make the disposable proof parent physically canonical.
+function createProofRoot(tempDirectory = os.tmpdir()) {
+  return fs.mkdtempSync(path.join(fs.realpathSync(tempDirectory), "agentplugins-platform-proof-"));
+}
+
 function npmInvocation(args, platform = process.platform, execPath = process.execPath) {
   if (platform !== "win32") return { command: "npm", args };
   const npmCLI = path.win32.join(path.win32.dirname(execPath), "node_modules", "npm", "bin", "npm-cli.js");
@@ -74,6 +80,16 @@ function npmInvocation(args, platform = process.platform, execPath = process.exe
 function installedShimInvocation(project, args, platform = process.platform) {
   const shim = path.join(project, "node_modules", ".bin", platform === "win32" ? "agentplugins.cmd" : "agentplugins");
   return { command: shim, args, shell: platform === "win32" };
+}
+
+// Windows npm creates a .cmd shim; shell mode must preserve each argument as
+// one token. Do not permit cmd metacharacters or expansion in a proof command.
+function windowsShimArgs(invocation) {
+  if (!invocation.shell) return invocation.args;
+  return invocation.args.map((value) => {
+    if (/[\r\n"%!^&|<>]/.test(value)) fail("unsafe Windows npm shim argument");
+    return /[\s()]/.test(value) ? `"${value}"` : value;
+  });
 }
 
 function assertInstalledShimInvocation(invocation, project, platform = process.platform) {
@@ -200,7 +216,7 @@ function main() {
     fail(`runner architecture mismatch: expected ${expectedTarget}, got ${actualTarget}`);
   }
 
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentplugins-platform-proof-"));
+  const root = createProofRoot();
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   const cursor = path.join(home, ".cursor");
@@ -289,13 +305,13 @@ function main() {
   const invoke = (args) => {
     const invocation = installedShimInvocation(project, args);
     assertInstalledShimInvocation(invocation, project);
-    return run(invocation.command, invocation.args, { ...commandOptions, shell: invocation.shell });
+    return run(invocation.command, windowsShimArgs(invocation), { ...commandOptions, shell: invocation.shell });
   };
   const privateRoots = [root, process.env.GITHUB_WORKSPACE, process.env.RUNNER_TEMP];
   const invokeJSON = (args) => {
     const invocation = installedShimInvocation(project, [...args, "--format", "json"]);
     assertInstalledShimInvocation(invocation, project);
-    const output = jsonCommand(invocation.command, invocation.args, { ...commandOptions, shell: invocation.shell });
+    const output = jsonCommand(invocation.command, windowsShimArgs(invocation), { ...commandOptions, shell: invocation.shell });
     assertPublicJSONPathFree(output, `agentplugins ${args[0]} JSON`, privateRoots);
     return output;
   };
@@ -416,11 +432,13 @@ module.exports = {
   assertInstalledShimInvocation,
   assertPublicJSONPathFree,
   assertSyntheticInfo,
+  createProofRoot,
   frozenReleaseAsset,
   installedShimInvocation,
   lifecycleCommands,
   lifecycleResult,
   npmInvocation,
   parseBootstrapMode,
-  parseLifecycle
+  parseLifecycle,
+  windowsShimArgs
 };
