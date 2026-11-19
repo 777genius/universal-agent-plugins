@@ -416,6 +416,12 @@ func revokePiProjectTrust(env clients.Env, request domain.DeactivationRequest) e
 // derives digests from live content, so a changed resource is reported by
 // piTrustBlocker instead of becoming a reason to record its new content.
 func observePiProjectTrust(kernel nativeconfig.Kernel, request domain.ActivationRequest) (bool, error) {
+	return observePiProjectTrustWithReader(request, kernel.ReadExactFile)
+}
+
+// The Skills observer supplies its bounded reader and retains these exact
+// snapshots; existing trust callers retain their original reader contract.
+func observePiProjectTrustWithReader(request domain.ActivationRequest, read func(string) (nativeconfig.FileSnapshot, error)) (bool, error) {
 	project, user, err := piTrustTarget(request.Client, request.Plan)
 	if err != nil {
 		return false, err
@@ -433,7 +439,7 @@ func observePiProjectTrust(kernel nativeconfig.Kernel, request domain.Activation
 		return false, err
 	}
 	_, entryPath, projectsPath := piTrustHookPaths(user)
-	hook, err := kernel.ReadExactFile(entryPath)
+	hook, err := read(entryPath)
 	if err != nil {
 		return false, err
 	}
@@ -444,7 +450,7 @@ func observePiProjectTrust(kernel nativeconfig.Kernel, request domain.Activation
 	if !hook.Exists || !bytes.Equal(hook.Body, []byte(piTrustHookSource)) {
 		return false, nil
 	}
-	snapshot, err := kernel.ReadExactFile(projectsPath)
+	snapshot, err := read(projectsPath)
 	if err != nil {
 		return false, err
 	}

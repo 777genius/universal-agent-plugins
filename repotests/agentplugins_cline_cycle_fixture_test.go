@@ -233,9 +233,7 @@ func (c *clineProjectCycle) command(t *testing.T, label, scope string) ports.Com
 	}
 	f.check(t)
 	f.used[label] = true
-	ctx, cancel := context.WithTimeout(f.ctx, 30*time.Second)
-	defer cancel()
-	result, err := (process.OS{}).RunWithDescendantExitGrace(ctx, ports.Command{Argv: argv, Env: f.env(false), Dir: cwd, StdoutLimitBytes: 1 << 20}, 5*time.Second)
+	result, expired, err := c.capture(cwd, argv)
 	kind := "none"
 	if err != nil {
 		kind = "capture"
@@ -243,12 +241,12 @@ func (c *clineProjectCycle) command(t *testing.T, label, scope string) ports.Com
 			kind = "exit"
 		}
 	}
-	meta, _ := json.Marshal(map[string]any{"argv": argv, "cwd": cwd, "exit": result.ExitCode, "error": err != nil, "error_kind": kind, "deadline": ctx.Err() != nil})
+	meta, _ := json.Marshal(map[string]any{"argv": argv, "cwd": cwd, "exit": result.ExitCode, "error": err != nil, "error_kind": kind, "deadline": expired})
 	f.keep(t, label+".command.json", meta)
 	f.keep(t, label+".stdout.log", result.Stdout)
 	f.keep(t, label+".stderr.log", result.Stderr)
 	f.check(t)
-	if ctx.Err() != nil || len(result.Stdout) > 1<<20 || bytes.Contains(result.Stderr, []byte("stderr bytes omitted")) {
+	if expired || len(result.Stdout) > 1<<20 || bytes.Contains(result.Stderr, []byte("stderr bytes omitted")) {
 		t.Fatal("Cline cycle public capture/cleanup")
 	}
 	if label == "repeat-remove-a" {
@@ -261,6 +259,15 @@ func (c *clineProjectCycle) command(t *testing.T, label, scope string) ports.Com
 		t.Fatalf("Cline cycle %s process failed", label)
 	}
 	return result
+}
+
+// capture is the original cycle process mechanism. Callers retain their own
+// authority checks, evidence slots, stage matrices and expected exit statuses.
+func (c *clineProjectCycle) capture(cwd string, argv []string) (ports.CommandResult, bool, error) {
+	ctx, cancel := context.WithTimeout(c.f.ctx, 30*time.Second)
+	defer cancel()
+	result, err := (process.OS{}).RunWithDescendantExitGrace(ctx, ports.Command{Argv: argv, Env: c.f.env(false), Dir: cwd, StdoutLimitBytes: 1 << 20}, 5*time.Second)
+	return result, ctx.Err() != nil, err
 }
 func clineCycleScope(stage string) string {
 	if stage == "version" || strings.HasSuffix(stage, "-user") {

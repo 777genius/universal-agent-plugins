@@ -15,6 +15,12 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "catalog" {
+		if err := capturePiCatalog(os.Args[2:]); err != nil {
+			fail(err)
+		}
+		return
+	}
 	if len(os.Args) != 8 && len(os.Args) != 9 {
 		fmt.Fprintln(os.Stderr, "usage: project-driver STATE USER_PROFILE PROJECT SOURCE OPERATION INSTALLATION_ID OUTPUT [user|project]")
 		os.Exit(2)
@@ -73,7 +79,7 @@ func main() {
 	receipt := map[string]any{
 		"outcome": result.Outcome,
 		"binding": map[string]string{
-			"scope": result.Binding.Scope,
+			"scope":       result.Binding.Scope,
 			"target_path": result.Binding.TargetPath,
 		},
 	}

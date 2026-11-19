@@ -281,6 +281,18 @@ func runDuplexMode(ctx context.Context, command ports.Command, exchange func(io.
 			supervisionErr = ctx.Err()
 		}
 	}
+	// Finite clients can close stdout and exit before an EOF-draining callback
+	// finishes its metadata validation. Retain the pipe and owned leader until
+	// that callback settles within the same deadline; interactive/ACP exchanges
+	// still require their callback to finish before native exit.
+	if pipes.finishExchangeOnExit && !plannedShutdownEnabled && exited && !exchangeDone && supervisionErr == nil {
+		select {
+		case exchangeErr = <-exchanged:
+			exchangeDone = true
+		case <-ctx.Done():
+			supervisionErr = ctx.Err()
+		}
+	}
 	// Cancellation and exchange completion can become ready in the same
 	// scheduling turn. Preserve the context cause even when the buffered
 	// exchange result wins the select.

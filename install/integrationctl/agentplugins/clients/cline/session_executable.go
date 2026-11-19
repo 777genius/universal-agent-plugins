@@ -9,7 +9,8 @@ import (
 )
 
 // Cline's ordinary detector deliberately retains file-only authority. Resolve
-// its observed CLI only for an explicit session, not for install/version probes.
+// its observed CLI only for a project catalog or explicit session. File-only
+// planning and version probes never acquire native process authority.
 func clineSessionExecutable(env clients.Env, client domain.DetectedClient, bindings int) (string, error) {
 	if client.ClientID != domain.ClientCline || client.Status != domain.DetectionDetected || bindings == 0 {
 		return "", fmt.Errorf("an installed Cline CLI and owned project bindings are required")

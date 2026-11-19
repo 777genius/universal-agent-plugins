@@ -164,10 +164,107 @@ def qualified_fixture():
         rows["cycle-provider-receipts.jsonl"].append(record("", stage, {"requests": 1 if empty else 2, "responses": 1 if empty else 2, "empty": empty, "exact_call_issued": not empty, "single_call_approved": not empty, "error": False, "call_id": call_id, "prompt": prompt, "sentinel": sentinel, "operation": operation}))
     for name, entries in rows.items():
         bodies[name] = b"".join(raw(entry) + b"\n" for entry in entries)
+    summary["raw_skill_cycle"] = raw_skills_fixture(rows, state_by_stage)
+    bodies["runtime-attempt.json"] = raw(summary)
     return bodies, source
 
 
+def raw_skills_fixture(rows, states):
+    """Authored finite parser data, never a native execution receipt."""
+    name = "skill-4e68c33bfb91dc370d5c3745c0ba746428ff227ed3b3466f9c9d1552"
+    source = "https://github.com/777genius/universal-agent-plugins/tree/b5d80336b53397be5bbb72c84f680e5885a6ac0d/tests/fixtures/uap_apm/skills"
+    key = "github-skill:777genius/universal-agent-plugins:benchmark-note:tests/fixtures/uap_apm/skills/benchmark-note"
+    description = "An inert note for checking Agent Skills 1.0 installation."
+    skill = ("---\nname: benchmark-note\ndescription: " + description + "\n---\n\nRead the adjacent references/fixture.txt when explicitly asked. Do not access networks, credentials, or external tools.\n").encode()
+    resource = b"Portable Agent Skills 1.0 fixture. This exact file must be preserved without transformation.\n"
+    sha = lambda body: hashlib.sha256(body).hexdigest()
+    project, outside = "/inert/cycle/project", "/inert/cycle/outside"
+    iid = "independent-raw-installation"
+    physical = name[:51] + "-" + sha(iid.encode())[:12]
+    active = project + "/.uap/managed/clients/cline/" + physical
+    native = project + "/.cline/skills/benchmark-note"
+    bid = "client_" + sha("\0".join((iid, "cline", "project", active)).encode())[:24]
+    ins = copy.deepcopy(states["repeat-remove-a"][0])
+    ins.update(installation_id=iid, declared_name=name, data_retained=False, data_receipts={})
+    ins["source"] = {"stable_source_key": key, "source_binding_id": "src_" + sha(key.encode())[:24], "repository": "777genius/universal-agent-plugins", "package_subpath": "tests/fixtures/uap_apm/skills/benchmark-note", "resolved_revision": "b5d80336b53397be5bbb72c84f680e5885a6ac0d", "tree_digest": "sha256:" + "3" * 64}
+    manifest = raw({"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": name}) + b"\n"
+    ins["package"].update(declared_name=name, manifest_digest="sha256:" + sha(manifest), inventory={"mcp_present": False, "mcp_enabled": False, "skills": ["benchmark-note"]})
+    binding = copy.deepcopy(states["add-a"][1])
+    binding.update(client_binding_id=bid, target_locator=active, physical_artifact_id=physical, activation="active", authentication="not_required", native_profile_root=project)
+    binding.pop("data_receipt_id", None)
+    binding["native_objects"] = [{"object_id": "package:cline:" + physical, "kind": "managed_package_directory", "logical_name": name, "path": active, "managed_digest": "sha256:" + "4" * 64, "protection_class": "managed"}, {"object_id": "cline_project_skill_directory:benchmark-note", "kind": "cline_project_skill_directory", "logical_name": "benchmark-note", "path": native, "source_relative": "skills/benchmark-note", "managed_digest": "sha256:" + sha(b"f\0SKILL.md\0-\0" + skill + b"\0d\0references\0f\0references/fixture.txt\0-\0" + resource + b"\0"), "protection_class": "managed"}]
+    ins["clients"] = {bid: binding}
+    state = {"schema_version": 5, "installations": [states["repeat-remove-a"][0], ins]}
+    proof = {"state": stream(raw(state)), "skill": stream(skill), "resource": stream(resource), "binding": binding}
+    removed = copy.deepcopy(state)
+    removed["installations"][1].update(clients={}, data_retained=True)
+    tree = {".": "directory:20000000755", "references": "directory:20000000755", "SKILL.md": "file:644:" + sha(skill), "references/fixture.txt": "file:644:" + sha(resource)}
+    managed = {".": "directory:20000000755", "skills": "directory:20000000755", "plugin.json": "file:644:" + sha(manifest), **{"skills/benchmark-note" + ("/" + path if path != "." else ""): value for path, value in tree.items()}}
+    snapshot = {"native": tree, "managed": managed, "state-v2.json": proof["state"], "uap.toml": stream(b"inert manifest"), "uap.lock": stream(b"inert lock")}
+    probe = stream(b"".join(runtime.cline_cycle_stream(row["value"]) for row in rows["cycle-probe-events.jsonl"]))
+    record = {"source": source, "skill_sha256": sha(skill), "commands": [], "proofs": {"add": proof, "repeat": copy.deepcopy(proof), "remove": {"state": stream(raw(removed))}}, "inventories": [], "repeat_before": snapshot, "repeat_after": copy.deepcopy(snapshot), "probe_before": probe, "probe_after": probe}
+    add = ["/inert/agentplugins", "skills", "add", source, "--skill", "benchmark-note", "--target", "cline", "--scope", "project", "--project-root", project, "--yes", "--no-ui", "--format", "json"]
+    def command(stage, argv, cwd, stdout):
+        record["commands"].append({"stage": stage, "argv": argv, "cwd": cwd, "exit": 0, "error": False, "deadline": False, "stdout": stream(raw(stdout)), "stderr": stream(b"")})
+    for phase in ("before", "add", "repeat", "remove"):
+        if phase != "before":
+            dto = {"schema_version": 1, "command": "agentplugins remove" if phase == "remove" else "skills add", "result": "success"}
+            if phase != "remove": dto.update(status="succeeded", readiness="ready", items=[{"alias": "benchmark-note", "targetId": "cline", "destinationPath": active, "status": "unchanged" if phase == "repeat" else "succeeded"}])
+            argv = ["/inert/agentplugins", "remove", iid, "--target", "cline", "--scope", "project", "--project-root", project, "--yes", "--no-ui", "--format", "json"] if phase == "remove" else add
+            command(phase, argv, outside, dto)
+        for scope, cwd in (("a", project), ("b", "/inert/cycle/project-b"), ("user", outside)):
+            baseline = {"a": "final-a", "b": "final-b", "user": "removed-user"}[scope]
+            prior = next(row["value"] for row in rows["cycle-discovery.jsonl"] if row["stage"] == baseline and row["value"]["kind"] == "skills")
+            catalog = runtime.strict_json(runtime.cline_cycle_stream(prior["stdout"]))
+            if scope == "a" and phase in ("add", "repeat"):
+                catalog.append({"name": "benchmark-note", "description": description, "instructions": skill.split(b"---\n", 2)[2].decode().strip(), "frontmatter": {"name": "benchmark-note", "description": description}, "path": native + "/SKILL.md"})
+            command(phase + "-" + scope, ["/inert/cline", "--auto-approve", "false", "--cwd", cwd, "config", "skills", "--json"], cwd, catalog)
+            record["inventories"].append({"stage": phase, "scope": scope, "stdout": record["commands"][-1]["stdout"]})
+    return record
+
+
 class CompleteCycleTests(unittest.TestCase):
+    def test_raw_project_skills_are_required_with_exact_repeat_and_native_scope(self):
+        for kind in ("absent", "missing-repeat", "prepared", "repeat-status", "repeat-argv", "repeat-state", "repeat-lock", "source-pin", "native-path", "foreign-inventory", "metadata", "resource", "probe", "cleanup", "removal", "public-stderr"):
+            bodies, source = qualified_fixture()
+            summary = runtime.strict_json(bodies["runtime-attempt.json"])
+            record = summary["raw_skill_cycle"]
+            if kind == "absent": summary.pop("raw_skill_cycle")
+            elif kind == "missing-repeat": record["commands"] = [row for row in record["commands"] if row["stage"] != "repeat"]
+            elif kind in ("prepared", "repeat-status"):
+                row = next(row for row in record["commands"] if row["stage"] == "repeat")
+                doc = runtime.strict_json(runtime.cline_cycle_stream(row["stdout"]))
+                if kind == "prepared": doc["readiness"] = "prepared"
+                else: doc["items"][0]["status"] = "succeeded"
+                row["stdout"] = stream(raw(doc))
+            elif kind == "repeat-argv": next(row for row in record["commands"] if row["stage"] == "repeat")["argv"][3] = "foreign-source"
+            elif kind == "public-stderr": next(row for row in record["commands"] if row["stage"] == "repeat")["stderr"] = None
+            elif kind in ("repeat-state", "source-pin", "removal"):
+                phase = "remove" if kind == "removal" else "repeat"
+                proof = record["proofs"][phase]
+                state = runtime.strict_json(runtime.cline_cycle_stream(proof["state"]))
+                selected = state["installations"][1]
+                if kind == "repeat-state": selected["installation_id"] = "foreign-iid"
+                elif kind == "source-pin": selected["source"]["resolved_revision"] = "0" * 40
+                else: selected["clients"] = record["proofs"]["add"]["binding"]
+                proof["state"] = stream(raw(state))
+            elif kind == "repeat-lock": record["repeat_after"]["uap.lock"] = stream(b"changed lock")
+            elif kind in ("native-path", "foreign-inventory", "metadata"):
+                row = next(row for row in record["inventories"] if row["stage"] == "add" and row["scope"] == "a")
+                catalog = runtime.strict_json(runtime.cline_cycle_stream(row["stdout"]))
+                selected = next(item for item in catalog if item["name"] == "benchmark-note")
+                if kind == "native-path": selected["path"] = selected["path"].replace("/project/", "/project-b/")
+                elif kind == "foreign-inventory": catalog.pop(0)
+                else: selected["instructions"] = "substituted instructions"
+                row["stdout"] = stream(raw(catalog))
+                next(command for command in record["commands"] if command["stage"] == "add-a")["stdout"] = row["stdout"]
+            elif kind == "resource": record["proofs"]["add"]["resource"] = stream(b"changed resource")
+            elif kind == "probe": record["probe_after"] = stream(b'{"method":"tools/call"}\n')
+            else: next(row for row in record["commands"] if row["stage"] == "repeat")["error"] = True
+            bodies["runtime-attempt.json"] = raw(summary)
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                runtime.cline_members(bodies, source)
+
     def test_reviewed_rehashed_extra_calls_object_authority_and_session_grammar_refuse(self):
         for kind in ("extra-response-call", "extra-history-call", "foreign-object-id", "foreign-logical-name", "foreign-source-relative", "foreign-skill-digest", "foreign-modes", "foreign-models", "extra-config-option", "duplicate-config-option", "typed-capability"):
             bodies, source = qualified_fixture()

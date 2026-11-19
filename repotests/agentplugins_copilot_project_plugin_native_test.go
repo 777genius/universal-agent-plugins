@@ -89,8 +89,8 @@ func testCopilotNativeWholePluginProject(t *testing.T) {
 		binding = value
 	}
 	if binding.ClientID != string(domain.ClientCopilot) || binding.Scope != string(domain.ScopeProject) ||
-		binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
-		t.Fatalf("whole-plugin binding incorrectly attested as runtime-active: %+v", binding)
+		binding.Activation != domain.ActivationActive || binding.Authentication != domain.AuthenticationNotRequired || binding.Verification != domain.VerificationInstalled {
+		t.Fatalf("whole-plugin pure Skills did not complete ordinary native discovery: %+v", binding)
 	}
 	registered := 0
 	for _, object := range binding.NativeObjects {

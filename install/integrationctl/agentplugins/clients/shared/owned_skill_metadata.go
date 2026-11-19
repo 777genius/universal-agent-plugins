@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
@@ -34,7 +35,9 @@ func ReadOwnedSkillMetadata(ctx context.Context, kernel nativeconfig.Kernel, sna
 
 func readOwnedSkillSnapshot(ctx context.Context, kernel nativeconfig.Kernel, original, expected, sealed string, closeSnapshot func() error) (body []byte, err error) {
 	defer func() {
-		err = errors.Join(err, closeSnapshot())
+		if closeErr := closeSnapshot(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
 		if err != nil {
 			body = nil
 		}
@@ -61,3 +64,6 @@ func readOwnedSkillSnapshot(ctx context.Context, kernel nativeconfig.Kernel, ori
 	}
 	return file.Body, nil
 }
+
+// ValidateLeafID applies the existing portable leaf policy at the client boundary.
+func ValidateLeafID(value string) error { return pathpolicy.ValidateLeafID(value) }
