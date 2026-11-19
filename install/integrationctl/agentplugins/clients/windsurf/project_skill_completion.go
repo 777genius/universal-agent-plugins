@@ -146,7 +146,6 @@ func completeDevinSkills(ctx context.Context, env clients.Env, request domain.Ac
 	return outcome, nil
 }
 
-
 func verifyDevinSkillPolicy(env clients.Env, plan domain.DeliveryPlan, cwd, global string, before map[string]shared.NativeFileSnapshot) error {
 	after, eligible, err := devinSkillPolicyFiles(env, plan.NativeRegistryRoot, global)
 	if err != nil || !eligible || !devinSkillContextKnown(env, plan.Scope, cwd) || !devinSkillPolicyStable(before, after, global) {

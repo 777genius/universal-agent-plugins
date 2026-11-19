@@ -125,7 +125,6 @@ func projectSkillEntry(row map[string]any) bool {
 	}
 }
 
-
 func projectSkillOptionalFields(row map[string]any) ([]string, bool) {
 	fields := []string{"name", "description", "source", "userInvocable"}
 	if disabled, exists := row["disabled"]; exists {
