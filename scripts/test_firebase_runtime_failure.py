@@ -141,6 +141,18 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                 else:
                     self.assertEqual(result["status"], "refused-unqualified")
                     self.assertEqual(result["facts"], [])
+                    self.assertIn(result["refusal_phase"], {
+                        "case-root", "native-projection", "staging-binding",
+                        "source-envelope", "owned-data", "locked-npm-runtime",
+                        "npm-cache", "held-custody"})
+                    self.assertIn(result["refusal_class"], {
+                        "missing", "deadline", "invalid-state"})
+                    if mutation in ("stage-data", "stage-root", "stage-manifest"):
+                        self.assertEqual(result["refusal_phase"], "staging-binding")
+                    elif mutation in ("owner-state", "owner-digest", "owner-id"):
+                        self.assertEqual(result["refusal_phase"], "owned-data")
+                    elif mutation == "extra-log":
+                        self.assertEqual(result["refusal_phase"], "npm-cache")
 
 
 if __name__ == "__main__":

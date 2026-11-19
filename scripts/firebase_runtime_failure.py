@@ -24,6 +24,7 @@ def _unique(pairs):
 def collect(case):
     """Return all fixed facts or a refusal; no raw log, URL, path or body output."""
     refused = {"status": "refused-unqualified", "qualified": False, "facts": []}
+    refusal_phase = "case-root"
     held, directories = [], {}
     deadline = time.monotonic() + 5
     total = 0
@@ -127,6 +128,7 @@ def collect(case):
         if not case.is_absolute() or case.name != "plugin-06" or ".." in case.parts:
             raise ValueError("case authority")
         directory(case)
+        refusal_phase = "native-projection"
         source_facts = []
         entrypoint = None
         source_configs = {}
@@ -144,10 +146,12 @@ def collect(case):
                     continue
                 if not re.fullmatch(r"\.agentplugins-staging-[a-f0-9]{16}", staged.name):
                     raise ValueError("unknown staging path")
+                refusal_phase = "staging-binding"
                 backend = staged_backend(staged, skills, data)
                 if backend in sources:
                     raise ValueError("ambiguous source")
                 sources[backend] = (staged, "staging")
+        refusal_phase = "source-envelope"
         for backend, (skill, location) in sources.items():
             source = skill / ".agentplugins-runtime/io.github.777genius.agentplugins/runtime"
             config_body = read(source / "runtime.json", 16384)
@@ -182,6 +186,7 @@ def collect(case):
                                  "package": {"bytes": len(source_package), "sha256": hashlib.sha256(source_package).hexdigest()},
                                  "lock": source_lock})
         facts = []
+        refusal_phase = "owned-data"
         if dir_fact(data):
             for backend in entries(data):
                 directory(backend)
@@ -201,6 +206,7 @@ def collect(case):
                         or owner.get("ownership_digest") != "sha256:" + hashlib.sha256(
                             ("agentplugins-plugin-data-v1\0" + receipt + "\0" + str(backend)).encode()).hexdigest()):
                     raise ValueError("data authority")
+                refusal_phase = "locked-npm-runtime"
                 runtime = backend / "npm-runtime"
                 row = {"runtime_present": dir_fact(runtime), "staging": [], "targets": [], "locks": 0}
                 if row["runtime_present"]:
@@ -228,6 +234,7 @@ def collect(case):
                                 "node_modules": dir_fact(target / "node_modules"),
                                 "bin": dir_fact(target / "node_modules/.bin")}
                         row["staging" if stage else "targets"].append(item)
+                refusal_phase = "npm-cache"
                 logs = backend / "npm-cache/_logs"
                 row["npm_logs"] = {"present": dir_fact(logs), "count": 0}
                 if row["npm_logs"]["present"]:
@@ -238,6 +245,7 @@ def collect(case):
                     if candidates:
                         row["npm_logs"]["latest"] = file_fact(candidates[-1], log=True)
                 facts.append(row)
+        refusal_phase = "held-custody"
         for path in directories:
             directory(path)
         for path, fd, expected in held:
@@ -248,7 +256,15 @@ def collect(case):
             raise ValueError("deadline")
         return {"status": "observed-unqualified", "qualified": False,
                 "writer_closure_claimed": False, "source": source_facts, "facts": facts}
-    except (OSError, ValueError, TypeError, RuntimeError, KeyError):
+    except (OSError, ValueError, TypeError, RuntimeError, KeyError) as error:
+        # Fixed identifiers only: no exception strings, paths or npm log content.
+        # These are refusal locations, never product attribution or qualification.
+        refused["refusal_phase"] = refusal_phase
+        refused["refusal_class"] = (
+            "missing" if isinstance(error, FileNotFoundError)
+            else "deadline" if isinstance(error, TimeoutError) or (
+                isinstance(error, ValueError) and str(error) == "deadline")
+            else "invalid-state")
         return refused
     finally:
         for _, fd, _ in reversed(held):
