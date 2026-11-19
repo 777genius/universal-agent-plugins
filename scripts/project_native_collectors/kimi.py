@@ -878,7 +878,7 @@ def _emit_failure_diagnostic(diagnostic, error, stream):
     stream.write(line)
 
 
-def _installed_skills(data, expected):
+def _installed_skills(data, expected, selected_names=()):
     """Compare native rows to receipt-selected files, never replacement fixtures."""
     _object(data, ("skills",))
     rows = data["skills"]
@@ -899,7 +899,7 @@ def _installed_skills(data, expected):
         if "scopes" in row and (not isinstance(row["scopes"], list) or len(row["scopes"]) > 2
                 or any(value not in ("tui", "web") for value in row["scopes"])):
             raise ValueError("Kimi installed skill scope shape differs")
-        if row["name"].startswith("uap-kimi-native-"):
+        if row["name"].startswith("uap-kimi-native-") or row["name"] in selected_names:
             if row["name"] in found:
                 raise ValueError("Kimi installed skill is duplicated")
             found[row["name"]] = row
@@ -948,7 +948,12 @@ def observe_installed(ctx, request, diagnostic=None):
     diagnostic = diagnostic or _KimiFailureDiagnostic("installed")
     diagnostic.ctx = ctx
     diagnostic.step("request-validate")
-    _object(request, ("stage", "setup_trust", "skills", "servers"))
+    _object(request, ("stage", "setup_trust", "skills", "servers"), ("selected_skill_names",))
+    selected_names = request.get("selected_skill_names", [])
+    if (not isinstance(selected_names, list) or len(selected_names) > 32
+            or any(not isinstance(name, str) or not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", name)
+                   for name in selected_names) or len(set(selected_names)) != len(selected_names)):
+        raise ValueError("Kimi receipt-selected Skill names refused")
     if (not re.fullmatch(r"[a-z][a-z0-9-]{0,40}", request["stage"])
             or type(request["setup_trust"]) is not bool
             or set(request["skills"]) != set(WORKSPACES)
@@ -1028,7 +1033,7 @@ def observe_installed(ctx, request, diagnostic=None):
                               urlencode({"cwd": str(ctx.projects["user"])})), [])
         for scope in WORKSPACES:
             skill_rows[scope] = _installed_skills(api("skills-" + scope, "GET",
-                "/api/v1/workspaces/" + ids[scope] + "/skills"), request["skills"][scope])
+                "/api/v1/workspaces/" + ids[scope] + "/skills"), request["skills"][scope], selected_names)
             entries = request["servers"][scope] if scope != "c" else []
             server_rows[scope] = _installed_catalog(api("mcp-" + scope, "GET",
                 "/api/v2/mcp/servers?" + urlencode({"cwd": str(ctx.projects[scope])})), entries)
@@ -1064,6 +1069,14 @@ def observe_installed(ctx, request, diagnostic=None):
                     raise ValueError("Kimi installed named test lacks fresh correlated events")
                 seen.update(pairs)
                 probe_rows[scope] = fresh
+        if selected_names:
+            outside = {"root": ctx.projects["user"], "name": "uap-kimi-native-outside"}
+            outside_id = _workspace(api("workspace-outside", "POST", "/api/v1/workspaces",
+                {"root": str(outside["root"]), "name": outside["name"]}), outside)
+            if outside_id in ids.values():
+                raise ValueError("Kimi outside workspace identity is not distinct")
+            skill_rows["user"] = _installed_skills(api("skills-outside", "GET",
+                "/api/v1/workspaces/" + outside_id + "/skills"), [], selected_names)
         preserved()
         if _object(api("shutdown", "POST", "/api/v1/shutdown", {}), ("ok",))["ok"] is not True:
             raise ValueError("Kimi installed service shutdown failed")

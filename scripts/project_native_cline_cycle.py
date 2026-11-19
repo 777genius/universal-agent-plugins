@@ -341,3 +341,118 @@ def validate_success(rows, decode, stream):
         native(rows, state_rows, projects, configs, load, stream)
     except (KeyError, IndexError, TypeError, AttributeError, OverflowError, UnicodeError, RecursionError) as error:
         raise ValueError("Cline complete-cycle semantic structure refused") from error
+
+
+def validate_raw_skills(record, rows, decode, stream):
+    """Require the additional public raw route AND the original mixed cycle.
+
+    Captures are data only. Live foreign files, OS runner closure and tree
+    comparisons remain source-attested gates, never inferred from a flag.
+    """
+    try:
+        raw_skills(record, rows, decode, stream)
+    except (KeyError, IndexError, TypeError, AttributeError, OverflowError, UnicodeError, RecursionError) as error:
+        raise ValueError("Cline raw Skills semantic structure refused") from error
+
+
+def raw_skills(record, rows, decode, stream):
+    require(type(record) is dict and set(record) == {"source", "skill_sha256", "commands", "proofs", "inventories", "probe_before", "probe_after", "repeat_before", "repeat_after"})
+    source = "https://github.com/777genius/universal-agent-plugins/tree/b5d80336b53397be5bbb72c84f680e5885a6ac0d/tests/fixtures/uap_apm/skills"
+    key = "github-skill:777genius/universal-agent-plugins:benchmark-note:tests/fixtures/uap_apm/skills/benchmark-note"
+    name = "skill-4e68c33bfb91dc370d5c3745c0ba746428ff227ed3b3466f9c9d1552"
+    description = "An inert note for checking Agent Skills 1.0 installation."
+    skill = b"---\nname: benchmark-note\ndescription: An inert note for checking Agent Skills 1.0 installation.\n---\n\nRead the adjacent references/fixture.txt when explicitly asked. Do not access networks, credentials, or external tools.\n"
+    resource = b"Portable Agent Skills 1.0 fixture. This exact file must be preserved without transformation.\n"
+    require(record["source"] == source and record["skill_sha256"] == digest(skill) == "53e39c4f1dcaa4c2ed1196654678ede091b71fb837f77a1beb07ba556abc1198")
+    proofs = {row["stage"]: row["value"] for row in rows["cycle-proof.jsonl"]}
+    root = PurePosixPath(proofs["source-a-a-one"]["source"]).parent
+    projects = {"a": str(root / "project"), "b": str(root / "project-b"), "user": str(root / "outside")}
+    old = decode(stream(proofs["repeat-remove-a"]["state"]))["installations"][0]
+    require(stream(record["probe_before"]) == stream(record["probe_after"]) == b"".join(stream(row["value"]) for row in rows["cycle-probe-events.jsonl"]))
+    require(type(record["proofs"]) is dict and set(record["proofs"]) == {"add", "repeat", "remove"})
+    installed = []
+    for phase in ("add", "repeat", "remove"):
+        proof = record["proofs"][phase]
+        require(set(proof) == ({"state"} if phase == "remove" else {"state", "skill", "resource", "binding"}))
+        state = decode(stream(proof["state"]))
+        require(type(state) is dict and type(state["schema_version"]) is int and state["schema_version"] == 5 and len(state["installations"]) == 2)
+        others = [item for item in state["installations"] if item["installation_id"] == old["installation_id"]]
+        require(exact(others, [old]))
+        selected = [item for item in state["installations"] if item["installation_id"] != old["installation_id"]]
+        require(len(selected) == 1)
+        ins = selected[0]
+        require(ins["declared_name"] == name and type(ins["installation_id"]) is str and ins["installation_id"])
+        origin = ins["source"]
+        require(origin["stable_source_key"] == key and origin["source_binding_id"] == "src_" + digest(key.encode())[:24] and origin["repository"] == "777genius/universal-agent-plugins" and origin["package_subpath"] == "tests/fixtures/uap_apm/skills/benchmark-note" and origin["resolved_revision"] == "b5d80336b53397be5bbb72c84f680e5885a6ac0d")
+        require(re.fullmatch(r"sha256:[0-9a-f]{64}", origin["tree_digest"]) is not None)
+        require(exact(ins["package"]["inventory"], {"mcp_present": False, "mcp_enabled": False, "skills": ["benchmark-note"]}))
+        if phase == "remove":
+            require(ins["clients"] == {} and ins.get("data_retained") is True and ins["installation_id"] == installed[0]["installation_id"] and exact(origin, installed[0]["source"]) and exact(ins["package"], installed[0]["package"]))
+            continue
+        require(stream(proof["skill"]) == skill and stream(proof["resource"]) == resource and len(ins["clients"]) == 1 and ins.get("data_retained", False) is False)
+        binding = proof["binding"]
+        require(exact(list(ins["clients"].values()), [binding]))
+        physical = name[:51] + "-" + digest(ins["installation_id"].encode())[:12]
+        active = projects["a"] + "/.uap/managed/clients/cline/" + physical
+        bid = "client_" + digest("\0".join((ins["installation_id"], "cline", "project", active)).encode())[:24]
+        require(binding["client_binding_id"] == bid and list(ins["clients"]) == [bid] and binding["physical_artifact_id"] == physical and binding["target_locator"] == active and binding["native_profile_root"] == projects["a"])
+        require(all(binding[field] == value for field, value in {"client_id": "cline", "scope": "project", "activation": "active", "authentication": "not_required", "policy": "allowed", "materialization": "materialized", "verification": "installation_verified"}.items()))
+        objects = {obj["kind"]: obj for obj in binding["native_objects"]}
+        require(len(binding["native_objects"]) == len(objects) == 2 and set(objects) == {"managed_package_directory", "cline_project_skill_directory"})
+        native = projects["a"] + "/.cline/skills/benchmark-note"
+        skill_digest = "sha256:" + digest(b"f\0SKILL.md\0-\0" + skill + b"\0d\0references\0f\0references/fixture.txt\0-\0" + resource + b"\0")
+        require(exact(objects["cline_project_skill_directory"], {"object_id": "cline_project_skill_directory:benchmark-note", "kind": "cline_project_skill_directory", "logical_name": "benchmark-note", "path": native, "source_relative": "skills/benchmark-note", "managed_digest": skill_digest, "protection_class": "managed"}))
+        package_object = objects["managed_package_directory"]
+        require(set(package_object) == {"object_id", "kind", "logical_name", "path", "managed_digest", "protection_class"} and package_object["object_id"] == "package:cline:" + physical and package_object["logical_name"] == name and package_object["path"] == active and package_object["protection_class"] == "managed" and re.fullmatch(r"sha256:[0-9a-f]{64}", package_object["managed_digest"]) is not None)
+        installed.append(ins)
+    require(exact(installed[0], installed[1]) and stream(record["proofs"]["add"]["state"]) == stream(record["proofs"]["repeat"]["state"]))
+    snapshot = record["repeat_before"]
+    require(exact(snapshot, record["repeat_after"]) and set(snapshot) == {"native", "managed", "state-v2.json", "uap.toml", "uap.lock"})
+    require(stream(snapshot["state-v2.json"]) == stream(record["proofs"]["add"]["state"]) and stream(snapshot["uap.toml"]) and stream(snapshot["uap.lock"]))
+    manifest = (json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": name}, separators=(",", ":"), sort_keys=True) + "\n").encode()
+    expected_files = {"SKILL.md": skill, "references/fixture.txt": resource}
+    for label, files, directories in (("native", expected_files, {".", "references"}), ("managed", {"plugin.json": manifest, **{"skills/benchmark-note/" + path: value for path, value in expected_files.items()}}, {".", "skills", "skills/benchmark-note", "skills/benchmark-note/references"})):
+        tree = snapshot[label]
+        require(type(tree) is dict and set(tree) == set(files) | directories)
+        require(all(type(tree[path]) is str and tree[path].startswith("directory:") for path in directories))
+        require(all(type(tree[path]) is str and re.fullmatch(r"file:[0-7]+:" + digest(body), tree[path]) is not None for path, body in files.items()))
+    require(installed[0]["package"]["manifest_digest"] == "sha256:" + digest(manifest))
+    commands = record["commands"]
+    order = ["before-a", "before-b", "before-user", "add", "add-a", "add-b", "add-user", "repeat", "repeat-a", "repeat-b", "repeat-user", "remove", "remove-a", "remove-b", "remove-user"]
+    require(type(commands) is list and [row["stage"] for row in commands] == order)
+    add_argv = None
+    public = {}
+    for command in commands:
+        require(set(command) == {"stage", "argv", "cwd", "exit", "error", "deadline", "stdout", "stderr"} and type(command["exit"]) is int and command["exit"] == 0 and command["error"] is False and command["deadline"] is False)
+        argv, phase = command["argv"], command["stage"]
+        require(type(argv) is list and all(type(part) is str for part in argv) and PurePosixPath(argv[0]).is_absolute())
+        if phase in ("add", "repeat", "remove"):
+            require(command["cwd"] == projects["user"])
+            expected = ["skills", "add", source, "--skill", "benchmark-note", "--target", "cline", "--scope", "project", "--project-root", projects["a"], "--yes", "--no-ui", "--format", "json"]
+            if phase == "remove": expected = ["remove", installed[0]["installation_id"], "--target", "cline", "--scope", "project", "--project-root", projects["a"], "--yes", "--no-ui", "--format", "json"]
+            require(argv[1:] == expected)
+            if phase == "add": add_argv = argv
+            if phase == "repeat": require(argv == add_argv)
+            doc = decode(stream(command["stdout"]))
+            require(type(doc) is dict and type(doc["schema_version"]) is int and doc["schema_version"] == 1 and doc["command"] == ("agentplugins remove" if phase == "remove" else "skills add") and doc["result"] == "success")
+            if phase != "remove":
+                require(doc["status"] == "succeeded" and doc["readiness"] == "ready" and not doc.get("next_actions") and len(doc["items"]) == 1)
+                item = doc["items"][0]
+                require(item["alias"] == "benchmark-note" and item["targetId"] == "cline" and item["destinationPath"] == active and item["status"] == ("unchanged" if phase == "repeat" else "succeeded"))
+            public[phase] = command
+        else:
+            scope = phase.split("-")[1]
+            require(command["cwd"] == projects[scope] and argv[1:] == ["--auto-approve", "false", "--cwd", projects[scope], "config", "skills", "--json"] and stream(command["stderr"]) == b"")
+    inventories = record["inventories"]
+    require(type(inventories) is list and [(row["stage"], row["scope"]) for row in inventories] == [(phase, scope) for phase in ("before", "add", "repeat", "remove") for scope in ("a", "b", "user")])
+    baseline = {"a": "final-a", "b": "final-b", "user": "removed-user"}
+    for row in inventories:
+        require(set(row) == {"stage", "scope", "stdout"})
+        require(exact(row["stdout"], commands[order.index(row["stage"] + "-" + row["scope"])]["stdout"]))
+        prior = next(value["value"] for value in rows["cycle-discovery.jsonl"] if value["stage"] == baseline[row["scope"]] and value["value"]["kind"] == "skills")
+        expected = {item["path"]: item for item in decode(stream(prior["stdout"]))}
+        if row["scope"] == "a" and row["stage"] in ("add", "repeat"):
+            path = native + "/SKILL.md"
+            expected[path] = {"name": "benchmark-note", "description": description, "instructions": skill.split(b"---\n", 2)[2].decode().strip(), "frontmatter": {"name": "benchmark-note", "description": description}, "path": path}
+        catalog = decode(stream(row["stdout"]))
+        require(type(catalog) is list and len(catalog) == len(expected) and exact({item["path"]: item for item in catalog}, expected))

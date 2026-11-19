@@ -70,7 +70,8 @@ COMMANDS = ("git-A", "git-B", "version", "add-A", "native-attempt")
 KIMI_COMMANDS = ("git-a", "git-b", "git-c", "version", "add-user", "add-a", "add-b", "add-c",
                  "observe-empty", "observe-installed", "observe-stable", "observe-updated", "observe-repaired",
                  "observe-restart", "observe-removed", "repeat-add-a", "unchanged-update-a", "intact-repair-a",
-                 "update-a", "missing-repair-a", "remove-a", "repeat-remove-a")
+                 "update-a", "missing-repair-a", "remove-a", "repeat-remove-a",
+                 "observe-raw-empty", "observe-raw-add", "observe-raw-repeat", "observe-raw-removed")
 CLI_COMMANDS = ("git-a", "git-b", "version", "add-a", "native-attempt")
 CLINE_COMMANDS = ("git-a", "git-b", "version", "add-a")
 KIMI_CALL_COMMANDS = ("git-a", "git-b", "git-c", "version", "add-a", "native-attempt")
@@ -219,7 +220,7 @@ def attempt_members(bodies, source, client="copilot"):
 
 
 def kimi_members(bodies, source):
-    allowed = {"lifecycle.json"}
+    allowed = {"lifecycle.json", "raw-skills-public.json"}
     for label in KIMI_COMMANDS:
         triple = {label + suffix for suffix in (".command.json", ".stdout.log", ".stderr.log")}
         allowed |= triple
@@ -250,11 +251,78 @@ def kimi_members(bodies, source):
     if not result["test_failed"]:
         if set(bodies) != allowed or any(not qualification[key] for key in shared.QUALIFICATION_CASES if key != "mcp-tools-call"):
             raise ValueError("successful Kimi lifecycle must contain all selected stages")
+        kimi_raw_skills_members(bodies, result)
     identity = result.get("source_identity")
     if identity is not None and identity != {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"],
                                             "installer_source_state": "committed", "installer_patch_sha256": []}:
         raise ValueError("Kimi evidence source differs")
     return result
+
+
+def kimi_raw_skills_members(bodies, result):
+    """New raw coverage AND the original mixed oracle, under unchanged ZIP caps."""
+    proof = result.get("raw_skills")
+    if (not isinstance(proof, dict)
+            or any(proof.get(key) is not True for key in ("public_add_repeat_ready", "same_public_argv", "native_a_b_c_user_inventory", "removed"))
+            or proof.get("model_qualified") is not False or proof.get("mcp_activation_qualified") is not False
+            or not isinstance(proof.get("source"), dict)
+            or proof["source"].get("repository") != "anthropics/skills"
+            or proof["source"].get("resolved_revision") != "ca45fc496a3436251f191354091d557da31c15b5"
+            or proof["source"].get("package_subpath") != "skills/frontend-design"
+            or any(not isinstance(proof.get(key), str) or not proof[key] for key in ("installation_id", "binding_id"))):
+        raise ValueError("Kimi raw Skills receipt or source proof differs")
+    public = strict_json(bodies["raw-skills-public.json"])
+    labels, suffixes = ("raw-add", "raw-repeat", "raw-remove"), (".stdout.log", ".stderr.log", ".command.json")
+    if not isinstance(public, dict) or set(public) != {label+suffix for label in labels for suffix in suffixes}:
+        raise ValueError("Kimi raw public capture is incomplete")
+    commands = {}
+    for label in labels:
+        if any(not isinstance(public[label+suffix], str) for suffix in suffixes):
+            raise ValueError("Kimi raw public capture is not text")
+        command = strict_json(public[label+".command.json"].encode())
+        if (set(command) != {"argv", "cwd", "exit", "error", "deadline", "cleanup"}
+                or type(command["exit"]) is not int or command["exit"] != 0
+                or command["error"] is not False or command["deadline"] is not False
+                or not isinstance(command["argv"], list) or not command["argv"]
+                or any(not isinstance(arg, str) for arg in command["argv"])
+                or not isinstance(command["cwd"], str)):
+            raise ValueError("Kimi raw public command did not close successfully")
+        commands[label] = command
+        value = strict_json(public[label+".stdout.log"].encode())
+        if value.get("schema_version") != 1 or type(value["schema_version"]) is not int or value.get("result") != "success":
+            raise ValueError("Kimi raw public outcome differs")
+        if label != "raw-remove":
+            items = value.get("items")
+            if (value.get("command") != "skills add" or value.get("scope") != "project" or value.get("status") != "succeeded"
+                    or value.get("readiness") != "ready" or value.get("next_actions", []) != []
+                    or not isinstance(items, list) or len(items) != 1 or not isinstance(items[0], dict)
+                    or items[0].get("targetId") != "kimi" or items[0].get("status") != "succeeded"):
+                raise ValueError("Kimi raw public Skills are not Ready")
+        elif (value.get("command") != "agentplugins remove" or value.get("outcome") != "completed" or value.get("scope") != "project"):
+            raise ValueError("Kimi raw public removal differs")
+    project, installer = commands["raw-add"]["cwd"], commands["raw-add"]["argv"][0]
+    source = "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/frontend-design"
+    add = [installer, "skills", "add", source, "--skill", "frontend-design", "--target", "kimi", "--scope", "project", "--project-root", project, "--no-ui", "--yes", "--format", "json"]
+    remove = [installer, "remove", "frontend-design", "--target", "kimi", "--scope", "project", "--project-root", project, "--yes", "--format", "json"]
+    if (not Path(project).is_absolute() or not Path(installer).is_absolute()
+            or any(commands[label]["cwd"] != project for label in labels)
+            or commands["raw-add"]["argv"] != add or commands["raw-repeat"]["argv"] != add
+            or commands["raw-remove"]["argv"] != remove):
+        raise ValueError("Kimi raw repeat changed pinned public arguments or project")
+    for stage in ("raw-empty", "raw-add", "raw-repeat", "raw-removed"):
+        capture = strict_json(bodies["observe-"+stage+".stdout.log"])
+        research = strict_json(capture["files"]["research.json"].encode())
+        observed, native = research["observations"], research["commands"]
+        expected = {scope: (["frontend-design"] if scope == "a" and stage in ("raw-add", "raw-repeat") else []) for scope in ("a", "b", "c", "user")}
+        if (observed.get("stage") != stage or observed.get("skill_names") != expected
+                or observed.get("tools_call_count") != 0 or type(observed.get("tools_call_count")) is not int or observed.get("provider_configured") is not False
+                or not isinstance(native, list) or len(native) != 1 or native[0].get("exit") != 0 or type(native[0].get("exit")) is not int
+                or native[0].get("error") is not None
+                or not isinstance(native[0].get("cleanup"), dict)
+                or any(type(value) is not bool for value in native[0]["cleanup"].values())
+                or native[0].get("cleanup") != {"shutdown_acknowledged": True, "sigterm_sent": False,
+                     "forced_kill": False, "group_reaped": True, "port_closed": True}):
+            raise ValueError("Kimi raw independent inventories or natural shutdown differ")
 
 
 def qoder_log_run_stamp(text):
@@ -1008,6 +1076,7 @@ def cline_cycle_members(bodies, source):
             raise ValueError("complete Cline cycle provider cleanup required")
     if success:
         cline_cycle_success.validate_success(rows, strict_json, cline_cycle_stream)
+        cline_cycle_success.validate_raw_skills(result.get("raw_skill_cycle"), rows, strict_json, cline_cycle_stream)
     return result
 
 

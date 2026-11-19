@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import shutil
 import tarfile
 import tempfile
 import unittest
@@ -113,6 +114,120 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         subject.command(["devin", "--version"], "/tmp", {})
 
+    def test_raw_project_skill_requires_exact_provider_source_and_metadata(self):
+        selected = Path("/tmp/project-a/.devin/skills") / subject.RAW_SKILL
+        row = {"name": subject.RAW_SKILL, "description": subject.RAW_DESCRIPTION,
+               "provider": "Devin", "base_dir": str(selected), "display_name": subject.RAW_SKILL,
+               "triggers": ["user", "model"], "warnings": [], "errors": []}
+        self.assertTrue(subject.raw_skill_present(json.dumps([row]), selected))
+        self.assertFalse(subject.raw_skill_present("[]", selected))
+        mutations = {"provider": "Windsurf", "base_dir": "/tmp/project-b/.devin/skills/" + subject.RAW_SKILL,
+                     "description": "different", "display_name": "different", "triggers": ["user"],
+                     "warnings": ["unknown policy"], "errors": ["failed"], "extra": True}
+        for key, value in mutations.items():
+            with self.subTest(field=key), self.assertRaises(RuntimeError):
+                subject.raw_skill_present(json.dumps([{**row, key: value}]), selected)
+        for body in (json.dumps([row, row]), json.dumps([{}] * 129), "{}", "null", '["name-only"]'):
+            with self.subTest(body=body), self.assertRaises(RuntimeError):
+                subject.raw_skill_present(body, selected)
+
+    def test_raw_ready_output_requires_ready_unchanged_repeat(self):
+        output = {"schema_version": 1, "command": "skills add", "result": "success",
+                  "status": "succeeded", "readiness": "ready", "next_actions": [],
+                  "items": [{"alias": subject.RAW_SKILL, "targetId": "windsurf", "status": "unchanged"}]}
+        self.assertEqual(subject.raw_ready_output(json.dumps(output), repeated=True), output)
+        for key, value in (("schema_version", 2), ("command", "add"), ("result", "failure"),
+                           ("status", "partial"), ("readiness", "needs_action"),
+                           ("next_actions", ["confirm setup"]), ("items", [])):
+            with self.subTest(field=key), self.assertRaises(RuntimeError):
+                subject.raw_ready_output(json.dumps({**output, key: value}), repeated=True)
+        output["items"][0]["status"] = "succeeded"
+        with self.assertRaises(RuntimeError):
+            subject.raw_ready_output(json.dumps(output), repeated=True)
+        self.assertEqual(subject.raw_ready_output(json.dumps(output)), output)
+
+    def test_raw_case_repeats_same_argv_and_retains_checkable_evidence(self):
+        skill = (Path(__file__).resolve().parents[1] /
+                 "tests/fixtures/uap_apm/skills/benchmark-note/SKILL.md").read_bytes()
+        for fault in (None, "identity", "binding", "payload", "lock", "foreign", "scope"):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                case = root / "raw-project-skills"
+                project, outside = case / "project-a", case / "outside"
+                state_root = project / ".uap"
+                managed = state_root / "managed/clients/windsurf/fixture"
+                native = project / ".devin/skills" / subject.RAW_SKILL
+                state_path = state_root / "state-v2.json"
+                binding = {"client_id": "windsurf", "scope": "project", "activation": "active",
+                           "authentication": "not_required", "policy": "allowed", "verification": "installation_verified",
+                           "native_profile_root": str(project / ".devin"), "target_locator": str(managed)}
+                installation = {"installation_id": "held-fixture-id", "clients": {"held": binding},
+                                "source": {"resolved_revision": "b5d80336b53397be5bbb72c84f680e5885a6ac0d"}}
+                state = {"schema_version": 5, "installations": [installation]}
+                additions = 0
+                def fake_command(argv, cwd, env, timeout=90):
+                    nonlocal additions
+                    if argv[1:3] == ["skills", "add"]:
+                        self.assertEqual((Path(cwd), timeout), (outside, 90))
+                        additions += 1
+                        if additions == 1:
+                            for path in (managed, native):
+                                path.mkdir(parents=True)
+                                (path / "SKILL.md").write_bytes(skill)
+                            for name in ("uap.toml", "uap.lock"):
+                                (project / name).write_text("held lock or manifest\n")
+                            state_path.write_text(json.dumps(state))
+                        elif fault in ("identity", "binding"):
+                            if fault == "identity": installation["installation_id"] = "replacement-id"
+                            else: binding["activation"] = "prepared"
+                            state_path.write_text(json.dumps(state))
+                        elif fault == "payload": (native / "SKILL.md").write_bytes(b"changed\n")
+                        elif fault == "lock": (project / "uap.lock").write_text("changed\n")
+                        elif fault == "foreign": (case / "config/devin/mcp_config.json").write_text("changed\n")
+                        return json.dumps({"schema_version": 1, "command": "skills add", "result": "success",
+                            "status": "succeeded", "readiness": "ready", "items": [{"alias": subject.RAW_SKILL,
+                            "targetId": "windsurf", "status": "succeeded" if additions == 1 else "unchanged"}]})
+                    if argv[1] == "remove":
+                        shutil.rmtree(managed)
+                        shutil.rmtree(native)
+                        installation["clients"] = {}
+                        state_path.write_text(json.dumps(state))
+                        return json.dumps({"result": "success"})
+                    self.assertEqual((argv[1:], timeout), (["skills", "list", "--json"], 45))
+                    present = native.exists() and (Path(cwd) == project or (fault == "scope" and additions == 2))
+                    return json.dumps([{"name": subject.RAW_SKILL, "description": subject.RAW_DESCRIPTION,
+                        "provider": "Devin", "base_dir": str(native), "display_name": subject.RAW_SKILL,
+                        "triggers": ["user", "model"], "warnings": [], "errors": []}] if present else [])
+                report = {}
+                with patch.object(subject, "command", side_effect=fake_command):
+                    if fault:
+                        with self.assertRaises(RuntimeError):
+                            subject.raw_project_skills(root, report, Path("/selected/devin"), Path("/selected/uap"), {})
+                        self.assertNotEqual(report.get("raw_project_skills_native_ready"), True)
+                        continue
+                    subject.raw_project_skills(root, report, Path("/selected/devin"), Path("/selected/uap"), {})
+                evidence = report["raw_project_skills"]
+                self.assertTrue(report["raw_project_skills_native_ready"])
+                self.assertEqual(set(evidence["public"]), {"add", "repeat", "remove"})
+                self.assertEqual(evidence["public"]["repeat"]["items"][0]["status"], "unchanged")
+                commands = [row for row in evidence["commands"] if row["stage"] in ("skills-add", "skills-repeat")]
+                self.assertEqual(commands[0]["argv"], commands[1]["argv"])
+                self.assertEqual(evidence["repeat_continuity"]["before"], evidence["repeat_continuity"]["after"])
+                self.assertEqual(len(evidence["inventories"]), 12)
+                self.assertEqual({row["stage"] for row in evidence["inventories"]},
+                                 {"before-add", "after-add", "after-repeat", "after-remove"})
+
+    def test_raw_case_is_required_without_replacing_original_mixed_oracle(self):
+        for mixed, raw in ((False, False), (True, False), (False, True), (True, True)):
+            with self.subTest(mixed=mixed, raw=raw):
+                self.assertEqual(subject.qualified({"installation_discovery_e2e": mixed,
+                    "raw_project_skills_native_ready": raw}), mixed and raw)
+        self.assertFalse(subject.qualified({"installation_discovery_e2e": True}))
+        self.assertEqual(subject.RAW_SOURCE,
+            "https://github.com/777genius/universal-agent-plugins/tree/b5d80336b53397be5bbb72c84f680e5885a6ac0d/tests/fixtures/uap_apm/skills")
+        fixture = Path(__file__).resolve().parents[1] / "tests/fixtures/uap_apm/skills/benchmark-note/SKILL.md"
+        self.assertEqual(hashlib.sha256(fixture.read_bytes()).hexdigest(), subject.RAW_SKILL_SHA)
+
     def test_mcp_inventory_requires_structured_selected_enabled_source(self):
         config = Path("/tmp/project-a/.devin/mcp_config.json")
         def row(name=subject.STDIO, source=str(config), enabled=True, transport="stdio"):
@@ -134,6 +249,26 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
             with self.subTest(body=bad), self.assertRaises((RuntimeError, ValueError)):
                 subject.available_mcp(bad, subject.STDIO, config, "stdio")
         self.assertFalse(subject.available_mcp("[]", subject.STDIO, config, "stdio"))
+
+
+class RawSnapshotProjectLayoutTests(unittest.TestCase):
+    def test_snapshot_uses_real_project_dependency_root_without_legacy_fallback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary).resolve() / "project"
+            state = project / ".uap"
+            managed, native = state / "managed", project / ".devin/skills/owned"
+            for directory in (managed, native):
+                directory.mkdir(parents=True)
+            (state / "state-v2.json").write_text("state\n")
+            for name in ("uap.toml", "uap.lock"):
+                (project / name).write_text("held dependency file\n")
+            value = subject.raw_repeat_snapshot(managed, native, project)
+            self.assertTrue(all(str(path) in value for path in
+                            (state / "state-v2.json", project / "uap.toml", project / "uap.lock")))
+            (project / "uap.lock").unlink()
+            (state / "uap.lock").write_text("wrong legacy location\n")
+            with self.assertRaises(FileNotFoundError):
+                subject.raw_repeat_snapshot(managed, native, project)
 
 
 if __name__ == "__main__":

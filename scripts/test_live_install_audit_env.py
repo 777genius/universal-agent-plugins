@@ -10,6 +10,7 @@ import sys
 import textwrap
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -5021,7 +5022,8 @@ module.exports = {
                 def source_call(argv, *_args, **_kwargs):
                     return dict(empty if len(argv) > 1 and argv[1] == "list" else refused)
                 with TemporaryDirectory() as temporary:
-                    with patch.object(audit, "call", side_effect=source_call):
+                    with patch.dict(audit.AGENT_BINARIES, {}, clear=True), \
+                         patch.object(audit, "call", side_effect=source_call):
                         result = audit.do_case(
                             "/unused/audit-cli", target, "plugin", "atlassian",
                             0, Path(temporary).resolve(), {})
@@ -5162,13 +5164,13 @@ module.exports = {
             self.assertFalse(refused["completed"])
             self.assertIn("pinned", refused["reason"])
 
-    def test_chatgpt_prepared_requires_registration_and_verified_cleanup(self):
+    def test_chatgpt_alias_requires_registration_and_verified_cleanup(self):
         # BUG-013: a zero-exit CLI can still leave no managed installation.
         audit = load_audit()
         source = "github:example/chatgpt-demo@" + ("a" * 40)
         identity = "chatgpt-demo"
         matched = [{"name": identity, "installation_id": "isolated-owned-install",
-                    "clients": [{"client_id": "chatgpt",
+                    "clients": [{"client_id": "codex",
                                  "verification": "installation_verified"}]}]
 
         def response(exit_code, installations=None):
@@ -5178,11 +5180,20 @@ module.exports = {
 
         def run_case(outputs, matches):
             with TemporaryDirectory() as temporary:
-                with patch.object(audit, "call", side_effect=outputs), \
-                     patch.object(audit, "matching_installations", return_value=matches):
-                    return audit.do_case(
+                with patch.dict(audit.AGENT_BINARIES, {}, clear=True), \
+                     patch.object(audit, "call", side_effect=outputs) as calls, \
+                     patch.object(audit, "matching_installations", return_value=matches) as matching:
+                    result = audit.do_case(
                         "/unused/agentplugins", "chatgpt", "plugin", source, 0,
                         Path(temporary).resolve(), {source: identity})
+                self.assertEqual(result["canonical_client_id"], "codex")
+                self.assertGreater(matching.call_count, 0)
+                self.assertTrue(all(call.args[2] == "codex" for call in matching.call_args_list))
+                for call in calls.call_args_list:
+                    argv = call.args[0]
+                    if "--target" in argv:
+                        self.assertEqual(argv[argv.index("--target") + 1], "chatgpt")
+                return result
 
         empty = run_case([response(0), response(0)], [])
         self.assertEqual(empty["status"], "incomplete-native-proof")
@@ -5206,7 +5217,7 @@ module.exports = {
         prepared = run_case(
             [response(0), response(0), response(0), response(0), response(0), response(0)],
             matched)
-        self.assertEqual(prepared["status"], "manual-setup-prepared")
+        self.assertEqual(prepared["status"], "package-installed-native-unqualified")
         self.assertTrue(prepared["repeat_verified"])
         self.assertTrue(prepared["repeat_native_unchanged"])
         self.assertTrue(prepared["repeat_lock_unchanged"])
@@ -5214,6 +5225,74 @@ module.exports = {
         self.assertTrue(prepared["listed_identity"])
         self.assertTrue(prepared["removal_verified"])
         self.assertTrue(prepared["sentinels_preserved"])
+
+    def test_chatgpt_desktop_requires_actual_codex_bootstrap(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch("sys.argv", ["live-install-audit.py", "--cli", "/unused/agentplugins",
+                                       "--target", "chatgpt", "--kind", "plugin",
+                                       "--limit", "1", "--report-dir", temporary]), \
+                    patch.object(audit, "do_case") as cases, \
+                    patch.object(audit, "version_evidence") as version:
+                self.assertEqual(audit.main(), 2)
+            cases.assert_not_called()
+            version.assert_not_called()
+            report = json.loads((Path(temporary) / "chatgpt-plugin.json").read_text())
+        self.assertEqual(report["canonical_client_id"], "codex")
+        self.assertEqual(report["cases_attempted"], 0)
+        self.assertEqual([row["status"] for row in report["results"]], ["client-unavailable"])
+        self.assertIn("codex", report["blocker"])
+
+    def test_chatgpt_desktop_bootstrap_binds_the_shared_pin_and_regular_binary(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        self.assertIn("run: bash scripts/prepare-codex-linux-sandbox.sh", workflow)
+        self.assertIn("exclude:\n          - target: chatgpt\n            kind: skill", workflow)
+        block = textwrap.dedent(workflow.split("<<'CHATGPT_CODEX'\n", 1)[1]
+                                .split("          CHATGPT_CODEX", 1)[0])
+        pin = ("existing", "immutable", "catalog", "pin")
+        for mode in ("regular", "symlink", "not-executable", "foreign-path"):
+            with self.subTest(mode=mode), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                (root / "vendor-proof").mkdir()
+                observed = []
+
+                def provision(selected, directory, name):
+                    self.assertIs(selected, pin)
+                    self.assertEqual((directory, name), (root / "vendor-root", "codex"))
+                    binary = directory / "codex"
+                    if mode == "foreign-path":
+                        binary = root / "foreign"
+                    binary.write_bytes(b"inert test fixture, never executed")
+                    binary.chmod(0o600 if mode == "not-executable" else 0o700)
+                    if mode == "symlink":
+                        target = root / "link-target"
+                        binary.rename(target)
+                        binary.symlink_to(target)
+                    observed.append(binary)
+                    return binary, {"source": "https://example.invalid/pinned-archive"}
+
+                module = SimpleNamespace(PINS={"linux-amd64": {"codex": pin}}, provision=provision)
+                spec = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda _module: None))
+                with patch("sys.argv", ["bootstrap", str(root)]), \
+                        patch("sys.platform", "linux"), patch("platform.machine", return_value="x86_64"), \
+                        patch("importlib.util.spec_from_file_location", return_value=spec), \
+                        patch("importlib.util.module_from_spec", return_value=module):
+                    if mode == "regular":
+                        exec(compile(block, "<desktop-bootstrap-contract>", "exec"), {})
+                    else:
+                        with self.assertRaisesRegex(SystemExit, "unverified staged Codex executable"):
+                            exec(compile(block, "<desktop-bootstrap-contract>", "exec"), {})
+                self.assertEqual(len(observed), 1)
+                proof = root / "vendor-proof/codex-runtime.json"
+                if mode == "regular":
+                    value = json.loads(proof.read_text())
+                    self.assertEqual((value["public_target"], value["canonical_client_id"],
+                                      value["pin_family"], value["executable"]),
+                                     ("chatgpt", "codex", "full-catalog", str(observed[0])))
+                else:
+                    self.assertFalse(proof.exists())
 
     def test_both_native_matrices_bind_real_bootstrap_outcomes(self):
         # BUG-014: present binary + failed native --version must never produce PASS.
@@ -5242,6 +5321,7 @@ module.exports = {
             cli = Path(temporary) / "inert-cli"
             cli.write_text("no native execution")
             with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch.dict(audit.AGENT_BINARIES, {"codex": str(cli)}, clear=True), \
                     patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
                                        "--target", "chatgpt", "--kind", "plugin",
                                        "--limit", "1", "--report-dir", temporary]), \
@@ -5273,6 +5353,7 @@ module.exports = {
                 cli = Path(temporary) / "inert-cli"
                 cli.write_text("no native execution")
                 with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                        patch.dict(audit.AGENT_BINARIES, {"codex": str(cli)}, clear=True), \
                         patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
                                            "--target", "chatgpt", "--kind", "plugin",
                                            "--limit", "1", "--report-dir", temporary]), \
@@ -5399,28 +5480,62 @@ module.exports = {
         self.assertIn('env -i PATH="$PATH" HOME="$probe_home"', workflow)
 
     def test_devin_project_skills_use_exact_reviewed_native_version(self):
-        # BUG-054: actual 30/30 project Skills refused with Devin 3000.11.234;
-        # production requireCurrentDevin accepts only 3000.11.205.
+        # Both obsolete CDN routes stopped before cases with HTTP 403. The
+        # existing User and Project admission already supports official .12.57.
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/live-install-remaining-clients.yml").read_text()
+        self.assertEqual(workflow.count("            windsurf)"), 1)
+        vendor = workflow.split("            windsurf)", 1)[1].split("              ;;", 1)[0]
+        self.assertIn('https://registry.npmjs.org/devin/-/devin-3000.12.57-linux-x64.tgz', vendor)
+        self.assertNotIn('if [[ "$KIND"', vendor)
+        self.assertNotIn("static.devin.ai/cli/", workflow)
+        self.assertIn("PYTHONPATH=scripts python3 -", workflow)
+        self.assertIn('executable="$RUNNER_TEMP/vendor-devin/bin/devin"', workflow)
+        self.assertIn('test -f "$executable" && test -x "$executable" && test ! -L "$executable" || exit 4', workflow)
+        self.assertIn('env -i PATH="$PATH" HOME="$probe_home"', workflow)
+        version = (root / "install/integrationctl/agentplugins/clients/windsurf/version_profile.go").read_text()
+        self.assertIn('version == "3000.12.57"', version)
+        for relative in ("global_profile.go", "project_validation.go"):
+            self.assertIn("supportedDevinNativeVersion(client.Version)",
+                          (root / "install/integrationctl/agentplugins/clients/windsurf" / relative).read_text())
+
+    def test_devin_npm_bootstrap_binds_reviewed_archive_binary_and_package_path(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
         workflow = (Path(__file__).resolve().parents[1] /
                     ".github/workflows/live-install-remaining-clients.yml").read_text()
-        self.assertEqual(workflow.count("            windsurf)"), 2)
-        vendor_block, sha_block = (
-            block.split("              ;;", 1)[0]
-            for block in workflow.split("            windsurf)")[1:]
-        )
-        self.assertIn('if [[ "$KIND" == skill ]]; then', vendor_block)
-        self.assertIn('if [[ "$KIND" == skill ]]; then', sha_block)
-        self.assertIn("devin-3000.11.205-x86_64-unknown-linux.tar.gz", vendor_block)
-        self.assertIn("devin-3000.11.234-x86_64-unknown-linux.tar.gz", vendor_block)
-        self.assertIn('SHA256="2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4"', sha_block)
-        self.assertIn('SHA256="201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a"', sha_block)
-        self.assertLess(vendor_block.index("3000.11.205"), vendor_block.index("3000.11.234"))
-        self.assertLess(sha_block.index("2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4"),
-                        sha_block.index("201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a"))
-        self.assertLess(workflow.index('sha256_file -c -'),
-                        workflow.index('archive.extractall(path=sys.argv[2], filter="data")'))
-        self.assertIn('test -f "$executable" && test -x "$executable" && test ! -L "$executable"', workflow)
-        self.assertIn('env -i PATH="$PATH" HOME="$probe_home"', workflow)
+        marker = 'PYTHONPATH=scripts python3 - "$RUNNER_TEMP" "$URL" <<\'PY_DEVIN\'\n'
+        self.assertIn(marker, workflow)
+        source = textwrap.dedent(workflow.split(marker, 1)[1].split("\n          PY_DEVIN", 1)[0])
+        integrity = "sha512-SZhb9rrYghHvOh0PRpZT1GpNPMMo+7P9VH6t6ZNMrBmyVX3x3XflPvCv8yomx/i7vnvf64bdFR++cRRg/c8mLQ=="
+        url = "https://registry.npmjs.org/devin/-/devin-3000.12.57-linux-x64.tgz"
+        binary_sha = "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d"
+        for mode in ("good", "integrity", "version", "url", "binary", "path", "acquisition"):
+            with self.subTest(mode=mode), TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root / "vendor-proof").mkdir()
+                install = Mock(return_value=(root / "vendor-devin/bin/devin", integrity))
+                module = SimpleNamespace(VERSION="3000.12.57", TARBALL_URL=url,
+                                         BINARY_SHA=binary_sha, install_genuine_devin=install)
+                if mode == "integrity":
+                    install.return_value = (root / "vendor-devin/bin/devin", "sha512-unreviewed")
+                elif mode == "path":
+                    install.return_value = (root / "foreign/devin", integrity)
+                elif mode == "acquisition":
+                    install.side_effect = RuntimeError("ordinary acquisition refused")
+                elif mode in ("version", "url", "binary"):
+                    setattr(module, {"version": "VERSION", "url": "TARBALL_URL", "binary": "BINARY_SHA"}[mode], "unreviewed")
+                with patch.dict(sys.modules, devin_project_auto_install_e2e=module), \
+                     patch.object(sys, "argv", ["workflow", temporary, url]):
+                    if mode == "good":
+                        exec(compile(source, "remaining-devin-bootstrap", "exec"), {})
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "Devin|acquisition"):
+                            exec(compile(source, "remaining-devin-bootstrap", "exec"), {})
+                proof = json.loads((root / "vendor-proof/devin-npm.json").read_text())
+                self.assertEqual(proof["acquisition_verified"], mode == "good")
+                self.assertEqual(proof["reviewed_integrity"], integrity)
+                self.assertEqual(install.call_count, 0 if mode in ("version", "url", "binary") else 1)
 
     def test_vscode_deb_uses_exact_verified_staged_launcher(self):
         # BUG-055: /usr/bin/code may be an absolute .deb symlink, not a
@@ -7904,6 +8019,7 @@ module.exports = {
                 return {"status": "passed"}
 
             with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch.dict(audit.AGENT_BINARIES, {"codex": str(cli)}, clear=True), \
                     patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
                                        "--target", "chatgpt", "--kind", "plugin",
                                        "--limit", "1", "--report-dir", str(root)]), \

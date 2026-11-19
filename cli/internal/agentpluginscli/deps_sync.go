@@ -275,7 +275,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 }
 
 func dependencyNativeConfigRoot(app App, client domain.DetectedClient) string {
-	if _, opted := clients.As[clients.UserNativeRegistryLayout](app.ClientRegistry, client.ClientID); app.scope() == domain.ScopeUser && opted {
+	if _, opted := clients.As[clients.UserNativeRegistryLayout](app.ClientRegistry, client.ClientID); opted {
 		return client.NativeConfigRoot
 	}
 	return ""

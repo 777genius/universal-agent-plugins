@@ -24,6 +24,8 @@ func (session *groupSession) observeGroupPreparedSetups() error {
 		}
 		_, complete, _, err := session.service.activeNativeDelivery(session.ctx, target.input, target.plan, session.state.Installations[session.installationIndex], *target.managed)
 		if err != nil {
+			// Read-only setup observation failed before any external activation.
+			session.markRemainingNotAttempted(0, "verification", err.Error())
 			return err
 		}
 		if !complete {

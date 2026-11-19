@@ -211,6 +211,68 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.kimi_members({"lifecycle.json": json.dumps(result).encode()}, self.source)
 
+    def kimi_raw_lifecycle_bodies(self):
+        """Synthetic inert data for the existing reader, never runtime proof."""
+        result = {key: value for key, value in self.result().items() if key not in ("provider_kind", "runtime_attempt_complete")}
+        result.update(client="kimi", test_failed=False,
+            qualification={key: key != "mcp-tools-call" for key in runtime.shared.QUALIFICATION_CASES},
+            raw_skills={"source": {"repository": "anthropics/skills", "resolved_revision": "ca45fc496a3436251f191354091d557da31c15b5", "package_subpath": "skills/frontend-design"},
+                        "installation_id": "installation", "binding_id": "binding", "public_add_repeat_ready": True,
+                        "same_public_argv": True, "native_a_b_c_user_inventory": True, "removed": True,
+                        "model_qualified": False, "mcp_activation_qualified": False})
+        bodies = {"lifecycle.json": json.dumps(result).encode()}
+        command = {"argv": ["/owned/agentplugins"], "cwd": "/owned/A", "exit": 0,
+                   "error": False, "deadline": False, "cleanup": "ordinary full-descendant supervision; forced termination fails"}
+        for label in runtime.KIMI_COMMANDS:
+            bodies.update({label+".command.json": json.dumps(command).encode(), label+".stdout.log": b"", label+".stderr.log": b""})
+        public = {}
+        source = "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/frontend-design"
+        for label in ("raw-add", "raw-repeat", "raw-remove"):
+            args = ["/owned/agentplugins", "skills", "add", source, "--skill", "frontend-design", "--target", "kimi", "--scope", "project", "--project-root", "/owned/A", "--no-ui", "--yes", "--format", "json"]
+            value = {"schema_version": 1, "command": "skills add", "result": "success", "status": "succeeded", "scope": "project", "readiness": "ready", "items": [{"targetId": "kimi", "status": "succeeded"}]}
+            if label == "raw-remove":
+                args = ["/owned/agentplugins", "remove", "frontend-design", "--target", "kimi", "--scope", "project", "--project-root", "/owned/A", "--yes", "--format", "json"]
+                value = {"schema_version": 1, "command": "agentplugins remove", "result": "success", "outcome": "completed", "scope": "project"}
+            public.update({label+".command.json": json.dumps({**command, "argv": args}), label+".stdout.log": json.dumps(value), label+".stderr.log": ""})
+        bodies["raw-skills-public.json"] = json.dumps(public).encode()
+        for stage in ("raw-empty", "raw-add", "raw-repeat", "raw-removed"):
+            native = {"exit": 0, "error": None, "cleanup": {"shutdown_acknowledged": True, "sigterm_sent": False, "forced_kill": False, "group_reaped": True, "port_closed": True}}
+            observed = {"stage": stage, "skill_names": {scope: (["frontend-design"] if scope == "a" and stage in ("raw-add", "raw-repeat") else []) for scope in ("a", "b", "c", "user")}, "tools_call_count": 0, "provider_configured": False}
+            bodies["observe-"+stage+".stdout.log"] = json.dumps({"files": {"research.json": json.dumps({"observations": observed, "commands": [native]})}}).encode()
+        return bodies
+
+    def test_kimi_raw_reader_ands_exact_public_ready_repeat_and_independent_scope_shutdown(self):
+        bodies = self.kimi_raw_lifecycle_bodies()
+        self.assertEqual(len(bodies), 80)
+        self.assertFalse(runtime.kimi_members(bodies, self.source)["test_failed"])
+        for failure in ("mixed", "raw-flag", "raw-missing", "prepared", "internal-status", "repeat-status", "repeat-argv", "user-leak", "forced-shutdown", "missing-user"):
+            changed = dict(bodies)
+            result = json.loads(changed["lifecycle.json"])
+            if failure == "mixed": result["qualification"]["project-lifecycle"] = False
+            if failure == "raw-flag": result["raw_skills"]["removed"] = 1
+            changed["lifecycle.json"] = json.dumps(result).encode()
+            if failure == "raw-missing": del changed["raw-skills-public.json"]
+            if failure in ("prepared", "internal-status", "repeat-status", "repeat-argv"):
+                public = json.loads(changed["raw-skills-public.json"])
+                name = "raw-repeat.stdout.log" if failure in ("prepared", "internal-status", "repeat-status") else "raw-repeat.command.json"
+                value = json.loads(public[name])
+                if failure == "prepared": value["readiness"] = "needs_action"
+                elif failure == "internal-status": value["items"][0]["status"] = "completed"
+                elif failure == "repeat-status": value["items"][0]["status"] = "unchanged"
+                else: value["argv"][3] = "https://foreign.invalid/source"
+                public[name] = json.dumps(value)
+                changed["raw-skills-public.json"] = json.dumps(public).encode()
+            if failure in ("user-leak", "forced-shutdown", "missing-user"):
+                capture = json.loads(changed["observe-raw-removed.stdout.log"])
+                research = json.loads(capture["files"]["research.json"])
+                if failure == "user-leak": research["observations"]["skill_names"]["user"] = ["frontend-design"]
+                if failure == "missing-user": del research["observations"]["skill_names"]["user"]
+                if failure == "forced-shutdown": research["commands"][0]["cleanup"]["forced_kill"] = True
+                capture["files"]["research.json"] = json.dumps(research)
+                changed["observe-raw-removed.stdout.log"] = json.dumps(capture).encode()
+            with self.subTest(failure=failure), self.assertRaises(ValueError):
+                runtime.kimi_members(changed, self.source)
+
     def cli_result(self, client):
         result = {key: value for key, value in self.result().items() if key != "provider_kind"}
         result.update({"client": client, "version": runtime.CLI_ATTEMPTS[client],

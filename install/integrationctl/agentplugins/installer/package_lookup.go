@@ -20,7 +20,7 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	}
 	if req.ClientNativeConfigRoot != "" {
 		_, opted := clients.As[clients.UserNativeRegistryLayout](e.cfg.Registry, id)
-		if e.scope() != domain.ScopeUser || !opted || !validRoot(req.ClientNativeConfigRoot) {
+		if !opted || !validRoot(req.ClientNativeConfigRoot) {
 			return domain.DetectedClient{}, fmt.Errorf("%w: ClientNativeConfigRoot requires an explicit absolute clean User root and an opted-in adapter", ErrInvalidRequest)
 		}
 	}
