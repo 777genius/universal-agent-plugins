@@ -640,21 +640,19 @@ def complete(commands,proof_rows,probes,result):
 
 def cache_file_observation(value, row, now):
     """Bind optional schema-only facts to a refused new file in the owned cli cache."""
-    obj(value, "relative_path bytes sha256 format", "top_level_schema")
-    name = value["relative_path"]
-    require(type(name) is str and re.fullmatch(r"cli/[A-Za-z0-9][A-Za-z0-9._-]{0,95}", name)
-            and row["operation"] == "added" and row["before"] is False and row["after"] is True
+    obj(value, "bytes sha256 format", "top_level_type_counts")
+    require(row["operation"] == "added" and row["before"] is False and row["after"] is True
             and now["Kind"] == "file" and now["Links"] == 1
-            and row["key_sha256"] == sha(name.encode()) and row["parent_sha256"] == sha(b"cli")
+            and row["parent_sha256"] == sha(b"cli")
             and type(value["bytes"]) is int and value["bytes"] == now["Size"]
             and 0 <= value["bytes"] <= 1 << 20 and value["sha256"] == now["SHA256"]
             and value["format"] in ("opaque", "json-object", "json-array", "json-scalar"))
-    if "top_level_schema" in value:
-        schema = value["top_level_schema"]
-        require(value["format"] == "json-object" and type(schema) is dict and len(schema) <= 32
-                and all(type(key) is str and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", key)
-                        and type(kind) is str and kind in ("object", "array", "string", "number", "boolean", "null")
-                        for key, kind in schema.items()))
+    if "top_level_type_counts" in value:
+        counts = value["top_level_type_counts"]
+        require(value["format"] == "json-object" and type(counts) is dict and len(counts) <= 6
+                and all(type(kind) is str and kind in ("object", "array", "string", "number", "boolean", "null")
+                        and type(count) is int and 1 <= count <= 32 for kind, count in counts.items())
+                and sum(counts.values()) <= 32)
 
 
 def cache_diagnostic(value, summary, commands):

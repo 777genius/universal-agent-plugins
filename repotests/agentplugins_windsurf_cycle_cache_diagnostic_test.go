@@ -59,7 +59,7 @@ func (c *windProjectCycle) auditNativeCache(label string, start, end time.Time) 
 		"changed_records":      len(changed),
 	}
 	// Arbitrary names remain opaque. Only a bounded new cli leaf can carry
-	// relative-name/schema facts; none of these facts authorize its mutation.
+	// digest/size and aggregate-type facts; none of these facts authorize its mutation.
 	// A large/unreadable delta remains a refusal, not an output-amplification path.
 	if len(changed) > 16 {
 		audit["bounded_out"] = true
@@ -99,7 +99,6 @@ func (c *windProjectCycle) auditNativeCache(label string, start, end time.Time) 
 }
 
 var windCacheLeafName = regexp.MustCompile(`^cli/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$`)
-var windCacheSchemaName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
 
 // This optional diagnostic reads a held, bounded file but exports no values.
 // A failed read leaves the original opaque refusal evidence unchanged.
@@ -128,7 +127,7 @@ func windCacheFileObservation(root, name string, want windProfileRecord) (fact m
 	if unix.Lstat(path, &after) != nil || !windSameStat(before, after) || windCheckEdges(edges) != nil {
 		return nil
 	}
-	fact = map[string]any{"relative_path": name, "bytes": want.Size, "sha256": want.SHA256, "format": "opaque"}
+	fact = map[string]any{"bytes": want.Size, "sha256": want.SHA256, "format": "opaque"}
 	value, err := projectNativeRuntimeJSON(body)
 	if err != nil {
 		return fact
@@ -139,25 +138,22 @@ func windCacheFileObservation(root, name string, want windProfileRecord) (fact m
 		fact["format"] = "json-" + kind
 	}
 	if object, ok := value.(map[string]any); ok {
-		if schema := windCacheJSONSchema(object); schema != nil {
-			fact["top_level_schema"] = schema
+		if counts := windCacheJSONTypes(object); counts != nil {
+			fact["top_level_type_counts"] = counts
 		}
 	}
 	return fact
 }
 
-func windCacheJSONSchema(object map[string]any) map[string]string {
+func windCacheJSONTypes(object map[string]any) map[string]int {
 	if len(object) > 32 {
 		return nil
 	}
-	schema := make(map[string]string, len(object))
-	for name, value := range object {
-		if !windCacheSchemaName.MatchString(name) {
-			return nil
-		}
-		schema[name] = windCacheJSONType(value)
+	counts := make(map[string]int)
+	for _, value := range object {
+		counts[windCacheJSONType(value)]++
 	}
-	return schema
+	return counts
 }
 
 func windCacheJSONType(value any) string {
@@ -243,12 +239,13 @@ func TestWindsurfCycleCacheAuditRefusesUnknownSymlink(t *testing.T) {
 func TestWindsurfCycleCacheFileObservationIsBoundedSchemaOnly(t *testing.T) {
 	for _, scenario := range []struct {
 		name, body, format string
-		schema             map[string]string
+		counts             map[string]int
 	}{
-		{"cache.json", `{"access_token":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR","servers":{"nested":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"},"items":[],"count":1,"enabled":true,"empty":null}`, "json-object", map[string]string{"access_token": "string", "servers": "object", "items": "array", "count": "number", "enabled": "boolean", "empty": "null"}},
+		{"cache.json", `{"access_token":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR","servers":{"nested":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"},"items":[],"count":1,"enabled":true,"empty":null}`, "json-object", map[string]int{"string": 1, "object": 1, "array": 1, "number": 1, "boolean": 1, "null": 1}},
 		{"duplicate.json", `{"key":1,"key":2}`, "opaque", nil},
 		{"malformed.json", `{"token":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"`, "opaque", nil},
-		{"unsafe-schema.json", `{"/private/path":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"}`, "json-object", nil},
+		{"unsafe-schema.json", `{"/private/path":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"}`, "json-object", map[string]int{"string": 1}},
+		{"SECRET_FILENAME_DO_NOT_DISCLOSE.json", `{"SECRET_KEY_DO_NOT_DISCLOSE":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"}`, "json-object", map[string]int{"string": 1}},
 		{"array.json", `["OWNED_CACHE_VALUE_MUST_NOT_APPEAR"]`, "json-array", nil},
 		{"scalar.json", `"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"`, "json-scalar", nil},
 	} {
@@ -272,15 +269,15 @@ func TestWindsurfCycleCacheFileObservationIsBoundedSchemaOnly(t *testing.T) {
 					fact, _ = row["file_observation"].(map[string]any)
 				}
 			}
-			if fact == nil || fact["relative_path"] != name || fact["bytes"] != int64(len(scenario.body)) || fact["sha256"] != windsurfConfigDigest([]byte(scenario.body)) || fact["format"] != scenario.format {
+			if fact == nil || fact["bytes"] != int64(len(scenario.body)) || fact["sha256"] != windsurfConfigDigest([]byte(scenario.body)) || fact["format"] != scenario.format {
 				t.Fatal("cache diagnostic did not bind exact bounded file facts")
 			}
-			schema, _ := fact["top_level_schema"].(map[string]string)
-			if !reflect.DeepEqual(schema, scenario.schema) {
-				t.Fatal("cache diagnostic schema differs")
+			counts, _ := fact["top_level_type_counts"].(map[string]int)
+			if !reflect.DeepEqual(counts, scenario.counts) {
+				t.Fatal("cache diagnostic aggregate types differ")
 			}
 			raw, err := json.Marshal(audit)
-			if err != nil || strings.Contains(string(raw), "OWNED_CACHE_VALUE_MUST_NOT_APPEAR") || strings.Contains(string(raw), "/private/path") || strings.Contains(string(raw), root) {
+			if err != nil || strings.Contains(string(raw), "OWNED_CACHE_VALUE_MUST_NOT_APPEAR") || strings.Contains(string(raw), "SECRET_FILENAME_DO_NOT_DISCLOSE") || strings.Contains(string(raw), "SECRET_KEY_DO_NOT_DISCLOSE") || strings.Contains(string(raw), "/private/path") || strings.Contains(string(raw), root) {
 				t.Fatal("cache diagnostic disclosed values or host path")
 			}
 		})
@@ -329,7 +326,7 @@ func TestWindsurfCycleCacheFileObservationRefusesUnboundFacts(t *testing.T) {
 	for i := range 33 {
 		large[fmt.Sprintf("key%d", i)] = "PRIVATE_VALUE"
 	}
-	if windCacheJSONSchema(large) != nil {
+	if windCacheJSONTypes(large) != nil {
 		t.Fatal("unbounded schema accepted")
 	}
 }
