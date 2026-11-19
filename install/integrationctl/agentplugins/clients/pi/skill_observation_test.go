@@ -48,6 +48,9 @@ func (runner *piSkillCatalogRunner) RunDuplexToCompletion(ctx context.Context, c
 	runner.command = command
 	if runner.expire {
 		<-ctx.Done()
+		if runner.after != nil {
+			runner.after()
+		}
 		return ctx.Err()
 	}
 	runner.input.Reset()
@@ -293,7 +296,11 @@ func TestPiSkillsUnqualifiedAuthorityNeverStartsNativeQuery(t *testing.T) {
 				out.NativeObjects = slices.Clone(request.Delivery.NativeObjects)
 			}
 			got, err := completePiSkills(t.Context(), env, request, out)
-			if err != nil || got.Activation != domain.ActivationPrepared || runner.calls != 0 {
+			if mode == "missing-bounded-reader" || mode == "wrong-selected-name" {
+				if err == nil || got.Activation != domain.ActivationFailed || got.NativeEffect != domain.NativeEffectUncertain || runner.calls != 0 {
+					t.Fatalf("unqualified capture did not fail closed: %+v %v calls%d", got, err, runner.calls)
+				}
+			} else if err != nil || got.Activation != domain.ActivationPrepared || runner.calls != 0 {
 				t.Fatalf("unqualified request queried native: %+v %v calls%d", got, err, runner.calls)
 			}
 		})
@@ -634,13 +641,17 @@ func TestPiSkillsCancellationDuringFinalTrustReadCannotPromote(t *testing.T) {
 func TestPiSkillsInternalTimeoutKeepsVerifiedPrepared(t *testing.T) {
 	request, env, runner := piSkillFixture(t, domain.ScopeUser)
 	runner.expire = true
+	after := false
+	files := &piReviewTrustFiles{after: &after}
+	env.NativeConfig = nativeconfig.NewWithFileIO(files)
+	runner.after = func() { after = true }
 	out := piSkillOutcome(request)
 	out.NativeEffect = domain.NativeEffectCommitted
 	got, err := completePiSkills(t.Context(), env, request, out)
 	if t.Context().Err() != nil {
 		t.Fatal("parent expired instead of internal catalog budget")
 	}
-	if err != nil || !reflect.DeepEqual(got, out) || runner.calls != 1 {
+	if err != nil || !reflect.DeepEqual(got, out) || runner.calls != 1 || files.finalReads == 0 {
 		t.Fatalf("closed catalog timeout replaced verified binding or skipped custody: %+v %v", got, err)
 	}
 }

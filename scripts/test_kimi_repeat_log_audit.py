@@ -1,6 +1,7 @@
 """Inert filesystem checks for one bounded owned Kimi diagnostic append."""
 import copy
 import os
+import stat
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -59,8 +60,10 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
                 self.fixture()
                 before = self.capture()
                 self.append()
-                if mutation == "prefix": self.log.write_bytes(b"changed original\n")
-                elif mutation == "truncate": self.log.write_bytes(b"")
+                if mutation == "prefix":
+                    self.log.write_bytes(b"changed original\n")
+                elif mutation == "truncate":
+                    self.log.write_bytes(b"")
                 elif mutation == "replace":
                     replacement = self.log.with_suffix(".new")
                     replacement.write_bytes(self.log.read_bytes())
@@ -68,15 +71,25 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
                 elif mutation == "rotate":
                     self.log.rename(self.log.with_suffix(".log.1"))
                     self.log.write_bytes(b"new rotation\n")
-                elif mutation == "mode": self.log.chmod(0o400)
-                elif mutation == "parent-mode": self.log.parent.chmod(0o700)
-                elif mutation == "profile": (self.home / "foreign").write_bytes(b"changed")
-                elif mutation == "skill": (self.project / ".kimi-code/skills/docs/SKILL.md").write_bytes(b"changed")
-                elif mutation == "managed": (self.project / ".uap/managed/package/payload").write_bytes(b"changed")
-                elif mutation == "new-file": (self.log.parent / "unexpected").write_bytes(b"new")
-                elif mutation == "new-directory": (self.log.parent / "unexpected").mkdir()
+                elif mutation == "mode":
+                    self.log.chmod(0o400)
+                elif mutation == "parent-mode":
+                    original = stat.S_IMODE(self.log.parent.stat().st_mode)
+                    self.log.parent.chmod(original ^ stat.S_IRGRP)
+                    self.assertNotEqual(stat.S_IMODE(self.log.parent.stat().st_mode), original)
+                elif mutation == "profile":
+                    (self.home / "foreign").write_bytes(b"changed")
+                elif mutation == "skill":
+                    (self.project / ".kimi-code/skills/docs/SKILL.md").write_bytes(b"changed")
+                elif mutation == "managed":
+                    (self.project / ".uap/managed/package/payload").write_bytes(b"changed")
+                elif mutation == "new-file":
+                    (self.log.parent / "unexpected").write_bytes(b"new")
+                elif mutation == "new-directory":
+                    (self.log.parent / "unexpected").mkdir()
                 after = self.capture()
-                if mutation == "post-list": self.append()
+                if mutation == "post-list":
+                    self.append()
                 self.assertIsNone(self.classify(before, after, self.capture()))
 
     def test_refuses_links_absence_oversize_and_read_race(self):
@@ -87,10 +100,13 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
                     target = self.home / "target"
                     self.log.rename(target)
                     self.log.symlink_to(target)
-                elif mutation == "hardlink": os.link(self.log, self.home / "linked")
-                elif mutation == "absent": self.log.unlink()
+                elif mutation == "hardlink":
+                    os.link(self.log, self.home / "linked")
+                elif mutation == "absent":
+                    self.log.unlink()
                 elif mutation == "oversize":
-                    with self.log.open("ab") as stream: stream.truncate((6 << 20) + 1)
+                    with self.log.open("ab") as stream:
+                        stream.truncate((1 << 20) + 1)
                 if mutation == "read-race":
                     read = self.audit.copilot_settings_read
                     def changing(*args, **kwargs):
@@ -99,7 +115,8 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
                         return value
                     with patch.object(self.audit, "copilot_settings_read", changing):
                         self.assertIsNone(self.capture())
-                else: self.assertIsNone(self.capture())
+                else:
+                    self.assertIsNone(self.capture())
 
     def test_ready_and_closed_command_remain_mandatory(self):
         self.fixture()
@@ -109,10 +126,39 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
         for boundary in ("fresh", "repeat", "actions", "item", "exit", "timeout"):
             with self.subTest(boundary=boundary):
                 added, repeated, command = copy.deepcopy(self.added), copy.deepcopy(self.repeated), dict(self.command)
-                if boundary == "fresh": added["readiness"] = "needs_action"
-                elif boundary == "repeat": repeated["readiness"] = "needs_action"
-                elif boundary == "actions": repeated["next_actions"] = [{"code": "verify_native"}]
-                elif boundary == "item": repeated["items"][0]["status"] = "completed"
-                elif boundary == "exit": command["exit_code"] = 1
-                elif boundary == "timeout": command["timeout"] = True
+                if boundary == "fresh":
+                    added["readiness"] = "needs_action"
+                elif boundary == "repeat":
+                    repeated["readiness"] = "needs_action"
+                elif boundary == "actions":
+                    repeated["next_actions"] = [{"code": "verify_native"}]
+                elif boundary == "item":
+                    repeated["items"][0]["status"] = "completed"
+                elif boundary == "exit":
+                    command["exit_code"] = 1
+                elif boundary == "timeout":
+                    command["timeout"] = True
                 self.assertIsNone(self.audit.kimi_repeat_log_append(before, after, after, added, repeated, command))
+
+    def test_append_bound_matches_existing_removal_scan(self):
+        for size in ((1 << 20) - 1, 1 << 20, (1 << 20) + 1):
+            with self.subTest(size=size):
+                self.fixture()
+                self.log.write_bytes(b"x" * ((1 << 20) - 2))
+                before = self.capture()
+                self.assertIsNotNone(before)
+                with self.log.open("ab") as stream:
+                    stream.write(b"y" * (size - ((1 << 20) - 2)))
+                after = self.capture()
+                proof = self.classify(before, after, self.capture())
+                native = self.home / ".kimi-code"
+                leftovers = self.audit.native_identity_residuals(
+                    [native], "removed-skill", self.audit.snapshot([native]), "kimi")
+                if size <= 1 << 20:
+                    self.assertIsNotNone(proof)
+                    self.assertEqual(proof["after_bytes"], size)
+                    self.assertEqual(leftovers, [])
+                else:
+                    self.assertIsNone(after)
+                    self.assertIsNone(proof)
+                    self.assertEqual(leftovers, [".kimi-code/logs/kimi-code.log: unscanned-too-large"])

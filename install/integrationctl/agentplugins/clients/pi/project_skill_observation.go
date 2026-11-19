@@ -45,7 +45,11 @@ func completePiSkills(ctx context.Context, env clients.Env, request domain.Activ
 	defer cancel()
 	proof, err := capturePiSkills(bounded, env, request)
 	if err != nil {
-		return out, bounded.Err()
+		if errors.Is(err, errPiSkillObservationRead) || err == bounded.Err() {
+			return out, bounded.Err()
+		}
+		out.NativeEffect = domain.NativeEffectUncertain
+		return shared.FailedActivation(out, "repair the exact owned Pi Skills and review the selected profile before retrying", errors.Join(err, bounded.Err()))
 	}
 	observed, queryErr := runPiSkillCatalog(bounded, runner, request)
 	verification, finish := context.WithTimeout(ctx, 5*time.Second)
@@ -63,18 +67,20 @@ func finishPiSkills(ctx context.Context, env clients.Env, request domain.Activat
 		return out, err
 	}
 	fresh, err := capturePiSkills(ctx, env, request)
-	if stopped := ctx.Err(); stopped != nil {
+	stopped := ctx.Err()
+	mismatch := fresh != nil && err == nil && !reflect.DeepEqual(proof, fresh)
+	if mismatch || err != nil && err != stopped && !errors.Is(err, errPiSkillObservationRead) {
+		out.NativeEffect = domain.NativeEffectUncertain
+		return shared.FailedActivation(out, "repair the exact owned Pi Skills and review the selected profile before retrying",
+			errors.Join(queryErr, err, stopped, errors.New("pi Skill source, native objects or trust authority changed during observation")))
+	}
+	if stopped != nil {
 		return out, stopped
 	}
 	if errors.Is(err, errPiSkillObservationRead) {
 		// Read-only uncertainty is not evidence of a new native mutation. Retain
 		// the verified binding and its already recorded effect, without promotion.
 		return out, nil
-	}
-	if err != nil || !reflect.DeepEqual(proof, fresh) {
-		out.NativeEffect = domain.NativeEffectUncertain
-		return shared.FailedActivation(out, "repair the exact owned Pi Skills and review the selected profile before retrying",
-			errors.Join(queryErr, err, errors.New("pi Skill source, native objects or trust authority changed during observation")))
 	}
 	if queryErr == nil && piSkillCatalogMatches(observed, proof.skills, request.Plan.Scope, request.Plan.NativeRegistryRoot) &&
 		piSkillsAuthority(request, out) {
@@ -253,31 +259,34 @@ func piPackageSkillReceipt(ctx context.Context, snapshots ports.DirectorySnapsho
 func piSkillTrust(env clients.Env, request domain.ActivationRequest) ([]shared.NativeFileSnapshot, error) {
 	kernel := env.NativeConfig
 	paths := []string{filepath.Join(request.Client.ConfigRoot, "settings.json"), filepath.Join(request.Client.ConfigRoot, "trust.json")}
+	snapshots := make([]shared.NativeFileSnapshot, 0, 4)
+	read := func(path string) (shared.NativeFileSnapshot, error) {
+		snapshot, err := kernel.ReadExactFileBounded(path, piTrustDocumentLimit)
+		if err == nil {
+			snapshots = append(snapshots, snapshot)
+		}
+		return snapshot, err
+	}
+	for _, path := range paths {
+		if _, err := read(path); err != nil {
+			return nil, piSkillReadFailure(err)
+		}
+	}
 	if request.Plan.Scope == domain.ScopeProject {
-		recorded, err := observePiProjectTrust(kernel, request)
+		recorded, err := observePiProjectTrustWithReader(request, read)
 		if err != nil {
 			return nil, piSkillReadFailure(err)
 		}
 		if !recorded {
 			return nil, errors.New("pi project trust was not previously confirmed")
 		}
-		blocker, err := piTrustBlocker(kernel, request.Client.ConfigRoot, request.Plan.TargetContext.ProjectRoot)
+		blocker, err := piTrustBlockerSnapshot(snapshots[len(snapshots)-1], request.Client.ConfigRoot, request.Plan.TargetContext.ProjectRoot)
 		if err != nil {
 			return nil, piSkillReadFailure(err)
 		}
 		if blocker != "" {
 			return nil, fmt.Errorf("pi project trust is blocked: %s", blocker)
 		}
-		_, entry, projects := piTrustHookPaths(request.Client.ConfigRoot)
-		paths = append(paths, entry, projects)
-	}
-	snapshots := make([]shared.NativeFileSnapshot, 0, len(paths))
-	for _, path := range paths {
-		snapshot, err := kernel.ReadExactFileBounded(path, 1<<20)
-		if err != nil {
-			return nil, piSkillReadFailure(err)
-		}
-		snapshots = append(snapshots, snapshot)
 	}
 	return snapshots, nil
 }

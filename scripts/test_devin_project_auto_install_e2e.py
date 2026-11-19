@@ -114,6 +114,53 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         subject.command(["devin", "--version"], "/tmp", {})
 
+    def test_failed_command_retains_bounded_redacted_receipt_before_raise(self):
+        secret = 'private value "with quotes"'
+        stderr = ('agentplugins: selected native inventory is unavailable\n'
+                  'API_KEY="' + secret.replace('"', '\\"') + '"\n'
+                  'Authorization: Bearer opaque-bearer\n'
+                  'token="two private words"\n').encode()
+        receipt = {"stage": "skills-add", "argv": ["agentplugins", "skills", "add"]}
+        stdout = json.dumps({"command": "skills add", "result": "failure", "status": "failed",
+                             "readiness": "failed", "private": secret}).encode()
+        record = {"error": None, "exit": 1, "elapsed_seconds": 0.5}
+        with patch.object(subject, "run_probe", return_value=(record, stdout, stderr)):
+            with self.assertRaisesRegex(RuntimeError, "exit=1") as raised:
+                subject.command(["agentplugins", "skills", "add"], "/tmp",
+                                {"API_KEY": secret}, receipt=receipt)
+        result = receipt["result"]
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(result["stderr_sha256"], hashlib.sha256(stderr).hexdigest())
+        self.assertEqual(result["public_status"], {
+            "command": "skills add", "result": "failure", "status": "failed", "readiness": "failed"})
+        self.assertIn("selected native inventory is unavailable", result["stderr_diagnostic"])
+        self.assertIn("selected native inventory is unavailable", str(raised.exception))
+        self.assertIn("stage=skills-add", str(raised.exception))
+        rendered = json.dumps(receipt) + str(raised.exception)
+        for private in (secret, "opaque-bearer", "two private words", "private value"):
+            self.assertNotIn(private, rendered)
+        self.assertLessEqual(len(result["stderr_diagnostic"]), 2048)
+        large = b"token=" + b"Z" * 3000
+        self.assertLessEqual(len(subject.command_diagnostic(large, {})), 2048)
+        self.assertNotIn("Z" * 16, subject.command_diagnostic(large, {}))
+        self.assertIn("<redacted>", subject.command_diagnostic(large, {}))
+
+    def test_raw_failure_keeps_selected_command_stage_and_result(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            report = {}
+            success = ({"error": None, "exit": 0}, b"[]", b"")
+            failed = ({"error": None, "exit": 1}, b'{"result":"failure"}',
+                      b"agentplugins: exact selected source could not be acquired")
+            with patch.object(subject, "run_probe", side_effect=[success] * 3 + [failed]):
+                with self.assertRaises(RuntimeError):
+                    subject.raw_project_skills(Path(temporary), report,
+                                               Path("/selected/devin"), Path("/selected/uap"), {})
+            last = report["raw_project_skills"]["commands"][-1]
+            self.assertEqual(last["stage"], "skills-add")
+            self.assertEqual(last["result"]["exit_code"], 1)
+            self.assertIn("selected source could not be acquired", last["result"]["stderr_diagnostic"])
+            self.assertNotEqual(report.get("raw_project_skills_native_ready"), True)
+
     def test_raw_project_skill_requires_exact_provider_source_and_metadata(self):
         selected = Path("/tmp/project-a/.devin/skills") / subject.RAW_SKILL
         row = {"name": subject.RAW_SKILL, "description": subject.RAW_DESCRIPTION,
@@ -165,7 +212,7 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                                 "source": {"resolved_revision": "b5d80336b53397be5bbb72c84f680e5885a6ac0d"}}
                 state = {"schema_version": 5, "installations": [installation]}
                 additions = 0
-                def fake_command(argv, cwd, env, timeout=90):
+                def fake_command(argv, cwd, env, timeout=90, receipt=None):
                     nonlocal additions
                     if argv[1:3] == ["skills", "add"]:
                         self.assertEqual((Path(cwd), timeout), (outside, 90))

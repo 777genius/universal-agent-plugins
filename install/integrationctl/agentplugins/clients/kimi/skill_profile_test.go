@@ -11,7 +11,43 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
+
+type kimiTokenIdentitySnapshots struct {
+	ports.DirectorySnapshots
+	afterDigest func(string)
+}
+
+func (snapshots kimiTokenIdentitySnapshots) Digest(ctx context.Context, root string) (string, error) {
+	digest, err := snapshots.DirectorySnapshots.Digest(ctx, root)
+	snapshots.afterDigest(root)
+	return digest, err
+}
+
+func TestKimiFinalIdentityReadCannotHideTokenChange(t *testing.T) {
+	for _, version := range []string{"2.3.2", "2.5.2"} {
+		for _, scenario := range []struct {
+			name string
+			size int
+		}{{"replacement", 43}, {"oversized", 44}} {
+			t.Run(version+"-"+scenario.name, func(t *testing.T) {
+				f := newKimiCompletionFixture(t, version)
+				changed := 0
+				f.env.Snapshots = kimiTokenIdentitySnapshots{DirectorySnapshots: f.env.Snapshots, afterDigest: func(root string) {
+					if root == filepath.Join(f.request.Client.ConfigRoot, "workspace-trust") && len(f.calls) > 0 && f.calls[len(f.calls)-1] == "POST /api/v1/shutdown" {
+						changed++
+						write(t, filepath.Join(f.request.Client.ConfigRoot, "server.token"), strings.Repeat("B", scenario.size))
+					}
+				}}
+				out, err := New().Activate(t.Context(), f.env, f.request)
+				if err == nil || out.Activation != domain.ActivationPrepared || out.NativeEffect != domain.NativeEffectUncertain || f.queries != 1 || changed != 1 {
+					t.Fatal("final identity read hid a changed or oversized native token", out, err, changed, f.queries)
+				}
+			})
+		}
+	}
+}
 
 func TestKimiFirstTokenMayOnlyHardenSameProfileDirectory(t *testing.T) {
 	if runtime.GOOS == "windows" {

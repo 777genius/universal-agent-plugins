@@ -261,7 +261,7 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 					t.Fatalf("configuration-only Pi fixture lost its exact binding: %+v", installed.Clients)
 				}
 				for _, binding := range installed.Clients {
-					if binding.ClientID != domain.ClientPi || binding.Activation != domain.ActivationPrepared {
+					if binding.ClientID != string(domain.ClientPi) || binding.Activation != domain.ActivationPrepared {
 						t.Fatalf("configuration-only Pi fixture claimed native discovery: %+v", binding)
 					}
 				}

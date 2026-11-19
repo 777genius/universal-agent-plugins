@@ -43,6 +43,9 @@ func (r *copilotWholeSkillRunner) RunWithTreeExitGrace(ctx context.Context, c le
 	r.commands = append(r.commands, c)
 	if r.expire {
 		<-ctx.Done()
+		if r.mutate != nil {
+			r.mutate()
+		}
 		return r.result, ctx.Err()
 	}
 	if r.mutate != nil {
@@ -405,13 +408,33 @@ func TestCopilotWholePluginCatalogRejectsForeignNULPath(t *testing.T) {
 func TestCopilotWholeSkillsInternalTimeoutKeepsVerifiedPrepared(t *testing.T) {
 	request, env, runner := copilotWholeSkillFixture(t)
 	runner.expire = true
+	after := false
+	reads := 0
+	env.NativeConfig = nativeconfig.NewWithFileIO(copilotTimeoutCustodyFiles{after: &after, reads: &reads})
+	runner.mutate = func() { after = true }
 	out := copilotPreparedSkillOutcome(request)
 	out.NativeEffect = domain.NativeEffectCommitted
 	got, err := observeCopilotWholePluginSkills(t.Context(), env, request, out)
 	if t.Context().Err() != nil {
 		t.Fatal("parent expired instead of internal catalog budget")
 	}
-	if err != nil || got.Activation != domain.ActivationPrepared || got.Verification != out.Verification || got.NativeEffect != domain.NativeEffectCommitted || len(runner.commands) != 1 {
+	if err != nil || got.Activation != domain.ActivationPrepared || got.Verification != out.Verification || got.NativeEffect != domain.NativeEffectCommitted || len(runner.commands) != 1 || reads == 0 {
 		t.Fatalf("closed catalog timeout skipped intact custody or promoted: %+v %v", got, err)
 	}
+}
+
+// Only post-catalog bounded profile reads count, so an early timeout return
+// cannot satisfy the caller regression with its initial capture.
+type copilotTimeoutCustodyFiles struct {
+	nativeconfig.FileIO
+	after *bool
+	reads *int
+}
+
+func (f copilotTimeoutCustodyFiles) ReadNoFollowBounded(path string, limit int64) ([]byte, os.FileMode, bool, error) {
+	if *f.after && strings.HasSuffix(path, "config.json") {
+		*f.reads++
+	}
+	v, err := nativeconfig.New().ReadExactFileBounded(path, limit)
+	return v.Body, v.Mode, v.Exists, err
 }

@@ -56,11 +56,11 @@ func kimiSkillProfile(ctx context.Context, env clients.Env, request domain.Activ
 	if err != nil {
 		return snapshot, command, err
 	}
-	snapshot.token, err = env.NativeConfig.ReadExactFileBounded(filepath.Join(profile, "server.token"), 43)
+	snapshot.trust, snapshot.executable, snapshot.profile, err = kimiProfileIdentities(ctx, env, request)
 	if err != nil {
 		return snapshot, command, err
 	}
-	snapshot.trust, snapshot.executable, snapshot.profile, err = kimiProfileIdentities(ctx, env, request)
+	snapshot.token, err = env.NativeConfig.ReadExactFileBounded(filepath.Join(profile, "server.token"), 43)
 	if err != nil {
 		return snapshot, command, err
 	}

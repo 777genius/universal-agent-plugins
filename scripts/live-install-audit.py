@@ -1969,7 +1969,7 @@ def copilot_settings_windows_descriptor(path, initial, expected):
         raise
 
 
-def copilot_settings_read(path, case_root, max_bytes=1 << 20):
+def copilot_settings_read(path, case_root):
     """Read bounded owned bytes through descriptors, never a replaced symlink."""
     descriptors = []
     try:
@@ -1982,7 +1982,7 @@ def copilot_settings_read(path, case_root, max_bytes=1 << 20):
             return None, "unsafe-path"
         expected = canonical_root / relative
         initial = path.lstat()
-        if not stat.S_ISREG(initial.st_mode) or initial.st_size > max_bytes:
+        if not stat.S_ISREG(initial.st_mode) or initial.st_size > 1 << 20:
             return None, "not-regular-or-too-large"
         if initial.st_nlink != 1 or not path_inside_case(path, case_root):
             return None, "unsafe-path"
@@ -2019,11 +2019,11 @@ def copilot_settings_read(path, case_root, max_bytes=1 << 20):
                 or identity != (current.st_dev, current.st_ino)
                 or not path_inside_case(path, case_root)):
             return None, "unsafe-path"
-        if opened.st_size > max_bytes:
+        if opened.st_size > 1 << 20:
             return None, "not-regular-or-too-large"
         with os.fdopen(os.dup(descriptor), "rb") as stream:
-            body = stream.read(max_bytes + 1)
-        if len(body) > max_bytes:
+            body = stream.read((1 << 20) + 1)
+        if len(body) > 1 << 20:
             return None, "not-regular-or-too-large"
         return body.decode("utf-8"), None
     except FileNotFoundError:
@@ -2046,7 +2046,7 @@ def kimi_repeat_log_capture(home, project, case_root):
                 raise ValueError("Kimi log parent is not ordinary")
             return [(value.st_dev, value.st_ino, value.st_mode) for value in values]
         before_parents, initial = parent_facts(), path.lstat()
-        body, error = copilot_settings_read(path, case_root, max_bytes=6 << 20)
+        body, error = copilot_settings_read(path, case_root)
         final = path.lstat()
         fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_size", "st_mtime_ns")
         identity = tuple(getattr(initial, key) for key in fields)
@@ -2086,7 +2086,7 @@ def kimi_repeat_log_append(before, after, listed, added, repeated, command):
     if (before["identity"][:4] != after["identity"][:4]
             or before["parents"] != after["parents"] or before["log_key"] != after["log_key"]
             or not after["body"].startswith(before["body"])
-            or not len(before["body"]) < len(after["body"]) <= 6 << 20):
+            or not len(before["body"]) < len(after["body"]) <= 1 << 20):
         return None
     ignored = {before["log_key"], "metadata:0:.kimi-code/logs/kimi-code.log"}
     original = {key: value for key, value in before["scope"].items() if key not in ignored}

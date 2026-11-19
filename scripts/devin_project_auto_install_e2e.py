@@ -48,16 +48,56 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def command(argv, cwd, env, timeout=90):
+def command_diagnostic(body, env):
+    """Reuse the bounded redacted-tail policy; redact before truncation."""
+    text = body.decode("utf-8", errors="replace")
+    for key, value in env.items():
+        if isinstance(value, str) and len(value) >= 4 and re.search(
+                r"(?i)token|password|secret|api[_-]?key|authorization|credential", key):
+            text = text.replace(value, "<redacted>")
+            text = text.replace(json.dumps(value)[1:-1], "<redacted>")
+    text = re.sub(r"(?i)(Authorization\s*:\s*Bearer\s+)\S+", r"\1<redacted>", text)
+    text = re.sub(r"""(?i)((?:token|password|secret|api[_-]?key|credential)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}]+)""",
+                  r"\1<redacted>", text)
+    return text[-2048:]
+
+
+def command(argv, cwd, env, timeout=90, receipt=None):
     # Share the repository's bounded, supervised process runner with all other
     # native collectors. A timed-out CLI cannot leave orphaned subprocesses.
     record, stdout, stderr = run_probe(
         argv, Path(cwd), env, Path("/tmp"), "devin-project-e2e",
         timeout=timeout, limit=1 << 20, memory_only=True)
+    if receipt is not None:
+        receipt["result"] = {
+            "exit_code": record["exit"],
+            "capture_error": (command_diagnostic(str(record["error"]).encode(), env)
+                              if record["error"] is not None else None),
+            "elapsed_seconds": record.get("elapsed_seconds"),
+            "stdout_bytes": len(stdout), "stdout_sha256": digest(stdout),
+            "stderr_bytes": len(stderr), "stderr_sha256": digest(stderr),
+        }
+        if record["error"] is not None or record["exit"] != 0:
+            receipt["result"]["stderr_diagnostic"] = command_diagnostic(stderr, env)
+            try:
+                public = json.loads(stdout)
+            except (ValueError, UnicodeError):
+                public = None
+            allowed = {"command": ("skills add", "remove"), "result": ("success", "failure"),
+                       "status": ("succeeded", "failed", "partial", "interrupted"),
+                       "readiness": ("ready", "needs_action", "failed", "unknown")}
+            if isinstance(public, dict):
+                receipt["result"]["public_status"] = {
+                    key: public[key] for key, values in allowed.items()
+                    if isinstance(public.get(key), str) and public[key] in values}
     if record["error"] is not None or record["exit"] != 0:
+        stage = receipt.get("stage", "unspecified") if receipt is not None else "unspecified"
+        capture = (command_diagnostic(str(record["error"]).encode(), env)[:128]
+                   if record["error"] is not None else None)
+        diagnostic = command_diagnostic(stderr, env)
         raise RuntimeError(
-            f"command {Path(argv[0]).name} failed, exit={record['exit']}, "
-            f"capture={record['error']}, stderr_sha256={digest(stderr)}")
+            f"command {Path(argv[0]).name} stage={stage} failed, exit={record['exit']}, "
+            f"capture={capture}, stderr={diagnostic[:512]}, stderr_sha256={digest(stderr)}")
     return stdout.decode("utf-8", errors="strict")
 
 
@@ -377,7 +417,7 @@ def raw_project_skills(root, report, binary, cli, base_env):
     def run(label, argv, cwd, timeout=90):
         receipt = {"stage": label, "argv": argv, "cwd": str(cwd)}
         evidence["commands"].append(receipt)
-        return command(argv, cwd, env, timeout=timeout)
+        return command(argv, cwd, env, timeout=timeout, receipt=receipt)
     def preserved():
         for path, (body, mode) in protected.items():
             if path.is_symlink() or path.read_bytes() != body or path.stat().st_mode != mode:

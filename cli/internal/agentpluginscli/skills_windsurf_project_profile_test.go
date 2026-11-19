@@ -166,15 +166,16 @@ func TestRawProjectSkillsRepeatHydratesOnlySelectedVersion(t *testing.T) {
 	}
 	calls, probes := runner.calls, len(detector.targets)
 	repeated := journey.run(t, argv...)
-	if err := json.Unmarshal([]byte(repeated), &document); err != nil {
+	var repeatDocument map[string]any
+	if err := json.Unmarshal([]byte(repeated), &repeatDocument); err != nil {
 		t.Fatal(err)
 	}
-	items, ok := document["items"].([]any)
+	items, ok := repeatDocument["items"].([]any)
 	if !ok || len(items) != 1 {
 		t.Fatalf("repeat items: %s", repeated)
 	}
 	item, ok := items[0].(map[string]any)
-	if !ok || item["status"] != "unchanged" || document["readiness"] != "ready" || runner.calls != calls+6 || len(detector.targets) != probes+2 || detector.broadCalls != 0 {
+	if !ok || item["status"] != "unchanged" || repeatDocument["readiness"] != "ready" || runner.calls != calls+6 || len(detector.targets) != probes+2 || detector.broadCalls != 0 {
 		t.Fatalf("repeat lacked fresh exact version/catalog: %s native=%d probes=%v", repeated, runner.calls, detector.targets)
 	}
 	for _, targets := range detector.targets {
