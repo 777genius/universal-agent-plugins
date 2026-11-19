@@ -10,6 +10,7 @@ import sys
 import textwrap
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -5021,7 +5022,8 @@ module.exports = {
                 def source_call(argv, *_args, **_kwargs):
                     return dict(empty if len(argv) > 1 and argv[1] == "list" else refused)
                 with TemporaryDirectory() as temporary:
-                    with patch.object(audit, "call", side_effect=source_call):
+                    with patch.dict(audit.AGENT_BINARIES, {}, clear=True), \
+                         patch.object(audit, "call", side_effect=source_call):
                         result = audit.do_case(
                             "/unused/audit-cli", target, "plugin", "atlassian",
                             0, Path(temporary).resolve(), {})
@@ -5162,13 +5164,13 @@ module.exports = {
             self.assertFalse(refused["completed"])
             self.assertIn("pinned", refused["reason"])
 
-    def test_chatgpt_prepared_requires_registration_and_verified_cleanup(self):
+    def test_chatgpt_alias_requires_registration_and_verified_cleanup(self):
         # BUG-013: a zero-exit CLI can still leave no managed installation.
         audit = load_audit()
         source = "github:example/chatgpt-demo@" + ("a" * 40)
         identity = "chatgpt-demo"
         matched = [{"name": identity, "installation_id": "isolated-owned-install",
-                    "clients": [{"client_id": "chatgpt",
+                    "clients": [{"client_id": "codex",
                                  "verification": "installation_verified"}]}]
 
         def response(exit_code, installations=None):
@@ -5178,11 +5180,20 @@ module.exports = {
 
         def run_case(outputs, matches):
             with TemporaryDirectory() as temporary:
-                with patch.object(audit, "call", side_effect=outputs), \
-                     patch.object(audit, "matching_installations", return_value=matches):
-                    return audit.do_case(
+                with patch.dict(audit.AGENT_BINARIES, {}, clear=True), \
+                     patch.object(audit, "call", side_effect=outputs) as calls, \
+                     patch.object(audit, "matching_installations", return_value=matches) as matching:
+                    result = audit.do_case(
                         "/unused/agentplugins", "chatgpt", "plugin", source, 0,
                         Path(temporary).resolve(), {source: identity})
+                self.assertEqual(result["canonical_client_id"], "codex")
+                self.assertGreater(matching.call_count, 0)
+                self.assertTrue(all(call.args[2] == "codex" for call in matching.call_args_list))
+                for call in calls.call_args_list:
+                    argv = call.args[0]
+                    if "--target" in argv:
+                        self.assertEqual(argv[argv.index("--target") + 1], "chatgpt")
+                return result
 
         empty = run_case([response(0), response(0)], [])
         self.assertEqual(empty["status"], "incomplete-native-proof")
@@ -5206,7 +5217,7 @@ module.exports = {
         prepared = run_case(
             [response(0), response(0), response(0), response(0), response(0), response(0)],
             matched)
-        self.assertEqual(prepared["status"], "manual-setup-prepared")
+        self.assertEqual(prepared["status"], "package-installed-native-unqualified")
         self.assertTrue(prepared["repeat_verified"])
         self.assertTrue(prepared["repeat_native_unchanged"])
         self.assertTrue(prepared["repeat_lock_unchanged"])
@@ -5214,6 +5225,74 @@ module.exports = {
         self.assertTrue(prepared["listed_identity"])
         self.assertTrue(prepared["removal_verified"])
         self.assertTrue(prepared["sentinels_preserved"])
+
+    def test_chatgpt_desktop_requires_actual_codex_bootstrap(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch("sys.argv", ["live-install-audit.py", "--cli", "/unused/agentplugins",
+                                       "--target", "chatgpt", "--kind", "plugin",
+                                       "--limit", "1", "--report-dir", temporary]), \
+                    patch.object(audit, "do_case") as cases, \
+                    patch.object(audit, "version_evidence") as version:
+                self.assertEqual(audit.main(), 2)
+            cases.assert_not_called()
+            version.assert_not_called()
+            report = json.loads((Path(temporary) / "chatgpt-plugin.json").read_text())
+        self.assertEqual(report["canonical_client_id"], "codex")
+        self.assertEqual(report["cases_attempted"], 0)
+        self.assertEqual([row["status"] for row in report["results"]], ["client-unavailable"])
+        self.assertIn("codex", report["blocker"])
+
+    def test_chatgpt_desktop_bootstrap_binds_the_shared_pin_and_regular_binary(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        self.assertIn("run: bash scripts/prepare-codex-linux-sandbox.sh", workflow)
+        self.assertIn("exclude:\n          - target: chatgpt\n            kind: skill", workflow)
+        block = textwrap.dedent(workflow.split("<<'CHATGPT_CODEX'\n", 1)[1]
+                                .split("          CHATGPT_CODEX", 1)[0])
+        pin = ("existing", "immutable", "catalog", "pin")
+        for mode in ("regular", "symlink", "not-executable", "foreign-path"):
+            with self.subTest(mode=mode), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                (root / "vendor-proof").mkdir()
+                observed = []
+
+                def provision(selected, directory, name):
+                    self.assertIs(selected, pin)
+                    self.assertEqual((directory, name), (root / "vendor-root", "codex"))
+                    binary = directory / "codex"
+                    if mode == "foreign-path":
+                        binary = root / "foreign"
+                    binary.write_bytes(b"inert test fixture, never executed")
+                    binary.chmod(0o600 if mode == "not-executable" else 0o700)
+                    if mode == "symlink":
+                        target = root / "link-target"
+                        binary.rename(target)
+                        binary.symlink_to(target)
+                    observed.append(binary)
+                    return binary, {"source": "https://example.invalid/pinned-archive"}
+
+                module = SimpleNamespace(PINS={"linux-amd64": {"codex": pin}}, provision=provision)
+                spec = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda _module: None))
+                with patch("sys.argv", ["bootstrap", str(root)]), \
+                        patch("sys.platform", "linux"), patch("platform.machine", return_value="x86_64"), \
+                        patch("importlib.util.spec_from_file_location", return_value=spec), \
+                        patch("importlib.util.module_from_spec", return_value=module):
+                    if mode == "regular":
+                        exec(compile(block, "<desktop-bootstrap-contract>", "exec"), {})
+                    else:
+                        with self.assertRaisesRegex(SystemExit, "unverified staged Codex executable"):
+                            exec(compile(block, "<desktop-bootstrap-contract>", "exec"), {})
+                self.assertEqual(len(observed), 1)
+                proof = root / "vendor-proof/codex-runtime.json"
+                if mode == "regular":
+                    value = json.loads(proof.read_text())
+                    self.assertEqual((value["public_target"], value["canonical_client_id"],
+                                      value["pin_family"], value["executable"]),
+                                     ("chatgpt", "codex", "full-catalog", str(observed[0])))
+                else:
+                    self.assertFalse(proof.exists())
 
     def test_both_native_matrices_bind_real_bootstrap_outcomes(self):
         # BUG-014: present binary + failed native --version must never produce PASS.
@@ -5242,6 +5321,7 @@ module.exports = {
             cli = Path(temporary) / "inert-cli"
             cli.write_text("no native execution")
             with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch.dict(audit.AGENT_BINARIES, {"codex": str(cli)}, clear=True), \
                     patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
                                        "--target", "chatgpt", "--kind", "plugin",
                                        "--limit", "1", "--report-dir", temporary]), \
@@ -5273,6 +5353,7 @@ module.exports = {
                 cli = Path(temporary) / "inert-cli"
                 cli.write_text("no native execution")
                 with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                        patch.dict(audit.AGENT_BINARIES, {"codex": str(cli)}, clear=True), \
                         patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
                                            "--target", "chatgpt", "--kind", "plugin",
                                            "--limit", "1", "--report-dir", temporary]), \
@@ -7904,6 +7985,7 @@ module.exports = {
                 return {"status": "passed"}
 
             with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch.dict(audit.AGENT_BINARIES, {"codex": str(cli)}, clear=True), \
                     patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
                                        "--target", "chatgpt", "--kind", "plugin",
                                        "--limit", "1", "--report-dir", str(root)]), \

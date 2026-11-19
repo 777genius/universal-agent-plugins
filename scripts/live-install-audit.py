@@ -2124,6 +2124,11 @@ def initialize_project_skill_git_root(project, env, case_root):
         raise RuntimeError("genuine isolated project Git init failed")
 
 
+def audit_client_id(target, kind):
+    """Public Desktop arguments persist as the canonical local Codex client."""
+    return "codex" if (target, kind) == ("chatgpt", "plugin") else target
+
+
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             signed_release_pins=None, *, client_version=None, historical_baseline=False):
     with ExitStack() as audits:
@@ -2134,6 +2139,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
              signed_release_pins, audits, client_version, *, historical_baseline=False):
+    native_target = audit_client_id(target, kind)
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
     project = case_root / "project"
@@ -2161,7 +2167,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         path.mkdir(parents=True, exist_ok=True)
         if path.is_symlink() or not path.resolve().is_relative_to(canonical_case):
             raise ValueError("nested audit directory escapes disposable case")
-    native_roots = [home / v for v in NATIVE_ROOTS[target]]
+    native_roots = [home / v for v in NATIVE_ROOTS[native_target]]
     if any(not root.resolve().is_relative_to(case_root.resolve()) for root in native_roots):
         raise ValueError("native root escapes disposable case")
     sentinel = project / "foreign-untouched.txt"
@@ -2194,7 +2200,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                          if kind == "skill" else {})
     # Presence of an actual binary comes from the workflow; a config directory is
     # only an empty isolated profile and is never counted as agent detection.
-    if target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
+    if native_target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     env = isolated_client_env(home, case_root, data)
     codex_skill_case = target == "codex" and kind == "skill"
@@ -2274,7 +2280,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         _, _, codex_system_metadata = CODEX_RUNTIME_AUDIT["system_skill_initialization"](
             home / ".codex")
         _codex_system_skill_checkpoint(home, codex_system_metadata)
-    if target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
+    if native_target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
         # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
         # Author these fixture objects before protecting every byte and identity.
         assert_case_unchanged()
@@ -2369,7 +2375,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                          if copilot_before is not None else None)
     changed = set(snapshot(native_roots).items()) - set(before.items())
     native_attribution = attributable_native_changes(
-        native_roots, changed, identity, target, native_components)
+        native_roots, changed, identity, native_target, native_components)
     skill_path = skill_file_present(project, target, identity) if kind == "skill" else None
     locked = (project / "uap.toml").is_file() and (project / "uap.lock").is_file()
     lock_contains = locked and identity in (project / "uap.lock").read_text(encoding="utf-8")
@@ -2379,7 +2385,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     listed = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                    env, project, 30))
     listed_json = listed.pop("_json", None) if listed else None
-    matching = matching_installations(listed_json, identity, target, kind, item,
+    matching = matching_installations(listed_json, identity, native_target, kind, item,
                                      signed_release_pins)
     grok_prepared = (grok_prepared_skill_installations(
         listed_json, item, skill_path, project, output)
@@ -2388,17 +2394,17 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if grok_prepared:
         matching = grok_prepared
     signed_observation = (
-        signed_release_public_observation(listed_json, identity, target)
+        signed_release_public_observation(listed_json, identity, native_target)
         if kind == "plugin" and isinstance(item, str) and not item.startswith("github:")
         else [])
     listed_identity = len(matching) == 1
-    failed_install_registered = has_target_registration(listed_json, identity, target) if (
+    failed_install_registered = has_target_registration(listed_json, identity, native_target) if (
         output["exit_code"] != 0) else False
     failed_install_residue = bool(output["exit_code"] != 0 and (
         failed_install_registered or native_attribution or skill_path))
     prepared_binding = bool(listed_identity and (
         grok_prepared or (kind == "plugin" and any(
-            client.get("client_id") == target and client.get("verification") == "package_validated"
+            client.get("client_id") == native_target and client.get("verification") == "package_validated"
             and client.get("activation") == "manual_activation_required"
             for client in matching[0].get("clients", []) if isinstance(client, dict)))))
     # Name and file presence alone are insufficient. A true Skill pass also
@@ -2499,7 +2505,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         repeat_matches = (grok_prepared_skill_installations(
             repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
             if grok_prepared else matching_installations(
-                repeat_list_json, identity, target, kind, item, signed_release_pins))
+                repeat_list_json, identity, native_target, kind, item, signed_release_pins))
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
         if codex_runtime is not None:
@@ -2570,7 +2576,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 case_root, home, project, matching[0], repeat_add_json, item,
                 claude_document, scoped_snapshot, claude_before,
                 lambda observed: native_identity_residuals(
-                    native_roots, identity, observed, target, native_components))
+                    native_roots, identity, observed, native_target, native_components))
             audits.callback(claude_retirement.close)
         except (OSError, ValueError, TypeError, KeyError, IndexError):
             claude_retirement_proof = {"status": "unresolved-cache-retirement"}
@@ -2581,7 +2587,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         # Codex explicitly requires external uninstall before UAP can settle a
         # user-scope plugin removal. We execute and verify the real native
         # plugin + marketplace commands, never attest on a guessed state.
-        if kind == "plugin" and target == "codex":
+        if kind == "plugin" and native_target == "codex":
             native_uninstall = uninstall_native_codex_plugin(
                 identity, home, case_root, env, project)
             assert_case_unchanged()
@@ -2655,7 +2661,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     post_remove_identity_registered = bool(
         post_list_schema_valid and (
             has_target_registration(
-                post_list_json, identity, target,
+                post_list_json, identity, native_target,
                 skill_source=f'{item["repo"]}/skills/{item["folder"]}'
                 if kind == "skill" and target == "claude" else None)
             or (grok_prepared and grok_prepared_source_survives(
@@ -2675,7 +2681,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         native_identity_residuals(
             native_roots, identity,
             sorted(set(snapshot(native_roots)) | set(native_attribution) | set(unsafe_paths)),
-            target, native_components, client_version=client_version,
+            native_target, native_components, client_version=client_version,
             bootstrap_proof=opencode_bootstrap_proof)
         if cleanup and cleanup["exit_code"] == 0 else []
     )
@@ -2711,7 +2717,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     continue
                 relative = observed[len(prefix):]
                 path = root / relative
-                if passive_native_path(target, relative) and path.is_file() and not path.is_symlink():
+                if passive_native_path(native_target, relative) and path.is_file() and not path.is_symlink():
                     passive_retained.append(observed)
     copilot_disabled_setting_retained = bool(
         target == "copilot" and kind == "plugin"
@@ -2756,8 +2762,6 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     installed = installed and (not codex_skill_case or codex_add_ready)
     if installed and removal_verified and sentinels_preserved and not repeat_verified:
         status = "repeat-add-unqualified"
-    elif target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved and repeat_verified:
-        status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
         status = ("prepared-lifecycle-passed" if (
                        kind == "plugin" and prepared_components_only)
@@ -2769,9 +2773,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                            or (target == "copilot" and
                                (copilot_native_before_remove is None or
                                 copilot_native_before_remove["status"] != "installed"))
-                           or (target == "codex" and not (
+                           or (native_target == "codex" and not (
                                native_uninstall and native_uninstall.get("completed")))
-                           or (target not in ("codex", "qoder", "copilot")
+                           or (native_target not in ("codex", "qoder", "copilot")
                                and not native_attribution)))
                   else "prepared-lifecycle-passed" if prepared_binding else "passed")
     elif installed and cleanup and (
@@ -2829,6 +2833,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if status == "passed" and skill_public_ready is not None and not all(skill_public_ready.values()):
         status = "incomplete-native-proof"
     return {"kind": kind, "index": index, "identity": identity, "target": target,
+            **({"canonical_client_id": native_target} if target == "chatgpt" else {}),
             "source": item if kind == "plugin" else item["source"],
             "status": status, "install": output, "list": listed,
             "native_file_delta": len(changed),
@@ -2842,15 +2847,15 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "signed_release_observation": signed_observation,
             "public_target_states": {
                 "after-add": public_target_state_observation(
-                    listed_json, identity, target,
+                    listed_json, identity, native_target,
                     installation_ids=old_ids if kind == "skill" else None,
                     skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None),
                 "repeat-add": public_target_state_observation(
-                    repeat_list_json, identity, target,
+                    repeat_list_json, identity, native_target,
                     installation_ids=repeat_identity_ids if kind == "skill" else None,
                     skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None),
                 "after-remove": public_target_state_observation(
-                    post_list_json, identity, target,
+                    post_list_json, identity, native_target,
                     installation_ids=old_ids | set(repeat_identity_ids) if kind == "skill" else None,
                     skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None)},
             "public_skill_ready": skill_public_ready,
@@ -3057,7 +3062,10 @@ def main():
     report_file = report_dir / f"{args.target}-{args.kind}.json"
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
-    eligible_binaries = EXECUTABLE.get(args.target, ())
+    native_target = audit_client_id(args.target, args.kind)
+    if args.target == "chatgpt":
+        report["canonical_client_id"] = native_target
+    eligible_binaries = EXECUTABLE.get(native_target, ())
     if not vendor_bootstrap_attested():
         report["blocker"] = "Vendor bootstrap was not verified; no native-client PASS is permitted"
         report["results"] = unexecuted_source_rows(
