@@ -5,6 +5,7 @@ import os
 import stat
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -42,6 +43,133 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
             before, after, listed, self.added, self.repeated, self.command,
             (before or {}).get("native") if native_before is None else native_before,
             (listed or {}).get("native") if native_after is None else native_after, facts)
+
+    def workspace_lock(self):
+        target = self.home / ".kimi-code/.projects-write-lock"
+        target.write_bytes(b"")
+        target.chmod(0o600)
+        return target
+
+    def test_native_empty_workspace_lock_replacement_with_log_append(self):
+        self.fixture()
+        target = self.workspace_lock()
+        before = self.capture()
+        self.assertIsNotNone(before)
+        self.append()
+        temporary = target.with_name(target.name + ".tmp")
+        temporary.write_bytes(b"")
+        temporary.chmod(0o600)
+        os.replace(temporary, target)
+        after = self.capture()
+        self.assertIsNotNone(after)
+        self.assertNotEqual(before["workspace_lock"][6], after["workspace_lock"][6])
+        self.assertEqual(before["workspace_lock"][:6], after["workspace_lock"][:6])
+        proof = self.classify(before, after, self.capture())
+        self.assertIsNotNone(proof)
+        self.assertEqual(proof["status"], "verified-owned-log-append")
+        self.assertTrue(proof["post_list_unchanged"])
+
+    def test_workspace_lock_refuses_unsafe_capture_and_read_replacement(self):
+        for mutation in ("content", "mode", "uid", "hardlink", "symlink", "directory",
+                         "companion", "read-replacement"):
+            with self.subTest(mutation=mutation):
+                self.fixture()
+                target = self.workspace_lock()
+                if mutation == "content":
+                    target.write_bytes(b"private-coordinator-canary")
+                elif mutation == "mode":
+                    target.chmod(0o640)
+                elif mutation == "hardlink":
+                    os.link(target, self.home / "another-link")
+                elif mutation == "symlink":
+                    target.unlink()
+                    target.symlink_to(self.home / "foreign")
+                elif mutation == "directory":
+                    target.unlink()
+                    target.mkdir()
+                elif mutation == "companion":
+                    target.with_name(target.name + ".lock").mkdir()
+                read, lstat = self.audit.copilot_settings_read, Path.lstat
+                reached = []
+                def changed_owner(path, *args, **kwargs):
+                    value = lstat(path, *args, **kwargs)
+                    if mutation == "uid" and path == target:
+                        reached.append(True)
+                        fields = {key: getattr(value, key) for key in dir(value) if key.startswith("st_")}
+                        fields["st_uid"] += 1
+                        return SimpleNamespace(**fields)
+                    return value
+                def changed_read(path, *args, **kwargs):
+                    value = read(path, *args, **kwargs)
+                    if mutation == "read-replacement" and path == target:
+                        reached.append(True)
+                        temporary = target.with_name(target.name + ".tmp")
+                        temporary.write_bytes(b"")
+                        temporary.chmod(0o600)
+                        os.replace(temporary, target)
+                    return value
+                facts = {}
+                with patch.object(Path, "lstat", changed_owner), \
+                     patch.object(self.audit, "copilot_settings_read", changed_read):
+                    self.assertIsNone(self.capture(facts))
+                if mutation in ("uid", "read-replacement"):
+                    self.assertTrue(reached)
+                self.assertNotIn("private-coordinator-canary", json.dumps(facts))
+                self.assertNotIn(str(self.root), json.dumps(facts))
+
+    def test_workspace_companion_created_during_final_held_read_refuses(self):
+        self.fixture()
+        target = self.workspace_lock()
+        before = self.capture()
+        self.append()
+        after = self.capture()
+        self.assertIsNotNone(self.classify(before, after, self.capture()))
+        read, reached = self.audit.copilot_settings_read, []
+        def create_companion(path, *args, **kwargs):
+            result = read(path, *args, **kwargs)
+            if path == target:
+                reached.append(True)
+                target.with_name(target.name + ".lock").mkdir()
+            return result
+        with patch.object(self.audit, "copilot_settings_read", create_companion):
+            listed = self.capture()
+        self.assertEqual(reached, [True])
+        self.assertIsNone(listed)
+        self.assertIsNone(self.classify(before, after, listed))
+
+    def test_workspace_lock_exception_preserves_all_other_scope_guards(self):
+        for mutation in ("unexpected-path", "parent", "config", "missing", "created",
+                         "post-list", "public-ready", "closure"):
+            with self.subTest(mutation=mutation):
+                self.fixture()
+                target = self.workspace_lock()
+                config = self.home / ".kimi-code/config.toml"
+                config.write_bytes(b"telemetry = false\n")
+                other = target.with_name("unrelated-empty-file")
+                other.write_bytes(b"")
+                other.chmod(0o600)
+                if mutation == "created":
+                    target.unlink()
+                before = self.capture()
+                self.assertIsNotNone(before)
+                self.append()
+                selected = other if mutation == "unexpected-path" else config if mutation == "config" else target
+                temporary = selected.with_name(selected.name + ".tmp")
+                temporary.write_bytes(selected.read_bytes() if selected.exists() else b"")
+                temporary.chmod(0o600)
+                os.replace(temporary, selected)
+                if mutation == "parent":
+                    selected.parent.chmod(stat.S_IMODE(selected.parent.stat().st_mode) ^ stat.S_IRGRP)
+                elif mutation == "missing":
+                    target.unlink()
+                elif mutation == "public-ready":
+                    self.repeated["readiness"] = "needs_action"
+                elif mutation == "closure":
+                    self.command["timeout"] = True
+                after = self.capture()
+                if mutation == "post-list":
+                    target.write_bytes(b"changed after repeat")
+                self.assertIsNone(self.classify(before, after, self.capture()))
 
     def test_same_inode_append_retains_ready_and_exports_only_hashes(self):
         self.fixture()
