@@ -88,7 +88,7 @@ function windowsShimArgs(invocation) {
   if (!invocation.shell) return invocation.args;
   return invocation.args.map((value) => {
     if (/[\r\n"%!^&|<>]/.test(value)) fail("unsafe Windows npm shim argument");
-    return /\s/.test(value) ? `"${value}"` : value;
+    return /[\s()]/.test(value) ? `"${value}"` : value;
   });
 }
 

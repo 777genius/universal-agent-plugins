@@ -54,6 +54,10 @@ test("Windows npm shim retains spaced authoring arguments and rejects cmd expans
     '"Proof of published package authoring"', "--format", "json"
   ]);
   assert.deepEqual(windowsShimArgs({ shell: false, args: argv }), argv);
+  // CMD treats parentheses as grouping characters even without spaces.
+  const groupedPath = "C:\\build(1)\\authored";
+  assert.deepEqual(windowsShimArgs({ shell: true, args: ["author", "init", groupedPath] }),
+    ["author", "init", '"' + groupedPath + '"']);
   for (const unsafe of ["a&whoami", "%PATH%", 'literal"quote', "value|exit", "value^escape", "line\nbreak"]) {
     assert.throws(() => windowsShimArgs({ shell: true, args: [unsafe] }), /unsafe Windows npm shim argument/);
   }
