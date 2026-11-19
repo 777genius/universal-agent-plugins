@@ -33,6 +33,16 @@ class WindsurfCycleContracts(unittest.TestCase):
         self.assertEqual(len(self.commands),len(cycle.STAGES))
         self.assertTrue(all(len(raw)<=1<<20 for raw in self.bodies().values()))
 
+    def test_previous_native_pin_cannot_supply_current_cycle_evidence(self):
+        self.result["version"] = "3000.11.205"
+        with self.assertRaises(ValueError):
+            self.admit()
+        self.result["version"] = "3000.12.57"
+        command = next(row["value"] for row in self.commands if row["stage"] == "version")
+        command["stdout"] = wire(b"devin 3000.11.205 (6dea39440ae3)\n")
+        with self.assertRaises(ValueError):
+            self.admit()
+
     def test_add_public_scope_and_native_action_are_exact(self):
         # The A/B fixture uses private identifiers; the public DTO must say "project".
         baseline=copy.deepcopy(self.commands)
@@ -235,7 +245,7 @@ class WindsurfCycleContracts(unittest.TestCase):
         diagnostic = {
             "diagnostic_only": True, "accepted": False, "stage": stage,
             "root_sha256": cycle.sha((self.result["component_layout"]["root"] + "/xdg-cache/devin").encode()),
-            "native_binary_sha256": "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4",
+            "native_binary_sha256": "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d",
             "started_at": cmd["started_at"], "ended_at": cmd["ended_at"],
             "changed_records": 1,
             "records": [{"key_sha256": cycle.sha(b"cli/private"), "parent_sha256": cycle.sha(b"cli"),

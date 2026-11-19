@@ -7,21 +7,23 @@ MCP connection, model or account claim. The shared runner owns all execution.
 import re
 
 CLIENT = "windsurf"
-VERSION = "3000.11.205"
+VERSION = "3000.12.57"
 AVAILABLE_PHASES = ("acquire", "help")
 ACQUISITION = {
-    "url": "https://static.devin.ai/cli/3000.11.205/"
-           "devin-3000.11.205-x86_64-unknown-linux.tar.gz",
-    "integrity": "sha256:2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4",
-    "expected_bytes": 73_679_375,
+    # The same official platform archive and independent executable pin used
+    # by devin_project_auto_install_e2e; shared acquire/materialize owns the
+    # bounded SRI, inventory, extraction and runtime-identity checks here.
+    "url": "https://registry.npmjs.org/devin/-/devin-3000.12.57-linux-x64.tgz",
+    "integrity": "sha512-SZhb9rrYghHvOh0PRpZT1GpNPMMo+7P9VH6t6ZNMrBmyVX3x3XflPvCv8yomx/i7vnvf64bdFR++cRRg/c8mLQ==",
+    "expected_bytes": 74_021_748,
     "max_bytes": 96 << 20,
     "max_expanded_bytes": 256 << 20,
     "format": "tar.gz",
-    "entrypoint": "bin/devin",
+    "entrypoint": "package/bin/devin",
     "runtime": "native",
-    "binary_sha256": "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4",
+    "binary_sha256": "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d",
 }
-_VERSION = "devin 3000.11.205 (6dea39440ae3)"
+_VERSION = "devin 3000.12.57 (96542e930752)"
 # Measured run 40235292067, artifact 12616906453. Only this command uses
 # literal options in its Usage forms; do not broaden every command boundary.
 _ADD_USAGE = (
@@ -93,7 +95,7 @@ def collect(ctx):
     return {
         "observations": observations,
         "cases": [{"id": "windsurf.help", "status": "passed",
-                   "reason": "Exact pinned Devin 3000.11.205 build and fixed MCP/skills help observed for the Windsurf target; no discovery or service invocation"}],
+                   "reason": "Exact pinned Devin 3000.12.57 build and fixed MCP/skills help observed for the Windsurf target; no discovery or service invocation"}],
         "unobserved": ["windsurf.scope-observation", "windsurf.project-lifecycle",
                        "windsurf.native-restart-removal", "windsurf.mcp-initialize",
                        "windsurf.mcp-tools-list", "windsurf.mcp-tools-call"],
