@@ -17,6 +17,7 @@
 package clients
 
 import (
+	"context"
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -46,6 +47,8 @@ type Env struct {
 	OpenCodeTransitions ports.OpenCodeTransitionRecorder
 	Runner              ports.CommandRunner
 	NativeConfig        nativeconfig.Kernel
+	ParseSkill          func(context.Context, string, []byte) (domain.Skill, error)
+	Snapshots           ports.DirectorySnapshots
 	Paths               ports.PathPolicy
 	Launcher            StdioLauncherDeliverer
 	Now                 func() time.Time

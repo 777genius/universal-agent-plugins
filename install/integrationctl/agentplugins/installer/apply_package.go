@@ -54,9 +54,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 		delivery.ProfileAuthority = added.Plan.ProfileAuthority()
 		result.Delivery = &delivery
 	}
-	if added.Activation.UserActions != nil {
-		result.ManualActions = append([]string(nil), added.Activation.UserActions...)
-	}
+	result.ManualActions = added.Activation.PendingUserActions()
 	result.LocalActions = append([]string(nil), added.Activation.LocalActions...)
 	result, committed, loadErr := e.readCommittedPackage(prepared, added, result, err)
 	if added.GroupPhase != "" {

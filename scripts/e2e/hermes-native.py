@@ -267,11 +267,13 @@ def run_source_adds():
     report = json.loads((evidence / "report.json").read_text())
     require(report.get("completed") is True
             and report.get("scenarios") == ["raw-https", "saved-git"]
-            and report.get("native_discovery") is True,
+            and report.get("native_discovery") is True
+            and report.get("user_repeat_completed") is True
+            and report.get("production_catalog_queries", 0) >= 6,
             "both native source add scenarios must actually execute")
     require(hashlib.sha256(git_config.read_bytes()).hexdigest() == git_digest,
             "native source scenario changed the prepared fixture Git policy")
-    for name in ("raw-https", "saved-git"):
+    for name in ("raw-https", "saved-git", "user-repeat"):
         require(("--- PASS: TestHermesSourceSkillsConfirmedAddsNative/" + name).encode() in stdout,
                 "missing executed native source scenario: " + name)
     sys.stdout.buffer.write(stdout)

@@ -10,8 +10,10 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
 
 type Activator struct {
@@ -50,7 +52,7 @@ func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel, s
 }
 
 func (activator Activator) env(id domain.ClientID) clients.Env {
-	return clients.Env{ProjectRoots: activator.ProjectRoots, UserHome: activator.UserHome, NativeTransitions: activator.NativeTransitions.ForClient(id), OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel(), LookupExecutable: activator.LookupExecutable}
+	return clients.Env{ProjectRoots: activator.ProjectRoots, UserHome: activator.UserHome, NativeTransitions: activator.NativeTransitions.ForClient(id), OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel(), LookupExecutable: activator.LookupExecutable, ParseSkill: conformance.ParseSkill, Snapshots: packagesnapshot.Builder{}}
 }
 
 func (activator Activator) nativeConfigKernel() nativeconfig.Kernel {
