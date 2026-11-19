@@ -133,6 +133,15 @@ The following `agentplugins` changes are breaking. They ship in the next minor
 
 ### Fixed
 
+- `agentplugins add <plugin> --target a,b,c` no longer refuses every agent when
+  one agent fails its own preflight or package preparation (for example a
+  read-only `<project>/.claude`). The other agents install as if selected
+  alone, the failed agent is reported with its cause and a retry step, and the
+  command exits non-zero with status `external_partial_failure`. Automation
+  that relied on "no selected client was changed" for such failures should
+  check the per-target rows. Group-wide causes (recovery, security block,
+  unconfirmed process cleanup, plan, source or host changes, timeout,
+  cancellation) and selections with VS Code still stop every agent.
 - A pending ChatGPT registration no longer cancels a multi-client Context7
   installation. Other selected clients are installed and ChatGPT is reported
   as a separate setup step with a ChatGPT-only resume command.

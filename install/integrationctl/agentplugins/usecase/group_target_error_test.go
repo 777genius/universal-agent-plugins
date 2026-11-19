@@ -18,10 +18,15 @@ type clientFailingStager struct {
 	ports.PackageStager
 	client domain.ClientID
 	err    error
+	// failed, when set, records that the failure happened.
+	failed *bool
 }
 
 func (stager clientFailingStager) Stage(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints) (domain.StagedDelivery, error) {
 	if plan.ClientID == stager.client {
+		if stager.failed != nil {
+			*stager.failed = true
+		}
 		return domain.StagedDelivery{}, stager.err
 	}
 	return stager.PackageStager.Stage(ctx, envelope, plan, operationID, hints)
@@ -62,6 +67,7 @@ func TestGroupAttributesOnlyTargetLocalFailures(t *testing.T) {
 		planErr    error
 		foreign    bool
 		badScope   bool
+		globalFail bool
 		attributed bool
 		phase      GroupPhase
 	}{
@@ -72,14 +78,26 @@ func TestGroupAttributesOnlyTargetLocalFailures(t *testing.T) {
 		"staging canceled":        {stageErr: fmt.Errorf("stage: %w", context.Canceled), phase: GroupPhasePreparationFailed},
 		"staging deadline":        {stageErr: fmt.Errorf("stage: %w", context.DeadlineExceeded), phase: GroupPhasePreparationFailed},
 		"unrelated staging cause": {stageErr: errors.New("disk said no"), attributed: true, phase: GroupPhasePreparationFailed},
+		"group-wide check fails":  {stageErr: permission, globalFail: true, phase: GroupPhasePreparationFailed},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			service, store, cursor := serviceFixture(t)
 			kiro := domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+			failed := false
 			if tc.stageErr != nil {
-				service.Stager = clientFailingStager{PackageStager: service.Stager, client: domain.ClientKiro, err: tc.stageErr}
+				service.Stager = clientFailingStager{PackageStager: service.Stager, client: domain.ClientKiro, err: tc.stageErr, failed: &failed}
+			}
+			if tc.globalFail {
+				// A check that covers every target starts failing together with
+				// kiro's staging, so the failure may not be kiro's own.
+				service.CheckNamespace = func() error {
+					if failed {
+						return errors.New("profile namespace changed")
+					}
+					return nil
+				}
 			}
 			if tc.planErr != nil {
 				service.Planner = clientFailingPlanner{DeliveryPlanner: service.Planner, client: domain.ClientKiro, err: tc.planErr}

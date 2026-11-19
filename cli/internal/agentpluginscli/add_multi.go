@@ -82,7 +82,8 @@ type addTargetProof struct {
 
 // runAddMany is deliberately not implemented as repeated CLI invocations. It
 // resolves and validates one package, detects clients once, builds every plan,
-// and only begins applying after the complete selected set passes preflight.
+// and applies one group. An agent whose own preflight or preparation fails is
+// left out and the others run as a new group (see groupIsolation).
 func runAddMany(ctx context.Context, cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, activationComplete, authComplete bool) error {
 	return runAddManyWithClients(ctx, cmd, app, opts, source, targets, activationComplete, authComplete, nil)
 }
@@ -191,7 +192,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		combined.setTargetProof(selected[index].ClientID, "not_run")
 	}
 	combined.Succeeded, combined.Failed = len(planned.Targets), len(isolation.excluded)
-	combined.Targets = isolation.withExcluded(combined.Targets, &combined, true, sourceArg)
+	combined.Targets = isolation.withExcluded(combined.Targets, &combined, true)
 	if err != nil {
 		combined.Status, combined.Failed, combined.Succeeded = "preflight_failed", len(inputs), 0
 		setPreflightNextActions(combined.Targets)
@@ -306,7 +307,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		combined.Targets = append(combined.Targets, entry)
 		combined.setTargetProof(selected[index].ClientID, addTargetProofOutcome(result))
 	}
-	combined.Targets = isolation.withExcluded(combined.Targets, &combined, false, sourceArg)
+	combined.Targets = isolation.withExcluded(combined.Targets, &combined, false)
 	for _, entry := range combined.Targets {
 		countBatchTarget(&combined, entry)
 	}
@@ -437,9 +438,10 @@ func renderAddMultiApplySummary(writer io.Writer, result addMultiResult, envelop
 			if _, err := fmt.Fprintf(writer, "    %s\n", prompt.SafeText(target.RetryCommand)); err != nil {
 				return err
 			}
-		} else if target.failure != nil && target.failure.Retryable && !result.DryRun {
-			// Sources without a portable retry command (local paths) keep the
-			// person's own command, scope and project root.
+		} else if target.failure != nil && target.failure.Retryable && !result.DryRun && (target.Error == nil || target.Error.Stage != "cleanup") {
+			// An agent left out of its group is retried with the person's own
+			// command, which keeps scope, project root and saving. Unconfirmed
+			// process cleanup stops every retry.
 			if _, err := fmt.Fprintf(writer, "  Retry: run the same command with --target %s\n", prompt.SafeText(publicCLITargetName(domain.ClientID(target.Target)))); err != nil {
 				return err
 			}

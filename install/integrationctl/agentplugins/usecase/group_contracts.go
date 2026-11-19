@@ -78,9 +78,10 @@ const (
 
 // GroupTargetError attributes a failed group to the selected clients whose own
 // preflight or package preparation failed. It is returned only before any
-// managed state or client changed, and only by steps that read or write that
-// target's own plan and staging. Cross-target, input, state and lifecycle
-// refusals are never attributed. Its text is the cause's text, unchanged.
+// managed state or client changed, only by the steps that plan, check and
+// stage that target, and only while the group-wide profile and recovery checks
+// still pass. Cross-target, input, state and lifecycle refusals are never
+// attributed. Its text is the cause's text, unchanged.
 //
 // A caller may run the remaining clients as a new group. Running them is the
 // same as selecting only them: the group plans, checks and stages again under
@@ -93,10 +94,15 @@ type GroupTargetError struct {
 func (err *GroupTargetError) Error() string { return err.Err.Error() }
 func (err *GroupTargetError) Unwrap() error { return err.Err }
 
-// attributeGroupTarget marks a target-local failure. Cancellation and deadline
-// end the whole operation and are never attributed to one target.
-func attributeGroupTarget(err error, clients ...domain.ClientID) error {
+// attributeTarget marks a target-local failure. Cancellation and deadline end
+// the whole operation. Profile and recovery checks run inside every planning
+// and staging port and cover all targets, so a failure is attributed only
+// while those group-wide checks still pass.
+func (session *groupSession) attributeTarget(err error, clients ...domain.ClientID) error {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	if session.service.checkProfiles(session.ctx) != nil {
 		return err
 	}
 	return &GroupTargetError{Clients: append([]domain.ClientID(nil), clients...), Err: err}

@@ -92,15 +92,18 @@ selected agent: "No selected client was changed".
 
 - The usecase returns `GroupTargetError` (clients + unchanged cause) only for a
   target's own planning, identity/namespace preflight and staging, before
-  anything changed. Input, scope, collision, state and lifecycle refusals and
+  anything changed, and only while the group-wide profile and recovery checks
+  still pass. Input, scope, collision, state and lifecycle refusals and
   cancellation are never attributed.
 - `add --target a,b,c` then runs the remaining agents as a new group with a new
   operation id: the same `AddGroup`, lock, staging and one commit as selecting
   only them. The failed agent is a `external_failed` row with
   `error.stage: "preparation"`, a plain cause when `failureKindOf` has one
   (otherwise the cause itself, also appended to the command error), the
-  technical chain in the install log, and a retry step (`Retry:` line or the
-  interactive retry).
+  technical chain in the install log, and a retry step: `Retry: run the same
+  command with --target <agent>` (keeps scope, project root and saving; no
+  reconstructed `retry_command`) or the interactive retry. Unconfirmed process
+  cleanup suppresses every retry.
 - The overall status is the existing `external_partial_failure`, exit code is
   non-zero. No JSON field or status was added.
 - Causes that stay group-wide: process cleanup unconfirmed, recovery required,
@@ -108,7 +111,11 @@ selected agent: "No selected client was changed".
   source change, a host that drifted from the reviewed snapshot, timeout and
   cancellation.
 - If every agent fails on its own, the result is exactly the old one: the first
-  agent's cause and "No selected client was changed".
+  agent's cause and "No selected client was changed". If the agents still
+  selected are then refused for a group-wide reason, nothing changed and the
+  whole selection is reported with that reason.
+- A selection with VS Code (frozen, shares delivery with Copilot) keeps the
+  old whole-selection behaviour.
 
 ## Not done, on purpose
 

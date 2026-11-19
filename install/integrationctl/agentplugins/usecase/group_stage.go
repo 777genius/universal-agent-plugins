@@ -33,14 +33,14 @@ func (session *groupSession) stageGroupDeliveries() error {
 				installation := session.state.Installations[session.installationIndex]
 				if err := session.service.prepareExistingRuntime(session.ctx, target.input.Envelope, target.plan, installation, *target.managed); err != nil {
 					session.cleanupStaged()
-					return attributeGroupTarget(fmt.Errorf("prepare installed MCP runtime for %s: %w", target.input.Client.ClientID, err), session.plannedClients(*target)...)
+					return session.attributeTarget(fmt.Errorf("prepare installed MCP runtime for %s: %w", target.input.Client.ClientID, err), session.plannedClients(*target)...)
 				}
 			}
 			continue
 		}
 		if err := session.stageOneGroupDelivery(targetIndex, target); err != nil {
 			session.cleanupStaged()
-			return attributeGroupTarget(err, session.plannedClients(*target)...)
+			return session.attributeTarget(err, session.plannedClients(*target)...)
 		}
 	}
 	if err := session.requireRecordedRepairProjections(); err != nil {

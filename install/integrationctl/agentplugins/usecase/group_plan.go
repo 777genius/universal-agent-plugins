@@ -25,7 +25,7 @@ func (session *groupSession) planOneGroupTarget(targetIndex int, target AddInput
 	}
 	plan, err := session.planAndPreflightGroupTarget(targetIndex, &target)
 	if err != nil {
-		return attributeGroupTarget(err, target.Client.ClientID)
+		return session.attributeTarget(err, target.Client.ClientID)
 	}
 	clientID, managed, err := session.resolveGroupManagedBinding(target, &plan)
 	if err != nil {
@@ -159,10 +159,10 @@ func (session *groupSession) recordGroupTarget(targetIndex int, target AddInput,
 	}
 	recovering, err := session.observePlannedGroupTarget(target, plan, managed)
 	if err != nil {
-		return attributeGroupTarget(fmt.Errorf("target %s identity preflight: %w", target.Client.ClientID, err), target.Client.ClientID)
+		return session.attributeTarget(fmt.Errorf("target %s identity preflight: %w", target.Client.ClientID, err), target.Client.ClientID)
 	}
 	if err := session.service.checkMCPNamespace(session.ctx, target.Client, &plan, managed); err != nil {
-		return attributeGroupTarget(fmt.Errorf("target %s namespace preflight: %w", target.Client.ClientID, err), target.Client.ClientID)
+		return session.attributeTarget(fmt.Errorf("target %s namespace preflight: %w", target.Client.ClientID, err), target.Client.ClientID)
 	}
 	session.result.Targets[targetIndex].Plan = plan
 	noChange := !requiresComponentRemoval(plan) && managed != nil && !session.input.Repair && !session.input.Switch && groupPackageUnchanged(*managed, target) && containsSurface(managed.AffectedSurfaces, string(target.Client.ClientID))

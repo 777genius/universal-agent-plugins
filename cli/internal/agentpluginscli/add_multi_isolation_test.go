@@ -1,11 +1,13 @@
 package agentpluginscli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -319,5 +321,123 @@ func TestGroupAddPartialJSONUsesExistingContract(t *testing.T) {
 	}
 	if !reflect.DeepEqual(order, okOrder) {
 		t.Fatalf("row order = %v, want %v", order, okOrder)
+	}
+}
+
+// When the agents still selected are then refused for a reason that concerns
+// them all, nothing changed: the whole selection is reported with that reason.
+func TestGroupAddLaterGroupWideRefusalReportsTheWholeSelection(t *testing.T) {
+	t.Parallel()
+	recovery := fmt.Errorf("stage cursor: %w", installer.ErrRecoveryRequired)
+	fixture := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientCodex: unavailable(domain.ClientCodex), domain.ClientCursor: recovery})
+	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
+	want := fmt.Sprintf("group preparation failed before client changes (selected targets: [codex cursor kiro]): %v; no selected client was changed", recovery)
+	if err == nil || err.Error() != want || !errors.Is(err, installer.ErrRecoveryRequired) {
+		t.Fatalf("later refusal = %v\nwant %s", err, want)
+	}
+	if !strings.HasPrefix(stdout, "No selected client was changed") {
+		t.Fatalf("later refusal output = %q", stdout)
+	}
+	if got := installedProjection(t, fixture); len(got) != 0 {
+		t.Fatalf("later refusal changed state: %v", got)
+	}
+}
+
+// Unconfirmed process cleanup stops every retry route, including the retry
+// line of an agent that was left out earlier.
+func TestExcludedAgentGetsNoRetryWhenCleanupIsUnconfirmed(t *testing.T) {
+	failure := describeSyncFailure(unavailable(domain.ClientCursor))
+	excluded := &usecase.GroupTargetFailure{Stage: "preparation", Message: failure.Summary + " " + failure.Next}
+	activation := &usecase.GroupTargetFailure{Stage: "activation", Message: "activation failed"}
+	combined := addMultiResult{Plugin: "demo", Status: string(usecase.GroupPhaseExternalPartialFailure), Targets: []addTargetResult{
+		{Target: "codex", Status: string(usecase.GroupTargetExternalFailed), Error: activation,
+			Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed, Failure: activation}}},
+		{Target: "cursor", Status: string(usecase.GroupTargetExternalFailed), Error: excluded, failure: failure,
+			Output: addResultData{Result: usecase.AddResult{GroupPhase: usecase.GroupTargetExternalFailed, Failure: excluded}}},
+	}}
+	cmd, out, _ := retryTestCommand(t)
+	app := App{InstallLogDir: filepath.Join(t.TempDir(), "logs")}
+	opts := &options{format: "human"}
+	probe := &domain.UnclosedClientProbe{Operation: "native operation", Err: context.DeadlineExceeded}
+	_ = app.recordGroupOutcome(cmd, opts, &combined, probe)
+	if err := renderAddMultiResult(cmd, opts, combined, domain.PackageEnvelope{}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "Retry") || !strings.Contains(out.String(), "processes have stopped") {
+		t.Fatalf("cleanup offered a retry: %s", out.String())
+	}
+}
+
+// A cause shown as is must not carry terminal control sequences.
+func TestExcludedDryRunCauseIsTerminalSafe(t *testing.T) {
+	failure := describeSyncFailure(errors.New("bad \x1b]0;title\a \x1b[2J cause"))
+	row := addTargetResult{Target: "cursor", Status: string(usecase.GroupTargetExternalFailed), failure: failure,
+		Error: &usecase.GroupTargetFailure{Stage: "preparation", Message: failure.Detail}}
+	var out bytes.Buffer
+	if err := renderAddMultiDryRun(&out, addMultiResult{Plugin: "demo", DryRun: true, Targets: []addTargetResult{row}}); err != nil {
+		t.Fatal(err)
+	}
+	if strings.ContainsRune(out.String(), 0x1b) || !strings.Contains(out.String(), "cursor: cannot be installed") {
+		t.Fatalf("unsafe dry-run output: %q", out.String())
+	}
+}
+
+// VS Code is frozen and shares its delivery with Copilot, so a selection with
+// it keeps the whole-selection behaviour.
+func TestGroupIsolationIsOffWhenVSCodeIsSelected(t *testing.T) {
+	t.Parallel()
+	with := newGroupIsolation([]domain.DetectedClient{{ClientID: domain.ClientCopilot}, {ClientID: domain.ClientVSCode}}, nil, "op")
+	without := newGroupIsolation([]domain.DetectedClient{{ClientID: domain.ClientCopilot}, {ClientID: domain.ClientCursor}}, nil, "op")
+	if with.enabled() || !without.enabled() {
+		t.Fatalf("enabled = %v/%v", with.enabled(), without.enabled())
+	}
+}
+
+// flaggingStager fails one client and records that it did.
+type flaggingStager struct {
+	ports.PackageStager
+	client domain.ClientID
+	err    error
+	failed *bool
+}
+
+func (stager flaggingStager) Stage(ctx context.Context, envelope domain.PackageEnvelope, plan domain.DeliveryPlan, operationID string, hints domain.CompatibilityHints) (domain.StagedDelivery, error) {
+	if plan.ClientID == stager.client {
+		*stager.failed = true
+		return domain.StagedDelivery{}, stager.err
+	}
+	return stager.PackageStager.Stage(ctx, envelope, plan, operationID, hints)
+}
+
+// lockAfterFailure refuses the mutation lock once the stager failed.
+type lockAfterFailure struct {
+	ports.MutationLock
+	failed *bool
+	err    error
+}
+
+func (lock lockAfterFailure) Acquire(ctx context.Context) (ports.UnlockFunc, error) {
+	if *lock.failed {
+		return nil, lock.err
+	}
+	return lock.MutationLock.Acquire(ctx)
+}
+
+// A later attempt refused before it planned anything still reports the whole
+// selection, with that attempt's cause.
+func TestGroupAddLaterRefusalBeforePlanningReportsTheWholeSelection(t *testing.T) {
+	t.Parallel()
+	failed := false
+	busy := errors.New("another installation holds the lock")
+	fixture := newIsolationFixture(t, nil)
+	fixture.app.Lifecycle.Stager = flaggingStager{PackageStager: fixture.app.Lifecycle.Stager, client: domain.ClientCodex, err: unavailable(domain.ClientCodex), failed: &failed}
+	fixture.app.Lifecycle.Lock = lockAfterFailure{MutationLock: fixture.app.Lifecycle.Lock, failed: &failed, err: busy}
+	_, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
+	want := fmt.Sprintf("group preparation failed before client changes (selected targets: [codex cursor kiro]): %v; no selected client was changed", busy)
+	if err == nil || err.Error() != want {
+		t.Fatalf("later refusal = %v\nwant %s", err, want)
+	}
+	if got := installedProjection(t, fixture); len(got) != 0 {
+		t.Fatalf("later refusal changed state: %v", got)
 	}
 }

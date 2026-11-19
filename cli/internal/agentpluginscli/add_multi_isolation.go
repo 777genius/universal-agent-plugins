@@ -62,16 +62,31 @@ func (isolation *groupIsolation) activeClients() []domain.DetectedClient {
 // the failed attempt is reused.
 func (isolation *groupIsolation) addGroup(ctx context.Context, service usecase.Service, input usecase.GroupInput) (usecase.GroupResult, error) {
 	startActive, startID := append([]int(nil), isolation.active...), isolation.operationID
-	var first usecase.GroupResult
-	var firstErr error
+	input.Targets, input.OperationGroupID = isolation.activeInputs(), isolation.operationID
+	first, firstErr := service.AddGroup(ctx, input)
+	if !isolation.enabled() {
+		return first, firstErr
+	}
+	// restore reports the whole selection with the given cause. Only refusals
+	// before any change reach it, so the selection is unchanged.
+	restore := func(err error) (usecase.GroupResult, error) {
+		isolation.active, isolation.operationID = startActive, startID
+		return first, err
+	}
+	result, err := first, firstErr
 	left := map[int]isolatedTarget{}
-	for attempt := 0; ; attempt++ {
-		input.Targets, input.OperationGroupID = isolation.activeInputs(), isolation.operationID
-		result, err := service.AddGroup(ctx, input)
-		if attempt == 0 {
-			first, firstErr = result, err
-		}
+	for {
 		failed := targetLocalGroupFailure(ctx, result, err)
+		if len(failed) == 0 {
+			if len(left) > 0 && ctx.Err() == nil && refusedBeforeChange(result, err) {
+				// The others were refused for a reason that concerns them all.
+				return restore(err)
+			}
+			for index, target := range left {
+				isolation.excluded[index] = target
+			}
+			return result, err
+		}
 		keep := make([]int, 0, len(isolation.active))
 		for position, index := range isolation.active {
 			if !failed[isolation.selected[index].ClientID] {
@@ -84,24 +99,41 @@ func (isolation *groupIsolation) addGroup(ctx context.Context, service usecase.S
 			}
 			left[index] = isolatedTarget{result: row, cause: err}
 		}
-		if len(keep) == 0 {
-			// Every agent failed on its own: nothing changed, report as before.
-			isolation.active, isolation.operationID = startActive, startID
-			return first, firstErr
-		}
-		if len(keep) == len(isolation.active) {
-			for index, target := range left {
-				isolation.excluded[index] = target
-			}
-			return result, err
+		if len(keep) == 0 || len(keep) == len(isolation.active) {
+			// Every agent failed on its own, or the failure named none of them:
+			// nothing changed, so report the selection as before.
+			return restore(firstErr)
 		}
 		operationID, idErr := newOperationGroupID()
 		if idErr != nil {
-			isolation.active, isolation.operationID = startActive, startID
-			return result, errors.Join(err, idErr)
+			return restore(firstErr)
 		}
 		isolation.active, isolation.operationID = keep, operationID
+		input.Targets, input.OperationGroupID = isolation.activeInputs(), isolation.operationID
+		result, err = service.AddGroup(ctx, input)
 	}
+}
+
+// enabled reports whether agents may be left out. VS Code shares its physical
+// delivery with Copilot and is frozen, so a selection with it keeps the
+// whole-selection behaviour.
+func (isolation *groupIsolation) enabled() bool {
+	for _, client := range isolation.selected {
+		if client.ClientID == domain.ClientVSCode {
+			return false
+		}
+	}
+	return true
+}
+
+// refusedBeforeChange reports a group that failed without changing anything,
+// including one refused before it planned any target (no phase yet).
+func refusedBeforeChange(result usecase.GroupResult, err error) bool {
+	switch result.Phase {
+	case "", usecase.GroupPhasePlanned, usecase.GroupPhasePreparationFailed:
+		return err != nil && !result.Mutated
+	}
+	return false
 }
 
 // targetLocalGroupFailure names the agents a refused group can run without. It
@@ -109,10 +141,7 @@ func (isolation *groupIsolation) addGroup(ctx context.Context, service usecase.S
 // failure to those agents' own checks or preparation.
 func targetLocalGroupFailure(ctx context.Context, result usecase.GroupResult, err error) map[domain.ClientID]bool {
 	var attributed *usecase.GroupTargetError
-	if err == nil || ctx.Err() != nil || result.Mutated || !errors.As(err, &attributed) {
-		return nil
-	}
-	if result.Phase != usecase.GroupPhasePlanned && result.Phase != usecase.GroupPhasePreparationFailed {
+	if ctx.Err() != nil || !refusedBeforeChange(result, err) || !errors.As(err, &attributed) {
 		return nil
 	}
 	if !failureStaysWithTarget(err) {
@@ -149,7 +178,7 @@ func hostChangedSinceReview(err error) bool {
 // withExcluded returns the rows of every selected agent in selection order:
 // rows[position] belongs to the active agent at that position, and each agent
 // left out gets its failure row.
-func (isolation *groupIsolation) withExcluded(rows []addTargetResult, combined *addMultiResult, dryRun bool, sourceArg string) []addTargetResult {
+func (isolation *groupIsolation) withExcluded(rows []addTargetResult, combined *addMultiResult, dryRun bool) []addTargetResult {
 	if len(isolation.excluded) == 0 {
 		return rows
 	}
@@ -162,7 +191,7 @@ func (isolation *groupIsolation) withExcluded(rows []addTargetResult, combined *
 		all = append(all, ordered{index: isolation.active[position], row: row})
 	}
 	for index := range isolation.excluded {
-		row := isolation.excludedRow(index, dryRun, sourceArg)
+		row := isolation.excludedRow(index, dryRun)
 		row.Output.OperationID = combined.OperationID
 		combined.setTargetProof(isolation.selected[index].ClientID, "failed")
 		all = append(all, ordered{index: index, row: row})
@@ -175,11 +204,15 @@ func (isolation *groupIsolation) withExcluded(rows []addTargetResult, combined *
 	return merged
 }
 
-// excludedRow reports one agent left out of its group. The cause is shown in
-// plain words; its technical text goes only to the install log.
-func (isolation *groupIsolation) excludedRow(index int, dryRun bool, sourceArg string) addTargetResult {
+// excludedRow reports one agent left out of its group: in plain words when the
+// cause has a plain explanation, otherwise the cause itself. The full chain is
+// kept for the install log. The retry step is the person's own command with
+// --target, which keeps scope, project root and saving; a reconstructed
+// command could not.
+func (isolation *groupIsolation) excludedRow(index int, dryRun bool) addTargetResult {
 	excluded := isolation.excluded[index]
 	result := excluded.result
+	result.InstallationID = "" // The failed attempt's installation was never recorded.
 	failure := describeSyncFailure(excluded.cause)
 	if result.Plan.Status == domain.PlanUnsupported {
 		failure.Kind = failureTargetUnsupported
@@ -199,9 +232,6 @@ func (isolation *groupIsolation) excludedRow(index int, dryRun bool, sourceArg s
 		NextAction: failure.Next, Error: targetFailure, displayName: clientDisplayName(isolation.selected[index]),
 		failure: failure,
 	}
-	if failure.Retryable && !dryRun {
-		row.RetryCommand = batchRetryCommandFor(row, sourceArg)
-	}
 	return row
 }
 
@@ -215,7 +245,7 @@ func (isolation *groupIsolation) excludedNotice() []string {
 	sort.Ints(indexes)
 	lines := make([]string, 0, len(indexes))
 	for _, index := range indexes {
-		row := isolation.excludedRow(index, true, "")
+		row := isolation.excludedRow(index, true)
 		lines = append(lines, fmt.Sprintf("%s will not be installed: %s", batchTargetLabel(row), row.Error.Message))
 	}
 	return lines
