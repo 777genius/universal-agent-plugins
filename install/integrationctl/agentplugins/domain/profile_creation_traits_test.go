@@ -17,10 +17,10 @@ func TestUserProfileCreationPolicyDoesNotAdoptExistingBindings(t *testing.T) {
 	}
 }
 
-// Other clients cannot inherit Copilot's explicit saved project repair policy.
+// Only clients with an explicit saved project setup contract opt in.
 func TestSavedProjectRepairOnAddIsNotGeneric(t *testing.T) {
 	for _, definition := range ClientDefinitions() {
-		want := definition.ID == ClientCopilot
+		want := definition.ID == ClientCopilot || definition.ID == ClientHermes
 		if got := ClientTraitsFor(definition.ID).SavedProjectRepairOnAdd; got != want {
 			t.Errorf("%s saved project repair opt-in = %t, want %t", definition.ID, got, want)
 		}

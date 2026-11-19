@@ -401,17 +401,18 @@
     },
     "dependencies": {
       "eyebrow": "Связанные зависимости",
-      "title": "Два плагина. Одна общая зависимость.",
+      "title": "Два плагина\nОдна общая зависимость",
       "description": "Установите плагин вместе с зависимостями. Общие зависимости одной совместимой версии устанавливаются один раз.",
       "demoPackage": "Демонстрационный пакет",
       "installed": "Установлено",
       "alreadyInstalled": "Уже установлено",
-      "shared": "общая",
+      "shared": "Используется обоими плагинами",
       "caption": "Пакеты и граф показаны для примера. Оба пакета используют общий Playwright; Context7 уже установлен.",
-      "graphDescription": "marketing-kit зависит от Playwright, HubSpot и Notion. Web Design Kit зависит от того же пакета Playwright, Figma и Context7. Все пакеты установлены; Context7 был установлен ранее."
+      "graphDescription": "Пример версий: marketing-kit v{marketingVersion} и Web Design Kit v{designVersion} используют одну общую зависимость — мост Playwright v{playwrightVersion}. Marketing Kit также использует HubSpot и Notion, а Web Design Kit — Figma и Context7.",
+      "exampleVersions": "Пример версий"
     },
     "restore": {
-      "title": "Те же версии плагинов. У всей команды.",
+      "title": "Те же версии плагинов\nУ всей команды",
       "guide": "Инструкция",
       "from": "Мой компьютер",
       "to": "Компьютер коллеги",
@@ -599,7 +600,7 @@
       "more": "Ещё +{count}"
     },
     "command": {
-      "terminal": "Терминал",
+      "terminal": "Ваш терминал",
       "copiedLabel": "Команда скопирована",
       "copyLabel": "Копировать команду",
       "copied": "Скопировано",
@@ -841,9 +842,10 @@
       "unsupportedPluginComponents": "{agent} поддерживает не все компоненты этого плагина.",
       "dialogDescription": "Выберите агентов и область установки, затем выполните команду в терминале.",
       "closeDialog": "Закрыть установку",
-      "pinnedSourceShort": "Закреплённый Git-источник",
+      "pinnedSourceShort": "Установка из Git",
       "desktopSourceShort": "Локальное подключение Desktop",
-      "webSetupShort": "Настройка Web по инструкции"
+      "webSetupShort": "Настройка Web по инструкции",
+      "selectionRoutesUnavailable": "Выбранные агенты сохранены. Для этой комбинации нет общего источника установки в выбранной области. Измените агентов или область, чтобы получить команду установки."
     },
     "authentication": {
       "not_required": "Учётная запись не требуется",

@@ -167,13 +167,18 @@ usePageSeo(
   <div class="registry-surface skills-detail">
     <PageBackground />
     <div class="container skills-detail__container">
-      <nav class="skills-detail__breadcrumbs" :aria-label="t('registryUi.skills.detail.breadcrumb')">
-        <NuxtLink :to="localePath({ path: '/plugins/', query: { tab: 'skills' } })">
-          {{ t('registryUi.skills.skills') }}
-        </NuxtLink>
-        <span aria-hidden="true">/</span>
-        <span>{{ skill?.title ?? t('registryUi.skills.detail.skill') }}</span>
-      </nav>
+      <DetailBreadcrumbs
+        :back-to="localePath({ path: '/plugins/', query: { tab: 'skills' } })"
+        :back-label="t('registryUi.skills.detail.backToSkills')"
+        :label="t('registryUi.skills.detail.breadcrumb')"
+        :parents="[
+          {
+            label: t('registryUi.skills.skills'),
+            to: localePath({ path: '/plugins/', query: { tab: 'skills' } }),
+          },
+        ]"
+        :current="skill?.title ?? t('registryUi.skills.detail.skill')"
+      />
 
       <div v-if="isBusy" class="skills-detail__panel" role="status">
         {{ t('registryUi.skills.loading') }}

@@ -6,7 +6,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { usePluginInstallSelection } from '../composables/usePluginInstallSelection.ts';
 import { useInstallPreferencesStore } from '../stores/installPreferences.ts';
 import { pluginCommands } from '../utils/commands.ts';
-import { reconcileLocalChatGPTTargets } from '../data/installTargets.ts';
+import { cliInstallTargets, reconcileLocalChatGPTTargets } from '../data/installTargets.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 
 const fixture: RegistryPlugin = JSON.parse(
@@ -41,14 +41,14 @@ function mount(plugin: RegistryPlugin) {
 }
 
 
-test('Codex and Desktop picker choices reconcile to one native backend', () => {
-  assert.deepEqual(reconcileLocalChatGPTTargets(['codex', 'chatgpt', 'chatgptweb'], ['codex']), ['chatgpt', 'chatgptweb']);
-  assert.deepEqual(reconcileLocalChatGPTTargets(['codex', 'chatgpt', 'chatgptweb'], ['chatgpt']), ['codex', 'chatgptweb']);
-  assert.deepEqual(reconcileLocalChatGPTTargets(['codex', 'chatgpt'], ['cursor']), ['codex']);
-  assert.deepEqual(reconcileLocalChatGPTTargets(['chatgpt', 'chatgptweb'], ['chatgpt']), ['chatgpt', 'chatgptweb']);
+test('Codex and Desktop stay selected while execution deduplicates their shared profile', () => {
+  const targets = ['codex', 'chatgpt', 'chatgptweb'] as const;
+  assert.deepEqual(reconcileLocalChatGPTTargets([...targets], ['codex']), targets);
+  assert.deepEqual(cliInstallTargets(targets), ['codex', 'chatgptweb']);
+  assert.deepEqual(cliInstallTargets(['chatgpt', 'codex', 'cursor']), ['chatgpt', 'cursor']);
 });
 
-test('restored Codex and Desktop preferences cannot emit duplicate local install targets', () => {
+test('restored Codex and Desktop preferences retain both visible choices', () => {
   setActivePinia(createPinia());
   const plugin = data();
   const preferences = useInstallPreferencesStore();
@@ -58,9 +58,8 @@ test('restored Codex and Desktop preferences cannot emit duplicate local install
     ['codex', 'chatgpt', 'cursor'],
   );
   const state = mount(plugin);
-  assert.deepEqual(state.targets.value, ['codex']);
-  assert.match(pluginCommands(plugin, state.targets.value).add, /--target codex$/);
-  assert.doesNotMatch(pluginCommands(plugin, state.targets.value).add, /codex,chatgpt/);
+  assert.deepEqual(state.targets.value, ['codex', 'chatgpt']);
+  assert.match(pluginCommands(plugin, cliInstallTargets(state.targets.value)).add, /--target codex$/);
   state.stop();
 });
 
@@ -173,7 +172,9 @@ test('project defaults to CLI detection and preserves manual project targets', (
   state.updateAutoDetect(false);
   assert.equal(state.autoDetect.value, false);
   state.updateTargets(['codex', 'cursor']);
-  assert.deepEqual(state.targets.value, ['codex'], 'Explicit eligible choice replaces the unsupported saved placeholder');
+  assert.deepEqual(state.targets.value, ['codex', 'cursor'], 'A valid choice retains the unsupported explicit peer');
+  assert.equal(state.availability.value, undefined);
+  state.updateTargets(['codex']);
   assert.equal(unref(state.resolution).distribution?.targets[0]?.authentication, 'required');
   assert.match(
     pluginCommands(data(), state.targets.value, true, state.scope.value).add,
@@ -304,35 +305,28 @@ test('missing scope and ChatGPT user-only facts never create project availabilit
   state.stop();
 });
 
-test('explicit source selection is exclusive, persists across navigation and never enters automatic commands', async () => {
+test('mixed explicit choices use one eligible source and survive navigation', async () => {
   setActivePinia(createPinia());
   const plugin = data();
   plugin.trust_state = 'reviewed';
   let state = mount(plugin);
-  assert.equal(unref(state.pinnedSourceCommands), undefined);
   state.updateAutoDetect(false);
-  state.updateTargets(['cursor', 'hermes']);
-  assert.deepEqual(state.targets.value, ['hermes']);
-  assert.match(state.pinnedSourceCommands.value?.add ?? '', /^npx -y universal-agent-plugins@0\.1\.110 add github:/);
-  assert.equal(state.resolution.value.distribution, undefined);
-  state.toggleInstall();
+  const chosen = ['cursor', 'codex', 'chatgpt', 'hermes', 'antigravity', 'pi'];
+  state.updateTargets(chosen);
+  assert.deepEqual(state.targets.value, chosen);
+  const command = state.pinnedSourceCommands.value;
+  assert.match(command?.add ?? '', /^npx -y universal-agent-plugins@0\.1\.110 add github:/);
+  assert.match(command?.add ?? '', /--target cursor,codex,hermes,antigravity,pi$/);
+  assert.doesNotMatch(command?.add ?? '', /--no-save|chatgpt|\n/);
+  assert.match(command?.repair ?? '', /--target cursor,codex,hermes,antigravity,pi$/);
   await nextTick();
   state.stop();
   state = mount(plugin);
   assert.equal(state.autoDetect.value, false);
-  assert.deepEqual(state.targets.value, ['hermes']);
-  assert.equal(state.pinnedSourceSelected.value, true);
-  state.updateTargets(['hermes', 'pi']);
-  assert.deepEqual(state.targets.value, ['pi']);
-  state.updateTargets(['pi', 'codex']);
-  assert.deepEqual(state.targets.value, ['codex']);
-  assert.equal(unref(state.pinnedSourceCommands), undefined);
-  assert.ok(state.resolution.value.distribution);
-  state.updateTargets(['codex', 'antigravity']);
-  assert.equal(state.pinnedRepairLimitation.value, undefined);
+  assert.deepEqual(state.targets.value, chosen);
+  assert.deepEqual(state.pinnedSourceCommands.value, command);
   state.updateAutoDetect(true);
   assert.equal(unref(state.pinnedSourceCommands), undefined);
-  assert.equal(unref(state.pinnedRepairLimitation), undefined);
   assert.equal(pluginCommands(plugin).add, 'npx -y universal-agent-plugins add gitlab');
   state.stop();
 });
@@ -374,9 +368,11 @@ for (const [scope, client] of [['user', 'hermes'], ['project', 'pi']] as const) 
     assert.equal(unref(state.pinnedSourceCommands), undefined);
     const replacement = scope === 'user' ? 'cursor' : 'codex';
     state.updateTargets([client, replacement]);
-    assert.deepEqual(state.targets.value, [replacement], 'The picker includes the retained checked option');
+    assert.deepEqual(state.targets.value, [client, replacement], 'Adding a valid peer never silently removes the declined intent');
     assert.equal(state.scope.value, scope);
     assert.equal(state.autoDetect.value, false);
+    assert.equal(unref(state.availability), undefined);
+    state.updateTargets([replacement]);
     assert.equal(unref(state.availability)?.kind, 'signed');
     state.stop();
   });

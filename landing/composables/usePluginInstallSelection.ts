@@ -64,7 +64,7 @@ export function usePluginInstallSelection(
   const pinnedReleaseSource = computed(() => pinnedSelection.value?.source);
   const pinnedReleaseComponents = computed(() => pinnedSelection.value?.components);
   const pinnedSourceCommands = computed(() => pinnedSelection.value
-    ? pinnedCatalogCommands(plugin(), pinnedSelection.value.client, scope.value) : undefined);
+    ? pinnedCatalogCommands(plugin(), pinnedSelection.value.clients ?? pinnedSelection.value.client, scope.value) : undefined);
   const pinnedRepairLimitation = computed(() => pinnedCatalogRepairLimitation(pinnedSelection.value));
   // One authorized project source is enough to offer CLI-side target discovery.
   // This must not broaden any signed release scope or assume local client state.
@@ -104,7 +104,7 @@ export function usePluginInstallSelection(
         availableClients.value.find((client) => client.id === 'cursor') ??
         availableClients.value[0];
       // Persisted preferences may predate the public ChatGPT target rename.
-      // Never restore both public Codex and Desktop as two local installs.
+      // Both visible surfaces share one canonical execution target.
       targets.value = saved.targetIds.length
         ? reconcileLocalChatGPTTargets(saved.targetIds as InstallTargetID[], [])
         : initial

@@ -397,8 +397,8 @@ def version_evidence(argv, env, cwd):
     return {"status": "reported", "value": value[:200], "exit_code": 0}
 
 
-def snapshot(root):
-    """Record native entries without following symlinks or hiding read errors."""
+def snapshot(root, *, include_directories=False):
+    """Record native entries; Gemini repeat also preserves ordinary directory identities."""
     found = {}
     for target_root in root:
         if target_root.is_symlink():
@@ -420,6 +420,15 @@ def snapshot(root):
                 if path.is_symlink():
                     found[f"{target_root.name}/{path.relative_to(target_root)}"] = "symlink"
                     dirs.remove(name)
+                elif include_directories:
+                    # An empty directory is a repeat mutation too. Ignore
+                    # timestamps: native journals may touch existing parents.
+                    try:
+                        info = path.lstat()
+                        identity = f"{info.st_mode}:{info.st_dev}:{info.st_ino}" if stat.S_ISDIR(info.st_mode) else "non-regular"
+                    except OSError:
+                        identity = "unreadable"
+                    found[f"directory:{target_root.name}/{path.relative_to(target_root).as_posix()}"] = identity
             for name in files:
                 path = Path(base) / name
                 relative = str(path.relative_to(target_root))
@@ -2400,7 +2409,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
          (bool(skill_path) and lock_pinned and skill_bytes_match))
     )
     if gemini_skill_case and installed:
-        gemini_baseline_before = snapshot(native_roots)
+        gemini_baseline_before = snapshot(native_roots, include_directories=True)
         gemini_runtime = GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
             home, project, gemini_baseline_before, client_version,
             profile_snapshot=scoped_snapshot)
@@ -2418,7 +2427,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 [AGENT_BINARIES["gemini"], "skills", "list", "--all"], native_env, project, 30)
             native_finished = datetime.now(timezone.utc)
             native_observed.pop("_json", None)
-            gemini_baseline_after = snapshot(native_roots)
+            gemini_baseline_after = snapshot(native_roots, include_directories=True)
             gemini_native_baseline = {
                 "operation": "native-skills-list-baseline",
                 "started": native_started.isoformat(), "finished": native_finished.isoformat(),
@@ -2453,7 +2462,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_project_unchanged = None
     repeat_verified = False
     if installed:
-        before_repeat_native = snapshot(native_roots)
+        before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
                                  if codex_runtime is not None else None)
         before_repeat_project = (snapshot([project / root for root in project_skill_roots])
@@ -2471,7 +2480,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
                                   **capture_option)
         repeat_add_finished = datetime.now(timezone.utc)
-        after_repeat_add = (snapshot(native_roots)
+        after_repeat_add = (snapshot(native_roots, include_directories=gemini_runtime is not None)
                             if codex_runtime is not None or gemini_runtime is not None else None)
         if gemini_runtime is not None:
             gemini_runtime.checkpoint("after-public-repeat-add", after_repeat_add,
@@ -2481,7 +2490,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
         repeat_list_finished = datetime.now(timezone.utc)
-        after_repeat_list = (snapshot(native_roots)
+        after_repeat_list = (snapshot(native_roots, include_directories=gemini_runtime is not None)
                              if codex_runtime is not None or gemini_runtime is not None else None)
         if gemini_runtime is not None:
             gemini_runtime.checkpoint("after-public-repeat-list", after_repeat_list,
@@ -2497,7 +2506,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_runtime.checkpoint("repeat-installed", True)
             codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
                 repeat_add_json, repeat_matches, identity)
-        after_repeat_native = snapshot(native_roots)
+        after_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         gemini_repeat_valid = (gemini_runtime.finish(after_repeat_native)
                               if gemini_runtime is not None else False)
         if codex_runtime is not None or gemini_runtime is not None:

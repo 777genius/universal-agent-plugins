@@ -218,7 +218,7 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   const preview = (await page.locator('.hero-demo-video').boundingBox())!;
   const supported = (await page.locator('.client-section').boundingBox())!;
   const install = (await page.locator('.hero__window').boundingBox())!;
-  expect(preview.width).toBeGreaterThanOrEqual(1300);
+  expect(preview.width).toBeCloseTo(800, 0);
   expect(preview.y - (supported.y + supported.height)).toBeGreaterThanOrEqual(15);
   expect(install.y + install.height).toBeLessThan(preview.y);
   await expect(page.locator('.hero__demo .hero-demo-video')).toHaveCount(0);

@@ -1,13 +1,21 @@
 <script setup lang="ts">
+import { marketingKitVersion } from '~/data/marketingKitDemo';
 const { t } = useI18n();
 const { asset } = useSite();
-// The film's final dependency scene: both demonstration packages share Playwright.
+// Marketing Kit follows its declared fixture; Web Design Kit is illustrative.
+// Playwright's bridge package is pinned in examples/plugins/marketing-kit/uap.toml;
+// this illustrates reuse, not the latest upstream Playwright release.
+const exampleVersions = {
+  marketingVersion: marketingKitVersion,
+  designVersion: '0.1.0',
+  playwrightVersion: '0.0.80',
+};
 const packages = [
-  { id: 'marketing', name: 'marketing-kit', glyph: 'plugin' },
-  { id: 'design', name: 'Web Design Kit', glyph: 'code' },
+  { id: 'marketing', name: 'marketing-kit', version: exampleVersions.marketingVersion, glyph: 'plugin' },
+  { id: 'design', name: 'Web Design Kit', version: exampleVersions.designVersion, glyph: 'code' },
 ];
 const dependencies = [
-  { id: 'playwright', name: 'Playwright', shared: true, delay: 520 },
+  { id: 'playwright', name: 'Playwright', version: exampleVersions.playwrightVersion, shared: true, delay: 520 },
   { id: 'hubspot', name: 'HubSpot', delay: 320 },
   { id: 'notion', name: 'Notion', delay: 420 },
   { id: 'figma', name: 'Figma', delay: 620 },
@@ -63,7 +71,7 @@ onBeforeUnmount(() => observer?.disconnect());
         class="dependency-scene__graph"
         dir="ltr"
         role="img"
-        :aria-label="t('shell.dependencies.graphDescription')"
+        :aria-label="t('shell.dependencies.graphDescription', exampleVersions)"
       >
         <svg
           class="dependency-scene__edges dependency-scene__edges--desktop"
@@ -119,6 +127,7 @@ onBeforeUnmount(() => observer?.disconnect());
             </svg>
             <strong>{{ plugin.name }}</strong>
           </div>
+          <span class="dependency-scene__version">v{{ plugin.version }}</span>
           <p class="dependency-scene__status">
             <span class="dependency-scene__check">✓</span>{{ t('shell.dependencies.installed') }}
           </p>
@@ -142,6 +151,7 @@ onBeforeUnmount(() => observer?.disconnect());
           />
           <div class="dependency-scene__dependency-copy">
             <strong>{{ dependency.name }}</strong>
+            <span v-if="dependency.shared" class="dependency-scene__version">v{{ dependency.version }}</span>
             <span class="dependency-scene__status" dir="auto">{{
               t(
                 dependency.existing
@@ -156,7 +166,10 @@ onBeforeUnmount(() => observer?.disconnect());
           <span class="dependency-scene__check">✓</span>
         </div>
       </div>
-      <figcaption>{{ t('shell.dependencies.caption') }}</figcaption>
+      <figcaption>
+        <span class="dependency-scene__example-label">{{ t('shell.dependencies.exampleVersions') }}</span>
+        {{ t('shell.dependencies.caption') }}
+      </figcaption>
     </figure>
   </section>
 </template>
@@ -269,8 +282,16 @@ onBeforeUnmount(() => observer?.disconnect());
     background: #14231f;
     font-size: 8.8px;
   }
-  &__package-name + &__status {
-    margin-top: 14.4px;
+  &__version {
+    display: block;
+    margin-block: 4px;
+    color: #9aa8bf;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .65rem;
+    line-height: 1.3;
+  }
+  &__version + &__status {
+    margin-top: 8px;
   }
   &__progress {
     height: 4px;
@@ -335,6 +356,11 @@ onBeforeUnmount(() => observer?.disconnect());
     color: #81dfef;
     font-size: 0.6rem;
     font-weight: 700;
+  }
+  &__example-label {
+    display: block;
+    margin-block-end: 4px;
+    color: var(--muted);
   }
   figcaption {
     margin-top: 20px;

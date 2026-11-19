@@ -18,7 +18,7 @@ import textwrap
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 from runpy import run_path
 
 import codex_runtime_audit as audit
@@ -1505,8 +1505,10 @@ class CodexPluginSQLiteAuditTest(unittest.TestCase):
         self.database = self.home / '.local/state/codex-sqlite/state_5.sqlite'
 
     async def discover(self, binary, project, profile, environment, **kwargs):
-        self.assertEqual(kwargs, {})
+        self.assertEqual(kwargs, {"sqlite_baseline": True})
         self.assertEqual(environment['CODEX_HOME'], str(self.profile))
+        self.assertEqual(self.profile.joinpath('config.toml').read_bytes(),
+                         audit._sqlite_config(str(self.database.parent)))
         with closing(sqlite3.connect(self.database)) as connection:
             connection.execute('CREATE TABLE fixture_rows (value TEXT)')
             connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
@@ -1591,6 +1593,63 @@ class CodexPluginSQLiteAuditTest(unittest.TestCase):
         observer.runtime.mkdir()
         with self.assertRaisesRegex(ValueError, 'authority root changed'):
             observer.checkpoint('replaced-root')
+
+
+class CodexSQLiteBaselineStartupTest(unittest.TestCase):
+    def test_only_sqlite_baseline_adds_process_local_feature_override(self):
+        binary, project = Path('/inert/codex'), Path('/inert/project')
+        environment = {'CODEX_HOME': '/inert/profile'}
+        for windows in (False, True):
+            for baseline in (False, True):
+                with self.subTest(windows=windows, baseline=baseline):
+                    events, owner, job = [], object(), object()
+                    stdin = SimpleNamespace(write=lambda value: events.append(('gate', value)),
+                                            drain=AsyncMock())
+                    process = SimpleNamespace(stdin=stdin, _transport=SimpleNamespace(
+                        get_extra_info=lambda key: owner))
+                    def assign(observed):
+                        self.assertIs(observed, owner)
+                        events.append(('job', observed))
+                        return job
+                    create = AsyncMock(return_value=process)
+                    with (patch.object(audit, 'os', SimpleNamespace(name='nt' if windows else 'posix')),
+                          patch.object(audit.asyncio, 'create_subprocess_exec', create),
+                          patch.object(audit.subprocess, 'CREATE_NEW_PROCESS_GROUP', 512, create=True),
+                          patch.object(audit, 'run_path', return_value={'WindowsJob': assign})):
+                        observed = asyncio.run(audit._start_native(
+                            binary, project, environment, sqlite_baseline=baseline))
+                    expected = ([sys.executable, str(Path(audit.__file__).resolve()),
+                                 '--windows-native-start', str(binary)]
+                                + (['--sqlite-baseline'] if baseline else []) if windows else
+                                [str(binary)] + (['--disable', 'plugins'] if baseline else [])
+                                + ['app-server'])
+                    self.assertEqual(list(create.await_args.args), expected)
+                    self.assertEqual(create.await_args.kwargs['env'], environment)
+                    self.assertEqual(observed, (process, job if windows else None))
+                    self.assertEqual(events, [('job', owner), ('gate', b'!')] if windows else [])
+
+    def test_windows_bootstrap_accepts_only_fixed_baseline_intent_after_ownership_gate(self):
+        for baseline in (False, True):
+            argv = ['observer', '--windows-native-start', '/inert/codex']
+            if baseline:
+                argv.append('--sqlite-baseline')
+            with (patch.object(audit, 'os', SimpleNamespace(name='nt', read=Mock(return_value=b'!'))),
+                  patch.object(audit.subprocess, 'call', return_value=0) as call):
+                self.assertEqual(audit._windows_native_start(argv), 0)
+                self.assertEqual(call.call_args.args[0], ['/inert/codex']
+                                 + (['--disable', 'plugins'] if baseline else []) + ['app-server'])
+            with (patch.object(audit, 'os', SimpleNamespace(name='nt', read=Mock(return_value=b'?'))),
+                  patch.object(audit.subprocess, 'call') as call):
+                with self.assertRaisesRegex(SystemExit, 'ownership was not established'):
+                    audit._windows_native_start(argv)
+                call.assert_not_called()
+        for extra in (['--disable', 'plugins'], ['--sqlite-baseline', '--other'], ['--other']):
+            with (patch.object(audit, 'os', SimpleNamespace(name='nt', read=Mock())) as owned_os,
+                  patch.object(audit.subprocess, 'call') as call):
+                with self.assertRaisesRegex(SystemExit, 'private Windows'):
+                    audit._windows_native_start(['observer', '--windows-native-start', 'codex', *extra])
+                owned_os.read.assert_not_called()
+                call.assert_not_called()
 
 
 class CodexSystemSkillInitializationTest(unittest.TestCase):

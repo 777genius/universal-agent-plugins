@@ -60,6 +60,7 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 		InstallationID:                   req.InstallationID, OperationID: req.OperationID, BackendExecutable: req.ClientExecutable,
 		OriginMode: snapshot.OriginMode, DirectoryResolution: cloneAcquiredDirectory(snapshot.Directory), Hints: req.acquiredCompatibility(),
 		EnvironmentAuthority: req.EnvironmentAuthority,
+		ProjectTrustConsent:  req.ProjectTrustConsent,
 		ConfirmPluginEnable:  req.ConfirmPluginEnable,
 		ActivationComplete:   req.ActivationComplete, AuthComplete: req.AuthComplete,
 	}, dry)

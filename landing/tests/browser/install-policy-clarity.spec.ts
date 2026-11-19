@@ -41,6 +41,9 @@ for (const width of [1440, 390]) {
     const notice = wording('en')('registryUi.install.pinnedCatalogSource');
     const repairNotice = wording('en')('registryUi.install.antigravityRepairUnavailable', { version: '0.1.110' });
     for (const [agent, client] of [['Hermes Agent', 'hermes'], ['Google Antigravity', 'antigravity'], ['Pi', 'pi']]) {
+      await hero.locator('.app-multiselect__trigger').click();
+      await page.locator('.app-multiselect__auto').click();
+      await page.keyboard.press('Escape');
       await targets(page, hero, [agent!]);
       await expect(hero.locator('.command-snippet--add code')).toHaveText(`${cli} add ${selector} --target ${client}`);
       await expect(hero).toContainText(notice);
@@ -48,6 +51,9 @@ for (const width of [1440, 390]) {
     }
     await openCardInstall(page, card);
     for (const [agent, client] of [['Hermes Agent', 'hermes'], ['Google Antigravity', 'antigravity'], ['Pi', 'pi']]) {
+      await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
+      await page.locator('.app-multiselect__auto').click();
+      await page.keyboard.press('Escape');
       await targets(page, card, [agent!]);
       const add = `${cli} add ${selector} --target ${client}`;
       const snippet = page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add');
@@ -74,16 +80,19 @@ for (const width of [1440, 390]) {
       .toHaveText(`${cli} add ${selector} --target hermes --scope project`);
     await targets(page, detail, ['Google Antigravity']);
     await expect(detail.locator('.command-snippet--add code'))
-      .toHaveText(`${cli} add ${selector} --target antigravity --scope project`);
+      .toHaveText(`${cli} add ${selector} --target hermes,antigravity --scope project`);
     await expect(detail).not.toContainText(repairNotice);
     await expect(detail.locator('.command-snippet--repair')).toHaveCount(1);
     for (const action of ['update', 'repair', 'remove'])
       await expect(detail.locator(`.command-snippet--${action} code`))
-        .toHaveText(`${cli} ${action} ${manifestName} --target antigravity --scope project`);
+        .toHaveText(`${cli} ${action} ${manifestName} --target hermes,antigravity --scope project`);
     await testInfo.attach(`explicit-source-detail-${width}.png`, {
       body: await detail.screenshot({ animations: 'disabled' }), contentType: 'image/png',
     });
     await detail.getByRole('button', { name: 'This computer', exact: true }).click();
+    await detail.locator('.app-multiselect__trigger').click();
+    await page.locator('.app-multiselect__auto').click();
+    await page.keyboard.press('Escape');
     await targets(page, detail, ['Google Antigravity']);
     const userAdd = `${cli} add ${selector} --target antigravity`;
     await expect(detail.locator('.command-snippet--add code')).toHaveText(userAdd);

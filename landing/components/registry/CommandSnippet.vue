@@ -3,6 +3,7 @@
   See site/NOTICE.md for the complete attribution.
 -->
 <script setup lang="ts">
+import { mdiContentCopy, mdiCheck } from '@mdi/js';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import { withNativeCliInvocation } from '~/utils/cliInvocation';
 
@@ -29,12 +30,6 @@ const copied = ref(false);
 const renderedCommand = computed(() =>
   withNativeCliInvocation(props.command, preferences.useNativeCli),
 );
-const visibleCommand = computed(() => {
-  if (!props.compact) return renderedCommand.value;
-  if (renderedCommand.value.includes(' --target '))
-    return renderedCommand.value.replace(' --target ', '\n--target ');
-  return renderedCommand.value.replace(/^(npx -y universal-agent-plugins\s+\S+|agentplugins\s+(?:add|update|repair|remove|switch))\s+/, '$1\n');
-});
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 onBeforeUnmount(() => {
@@ -82,10 +77,7 @@ async function copyCommand() {
     <div class="command-snippet__header">
       <span v-if="!inline" class="command-snippet__label">
         <svg class="command-snippet__label-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <template v-if="kind === 'add'">
-            <path d="M12 5v14M5 12h14" />
-          </template>
-          <template v-else-if="kind === 'update'">
+          <template v-if="kind === 'update'">
             <path d="M20 7v5h-5M4 17v-5h5" />
             <path d="M18.5 12a6.5 6.5 0 0 0-11.2-4.5L4 12M5.5 12a6.5 6.5 0 0 0 11.2 4.5L20 12" />
           </template>
@@ -102,7 +94,11 @@ async function copyCommand() {
             <path d="m5 7 4 5-4 5M11 17h8" />
           </template>
         </svg>
-        {{ label ?? t('registryUi.command.terminal') }}
+        {{
+          kind === 'add'
+            ? t('registryUi.command.terminal')
+            : (label ?? t('registryUi.command.terminal'))
+        }}
       </span>
       <button
         type="button"
@@ -111,10 +107,11 @@ async function copyCommand() {
         "
         @click="copyCommand"
       >
+        <v-icon :icon="copied ? mdiCheck : mdiContentCopy" size="14" aria-hidden="true" />
         {{ copied ? t('registryUi.command.copied') : t('registryUi.command.copy') }}
       </button>
     </div>
-    <pre><code><slot>{{ visibleCommand }}</slot></code></pre>
+    <pre><code><slot>{{ renderedCommand }}</slot></code></pre>
     <span class="sr-only" role="status" aria-live="polite">{{
       copied ? t('registryUi.command.announcement') : ''
     }}</span>

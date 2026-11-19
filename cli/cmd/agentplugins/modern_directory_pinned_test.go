@@ -160,3 +160,31 @@ func TestPinnedModernDirectoryCannotUseLegacyKeyWithNewID(t *testing.T) {
 		t.Fatal("negative fixture must use the actual 32-byte legacy Ed25519 key")
 	}
 }
+
+func TestPinnedModernDirectoryRejectsPretrustedSuccessorIDAndBytes(t *testing.T) {
+	for _, tc := range []struct {
+		name, diagnostic string
+		mutate           func(*pinnedModernDirectoryTrust)
+	}{
+		{
+			name: "next_key_id", diagnostic: "distinct pinned signing key ID",
+			mutate: func(c *pinnedModernDirectoryTrust) { c.KeyID = nextDirectoryKeyID },
+		},
+		{
+			name: "next_key_bytes_renamed_id", diagnostic: "pretrusted successor",
+			mutate: func(c *pinnedModernDirectoryTrust) {
+				c.KeyID = "modern-alias-for-existing-next"
+				c.PublicKeyBase64 = nextDirectoryPublicKey
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pinned := modernPinnedTestTrust(t)
+			tc.mutate(&pinned)
+			_, err := newPinnedModernDirectoryClient(t.TempDir(), pinned)
+			if err == nil || !strings.Contains(err.Error(), tc.diagnostic) {
+				t.Fatalf("pretrusted production key reuse was not rejected before bootstrap: %v", err)
+			}
+		})
+	}
+}

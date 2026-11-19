@@ -26,6 +26,31 @@ def load_audit():
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
 
+    def test_gemini_repeat_snapshot_tracks_ordinary_empty_directory_deltas(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            profile = Path(temporary) / ".gemini"
+            chats = profile / "tmp" / "project" / "chats"
+            chats.mkdir(parents=True)
+            before = audit.snapshot([profile], include_directories=True)
+            ordinary_before = audit.snapshot([profile])
+            untracked = profile / "unexpected-empty"
+            untracked.mkdir()
+            after = audit.snapshot([profile], include_directories=True)
+            self.assertNotEqual(before, after)
+            self.assertIn("directory:.gemini/unexpected-empty", after)
+            # Other client snapshots intentionally keep the old contract.
+            self.assertEqual(audit.snapshot([profile]), ordinary_before)
+            untracked.rmdir()
+            # A valid journal under the same chats parents changes one file,
+            # not the directory identities used to reject foreign deltas.
+            (chats / "record.json").write_text("{}\\n")
+            journal = audit.snapshot([profile], include_directories=True)
+            self.assertEqual(set(journal) - set(before),
+                             {".gemini/tmp/project/chats/record.json"})
+            (chats / "record.json").unlink()
+            self.assertEqual(audit.snapshot([profile], include_directories=True), before)
+
     def test_marketing_kit_rejects_non_success_json_even_with_zero_exit(self):
         # A zero process exit with a refusal/partial response is not lifecycle PASS.
         from runpy import run_path
@@ -8510,9 +8535,10 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
             ambient.mkdir()
             (ambient / "foreign.txt").write_text("ambient untouched")
             ambient_before = audit.scoped_snapshot((ambient,))
-            async def discover(binary, project, native_profile, environment):
+            async def discover(binary, project, native_profile, environment, **kwargs):
                 self.assertEqual(native_profile, profile)
                 self.assertEqual(environment["CODEX_HOME"], str(profile))
+                self.assertEqual(kwargs, {"sqlite_baseline": True} if kind == "plugin" else {})
                 if kind == "plugin":
                     installation_id = (profile / "installation_id").read_bytes()
                     parsed = audit.uuid.UUID(installation_id.decode("ascii"))
@@ -8563,8 +8589,10 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                 return {"data": [{"cwd": str(project), "errors": [], "skills": skills}]}
             def perform(argv, environment, cwd, timeout=105):
                 commands.append(list(argv))
+                self.assertNotIn("--disable", argv)
                 command = argv[1]
                 config = profile / "config.toml"
+                self.assertNotIn("features", audit.tomllib.loads(config.read_text()))
                 if command == "skills":
                     selected = case / "project/.agents/skills" / identity / "SKILL.md"
                     selected.parent.mkdir(parents=True, exist_ok=True)
@@ -9564,7 +9592,7 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
                 self.assertTrue(row['removal_verified'])
                 self.assertTrue(row['sentinels_preserved'])
                 self.assertEqual(row['public_skill_ready'], {'after-add': True, 'repeat-add': True})
-                self.assertEqual(row['repeat_native_unchanged'], replaced)
+                self.assertFalse(row['repeat_native_unchanged'])
                 self.assertEqual(row['repeat_native_runtime_only'], not replaced and not failure)
                 self.assertEqual(row['repeat_verified'], not replaced and not failure)
                 self.assertEqual(row['status'], 'repeat-add-unqualified' if replaced or failure else 'passed')
