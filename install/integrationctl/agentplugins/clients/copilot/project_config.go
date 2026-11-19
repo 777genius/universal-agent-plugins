@@ -68,6 +68,9 @@ func (*Adapter) ValidateBindingProfile(root string, binding domain.ClientBinding
 	if err := pathpolicy.RequireContainedChild(root, expected); err != nil {
 		return err
 	}
+	if copilotHasProjectPlugin(binding.NativeObjects) {
+		return copilotValidateProjectPluginObjects(root, binding.PhysicalArtifact, binding.NativeObjects)
+	}
 	layout, err := copilotComponents(root)
 	if err != nil {
 		return err

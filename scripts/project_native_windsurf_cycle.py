@@ -638,6 +638,23 @@ def complete(commands,proof_rows,probes,result):
 
 
 
+def cache_file_observation(value, row, now):
+    """Bind optional schema-only facts to a refused new file in the owned cli cache."""
+    obj(value, "bytes sha256 format", "top_level_type_counts")
+    require(row["operation"] == "added" and row["before"] is False and row["after"] is True
+            and now["Kind"] == "file" and now["Links"] == 1
+            and row["parent_sha256"] == sha(b"cli")
+            and type(value["bytes"]) is int and value["bytes"] == now["Size"]
+            and 0 <= value["bytes"] <= 1 << 20 and value["sha256"] == now["SHA256"]
+            and value["format"] in ("opaque", "json-object", "json-array", "json-scalar"))
+    if "top_level_type_counts" in value:
+        counts = value["top_level_type_counts"]
+        require(value["format"] == "json-object" and type(counts) is dict and len(counts) <= 6
+                and all(type(kind) is str and kind in ("object", "array", "string", "number", "boolean", "null")
+                        and type(count) is int and 1 <= count <= 32 for kind, count in counts.items())
+                and sum(counts.values()) <= 32)
+
+
 def cache_diagnostic(value, summary, commands):
     """Admit only typed, nonauthorizing failure evidence; never a native PASS."""
     obj(value, "diagnostic_only accepted stage root_sha256 native_binary_sha256 started_at ended_at changed_records", "records bounded_out")
@@ -662,7 +679,7 @@ def cache_diagnostic(value, summary, commands):
     start, end = stamp(cmd["started_at"]), stamp(cmd["ended_at"])
     observed = set()
     for row in rows:
-        obj(row, "key_sha256 parent_sha256 operation before after previous current within_command")
+        obj(row, "key_sha256 parent_sha256 operation before after previous current within_command", "file_observation")
         require(all(type(row[key]) is str and re.fullmatch(r"[0-9a-f]{64}", row[key])
                     for key in ("key_sha256", "parent_sha256")))
         require(row["key_sha256"] not in observed)
@@ -675,6 +692,8 @@ def cache_diagnostic(value, summary, commands):
         require((not before or not after or not same(old, now))
                 and type(row["within_command"]) is bool
                 and row["within_command"] is (after and times(now, start, end)))
+        if "file_observation" in row:
+            cache_file_observation(row["file_observation"], row, now)
 
 def members(bodies,source_identity):
     try:return admit(bodies,source_identity)
