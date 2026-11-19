@@ -223,8 +223,12 @@ workflow installs the **current public stable** native binary from its official
 release on the six OS targets above. A single
 [version resolver](../../.github/workflows/agentplugins-published-version.yml)
 requires an exact matching public, non-prerelease GitHub tag and published npm
-version. For an unpinned check it selects npm's stable `latest` first, so a
-GitHub Release awaiting npm approval cannot masquerade as a qualified install.
+version. For an unpinned PR/weekly smoke it selects npm's stable `latest`
+first and verifies the corresponding public GitHub tag. This is a historical
+npm-stable diagnostic, not certification of the newest GitHub Release.
+After a successful trusted publisher run, release E2E additionally requires
+its exact tag to match both GitHub's latest public Release and npm `latest`.
+A newer GitHub-only Release cannot be certified while npm approval is pending.
 This version is *not* the source-built package-manager executable.
 
 The [Windows published native-client E2E](../../.github/workflows/agentplugins-published-windows-audit.yml)

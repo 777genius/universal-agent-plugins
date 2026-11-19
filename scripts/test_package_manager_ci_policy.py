@@ -6,6 +6,9 @@ Dependency-free so drafts can run without setting up Go or accounts.
 
 from pathlib import Path
 import re
+import os
+import shutil
+import subprocess
 import unittest
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/package-manager-e2e.yml"
@@ -40,7 +43,11 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         # GitHub Release may be public before npm environment approval.
         # For unpinned PR/weekly smoke, only npm latest may select a target,
         # and it still requires the corresponding public GitHub release.
-        self.assertNotIn("releases/latest", version)
+        # Ordinary source-PR smoke may test historical npm latest; trusted
+        # publication must additionally prove newest GitHub/npm parity.
+        self.assertIn('releases/latest" --jq', version)
+        self.assertIn('trusted_release=true', version)
+        self.assertIn('latest_public_tag', version)
         self.assertIn('tag="agentplugins-v$current"', version)
         self.assertIn('[[ "$current" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]', version)
         self.assertIn("npm view universal-agent-plugins dist-tags.latest", version)
@@ -129,6 +136,30 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertIn("actions: read", native)
         self.assertIn("uses: ./.github/workflows/agentplugins-published-version.yml", native)
         self.assertIn("require_trusted_publish: ${{ github.event_name == 'workflow_run' }}", native)
+
+    def test_trusted_publish_latest_parity_negative_fixtures(self):
+        version = (WORKFLOW.parent / "agentplugins-published-version.yml").read_text(encoding="utf-8")
+        # Test the exact Bash condition used by the trusted-publisher lane.
+        predicate = ('[[ "$published" == "$version" && "$current" == "$version" '
+                     '&& "$latest_public_tag" == "$tag" ]]')
+        self.assertIn(predicate, version)
+        bash = shutil.which("bash")
+        if not bash:
+            self.skipTest("Bash unavailable; structural release assertions still run")
+        cases = [
+            ("matching .112", "0.1.112", "0.1.112", "agentplugins-v0.1.112", "0.1.112", True),
+            ("GitHub .111 npm latest .110", "0.1.111", "0.1.110", "agentplugins-v0.1.111", "0.1.111", False),
+            ("newer GitHub latest", "0.1.111", "0.1.111", "agentplugins-v0.1.112", "0.1.111", False),
+            ("wrong package", "0.1.110", "0.1.111", "agentplugins-v0.1.111", "0.1.111", False),
+        ]
+        for name, published, current, latest, exact, expected in cases:
+            with self.subTest(case=name):
+                env = dict(os.environ, published=published, current=current,
+                           latest_public_tag=latest, version=exact,
+                           tag="agentplugins-v" + exact)
+                result = subprocess.run([bash, "-c", predicate], env=env,
+                                        capture_output=True, timeout=5, check=False)
+                self.assertEqual(result.returncode == 0, expected, name)
 
     def test_legacy_firebase_capture_is_manual_diagnostic_only(self):
         legacy = (WORKFLOW.parent / "agentplugins-windows-firebase-capture-probe.yml").read_text(

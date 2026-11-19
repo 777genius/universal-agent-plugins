@@ -46,6 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           requested="${REQUESTED_VERSION:-}"
+          trusted_release=false
           # A successful prepare-only workflow is NOT a published npm release.
           # The complete run must contain successful publish and verify-public jobs,
           # and the tested version is bound to that run's immutable release tag.
@@ -63,6 +64,7 @@ jobs:
               exit 2
             fi
             requested="${PUBLISH_HEAD_REF#agentplugins-v}"
+            trusted_release=true
           fi
           if [[ -n "$requested" && ! "$requested" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Only an exact stable version is allowed" >&2
@@ -73,6 +75,7 @@ jobs:
             # publish. Select only the npm latest stable version for ordinary
             # native installer checks, then verify its exact public GitHub tag.
             # An unpublished GitHub Release must not poison PR/weekly smoke.
+          # This is historical npm-stable smoke, NOT latest-release parity.
             current="$(npm view universal-agent-plugins dist-tags.latest 2>/dev/null || true)"
             [[ "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
               echo "::error::npm latest is missing or not a stable version ('$current')" >&2
@@ -93,9 +96,15 @@ jobs:
           # Bound retries; a mismatch is NEVER treated as a qualified release.
           published=""
           current=""
+          latest_public_tag=""
           for attempt in 1 2 3 4 5 6; do
             published="$(npm view "universal-agent-plugins@$version" version 2>/dev/null || true)"
-            if [[ -n "$requested" ]]; then
+            if [[ "$trusted_release" == "true" ]]; then
+              # Release certification must not pass on historical npm bytes.
+              current="$(npm view universal-agent-plugins dist-tags.latest 2>/dev/null || true)"
+              latest_public_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+              [[ "$published" == "$version" && "$current" == "$version" && "$latest_public_tag" == "$tag" ]] && break
+            elif [[ -n "$requested" ]]; then
               [[ "$published" == "$version" ]] && break
             else
               current="$(npm view universal-agent-plugins dist-tags.latest 2>/dev/null || true)"
@@ -107,6 +116,10 @@ jobs:
             echo "::error::Published npm package '$version' missing or stale (got '$published')" >&2
             exit 2
           }
+          if [[ "$trusted_release" == "true" && ( "$current" != "$version" || "$latest_public_tag" != "$tag" ) ]]; then
+            echo "::error::Latest public release/npm parity failed: GitHub '$latest_public_tag', npm latest '$current', trusted tag '$tag'" >&2
+            exit 2
+          fi
           if [[ -z "$requested" && "$current" != "$version" ]]; then
             echo "::error::npm latest '$current' differs from public release '$version'" >&2
             exit 2
