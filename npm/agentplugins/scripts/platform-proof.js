@@ -65,6 +65,12 @@ function mkdir(directory) {
   fs.mkdirSync(directory, { recursive: true });
 }
 
+// macOS TMPDIR may traverse /var -> /private/var. Scaffold correctly refuses
+// symlink ancestors, so make the disposable proof parent physically canonical.
+function createProofRoot(tempDirectory = os.tmpdir()) {
+  return fs.mkdtempSync(path.join(fs.realpathSync(tempDirectory), "agentplugins-platform-proof-"));
+}
+
 function npmInvocation(args, platform = process.platform, execPath = process.execPath) {
   if (platform !== "win32") return { command: "npm", args };
   const npmCLI = path.win32.join(path.win32.dirname(execPath), "node_modules", "npm", "bin", "npm-cli.js");
@@ -200,7 +206,7 @@ function main() {
     fail(`runner architecture mismatch: expected ${expectedTarget}, got ${actualTarget}`);
   }
 
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentplugins-platform-proof-"));
+  const root = createProofRoot();
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   const cursor = path.join(home, ".cursor");
@@ -416,6 +422,7 @@ module.exports = {
   assertInstalledShimInvocation,
   assertPublicJSONPathFree,
   assertSyntheticInfo,
+  createProofRoot,
   frozenReleaseAsset,
   installedShimInvocation,
   lifecycleCommands,
