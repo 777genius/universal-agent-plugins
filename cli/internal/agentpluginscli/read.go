@@ -38,49 +38,17 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	if err != nil {
 		return err
 	}
-	state, err := app.StateStore.Load()
+	report, state, selected, err := collectDoctorSnapshot(ctx, app, clients, args)
 	if err != nil {
 		return err
 	}
-	open, err := app.Lifecycle.Kernel.Directory.ListOpen()
-	if err != nil {
-		return err
-	}
-	publicClients := make([]publicDetectedClient, 0, len(clients))
-	for _, client := range clients {
-		publicClients = append(publicClients, publicDetectedClient{
-			ClientID: client.ClientID, DisplayName: client.DisplayName, Status: client.Status, Version: client.Version,
-			Surfaces: append([]domain.ClientSurface(nil), client.Surfaces...),
-		})
-	}
-	report := struct {
-		ReadOnly           bool                     `json:"read_only"`
-		ToolVersion        string                   `json:"tool_version"`
-		SupportedClients   []supportedClient        `json:"supported_clients"`
-		Clients            []publicDetectedClient   `json:"clients"`
-		InstallationCount  int                      `json:"installation_count"`
-		OpenOperationCount int                      `json:"open_operation_count"`
-		Installation       *publicInstallation      `json:"installation,omitempty"`
-		ProjectReadiness   []projectReadinessRecord `json:"project_readiness"`
-		Findings           []doctorFinding          `json:"findings"`
-	}{ReadOnly: true, ToolVersion: normalizedToolVersion(app.Version), SupportedClients: doctorSupportedClients(), Clients: publicClients,
-		InstallationCount: len(publicInstallations(state, false)), OpenOperationCount: len(open) + len(unresolvedNativeAttempts(app, state))}
-	selected := (*domain.Installation)(nil)
-	if len(args) == 1 {
-		installation, err := selectInstallation(state, args[0])
-		if err != nil {
-			return err
-		}
-		value, err := inspectInstalledProduct(ctx, app, state, installation)
+	if selected != nil {
+		value, err := inspectInstalledProduct(ctx, app, state, *selected)
 		if err != nil {
 			return fmt.Errorf("inspect signed Directory: %w", err)
 		}
 		report.Installation = &value
-		selected = &installation
 	}
-	report.ProjectReadiness = projectReadinessRecords(state, selected)
-	report.Findings = doctorFindings(ctx, app, clients, state, open, selected)
-	report.Findings = append(report.Findings, doctorCodexNativeFindings(state, selected)...)
 	safety, err := doctorDirectorySafetyFindings(ctx, app, state, selected, report.Installation)
 	if err != nil {
 		return fmt.Errorf("inspect signed Directory: %w", err)
@@ -88,12 +56,16 @@ func runDoctor(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	report.Findings = append(report.Findings, safety...)
 	report.Findings = dropDoctorHealthySentinel(report.Findings)
 	sortDoctorFindings(report.Findings)
+	return renderDoctor(cmd, opts, report)
+}
+
+func renderDoctor(cmd *cobra.Command, opts *options, report doctorReport) error {
 	if opts.format == "json" {
 		return writeJSONOutput(cmd.OutOrStdout(), "doctor", report)
 	}
 	_, _ = fmt.Fprintln(cmd.OutOrStdout(), "agentplugins doctor (read-only)")
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Tool version"), report.ToolVersion)
-	for _, client := range clients {
+	for _, client := range report.Clients {
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", client.DisplayName, client.Status)
 	}
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s: %d\n", terminaltheme.For(cmd.OutOrStdout()).Text(terminaltheme.Label, "Tracked installations"), report.InstallationCount)

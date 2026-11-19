@@ -90,6 +90,7 @@ func (adapter *Adapter) activateDevinGlobal(ctx context.Context, env clients.Env
 	if err == nil && outcome.Verification == domain.VerificationInstalled {
 		outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
 		outcome.UserActions = shared.AppendUnique(outcome.UserActions, DevinGlobalAction)
+		return completeDevinSkills(ctx, env, request, outcome)
 	}
 	return outcome, err
 }

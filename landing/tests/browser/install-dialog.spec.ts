@@ -65,6 +65,14 @@ for (const width of [1280, 390]) {
       const projectInfo = page.getByRole('dialog').locator('.install-scope__info');
       await projectInfo.focus();
       await expect(page.locator('.app-tooltip:visible')).toContainText(await projectInfo.getAttribute('aria-label') ?? '');
+      // A rapid keyboard return must not let closing content dismiss its own reopen.
+      await projectInfo.evaluate(async (element) => {
+        element.blur();
+        await Promise.resolve();
+        element.focus();
+      });
+      await expect(projectInfo).toBeFocused();
+      await expect(page.locator('.app-tooltip:visible')).toContainText(await projectInfo.getAttribute('aria-label') ?? '');
       await page.getByRole('dialog').locator('.install-dialog__close').focus();
       await targets(page, card, ['Codex']);
       const dialog = page.locator('.install-dialog');

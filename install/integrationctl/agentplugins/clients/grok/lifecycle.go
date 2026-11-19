@@ -23,9 +23,9 @@ func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.Activatio
 	return shared.HasClientCLI(env, request.BackendExecutable)
 }
 
-func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
+func (*Adapter) VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
 	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject || plan.TargetContext.ProjectRoot != "" {
-		return false
+		return projectSkillsVerifiable(client, plan, backendExecutable)
 	}
 	return shared.HasListingCLI(backendExecutable)
 }
@@ -50,14 +50,14 @@ func activateUser(ctx context.Context, env clients.Env, request domain.Activatio
 		return outcome, nil
 	}
 	if request.VerifyOnly {
-		return verifyActivation(ctx, env, request, outcome)
+		return verifyActivation(ctx, env, request, outcome, false)
 	}
 	entries, err := listPlugins(ctx, env, request.BackendExecutable)
 	if err != nil {
 		return activationError(outcome, request, err)
 	}
 	entry, found := findEntry(entries, request.DeclaredName)
-	if found && !expectedEntry(entry, request.Delivery.ActivePath) {
+	if found && !expectedEntry(entry, request.DeclaredName, request.Delivery.ActivePath) {
 		return activationError(outcome, request, fmt.Errorf("%w: Grok plugin %q is registered from a different source", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
 	}
 	if found && entry.Status == "disabled" {
@@ -71,32 +71,48 @@ func activateUser(ctx context.Context, env clients.Env, request domain.Activatio
 	}
 	if found {
 		if _, err := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "uninstall", "--confirm", request.DeclaredName); err != nil {
+			// A failed native command may still have changed its registry.
+			outcome.NativeEffect = domain.NativeEffectUncertain
 			return activationError(outcome, request, fmt.Errorf("uninstall previous Grok plugin: %w", err))
 		}
 		if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
-			return activationError(outcome, request, fmt.Errorf("verify previous Grok plugin removal: %w", err))
+			// A successful native removal with unreadable or negative readback
+			// may have changed the registration. Never begin a second mutation
+			// or accept a stale manual attestation after this point.
+			outcome.NativeEffect = domain.NativeEffectUncertain
+			return shared.FailedActivation(outcome, "inspect Grok native registry before retrying replacement",
+				fmt.Errorf("verify previous Grok plugin removal: %w", err))
 		}
 	}
-	_, installErr := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "install", "--trust", request.Delivery.ActivePath)
-	verified, verifyErr := verifyActivation(ctx, env, request, outcome)
-	if installErr != nil {
-		// A same-version update may change package content, so a stale listing
-		// cannot prove a failed install delivered the new package bytes.
-		return shared.FailedActivation(outcome, "inspect `grok plugin list --json` and retry installation", errors.Join(fmt.Errorf("install grok plugin: %w", installErr), verifyErr))
+	if _, err := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "install", "--trust", request.Delivery.ActivePath); err != nil {
+		// A failed or unclosed native installation may have partially changed
+		// its registry. Never re-probe or assume no external effect.
+		outcome.NativeEffect = domain.NativeEffectUncertain
+		return activationError(outcome, request, fmt.Errorf("install grok plugin: %w", err))
 	}
-	if verifyErr == nil && verified.Verification == domain.VerificationInstalled {
-		return verified, nil
-	}
-	return verified, verifyErr
+	return verifyActivation(ctx, env, request, outcome, true)
 }
 
-func verifyActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
+func verifyActivation(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome, installedNow bool) (domain.ActivationOutcome, error) {
 	entries, err := listPlugins(ctx, env, request.BackendExecutable)
 	if err != nil {
+		if installedNow {
+			// A previous manual attestation cannot prove this new native install.
+			// Unknown readback after a successful mutation has uncertain effect:
+			// do not claim Ready or retry native operations in the same session.
+			outcome.NativeEffect = domain.NativeEffectUncertain
+			return shared.FailedActivation(outcome, "inspect `grok plugin list --json` before retrying installation",
+				fmt.Errorf("verify newly installed Grok plugin: %w", shared.CompletionProbeFailure(err)))
+		}
 		return activationError(outcome, request, err)
 	}
 	entry, found := findEntry(entries, request.DeclaredName)
-	if !found || !expectedEntry(entry, request.Delivery.ActivePath) || entry.Status != "installed" || entry.Version != request.Plan.DeclaredVersion {
+	if !found || !expectedEntry(entry, request.DeclaredName, request.Delivery.ActivePath) || entry.Status != "installed" || entry.Version != request.Plan.DeclaredVersion {
+		if installedNow {
+			// The install command completed, but native evidence contradicts
+			// the requested registration; its external effect is unresolved.
+			outcome.NativeEffect = domain.NativeEffectUncertain
+		}
 		return activationError(outcome, request, fmt.Errorf("%w: Grok plugin %q is absent, disabled, foreign, or has a different version", shared.ErrRecognizedNegativeEvidence, request.DeclaredName))
 	}
 	outcome.Activation, outcome.Verification = domain.ActivationActive, domain.VerificationInstalled
@@ -104,7 +120,14 @@ func verifyActivation(ctx context.Context, env clients.Env, request domain.Activ
 }
 
 func activationError(outcome domain.ActivationOutcome, request domain.ActivationRequest, err error) (domain.ActivationOutcome, error) {
-	if errors.Is(err, errUnknownList) {
+	err = shared.CompletionProbeFailure(err)
+	if domain.IsUnclosedClientProbe(err) {
+		outcome.NativeEffect = domain.NativeEffectUncertain
+		failed, cause := shared.FailedActivation(outcome, "resolve the unclosed Grok process before retrying", err)
+		failed.UserActions = []string{"resolve uncertain Grok process cleanup before attempting another installation"}
+		return failed, cause
+	}
+	if errors.Is(err, errUnknownList) && request.VerifyOnly && outcome.NativeEffect != domain.NativeEffectUncertain {
 		if attested, ok := shared.AttestedUnknownVerification(outcome, request); ok {
 			return attested, nil
 		}
@@ -132,7 +155,19 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 	}
 	outcome := shared.StartedDeactivation()
 	if request.ExternalUninstalled {
+		// External confirmation is necessary when Grok is unavailable, but
+		// must not bypass fresh native evidence when it can be queried.
+		if request.Confirmed && shared.HasClientCLI(env, request.BackendExecutable) {
+			outcome.ArtifactRemovalAllowed = false
+			if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
+				if domain.IsUnclosedClientProbe(shared.CompletionProbeFailure(err)) {
+					outcome.NativeEffect = domain.NativeEffectUncertain
+				}
+				return outcome, fmt.Errorf("verify externally uninstalled Grok plugin: %w", err)
+			}
+		}
 		outcome.ExternalRemovalComplete = true
+		outcome.ArtifactRemovalAllowed = true
 		return outcome, nil
 	}
 	if adapter.RequiresExternalUninstalled(env, request) {
@@ -142,6 +177,9 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 		outcome.UserActions = []string{"agentplugins will uninstall the managed Grok Build plugin automatically"}
 		return outcome, nil
 	}
+	// An unknown native listing is not an absence receipt. Keep the managed artifact
+	// until an exact absence or completed owned unregister is verified.
+	outcome.ArtifactRemovalAllowed = false
 	entries, err := listPlugins(ctx, env, request.BackendExecutable)
 	if err != nil {
 		return outcome, err
@@ -149,18 +187,27 @@ func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, request
 	entry, found := findEntry(entries, request.DeclaredName)
 	if !found {
 		outcome.ExternalRemovalComplete = true
+		outcome.ArtifactRemovalAllowed = true
 		return outcome, nil
 	}
-	if !expectedEntry(entry, request.ManagedArtifactPath) {
+	if !expectedEntry(entry, request.DeclaredName, request.ManagedArtifactPath) {
 		return outcome, fmt.Errorf("grok plugin %q is registered from a different source; refusing to uninstall it", request.DeclaredName)
 	}
-	_, uninstallErr := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "uninstall", "--confirm", request.DeclaredName)
+	if _, err := shared.RunClientCommand(ctx, env.Runner, "grok Build", request.BackendExecutable, "plugin", "uninstall", "--confirm", request.DeclaredName); err != nil {
+		outcome.ArtifactRemovalAllowed = false
+		outcome.NativeEffect = domain.NativeEffectUncertain
+		// A failed native unregister may have partial effects; do not issue
+		// another native query or allow managed artifact deletion.
+		return outcome, fmt.Errorf("uninstall grok plugin: %w", err)
+	}
 	if err := verifyAbsent(ctx, env, request.BackendExecutable, request.DeclaredName); err != nil {
-		if uninstallErr != nil {
-			return outcome, errors.Join(fmt.Errorf("uninstall grok plugin: %w", uninstallErr), fmt.Errorf("verification: %w", err))
-		}
+		outcome.ArtifactRemovalAllowed = false
+		// Unregister has already completed: any failed readback leaves
+		// uncertain external state, even if the listing process closed.
+		outcome.NativeEffect = domain.NativeEffectUncertain
 		return outcome, err
 	}
 	outcome.ExternalRemovalComplete = true
+	outcome.ArtifactRemovalAllowed = true
 	return outcome, nil
 }

@@ -299,7 +299,7 @@ def _binding_closure(item, binding, row, scope, layout, entry, active, physical)
 
 
 def _members(bodies, source, result, decode):
-    if (result.get("client") != "windsurf" or result.get("version") != "3000.11.205"
+    if (result.get("client") != "windsurf" or result.get("version") != "3000.12.57"
             or result.get("capture_mode") != MODE or result.get("capture_review_required") is not True
             or result.get("runtime_attempt_complete") is not False or result.get("test_failed") is not True
             or result.get("activation") != "prepared" or result.get("qualification") != QUAL
@@ -338,7 +338,7 @@ def _members(bodies, source, result, decode):
         native = label not in ("git-a", "git-b", "add-user", "add-a", "add-b")
         if earlier and (row["exit"] != 0 or row["error"] or row["deadline"] or (native and bodies[label + SUFFIXES[2]])):
             raise ValueError("Windsurf component earlier failed command continued")
-        if earlier and label == "version" and bodies[label + SUFFIXES[1]] != b"devin 3000.11.205 (6dea39440ae3)\n":
+        if earlier and label == "version" and bodies[label + SUFFIXES[1]] != b"devin 3000.12.57 (96542e930752)\n":
             raise ValueError("Windsurf component exact version differs")
     if ("runtime-attempt.json" not in bodies or set(bodies) - allowed or len(bodies) > 72
             or any(type(raw) is not bytes or len(raw) > 1 << 20 for raw in bodies.values())

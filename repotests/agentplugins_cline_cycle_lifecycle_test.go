@@ -260,6 +260,7 @@ func TestAgentpluginsClineNativeProjectCompleteCycle(t *testing.T) {
 	if len(f.used) != len(clineCyclePublic) || !reflect.DeepEqual(c.listings, clineCycleListings) || !reflect.DeepEqual(c.sessions, clineCycleACP) {
 		t.Fatal("Cline complete cycle stage closure")
 	}
+	clineProjectRawSkills(t, c)
 	f.evidence["cycle_observed_complete"] = true
 	f.evidence["attempt_stage"] = "complete-cycle"
 	// Qualification is finalized only after deferred provider, live preservation,

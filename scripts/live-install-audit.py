@@ -27,6 +27,7 @@ HISTORICAL_CODEX = run_path(str(ROOT / "scripts/published_codex_baseline.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
 GEMINI_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/gemini_runtime_audit.py"))
 OPENCODE_BOOTSTRAP_AUDIT = run_path(str(ROOT / "scripts/opencode_bootstrap_audit.py"))
+NATIVE_ARTIFACTS = run_path(str(ROOT / "scripts/native_client_project_artifacts.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -397,6 +398,39 @@ def version_evidence(argv, env, cwd):
     return {"status": "reported", "value": value[:200], "exit_code": 0}
 
 
+def native_file_digest(path):
+    """Hash one held regular file; a pathname swap cannot redirect or block the read."""
+    try:
+        initial = path.lstat()
+        if stat.S_ISLNK(initial.st_mode):
+            return "symlink"
+        if not stat.S_ISREG(initial.st_mode):
+            return "non-regular"
+        descriptor = NATIVE_ARTIFACTS["open_member"](path)
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode):
+                return "non-regular"
+            if not NATIVE_ARTIFACTS["same_opened"](initial, opened):
+                return "unreadable"
+            sha, remaining = hashlib.sha256(), opened.st_size + 1
+            while remaining:
+                chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+                if not chunk:
+                    break
+                sha.update(chunk)
+                remaining -= len(chunk)
+            identity = NATIVE_ARTIFACTS["identity"]
+            if (remaining != 1 or identity(opened) != identity(os.fstat(descriptor))
+                    or identity(initial) != identity(path.lstat())):
+                return "unreadable"
+            return sha.hexdigest()
+        finally:
+            os.close(descriptor)
+    except (OSError, ValueError):
+        return "unreadable"
+
+
 def snapshot(root, *, include_directories=False):
     """Record native entries; Gemini repeat also preserves ordinary directory identities."""
     found = {}
@@ -432,22 +466,7 @@ def snapshot(root, *, include_directories=False):
             for name in files:
                 path = Path(base) / name
                 relative = str(path.relative_to(target_root))
-                try:
-                    if path.is_symlink():
-                        digest = "symlink"
-                    elif not path.is_file():
-                        digest = "non-regular"
-                    else:
-                        # Never reuse a constant digest for a large native artifact:
-                        # repeat-add and remove can rewrite files above 4 MiB.
-                        sha = hashlib.sha256()
-                        with path.open("rb") as stream:
-                            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                                sha.update(chunk)
-                        digest = sha.hexdigest()
-                except OSError:
-                    digest = "unreadable"
-                found[f"{target_root.name}/{relative}"] = digest
+                found[f"{target_root.name}/{relative}"] = native_file_digest(path)
     return found
 
 
@@ -496,7 +515,7 @@ def failed_case_diagnostics(row):
     """Expose existing failed-case evidence in logs; never change qualification."""
     keys = ("codex_public_add_ready", "codex_public_repeat_ready", "public_skill_ready",
             "repeat_native_unchanged", "repeat_native_runtime_only", "repeat_native_changes",
-            "repeat_native_phases", "repeat_verified",
+            "repeat_native_phases", "repeat_verified", "kimi_repeat_log_facts",
             "removal_verified", "sentinels_preserved", "public_target_states")
     evidence = {key: row[key] for key in keys if row.get(key) is not None}
     for key in ("error", "error_traceback"):
@@ -1565,6 +1584,16 @@ def public_target_state_observation(response, identity, target, *,
             "states": states, "truncated": truncated}
 
 
+def prepared_package_binding(client, target):
+    """A materialized User package can have a lifecycle without native discovery."""
+    return (isinstance(client, dict) and client.get("client_id") == target
+            and client.get("scope") == "user"
+            and client.get("materialization") == "materialized"
+            and client.get("activation") == "prepared"
+            and client.get("verification") == "package_validated"
+            and client.get("policy") == "allowed")
+
+
 def matching_installations(response, identity, target, kind, item, signed_release_pins=None):
     """Verify the frozen Registry release, never only live self-consistency."""
     signed_release_pins = signed_release_pins or {}
@@ -1591,7 +1620,9 @@ def matching_installations(response, identity, target, kind, item, signed_releas
             (client.get("verification") == "installation_verified" or
              (kind == "plugin" and client.get("materialization") == "materialized" and
               client.get("verification") == "package_validated" and
-              client.get("activation") == "manual_activation_required"))
+              (client.get("activation") == "manual_activation_required" or
+               (isinstance(item, str) and item in signed_release_pins
+                and prepared_package_binding(client, target)))))
         ]
         if not verified_clients:
             continue
@@ -1982,7 +2013,7 @@ def copilot_settings_read(path, case_root):
             return None, "unsafe-path"
         expected = canonical_root / relative
         initial = path.lstat()
-        if not stat.S_ISREG(initial.st_mode) or initial.st_size > 1024 * 1024:
+        if not stat.S_ISREG(initial.st_mode) or initial.st_size > 1 << 20:
             return None, "not-regular-or-too-large"
         if initial.st_nlink != 1 or not path_inside_case(path, case_root):
             return None, "unsafe-path"
@@ -2019,11 +2050,11 @@ def copilot_settings_read(path, case_root):
                 or identity != (current.st_dev, current.st_ino)
                 or not path_inside_case(path, case_root)):
             return None, "unsafe-path"
-        if opened.st_size > 1024 * 1024:
+        if opened.st_size > 1 << 20:
             return None, "not-regular-or-too-large"
         with os.fdopen(os.dup(descriptor), "rb") as stream:
-            body = stream.read(1024 * 1024 + 1)
-        if len(body) > 1024 * 1024:
+            body = stream.read((1 << 20) + 1)
+        if len(body) > 1 << 20:
             return None, "not-regular-or-too-large"
         return body.decode("utf-8"), None
     except FileNotFoundError:
@@ -2033,6 +2064,145 @@ def copilot_settings_read(path, case_root):
     finally:
         for descriptor in reversed(descriptors):
             os.close(descriptor)
+
+
+def kimi_log_fact(facts, reason, changed=None):
+    """Fixed diagnostic enums/counts only; never change the proof decision."""
+    if isinstance(facts, dict):
+        facts["reason"] = reason
+        if changed is not None:
+            facts["changed_entries_capped"] = min(changed, 100000)
+    return None
+
+
+def kimi_repeat_log_capture(home, project, case_root, facts=None):
+    """Private bounded bytes; only hashes leave the isolated audit case."""
+    path = home / ".kimi-code/logs/kimi-code.log"
+    try:
+        parents = (case_root, home, home / ".kimi-code", path.parent)
+        def parent_facts():
+            values = [directory.lstat() for directory in parents]
+            if any(not stat.S_ISDIR(value.st_mode) for value in values):
+                raise ValueError("Kimi log parent is not ordinary")
+            return [(value.st_dev, value.st_ino, value.st_mode) for value in values]
+        before_parents, initial = parent_facts(), path.lstat()
+        body, error = copilot_settings_read(path, case_root)
+        final = path.lstat()
+        fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_size", "st_mtime_ns")
+        identity = tuple(getattr(initial, key) for key in fields)
+        if error is not None:
+            reasons = {"absent": "log-absent", "unsafe-path": "log-read-unsafe",
+                       "not-regular-or-too-large": "log-read-type-or-bound"}
+            return kimi_log_fact(facts, reasons.get(error, "log-read-refused") if isinstance(error, str) else "log-read-refused")
+        if before_parents != parent_facts():
+            return kimi_log_fact(facts, "log-parent-changed")
+        if identity != tuple(getattr(final, key) for key in fields):
+            return kimi_log_fact(facts, "log-identity-changed")
+        scope = scoped_snapshot((home, project / ".kimi-code", project / ".uap/managed"))
+        log_key = home.name + "/.kimi-code/logs/kimi-code.log"
+        body = body.encode("utf-8")
+        if scope.get(log_key) != hashlib.sha256(body).hexdigest():
+            return kimi_log_fact(facts, "log-hash-mismatch")
+        if identity != tuple(getattr(path.lstat(), key) for key in fields):
+            return kimi_log_fact(facts, "log-identity-after-scope-changed")
+        if before_parents != parent_facts():
+            return kimi_log_fact(facts, "log-parent-after-scope-changed")
+        # Derive the native comparison from the same captured bytes. A separate
+        # earlier/later snapshot must match before this can explain its delta.
+        prefix = home.name + "/"
+        native = {key[len(prefix):]: value for key, value in scope.items()
+                  if any(key.startswith(prefix + root + "/") for root in NATIVE_ROOTS["kimi"])}
+        kimi_log_fact(facts, "captured")
+        if isinstance(facts, dict):
+            facts["log_bytes"] = len(body)
+        return {"body": body, "identity": identity, "native": native,
+                "parents": before_parents, "scope": scope, "log_key": log_key}
+    except OSError:
+        return kimi_log_fact(facts, "filesystem-read-refused")
+    except ValueError:
+        return kimi_log_fact(facts, "parent-or-path-refused")
+    except AssertionError:
+        return kimi_log_fact(facts, "scope-unreadable")
+
+
+def kimi_scope_change_facts(before, after, home_prefix):
+    """Describe held snapshot differences without exposing keys or values."""
+    changed = sorted(key for key in before.keys() | after.keys()
+                     if key not in before or key not in after or before[key] != after[key])
+    records = []
+    scopes = {"0": "home", "1": "project-native", "2": "managed"}
+    for key in changed[:8]:
+        parts = key.split(":", 2)
+        kind = parts[0] if parts[0] in ("metadata", "directory", "link", "root-kind", "root-link") else "file-hash"
+        scope = scopes.get(parts[1], "unknown") if kind != "file-hash" and len(parts) > 1 else "unknown"
+        if kind == "file-hash":
+            scope = {home_prefix: "home", ".kimi-code": "project-native", "managed": "managed"}.get(key.split("/", 1)[0], "unknown")
+        record = {"key_sha256": hashlib.sha256(key.encode("utf-8", errors="surrogatepass")).hexdigest(),
+                  "scope": scope, "key_kind": kind,
+                  "change_kind": "added" if key not in before else "removed" if key not in after else "changed"}
+        if kind == "metadata" and key in before and key in after:
+            left, right = before[key], after[key]
+            if isinstance(left, tuple) and isinstance(right, tuple) and len(left) == len(right) and len(left) in (3, 4):
+                record["metadata_fields"] = [name for index, name in enumerate(("mode", "device", "inode", "mtime_ns")[:len(left)])
+                                             if left[index] != right[index]]
+            else:
+                record["metadata_fields"] = ["shape"]
+        records.append(record)
+    return {"scope_changes": records, "scope_changes_omitted": min(max(0, len(changed) - 8), 100000)}
+
+
+def kimi_repeat_log_append(before, after, listed, added, repeated, command, native_before, native_after, facts=None):
+    """Admit one same-inode append, not rotation or other native mutations."""
+    for phase, value in (("before", before), ("after-add", after), ("post-list", listed)):
+        if value is None:
+            return kimi_log_fact(facts, "capture-unavailable-" + phase)
+    if after != listed:
+        return kimi_log_fact(facts, "post-list-changed")
+    if (type(command.get("exit_code")) is not int or command["exit_code"] != 0
+            or command.get("timeout") is not False):
+        return kimi_log_fact(facts, "repeat-command-refused")
+    if before["native"] != native_before:
+        return kimi_log_fact(facts, "native-before-mismatch")
+    if listed["native"] != native_after:
+        return kimi_log_fact(facts, "native-after-mismatch")
+    for index, response in enumerate((added, repeated)):
+        items = response.get("items") if isinstance(response, dict) else None
+        if (not isinstance(response, dict) or response.get("schema_version") != 1
+                or type(response.get("schema_version")) is not int
+                or response.get("command") != "skills add" or response.get("result") != "success"
+                or response.get("status") != "succeeded" or response.get("scope") != "project"
+                or response.get("readiness") != "ready" or response.get("next_actions") not in (None, [])
+                or not isinstance(items, list) or len(items) != 1 or not isinstance(items[0], dict)
+                or items[0].get("targetId") != "kimi"
+                or items[0].get("status") not in (("succeeded", "unchanged") if index else ("succeeded",))):
+            return kimi_log_fact(facts, "fresh-public-refused" if index == 0 else "repeat-public-refused")
+    if before["identity"][:4] != after["identity"][:4]:
+        return kimi_log_fact(facts, "log-identity-changed")
+    if before["parents"] != after["parents"]:
+        return kimi_log_fact(facts, "log-parent-changed")
+    if before["log_key"] != after["log_key"]:
+        return kimi_log_fact(facts, "log-key-changed")
+    if not after["body"].startswith(before["body"]):
+        return kimi_log_fact(facts, "log-prefix-changed")
+    if len(after["body"]) > 1 << 20:
+        return kimi_log_fact(facts, "log-over-one-mib")
+    if len(after["body"]) <= len(before["body"]):
+        return kimi_log_fact(facts, "log-not-append")
+    ignored = {before["log_key"], "metadata:0:.kimi-code/logs/kimi-code.log"}
+    original = {key: value for key, value in before["scope"].items() if key not in ignored}
+    current = {key: value for key, value in after["scope"].items() if key not in ignored}
+    if original != current:
+        changed = sum(original.get(key) != current.get(key) for key in original.keys() | current.keys())
+        if isinstance(facts, dict):
+            facts.update(kimi_scope_change_facts(original, current, before["log_key"].split("/", 1)[0]))
+        return kimi_log_fact(facts, "protected-scope-changed", changed)
+    kimi_log_fact(facts, "verified-append")
+    return {"status": "verified-owned-log-append", "path": ".kimi-code/logs/kimi-code.log",
+            "before_bytes": len(before["body"]), "after_bytes": len(after["body"]),
+            "before_sha256": hashlib.sha256(before["body"]).hexdigest(),
+            "after_sha256": hashlib.sha256(after["body"]).hexdigest(),
+            "append_sha256": hashlib.sha256(after["body"][len(before["body"]):]).hexdigest(),
+            "same_inode_mode_parents": True, "post_list_unchanged": True}
 
 
 def copilot_settings_sanitized_shape(home, case_root, identity):
@@ -2124,6 +2294,11 @@ def initialize_project_skill_git_root(project, env, case_root):
         raise RuntimeError("genuine isolated project Git init failed")
 
 
+def audit_client_id(target, kind):
+    """Public Desktop arguments persist as the canonical local Codex client."""
+    return "codex" if (target, kind) == ("chatgpt", "plugin") else target
+
+
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             signed_release_pins=None, *, client_version=None, historical_baseline=False):
     with ExitStack() as audits:
@@ -2134,6 +2309,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
              signed_release_pins, audits, client_version, *, historical_baseline=False):
+    native_target = audit_client_id(target, kind)
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
     project = case_root / "project"
@@ -2161,7 +2337,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         path.mkdir(parents=True, exist_ok=True)
         if path.is_symlink() or not path.resolve().is_relative_to(canonical_case):
             raise ValueError("nested audit directory escapes disposable case")
-    native_roots = [home / v for v in NATIVE_ROOTS[target]]
+    native_roots = [home / v for v in NATIVE_ROOTS[native_target]]
     if any(not root.resolve().is_relative_to(case_root.resolve()) for root in native_roots):
         raise ValueError("native root escapes disposable case")
     sentinel = project / "foreign-untouched.txt"
@@ -2194,7 +2370,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                          if kind == "skill" else {})
     # Presence of an actual binary comes from the workflow; a config directory is
     # only an empty isolated profile and is never counted as agent detection.
-    if target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
+    if native_target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     env = isolated_client_env(home, case_root, data)
     codex_skill_case = target == "codex" and kind == "skill"
@@ -2274,7 +2450,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         _, _, codex_system_metadata = CODEX_RUNTIME_AUDIT["system_skill_initialization"](
             home / ".codex")
         _codex_system_skill_checkpoint(home, codex_system_metadata)
-    if target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
+    if native_target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
         # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
         # Author these fixture objects before protecting every byte and identity.
         assert_case_unchanged()
@@ -2369,7 +2545,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                          if copilot_before is not None else None)
     changed = set(snapshot(native_roots).items()) - set(before.items())
     native_attribution = attributable_native_changes(
-        native_roots, changed, identity, target, native_components)
+        native_roots, changed, identity, native_target, native_components)
     skill_path = skill_file_present(project, target, identity) if kind == "skill" else None
     locked = (project / "uap.toml").is_file() and (project / "uap.lock").is_file()
     lock_contains = locked and identity in (project / "uap.lock").read_text(encoding="utf-8")
@@ -2379,7 +2555,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     listed = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                    env, project, 30))
     listed_json = listed.pop("_json", None) if listed else None
-    matching = matching_installations(listed_json, identity, target, kind, item,
+    matching = matching_installations(listed_json, identity, native_target, kind, item,
                                      signed_release_pins)
     grok_prepared = (grok_prepared_skill_installations(
         listed_json, item, skill_path, project, output)
@@ -2388,18 +2564,19 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if grok_prepared:
         matching = grok_prepared
     signed_observation = (
-        signed_release_public_observation(listed_json, identity, target)
+        signed_release_public_observation(listed_json, identity, native_target)
         if kind == "plugin" and isinstance(item, str) and not item.startswith("github:")
         else [])
     listed_identity = len(matching) == 1
-    failed_install_registered = has_target_registration(listed_json, identity, target) if (
+    failed_install_registered = has_target_registration(listed_json, identity, native_target) if (
         output["exit_code"] != 0) else False
     failed_install_residue = bool(output["exit_code"] != 0 and (
         failed_install_registered or native_attribution or skill_path))
     prepared_binding = bool(listed_identity and (
         grok_prepared or (kind == "plugin" and any(
-            client.get("client_id") == target and client.get("verification") == "package_validated"
-            and client.get("activation") == "manual_activation_required"
+            (client.get("client_id") == native_target and client.get("verification") == "package_validated"
+             and client.get("activation") == "manual_activation_required")
+            or prepared_package_binding(client, native_target)
             for client in matching[0].get("clients", []) if isinstance(client, dict)))))
     # Name and file presence alone are insufficient. A true Skill pass also
     # proves the immutable source in the portable lock AND exact upstream bytes.
@@ -2461,6 +2638,13 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_lock_unchanged = None
     repeat_project_unchanged = None
     repeat_verified = False
+    kimi_repeat_log_proof = None
+    kimi_log_case = (target == "kimi" and kind == "skill" and sys.platform == "linux"
+                     and isinstance(client_version, dict) and client_version.get("status") == "reported"
+                     and client_version.get("value") == "2.5.2"
+                     and type(client_version.get("exit_code")) is int and client_version["exit_code"] == 0)
+    kimi_repeat_log_facts = ({"captures": {phase: {} for phase in ("before", "after-add", "post-list")},
+                              "append": {"reason": "not-reached"}} if kimi_log_case else None)
     if installed:
         before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
@@ -2476,10 +2660,14 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 for path in lock_paths
             )
         before_repeat_lock = lock_state()
+        kimi_log_before = (kimi_repeat_log_capture(home, project, case_root,
+                            kimi_repeat_log_facts["captures"]["before"]) if kimi_log_case else None)
         repeat_add_started = datetime.now(timezone.utc)
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
                                   **capture_option)
         repeat_add_finished = datetime.now(timezone.utc)
+        kimi_log_after = (kimi_repeat_log_capture(home, project, case_root,
+                            kimi_repeat_log_facts["captures"]["after-add"]) if kimi_log_case else None)
         after_repeat_add = (snapshot(native_roots, include_directories=gemini_runtime is not None)
                             if codex_runtime is not None or gemini_runtime is not None else None)
         if gemini_runtime is not None:
@@ -2499,7 +2687,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         repeat_matches = (grok_prepared_skill_installations(
             repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
             if grok_prepared else matching_installations(
-                repeat_list_json, identity, target, kind, item, signed_release_pins))
+                repeat_list_json, identity, native_target, kind, item, signed_release_pins))
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
         if codex_runtime is not None:
@@ -2507,6 +2695,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
                 repeat_add_json, repeat_matches, identity)
         after_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
+        kimi_log_listed = (kimi_repeat_log_capture(home, project, case_root,
+                            kimi_repeat_log_facts["captures"]["post-list"]) if kimi_log_case else None)
         gemini_repeat_valid = (gemini_runtime.finish(after_repeat_native)
                               if gemini_runtime is not None else False)
         if codex_runtime is not None or gemini_runtime is not None:
@@ -2521,6 +2711,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     before_repeat_native, after_repeat_native, before_repeat_runtime)
             elif gemini_runtime is not None:
                 repeat_native_runtime_only = gemini_repeat_valid
+            elif kimi_log_case:
+                kimi_repeat_log_proof = kimi_repeat_log_append(
+                    kimi_log_before, kimi_log_after, kimi_log_listed, added_json, repeat_add_json, repeat_add,
+                    before_repeat_native, after_repeat_native, kimi_repeat_log_facts["append"])
+                repeat_native_runtime_only = kimi_repeat_log_proof is not None
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
@@ -2570,7 +2765,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 case_root, home, project, matching[0], repeat_add_json, item,
                 claude_document, scoped_snapshot, claude_before,
                 lambda observed: native_identity_residuals(
-                    native_roots, identity, observed, target, native_components))
+                    native_roots, identity, observed, native_target, native_components))
             audits.callback(claude_retirement.close)
         except (OSError, ValueError, TypeError, KeyError, IndexError):
             claude_retirement_proof = {"status": "unresolved-cache-retirement"}
@@ -2581,7 +2776,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         # Codex explicitly requires external uninstall before UAP can settle a
         # user-scope plugin removal. We execute and verify the real native
         # plugin + marketplace commands, never attest on a guessed state.
-        if kind == "plugin" and target == "codex":
+        if kind == "plugin" and native_target == "codex":
             native_uninstall = uninstall_native_codex_plugin(
                 identity, home, case_root, env, project)
             assert_case_unchanged()
@@ -2655,7 +2850,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     post_remove_identity_registered = bool(
         post_list_schema_valid and (
             has_target_registration(
-                post_list_json, identity, target,
+                post_list_json, identity, native_target,
                 skill_source=f'{item["repo"]}/skills/{item["folder"]}'
                 if kind == "skill" and target == "claude" else None)
             or (grok_prepared and grok_prepared_source_survives(
@@ -2675,7 +2870,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         native_identity_residuals(
             native_roots, identity,
             sorted(set(snapshot(native_roots)) | set(native_attribution) | set(unsafe_paths)),
-            target, native_components, client_version=client_version,
+            native_target, native_components, client_version=client_version,
             bootstrap_proof=opencode_bootstrap_proof)
         if cleanup and cleanup["exit_code"] == 0 else []
     )
@@ -2711,7 +2906,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     continue
                 relative = observed[len(prefix):]
                 path = root / relative
-                if passive_native_path(target, relative) and path.is_file() and not path.is_symlink():
+                if passive_native_path(native_target, relative) and path.is_file() and not path.is_symlink():
                     passive_retained.append(observed)
     copilot_disabled_setting_retained = bool(
         target == "copilot" and kind == "plugin"
@@ -2756,8 +2951,6 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     installed = installed and (not codex_skill_case or codex_add_ready)
     if installed and removal_verified and sentinels_preserved and not repeat_verified:
         status = "repeat-add-unqualified"
-    elif target == "chatgpt" and kind == "plugin" and installed and removal_verified and sentinels_preserved and repeat_verified:
-        status = "manual-setup-prepared"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
         status = ("prepared-lifecycle-passed" if (
                        kind == "plugin" and prepared_components_only)
@@ -2769,9 +2962,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                            or (target == "copilot" and
                                (copilot_native_before_remove is None or
                                 copilot_native_before_remove["status"] != "installed"))
-                           or (target == "codex" and not (
+                           or (native_target == "codex" and not (
                                native_uninstall and native_uninstall.get("completed")))
-                           or (target not in ("codex", "qoder", "copilot")
+                           or (native_target not in ("codex", "qoder", "copilot")
                                and not native_attribution)))
                   else "prepared-lifecycle-passed" if prepared_binding else "passed")
     elif installed and cleanup and (
@@ -2829,6 +3022,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if status == "passed" and skill_public_ready is not None and not all(skill_public_ready.values()):
         status = "incomplete-native-proof"
     return {"kind": kind, "index": index, "identity": identity, "target": target,
+            **({"canonical_client_id": native_target} if target == "chatgpt" else {}),
             "source": item if kind == "plugin" else item["source"],
             "status": status, "install": output, "list": listed,
             "native_file_delta": len(changed),
@@ -2842,15 +3036,15 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "signed_release_observation": signed_observation,
             "public_target_states": {
                 "after-add": public_target_state_observation(
-                    listed_json, identity, target,
+                    listed_json, identity, native_target,
                     installation_ids=old_ids if kind == "skill" else None,
                     skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None),
                 "repeat-add": public_target_state_observation(
-                    repeat_list_json, identity, target,
+                    repeat_list_json, identity, native_target,
                     installation_ids=repeat_identity_ids if kind == "skill" else None,
                     skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None),
                 "after-remove": public_target_state_observation(
-                    post_list_json, identity, target,
+                    post_list_json, identity, native_target,
                     installation_ids=old_ids | set(repeat_identity_ids) if kind == "skill" else None,
                     skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None)},
             "public_skill_ready": skill_public_ready,
@@ -2858,6 +3052,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
             "repeat_native_runtime_only": repeat_native_runtime_only,
+            "kimi_repeat_log_proof": kimi_repeat_log_proof,
+            "kimi_repeat_log_facts": kimi_repeat_log_facts,
             "repeat_native_changes": repeat_native_changes,
             "repeat_native_phases": repeat_native_phases,
             "repeat_lock_unchanged": repeat_lock_unchanged,
@@ -3057,7 +3253,10 @@ def main():
     report_file = report_dir / f"{args.target}-{args.kind}.json"
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
-    eligible_binaries = EXECUTABLE.get(args.target, ())
+    native_target = audit_client_id(args.target, args.kind)
+    if args.target == "chatgpt":
+        report["canonical_client_id"] = native_target
+    eligible_binaries = EXECUTABLE.get(native_target, ())
     if not vendor_bootstrap_attested():
         report["blocker"] = "Vendor bootstrap was not verified; no native-client PASS is permitted"
         report["results"] = unexecuted_source_rows(
@@ -3112,7 +3311,7 @@ def main():
                                  doc["plugin_declared_names"],
                                  doc["signed_release_pins"],
                                  **({"client_version": report.get("client_version")}
-                                    if (args.target, args.kind) == ("gemini", "skill")
+                                    if (args.target, args.kind) in (("gemini", "skill"), ("kimi", "skill"))
                                     or args.target == "opencode" else {}),
                                  **({"historical_baseline": True} if historical_baseline else {}))
             except Exception as e:

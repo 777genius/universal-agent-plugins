@@ -88,11 +88,7 @@ func windCycleReceipt(r *windComponentRecipe, row domain.MutationReceipt, group,
 func (c *windProjectCycle) publicProof(t *testing.T, label string, r *windComponentRecipe, result ports.CommandResult, start, end time.Time) {
 	t.Helper()
 	w := c.w
-	progressLabel := label
-	if label == "add-user" {
-		progressLabel = "add-a"
-	}
-	if label != "repeat-remove-a" && string(result.Stderr) != grokCycleProgress(progressLabel, windComponentName) {
+	if label != "repeat-remove-a" && string(result.Stderr) != windCycleProgress(label) {
 		t.Fatal("Windsurf exact public progress")
 	}
 	raw, err := projectNativeRuntimeRead(filepath.Join(r.StateRoot, "state-v2.json"), 64<<10)
@@ -195,6 +191,18 @@ func (c *windProjectCycle) publicProof(t *testing.T, label string, r *windCompon
 	}
 	c.proof(t, label, map[string]any{"scope": r.Scope, "version": windCycleVersion(r), "revision": r.Revision, "nonce": r.Nonce, "source": r.Source, "source_digest": r.Digest, "removed": removed, "state": windCycleStream(raw), "native_config": windCycleStream(config), "cache": cache, "data_marker": windCycleStream(c.markers[r.Scope]), "frames": frames, "mutation_lock": windCycleStream(mustWindCycleLock(t, r)), "data_owner": windCycleStream(mustWindCycleOwner(t, r)), "payload_files": c.payloadFiles(t, r, removed)})
 	w.freezeProof(t, r)
+}
+
+// The mixed Windsurf package still takes the public apply path on repeat.
+// Grok's completed pure-Skills no-op omits that second progress line.
+func windCycleProgress(stage string) string {
+	if stage == "repeat-add-a" {
+		return "Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+	}
+	if stage == "add-user" {
+		stage = "add-a"
+	}
+	return grokCycleProgress(stage, windComponentName)
 }
 
 func mustWindCycleState(t *testing.T, want windProfileRecord, path string) []byte {

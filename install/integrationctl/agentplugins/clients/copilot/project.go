@@ -21,6 +21,19 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 		if _, err := copilotPlanRoot(domain.DetectedClient{ConfigRoot: in.Plan.TargetContext.UserConfigRoot}, in.Plan); err != nil {
 			return nil, err
 		}
+		if in.Plan.HasNativePluginRegistration() {
+			if in.Envelope.FormatID != domain.FormatIDAgentPluginsV1 {
+				return nil, fmt.Errorf("copilot native plugin registration requires Agent Plugins 1.0")
+			}
+			if err := shared.ProjectCopilotMarketplace(in.StagingPath, in.Envelope, in.Plan); err != nil {
+				return nil, err
+			}
+			object, err := copilotProjectPluginObject(in.Plan)
+			if err != nil {
+				return nil, err
+			}
+			return []domain.NativeObjectOwnership{object}, nil
+		}
 		if err := shared.ProjectMCPServers(shared.MCPProjection{Root: in.StagingPath, Envelope: in.Envelope,
 			Names: shared.SupportedMCPNames(in.Plan), Dialect: shared.MCPDialectCursor, PluginRoot: in.Plan.ActivePath, DataPath: in.PluginDataPath}); err != nil {
 			return nil, err
@@ -49,6 +62,17 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject {
 		if _, err := copilotPlanRoot(domain.DetectedClient{ConfigRoot: plan.TargetContext.UserConfigRoot}, plan); err != nil {
 			return nil, err
+		}
+		if plan.HasNativePluginRegistration() || copilotHasProjectPlugin(plan.PreviousNativeObjects) &&
+			copilotWholePluginContentEligible(envelope, plan.Components) {
+			if envelope.FormatID != domain.FormatIDAgentPluginsV1 {
+				return nil, fmt.Errorf("copilot native plugin registration requires Agent Plugins 1.0")
+			}
+			object, err := copilotProjectPluginObject(plan)
+			if err != nil {
+				return nil, err
+			}
+			return []domain.NativeObjectOwnership{object}, nil
 		}
 		if err := validateCopilotProjectStdio(root, envelope, plan, dataPath); err != nil {
 			return nil, err

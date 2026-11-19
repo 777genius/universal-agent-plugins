@@ -14,6 +14,14 @@ from pi_project_native_e2e import PINS, checked_release, require_hosted, run, wr
 from pi_local_model_fixture import ScriptedPiModel
 
 
+PI_RAW_COMMIT = "b5d80336b53397be5bbb72c84f680e5885a6ac0d"
+PI_RAW_SOURCE = "https://github.com/777genius/universal-agent-plugins/tree/" + PI_RAW_COMMIT + "/tests/fixtures/uap_apm/skills"
+PI_RAW_SKILL = "benchmark-note"
+PI_RAW_DESCRIPTION = "An inert note for checking Agent Skills 1.0 installation."
+PI_RAW_BODY = "---\nname: benchmark-note\ndescription: An inert note for checking Agent Skills 1.0 installation.\n---\n\nRead the adjacent references/fixture.txt when explicitly asked. Do not access networks, credentials, or external tools.\n"
+PI_RAW_RESOURCE = b"Portable Agent Skills 1.0 fixture. This exact file must be preserved without transformation.\n"
+
+
 class PiHTTPMCPProbe:
     """Single bounded, stateless HTTP MCP fixture for both native Pi scopes."""
     def __init__(self, *, nonce=None):
@@ -163,6 +171,209 @@ def checked_rpc(pi, project, env, approved, stage):
         raise RuntimeError("Pi skill command inventory malformed or unbounded")
     return commands
 
+def pi_raw_ready(value):
+    if (not isinstance(value, dict) or type(value.get("schema_version")) is not int or value.get("schema_version") != 1
+            or value.get("command") != "skills add" or value.get("result") != "success"
+            or value.get("readiness") != "ready" or value.get("next_actions") not in (None, [])):
+        raise RuntimeError("public Pi raw Skills did not report Ready")
+    return value
+
+
+def pi_raw_inventory(receipt, expected, scope, base):
+    if receipt.get("passed") is not True or receipt.get("closure_proved") is not True:
+        raise RuntimeError("Pi inventory lacks finite native process closure")
+    response = receipt.get("response", {})
+    if response.get("type") != "response" or response.get("command") != "get_commands" or response.get("success") is not True:
+        raise RuntimeError("Pi inventory response differs")
+    rows = response.get("data", {}).get("commands")
+    if not isinstance(rows, list) or len(rows) > 512 or not all(isinstance(row, dict) for row in rows):
+        raise RuntimeError("Pi inventory rows are malformed")
+    selected = [row for row in rows if row.get("name") == "skill:" + PI_RAW_SKILL]
+    if len(selected) != int(expected is not None):
+        raise RuntimeError("Pi selected Skill presence differs")
+    if selected and selected[0] != {"name": "skill:" + PI_RAW_SKILL, "description": PI_RAW_DESCRIPTION,
+                                   "source": "skill", "sourceInfo": {"path": str(expected), "source": "auto",
+                                   "scope": scope, "origin": "top-level", "baseDir": str(base)}}:
+        raise RuntimeError("Pi selected Skill source authority differs")
+    return rows
+
+
+def pi_raw_tree(root):
+    import hashlib
+    import stat
+    if not root.exists():
+        return {}
+    result = {}
+    for path in sorted(root.rglob("*")):
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode) or not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
+            raise RuntimeError("Pi fixture snapshot contains nonordinary path")
+        if stat.S_ISDIR(info.st_mode):
+            result[str(path.relative_to(root))] = ("directory", stat.S_IMODE(info.st_mode))
+        if stat.S_ISREG(info.st_mode):
+            if info.st_size > 1 << 20:
+                raise RuntimeError("Pi fixture snapshot file exceeds bound")
+            result[str(path.relative_to(root))] = (stat.S_IMODE(info.st_mode), hashlib.sha256(path.read_bytes()).hexdigest())
+    return result
+
+
+def pi_raw_skills_case(pi, release, driver, installer, parent, destination, scope):
+    """Actual public raw add/repeat/remove; independent finite native inventories."""
+    import base64
+    import hashlib
+    import time
+    raw = parent / ("public-raw-" + scope)
+    raw.mkdir(mode=0o700)
+    home, a, b, outside = [raw / leaf for leaf in ("home", "A", "B", "outside")]
+    for path in (home, a, b, outside):
+        path.mkdir(mode=0o700)
+    user = home / ".pi/agent"
+    user.mkdir(mode=0o700, parents=True)
+    data = raw / "uap-home"
+    env = {"HOME": str(home), "USERPROFILE": str(home), "PI_CODING_AGENT_DIR": str(user), "PI_OFFLINE": "1",
+           "PATH": str(pi.parent) + os.pathsep + os.environ.get("PATH", ""),
+           "AGENTPLUGINS_HOME": str(data), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+           "GIT_TERMINAL_PROMPT": "0", "NO_COLOR": "1"}
+    for key in ("SystemRoot", "COMSPEC", "WINDIR", "PATHEXT"):
+        if os.environ.get(key):
+            env[key] = os.environ[key]
+    for key, leaf in (("XDG_CONFIG_HOME", "config"), ("XDG_DATA_HOME", "data"),
+                      ("XDG_CACHE_HOME", "cache"), ("XDG_STATE_HOME", "state"), ("TMPDIR", "tmp")):
+        path = raw / leaf
+        path.mkdir(mode=0o700)
+        env[key] = str(path)
+    source = PI_RAW_SOURCE
+    body = PI_RAW_BODY
+    foreign_user = user / "skills/uap-pi-foreign-user/SKILL.md"
+    write(foreign_user.parent, "SKILL.md",
+          "---\nname: uap-pi-foreign-user\ndescription: Foreign user marker\n---\nInert text.\n")
+    foreign_bytes = foreign_user.read_bytes()
+    record = {"scope": scope, "release": release, "commands": {}, "inventories": {}, "proofs": {},
+              "source": str(source), "skill_sha256": hashlib.sha256(body.encode()).hexdigest(),
+              "public_yes_consent": True, "approval_override": False, "model_or_provider_requested": False,
+              "passed": False}
+    started = time.monotonic()
+    def remaining():
+        left = 90 - (time.monotonic() - started)
+        if left <= 35:
+            raise RuntimeError("Pi raw case original deadline cannot cover another owned process")
+        return left
+    def public(label, argv, project):
+        entry = {"argv": [str(arg) for arg in argv], "cwd": str(project)}
+        record["commands"][label] = entry
+        wire = run(entry["argv"], project, env=env, timeout=remaining(), max_output=1 << 20)
+        entry.update(stdout_base64=base64.b64encode(wire).decode(), stdout_sha256=hashlib.sha256(wire).hexdigest())
+        value = json.loads(wire)
+        entry["dto"] = value
+        if value.get("schema_version") != 1 or value.get("result") != "success":
+            raise RuntimeError("public Pi command did not succeed")
+        return value
+    def add_argv(selected, name, project, selected_scope):
+        args = [installer, "skills", "add", selected, "--skill", name, "--target", "pi",
+                "--scope", selected_scope, "--no-ui", "--yes", "--format", "json"]
+        if selected_scope == "project":
+            args += ["--project-root", project]
+        return args
+    native = (a / ".pi/skills" / PI_RAW_SKILL / "SKILL.md" if scope == "project"
+              else user / "skills" / PI_RAW_SKILL / "SKILL.md")
+    base = a / ".pi" if scope == "project" else user
+    state_root = a / ".uap" if scope == "project" else data
+    lock_root = a if scope == "project" else data
+    def proof(phase, present):
+        path = state_root / "state-v2.json"
+        wire = path.read_bytes()
+        if len(wire) > 1 << 20:
+            raise RuntimeError("Pi raw state exceeds evidence bound")
+        state = json.loads(wire)
+        selected = [(ins, binding) for ins in state["installations"]
+                    for binding in ins.get("clients", {}).values()
+                    if binding.get("client_id") == "pi" and binding.get("scope") == scope]
+        if len(selected) != int(present):
+            raise RuntimeError("Pi raw binding count differs")
+        item = {"state": state, "state_sha256": hashlib.sha256(wire).hexdigest()}
+        if present:
+            ins, binding = selected[0]
+            if (binding.get("activation"), binding.get("verification"), binding.get("authentication"),
+                    binding.get("policy")) != ("active", "installation_verified", "not_required", "allowed"):
+                raise RuntimeError("Pi raw owned binding is not Active/verified/not_required")
+            if (ins.get("source", {}).get("resolved_revision") != PI_RAW_COMMIT
+                    or native.read_bytes() != body.encode()
+                    or (native.parent / "references/fixture.txt").read_bytes() != PI_RAW_RESOURCE):
+                raise RuntimeError("Pi raw native Skill bytes differ")
+            item.update(installation_id=ins["installation_id"], binding=binding,
+                        native_tree=pi_raw_tree(Path(binding["target_locator"])),
+                        locks={name: (lock_root / name).read_text() for name in ("uap.toml", "uap.lock")})
+        elif native.exists():
+            raise RuntimeError("Pi raw removed Skill survived")
+        record["proofs"][phase] = item
+        return item
+    def inventories(phase, present):
+        captures = {}
+        record["inventories"][phase] = captures
+        for label, cwd in (("a", a), ("b", b), ("outside", outside)):
+            result_path = destination / ("raw-" + scope + "-" + phase + "-" + label + ".json")
+            run([str(driver), "catalog", str(pi), str(user), str(cwd), str(result_path)],
+                cwd, env=env, timeout=remaining(), max_output=1 << 20)
+            receipt = json.loads(result_path.read_bytes())
+            if receipt["native_binary_sha256"] != release["binary_sha256"]:
+                raise RuntimeError("Pi raw inventory used other vendor bytes")
+            expected = native if present and (scope == "user" or label == "a") else None
+            rows = pi_raw_inventory(receipt, expected, scope, base)
+            captures[label] = receipt
+            users = [row for row in rows if row.get("name") == "skill:uap-pi-foreign-user"]
+            if users != [{"name": "skill:uap-pi-foreign-user", "description": "Foreign user marker", "source": "skill",
+                          "sourceInfo": {"path": str(foreign_user), "source": "auto", "scope": "user",
+                                         "origin": "top-level", "baseDir": str(user)}}]:
+                raise RuntimeError("Pi inventory lost foreign user Skill")
+            if scope == "project":
+                others = [row for row in rows if row.get("name") == "skill:benchmark-secondary"]
+                want = [{"name": "skill:benchmark-secondary", "description": "An inert second Skill for verifying dependency removal.", "source": "skill",
+                         "sourceInfo": {"path": str(b / ".pi/skills/benchmark-secondary/SKILL.md"), "source": "auto",
+                                        "scope": "project", "origin": "top-level", "baseDir": str(b / ".pi")}}]
+                if others != (want if label == "b" else []):
+                    raise RuntimeError("fresh trusted B inventory lost or leaked its foreign Skill")
+    try:
+        # B's trust is granted only by a normal explicit public installation,
+        # never a manually authored trust file or --approve flag.
+        if scope == "project":
+            pi_raw_ready(public("foreign-b-setup", add_argv(PI_RAW_SOURCE, "benchmark-secondary", b, "project"), b))
+        else:
+            write(b, ".pi/skills/uap-pi-foreign-b/SKILL.md",
+                  "---\nname: uap-pi-foreign-b\ndescription: Foreign project B marker\n---\nInert text.\n")
+        foreign_b = pi_raw_tree(b)
+        inventories("baseline", False)
+        add = add_argv(source, PI_RAW_SKILL, a, scope)
+        pi_raw_ready(public("add", add, a))
+        first = proof("add", True)
+        inventories("add", True)
+        pi_raw_ready(public("repeat", add, a))
+        repeated = proof("repeat", True)
+        if repeated != first:
+            raise RuntimeError("Pi raw repeat changed IID, state, binding, native payload or lock")
+        inventories("repeat", True)
+        remove = [installer, "remove", first["installation_id"], "--target", "pi", "--scope", scope, "--format", "json"]
+        if scope == "project":
+            remove += ["--project-root", a]
+        public("remove", remove, a)
+        proof("remove", False)
+        inventories("remove", False)
+        if pi_raw_tree(b) != foreign_b or foreign_user.read_bytes() != foreign_bytes:
+            raise RuntimeError("Pi raw cycle changed foreign B/User data")
+        if (user / "trust.json").exists():
+            raise RuntimeError("Pi public raw cycle wrote vendor trust.json")
+        hook = user / "extensions/agentplugins-project-trust"
+        if scope == "user" and hook.exists():
+            raise RuntimeError("Pi User raw cycle created a Project trust hook")
+        record.update(passed=True, foreign_b_user_preserved=True, public_add_repeat_ready=True,
+                      same_iid_binding_payload_and_lock=True, native_inventory_count=12,
+                      no_vendor_trust_override=True)
+    finally:
+        record["elapsed_seconds"] = time.monotonic() - started
+        (destination / ("pi-public-raw-" + scope + ".json")).write_text(json.dumps(record, indent=2) + "\n")
+    return record
+
+
+
 def main():
     if len(sys.argv) != 3 or sys.argv[1] not in PINS:
         raise SystemExit("usage: pi_project_components_native_e2e.py TARGET OUTPUT")
@@ -187,6 +398,8 @@ def main():
             driver = root / ("driver.exe" if target.startswith("windows") else "driver")
             run(["go","build","-trimpath","-o",str(driver),"./clients/pi/testdata/project-driver"],
                 source / "install/integrationctl/agentplugins",timeout=240)
+            installer = root / ("agentplugins.exe" if target.startswith("windows") else "agentplugins")
+            run(["go", "build", "-trimpath", "-o", str(installer), "./cli/cmd/agentplugins"], source, timeout=240)
             user, project_a, project_b = root/"home/.pi/agent",root/"A",root/"B"
             package = root/"source"
             for p in (user,project_a,project_b,package): p.mkdir(parents=True)
@@ -453,6 +666,8 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
             if "pi-managed" in remaining:
                 raise RuntimeError("owned Pi project MCP survived removal")
             state["stages"].append("A_update_remove_B_and_foreign_preserved")
+            state["public_raw_skills"] = {scope: pi_raw_skills_case(pi, release, driver, installer, root, destination, scope)
+                                          for scope in ("project", "user")}
             state["status"]="passed"
     finally:
         (destination/"pi-project-components-evidence.json").write_text(json.dumps(state,indent=2,sort_keys=True)+"\n")

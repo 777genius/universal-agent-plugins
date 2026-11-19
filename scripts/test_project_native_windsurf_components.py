@@ -53,17 +53,17 @@ def proof(scope, layout, index):
 def fixture(count=23, stage=None):
     source = {"source_commit": "a" * 40, "source_tree": "b" * 40}
     root = "/inert/windsurf"
-    layout = {"root": root, "home": root + "/home", "a": root + "/project", "b": root + "/project-b", "outside": root + "/outside", "installer": "/inert/bin/agentplugins", "client": "/inert/vendor/bin/devin", "git": "/usr/bin/git"}
+    layout = {"root": root, "home": root + "/home", "a": root + "/project", "b": root + "/project-b", "outside": root + "/outside", "installer": "/inert/bin/agentplugins", "client": "/inert/vendor/package/bin/devin", "git": "/usr/bin/git"}
     completed = list(component.LABELS[:count])
     selected = [label[4:] for label in completed if label.startswith("add-")]
     proofs = [proof(scope, layout, index + 1) for index, scope in enumerate(selected)]
-    summary = {"client": "windsurf", "version": "3000.11.205", "capture_mode": component.MODE, "capture_review_required": True, "runtime_attempt_complete": False, "test_failed": True, "activation": "prepared", "vendor_authentication_qualified": False, "real_model_qualified": False, "qualification": dict(component.QUAL), "source_identity": {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"], "installer_source_state": "committed", "installer_patch_sha256": []}, "component_layout": layout, "completed_labels": completed, "component_proof_count": len(proofs), "attempt_stage": stage or ("capture-review" if count == 23 else completed[-1] if count else "prepare")}
+    summary = {"client": "windsurf", "version": "3000.12.57", "capture_mode": component.MODE, "capture_review_required": True, "runtime_attempt_complete": False, "test_failed": True, "activation": "prepared", "vendor_authentication_qualified": False, "real_model_qualified": False, "qualification": dict(component.QUAL), "source_identity": {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"], "installer_source_state": "committed", "installer_patch_sha256": []}, "component_layout": layout, "completed_labels": completed, "component_proof_count": len(proofs), "attempt_stage": stage or ("capture-review" if count == 23 else completed[-1] if count else "prepare")}
     bodies = {"runtime-attempt.json": raw(summary), "probe-events.jsonl": b""}
     if proofs: bodies["component-proof.jsonl"] = b"".join(raw(row) + b"\n" for row in proofs)
     for label in completed:
         cwd, argv = component._command(label, layout)
         bodies[label + ".command.json"] = raw({"argv": argv, "cwd": cwd, "exit": 0, "error": False, "deadline": False, "elapsed_ms": 1, "cleanup": "full descendant supervision; forced cleanup fails"})
-        bodies[label + ".stdout.log"] = b"devin 3000.11.205 (6dea39440ae3)\n" if label == "version" else b"unparsed native/private evidence"
+        bodies[label + ".stdout.log"] = b"devin 3000.12.57 (96542e930752)\n" if label == "version" else b"unparsed native/private evidence"
         bodies[label + ".stderr.log"] = b""
     return bodies, source
 
@@ -89,7 +89,7 @@ class WindsurfComponentTests(unittest.TestCase):
                 runtime.cli_attempt_members({k: v for k, v in bodies.items() if k != name}, source, "windsurf")
 
     def test_modes_flags_labels_triples_and_process_continuation_refuse(self):
-        for kind in ("mode", "client", "complete", "passed", "auth", "model", "qualification", "flag-type", "source", "skip", "repeat", "stage", "partial", "orphan", "argv", "cwd", "cleanup", "earlier-error", "earlier-stderr", "version", "bound"):
+        for kind in ("mode", "client", "complete", "passed", "auth", "model", "qualification", "flag-type", "source", "skip", "repeat", "stage", "partial", "orphan", "argv", "cwd", "cleanup", "earlier-error", "earlier-stderr", "version", "previous-version", "previous-build", "bound"):
             bodies, source = fixture(); summary = runtime.strict_json(bodies["runtime-attempt.json"])
             if kind == "mode": summary["capture_mode"] = "unknown"
             elif kind == "client": summary["client"] = "grok"
@@ -111,6 +111,8 @@ class WindsurfComponentTests(unittest.TestCase):
                 bodies["empty-a-skills.command.json"] = raw(row)
             elif kind == "earlier-stderr": bodies["empty-a-skills.stderr.log"] = b"unknown warning"
             elif kind == "version": bodies["version.stdout.log"] = b"other version\n"
+            elif kind == "previous-version": summary["version"] = "3000.11.205"
+            elif kind == "previous-build": bodies["version.stdout.log"] = b"devin 3000.11.205 (6dea39440ae3)\n"
             elif kind == "bound": bodies["b-get.stdout.log"] = b"x" * ((1 << 20) + 1)
             bodies["runtime-attempt.json"] = raw(summary)
             with self.subTest(kind=kind), self.assertRaises(ValueError): runtime.cli_attempt_members(bodies, source, "windsurf")

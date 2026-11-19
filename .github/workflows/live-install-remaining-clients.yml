@@ -7,6 +7,11 @@ on:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_kimi_repeat_log_audit.py'
+      - 'scripts/devin_project_auto_install_e2e.py'
+      - 'scripts/test_devin_project_auto_install_e2e.py'
+      - 'scripts/prepare-codex-linux-sandbox.sh'
+      - 'scripts/run-native-client-matrix.py'
       - 'tests/live-install/fixtures.json'
       - 'repotests/agentplugins_acp_metadata_*_test.go'
   workflow_dispatch:
@@ -37,6 +42,10 @@ jobs:
       matrix:
         target: [cursor, kiro, windsurf, grok, chatgpt]
         kind: [plugin, skill]
+        # Desktop exposes User scope; Project Skills are a documented refusal.
+        exclude:
+          - target: chatgpt
+            kind: skill
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -49,7 +58,9 @@ jobs:
         with:
           node-version: '24'
       - name: Refuse inherited real client profile overrides before live cases
-        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+          python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
       - name: Acquire actual public vendor client where a headless Linux build exists
         id: vendor-install
         # Preserve a complete explicit client-unavailable record even when a
@@ -59,9 +70,13 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           KIND: ${{ matrix.kind }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$TARGET" == chatgpt && "$KIND" == plugin ]]; then
+            bash scripts/prepare-codex-linux-sandbox.sh
+          fi
           mkdir -p "$RUNNER_TEMP/vendor-proof" "$HOME/.local/bin"
           # Runner toolchain must precede any vendor-controlled executable.
           export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"
@@ -81,15 +96,8 @@ jobs:
               ;;
             kiro) URL="https://desktop-release.q.us-east-1.amazonaws.com/3.0.0/kirocli-universal-darwin.zip"; BIN="kiro-cli" ;;
             windsurf)
-              if [[ "$KIND" == skill ]]; then
-                # Project Skills require exactly 3000.11.205 in requireCurrentDevin.
-                # Homebrew/homebrew-cask Casks/d/devin-cli.rb @ b0b0899868cd5816cfc754d2461a50920af612e0
-                URL="https://static.devin.ai/cli/3000.11.205/devin-3000.11.205-x86_64-unknown-linux.tar.gz"
-              else
-                # Preserve the independently reviewed user/plugin version.
-                # Homebrew/homebrew-cask Casks/d/devin-cli.rb @ c9adad21951a075e35556930e7396a87818f8980
-                URL="https://static.devin.ai/cli/3000.11.234/devin-3000.11.234-x86_64-unknown-linux.tar.gz"
-              fi
+              # Both Project and User admit this reviewed official npm version.
+              URL="https://registry.npmjs.org/devin/-/devin-3000.12.57-linux-x64.tgz"
               BIN="devin"
               ;;
             grok)
@@ -103,11 +111,40 @@ jobs:
               BIN="code"
               ;;
             chatgpt)
-              echo "ChatGPT is a remote/manual app target; no Linux agent executable" \
-                | tee "$RUNNER_TEMP/vendor-proof/manual-client.txt"
-              exit 0
+              test "$KIND" = plugin
+              # Desktop uses the same backend as the existing Codex catalog lane.
+              # Reuse that immutable pin and the bounded regular-member installer.
+              python3 - "$RUNNER_TEMP" <<'CHATGPT_CODEX'
+          import importlib.util, json, os, platform, stat, sys
+          from pathlib import Path
+          if sys.platform != "linux" or platform.machine() != "x86_64":
+              raise SystemExit("ChatGPT Desktop bootstrap requires Linux amd64")
+          root = Path(sys.argv[1]).resolve(strict=True)
+          directory = root / "vendor-root"
+          directory.mkdir()
+          source = Path.cwd() / "scripts/run-native-client-matrix.py"
+          spec = importlib.util.spec_from_file_location("chatgpt_codex_matrix", source)
+          module = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(module)
+          pin = module.PINS["linux-amd64"]["codex"]
+          binary, proof = module.provision(pin, directory, "codex")
+          if (binary != directory / "codex" or binary.is_symlink()
+                  or not stat.S_ISREG(binary.lstat().st_mode)
+                  or not os.access(binary, os.X_OK)
+                  or binary.resolve(strict=True) != binary):
+              raise SystemExit("unverified staged Codex executable")
+          proof.update(public_target="chatgpt", canonical_client_id="codex",
+                       pin_family="full-catalog", executable=str(binary))
+          with (root / "vendor-proof/codex-runtime.json").open("x") as stream:
+              stream.write(json.dumps(proof, sort_keys=True) + "\n")
+          (root / "vendor-proof/source.txt").write_text(proof["source"] + "\n")
+          CHATGPT_CODEX
+              BIN="codex"
+              executable="$RUNNER_TEMP/vendor-root/codex"
+              ln -s "$executable" "$HOME/.local/bin/codex"
               ;;
           esac
+          if [[ "$TARGET" != chatgpt ]]; then
           printf '%s\n' "$URL" > "$RUNNER_TEMP/vendor-proof/source.txt"
           # BUG-012: download, fingerprint, and preserve proposed vendor bytes;
           # never execute without a separately reviewed immutable digest pin.
@@ -121,13 +158,6 @@ jobs:
               ;;
             vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20" ;; # Microsoft official SHA-256 for Linux .deb x64 1.144.0
             kiro) SHA256="0a8f067c4fe6a23a231aa3a18e3e4332120ef9ed3d2d7b6eea907beb8b4cdd8b" ;; # Homebrew/homebrew-cask Casks/k/kiro-cli.rb @ 7191fc89
-            windsurf)
-              if [[ "$KIND" == skill ]]; then
-                SHA256="2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4" # Cask b0b08998, project 3000.11.205
-              else
-                SHA256="201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a" # Cask c9adad21, user 3000.11.234
-              fi
-              ;;
             grok) SHA256="22d281c5964c5444147328096ba2a221f3f0874c6858e27c825656a80f6e58e9" ;; # Homebrew Cask grok-build 1.0.70, Linux x86_64
           esac
           sha256_file() {
@@ -137,10 +167,41 @@ jobs:
               shasum -a 256 "$@" # macOS runner
             fi
           }
+          if [[ "$TARGET" == windsurf ]]; then
+            # Existing bounded official npm acquisition validates metadata, SRI,
+            # safe regular members, package authority and the fixed binary SHA.
+            # No npm install hooks or vendor installer scripts are executed.
+            PYTHONPATH=scripts python3 - "$RUNNER_TEMP" "$URL" <<'PY_DEVIN'
+          import json
+          from pathlib import Path
+          import sys
+          import devin_project_auto_install_e2e as devin
+          root = Path(sys.argv[1]).resolve(strict=True)
+          reviewed = "sha512-SZhb9rrYghHvOh0PRpZT1GpNPMMo+7P9VH6t6ZNMrBmyVX3x3XflPvCv8yomx/i7vnvf64bdFR++cRRg/c8mLQ=="
+          proof = dict(schema_version=1, version=devin.VERSION, tarball_url=sys.argv[2],
+                       reviewed_integrity=reviewed, binary_sha256=devin.BINARY_SHA,
+                       acquisition_verified=False)
+          try:
+              if (devin.VERSION != "3000.12.57" or devin.TARBALL_URL != sys.argv[2]
+                      or devin.BINARY_SHA != "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d"):
+                  raise RuntimeError("Devin helper differs from reviewed acquisition")
+              executable, integrity = devin.install_genuine_devin(root)
+              if executable != root / "vendor-devin/bin/devin":
+                  raise RuntimeError("Devin executable differs from reviewed package path")
+              proof["observed_integrity"] = integrity
+              if integrity != reviewed:
+                  raise RuntimeError("Devin npm archive differs from reviewed acquisition")
+              proof["acquisition_verified"] = True
+          finally:
+              (root / "vendor-proof" / "devin-npm.json").write_text(
+                  json.dumps(proof, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY_DEVIN
+            executable="$RUNNER_TEMP/vendor-devin/bin/devin"
+            test -f "$executable" && test -x "$executable" && test ! -L "$executable" || exit 4
+            ln -s "$executable" "$HOME/.local/bin/devin"
+          else
           if [[ "$TARGET" == cursor && "$KIND" == skill ]]; then
             artifact="$RUNNER_TEMP/cursor-agent.tar.gz"
-          elif [[ "$TARGET" == windsurf ]]; then
-            artifact="$RUNNER_TEMP/devin-cli.tar.gz"
           elif [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
             artifact="$RUNNER_TEMP/$TARGET.deb"
           elif [[ "$TARGET" == kiro ]]; then
@@ -159,9 +220,9 @@ jobs:
             exit 3
           fi
           printf '%s  %s\n' "$SHA256" "$artifact" | sha256_file -c -
-          if [[ ( "$TARGET" == cursor && "$KIND" == skill ) || "$TARGET" == windsurf ]]; then
+          if [[ "$TARGET" == cursor && "$KIND" == skill ]]; then
             mkdir -p "$RUNNER_TEMP/vendor-root"
-            # Both official archives are independently digest-pinned above.
+            # This official archive is independently digest-pinned above.
             # Python 3.12's data filter rejects archive entries escaping this root.
             python3 - "$artifact" "$RUNNER_TEMP/vendor-root" <<'PY'
           import sys
@@ -169,13 +230,8 @@ jobs:
           with tarfile.open(sys.argv[1], "r:gz") as archive:
               archive.extractall(path=sys.argv[2], filter="data")
           PY
-            if [[ "$TARGET" == windsurf ]]; then
-              executable="$RUNNER_TEMP/vendor-root/bin/devin"
-              target_binary="devin"
-            else
-              executable="$RUNNER_TEMP/vendor-root/dist-package/cursor-agent"
-              target_binary="cursor-agent"
-            fi
+            executable="$RUNNER_TEMP/vendor-root/dist-package/cursor-agent"
+            target_binary="cursor-agent"
             test -f "$executable" && test -x "$executable" && test ! -L "$executable"
             ln -s "$executable" "$HOME/.local/bin/$target_binary"
           elif [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
@@ -216,6 +272,8 @@ jobs:
           else
             echo "Unsupported verified vendor format: $TARGET" >&2
             exit 4
+          fi
+          fi
           fi
           hash -r
           command -v "$BIN" | tee "$RUNNER_TEMP/vendor-proof/executable.txt"

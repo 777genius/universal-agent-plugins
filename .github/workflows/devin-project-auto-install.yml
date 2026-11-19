@@ -8,6 +8,13 @@ on:
       - 'scripts/test_devin_project_auto_install_e2e.py'
       - 'scripts/native_client_research.py'
       - 'install/integrationctl/agentplugins/clients/windsurf/**'
+      - 'install/integrationctl/agentplugins/clients/shared/owned_skill_metadata.go'
+      - 'install/integrationctl/agentplugins/clients/shared/native_config_snapshot.go'
+      - 'cli/internal/agentpluginscli/skills_unchanged.go'
+      - 'cli/internal/agentpluginscli/deps_sync.go'
+      - 'cli/internal/agentpluginscli/skills_windsurf_project_profile_test.go'
+      - 'install/integrationctl/agentplugins/installer/package_lookup.go'
+      - 'install/integrationctl/agentplugins/installer/types.go'
 permissions:
   contents: read
 jobs:

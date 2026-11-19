@@ -7,10 +7,18 @@ prepares selected MCP registrations in `.uap/clients/cline/mcp.json`. The manage
 package, state, data and receipts belong to the selected project's `.uap`
 namespace. Original user Cline configuration remains a separate authority.
 
-Results remain **Prepared** even when the exact installed component files are
-verified. File verification does not prove native session discovery, effective
-trust, IDE behavior, enabled skill execution or MCP initialization. Activation
-attestation cannot turn this project preparation into native activation.
+The CLI 0.1.93 preparation path returns **Prepared** even when the exact installed
+component files are verified. The current source checkout additionally verifies
+pure Project Skills through Cline's ordinary `config skills --json` catalog.
+Installation and unchanged repeat can return **Ready** when fresh native paths,
+metadata and instructions match the owned files and their receipts. A shadowed
+project Skill, missing CLI or unqualified catalog cannot qualify as Ready.
+
+This bounded catalog check needs no provider, model turn or MCP source override.
+Mixed MCP delivery remains Prepared. Native session behavior, IDE forwarding,
+tool execution and MCP initialization require their own evidence; activation
+attestation does not replace native discovery. This source behavior is not a
+claim that a new CLI release has been published.
 
 ## Use the prepared configuration
 
@@ -21,10 +29,10 @@ including `--auto-approve false`, and process environment values:
 - `CLINE_MCP_SETTINGS_PATH`: the selected project's absolute prepared MCP file.
 - `CLINE_NO_AUTO_UPDATE`: `1` for the suggested process.
 
-Add/repair returns these instructions for review and does not start Cline as an
-installation side effect. The source checkout also provides the explicit `run`
-command below. Startup consent grants no workspace trust, automatic tool
-approval or authentication.
+Mixed MCP add/repair returns these instructions for review and does not start an
+interactive Cline session as an installation side effect. The source checkout
+also provides the explicit `run` command below. Startup consent grants no
+workspace trust, automatic tool approval or authentication.
 The explicit MCP file selects the whole source. User registrations are not
 merged or copied into that session. A later process without the override reads
 its ordinary user settings again. IDE forwarding is a separate unverified path.

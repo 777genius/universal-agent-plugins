@@ -228,23 +228,25 @@
         "--json"
       ]
     ],
-    "Error": "",
+    "Error": "grok plugin list JSON contract is not recognized",
     "Outcome": {
-      "Activation": "manual_activation_required",
+      "Activation": "failed",
       "ActivationAttested": false,
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
       "CompletedUserActions": null,
-      "LocalActions": null,
+      "LocalActions": [
+        "inspect `grok plugin list --json` and rerun agentplugins update"
+      ],
       "LocalEntryObservation": null,
       "NativeEffect": "",
       "NativeObjects": null,
       "Policy": "allowed",
       "UserActions": [
-        "verify that the managed plugin is installed and enabled in Grok Build"
+        "retry client activation and verify client visibility"
       ],
-      "Verification": "package_validated"
+      "Verification": "failed"
     }
   },
   "hermes": {

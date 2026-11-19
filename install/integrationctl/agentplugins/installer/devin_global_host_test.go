@@ -71,9 +71,9 @@ func newDevinGlobalHostFixture(t *testing.T, project bool) devinGlobalHostFixtur
 }
 
 func TestFacadeDevinGlobalOriginalRootAdmission(t *testing.T) {
-	for _, name := range []string{"missing", "relative", "unclean", "legacy-alias", "missing-version", "unsupported-version", "project", "non-opted", "group"} {
+	for _, name := range []string{"missing", "relative", "unclean", "legacy-alias", "missing-version", "unsupported-version", "non-opted", "group"} {
 		t.Run(name, func(t *testing.T) {
-			f := newDevinGlobalHostFixture(t, name == "project")
+			f := newDevinGlobalHostFixture(t, false)
 			before := devinSDKRead(t, filepath.Join(f.profile, "mcp_config.json"))
 			legacy := devinSDKRead(t, filepath.Join(f.legacy, "mcp_config.json"))
 			switch name {
@@ -113,6 +113,82 @@ func TestFacadeDevinGlobalOriginalRootAdmission(t *testing.T) {
 			}
 			if _, statErr := os.Lstat(filepath.Join(f.profile, "skills", "docs")); !os.IsNotExist(statErr) {
 				t.Fatal("refusal installed native Skill", statErr)
+			}
+		})
+	}
+}
+
+func TestFacadeDevinProjectOriginalUserRootIsReadOnlyContext(t *testing.T) {
+	for _, authority := range []string{"observed", "missing"} {
+		t.Run(authority, func(t *testing.T) {
+			f := newDevinGlobalHostFixture(t, true)
+			if authority == "missing" {
+				f.request.ClientNativeConfigRoot = ""
+			}
+			global := devinSDKRead(t, filepath.Join(f.profile, "mcp_config.json"))
+			legacy := devinSDKRead(t, filepath.Join(f.legacy, "mcp_config.json"))
+			prepared, err := f.engine.Prepare(t.Context(), f.request)
+			if err != nil {
+				t.Fatal("Project must retain its separate write layout", err)
+			}
+			defer func() {
+				if err := prepared.Close(); err != nil {
+					t.Error(err)
+				}
+			}()
+			if prepared.Plan().ConfigRoot != f.legacy {
+				t.Fatal("original User root replaced Cascade authority")
+			}
+			// A caller mutation after review cannot replace the frozen context.
+			f.request.ClientNativeConfigRoot = filepath.Join(f.root, "replacement", "devin")
+			result, err := f.engine.Apply(t.Context(), prepared, installer.Decision{Confirmed: true})
+			if err != nil || result.Client.Activation != string(domain.ActivationPrepared) || result.Client.Verification != string(domain.VerificationInstalled) || f.runner.calls != 0 {
+				t.Fatal("mixed Project file delivery claimed native runtime", result, err)
+			}
+			state, err := f.store.Load()
+			if err != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+				t.Fatal("Project binding missing", state, err)
+			}
+			for _, binding := range state.Installations[0].Clients {
+				if binding.NativeProfileRoot != filepath.Join(f.request.ProjectRoot, ".devin") || binding.Scope != "project" {
+					t.Fatal("Project delivery selected a User write target", binding)
+				}
+			}
+			if global != devinSDKRead(t, filepath.Join(f.profile, "mcp_config.json")) || legacy != devinSDKRead(t, filepath.Join(f.legacy, "mcp_config.json")) {
+				t.Fatal("Project changed original Global or Cascade configuration")
+			}
+			if _, err := os.Stat(filepath.Join(f.profile, "skills", "docs")); !os.IsNotExist(err) {
+				t.Fatal("Project installed a User Skill", err)
+			}
+		})
+	}
+}
+
+func TestFacadeProjectOriginalUserRootAdmissionRefusals(t *testing.T) {
+	for _, mutation := range []string{"relative", "unclean", "non-opted", "group"} {
+		t.Run(mutation, func(t *testing.T) {
+			f := newDevinGlobalHostFixture(t, true)
+			switch mutation {
+			case "relative":
+				f.request.ClientNativeConfigRoot = "relative/devin"
+			case "unclean":
+				f.request.ClientNativeConfigRoot += string(filepath.Separator) + "."
+			case "non-opted":
+				f.request.ClientID = "cline"
+			case "group":
+				f.request.Targets = []installer.ClientTarget{{ClientID: "windsurf", ClientConfigRoot: f.legacy}}
+			}
+			global, legacy := devinSDKRead(t, filepath.Join(f.profile, "mcp_config.json")), devinSDKRead(t, filepath.Join(f.legacy, "mcp_config.json"))
+			prepared, err := f.engine.Prepare(t.Context(), f.request)
+			if prepared != nil {
+				_ = prepared.Close()
+			}
+			if !errors.Is(err, installer.ErrInvalidRequest) || f.runner.calls != 0 {
+				t.Fatal("unqualified explicit Project context accepted", err, f.runner.calls)
+			}
+			state, loadErr := f.store.Load()
+			if loadErr != nil || len(state.Installations) != 0 || global != devinSDKRead(t, filepath.Join(f.profile, "mcp_config.json")) || legacy != devinSDKRead(t, filepath.Join(f.legacy, "mcp_config.json")) {
+				t.Fatal("Project admission refusal changed authority", loadErr)
 			}
 		})
 	}
