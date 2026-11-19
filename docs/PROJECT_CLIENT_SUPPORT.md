@@ -23,7 +23,8 @@ selection, reload, trust or session work can remain.
 **VS Code plugin-platform maintenance freeze (19 November 2026):** VS Code
 is no longer an active UAP qualification priority and is hidden from the
 public landing. Its four dedicated native/research CI workflows are
-manual-only, not automatic PR or main gates. Existing adapters and historical
+manual-only, not automatic PR or main gates. The shared remaining-client
+live-audit matrix also excludes VS Code from automatic jobs. Existing adapters and historical
 evidence remain intact; this does not affect Copilot CLI, Code-OSS or existing
 installation ownership.
 
