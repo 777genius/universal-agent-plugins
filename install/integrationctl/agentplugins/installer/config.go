@@ -3,6 +3,7 @@ package installer
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
@@ -36,6 +37,9 @@ type Config struct {
 	// its existing filesystem-only compatibility path when disabled.
 	EnableNativeObserver bool
 	Runner               ports.CommandRunner
+	// NativeHTTP enables only an explicitly composed native loopback observer.
+	// Nil preserves file-only Prepared completion.
+	NativeHTTP http.RoundTripper
 	// LookupExecutable resolves a native management CLI only for an explicitly
 	// selected client operation. Nil keeps auxiliary management unavailable.
 	LookupExecutable func(string) (string, error)

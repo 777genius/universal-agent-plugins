@@ -10,6 +10,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+const copilotProjectInstalledAction = "project skills and MCP servers are installed, and Copilot remembers this folder; start a new Copilot session to load them"
+
 var _ clients.ActivationPreflighter = (*Adapter)(nil)
 
 func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRequest) error {
@@ -70,7 +72,7 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 		Automatic:         request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components),
 		UnavailableAction: "select supported Copilot project skills and MCP components",
 		RepairAction:      "repair exact managed Copilot project components", RetryAction: "retry Copilot project component installation",
-		CompletedAction: "project skills and MCP servers are installed, and Copilot remembers this folder; start a new Copilot session to load them",
+		CompletedAction: copilotProjectInstalledAction,
 		Verify: func() error {
 			if err := verifyCopilotTrust(env, request, true); err != nil {
 				return err
@@ -101,6 +103,7 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 	})
 	if err == nil && outcome.Verification == domain.VerificationInstalled {
 		outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
+		return observeCopilotProjectSkills(ctx, env, request, outcome)
 	}
 	return outcome, err
 }

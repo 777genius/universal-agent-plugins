@@ -24,6 +24,10 @@ func piTrustBlocker(kernel nativeconfig.Kernel, user, project string) (string, e
 	if err != nil {
 		return "", err
 	}
+	return piTrustBlockerSnapshot(snapshot, user, project)
+}
+
+func piTrustBlockerSnapshot(snapshot nativeconfig.FileSnapshot, user, project string) (string, error) {
 	document, err := decodePiTrust(snapshot)
 	if err != nil {
 		return "", err

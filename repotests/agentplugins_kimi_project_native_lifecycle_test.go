@@ -49,6 +49,8 @@ type kimiProjectNativeFixture struct {
 	serverIDs                              map[string]bool
 	foreignMCP                             map[string]any
 	protectedTrees                         map[string]map[string]string
+	rawSkill                               map[string]any
+	rawNames                               []string
 }
 
 func (f *kimiProjectNativeFixture) keep(t *testing.T, name string, body []byte) {
@@ -419,6 +421,9 @@ func (f *kimiProjectNativeFixture) observe(t *testing.T, stage string, trust boo
 			servers[scope] = append(servers[scope], map[string]any{"name": p.Name, "origin": origin, "config": config, "sha256": nativeSHA(t, origin), "event": filepath.Join(f.base.Root, scope+"-events.jsonl"), "nonce": f.base.Nonce + "-" + scope, "cwd": f.projects[scope]})
 		}
 	}
+	if f.rawSkill != nil {
+		skills["a"] = append(skills["a"], f.rawSkill)
+	}
 	observerIDs := map[string]string{}
 	for path, digest := range f.immutable {
 		if path != f.python && path != f.git {
@@ -429,6 +434,9 @@ func (f *kimiProjectNativeFixture) observe(t *testing.T, stage string, trust boo
 		observerIDs[path] = digest
 	}
 	request := map[string]any{"schema_version": 1, "root": f.base.Root, "home": f.base.Home, "projects": f.projects, "client": f.client, "identities": observerIDs, "observation": map[string]any{"stage": stage, "setup_trust": trust, "skills": skills, "servers": servers}}
+	if len(f.rawNames) != 0 {
+		request["observation"].(map[string]any)["selected_skill_names"] = f.rawNames
+	}
 	body, _ := json.Marshal(request)
 	path := filepath.Join(f.base.Root, stage+"-private-request.json")
 	projectNativeRuntimeWrite(t, path, body, 0600)
@@ -547,6 +555,7 @@ func TestAgentpluginsKimiNativeProjectComponentsLifecycle(t *testing.T) {
 	userMCP := filepath.Join(f.base.Home, ".kimi-code", "mcp.json")
 	f.protected[userMCP] = nativeSHA(t, userMCP)
 	f.observe(t, "empty", true)
+	f.rawSkillsCycle(t)
 	for _, scope := range []string{"user", "a", "b", "c"} {
 		f.uap(t, "add-"+scope, scope, true, false, "add", f.packages[scope].Source, "--no-save")
 		f.receipt(t, scope)
