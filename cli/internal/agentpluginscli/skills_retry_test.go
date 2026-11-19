@@ -547,8 +547,9 @@ func TestSkillsRetryClosesPreparedPreviewWhenOutputFails(t *testing.T) {
 	}
 }
 
-// A group refused before any client was touched offers no retry and no log:
-// nothing was attempted and the same preflight would refuse again.
+// A group refused before any client was touched offers no retry: nothing was
+// attempted and the same preflight would refuse again. It writes no log unless
+// the cause is a fixable machine problem (see install_failure_environment_test.go).
 func TestGroupRefusedBeforeAnyChangeIsNotRetried(t *testing.T) {
 	cmd, _, errOut := retryTestCommand(t)
 	app := App{Terminal: true, InstallLogDir: filepath.Join(t.TempDir(), "logs")}

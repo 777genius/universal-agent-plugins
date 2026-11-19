@@ -342,7 +342,7 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 	// same preflight would refuse again, and the person is told why already.
 	switch combined.Status {
 	case string(usecase.GroupPhasePlanned), string(usecase.GroupPhasePreparationFailed):
-		if unclosed {
+		if unclosed || combined.Status != string(usecase.GroupPhasePreparationFailed) || opts.format != "human" {
 			return cause
 		}
 		return app.explainRefusedGroup(cmd, opts, items, cause)
@@ -405,22 +405,28 @@ func runUpdateAllRetryable(cmd *cobra.Command, app App, opts *options) error {
 	return run()
 }
 
-// explainRefusedGroup handles a group refused before any client changed. For an
-// ordinary machine problem the person can fix (permission, full disk, network,
-// missing agent program) it keeps the technical chain in the install log and
-// puts only the plain cause in the public error. Retrying is not offered
-// automatically: nothing was applied, and the same command is the retry.
-// Every other refusal keeps its own error and writes no log.
+// explainRefusedGroup handles a group whose preparation failed before any
+// client changed. For an ordinary machine problem the person can fix
+// (permission, full disk, network, missing program) it keeps the technical
+// chain in the install log and puts only the plain cause in the public error.
+// Retrying is not offered automatically: nothing was applied, and the same
+// command is the retry. Every other refusal keeps its own error and writes no
+// log; so does a refusal whose log could not be written, because the technical
+// chain would otherwise be lost. Machine-readable output keeps the full error.
 func (app App) explainRefusedGroup(cmd *cobra.Command, opts *options, items []agentItem, cause error) error {
-	if environmentFailureKind(cause) == failureUnknown {
+	failure := describeSyncFailure(cause)
+	switch failure.Kind {
+	case failurePermission, failureReadOnly, failureDiskFull, failureNetwork, failureAgentMissing:
+	default:
 		return cause
 	}
-	failure := describeSyncFailure(cause)
 	for index := range items {
 		items[index].failure = failure
 	}
-	if path := app.recordInstallRun("add", 1+opts.retryAttempt, agentLogEntries(items)); path != "" && opts.format == "human" {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(path))
+	path := app.recordInstallRun("add", 1+opts.retryAttempt, agentLogEntries(items))
+	if path == "" {
+		return cause
 	}
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(path))
 	return installFailureWithCause{summary: strings.TrimSuffix(failure.Summary, "."), cause: cause}
 }

@@ -5,8 +5,8 @@ import (
 	"errors"
 	"io/fs"
 	"net"
+	"os"
 	"os/exec"
-	"syscall"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -74,20 +74,36 @@ func failureKindOf(err error) failureKind {
 // fix without reading technical detail. It only looks at typed causes that
 // survive error wrapping, never at message text.
 func environmentFailureKind(err error) failureKind {
-	var netErr net.Error
+	var (
+		execErr *exec.Error
+		opErr   *net.OpError
+		dnsErr  *net.DNSError
+	)
 	switch {
-	case errors.Is(err, syscall.ENOSPC):
+	case isDiskFull(err):
 		return failureDiskFull
-	case errors.Is(err, syscall.EROFS):
+	case isReadOnly(err):
 		return failureReadOnly
+	// A program that is missing or cannot be run is checked before the generic
+	// permission case: an unexecutable binary is not a write problem.
+	case errors.Is(err, exec.ErrNotFound), errors.As(err, &execErr):
+		return failureAgentMissing
 	case errors.Is(err, fs.ErrPermission):
 		return failurePermission
-	case errors.Is(err, exec.ErrNotFound):
-		return failureAgentMissing
-	case errors.As(err, &netErr):
+	case errors.As(err, &opErr), errors.As(err, &dnsErr):
+		// Only connection-level causes. TLS, URL syntax and other errors that
+		// merely implement net.Error stay generic, and a timeout is a timeout.
+		if timeoutCause(err) {
+			return failureTimeout
+		}
 		return failureNetwork
 	}
 	return failureUnknown
+}
+
+func timeoutCause(err error) bool {
+	var timeout interface{ Timeout() bool }
+	return errors.Is(err, os.ErrDeadlineExceeded) || errors.As(err, &timeout) && timeout.Timeout()
 }
 
 // installFailure is what a person sees for one agent: a plain cause, one next
@@ -171,15 +187,15 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 	case failureTimeout:
 		return "A step took too long and was stopped.", "Check network access and the agent, then retry.", true
 	case failurePermission:
-		return "UAP is not allowed to write to this agent's folder.", "Fix the folder's permissions, then retry this agent.", true
+		return "UAP is not allowed to write to a folder this agent needs.", "Fix the folder's permissions, then retry this agent.", true
 	case failureReadOnly:
-		return "This agent's folder is read-only.", "Make the location writable or choose another one, then retry this agent.", true
+		return "A folder this agent needs is read-only.", "Make the location writable or choose another one, then retry this agent.", true
 	case failureDiskFull:
 		return "There is not enough free disk space.", "Free some space, then retry this agent.", true
 	case failureNetwork:
-		return "A download needed for this agent failed because the network is unavailable.", "Check your connection, then retry this agent.", true
+		return "A download needed for this agent failed because the network could not be reached.", "Check your connection, then retry this agent.", true
 	case failureAgentMissing:
-		return "The agent's command-line program was not found.", "Install the agent or add it to your PATH, then retry.", true
+		return "A program this agent needs was not found or cannot be run.", "Install it or add it to your PATH, then retry.", true
 	case failureCanceled:
 		return "The installation was canceled.", "Retry when you are ready.", true
 	case failureSkipped:
