@@ -32,10 +32,18 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	f := newCopilotProjectAttempt(t)
 	defer f.cancel()
 	defer copilotRawLogEvidence(t, f)
+	// Catalog-only discovery must preserve this empty, test-owned event log.
+	log, err := os.OpenFile(f.base.Events, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := log.Close(); err != nil {
+		t.Fatal(err)
+	}
+	events := copilotRawRead(t, f.base.Events)
 	f.preparePackage(t)
 	foreign := copilotRawForeign(t, f)
 	before := copilotRawInventories(t, f, "before", nil)
-	events := copilotRawRead(t, f.base.Events)
 	argv := []string{f.installer, "skills", "add", nativeRawProjectSkillsSource, "--skill", copilotRawSkill, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--no-ui", "--format", "json"}
 	first := f.command(t, "raw-add", f.outside, f.env(), argv, 45*time.Second)
 	copilotRawReady(t, first.Stdout, false)

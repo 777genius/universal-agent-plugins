@@ -61,6 +61,9 @@ type Request struct {
 	ClientID             string
 	ClientConfigRoot     string
 	ClientExecutable     string
+	// ClientSurfaces preserves actual host observations, including unavailable
+	// or incompatible surfaces. It grants no authority inferred from paths.
+	ClientSurfaces []domain.ClientSurface `json:"-"`
 	// ClientNativeConfigRoot preserves an independently observed User profile
 	// for a single target opting into UserNativeRegistryLayout, including read-only
 	// User-policy observation during Project delivery. It never selects a User
@@ -107,6 +110,7 @@ func (req Request) acquiredCompatibility() domain.CompatibilityHints {
 // Group removal retains the published Claude/Codex boundary.
 type ClientTarget struct {
 	ClientID, ClientConfigRoot, ClientExecutable string
+	ClientSurfaces                               []domain.ClientSurface `json:"-"`
 	PackageRoot                                  string
 	ExternalUninstalled                          bool
 }
@@ -119,6 +123,7 @@ type TargetFacts struct {
 	BindingID     string
 	ConfigRoot    string
 	Executable    string
+	Surfaces      []domain.ClientSurface `json:"-"`
 }
 
 // Decision is host UI confirmation, outside mutation locks.
