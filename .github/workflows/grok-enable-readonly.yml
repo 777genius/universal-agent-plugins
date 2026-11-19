@@ -5,6 +5,7 @@ on:
       - 'install/integrationctl/adapters/process/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
       - 'cli/cmd/agentplugins/project_grok_public_native_linux_test.go'
+      - 'cli/cmd/agentplugins/grok_user_signed_native_linux_test.go'
       - 'install/integrationctl/agentplugins/installer/**'
       - 'install/integrationctl/agentplugins/usecase/**'
       - 'install/integrationctl/agentplugins/ports/**'
@@ -19,6 +20,7 @@ on:
       - 'install/integrationctl/adapters/process/**'
       - 'install/integrationctl/agentplugins/clients/grok/**'
       - 'cli/cmd/agentplugins/project_grok_public_native_linux_test.go'
+      - 'cli/cmd/agentplugins/grok_user_signed_native_linux_test.go'
       - 'install/integrationctl/agentplugins/installer/**'
       - 'install/integrationctl/agentplugins/usecase/**'
       - 'install/integrationctl/agentplugins/ports/**'
@@ -136,6 +138,9 @@ jobs:
           go version
           test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
           git diff --exit-code HEAD --
+          # Run Grok adapter regressions on the checked-out head; compiling the
+          # held native helper alone does not execute these contract tests.
+          go test -count=1 -timeout=4m -run '^Test(GrokUser|ProjectGrokOwnedSkills|ProjectGrokUnrelatedNativeSources|ProjectGrokObservedSkills|GrokActivation|GrokRejectsForeign|GrokDoesNotOverride|GrokUnconfirmedRemoval)' ./install/integrationctl/agentplugins/clients/grok
           go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-readonly-test" ./install/integrationctl/agentplugins/clients/grok
           go test -tags=grokreadonlynative -c -o "$RUNNER_TEMP/grok-runtime-metadata-test" ./install/integrationctl/adapters/process
           go test -tags=grokpublicnative -c -o "$RUNNER_TEMP/grok-public-test" ./cli/cmd/agentplugins

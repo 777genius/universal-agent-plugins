@@ -31,6 +31,18 @@ def group_alive(pid):
         return False
 
 
+def wait_group_exit(process, deadline):
+    """Reap the launcher while observing absence of its entire group."""
+    while True:
+        process.poll()
+        if not group_alive(process.pid):
+            return True
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return False
+        time.sleep(min(0.02, left))
+
+
 def port_closed(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as check:
         check.settimeout(0.2)
@@ -264,24 +276,21 @@ class Service:
             if self._process is not None:
                 process = self._process
                 end = min(self.deadline, time.monotonic() + 5)
-                # Native shutdown may finish its HTTP listener before the CLI
-                # foreground process. Permit its ordinary SIGTERM handler only.
-                try:
-                    process.wait(timeout=max(0.001, min(0.15, end - time.monotonic())))
-                except subprocess.TimeoutExpired:
-                    pass
-                if group_alive(process.pid):
+                # An API acknowledgement precedes asynchronous native cleanup.
+                # Give a completed observation natural whole-group grace inside
+                # the same five seconds, retaining the existing half-second
+                # reap duration for ordinary signal cleanup if it is needed.
+                natural_end = min(end, time.monotonic() + 0.15)
+                if complete and self._shutdown:
+                    natural_end = max(time.monotonic(), end - 0.5)
+                cleanup["group_reaped"] = wait_group_exit(process, natural_end)
+                if not cleanup["group_reaped"]:
                     try:
                         os.killpg(process.pid, signal.SIGTERM)
                         cleanup["sigterm_sent"] = True
                     except ProcessLookupError:
                         pass
-                while time.monotonic() < end:
-                    process.poll()
-                    if not group_alive(process.pid):
-                        cleanup["group_reaped"] = True
-                        break
-                    time.sleep(0.02)
+                    cleanup["group_reaped"] = wait_group_exit(process, end)
                 if not cleanup["group_reaped"]:
                     forced = cleanup["forced_kill"] = True
                     kill_group(process)

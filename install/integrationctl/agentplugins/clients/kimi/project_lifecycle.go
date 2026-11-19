@@ -68,7 +68,13 @@ func activateKimiProject(ctx context.Context, env clients.Env, r domain.Activati
 		return domain.ActivationOutcome{}, err
 	}
 	layout := kimiComponents(r.Plan.NativeRegistryRoot)
-	out, err := shared.CompleteNativeConfigActivation(ctx, r, shared.NativeConfigActivation{
+	files := r
+	if kimiPureSkillPlan(r.Plan) && shared.IntactNativeReplacement(r, kimiNativeObjects(r.PreviousNativeObjects), kimiNativeObjects(r.Delivery.NativeObjects), func() error {
+		return layout.Verify(kimiNativeObjects(r.Delivery.NativeObjects), false, env.NativeConfig)
+	}) {
+		files.VerifyOnly = true
+	}
+	out, err := shared.CompleteNativeConfigActivation(ctx, files, shared.NativeConfigActivation{
 		Automatic:         r.Plan.InstallIntent == domain.InstallIntentAutomatic,
 		UnavailableAction: "select supported Kimi project components", RepairAction: "repair exact Kimi project entries", RetryAction: "retry Kimi project component installation", CompletedAction: KimiProjectAction,
 		Verify: func() error {
@@ -84,6 +90,7 @@ func activateKimiProject(ctx context.Context, env clients.Env, r domain.Activati
 	})
 	if err == nil && out.Verification == domain.VerificationInstalled {
 		out.Activation, out.ActivationAttested = domain.ActivationPrepared, false
+		return completeKimiSkills(ctx, env, r, out)
 	}
 	return out, err
 }

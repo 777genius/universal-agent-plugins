@@ -6,6 +6,9 @@ import (
 )
 
 func (service Service) preparedSetupVerifierAvailable(input AddInput, plan domain.DeliveryPlan) bool {
+	if input.DryRun && !input.OnlinePreview {
+		return false
+	}
 	classifier, ok := service.Activator.(ports.PreparedSetupClassifier)
 	return ok && classifier.PreparedSetupVerifierAvailable(clonePreparedVerifierClient(input.Client), clonePreparedVerifierPlan(plan), input.BackendExecutable)
 }

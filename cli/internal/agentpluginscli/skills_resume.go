@@ -51,6 +51,11 @@ func skillsReadySetupNeedsRepair(ctx context.Context, adapter *dependencyInstall
 	if _, supported := clients.As[clients.PreparedSetupCompleter](adapter.app.ClientRegistry, domain.ClientID(action.ClientID)); !supported {
 		return false, nil
 	}
+	// Hydrate only this selected Skills observation. The same detected map
+	// reaches accepted recheck, so its exact version need not be probed twice.
+	if err := ensureSelectedProjectVersions(ctx, adapter.app, adapter.opts, []domain.ClientID{domain.ClientID(action.ClientID)}, adapter.detected); err != nil {
+		return false, err
+	}
 	// Capability presence admits only a reviewed repair candidate. After
 	// acceptance the core asks that client to classify the actual fresh native
 	// outcome before any setup effect. A saved Active value is never proof.

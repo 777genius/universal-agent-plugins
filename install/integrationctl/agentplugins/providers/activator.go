@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 
@@ -10,8 +11,10 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
 
 type Activator struct {
@@ -20,6 +23,7 @@ type Activator struct {
 	NativeTransitions   NativeTransitions
 	OpenCodeTransitions ports.OpenCodeTransitionRecorder
 	Runner              ports.CommandRunner
+	NativeHTTP          http.RoundTripper
 	LookupExecutable    func(string) (string, error)
 	NativeConfig        *nativeconfig.Kernel
 	// Registry supplies the client adapters that own lifecycle. It is injected
@@ -50,7 +54,7 @@ func requireNativeConfigKernel(id domain.ClientID, kernel nativeconfig.Kernel, s
 }
 
 func (activator Activator) env(id domain.ClientID) clients.Env {
-	return clients.Env{ProjectRoots: activator.ProjectRoots, UserHome: activator.UserHome, NativeTransitions: activator.NativeTransitions.ForClient(id), OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeConfig: activator.nativeConfigKernel(), LookupExecutable: activator.LookupExecutable}
+	return clients.Env{ProjectRoots: activator.ProjectRoots, UserHome: activator.UserHome, NativeTransitions: activator.NativeTransitions.ForClient(id), OpenCodeTransitions: activator.OpenCodeTransitions, Runner: activator.Runner, NativeHTTP: activator.NativeHTTP, NativeConfig: activator.nativeConfigKernel(), LookupExecutable: activator.LookupExecutable, ParseSkill: conformance.ParseSkill, DecodeSkillFrontmatter: decodeSkillFrontmatter, Snapshots: packagesnapshot.Builder{}}
 }
 
 func (activator Activator) nativeConfigKernel() nativeconfig.Kernel {

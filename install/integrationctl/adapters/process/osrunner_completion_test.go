@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -110,6 +111,131 @@ func TestOSRunnerFiniteProtocolRequiresCleanEOFExit(t *testing.T) {
 			}
 			if mode == "stalled" && !errors.Is(err, context.DeadlineExceeded) {
 				t.Fatalf("completion deadline was not preserved: %v", err)
+			}
+		})
+	}
+}
+
+func TestOSRunnerFiniteProtocolValidatesAfterNaturalEOF(t *testing.T) {
+	if os.Getenv("UAP_FINITE_EOF_VALIDATION_HELPER") == "1" {
+		if line, err := bufio.NewReader(os.Stdin).ReadString('\n'); err != nil || line != "inspect\n" {
+			os.Exit(19)
+		}
+		_, _ = fmt.Fprintln(os.Stdout, "observed")
+		os.Exit(0)
+	}
+	requireOrdinaryPreflight(t)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	validated := false
+	err := (OS{}).RunDuplexToCompletion(ctx, ports.Command{
+		Argv: []string{os.Args[0], "-test.run=^TestOSRunnerFiniteProtocolValidatesAfterNaturalEOF$"},
+		Env:  append(os.Environ(), "UAP_FINITE_EOF_VALIDATION_HELPER=1"),
+	}, func(input io.Writer, output io.Reader) error {
+		if _, err := io.WriteString(input, "inspect\n"); err != nil {
+			return err
+		}
+		body, err := io.ReadAll(output)
+		if err != nil || string(body) != "observed\n" {
+			return fmt.Errorf("finite EOF response differs: %q: %w", body, err)
+		}
+		// A finite server exits after its shutdown acknowledgement. Metadata
+		// validation after EOF must finish before the supervisor closes the pipe.
+		// This bounded work spans the supervisor's existing 5 ms exit poll.
+		time.Sleep(100 * time.Millisecond)
+		validated = true
+		return nil
+	})
+	if err != nil || !validated {
+		t.Fatalf("natural EOF validation did not complete: validated=%t err=%v", validated, err)
+	}
+}
+
+type finiteEOFValidationContainment struct {
+	eof, observed chan struct{}
+	once          sync.Once
+	termination   terminationResult
+}
+
+func (*finiteEOFValidationContainment) attach(*exec.Cmd) error { return nil }
+func (*finiteEOFValidationContainment) close() error           { return nil }
+func (c *finiteEOFValidationContainment) terminate() terminationResult {
+	return c.termination
+}
+func (c *finiteEOFValidationContainment) exited() (bool, error) {
+	select {
+	case <-c.eof:
+		c.once.Do(func() { close(c.observed) })
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func TestOSRunnerFiniteEOFExitBeforeCallbackReturn(t *testing.T) {
+	if mode := os.Getenv("UAP_FINITE_EOF_ORDER_HELPER"); mode != "" {
+		_, _ = fmt.Fprintln(os.Stdout, "observed")
+		if mode == "nonzero" {
+			os.Exit(17)
+		}
+		os.Exit(0)
+	}
+	for _, mode := range []string{"success", "protocol-error", "nonzero", "canceled", "deadline", "forced-descendants", "cleanup-failure", "interactive"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			containment := &finiteEOFValidationContainment{eof: make(chan struct{}), observed: make(chan struct{})}
+			containment.termination = terminationResult{leaderStopped: true}
+			if mode == "forced-descendants" {
+				containment.termination.forcedMembers = true
+			}
+			if mode == "cleanup-failure" {
+				containment.termination.err = errors.New("inert containment cleanup refused")
+			}
+			pipes := defaultDuplexPipeFactory
+			pipes.containment = func(*exec.Cmd) (duplexCommandContainment, error) { return containment, nil }
+			pipes.closure = &duplexClosureProof{}
+			pipes.finishExchangeOnExit = mode != "interactive"
+			validated := false
+			want := errors.New("finite response refused")
+			err := runDuplexMode(ctx, ports.Command{
+				Argv: []string{os.Args[0], "-test.run=^TestOSRunnerFiniteEOFExitBeforeCallbackReturn$"},
+				Env:  append(os.Environ(), "UAP_FINITE_EOF_ORDER_HELPER="+mode),
+			}, func(_ io.Writer, output io.Reader) error {
+				body, readErr := io.ReadAll(output)
+				close(containment.eof)
+				select {
+				case <-containment.observed:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				if readErr != nil || string(body) != "observed\n" {
+					return errors.Join(readErr, want)
+				}
+				validated = true
+				if mode == "deadline" {
+					<-ctx.Done()
+					return ctx.Err()
+				}
+				if mode == "protocol-error" {
+					return want
+				}
+				if mode == "canceled" {
+					cancel()
+				}
+				return nil
+			}, pipes, false)
+			if !validated || (err == nil) != (mode == "success") {
+				t.Fatalf("EOF ordering mode=%s validated=%t err=%v", mode, validated, err)
+			}
+			if mode == "protocol-error" && !errors.Is(err, want) || mode == "canceled" && !errors.Is(err, context.Canceled) {
+				t.Fatalf("original finite failure lost: %s %v", mode, err)
+			}
+			if mode == "deadline" && !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("finite callback deadline lost: %v", err)
+			}
+			if mode == "nonzero" && !strings.Contains(err.Error(), "17") || mode == "interactive" && !strings.Contains(err.Error(), "exited before the exchange completed") {
+				t.Fatalf("native or interactive refusal lost: %s %v", mode, err)
 			}
 		})
 	}

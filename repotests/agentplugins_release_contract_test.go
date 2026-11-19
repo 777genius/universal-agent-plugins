@@ -492,3 +492,45 @@ func yamlJob(t *testing.T, workflow, name string) string {
 	}
 	return job.String()
 }
+
+// Diagnose the first saved Context7 status boundary where 0.1.110 failed,
+// without weakening the exact acceptance predicate or exposing private facts.
+func TestAgentpluginsPublicNPMSavedStatusIsRedactedAndFailClosed(t *testing.T) {
+	job := yamlJob(t, readRepoFile(t, RepoRoot(t), ".github", "workflows", "agentplugins-npm-publish.yml"), "verify-public")
+	mustContain(t, job, `if ! run_agentplugins deps status --format json > "${root}/saved-status.json" 2> "${root}/saved-status-stderr.log"; then`)
+	mustContain(t, job, `if ! jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified" or . == "activation_prepared")'`)
+	mustContain(t, job, `2> "${root}/saved-status-jq-stderr.log"`)
+	mustContain(t, job, `2>> "${root}/saved-status-jq-stderr.log"`)
+	mustContain(t, job, "Saved deps status command failed")
+	mustContain(t, job, "Saved dependency status rejected")
+	for _, safe := range []string{"saved status: recovery=", "facts=", "pin_matches=", "owner_matches=", "flags_permitted="} {
+		mustContain(t, job, safe)
+	}
+	mustNotContain(t, job, `run_agentplugins deps status --format json | jq -e`)
+	mustNotContain(t, job, `cat "${root}/saved-status.json"`)
+	mustAppearBefore(t, job, `sha256sum --check "${root}/repeat-before.sha256"`, "Saved deps status command failed")
+	mustAppearBefore(t, job, "Saved dependency status rejected", `mkdir -p "${root}/transfer/state"`)
+}
+
+// A failed public lifecycle must not hide its last dependency status behind a
+// pipeline or print raw status facts (which can include private source paths).
+func TestAgentpluginsPublicNPMPostRemoveStatusIsRedactedAndFailClosed(t *testing.T) {
+	root := RepoRoot(t)
+	workflow := readRepoFile(t, root, ".github", "workflows", "agentplugins-npm-publish.yml")
+	job := yamlJob(t, workflow, "verify-public")
+	mustContain(t, job, "Post-remove deps status command failed")
+	mustContain(t, job, "Post-remove dependency status rejected")
+	mustContain(t, job, `2> "${root}/post-remove-jq-stderr.log"`)
+	mustContain(t, job, `2>> "${root}/post-remove-jq-stderr.log"`)
+	mustContain(t, job, "post-remove status: recovery=")
+	mustContain(t, job, "digest_agreement=")
+	mustContain(t, job, "facts=")
+	mustContain(t, job, "has_manifest=")
+	mustContain(t, job, "has_lock=")
+	mustContain(t, job, "if ! run_agentplugins deps status --format json >")
+	mustContain(t, job, "2> \"${root}/post-remove-stderr.log\"")
+	mustContain(t, job, "if ! jq -e '.pending_recovery == false and (.facts | length) == 0")
+	mustNotContain(t, job, "run_agentplugins deps status --format json | jq -e")
+	mustNotContain(t, job, "cat ${root}/post-remove-status.json")
+	mustAppearBefore(t, job, "run_agentplugins remove context7", "post-remove-status.json")
+}

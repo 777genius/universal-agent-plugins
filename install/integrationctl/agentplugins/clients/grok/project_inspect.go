@@ -19,8 +19,9 @@ type projectPlugin struct {
 	mcpServers        int64
 }
 type projectInspection struct {
-	version string
-	plugins []projectPlugin
+	version  string
+	plugins  []projectPlugin
+	document map[string]any
 }
 
 func parseProjectInspect(body []byte, project string) (projectInspection, error) {
@@ -48,7 +49,7 @@ func parseProjectInspect(body []byte, project string) (projectInspection, error)
 		return fail()
 	}
 	version, _ := value["grokVersion"].(string)
-	out := projectInspection{version: version}
+	out := projectInspection{version: version, document: value}
 	seen := map[string]bool{}
 	for _, entry := range entries {
 		parsed, err := parseProjectPlugin(entry)
@@ -111,31 +112,39 @@ func parseProjectPlugin(entry any) (projectPlugin, error) {
 	return projectPlugin{name: name, scope: scope, path: path, enabled: enabled, mcpServers: mcpServers}, nil
 }
 func inspectProject(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, owned, requireMCPDiscovery bool) (clients.RegistryFinding, error) {
+	finding, _, err := inspectProjectObservation(ctx, env, client, plan, owned, requireMCPDiscovery)
+	return finding, err
+}
+
+// Both preparation and Skill completion consume this one bounded observation.
+// The legacy 1.0.67 and MCP matching rules remain independent of Skill proof.
+func inspectProjectObservation(ctx context.Context, env clients.Env, client domain.DetectedClient, plan domain.DeliveryPlan, owned, requireMCPDiscovery bool) (clients.RegistryFinding, projectInspection, error) {
 	root, err := grokPlanRoot(client, plan)
 	if err != nil {
-		return clients.RegistryIndeterminate, err
+		return clients.RegistryIndeterminate, projectInspection{}, err
 	}
 	if env.Runner == nil || plan.NativeRegistryExecutable == "" || plan.NativeRegistryExecutable != client.ExecutablePath {
-		return clients.RegistryIndeterminate, fmt.Errorf("pinned Grok project inspect CLI unavailable or differs from detected client")
+		return clients.RegistryIndeterminate, projectInspection{}, fmt.Errorf("pinned Grok project inspect CLI unavailable or differs from detected client")
 	}
 	finding, err := inspectProjectFiles(plan, owned)
 	if err != nil || finding == clients.RegistryCollision {
-		return finding, err
+		return finding, projectInspection{}, err
 	}
 	bounded, cancel := context.WithTimeout(ctx, grokListTimeout)
 	defer cancel()
 	result, err := shared.RunNativeRegistry(bounded, env.Runner, legacyports.Command{Argv: []string{plan.NativeRegistryExecutable, "inspect", "--json"}, Dir: filepath.Dir(root), StdoutLimitBytes: grokListStdoutLimitBytes})
 	if err != nil {
-		return clients.RegistryIndeterminate, err
+		return clients.RegistryIndeterminate, projectInspection{}, err
 	}
 	if result.ExitCode != 0 || len(result.Stderr) != 0 {
-		return clients.RegistryIndeterminate, fmt.Errorf("grok project inspect failed or emitted stderr")
+		return clients.RegistryIndeterminate, projectInspection{}, fmt.Errorf("grok project inspect failed or emitted stderr")
 	}
 	native, err := parseProjectInspect(result.Stdout, filepath.Dir(root))
 	if err != nil {
-		return clients.RegistryIndeterminate, err
+		return clients.RegistryIndeterminate, projectInspection{}, err
 	}
-	return matchProjectInspection(native, plan, finding, owned, requireMCPDiscovery)
+	finding, err = matchProjectInspection(native, plan, finding, owned, requireMCPDiscovery)
+	return finding, native, err
 }
 
 // matchProjectInspection classifies the native inventory independently of invoking the pinned CLI.

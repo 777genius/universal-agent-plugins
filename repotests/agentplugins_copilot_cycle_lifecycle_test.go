@@ -162,6 +162,12 @@ func TestAgentpluginsCopilotNativeProjectCompleteCycle(t *testing.T) {
 	if !t.Run("remembered_project_trust", testCopilotProjectTrustInstallation) {
 		t.Fatal("Copilot project trust installation did not pass")
 	}
+	if !t.Run("whole_plugin_native_project", testCopilotNativeWholePluginProject) {
+		t.Fatal("Copilot whole-plugin project native registration did not pass")
+	}
+	if !t.Run("raw_skills_native_project", testCopilotNativeRawProjectSkills) {
+		t.Fatal("Copilot raw Skills public native journey did not pass")
+	}
 	f := newCopilotProjectAttempt(t)
 	c := newCopilotProjectCycle(f)
 	defer c.finish(t)

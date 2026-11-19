@@ -33,6 +33,16 @@ class WindsurfCycleContracts(unittest.TestCase):
         self.assertEqual(len(self.commands),len(cycle.STAGES))
         self.assertTrue(all(len(raw)<=1<<20 for raw in self.bodies().values()))
 
+    def test_previous_native_pin_cannot_supply_current_cycle_evidence(self):
+        self.result["version"] = "3000.11.205"
+        with self.assertRaises(ValueError):
+            self.admit()
+        self.result["version"] = "3000.12.57"
+        command = next(row["value"] for row in self.commands if row["stage"] == "version")
+        command["stdout"] = wire(b"devin 3000.11.205 (6dea39440ae3)\n")
+        with self.assertRaises(ValueError):
+            self.admit()
+
     def test_add_public_scope_and_native_action_are_exact(self):
         # The A/B fixture uses private identifiers; the public DTO must say "project".
         baseline=copy.deepcopy(self.commands)
@@ -235,7 +245,7 @@ class WindsurfCycleContracts(unittest.TestCase):
         diagnostic = {
             "diagnostic_only": True, "accepted": False, "stage": stage,
             "root_sha256": cycle.sha((self.result["component_layout"]["root"] + "/xdg-cache/devin").encode()),
-            "native_binary_sha256": "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4",
+            "native_binary_sha256": "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d",
             "started_at": cmd["started_at"], "ended_at": cmd["ended_at"],
             "changed_records": 1,
             "records": [{"key_sha256": cycle.sha(b"cli/private"), "parent_sha256": cycle.sha(b"cli"),
@@ -259,6 +269,38 @@ class WindsurfCycleContracts(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 self.admit()
             row[field] = original
+        fact = {"bytes": 1, "sha256": "a"*64,
+                "format": "json-object", "top_level_type_counts": {"string": 1, "object": 1}}
+        row["file_observation"] = fact
+        self.assertEqual(self.admit(), self.result)
+        for field, invalid in (("bytes", True), ("bytes", 2), ("sha256", "b"*64),
+                               ("format", "raw"), ("format", "opaque"),
+                               ("top_level_type_counts", {"SECRET_KEY_DO_NOT_EXPORT": 1}),
+                               ("top_level_type_counts", {"string": "SECRET_VALUE"}),
+                               ("top_level_type_counts", {"string": 0}),
+                               ("top_level_type_counts", {"string": 33}),
+                               ("top_level_type_counts", {"string": 32, "object": 1})):
+            original = fact[field]
+            fact[field] = invalid
+            with self.subTest(fact=field, invalid=invalid), self.assertRaises(ValueError):
+                self.admit()
+            fact[field] = original
+        for key, invalid in (("relative_path", "cli/SECRET_FILENAME_DO_NOT_EXPORT"), ("top_level_schema", {"SECRET_KEY_DO_NOT_EXPORT": "string"}), ("raw_body", "SECRET_VALUE"), ("header", "SECRET_VALUE")):
+            fact[key] = invalid
+            with self.subTest(extra=key), self.assertRaises(ValueError):
+                self.admit()
+            del fact[key]
+        for field, invalid in (("parent_sha256", "b"*64), ("operation", "changed")):
+            original = row[field]
+            row[field] = invalid
+            with self.subTest(row=field), self.assertRaises(ValueError):
+                self.admit()
+            row[field] = original
+        original_size = file["Size"]
+        file["Size"] = fact["bytes"] = (1 << 20) + 1
+        with self.assertRaises(ValueError):
+            self.admit()
+        file["Size"] = fact["bytes"] = original_size
         self.result["runtime_attempt_complete"] = True
         with self.assertRaises(ValueError):
             self.admit()

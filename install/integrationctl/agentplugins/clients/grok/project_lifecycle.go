@@ -86,8 +86,12 @@ func activateProject(ctx context.Context, env clients.Env, request domain.Activa
 	if request.Delivery.ClientID != domain.ClientGrok || request.Delivery.ActivePath != request.Plan.ActivePath || request.Delivery.OwnedBase != request.Plan.TargetRoot || request.DeclaredName != request.Plan.DeclaredName {
 		return outcome, fmt.Errorf("grok project delivered identity differs from plan")
 	}
-	finding, err := inspectProject(ctx, env, request.Client, request.Plan, true, true)
+	proof := captureProjectSkills(ctx, env, request)
+	finding, native, err := inspectProjectObservation(ctx, env, request.Client, request.Plan, true, true)
 	if err != nil {
+		if domain.IsUnclosedClientProbe(err) {
+			outcome.NativeEffect = domain.NativeEffectUncertain
+		}
 		return outcome, err
 	}
 	if finding != clients.RegistryExpected {
@@ -96,7 +100,7 @@ func activateProject(ctx context.Context, env clients.Env, request domain.Activa
 	if request.ConfirmPluginEnable && !request.VerifyOnly {
 		return enableProject(ctx, env, request, outcome)
 	}
-	return outcome, nil
+	return completeProjectSkills(ctx, proof, native, outcome)
 }
 func deactivateProject(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()

@@ -64,6 +64,7 @@ type ComponentDecision struct {
 
 type DeliveryPlan struct {
 	requiresNativeProjectionRefresh bool
+	nativePluginRegistration        bool
 
 	TargetContext              TargetContext           `json:"-"`
 	profileAuthority           *ProfileAuthority       `json:"-"`
@@ -109,6 +110,13 @@ type DeliveryPlan struct {
 	TargetRoot   string `json:"-"`
 	ActivePath   string `json:"-"`
 }
+
+// SetNativePluginRegistration selects transient native project registration without
+// changing public DTOs or the planner's recorded golden snapshots.
+func (p *DeliveryPlan) SetNativePluginRegistration(yes bool) { p.nativePluginRegistration = yes }
+
+// HasNativePluginRegistration is an in-memory scoped plan choice, never a persisted capability flag.
+func (p DeliveryPlan) HasNativePluginRegistration() bool { return p.nativePluginRegistration }
 
 // DeliveryTarget contains deterministic operational paths computed from the
 // configured client roots. Persisted state must be checked against this value
@@ -176,15 +184,18 @@ type ActivationRequest struct {
 }
 
 type ActivationOutcome struct {
-	LocalEntryObservation  *LocalEntryObservation `json:"-"`
-	Activation             ActivationState        `json:"activation"`
-	Authentication         AuthenticationState    `json:"authentication"`
-	Policy                 PolicyState            `json:"policy"`
-	Verification           VerificationState      `json:"verification"`
-	UserActions            []string               `json:"user_actions,omitempty"`
-	LocalActions           []string               `json:"-"`
-	ActivationAttested     bool                   `json:"activation_attested,omitempty"`
-	AuthenticationAttested bool                   `json:"authentication_attested,omitempty"`
+	LocalEntryObservation *LocalEntryObservation `json:"-"`
+	Activation            ActivationState        `json:"activation"`
+	Authentication        AuthenticationState    `json:"authentication"`
+	Policy                PolicyState            `json:"policy"`
+	Verification          VerificationState      `json:"verification"`
+	UserActions           []string               `json:"user_actions,omitempty"`
+	// CompletedUserActions identifies verified informational entries retained
+	// in UserActions for disclosure. It never changes lifecycle or saved state.
+	CompletedUserActions   []string `json:"-"`
+	LocalActions           []string `json:"-"`
+	ActivationAttested     bool     `json:"activation_attested,omitempty"`
+	AuthenticationAttested bool     `json:"authentication_attested,omitempty"`
 	// AuthoritativeObservation marks recognized negative verifier evidence.
 	// It is transient control-plane metadata and is never persisted as state.
 	AuthoritativeObservation bool `json:"-"`
