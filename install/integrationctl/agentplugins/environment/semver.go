@@ -5,51 +5,124 @@ import (
 	"regexp"
 	"strings"
 
-	"golang.org/x/mod/semver"
+	semver "github.com/Masterminds/semver/v3"
+	modsemver "golang.org/x/mod/semver"
 )
 
-var stableVersion = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$`)
-var caretVersion = regexp.MustCompile(`^\^(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(0|[1-9]\d*))?$`)
+// Stable releases retain their existing exact version contract. Graph downgrade
+// checks use this strict expression even when a constraint explicitly includes
+// a prerelease.
+var (
+	stableVersion          = regexp.MustCompile(`^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$`)
+	forbiddenVersionPrefix = regexp.MustCompile(`(^|[[:space:],|<>=~^])v\d`)
+	// Masterminds accepts coerced numeric operands such as 1.02.3; a package
+	// selector must not silently resolve such a value to a different version.
+	versionOperand = regexp.MustCompile(`(^|[[:space:],|<>=~^])(\d+(?:\.\d+){0,2})`)
+	// Match a complete comparator operand, never a version-like substring
+	// inside a prerelease or a +build metadata identifier.
+	prereleaseConstraintOperand = regexp.MustCompile(`(^|[[:space:],|<>=~^])(\d+\.\d+\.\d+-[0-9A-Za-z.-]+(?:\+[0-9A-Za-z.-]+)?)`)
+)
 
-func validateVersionSelector(selector Selector) error {
-	valid := selector.Kind == SelectorVersion && stableVersion.MatchString(selector.Value)
-	valid = valid || selector.Kind == SelectorRange && caretVersion.MatchString(selector.Value)
-	if !valid {
-		return fmt.Errorf("invalid stable version selector %q", selector.Value)
+// ParseRegistryVersionSelector is the single parser/classifier for registry
+// version requirements. Exact versions remain exact; partial versions and
+// comparators are ranges. Neither path silently coerces a leading "v".
+func ParseRegistryVersionSelector(value string) (Selector, error) {
+	selector := Selector{Kind: SelectorRange, Value: value}
+	if isCanonicalExactVersion(value) {
+		selector.Kind = SelectorVersion
 	}
-	return nil
+	return selector, selector.Validate()
 }
 
-// CompareVersions compares stable package versions numerically.
-func CompareVersions(a, b string) int { return semver.Compare("v"+a, "v"+b) }
+func isCanonicalExactVersion(value string) bool {
+	if value == "" || strings.TrimSpace(value) != value || strings.HasPrefix(value, "v") {
+		return false
+	}
+	version, err := semver.StrictNewVersion(value)
+	return err == nil && version.String() == value
+}
 
-// SelectorMatchesVersion applies the supported exact/caret stable syntax.
+// Masterminds accepts coerced numeric operands such as 1.02.3. Restrict
+// that guard to SemVer's core numbers; build metadata like +build.001 is valid.
+func hasCoercedCoreNumerics(expression string) bool {
+	for _, operand := range versionOperand.FindAllStringSubmatch(expression, -1) {
+		for _, part := range strings.Split(operand[2], ".") {
+			if len(part) > 1 && part[0] == '0' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func validateVersionSelector(selector Selector) error {
+	if selector.Value == "" || strings.TrimSpace(selector.Value) != selector.Value ||
+		forbiddenVersionPrefix.MatchString(selector.Value) ||
+		hasCoercedCoreNumerics(selector.Value) {
+		return fmt.Errorf("invalid version selector %q", selector.Value)
+	}
+	switch selector.Kind {
+	case SelectorVersion:
+		if isCanonicalExactVersion(selector.Value) {
+			return nil
+		}
+	case SelectorRange:
+		if _, err := semver.NewConstraint(selector.Value); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid version selector %q", selector.Value)
+}
+
+// CompareVersions keeps stable numeric ordering and prerelease ordering
+// delegated to an existing vetted semver implementation.
+func CompareVersions(a, b string) int {
+	return modsemver.Compare("v"+a, "v"+b)
+}
+
+// SelectorMatchesVersion applies the same parsed constraint grammar to registry
+// candidate selection, pin reuse and lock replay. A candidate must be a strict,
+// canonical SemVer version even if the library permits input coercion.
 func SelectorMatchesVersion(selector Selector, version string) bool {
-	if !stableVersion.MatchString(version) || validateVersionSelector(selector) != nil {
+	if validateVersionSelector(selector) != nil || !isCanonicalExactVersion(version) {
 		return false
 	}
-	if selector.Kind == SelectorVersion {
-		return version == selector.Value
-	}
-	parts := strings.Split(strings.TrimPrefix(selector.Value, "^"), ".")
-	lower := strings.Join(parts, ".")
-	if len(parts) == 2 {
-		lower += ".0"
-	}
-	if CompareVersions(version, lower) < 0 {
+	// SemVer build metadata does not participate in constraint equality.
+	// Exact bytes are still pinned by signed release identity and lock digests.
+	constraint, err := semver.NewConstraint(selector.Value)
+	if err != nil {
 		return false
 	}
-	got := strings.Split(version, ".")
-	if parts[0] != "0" {
-		return got[0] == parts[0]
-	}
-	if got[0] != "0" || got[1] != parts[1] {
+	candidate, err := semver.StrictNewVersion(version)
+	if err != nil || !constraint.Check(candidate) {
 		return false
 	}
-	if parts[1] == "0" && len(parts) == 3 {
-		return got[2] == parts[2]
+	// Masterminds permits *any* prerelease in a comparator group containing a
+	// prerelease. npm semver permits only prereleases of the explicitly named
+	// major.minor.patch tuple. The extra guard prevents unrequested upgrades.
+	if candidate.Prerelease() != "" {
+		return prereleaseMatchesNamedTuple(selector.Value, candidate)
 	}
 	return true
+}
+
+// Keep this compatibility rule narrow: the library still parses and evaluates
+// every constraint. Only the npm prerelease eligibility rule is enforced here.
+func prereleaseMatchesNamedTuple(expression string, candidate *semver.Version) bool {
+	for _, group := range strings.Split(expression, "||") {
+		selected, err := semver.NewConstraint(group)
+		if err != nil || !selected.Check(candidate) {
+			continue
+		}
+		for _, operand := range prereleaseConstraintOperand.FindAllStringSubmatch(group, -1) {
+			named, err := semver.StrictNewVersion(operand[2])
+			if err == nil && named.Major() == candidate.Major() &&
+				named.Minor() == candidate.Minor() && named.Patch() == candidate.Patch() {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func registrySelectorMatches(selector Selector, pkg LockedPackage) bool {

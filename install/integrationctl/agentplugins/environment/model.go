@@ -98,7 +98,9 @@ type Requirement struct {
 type Requirements struct {
 	SchemaVersion int                    `json:"schema_version"`
 	Dependencies  map[string]Requirement `json:"dependencies"`
-	Targets       map[string][]string    `json:"targets"`
+	// Development marks local-only direct dependencies in the same graph.
+	Development map[string]bool     `json:"development,omitempty"`
+	Targets     map[string][]string `json:"targets"`
 }
 
 type LockedSource struct {
@@ -313,6 +315,9 @@ func (requirements Requirements) Validate() error {
 		}
 		sources[key] = alias
 	}
+	if err := requirements.validateDevelopmentAliases(); err != nil {
+		return err
+	}
 	assigned := map[string]bool{}
 	for target, aliases := range requirements.Targets {
 		if strings.TrimSpace(target) == "" {
@@ -333,6 +338,20 @@ func (requirements Requirements) Validate() error {
 	for alias := range requirements.Dependencies {
 		if !assigned[alias] {
 			return fmt.Errorf("alias %q has no target assignment", alias)
+		}
+	}
+	return nil
+}
+
+// validateDevelopmentAliases keeps the root-only classification invariant
+// separate from graph and target validation.
+func (requirements Requirements) validateDevelopmentAliases() error {
+	for alias, present := range requirements.Development {
+		if !present {
+			return fmt.Errorf("development alias %q must be true", alias)
+		}
+		if _, declared := requirements.Dependencies[alias]; !declared {
+			return fmt.Errorf("development alias %q is not declared", alias)
 		}
 	}
 	return nil
@@ -363,7 +382,9 @@ func (requirement Requirement) SourceKey() (string, error) {
 type manifestIntent struct {
 	SchemaVersion int                  `json:"schema_version"`
 	Dependencies  []manifestDependency `json:"dependencies"`
-	Targets       []manifestTarget     `json:"targets"`
+	// Omitted for historical locks: old fingerprint bytes remain unchanged.
+	Development []string         `json:"development,omitempty"`
+	Targets     []manifestTarget `json:"targets"`
 }
 
 type manifestDependency struct {
@@ -401,6 +422,7 @@ func ManifestDigest(requirements Requirements) (string, error) {
 		}
 		intent.Dependencies = append(intent.Dependencies, item)
 	}
+	intent.Development = append(intent.Development, sortedKeys(requirements.Development)...)
 	for _, target := range sortedKeys(requirements.Targets) {
 		aliases := append([]string(nil), requirements.Targets[target]...)
 		sort.Strings(aliases)

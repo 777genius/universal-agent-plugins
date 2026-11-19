@@ -1,4 +1,4 @@
-import type { ClientID, RegistryPlugin } from '../types/registry.ts';
+import type { ClientID, InstallScope, RegistryPlugin } from '../types/registry.ts';
 import type { InstallTargetID } from '../data/installTargets.ts';
 import { pluginInstallAvailability } from './pluginInstallAvailability.ts';
 
@@ -6,6 +6,7 @@ import { pluginInstallAvailability } from './pluginInstallAvailability.ts';
 export function agentInstallExample(
   plugins: readonly RegistryPlugin[],
   client: ClientID,
+  scope: InstallScope = 'user',
 ): { plugin: RegistryPlugin; target: InstallTargetID } | undefined {
   const targets: InstallTargetID[] = client === 'chatgpt' ? ['chatgpt', 'chatgptweb'] : [client];
   const ordered = [
@@ -14,7 +15,7 @@ export function agentInstallExample(
   ];
   for (const plugin of ordered) {
     for (const target of targets) {
-      if (pluginInstallAvailability(plugin, [target], 'user')) return { plugin, target };
+      if (pluginInstallAvailability(plugin, [target], scope)) return { plugin, target };
     }
   }
   return undefined;

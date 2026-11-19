@@ -103,7 +103,26 @@ func TestPagesSite_CombinesLandingRootAndDocsSubpath(t *testing.T) {
 	}
 	pluginDetailPage := string(pluginDetailPageBody)
 	mustContain(t, pluginDetailPage, `sourceUrl(plugin)`)
-	mustContain(t, pluginDetailPage, `:aria-label="t('registryUi.detail.backToPluginDirectory')"`)
+	mustContain(t, pluginDetailPage, `<DetailBreadcrumbs`)
+	mustContain(t, pluginDetailPage, `:back-to="localePath('/plugins/')"`)
+	mustContain(t, pluginDetailPage, `:back-label="t('registryUi.detail.backToPluginDirectory')"`)
+	mustContain(t, pluginDetailPage, `:label="t('registryUi.detail.breadcrumb')"`)
+	mustContain(t, pluginDetailPage, `:parents="[{ label: t('registryUi.detail.plugins'), to: localePath('/plugins/') }]"`)
+	mustContain(t, pluginDetailPage, `:current="plugin.display_name"`)
+
+	// The shared component owns the accessible links and RTL arrow; the page
+	// still supplies its localized destination, labels and current plugin.
+	breadcrumbsBody, err := os.ReadFile(filepath.Join(root, "landing", "components", "registry", "DetailBreadcrumbs.vue"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	breadcrumbs := string(breadcrumbsBody)
+	mustContain(t, breadcrumbs, `<NuxtLink :to="backTo" :aria-label="backLabel"`)
+	mustContain(t, breadcrumbs, `<nav class="breadcrumbs" :aria-label="label">`)
+	mustContain(t, breadcrumbs, `<NuxtLink :to="parent.to">{{ parent.label }}</NuxtLink>`)
+	mustContain(t, breadcrumbs, `<span aria-current="page">{{ current }}</span>`)
+	mustContain(t, breadcrumbs, `.detail-navigation:dir(rtl) .detail-navigation__back`)
+	mustContain(t, breadcrumbs, `transform: scaleX(-1);`)
 
 	docsConfigBody, err := os.ReadFile(filepath.Join(root, "website", ".vitepress", "config", "shared.ts"))
 	if err != nil {
