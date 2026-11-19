@@ -42,6 +42,7 @@ jobs:
       GOTOOLCHAIN: local
       GOFLAGS: -buildvcs=false -p=1
     permissions:
+      actions: read
       checks: read
       contents: read
       pull-requests: read
@@ -108,6 +109,20 @@ jobs:
               exit 1
             fi
           }
+          # Individual checks on a merged PR head can be reused, but an
+          # incomplete or failed full Required main-push run on the frozen
+          # tagged commit must never become release publication authority.
+          required_runs="$(gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${COMMIT}&event=push&per_page=100")"
+          if ! jq -e --arg sha "${COMMIT}" '
+            any(.[]?.workflow_runs[]?;
+              .name == "Required" and .event == "push"
+              and .head_branch == "main" and .head_sha == $sha
+              and .status == "completed" and .conclusion == "success")' \
+            <<<"${required_runs}" >/dev/null; then
+            echo "frozen commit lacks successful full Required main-push workflow" >&2
+            exit 1
+          fi
           require_check dependency-review
           require_check skills-picker
           for name in \
