@@ -2289,6 +2289,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
              signed_release_pins, audits, client_version, *, historical_baseline=False):
+    native_target = audit_client_id(target, kind)
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
     project = case_root / "project"

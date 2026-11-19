@@ -182,7 +182,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn("actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", toolchain)
         self.assertIn("          go-version: '1.26.10'\n          cache: false\n", toolchain)
         self.assertEqual(gate.removeprefix(condition).strip(),
-                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestKiroCycle|TestGeminiPublicCompletionRequiresBothExactFreshInventoryPhases$|TestGeminiPublicCompletionPhasesMatchOperations$|TestGeminiRepeatedPublicCompletionRequiresFourExactFreshInventoryPhases$|TestKiroCycle)'")
+                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestKiroCycle|TestGeminiPublicCompletionRequiresBothExactFreshInventoryPhases$|TestGeminiPublicCompletionPhasesMatchOperations$|TestGeminiRepeatedPublicCompletionRequiresFourExactFreshInventoryPhases$)'")
         self.assertIn("    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n", contracts)
         self.assertNotIn("AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED", contracts)
         self.assertIn("    needs: contracts\n", native)
