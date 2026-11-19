@@ -62,7 +62,8 @@ def checked_list(cli, env, project):
     return [item.get("name") for item in rows if isinstance(item, dict)]
 
 
-def checked_plugin(cli, env, project, path, manifest, enabled=None):
+def checked_plugin(cli, env, project, path, manifest, enabled=None, *,
+                   skills=("native-smoke",), servers=("native-http", "native-stdio")):
     """Observe the exact physical artifact, never a same-name registration."""
     rows = json.loads(run(cli, "plugin", "list", "--json", env=env, cwd=project))
     if not isinstance(rows, list):
@@ -79,7 +80,7 @@ def checked_plugin(cli, env, project, path, manifest, enabled=None):
         raise AssertionError("Native inventory omitted boolean enablement")
     if enabled is not None and row["enabled"] is not enabled:
         raise AssertionError("Native enablement readback differs from requested state")
-    if row.get("skills") != ["native-smoke"] or sorted(row.get("mcpServers", [])) != ["native-http", "native-stdio"]:
+    if row.get("skills") != list(skills) or sorted(row.get("mcpServers", [])) != list(servers):
         raise AssertionError("Native inventory did not discover the selected components")
     return row
 
@@ -224,6 +225,127 @@ def assert_native_mcp(plugin, fixture_root):
         raise AssertionError("Native Streamable HTTP URL or headers were not preserved")
     if "${PLUGIN_" in json.dumps(config):
         raise AssertionError("A client-managed placeholder remained in native MCP configuration")
+
+
+def raw_skill_binding(state_root, native_root, scope, item):
+    """Join the public raw source pin to its exact owned native bundle."""
+    state = json.loads((state_root / "state-v2.json").read_text(encoding="utf-8"))
+    selected = [(installation, binding) for installation in state["installations"]
+                for binding in installation["clients"].values()
+                if binding["client_id"] == "antigravity" and binding["scope"] == scope]
+    if len(selected) != 1:
+        raise AssertionError("Raw Skill did not retain exactly one selected binding")
+    installation, binding = selected[0]
+    path = native_root / "plugins" / binding["physical_artifact_id"]
+    if (path.parent != native_root / "plugins" or binding["target_locator"] != str(path) or path.is_symlink()
+            or path.resolve(strict=True) != path or not path.is_dir()
+            or binding["materialization"] != "materialized" or binding["activation"] != "prepared"
+            or binding["verification"] != "installation_verified" or binding["policy"] != "allowed"):
+        raise AssertionError("Raw Skill binding changed native scope or claimed activation")
+    owned = [obj for obj in binding.get("native_objects", [])
+             if obj.get("kind") == "managed_package_directory" and obj.get("path") == str(path)
+             and obj.get("managed_digest") and obj.get("protection_class") == "managed"]
+    if len(owned) != 1:
+        raise AssertionError("Raw Skill native path lacks its exact ownership receipt")
+    intent = state_root.parent if scope == "project" else state_root
+    packages = [package for package in json.loads((intent / "uap.lock").read_text(encoding="utf-8"))["packages"]
+                if package.get("alias") == item["name"]]
+    if len(packages) != 1:
+        raise AssertionError("Raw Skill lock omitted its exact alias")
+    package = packages[0]
+    source = package["source"]["git"]
+    if (source.get("kind") != "skill" or source.get("skill") != item["name"]
+            or source.get("repository") != item["repo"] or source.get("commit") != item["ref"]
+            or source.get("resolved_skill_path") != "skills/" + item["folder"]
+            or package["targets"] != ["antigravity"]
+            or installation["source"]["resolved_revision"] != item["ref"]):
+        raise AssertionError("Raw Skill immutable source or scope pin differs")
+    skill = path / "skills" / item["name"] / "SKILL.md"
+    body = skill.read_bytes()
+    if skill.is_symlink() or hashlib.sha1(b"blob " + str(len(body)).encode() + b"\0" + body).hexdigest() != item["skill_md_git_blob_sha1"]:
+        raise AssertionError("Raw Skill bytes differ from the existing immutable fixture pin")
+    return installation, binding, path
+
+
+def checked_raw_skill_result(body, scope, *, repeated=False):
+    result = json.loads(body)
+    items = result.get("items", [])
+    if (type(result.get("schema_version")) is not int or result["schema_version"] != 1
+            or result.get("command") != "skills add" or result.get("result") != "success"
+            or result.get("status") != "succeeded" or result.get("scope") != scope
+            or result.get("readiness") != "needs_action" or len(items) != 1
+            or items[0].get("alias") != "frontend-design" or items[0].get("targetId") != "antigravity"
+            or items[0].get("status") != ("unchanged" if repeated else "succeeded")
+            or not result.get("next_actions")):
+        raise AssertionError("Raw Skills public result lost its selected Prepared boundary")
+
+
+def raw_skills_lifecycle(agy, uap, root, executable_dir, protected):
+    """Use the existing full-30 public Git source; never execute its Skill."""
+    fixtures = json.loads((Path(__file__).resolve().parents[2] / "tests/live-install/fixtures.json")
+                          .read_text(encoding="utf-8"))
+    item = next(row for row in fixtures["skills"] if row["name"] == "frontend-design")
+    if (item["repo"], item["ref"], item["skill_md_git_blob_sha1"]) != (
+            "anthropics/skills", "ca45fc496a3436251f191354091d557da31c15b5",
+            "a5333457c414d20d625f307df945842c0952ecc3"):
+        raise AssertionError("Raw Skill fixture is no longer the reviewed immutable source")
+    original = {path: protected_snapshot(path) for path in protected}
+    for scope in ("user", "project"):
+        case = root / ("raw-skills-" + scope)
+        env = profile(case, executable_dir)
+        # Select only this case's ordinary supported UAP state/cache authority.
+        env["AGENTPLUGINS_HOME"] = str(case / "state")
+        project, other = case / "project-a", case / "project-b"
+        for path in (project, other):
+            path.mkdir()
+        global_root = Path(env["HOME"]) / ".gemini/config"
+        native_root = global_root if scope == "user" else project / ".agents"
+        foreign = global_root / "plugins/foreign-raw-control"
+        foreign.mkdir(parents=True)
+        (foreign / "plugin.json").write_text(json.dumps({"name": foreign.name, "version": "1.0.0"}), encoding="utf-8")
+        (other / "sentinel").write_text("unselected project\n", encoding="utf-8")
+        foreign_before, other_before = protected_snapshot(foreign), protected_snapshot(other)
+        baseline = json.loads(run(agy, "plugin", "list", "--json", env=env, cwd=project))
+        global_before = protected_snapshot(global_root)
+        flags = ["--scope", scope, "--target", "antigravity", "--yes", "--format", "json"]
+        if scope == "project":
+            flags += ["--project-root", str(project)]
+        args = ["skills", "add", item["source"], "--skill", item["name"], "--no-ui", *flags]
+        state_root = project / ".uap" if scope == "project" else case / "state"
+        intent_root = project if scope == "project" else state_root
+        checked_raw_skill_result(run(uap, *args, env=env, cwd=project), scope)
+        installation, binding, bundle = raw_skill_binding(state_root, native_root, scope, item)
+        manifest = json.loads((bundle / "plugin.json").read_text(encoding="utf-8"))
+        before = protected_snapshot(bundle)
+        intent = tuple((intent_root / name).read_bytes() for name in ("uap.toml", "uap.lock"))
+        for repeated in (False, True):
+            if repeated:
+                checked_raw_skill_result(run(uap, *args, env=env, cwd=project), scope, repeated=True)
+                after, selected, same_bundle = raw_skill_binding(state_root, native_root, scope, item)
+                if (after["installation_id"] != installation["installation_id"]
+                        or after["source"] != installation["source"] or selected != binding
+                        or same_bundle != bundle or protected_snapshot(bundle) != before
+                        or intent != tuple((intent_root / name).read_bytes() for name in ("uap.toml", "uap.lock"))):
+                    raise AssertionError("Raw same-argv repeat replaced identity, pin, intent or native payload")
+            if scope == "user":
+                checked_plugin(agy, env, project, bundle, manifest, skills=(item["name"],), servers=())
+            elif json.loads(run(agy, "plugin", "list", "--json", env=env, cwd=project)) != baseline:
+                raise AssertionError("Project raw Skill was copied into global User inventory")
+        removed = json.loads(run(uap, "remove", item["name"], *flags, env=env, cwd=project))
+        if (removed.get("command") != "agentplugins remove" or removed.get("result") != "success"
+                or removed.get("outcome") != "completed" or bundle.exists()):
+            raise AssertionError("Raw Skill public removal did not remove only its owned bundle")
+        state = json.loads((state_root / "state-v2.json").read_text(encoding="utf-8"))
+        if any(binding["client_id"] == "antigravity" for row in state["installations"]
+               for binding in row["clients"].values()):
+            raise AssertionError("Raw Skill removal retained its selected active client binding")
+        if json.loads(run(agy, "plugin", "list", "--json", env=env, cwd=project)) != baseline:
+            raise AssertionError("Native inventory retained the removed raw Skill or changed foreign entries")
+        if (protected_snapshot(foreign) != foreign_before or protected_snapshot(other) != other_before
+                or scope == "project" and protected_snapshot(global_root) != global_before
+                or any(protected_snapshot(path) != before for path, before in original.items())):
+            raise AssertionError("Raw Skill lifecycle changed a foreign or original mixed scope")
+        print(f"PASS: raw public {scope} Skills add/repeat/remove; same IID/binding/pin; Prepared; no IDE activation", flush=True)
 
 
 def main():
@@ -551,6 +673,9 @@ def main():
             raise AssertionError("UAP removal modified a foreign User plugin")
         if tree_snapshot(source) != source_snapshot:
             raise AssertionError("Native lifecycle changed the verified portable source")
+        raw_skills_lifecycle(agy, uap, root, executable_dir,
+                             (source, project, project_b, Path(user_env["HOME"]),
+                              Path(vendor_env["HOME"]), Path(user_native_env["HOME"])))
         print("PASS: real agy strict validation of Skills + stdio/HTTP MCP, separate CLI "
               "import/list/uninstall; UAP User/Project add/remove, idempotent update, "
               "partial-drift refusal and exact absent-bundle repair. Foreign User state "
