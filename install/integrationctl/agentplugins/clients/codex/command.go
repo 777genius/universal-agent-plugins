@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 
@@ -50,8 +51,9 @@ func codexCommand(root, executable string, ambient []string, args ...string) (le
 
 // Keep only process basics needed by the native executable and its downloads.
 // In particular, do not inherit loader, language-runtime, proxy or Codex knobs.
-// Validate even discarded entries, with case-folding to reject ambiguity on
-// Windows as well as Unix. Sorting makes the child environment deterministic.
+// Validate every entry. Retained and reserved names are case-insensitive;
+// discarded Unix names keep their native case-sensitive identity. Windows
+// names are all case-insensitive. Sorting keeps the child deterministic.
 func codexEnvironment(root string, ambient []string) ([]string, error) {
 	if err := validateProfile(root, ""); err != nil {
 		return nil, err
@@ -67,13 +69,17 @@ func codexEnvironment(root string, ambient []string) ([]string, error) {
 		}
 		key, value, ok := strings.Cut(entry, "=")
 		canonical := strings.ToUpper(key)
-		if !ok || key == "" || strings.ContainsRune(entry, 0) || seen[canonical] {
+		identity := key
+		if runtime.GOOS == "windows" || keep[canonical] || canonical == "CODEX_HOME" {
+			identity = canonical
+		}
+		if !ok || key == "" || strings.ContainsRune(entry, 0) || seen[identity] {
 			return nil, fmt.Errorf("malformed or duplicate Codex environment entry")
 		}
 		if !validCodexEnvironmentName(key) {
 			return nil, fmt.Errorf("malformed Codex environment name")
 		}
-		seen[canonical] = true
+		seen[identity] = true
 		if keep[canonical] {
 			result = append(result, canonical+"="+value)
 		}
