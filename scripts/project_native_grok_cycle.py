@@ -180,7 +180,7 @@ def binding(value, ins, scope, revision, digest, paths, nonce):
     required = set("client_binding_id client_id scope target_locator physical_artifact_id materialization activation authentication policy verification package_revision affected_surfaces native_profile_root native_objects receipts updated_at".split())
     require(type(value) is dict and set(value) == required)
     expected = {"client_binding_id": bid, "client_id": "grok", "scope": "project", "target_locator": active, "physical_artifact_id": physical,
-        "materialization": "materialized", "activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "package_validated", "affected_surfaces": ["grok"],
+        "materialization": "materialized", "activation": "active", "authentication": "not_required", "policy": "allowed", "verification": "installation_verified", "affected_surfaces": ["grok"],
         "native_profile_root": paths["project_" + scope] + "/.grok", "package_revision": {"version": "1.0.0", "tree_digest": digest, "manifest_digest": ins["package"]["manifest_digest"]}}
     require(all(same(value[key], item) for key, item in expected.items()))
     managed = tree_digest(projected(scope, revision, nonce), False)
@@ -349,15 +349,9 @@ def public_result(raw, stage, verb, selected):
     name, digest = "uap-grok-cycle-" + scope, selected["source_digest"]
     data = row["data"]
     if stage == "repeat-add-a":
-        required = {"plugin", "scope", "version", "source", "tree_digest", "manifest_digest", "dry_run", "result", "readiness", "next_action", "next_actions"}
+        required = {"plugin", "scope", "version", "source", "tree_digest", "manifest_digest", "dry_run", "result", "readiness"}
         require(verb == "add" and type(data) is dict and required <= set(data) <= required | {"security"})
-        require(data["scope"] == "project" and data["readiness"] == "needs_action")
-        actions = data["next_actions"]
-        require(type(actions) is list and len(actions) == 1 and type(actions[0]) is dict)
-        action = actions[0]
-        require(set(action) == {"code", "actor", "message"} and action["code"] == "verify_native"
-                and action["actor"] == "native_client" and type(action["message"]) is str
-                and bool(action["message"]) and data["next_action"] == action["message"])
+        require(data["scope"] == "project" and data["readiness"] == "ready")
         output, group = data, ""
     else:
         required = {"batch", "status", "succeeded", "failed", "plugin", "dry_run", "targets"}
@@ -378,6 +372,13 @@ def public_result(raw, stage, verb, selected):
             require(group == installation["operation_group_id"])
     require(type(outcome) is dict and outcome.get("installation_id") == installation["installation_id"]
             and outcome.get("requires_confirmation") is False and outcome.get("mutated") is changed)
+    if stage == "repeat-add-a":
+        require(outcome.get("no_change") is True)
+    if verb in ("add", "update"):
+        require(output.get("readiness") == "ready" and "next_action" not in output and "next_actions" not in output)
+        activation = outcome.get("activation")
+        require(type(activation) is dict and same(activation, {"activation": "active", "authentication": "not_required",
+                "policy": "allowed", "verification": "installation_verified"}))
     found = []
     def visit(value):
         if type(value) is dict:
@@ -437,7 +438,7 @@ def complete(public, inspections, proof_rows):
                 if stage.startswith("add-"):
                     expected_progress = "Resolving and validating one Agent Plugin package for every selected target...\nInstalling " + name + " for 1 selected clients...\n"
                 elif stage == "repeat-add-a":
-                    expected_progress = "Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+                    expected_progress = "Resolving and validating one Agent Plugin package for every selected target...\n"
                 elif verb == "update":
                     expected_progress = "Resolving and validating one updated Agent Plugin package for every selected target...\n"
                 elif verb == "repair":

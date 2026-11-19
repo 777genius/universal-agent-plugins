@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 
 class NativeDriverVerdict(unittest.TestCase):
-    def run_driver(self, fail_cleanup=False, mutation=None):
+    def run_driver(self, fail_cleanup=False, mutation=None, missing_marker=None):
         module = runpy.run_path(str(Path(__file__).with_name("e2e") / "grok-enable-readonly.py"))
         scope = module["main"].__globals__
         body = b"inert fixture: never execute"
@@ -51,10 +51,12 @@ class NativeDriverVerdict(unittest.TestCase):
                 elif mutation == "changed":
                     writer_lock.write_bytes(b"unexpected")
                 stdout = b"GROK_READONLY_NATIVE_INVENTORY_PASS\n"
-            elif argv[1] == "-test.run=^TestProjectGrokNativeSavedEnablementLifecycle$":
+            elif argv[1] == "-test.run=^Test(ProjectGrokNativeSavedEnablementLifecycle|GrokNativeUserSignedRepeatIsFreshAndReadOnly)$":
                 if mutation == "public-added":
                     (Path(kwargs["env"]["HOME"]) / ".grok/unexpected-public").write_bytes(b"unexpected")
-                stdout = b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS\n"
+                stdout = b"".join(marker + b"\n" for marker in (
+                    b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS", b"GROK_NATIVE_USER_SIGNED_REPEAT_PASS")
+                    if marker != missing_marker)
             else:
                 raise AssertionError("unexpected inert command: " + repr(argv))
             return subprocess.CompletedProcess(argv, 0, stdout, b"")
@@ -89,12 +91,12 @@ class NativeDriverVerdict(unittest.TestCase):
         required = ["version", "git", "native-lock", "readonly-production-inventory"]
         self.assertIn(labels, [required, required + ["public-native-saved-lifecycle"]])
         self.assertTrue(all(entry["exit"] == 0 for entry in evidence["commands"]))
-        if len(labels) == 5 and mutation != "public-added":
+        if len(labels) == 5 and mutation != "public-added" and missing_marker is None:
             self.assertTrue(evidence["public_native_saved_lifecycle_passed"])
         else:
             self.assertNotIn("public_native_saved_lifecycle_passed", evidence)
         if mutation is None:
-            if fail_cleanup:
+            if fail_cleanup or missing_marker is not None:
                 for field in ("fixture_unchanged", "archive_sha256", "binary_sha256"):
                     self.assertNotIn(field, evidence)
                     self.assertNotIn(field, printed)
@@ -122,6 +124,17 @@ class NativeDriverVerdict(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertTrue(evidence["passed"])
         self.assertNotIn("error", evidence)
+
+    def test_each_public_native_case_must_reach_its_own_completion_marker(self):
+        for marker in (b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS", b"GROK_NATIVE_USER_SIGNED_REPEAT_PASS"):
+            with self.subTest(missing=marker):
+                status, evidence = self.run_driver(missing_marker=marker)
+                self.assertEqual(status, 1)
+                self.assertFalse(evidence["passed"])
+                self.assertNotIn("public_native_saved_lifecycle_passed", evidence)
+                self.assertNotIn("fixture_unchanged", evidence)
+                self.assertEqual(evidence["error"],
+                                 "ValueError: selected public native lifecycle did not complete")
 
     def test_unexpected_fixture_changes_still_refuse_with_difference(self):
         members = dict(added=("home", ".grok/unexpected"),

@@ -233,9 +233,11 @@ def main():
             if original_binary != hashlib.sha256(binary.read_bytes()).hexdigest():
                 raise ValueError("native executable changed")
             public = run("public-native-saved-lifecycle", [args.public_test.resolve(),
-                "-test.run=^TestProjectGrokNativeSavedEnablementLifecycle$", "-test.count=1", "-test.v", "-test.timeout=420s",
+                "-test.run=^Test(ProjectGrokNativeSavedEnablementLifecycle|GrokNativeUserSignedRepeatIsFreshAndReadOnly)$", "-test.count=1", "-test.v", "-test.timeout=420s",
                 "-grok-public-native=" + str(binary), "-grok-public-inventory-test=" + str(args.test.resolve())], timeout=450)
-            if b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS" not in public:
+            if any(marker not in public for marker in (
+                    b"GROK_PUBLIC_NATIVE_SAVED_LIFECYCLE_PASS\n",
+                    b"GROK_NATIVE_USER_SIGNED_REPEAT_PASS\n")):
                 raise ValueError("selected public native lifecycle did not complete")
             # A separate public native child runs after the readonly inventory.
             # The original protected HOME/project must survive BOTH children.
