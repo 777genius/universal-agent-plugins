@@ -24,20 +24,23 @@ function run(command, args, options) {
 }
 
 // Standard-first authoring reads package sources through the packageview
-// adapter, which is qualified on Linux, Windows and Apple Silicon only. On
-// Intel macOS the published binary must fail closed with platform_unavailable
-// instead of writing a package.
+// adapter, which has native source support on Linux, Windows and Apple Silicon
+// only. On Intel macOS the published binary must fail closed with
+// platform_unavailable instead of writing a package.
 const AUTHORING_UNSUPPORTED_TARGETS = new Set(["darwin-amd64"]);
 
 function runAllowFailure(command, args, options) {
   const result = spawnSync(command, args, { ...options, encoding: "utf8" });
   if (result.error) fail(`${command} ${args.join(" ")} could not start: ${result.error.message}`);
-  return { status: result.status, stdout: result.stdout || "" };
+  return { status: result.status, stdout: result.stdout || "", stderr: result.stderr || "" };
 }
 
 function assertAuthoringUnsupported(status, output) {
-  if (status === 0 || output?.command !== "author.init" || output.result !== "failure" ||
-      output.error?.code !== "platform_unavailable" || output.committed !== false) {
+  const data = output?.data;
+  if (status !== 1 || output?.schema_version !== 1 || output.command !== "author.init" ||
+      output.result !== "failure" || data?.error?.code !== "platform_unavailable" ||
+      data.committed !== false || data.effects?.committed !== false ||
+      !Array.isArray(data.affected_paths) || data.affected_paths.length !== 0) {
     fail("unsupported authoring platform did not fail closed with platform_unavailable");
   }
 }
@@ -390,11 +393,13 @@ function main() {
     try {
       output = JSON.parse(attempt.stdout);
     } catch (error) {
-      fail(`unsupported authoring platform did not return JSON: ${attempt.stdout}\n${error.message}`);
+      fail(`unsupported authoring platform did not return JSON: ${attempt.stdout}${attempt.stderr}\n${error.message}`);
     }
     assertPublicJSONPathFree(output, "agentplugins author init JSON", privateRoots);
     assertAuthoringUnsupported(attempt.status, output);
-    if (fs.existsSync(authored)) fail("unsupported authoring platform left package output behind");
+    if (fs.existsSync(authored) || fs.readdirSync(root).some((name) => name.startsWith("authored-package") || name.startsWith(".authoring-"))) {
+      fail("unsupported authoring platform left package output behind");
+    }
     authoringProof = "platform_unavailable_fail_closed";
   }
   if (fs.existsSync(path.join(state, "state-v2.json"))) fail("dry-run wrote lifecycle state");
