@@ -881,19 +881,22 @@ def _skill_inventory(listing, project):
 
 def verify_skill_inventory(listing, project, identity, selected, foreign, present, system=None):
     skills = _skill_inventory(listing, project)
+    if system is not None:
+        # System and project Skills have different native paths even when
+        # they share a name. Qualify the pinned System entry independently.
+        system_path = system["path"]
+        system_matches = [skill for skill in skills
+                          if _references_skill_path(skill.get("path"), system_path)]
+        expected = json.dumps(system, sort_keys=True, allow_nan=False)
+        originals = [skill for skill in system_matches
+                     if json.dumps(skill, sort_keys=True, allow_nan=False) == expected]
+        # Shadowing may hide the original only while the project Skill exists.
+        if (len(system_matches) != len(originals) or len(originals) > 1
+                or (not present and len(originals) != 1)):
+            raise ValueError("Codex original System Skill inventory changed")
     for name, expected, required in (("foreign-neighbor", foreign, True), (identity, selected, present)):
         matched = [skill for skill in skills
                    if _references_skill_path(skill.get("path"), expected)]
-        if name == identity and system is not None:
-            system_encoded = json.dumps(system, sort_keys=True, allow_nan=False)
-            observed = [(skill, json.dumps(skill, sort_keys=True, allow_nan=False))
-                        for skill in matched]
-            original = [skill for skill, encoded in observed if encoded == system_encoded]
-            # A selected project Skill may shadow the System entry. Its original
-            # file remains guarded, and absence must restore the exact typed entry.
-            if len(original) > 1 or (not present and len(original) != 1):
-                raise ValueError("Codex original System Skill inventory changed")
-            matched = [skill for skill, encoded in observed if encoded != system_encoded]
         if not required:
             if matched:
                 raise ValueError("removed Codex Skill is still natively discoverable")
@@ -1034,9 +1037,14 @@ class CodexRuntimeAudit:
         skills = _skill_inventory(listing, self.project)
         matched = [skill for skill in skills if skill.get("name") == self.identity
                    and skill.get("scope") == "system"]
-        if not matched:
-            return None
         path = self.profile / "skills/.system" / self.identity / "SKILL.md"
+        # A registered on-disk System Skill must not disappear from the
+        # native inventory merely by changing its reported scope or metadata.
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            if not matched:
+                return None
         if (len(matched) != 1 or Path(self.identity).name != self.identity
                 or self.identity in ("", ".", "..")
                 or matched[0].get("enabled") is not True

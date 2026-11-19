@@ -10209,14 +10209,6 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
 
 
 
-# Native 0.66.0 three-record journal fixture; only private fixture paths replaced.
-GEMINI_STARTUP_RECORD_FIXTURE = '{"sessionId":"skills-list-session","projectHash":"6545b9ca63e68521b25565d8b8adfd1bc89c7d29202af280f0ac10aa6796099a","startTime":"2026-11-17T21:52:38.592Z","lastUpdated":"2026-11-17T21:52:38.592Z","kind":"main"}\n{"id":"d04923d38bb0f6017037e74183378ef4","timestamp":"2026-11-17T21:52:38.593Z","type":"user","content":[{"text":"<session_context>\\nThis is the Gemini CLI. We are setting up the context for our chat.\\nToday\'s date is Tuesday, November 17, 2026 (formatted according to the user\'s locale).\\nMy operating system is: linux\\nThe project\'s temporary directory is: <PINNED_PROJECT_TEMP>\\n- **Workspace Directories:**\\n  - <PINNED_PROJECT>\\n- **Directory Structure:**\\n\\nShowing up to 200 items (files + folders). Folders or files indicated with ... contain more items not shown, were ignored, or the display limit (200 items) was reached.\\n\\n<PINNED_PROJECT>/\\n├───.gemini/\\n│   └───skills/\\n│       └───native-list-probe/\\n│           └───SKILL.md\\n└───.git/...\\n\\n\\n</session_context>"}]}\n{"$set":{"lastUpdated":"2026-11-17T21:52:38.593Z"}}\n'
-GEMINI_STARTUP_AUDIT = load_audit()
-GEMINI_STARTUP_MODULE = GEMINI_STARTUP_AUDIT.GEMINI_RUNTIME_AUDIT
-gemini_startup_snapshot = GEMINI_STARTUP_AUDIT.snapshot
-GEMINI_STARTUP_VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0"}
-
-
     def test_windows_registry_and_marker_require_exact_producer_spelling(self):
         if sys.platform != "win32":
             self.skipTest("Windows producer serialization contract")
@@ -10242,6 +10234,15 @@ GEMINI_STARTUP_VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0
                         self.assertIs(observer.evidence()["failure_facts"]["exact_key_present"], False)
                 finally:
                     observer.close()
+
+
+# Native 0.66.0 three-record journal fixture; only private fixture paths replaced.
+GEMINI_STARTUP_RECORD_FIXTURE = '{"sessionId":"skills-list-session","projectHash":"6545b9ca63e68521b25565d8b8adfd1bc89c7d29202af280f0ac10aa6796099a","startTime":"2026-11-17T21:52:38.592Z","lastUpdated":"2026-11-17T21:52:38.592Z","kind":"main"}\n{"id":"d04923d38bb0f6017037e74183378ef4","timestamp":"2026-11-17T21:52:38.593Z","type":"user","content":[{"text":"<session_context>\\nThis is the Gemini CLI. We are setting up the context for our chat.\\nToday\'s date is Tuesday, November 17, 2026 (formatted according to the user\'s locale).\\nMy operating system is: linux\\nThe project\'s temporary directory is: <PINNED_PROJECT_TEMP>\\n- **Workspace Directories:**\\n  - <PINNED_PROJECT>\\n- **Directory Structure:**\\n\\nShowing up to 200 items (files + folders). Folders or files indicated with ... contain more items not shown, were ignored, or the display limit (200 items) was reached.\\n\\n<PINNED_PROJECT>/\\n├───.gemini/\\n│   └───skills/\\n│       └───native-list-probe/\\n│           └───SKILL.md\\n└───.git/...\\n\\n\\n</session_context>"}]}\n{"$set":{"lastUpdated":"2026-11-17T21:52:38.593Z"}}\n'
+GEMINI_STARTUP_AUDIT = load_audit()
+GEMINI_STARTUP_MODULE = GEMINI_STARTUP_AUDIT.GEMINI_RUNTIME_AUDIT
+gemini_startup_snapshot = GEMINI_STARTUP_AUDIT.snapshot
+GEMINI_STARTUP_VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0"}
+
 
 class GeminiStartupEnvironmentContracts(unittest.TestCase):
     IDENTITY_REFUSAL = (

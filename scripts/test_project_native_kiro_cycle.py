@@ -292,9 +292,11 @@ class KiroAuthenticatedCycleContracts(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/project-native-runtime.yml").read_text()
         self.assertIn("github.event_name == 'workflow_dispatch' && inputs.kiro_auth_research == true && matrix.client == 'kiro' && secrets.KIRO_API_KEY || ''", workflow)
         self.assertIn("if not allow_kiro_auth:", workflow)
-        compiled_selection = "contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'kiro')"
+        compiled_selection = ("contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') || "
+                              "contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'gemini') || "
+                              "contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'kiro')")
         self.assertEqual(workflow.count("if: ${{ " + compiled_selection + " }}"), 2)
-        self.assertIn("go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestKiroCycle)'", workflow)
+        self.assertIn("|TestProjectNativeRuntime|TestKiroCycle|TestGeminiPublicCompletionRequiresBothExactFreshInventoryPhases$", workflow)
 
     def test_manual_authenticated_selection_does_not_duplicate_other_clients(self):
         import io
