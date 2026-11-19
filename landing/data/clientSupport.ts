@@ -68,7 +68,7 @@ const publishedClientSupportRows: ClientSupport[] = [
     id: 'copilot',
     name: 'GitHub Copilot CLI',
     user: 'Plugins, Skills, MCP',
-    project: 'Skills, MCP',
+    project: 'Plugins, Skills, MCP',
     setup: 'Automatic',
     nextStep: 'Restart Copilot CLI if requested.',
   },

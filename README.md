@@ -287,7 +287,7 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 | <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **Codex CLI** | Skills, MCP | Skills, MCP | Automatic | Open a new session; approve project MCP access if prompted. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> **OpenCode** | Skills, MCP | Skills, MCP | Automatic | Start a new session and review effective project settings. |
 | <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> **Cursor** | Plugins, Skills, MCP | Skills, MCP | Automatic | Reload Cursor; enable plugins or MCP servers if requested. |
-| <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> **GitHub Copilot CLI** | Plugins, Skills, MCP | Skills, MCP | Automatic | Restart Copilot CLI if requested. |
+| <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> **GitHub Copilot CLI** | Plugins, Skills, MCP | Plugins, Skills, MCP | Automatic | Restart Copilot CLI if requested. |
 | <img src="landing/public/client-icons/gemini.svg" width="24" height="24" alt="" align="middle"> **Gemini CLI** | Skills, MCP | Skills, MCP | Automatic | Reload Gemini CLI and approve tool access if prompted. |
 | <img src="landing/public/client-icons/qoder.svg" width="24" height="24" alt="" align="middle"> **Qoder** | Plugins, Skills, MCP, hooks | Skills, MCP | Automatic | Restart Qoder and review MCP permissions. |
 | <img src="landing/public/client-icons/pi.svg" width="24" height="24" alt="" align="middle"> **Pi** | Extensions, Skills, MCP | Extensions, Skills, MCP | Automatic | Trust the project and reload Pi resources. |
@@ -306,8 +306,8 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 client prompts; Prepared = files are ready but need activation; Manual = complete
 setup in the app. After confirmation, UAP completes supported native setup and
 reports remaining trust, sign-in or reload steps. This matrix
-describes the released installer capabilities of [native CLI 0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110). Hermes and Antigravity
-are included; signed Directory packages still need an eligible target. Installation does not prove native runtime activation or vendor authentication.
+describes the released installer capabilities of [native CLI 0.1.113](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.113)
+for every agent above; signed Directory packages still need an eligible target. Installation does not prove native runtime activation or vendor authentication.
 
 See the [compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
 for tested versions, platforms, and setup steps.
@@ -335,8 +335,12 @@ commands are withheld because these hosts cannot enforce explicit invocation.
 
 Grok Build, Kimi Code, and Qoder support stdio and Streamable HTTP MCP in user
 scope. Grok Project plugin enablement is opt-in on Linux with Grok 1.0.70 and
-preserves an existing disabled preference. Devin User delivery requires
-3000.11.205 or 3000.12.57; Project delivery requires 3000.11.205. Cline Project
+preserves an existing disabled preference. Devin User and Project delivery
+require 3000.11.205 or 3000.12.57. Stable GitHub Copilot CLI 1.0.81 or later
+registers a compatible Agent Plugins 1.0 package as a native project plugin; older
+versions and packages with bundled stdio executables or `PLUGIN_DATA` launchers
+keep separate project Skills and MCP. Start a new Copilot CLI session to load the
+project plugin. Cline Project
 MCP requires an explicitly selected managed session/settings path. Qoder also
 preserves native hooks, commands, and bundled binaries.
 See [portable commands](docs/UAP_COMMANDS.md) for command delivery and limits.
