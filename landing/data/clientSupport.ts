@@ -24,6 +24,7 @@ export const clientSupportCapabilityKeys = {
   'Personal app setup': 'personalAppSetup',
   'Skills only': 'skillsOnly',
   'Skills, MCP (prepared)': 'skillsMcpPrepared',
+  'Plugins, Skills, MCP (prepared)': 'pluginsSkillsMcpPrepared',
   'Not supported': 'notSupported',
 } as const;
 
@@ -68,7 +69,7 @@ const publishedClientSupportRows: ClientSupport[] = [
     id: 'copilot',
     name: 'GitHub Copilot CLI',
     user: 'Plugins, Skills, MCP',
-    project: 'Plugins, Skills, MCP',
+    project: 'Plugins, Skills, MCP (prepared)',
     setup: 'Automatic',
     nextStep: 'Restart Copilot CLI if requested.',
   },

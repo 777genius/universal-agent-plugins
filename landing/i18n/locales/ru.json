@@ -371,6 +371,7 @@
         "personalAppSetup": "Настройка личного приложения",
         "skillsOnly": "Только навыки",
         "skillsMcpPrepared": "Навыки, MCP (подготовлено)",
+        "pluginsSkillsMcpPrepared": "Плагины, навыки, MCP (подготовлено)",
         "notSupported": "Не поддерживается"
       },
       "setup": {

@@ -47,8 +47,8 @@ todo pacote, componente, versão ou escopo funcione nele.
 A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest),
 versão nativa publicada, adiciona uma API local de
 gerenciamento com processo controlado pelo aplicativo, descoberta de clientes
-e perfis sem alterações e extensões do Pi, Skills e MCP stdio/Streamable HTTP
-nos escopos de usuário e de projeto qualificado. Consulte [gerenciamento local](../use/manage#local-management-api).
+e perfis sem alterações e extensões nativas do Pi, Skills e MCP stdio/Streamable HTTP
+nos escopos de usuário e de projeto elegível. Consulte [gerenciamento local](../use/manage#local-management-api).
 Canais de gerenciadores de pacotes podem demorar para receber a atualização;
 confira `agentplugins version`.
 

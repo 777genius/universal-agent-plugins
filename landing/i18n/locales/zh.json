@@ -371,6 +371,7 @@
         "personalAppSetup": "个人应用设置",
         "skillsOnly": "仅技能",
         "skillsMcpPrepared": "技能、MCP（已准备）",
+        "pluginsSkillsMcpPrepared": "插件、技能、MCP（已准备）",
         "notSupported": "不支持"
       },
       "setup": {

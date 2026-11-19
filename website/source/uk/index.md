@@ -56,7 +56,7 @@ CLI запитає, які сумісні агенти використовув�
 
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)
 — поточний нативний випуск інсталятора. Він додає
-локальний API керування та розширення Pi, Skills і MCP stdio/Streamable HTTP в області користувача та сумісного проєкту.
+локальний API керування та нативні розширення Pi, Skills і MCP stdio/Streamable HTTP в області користувача та сумісного проєкту. Підписані випуски каталогу й далі потребують власної політики цілі Pi.
 Див. [локальне керування](./use/manage#local-management-api) та
 [сумісність із Pi](./reference/client-compatibility#pi-native-extensions).
 

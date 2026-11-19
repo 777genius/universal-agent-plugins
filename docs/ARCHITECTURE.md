@@ -212,10 +212,12 @@ grow. Production ClientID selectors are allowed only in `domain/clients.go`,
 a string literal client id or a comparison on `BackendFamily` slips past it. It
 detects regressions, it does not prove their absence.
 
-Golden files under `planner/testdata/golden`, `adapters/clientdetect/testdata/golden`,
-`providers/testdata/golden` and `agentpluginscli/testdata/golden` record what the
-core produces today for every registered client, including the operational fields the
-public JSON tags hide. Refactor parts must leave them byte-identical; a
+Golden files record what the core produces today, including the operational
+fields the public JSON tags hide. `planner/testdata/golden` and
+`adapters/clientdetect/testdata/golden` cover every registered client;
+`providers/testdata/golden` covers activation, deactivation and staging cases
+rather than individual clients; `agentpluginscli/testdata/golden` covers ChatGPT,
+Codex and Cursor cases. Refactor parts must leave them byte-identical; a
 deliberate behavior change rewrites them with `UPDATE_GOLDEN=1 go test ./...` in
 the same commit that explains why.
 

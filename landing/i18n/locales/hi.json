@@ -371,6 +371,7 @@
         "personalAppSetup": "निजी ऐप सेटअप",
         "skillsOnly": "केवल स्किल",
         "skillsMcpPrepared": "स्किल, MCP (तैयार)",
+        "pluginsSkillsMcpPrepared": "प्लगइन, स्किल, MCP (तैयार)",
         "notSupported": "समर्थित नहीं"
       },
       "setup": {

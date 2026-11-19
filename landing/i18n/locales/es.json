@@ -371,6 +371,7 @@
         "personalAppSetup": "Configuración de aplicación personal",
         "skillsOnly": "Solo habilidades",
         "skillsMcpPrepared": "Habilidades, MCP (preparado)",
+        "pluginsSkillsMcpPrepared": "Complementos, habilidades, MCP (preparado)",
         "notSupported": "No compatible"
       },
       "setup": {
