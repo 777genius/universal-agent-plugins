@@ -39,6 +39,10 @@ func (runner *hermesCompletionRunner) Run(_ context.Context, command legacyports
 	args := command.Argv[1:]
 	var output string
 	switch strings.Join(args, " ") {
+	case "--version":
+		// This fixture exercises trust only. An unavailable, closed native
+		// completion leaves the original owner Prepared assertions intact.
+		return legacyports.CommandResult{ExitCode: 1, CleanupComplete: true}, nil
 	case "-C " + runner.project + " rev-parse --show-toplevel":
 		output = filepath.ToSlash(runner.project) + "\n"
 	case "config path":

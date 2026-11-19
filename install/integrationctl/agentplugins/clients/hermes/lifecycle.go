@@ -174,16 +174,27 @@ func (adapter *Adapter) Activate(ctx context.Context, env clients.Env, req domai
 	return finishHermesActivation(ctx, env, req, outcome, err)
 }
 
-// Installed files prepare Hermes; only a new native session can activate them.
+// A fresh native Skill catalog can complete pure Skills after any consented trust step.
 func finishHermesActivation(ctx context.Context, env clients.Env, req domain.ActivationRequest, outcome domain.ActivationOutcome, err error) (domain.ActivationOutcome, error) {
 	if err != nil || outcome.Verification != domain.VerificationInstalled {
 		return outcome, err
 	}
 	outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
+	action := hermesCompletedAction
 	if hermesTrustApplies(req) {
-		return completeHermesProjectTrust(ctx, env, req, outcome)
+		var report hermesTrustReport
+		outcome, report, err = completeHermesProjectTrust(ctx, env, req, outcome)
+		if err != nil {
+			return outcome, err
+		}
+		// A target catalog cannot prove that a requested trust grant preserved
+		// every prior root or produced the required native confirmation.
+		if req.ProjectTrustConsent && !report.granted {
+			return outcome, nil
+		}
+		action = outcome.UserActions[len(outcome.UserActions)-1]
 	}
-	return outcome, nil
+	return completeHermesSkills(ctx, env, req, outcome, action)
 }
 
 func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, req domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
