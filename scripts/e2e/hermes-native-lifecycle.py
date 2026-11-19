@@ -91,7 +91,7 @@ class Lifecycle:
         if granted:
             require("Hermes now trusts this project's Git repository root" in actions,
                     "explicit Project add did not report verified Hermes trust")
-        if granted and activation.get("activation") == "active":
+        if granted:
             # Discovery completion retains the durable trust disclosure and
             # independently verifies every expected native Git root.
             require(data.get("readiness") == "ready"

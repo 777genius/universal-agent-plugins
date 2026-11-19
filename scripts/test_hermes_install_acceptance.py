@@ -103,7 +103,7 @@ class BuilderCleanupAcceptance(unittest.TestCase):
 class HermesTrustReportCompletionAcceptance(unittest.TestCase):
     def test_completed_guidance_requires_exact_public_state_and_native_roots(self):
         lifecycle = runpy.run_path(str(Path(__file__).parent / "e2e" / "hermes-native-lifecycle.py"))["Lifecycle"]
-        mutations = ("", "grouped", "unverified", "unknown-auth", "blocked",
+        mutations = ("", "grouped", "prepared", "prepared-pending", "unverified", "unknown-auth", "blocked",
                      "activation-attested", "authentication-attested", "missing-disclosure",
                      "not-ready", "empty-expected",
                      "missing-expected", "missing-selected", "lost-prior", "extra-root",
@@ -117,7 +117,12 @@ class HermesTrustReportCompletionAcceptance(unittest.TestCase):
                               "user_actions": ["Hermes now trusts this project's Git repository root"]}
                 data = {"readiness": "ready", "result": {"activation": activation}}
                 expected, roots = {prior, selected}, [str(prior), str(selected)]
-                if mutation == "unverified":
+                if mutation in ("prepared", "prepared-pending"):
+                    activation["activation"] = "prepared"
+                    if mutation == "prepared-pending":
+                        data["readiness"] = "needs_action"
+                        data["next_actions"] = [{"code": "verify_native", "actor": "native_client"}]
+                elif mutation == "unverified":
                     activation["verification"] = "package_validated"
                 elif mutation == "unknown-auth":
                     activation["authentication"] = "not_checked"
@@ -166,11 +171,11 @@ class HermesTrustReportCompletionAcceptance(unittest.TestCase):
                                     "extra-root", "invalid-native", "native-read-failed"):
                         self.assertTrue(capture.called)
 
-    def test_existing_granted_and_refused_guidance_keeps_its_boundary(self):
+    def test_prepared_grant_is_rejected_and_refused_guidance_keeps_its_boundary(self):
         lifecycle = runpy.run_path(str(Path(__file__).parent / "e2e" / "hermes-native-lifecycle.py"))["Lifecycle"]
         granted = "Hermes now trusts this project's Git repository root"
         refused = "UAP did not change Hermes project trust: maintenance; run `hermes skills trust` inside it"
-        for grant, actions, accepted in ((True, [granted], True),
+        for grant, actions, accepted in ((True, [granted], False),
                                          (False, [refused], True),
                                          (False, [], False)):
             with self.subTest(granted=grant, actions=actions), tempfile.TemporaryDirectory() as directory:
