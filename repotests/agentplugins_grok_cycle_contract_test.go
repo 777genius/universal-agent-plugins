@@ -63,6 +63,44 @@ func TestGrokCycleRepeatAddRequiresHeldDirectPublicResult(t *testing.T) {
 	}
 }
 
+func TestGrokCycleFreshReadinessRequiresItsGroupedPublicResult(t *testing.T) {
+	for _, mutation := range []string{"", "direct", "foreign-target", "foreign-plan", "prepared", "unchecked-auth", "unverified", "blocked", "attested", "next-actions", "missing-readiness"} {
+		t.Run(mutation, func(t *testing.T) {
+			direct, _ := grokCycleRepeatAddContract(t)
+			output := direct["data"].(map[string]any)
+			outcome := output["result"].(map[string]any)
+			activation := outcome["activation"].(map[string]any)
+			target := map[string]any{"target": "grok", "output": output}
+			document := map[string]any{"data": map[string]any{"targets": []any{target}}}
+			switch mutation {
+			case "direct":
+				document = direct
+			case "foreign-target":
+				target["target"] = "codex"
+			case "foreign-plan":
+				outcome["plan"].(map[string]any)["client_id"] = "codex"
+			case "prepared":
+				activation["activation"] = "prepared"
+			case "unchecked-auth":
+				activation["authentication"] = "not_checked"
+			case "unverified":
+				activation["verification"] = "package_validated"
+			case "blocked":
+				activation["policy"] = "blocked"
+			case "attested":
+				activation["activation_attested"] = true
+			case "next-actions":
+				output["next_actions"] = []any{}
+			case "missing-readiness":
+				delete(output, "readiness")
+			}
+			if err := grokCycleSkillsReady(document); (err == nil) != (mutation == "") {
+				t.Fatal("Grok grouped/direct readiness boundary differs", mutation, err)
+			}
+		})
+	}
+}
+
 func TestGrokCycleRepeatAddRefusesChangedPublicAuthority(t *testing.T) {
 	for _, path := range [][]string{{"schema_version"}, {"command"}, {"result"}, {"data"}, {"data", "scope"}, {"data", "readiness"}, {"data", "plugin"}, {"data", "version"}, {"data", "source"}, {"data", "tree_digest"}, {"data", "manifest_digest"}, {"data", "dry_run"}, {"data", "result"}, {"data", "result", "installation_id"}, {"data", "result", "requires_confirmation"}, {"data", "result", "mutated"}, {"data", "result", "no_change"}, {"data", "result", "plan"}, {"data", "result", "activation"}, {"data", "result", "plan", "client_id"}, {"data", "result", "plan", "scope"}, {"data", "result", "plan", "status"}, {"data", "result", "plan", "package_mode"}, {"data", "result", "plan", "physical_artifact_id"}, {"data", "result", "plan", "components"}, {"data", "result", "plan", "activation"}, {"data", "result", "plan", "authentication"}, {"data", "result", "plan", "policy"}, {"data", "result", "plan", "verification"}, {"data", "result", "activation", "activation"}, {"data", "result", "activation", "authentication"}, {"data", "result", "activation", "policy"}, {"data", "result", "activation", "verification"}} {
 		for _, replacement := range []any{nil, "foreign", true, json.Number("1")} {

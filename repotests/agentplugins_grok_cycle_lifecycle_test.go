@@ -174,6 +174,31 @@ func grokCycleRepeatAdd(stage, scope string, mutated bool, document map[string]a
 	return nil
 }
 
+// Fresh add and update use the ordinary grouped public DTO. Only repeated
+// single-target add uses the direct DTO checked by grokCycleRepeatAdd above.
+func grokCycleSkillsReady(document map[string]any) error {
+	outcome, err := commandsTargetOutcome(document)
+	if err != nil {
+		return err
+	}
+	data, _ := document["data"].(map[string]any)
+	targets, _ := data["targets"].([]any)
+	target, _ := targets[0].(map[string]any)
+	output, _ := target["output"].(map[string]any)
+	plan, _ := outcome["plan"].(map[string]any)
+	activation, _ := outcome["activation"].(map[string]any)
+	if target["target"] != "grok" || plan["client_id"] != "grok" || output["readiness"] != "ready" ||
+		!reflect.DeepEqual(activation, map[string]any{"activation": "active", "authentication": "not_required", "policy": "allowed", "verification": "installation_verified"}) {
+		return fmt.Errorf("Grok grouped result lacks exact native Skill readiness")
+	}
+	for _, key := range []string{"next_action", "next_actions"} {
+		if _, present := output[key]; present {
+			return fmt.Errorf("Grok ready result retains %s", key)
+		}
+	}
+	return nil
+}
+
 func (c *grokProjectCycle) apply(t *testing.T, stage, scope string, mutated bool) {
 	t.Helper()
 	r := c.recipes[scope]
@@ -205,7 +230,9 @@ func (c *grokProjectCycle) apply(t *testing.T, stage, scope string, mutated bool
 		} else {
 			commandsRequireMutated(t, stage, document, mutated)
 			if strings.HasPrefix(stage, "add-") || stage == "update-a" || stage == "unchanged-update-a" {
-				codexNativeProjectSkillsReady(t, document)
+				if err := grokCycleSkillsReady(document); err != nil {
+					t.Fatal(err)
+				}
 			}
 		}
 	}

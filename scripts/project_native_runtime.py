@@ -63,7 +63,7 @@ CASES = {
                  "file": "repotests/agentplugins_windsurf_cycle_fixture_test.go",
                  "optin": "AGENTPLUGINS_WINDSURF_PROJECT_RUNTIME_ATTEMPT", "seconds": 180, "phase": "runtime-attempt"},
 }
-CLI_ATTEMPTS = {"cursor": "2026.10.22-27dcf5f", "qoder": "1.1.78", "grok": "1.0.70", "kiro": "2.34.0", "windsurf": "3000.11.205"}
+CLI_ATTEMPTS = {"cursor": "2026.10.22-27dcf5f", "qoder": "1.1.78", "grok": "1.0.70", "kiro": "2.34.0", "windsurf": "3000.12.57"}
 MAX_ZIP = 32 << 20
 MAX_MEMBER = 2 << 20
 COMMANDS = ("git-A", "git-B", "version", "add-A", "native-attempt")
