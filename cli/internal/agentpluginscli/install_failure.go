@@ -3,6 +3,10 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"net"
+	"os"
+	"os/exec"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -27,6 +31,11 @@ const (
 	failureUpdateRequired    failureKind = "UPDATE_REQUIRED"
 	failureEnvironmentChange failureKind = "ENVIRONMENT_CHANGED"
 	failureTimeout           failureKind = "TIMEOUT"
+	failurePermission        failureKind = "PERMISSION_DENIED"
+	failureDiskFull          failureKind = "DISK_FULL"
+	failureReadOnly          failureKind = "READ_ONLY_LOCATION"
+	failureNetwork           failureKind = "NETWORK_UNAVAILABLE"
+	failureAgentMissing      failureKind = "AGENT_PROGRAM_MISSING"
 	failureCanceled          failureKind = "CANCELED"
 	failureSkipped           failureKind = "SKIPPED"
 )
@@ -58,7 +67,43 @@ func failureKindOf(err error) failureKind {
 	case errors.Is(err, context.Canceled), errors.Is(err, installer.ErrCancelled):
 		return failureCanceled
 	}
+	return environmentFailureKind(err)
+}
+
+// environmentFailureKind recognises ordinary machine problems that a person can
+// fix without reading technical detail. It only looks at typed causes that
+// survive error wrapping, never at message text.
+func environmentFailureKind(err error) failureKind {
+	var (
+		execErr *exec.Error
+		opErr   *net.OpError
+		dnsErr  *net.DNSError
+	)
+	switch {
+	case isDiskFull(err):
+		return failureDiskFull
+	case isReadOnly(err):
+		return failureReadOnly
+	// A program that is missing or cannot be run is checked before the generic
+	// permission case: an unexecutable binary is not a write problem.
+	case errors.Is(err, exec.ErrNotFound), errors.As(err, &execErr):
+		return failureAgentMissing
+	case errors.Is(err, fs.ErrPermission):
+		return failurePermission
+	case errors.As(err, &opErr), errors.As(err, &dnsErr):
+		// Only connection-level causes. TLS, URL syntax and other errors that
+		// merely implement net.Error stay generic, and a timeout is a timeout.
+		if timeoutCause(err) {
+			return failureTimeout
+		}
+		return failureNetwork
+	}
 	return failureUnknown
+}
+
+func timeoutCause(err error) bool {
+	var timeout interface{ Timeout() bool }
+	return errors.Is(err, os.ErrDeadlineExceeded) || errors.As(err, &timeout) && timeout.Timeout()
 }
 
 // installFailure is what a person sees for one agent: a plain cause, one next
@@ -141,6 +186,16 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 		return "Installed state changed while installing.", "Run the command again.", true
 	case failureTimeout:
 		return "A step took too long and was stopped.", "Check network access and the agent, then retry.", true
+	case failurePermission:
+		return "UAP is not allowed to write to a folder this agent needs.", "Fix the folder's permissions, then retry this agent.", true
+	case failureReadOnly:
+		return "A folder this agent needs is read-only.", "Make the location writable or choose another one, then retry this agent.", true
+	case failureDiskFull:
+		return "There is not enough free disk space.", "Free some space, then retry this agent.", true
+	case failureNetwork:
+		return "A download needed for this agent failed because the network could not be reached.", "Check your connection, then retry this agent.", true
+	case failureAgentMissing:
+		return "A program this agent needs was not found or cannot be run.", "Install it or add it to your PATH, then retry.", true
 	case failureCanceled:
 		return "The installation was canceled.", "Retry when you are ready.", true
 	case failureSkipped:
