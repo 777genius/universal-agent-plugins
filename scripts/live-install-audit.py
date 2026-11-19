@@ -2811,6 +2811,37 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         cleanup = audited_call([cli, "remove", selector, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup_json = cleanup.pop("_json", None)
+        if vscode_user_manual is not None:
+            # Manual-only observation: a refusal is not a native uninstall.
+            # Read back the exact binding only after the public refusal and all
+            # protected bytes/root identities remain unchanged.
+            proof = vscode_user_manual
+            proof["refusal_document"] = cleanup_json
+            proof["refusal_observed"] = bool(
+                vscode_command_complete(cleanup, 1)
+                and cleanup.get("stderr_tail") == VSCODE_MANUAL_REMOVE_STDERR
+                and vscode_manual_remove_refusal(cleanup_json, vscode_original))
+            after_refusal = scoped_snapshot((home, data, project))
+            proof["protected_after_refusal"] = after_refusal == protected
+            proof["protected_after_refusal_sha256"] = vscode_snapshot_digest(after_refusal)
+            proof["native_unchanged"] = (proof["native_unchanged"]
+                and scoped_snapshot(native_roots) == vscode_native_before)
+            proof["roots_unchanged"] = (proof["roots_unchanged"]
+                and vscode_root_identities(vscode_roots) == vscode_roots_before)
+            if (proof["refusal_observed"] and proof["protected_after_refusal"]
+                    and proof["native_unchanged"] and proof["roots_unchanged"]):
+                observed = audited_call(proof["list_argv"], env, project, 30)
+                observed_json = observed.pop("_json", None)
+                proof["post_refusal_list"] = observed
+                proof["post_refusal_binding"] = vscode_manual_binding(
+                    observed_json, identity, item, signed_release_pins)
+                after_list = scoped_snapshot((home, data, project))
+                proof["protected_after_list"] = after_list == protected
+                proof["protected_after_list_sha256"] = vscode_snapshot_digest(after_list)
+                proof["native_unchanged"] = (proof["native_unchanged"]
+                    and scoped_snapshot(native_roots) == vscode_native_before)
+                proof["roots_unchanged"] = (proof["roots_unchanged"]
+                    and vscode_root_identities(vscode_roots) == vscode_roots_before)
     qoder_native_after_remove = None
     if target == "qoder" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
         qoder_native_after_remove = qoder_native_plugin_state(
