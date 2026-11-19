@@ -133,11 +133,11 @@ func TestRawSkillPrefetchStartsInOrderWithinWindow(t *testing.T) {
 	}
 	for taken, key := range keys {
 		if taken == 0 {
-			waitFor(t, "first window", func() bool { return fake.calls.Load() == skillPrefetchWindow })
+			waitFor(t, "first window", func() bool { return fake.calls.Load() == prefetchWindow })
 		}
 		for _, path := range fake.startedPaths() {
-			if index(path) >= taken+skillPrefetchWindow {
-				t.Fatalf("fetch %s started before %d earlier snapshots were taken", path, index(path)-skillPrefetchWindow+1)
+			if index(path) >= taken+prefetchWindow {
+				t.Fatalf("fetch %s started before %d earlier snapshots were taken", path, index(path)-prefetchWindow+1)
 			}
 		}
 		snapshot, ok := prefetch.take(t.Context(), key)
@@ -159,10 +159,10 @@ func TestRawSkillPrefetchStartsInOrderWithinWindow(t *testing.T) {
 func TestRawSkillPrefetchFillsButNeverExceedsWindow(t *testing.T) {
 	fake := &prefetchSkillAcquirer{dir: t.TempDir(), block: make(chan struct{})}
 	prefetch := startRawSkillPrefetch(t.Context(), fake, prefetchKeys(9))
-	waitFor(t, "window to fill", func() bool { return fake.active.Load() == skillPrefetchWindow })
+	waitFor(t, "window to fill", func() bool { return fake.active.Load() == prefetchWindow })
 	time.Sleep(20 * time.Millisecond)
-	if got := fake.calls.Load(); got != skillPrefetchWindow || fake.maxSeen.Load() != skillPrefetchWindow || skillPrefetchWindow < 2 {
-		t.Fatalf("calls=%d peak=%d, want exactly the window %d", got, fake.maxSeen.Load(), skillPrefetchWindow)
+	if got := fake.calls.Load(); got != prefetchWindow || fake.maxSeen.Load() != prefetchWindow || prefetchWindow < 2 {
+		t.Fatalf("calls=%d peak=%d, want exactly the window %d", got, fake.maxSeen.Load(), prefetchWindow)
 	}
 	close(fake.block)
 	closeWithin(t, prefetch)
@@ -220,7 +220,7 @@ func TestRawSkillPrefetchCloseRemovesUntakenOnErrorPath(t *testing.T) {
 func TestRawSkillPrefetchCloseStopsBlockedFetchesWithLiveParent(t *testing.T) {
 	fake := &prefetchSkillAcquirer{dir: t.TempDir(), block: make(chan struct{})}
 	prefetch := startRawSkillPrefetch(t.Context(), fake, prefetchKeys(6))
-	waitFor(t, "fetches in flight", func() bool { return fake.active.Load() == skillPrefetchWindow })
+	waitFor(t, "fetches in flight", func() bool { return fake.active.Load() == prefetchWindow })
 	closeWithin(t, prefetch)
 	if got := fake.remaining(); got != 0 {
 		t.Fatalf("remaining snapshots after close = %d", got)
@@ -368,12 +368,12 @@ func TestPrepareSkillsPrefetchFetchesEachSelectedSkillOnce(t *testing.T) {
 func TestPrepareSkillsPrefetchCleansUpWhenFirstSkillFails(t *testing.T) {
 	names := []string{"alpha", "beta", "gamma", "delta", "epsilon"}
 	j, source, sha := multiSkillJourney(t, names)
-	source.fail, source.failAfter = "skills/alpha", skillPrefetchWindow-1
+	source.fail, source.failAfter = "skills/alpha", prefetchWindow-1
 	if _, err := j.cli.app.PrepareSkills(t.Context(), SkillsBatchRequest{Selections: skillSelections("acme/tools", sha, names...), TargetIDs: []string{"codex"}}); err == nil {
 		t.Fatal("expected the failing first Skill to abort prepare")
 	}
-	if got := source.succeeded.Load(); got != skillPrefetchWindow-1 {
-		t.Fatalf("completed prefetches = %d, want %d to be removed by close", got, skillPrefetchWindow-1)
+	if got := source.succeeded.Load(); got != prefetchWindow-1 {
+		t.Fatalf("completed prefetches = %d, want %d to be removed by close", got, prefetchWindow-1)
 	}
 	assertEmptyDir(t, j.source.TempRoot)
 }

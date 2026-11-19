@@ -85,7 +85,7 @@ func (candidate *skillsBatchCandidate) selectSkill(ctx context.Context, app App,
 		if req.Web != nil {
 			pin, err = resolver.resolveWebSkill(ctx, req, targets)
 		} else {
-			pin, err = resolver.resolveSkill(ctx, req, targets, nil, selection.Commit, "", "")
+			pin, err = resolver.resolveSkill(ctx, req, targets, nil, selection.Commit, "", "", nil)
 		}
 		if err != nil {
 			return err

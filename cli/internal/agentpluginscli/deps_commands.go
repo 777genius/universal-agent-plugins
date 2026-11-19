@@ -337,6 +337,8 @@ func resolveDependencyLock(ctx context.Context, app App, opts *options, requirem
 		return requirements, environment.Lock{}, environment.Lock{}, err
 	}
 	resolver := dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}
+	resolver.gitRoots = resolver.prefetchGitRoots(ctx, previous)
+	defer resolver.gitRoots.close()
 	var previousPin *environment.Lock
 	if hadPrevious {
 		previousPin = &previous
