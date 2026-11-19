@@ -123,7 +123,11 @@ func sameRequestedSelector(requirement environment.Requirement, previous environ
 
 func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement environment.Requirement, targets []string, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {
 	source := requirement.Git
-	fetched, prefetched := resolver.gitRoots.take(ctx, *source)
+	fetched, prefetched, err := resolver.gitRoots.take(ctx, *source)
+	if err != nil {
+		// The prefetch ran this resolution's own calls with the same arguments.
+		return environment.LockedPackage{}, err
+	}
 	resolution := fetched.resolution
 	if !prefetched {
 		var err error

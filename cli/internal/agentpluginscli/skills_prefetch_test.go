@@ -126,7 +126,7 @@ func closeWithin(t *testing.T, prefetch *rawSkillPrefetch) {
 func TestRawSkillPrefetchStartsInOrderWithinWindow(t *testing.T) {
 	fake := &prefetchSkillAcquirer{dir: t.TempDir()}
 	keys := prefetchKeys(12)
-	prefetch := startRawSkillPrefetch(t.Context(), fake, append(keys, keys[0]))
+	prefetch := startRawSkillPrefetch(t.Context(), fake, append(keys, keys[0]), prefetchGuard{})
 	defer prefetch.close()
 	index := func(path string) int {
 		return slices.IndexFunc(keys, func(key rawSkillKey) bool { return key.path == path })
@@ -140,11 +140,11 @@ func TestRawSkillPrefetchStartsInOrderWithinWindow(t *testing.T) {
 				t.Fatalf("fetch %s started before %d earlier snapshots were taken", path, index(path)-prefetchWindow+1)
 			}
 		}
-		snapshot, ok := prefetch.take(t.Context(), key)
+		snapshot, ok, _ := prefetch.take(t.Context(), key)
 		if !ok || snapshot.TreeDigest != key.repository+"@"+key.commit+"//"+key.path {
 			t.Fatalf("take %v = %v, %v", key, snapshot.TreeDigest, ok)
 		}
-		if _, ok := prefetch.take(t.Context(), key); ok {
+		if _, ok, _ := prefetch.take(t.Context(), key); ok {
 			t.Fatalf("snapshot %v handed out twice", key)
 		}
 	}
@@ -158,7 +158,7 @@ func TestRawSkillPrefetchStartsInOrderWithinWindow(t *testing.T) {
 
 func TestRawSkillPrefetchFillsButNeverExceedsWindow(t *testing.T) {
 	fake := &prefetchSkillAcquirer{dir: t.TempDir(), block: make(chan struct{})}
-	prefetch := startRawSkillPrefetch(t.Context(), fake, prefetchKeys(9))
+	prefetch := startRawSkillPrefetch(t.Context(), fake, prefetchKeys(9), prefetchGuard{})
 	waitFor(t, "window to fill", func() bool { return fake.active.Load() == prefetchWindow })
 	time.Sleep(20 * time.Millisecond)
 	if got := fake.calls.Load(); got != prefetchWindow || fake.maxSeen.Load() != prefetchWindow || prefetchWindow < 2 {
@@ -171,28 +171,29 @@ func TestRawSkillPrefetchFillsButNeverExceedsWindow(t *testing.T) {
 	}
 }
 
-func TestRawSkillPrefetchNeverServesAnotherSourceOrFailedFetch(t *testing.T) {
+func TestRawSkillPrefetchNeverServesAnotherSourceAndServesFailures(t *testing.T) {
 	fake := &prefetchSkillAcquirer{dir: t.TempDir(), fail: map[string]bool{"skills/s1": true}, panics: map[string]bool{"skills/s2": true}}
 	keys := prefetchKeys(3)
-	prefetch := startRawSkillPrefetch(t.Context(), fake, keys)
+	prefetch := startRawSkillPrefetch(t.Context(), fake, keys, prefetchGuard{})
 	defer prefetch.close()
 	for _, other := range []rawSkillKey{
 		{repository: "owner/other", commit: "c", path: "skills/s0"},
 		{repository: "owner/repo", commit: "d", path: "skills/s0"},
 		{repository: "owner/repo", commit: "c", path: "skills/s0/nested"},
 	} {
-		if _, ok := prefetch.take(t.Context(), other); ok {
+		if _, ok, _ := prefetch.take(t.Context(), other); ok {
 			t.Fatalf("prefetch served %v for a different source", other)
 		}
 	}
-	if _, ok := prefetch.take(t.Context(), keys[1]); ok {
-		t.Fatal("failed prefetch must fall back to the caller's own acquisition")
+	// A failure is served as the caller's own error instead of being repeated.
+	if _, ok, err := prefetch.take(t.Context(), keys[1]); !ok || err == nil || err.Error() != "fetch failed" {
+		t.Fatalf("failed prefetch must be served as its error: ok=%v err=%v", ok, err)
 	}
-	if _, ok := prefetch.take(t.Context(), keys[2]); ok {
+	if _, ok, _ := prefetch.take(t.Context(), keys[2]); ok {
 		t.Fatal("panicking prefetch must fall back to the caller's own acquisition")
 	}
 	var nilPrefetch *rawSkillPrefetch
-	if _, ok := nilPrefetch.take(t.Context(), keys[0]); ok {
+	if _, ok, _ := nilPrefetch.take(t.Context(), keys[0]); ok {
 		t.Fatal("nil prefetch served a snapshot")
 	}
 	nilPrefetch.close()
@@ -201,8 +202,8 @@ func TestRawSkillPrefetchNeverServesAnotherSourceOrFailedFetch(t *testing.T) {
 func TestRawSkillPrefetchCloseRemovesUntakenOnErrorPath(t *testing.T) {
 	fake := &prefetchSkillAcquirer{dir: t.TempDir()}
 	keys := prefetchKeys(3)
-	prefetch := startRawSkillPrefetch(t.Context(), fake, keys)
-	taken, ok := prefetch.take(t.Context(), keys[0])
+	prefetch := startRawSkillPrefetch(t.Context(), fake, keys, prefetchGuard{})
+	taken, ok, _ := prefetch.take(t.Context(), keys[0])
 	if !ok {
 		t.Fatal("expected prefetched snapshot")
 	}
@@ -219,7 +220,7 @@ func TestRawSkillPrefetchCloseRemovesUntakenOnErrorPath(t *testing.T) {
 
 func TestRawSkillPrefetchCloseStopsBlockedFetchesWithLiveParent(t *testing.T) {
 	fake := &prefetchSkillAcquirer{dir: t.TempDir(), block: make(chan struct{})}
-	prefetch := startRawSkillPrefetch(t.Context(), fake, prefetchKeys(6))
+	prefetch := startRawSkillPrefetch(t.Context(), fake, prefetchKeys(6), prefetchGuard{})
 	waitFor(t, "fetches in flight", func() bool { return fake.active.Load() == prefetchWindow })
 	closeWithin(t, prefetch)
 	if got := fake.remaining(); got != 0 {
@@ -230,11 +231,11 @@ func TestRawSkillPrefetchCloseStopsBlockedFetchesWithLiveParent(t *testing.T) {
 func TestRawSkillPrefetchRemovesSuccessArrivingAfterCancel(t *testing.T) {
 	fake := &prefetchSkillAcquirer{dir: t.TempDir(), block: make(chan struct{}), ignore: true}
 	keys := prefetchKeys(2)
-	prefetch := startRawSkillPrefetch(t.Context(), fake, keys)
+	prefetch := startRawSkillPrefetch(t.Context(), fake, keys, prefetchGuard{})
 	waitFor(t, "fetches in flight", func() bool { return fake.active.Load() == 2 })
 	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
-	if _, ok := prefetch.take(canceled, keys[0]); ok {
+	if _, ok, _ := prefetch.take(canceled, keys[0]); ok {
 		t.Fatal("canceled take served a snapshot")
 	}
 	closed := make(chan struct{})
@@ -369,11 +370,23 @@ func TestPrepareSkillsPrefetchCleansUpWhenFirstSkillFails(t *testing.T) {
 	names := []string{"alpha", "beta", "gamma", "delta", "epsilon"}
 	j, source, sha := multiSkillJourney(t, names)
 	source.fail, source.failAfter = "skills/alpha", prefetchWindow-1
-	if _, err := j.cli.app.PrepareSkills(t.Context(), SkillsBatchRequest{Selections: skillSelections("acme/tools", sha, names...), TargetIDs: []string{"codex"}}); err == nil {
-		t.Fatal("expected the failing first Skill to abort prepare")
+	_, err := j.cli.app.PrepareSkills(t.Context(), SkillsBatchRequest{Selections: skillSelections("acme/tools", sha, names...), TargetIDs: []string{"codex"}})
+	var selection *SkillsSelectionError
+	if !errors.As(err, &selection) || selection.Cause == nil || selection.Cause.Error() != "fetch failed" {
+		t.Fatalf("expected the failing first Skill's own fetch error, got %v", err)
 	}
 	if got := source.succeeded.Load(); got != prefetchWindow-1 {
 		t.Fatalf("completed prefetches = %d, want %d to be removed by close", got, prefetchWindow-1)
+	}
+	// The failed prefetch is the selection's own fetch; it is not repeated.
+	failed := 0
+	for _, key := range source.keys() {
+		if key.path == "skills/alpha" {
+			failed++
+		}
+	}
+	if failed != 1 {
+		t.Fatalf("failing Skill fetched %d times, want once", failed)
 	}
 	assertEmptyDir(t, j.source.TempRoot)
 }

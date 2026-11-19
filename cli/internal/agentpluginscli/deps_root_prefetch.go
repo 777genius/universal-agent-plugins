@@ -2,7 +2,6 @@ package agentpluginscli
 
 import (
 	"context"
-	"path"
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
@@ -55,7 +54,7 @@ func (resolver dependencyResolver) prefetchGitRoots(ctx context.Context, previou
 		if err != nil || pinned[key] {
 			continue
 		}
-		if source.Kind == environment.SkillKind && (skillsErr != nil || source.Path != "" && path.Base(source.Path) != source.Skill) {
+		if source.Kind == environment.SkillKind && (skillsErr != nil || skillDirectoryMismatch(source.Skill, source.Path)) {
 			continue
 		}
 		roots = append(roots, root{key: key, source: *source})
@@ -82,5 +81,5 @@ func (resolver dependencyResolver) prefetchGitRoots(ctx context.Context, previou
 		return gitRootFetch{resolution: resolution, snapshot: snapshot}, err
 	}
 	release := func(fetch gitRootFetch) { _ = packagedigest.Remove(fetch.snapshot) }
-	return startOrderedPrefetch(ctx, keys, acquire, release)
+	return startOrderedPrefetch(ctx, keys, acquire, release, resolver.app.prefetchGuard())
 }

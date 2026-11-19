@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"path"
 	"slices"
 	"strings"
 
@@ -59,7 +58,7 @@ func (candidate *skillsBatchCandidate) prefetchRawSkills(ctx context.Context, ap
 			continue
 		}
 		// resolveSkill rejects this selection before downloading; do not either.
-		if req.Git.Path != "" && path.Base(req.Git.Path) != req.Git.Skill {
+		if skillDirectoryMismatch(req.Git.Skill, req.Git.Path) {
 			continue
 		}
 		if old, ok := candidate.requirements.Dependencies[req.Alias]; ok && mustSourceKey(old) == mustSourceKey(req) {
@@ -70,7 +69,7 @@ func (candidate *skillsBatchCandidate) prefetchRawSkills(ctx context.Context, ap
 	if len(keys) < 2 {
 		return nil
 	}
-	return startRawSkillPrefetch(ctx, acquirer, keys)
+	return startRawSkillPrefetch(ctx, acquirer, keys, app.prefetchGuard())
 }
 
 func (candidate *skillsBatchCandidate) selectSkill(ctx context.Context, app App, selection SkillsSelection, req environment.Requirement, targets []string, prefetch *rawSkillPrefetch) error {

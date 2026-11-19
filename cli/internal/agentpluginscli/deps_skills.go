@@ -52,7 +52,7 @@ func (resolver dependencyResolver) resolveSkill(ctx context.Context, requirement
 			return environment.LockedPackage{}, err
 		}
 	}
-	if resolved != "" && path.Base(resolved) != source.Skill {
+	if skillDirectoryMismatch(source.Skill, resolved) {
 		return environment.LockedPackage{}, errors.New("skill name differs from source directory")
 	}
 	acquirer, err := resolver.app.rawSkillAcquirer()
@@ -64,7 +64,10 @@ func (resolver dependencyResolver) resolveSkill(ctx context.Context, requirement
 	if prefetched != nil && resolved == source.Path {
 		raw, ok, prefetched = *prefetched, true, nil
 	} else {
-		raw, ok = resolver.rawSkills.take(ctx, rawSkillKey{repository: source.Repository, commit: commit, path: resolved})
+		raw, ok, err = resolver.rawSkills.take(ctx, rawSkillKey{repository: source.Repository, commit: commit, path: resolved})
+		if err != nil {
+			return environment.LockedPackage{}, err
+		}
 	}
 	if !ok {
 		raw, err = acquirer.AcquireGitHubSkill(ctx, source.Repository, commit, resolved)
@@ -88,6 +91,12 @@ func (resolver dependencyResolver) resolveSkill(ctx context.Context, requirement
 	return pin, resolver.finishLoaded(ctx, loaded, pin)
 }
 
+// skillDirectoryMismatch reports a selected Skill folder whose name differs from
+// the Skill. An empty folder is the repository root and is never rejected here.
+func skillDirectoryMismatch(skill, directory string) bool {
+	return directory != "" && path.Base(directory) != skill
+}
+
 func skillSnapshotSource(pin environment.LockedPackage) domain.SourceIdentity {
 	source := pin.Source.Git
 	identity := githubIdentity(source.Repository, source.Commit, source.ResolvedSkillPath)
@@ -99,7 +108,7 @@ func (app App) acquireLockedSkill(ctx context.Context, pin environment.LockedPac
 	if source.Normalizer != environment.SkillNormalizerV1 {
 		return domain.PackageSnapshot{}, errors.New("unsupported locked Skill normalizer")
 	}
-	if source.ResolvedSkillPath != "" && path.Base(source.ResolvedSkillPath) != source.Skill {
+	if skillDirectoryMismatch(source.Skill, source.ResolvedSkillPath) {
 		return domain.PackageSnapshot{}, errors.New("locked Skill name differs from source directory")
 	}
 	acquirer, err := app.rawSkillAcquirer()

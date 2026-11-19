@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -30,10 +31,17 @@ type rootFetchSource struct {
 	active   atomic.Int32
 	maxSeen  atomic.Int32
 	tempRoot string
+	// failed is set once the failing source returned; reads starting after it
+	// are counted in afterFailure.
+	failed       atomic.Bool
+	afterFailure []string
 }
 
 func (source *rootFetchSource) read(ctx context.Context, kind, repository string) error {
 	source.mu.Lock()
+	if source.failed.Load() {
+		source.afterFailure = append(source.afterFailure, kind+" "+repository)
+	}
 	source.reads = append(source.reads, kind+" "+repository)
 	n := len(source.reads)
 	source.mu.Unlock()
@@ -51,6 +59,7 @@ func (source *rootFetchSource) read(ctx context.Context, kind, repository string
 		}
 	}
 	if repository == source.fail {
+		source.failed.Store(true)
 		return errors.New("remote read failed for " + repository)
 	}
 	return ctx.Err()
@@ -75,6 +84,26 @@ func (source *rootFetchSource) AcquireGitHubSkill(ctx context.Context, repositor
 		return domain.PackageSnapshot{}, err
 	}
 	return source.Acquirer.AcquireGitHubSkill(ctx, repository, commit, path)
+}
+
+func (source *rootFetchSource) readsOf(repository string) int {
+	source.mu.Lock()
+	defer source.mu.Unlock()
+	count := 0
+	for _, read := range source.reads {
+		if strings.HasSuffix(read, " "+repository) {
+			count++
+		}
+	}
+	return count
+}
+
+func (source *rootFetchSource) reset() {
+	source.mu.Lock()
+	source.reads, source.afterFailure = nil, nil
+	source.mu.Unlock()
+	source.failed.Store(false)
+	source.maxSeen.Store(0)
 }
 
 func (source *rootFetchSource) sortedReads() []string {
@@ -251,9 +280,30 @@ func TestGitRootPrefetchFailingSourceReturnsTheSerialError(t *testing.T) {
 			if serialErr == nil {
 				t.Fatal("expected the failing source to fail serial resolution")
 			}
+			serialReads, serialFailing := source.sortedReads(), source.readsOf(failing)
+			source.reset()
+			source.overlap = true
 			_, parallelErr := resolveMixedRoots(t, t.Context(), app, requirements, nil, false)
 			if parallelErr == nil || parallelErr.Error() != serialErr.Error() {
 				t.Fatalf("prefetched error = %v, want the serial error %v", parallelErr, serialErr)
+			}
+			// The failure is served, not repeated: the failing source costs one
+			// attempt. Reads already in flight beside it when it failed are the
+			// only additions to the serial reads.
+			if got := source.readsOf(failing); got != serialFailing || got != 1 {
+				t.Fatalf("failing source read %d times, serial read it %d times", got, serialFailing)
+			}
+			// Reads may still finish the roots before the failure, which the
+			// serial resolution also reads, but nothing beyond them starts.
+			for _, read := range source.afterFailure {
+				if !slices.Contains(serialReads, read) {
+					t.Fatalf("read %q started after the failure and is not a serial read", read)
+				}
+			}
+			for _, read := range serialReads {
+				if !slices.Contains(source.sortedReads(), read) {
+					t.Fatalf("prefetched resolution skipped serial read %q", read)
+				}
 			}
 			assertEmptyDir(t, source.tempRoot)
 		})

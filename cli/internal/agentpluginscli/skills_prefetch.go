@@ -13,10 +13,10 @@ type rawSkillKey struct{ repository, commit, path string }
 // of the sequential resolver.
 type rawSkillPrefetch = orderedPrefetch[rawSkillKey, domain.PackageSnapshot]
 
-func startRawSkillPrefetch(ctx context.Context, acquirer skillRawAcquirer, keys []rawSkillKey) *rawSkillPrefetch {
+func startRawSkillPrefetch(ctx context.Context, acquirer skillRawAcquirer, keys []rawSkillKey, guard prefetchGuard) *rawSkillPrefetch {
 	acquire := func(ctx context.Context, key rawSkillKey) (domain.PackageSnapshot, error) {
 		return acquirer.AcquireGitHubSkill(ctx, key.repository, key.commit, key.path)
 	}
 	release := func(snapshot domain.PackageSnapshot) { _ = packagedigest.Remove(snapshot) }
-	return startOrderedPrefetch(ctx, keys, acquire, release)
+	return startOrderedPrefetch(ctx, keys, acquire, release, guard)
 }
