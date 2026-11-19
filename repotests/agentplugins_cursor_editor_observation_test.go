@@ -106,7 +106,55 @@ func cursorEditorCapture(ctx context.Context, argv, env []string, cwd string, in
 	return body, err
 }
 
-func cursorEditorFrozen(t *testing.T, ctx context.Context, roots map[string]string) map[string]map[string]acpMetadataFile {
+func cursorEditorRefusalCause(err error) string {
+	if err == nil {
+		return "unclassified"
+	}
+	switch err.Error() {
+	case "editor tree boundary":
+		return "tree-boundary"
+	case "editor tree byte bound":
+		return "aggregate-bytes"
+	case "metadata custody type/owner":
+		return "type-owner"
+	case "metadata custody hardlink":
+		return "hardlink"
+	case "editor runtime alias refused":
+		return "alias-refused"
+	case "editor runtime alias changed":
+		return "alias-changed"
+	case "snapshot pre-read type/size refused":
+		return "file-type-size"
+	case "snapshot opened identity differs", "snapshot bytes/held identity changed", "snapshot path identity changed":
+		return "held-identity"
+	}
+	for _, prefix := range []string{"snapshot opened identity: ", "snapshot held identity: ", "snapshot path identity: "} {
+		if strings.HasPrefix(err.Error(), prefix) {
+			return "held-read"
+		}
+	}
+	return "unclassified"
+}
+
+func cursorEditorRefusalFacts(label string, facts map[string]acpMetadataFile, err error) string {
+	switch label {
+	case "runtime", "project-skills", "user-plugin", "playwright", "playwright-core":
+	default:
+		label = "unknown"
+	}
+	var total int64
+	for _, fact := range facts {
+		if os.FileMode(fact.Mode).IsRegular() {
+			total += fact.Bytes
+		}
+	}
+	// Count only facts already captured by the unchanged walk. Its final
+	// individually valid file remains counted if it trips the aggregate bound.
+	return fmt.Sprintf("editor frozen tree refusal root=%s cause=%s admitted_entries=%d admitted_regular_bytes=%d",
+		label, cursorEditorRefusalCause(err), len(facts), total)
+}
+
+func cursorEditorFrozen(ctx context.Context, t *testing.T, roots map[string]string) map[string]map[string]acpMetadataFile {
 	t.Helper()
 	result := map[string]map[string]acpMetadataFile{}
 	for label, root := range roots {
@@ -116,11 +164,102 @@ func cursorEditorFrozen(t *testing.T, ctx context.Context, roots map[string]stri
 		}
 		facts, err := cursorEditorTree(ctx, root)
 		if err != nil {
+			t.Log(cursorEditorRefusalFacts(label, facts, err))
 			t.Fatalf("editor frozen tree refused: %s", label)
 		}
 		result[label] = facts
 	}
 	return result
+}
+
+func TestCursorEditorFreezeRefusalFacts(t *testing.T) {
+	for _, scenario := range []struct {
+		name, cause string
+		entries     int
+		bytes       int64
+	}{
+		{"ordinary", "", 2, 5},
+		{"hardlink", "hardlink", 1, 0},
+		{"external-alias", "alias-refused", 2, 5},
+		{"special", "type-owner", 2, 5},
+		{"large", "file-type-size", 2, 5},
+		{"canceled", "tree-boundary", 0, 0},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			root := t.TempDir()
+			safe, private := filepath.Join(root, "00-safe"), filepath.Join(root, "10-PRIVATE-CANARY")
+			if err := os.WriteFile(safe, []byte("owned"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			switch scenario.name {
+			case "hardlink":
+				if err := os.Link(safe, private); err != nil {
+					t.Fatal(err)
+				}
+			case "external-alias":
+				outside := filepath.Join(t.TempDir(), "PRIVATE-CANARY")
+				if err := os.WriteFile(outside, []byte("foreign owned control"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(outside, private); err != nil {
+					t.Fatal(err)
+				}
+			case "special":
+				if err := syscall.Mkfifo(private, 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "large":
+				file, err := os.OpenFile(private, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+				if err != nil {
+					t.Fatal(err)
+				}
+				truncateErr, closeErr := file.Truncate((512<<20)+1), file.Close()
+				if truncateErr != nil || closeErr != nil {
+					t.Fatal(truncateErr, closeErr)
+				}
+			case "canceled":
+				cancel()
+			}
+			facts, err := cursorEditorTree(ctx, root)
+			if scenario.cause == "" {
+				if err != nil || len(facts) != scenario.entries || facts["00-safe"].Bytes != scenario.bytes {
+					t.Fatal("ordinary custody control failed", err)
+				}
+				return
+			}
+			want := fmt.Sprintf("editor frozen tree refusal root=runtime cause=%s admitted_entries=%d admitted_regular_bytes=%d", scenario.cause, scenario.entries, scenario.bytes)
+			if err == nil || cursorEditorRefusalFacts("runtime", facts, err) != want {
+				t.Fatal("actual refusal did not retain exact safe facts")
+			}
+		})
+	}
+}
+
+func TestCursorEditorFreezeRefusalPrivacyAndFixedCauses(t *testing.T) {
+	for _, scenario := range []struct{ message, cause string }{
+		{"editor tree byte bound", "aggregate-bytes"},
+		{"editor runtime alias changed", "alias-changed"},
+		{"snapshot opened identity differs", "held-identity"},
+		{"snapshot bytes/held identity changed", "held-identity"},
+		{"snapshot path identity changed", "held-identity"},
+		{"snapshot opened identity: PRIVATE-CANARY", "held-read"},
+		{"snapshot held identity: PRIVATE-CANARY", "held-read"},
+		{"snapshot path identity: PRIVATE-CANARY", "held-read"},
+		{"/home/PRIVATE-CANARY token=PRIVATE-CANARY\nraw output", "unclassified"},
+	} {
+		facts := map[string]acpMetadataFile{
+			"PRIVATE-CANARY": {Mode: 0600, Bytes: 5, SHA: "PRIVATE-CANARY"},
+			"private-dir":    {Mode: uint32(os.ModeDir | 0700), Bytes: 4096},
+			"private-alias":  {Mode: uint32(os.ModeSymlink | 0777), Bytes: 100},
+		}
+		got := cursorEditorRefusalFacts("/home/PRIVATE-CANARY", facts, fmt.Errorf("%s", scenario.message))
+		want := fmt.Sprintf("editor frozen tree refusal root=unknown cause=%s admitted_entries=3 admitted_regular_bytes=5", scenario.cause)
+		if got != want || strings.Contains(got, "PRIVATE-CANARY") {
+			t.Fatal("refusal leaked private contents or lost fixed classification")
+		}
+	}
 }
 
 func cursorEditorFiles(t *testing.T, paths map[string]string) map[string]acpMetadataFile {
@@ -205,10 +344,10 @@ func TestAgentpluginsCursorEditorObservation(t *testing.T) {
 	report["source"] = source
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 	defer cancel()
-	cursorEditorObserve(t, ctx, temp, output, report)
+	cursorEditorObserve(ctx, t, temp, output, report)
 }
 
-func cursorEditorObserve(t *testing.T, ctx context.Context, temp, output string, report map[string]any) {
+func cursorEditorObserve(ctx context.Context, t *testing.T, temp, output string, report map[string]any) {
 	t.Helper()
 	runtimeRoot := filepath.Join(temp, "vendor-root", "usr", "share", "cursor")
 	source := os.Getenv("AGENTPLUGINS_CURSOR_EDITOR_SOURCE")
@@ -220,7 +359,7 @@ func cursorEditorObserve(t *testing.T, ctx context.Context, temp, output string,
 	if filesBefore["archive"].SHA != cursorEditorPin {
 		t.Fatal("Cursor Editor exact official archive differs")
 	}
-	runtimeBefore := cursorEditorFrozen(t, ctx, map[string]string{"runtime": runtimeRoot})["runtime"]
+	runtimeBefore := cursorEditorFrozen(ctx, t, map[string]string{"runtime": runtimeRoot})["runtime"]
 	report["runtime_before_help"] = cursorEditorSummary(t, runtimeBefore)
 	root, project, env, _ := acpMetadataProfile(t, "cursor")
 	for _, key := range []string{"DISPLAY", "XAUTHORITY"} {
@@ -228,10 +367,10 @@ func cursorEditorObserve(t *testing.T, ctx context.Context, temp, output string,
 			env = append(env, key+"="+value)
 		}
 	}
-	cursorEditorHelpAndUI(t, ctx, root, project, output, source, paths, env, filesBefore, runtimeBefore, report)
+	cursorEditorHelpAndUI(ctx, t, root, project, output, source, paths, env, filesBefore, runtimeBefore, report)
 }
 
-func cursorEditorHelpAndUI(t *testing.T, ctx context.Context, root, project, output, source string, paths map[string]string, env []string, filesBefore, runtimeBefore map[string]acpMetadataFile, report map[string]any) {
+func cursorEditorHelpAndUI(ctx context.Context, t *testing.T, root, project, output, source string, paths map[string]string, env []string, filesBefore, runtimeBefore map[string]acpMetadataFile, report map[string]any) {
 	t.Helper()
 	report["stage"] = "native-help"
 	probe, stop := context.WithTimeout(ctx, 30*time.Second)
@@ -249,7 +388,7 @@ func cursorEditorHelpAndUI(t *testing.T, ctx context.Context, root, project, out
 	if err != nil || strings.Split(strings.TrimSpace(string(body)), "\n")[0] != "3.30.14" {
 		t.Fatal("editor measured version differs")
 	}
-	runtimeAfterHelp := cursorEditorFrozen(t, ctx, map[string]string{"runtime": filepath.Dir(paths["electron"])})["runtime"]
+	runtimeAfterHelp := cursorEditorFrozen(ctx, t, map[string]string{"runtime": filepath.Dir(paths["electron"])})["runtime"]
 	if !acpMetadataSame(runtimeBefore, runtimeAfterHelp) || !acpMetadataSame(filesBefore, cursorEditorFiles(t, paths)) {
 		t.Fatal("editor help changed frozen acquisition")
 	}
@@ -258,7 +397,7 @@ func cursorEditorHelpAndUI(t *testing.T, ctx context.Context, root, project, out
 		"user-plugin":     filepath.Join(root, "home", ".cursor", "plugins", "local"),
 		"playwright":      filepath.Join(source, "ui", "skills-picker", "node_modules", "playwright"),
 		"playwright-core": filepath.Join(source, "ui", "skills-picker", "node_modules", "playwright-core")}
-	before := cursorEditorFrozen(t, ctx, roots)
+	before := cursorEditorFrozen(ctx, t, roots)
 	summariesBefore := map[string]any{}
 	for label, facts := range before {
 		summariesBefore[label] = cursorEditorSummary(t, facts)
@@ -274,7 +413,7 @@ func cursorEditorHelpAndUI(t *testing.T, ctx context.Context, root, project, out
 	report["driver_stdout_bytes"], report["driver_stdout_sha256"] = len(observed), hex.EncodeToString(stdoutDigest[:])
 	var result map[string]any
 	decodeErr := json.Unmarshal(observed, &result)
-	after, filesAfter := cursorEditorFrozen(t, ctx, roots), cursorEditorFiles(t, paths)
+	after, filesAfter := cursorEditorFrozen(ctx, t, roots), cursorEditorFiles(t, paths)
 	summariesAfter := map[string]any{}
 	for label, facts := range after {
 		summariesAfter[label] = cursorEditorSummary(t, facts)

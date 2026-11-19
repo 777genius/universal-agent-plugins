@@ -18,10 +18,12 @@ from native_skills import (LIMIT, NativeSession, choose_targets, failure_screen,
 
 PLUGIN = "context7"
 TARGETS = ("claude", "codex")
+LABELS = {"claude": "Claude Code", "codex": "OpenAI Codex"}
 QUESTION = "Apply these changes? [y/N]"
 ACK = re.compile(rb"(?:^|[\r\n])Changes confirmed\.\r?\n")
 ACTIVITY = re.compile(rb"\r\x1b\[2K([^\r\n]*)(?=[\r\n])")
-RESULT = re.compile(r"(?:^|[\r\n])install ([^/\s]+)/([a-z0-9-]+): ([^\s]+)[^\r\n]*(?=[\r\n]|$)")
+RESULT = re.compile(r"(?:^|[\r\n])Install ([^\r\n]+?) for ([^\r\n:]+): ([^\s]+)[^\r\n]*(?=[\r\n]|$)")
+INSTALLATION = re.compile(r"(?m)^Installation: ([^/\s]+)\r?$")
 
 
 def arguments(installer):
@@ -47,8 +49,8 @@ def protected_state(root, env):
 
 def review(session):
     view = wait_screen(session, "plugin-review", lambda value: QUESTION in value and
-                       sorted(re.findall(r"(?m)^install ([^/\s]+)/([a-z0-9-]+)(?::[^\n]*)?$", value)) ==
-                       [(PLUGIN, target) for target in TARGETS])
+                       sorted(re.findall(r"(?m)^Install ([^\r\n]+?) for ([^\r\n:]+)(?::[^\r\n]*)?\r?$", value)) ==
+                       [(PLUGIN, LABELS[target]) for target in TARGETS])
     check(ACK.search(bytes(session.raw)) is None, "Directory changes acknowledged before confirmation")
     return view
 
@@ -106,13 +108,14 @@ def completed_result(raw, after):
     check(0 <= after <= len(raw), "invalid plugin completion offset")
     text = clean(raw[after:])
     results = RESULT.findall(text)
-    check(len(results) == 2 and sorted(client for _, client, _ in results) == list(TARGETS),
-          "Directory result did not cover exactly the two selected agents")
-    installation_ids = {identity for identity, _, _ in results}
+    check(len(results) == 2 and sorted((plugin, client) for plugin, client, _ in results) ==
+          [(PLUGIN, LABELS[target]) for target in TARGETS],
+          "Directory result did not cover exactly the plugin and two selected agents")
+    installation_ids = INSTALLATION.findall(text)
     check(len(installation_ids) == 1 and all(outcome == "completed" for _, _, outcome in results),
           "Directory result lost one saved installation or did not complete")
     # These are real operation outcomes, not evidence that MCP/auth is ready.
-    return {"installation_id": next(iter(installation_ids)),
+    return {"installation_id": installation_ids[0],
             "manual_or_next_actions": [line.strip() for line in text.splitlines()
                                        if line.strip().startswith(("Manual:", "Next:"))]}
 

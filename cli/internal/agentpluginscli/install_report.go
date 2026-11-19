@@ -47,6 +47,7 @@ func (report agentReport) Retryable() bool {
 // agentItem is one package on one agent, the neutral input of every report.
 type agentItem struct {
 	Alias, ClientID, Status string
+	installationID          string // presentation-only exact Result/Binding pairing
 	failure                 *installFailure
 }
 
@@ -63,6 +64,9 @@ func outcomeAgentItems(outcomes []environment.BindingOutcome) []agentItem {
 	for index, outcome := range outcomes {
 		status, _ := outcomeStatusReason(outcome)
 		out[index] = agentItem{Alias: outcome.Binding.Alias, ClientID: outcome.Binding.ClientID, Status: status, failure: describeBindingFailure(outcome)}
+		if outcome.Result != nil {
+			out[index].installationID = outcome.Result.InstallationID
+		}
 	}
 	return out
 }

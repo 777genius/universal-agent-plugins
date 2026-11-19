@@ -14,8 +14,8 @@ from test_native_skills import StreamSession
 ACK = b"\r\nChanges confirmed.\r\n"
 ACTIVITY = "\r\x1b[2K⠋ Applying changes · 0s".encode()
 STOP = b"\r\x1b[2K"
-RESULT = b"install selected-id/claude: completed \r\ninstall selected-id/codex: completed \r\n"
-REVIEW = "install context7/claude: not installed\ninstall context7/codex: not installed\n" + n.QUESTION
+RESULT = b"Install context7 for Claude Code: completed \r\nInstall context7 for OpenAI Codex: completed \r\nInstallation: selected-id\r\n"
+REVIEW = "Install context7 for Claude Code\nInstall context7 for OpenAI Codex\n" + n.QUESTION
 
 
 def session(before, chunks):
@@ -136,18 +136,18 @@ class NativePluginProgressTests(unittest.TestCase):
         with patch.object(value, "frame", side_effect=RuntimeError("capture failed")):
             with self.assertRaisesRegex(RuntimeError, "capture failed"):
                 n.wait_progress(value, 0)
-        self.assertIn("selected-id/codex: completed", value.screen.snapshot())
+        self.assertIn("Installation: selected-id", value.screen.snapshot())
 
 
 class NativePluginContractTests(unittest.TestCase):
     def test_arguments_and_review_use_the_ordinary_saved_directory_route(self):
         self.assertEqual(n.arguments(Path("/fixture/installer")), ["/fixture/installer", "add", "context7"])
         for view, accepted in (
-                (REVIEW, True), (REVIEW.replace(": not installed", ""), True),
+                (REVIEW, True), (REVIEW.replace("for Claude Code", "for Claude Code: review selected policy"), True),
                 (REVIEW.replace("[y/N]", "[Y/n]"), False),
-                (REVIEW.replace("context7/claude", "other/claude"), False),
-                (REVIEW.replace("context7/codex", "context7/claude"), False),
-                ("install context7/other: not installed\n" + REVIEW, False)):
+                (REVIEW.replace("context7 for Claude Code", "other for Claude Code"), False),
+                (REVIEW.replace("OpenAI Codex", "Claude Code"), False),
+                ("Install context7 for Other Agent\n" + REVIEW, False)):
             with self.subTest(view=view):
                 def wait(_session, _label, predicate):
                     n.check(predicate(view), "review refused")
@@ -170,10 +170,12 @@ class NativePluginContractTests(unittest.TestCase):
                     "installation_id": "selected-id", "manual_or_next_actions": [
                         "Manual: Claude MCP is not connected", "Next: inspect existing policy"]})
         for raw in (b"", RESULT.split(b"\n", 1)[0],
-                    RESULT.replace(b"/codex:", b"/claude:"),
-                    RESULT.replace(b"selected-id/codex", b"other-id/codex"),
-                    RESULT.replace(b"/codex:", b"/other:"),
-                    RESULT.replace(b"completed", b"failed", 1), RESULT + RESULT):
+                    RESULT.replace(b"OpenAI Codex:", b"Claude Code:"),
+                    RESULT + b"Installation: other-id\r\n",
+                    RESULT.replace(b"OpenAI Codex:", b"Other Agent:"),
+                    RESULT.replace(b"completed", b"failed", 1),
+                    RESULT.replace(b"context7 for Claude", b"other-plugin for Claude"),
+                    RESULT.replace(b"Installation: selected-id\r\n", b""), RESULT + RESULT):
             with self.subTest(raw=raw), self.assertRaises(AssertionError):
                 n.completed_result(raw, 0)
         for offset in (-1, len(RESULT) + 1):
