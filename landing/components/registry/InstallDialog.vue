@@ -127,13 +127,18 @@ const { t } = useI18n();
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 22px 26px 26px;
+  padding: 22px 26px 62px;
 }
 .install-dialog__footer {
+  position: relative;
   flex-shrink: 0;
-  padding: 12px 26px 14px;
+  padding: 0 26px 12px;
   border-top: 1px solid var(--line);
   background: var(--surface-solid);
+}
+.install-dialog__footer :deep(.command-snippet) {
+  position: relative;
+  margin-top: -36px;
 }
 .install-dialog__footer :deep(.native-cli-checkbox) {
   margin-top: 8px;
@@ -194,10 +199,10 @@ const { t } = useI18n();
     gap: 9px;
   }
   .install-dialog__footer {
-    padding: 10px 14px;
+    padding: 0 14px 10px;
   }
   .install-dialog__body {
-    padding: 18px 14px;
+    padding: 18px 14px 54px;
   }
 }
 </style>

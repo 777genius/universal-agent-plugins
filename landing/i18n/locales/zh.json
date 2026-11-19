@@ -808,6 +808,7 @@
         "label": "安装范围",
         "user": "这台电脑",
         "project": "此项目",
+        "projectLocationHint": "项目是运行终端命令时所在的文件夹。请在目标项目的根目录中运行命令。",
         "projectHint": "请在项目文件夹中运行这些命令。代理可能会要求您信任或激活该项目。",
         "projectUnavailable": "此软件包不支持项目安装。",
         "marketingKitProjectUnavailable": "Marketing Kit 暂不能安装到项目：必需的 Notion、HubSpot 和 Playwright 依赖需要分别支持 Project 范围安装。",

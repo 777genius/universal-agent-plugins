@@ -808,6 +808,7 @@
         "label": "Instalar para",
         "user": "Este computador",
         "project": "Este projeto",
+        "projectLocationHint": "O projeto é a pasta de onde você executa o comando no terminal. Execute-o na raiz do projeto desejado.",
         "projectHint": "Execute estes comandos na pasta do projeto. Seu agente pode pedir que você confie no projeto ou o ative.",
         "projectUnavailable": "A instalação em um projeto não está disponível para este pacote.",
         "marketingKitProjectUnavailable": "O Marketing Kit ainda não está disponível para Project: cada dependência obrigatória, Notion, HubSpot e Playwright, precisa ser compatível com a instalação em Project.",

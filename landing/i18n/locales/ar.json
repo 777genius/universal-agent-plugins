@@ -808,6 +808,7 @@
         "label": "التثبيت من أجل",
         "user": "هذا الكمبيوتر",
         "project": "هذا المشروع",
+        "projectLocationHint": "المشروع هو المجلد الذي تشغّل منه أمر الطرفية. شغّل الأمر من المجلد الجذر للمشروع المطلوب.",
         "projectHint": "شغّل هذه الأوامر من مجلد مشروعك. قد يطلب منك الوكيل الوثوق بالمشروع أو تفعيله.",
         "projectUnavailable": "التثبيت داخل مشروع غير متاح لهذه الحزمة.",
         "marketingKitProjectUnavailable": "حزمة Marketing Kit غير متاحة حاليًا لنطاق Project: يجب أن تدعم كل اعتماد إلزامي من Notion وHubSpot وPlaywright التثبيت ضمن Project.",

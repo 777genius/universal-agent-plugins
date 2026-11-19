@@ -825,6 +825,7 @@
         "label": "Install for",
         "user": "This computer",
         "project": "This project",
+        "projectLocationHint": "The project is the folder where you run the terminal command. Run it from your project root.",
         "projectHint": "Run these commands from your project folder. Your agent may ask you to trust or activate the project.",
         "projectUnavailable": "Project installation is not available for this package.",
         "marketingKitProjectUnavailable": "Marketing Kit is not yet available for Project: its required Notion, HubSpot and Playwright dependencies must each qualify for Project installation.",

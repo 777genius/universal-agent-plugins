@@ -808,6 +808,7 @@
         "label": "Installer pour",
         "user": "Cet ordinateur",
         "project": "Ce projet",
+        "projectLocationHint": "Le projet est le dossier depuis lequel vous exécutez la commande dans le terminal. Exécutez-la à la racine du projet souhaité.",
         "projectHint": "Exécutez ces commandes depuis le dossier du projet. Votre agent peut vous demander de faire confiance au projet ou de l’activer.",
         "projectUnavailable": "L’installation dans un projet n’est pas disponible pour ce paquet.",
         "marketingKitProjectUnavailable": "Marketing Kit n’est pas encore disponible pour Project : chacune de ses dépendances obligatoires Notion, HubSpot et Playwright doit prendre en charge l’installation en Project.",
