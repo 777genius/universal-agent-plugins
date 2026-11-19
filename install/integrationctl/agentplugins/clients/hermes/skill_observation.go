@@ -24,6 +24,11 @@ root = Path(sys.argv[1])
 sys.path.insert(0, str(root))
 from hermes_cli._launchers import runtime_command
 argv = runtime_command(root, python=sys.executable, args=sys.argv[3:], code=sys.argv[2])
+if os.name == "nt":
+    # Windows execv concatenates arguments without quoting inline Python.
+    # The supervised parent waits and preserves the selected child's status.
+    import subprocess
+    raise SystemExit(subprocess.call(argv))
 os.execv(argv[0], argv)
 `
 

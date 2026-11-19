@@ -1,6 +1,7 @@
 package hermes
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -19,6 +20,63 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
+
+type hermesSkillMetadataABAIO struct {
+	nativeconfig.FileIO
+	live                  string
+	original, substituted []byte
+	reads                 int
+}
+
+func (files *hermesSkillMetadataABAIO) ReadNoFollowBounded(path string, limit int64) ([]byte, os.FileMode, bool, error) {
+	if filepath.Base(path) != "SKILL.md" {
+		file, err := nativeconfig.New().ReadExactFileBounded(path, limit)
+		return file.Body, file.Mode, file.Exists, err
+	}
+	files.reads++
+	if err := os.WriteFile(files.live, files.substituted, 0600); err != nil {
+		return nil, 0, false, err
+	}
+	file, err := nativeconfig.New().ReadExactFileBounded(path, limit)
+	restore := os.WriteFile(files.live, files.original, 0600)
+	return file.Body, file.Mode, file.Exists, errors.Join(err, restore)
+}
+
+func TestHermesSkillObservationBindsMetadataDuringLiveABA(t *testing.T) {
+	for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
+		for _, nativeMetadata := range []string{"owned", "substituted"} {
+			t.Run(string(scope)+"/"+nativeMetadata, func(t *testing.T) {
+				request, env, doc := hermesObservationFixture(t, scope)
+				row := doc["skills"].([]any)[0].(map[string]any)
+				live := row["path"].(string)
+				original, err := os.ReadFile(live)
+				if err != nil {
+					t.Fatal(err)
+				}
+				files := &hermesSkillMetadataABAIO{live: live, original: original,
+					substituted: append(bytes.Clone(original), []byte("\nSubstituted instructions.\n")...)}
+				env.NativeConfig = nativeconfig.NewWithFileIO(files)
+				if nativeMetadata == "substituted" {
+					row["digest"] = fmt.Sprintf("%x", sha256.Sum256(files.substituted))
+				}
+				originalRunner := hermesObservationRunner(t, request, doc, nil)
+				calls := 0
+				env.Runner = hermesSkillRunner(func(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+					calls++
+					return originalRunner(ctx, command)
+				})
+				got, err := completeHermesSkills(t.Context(), env, request, hermesPreparedSkillOutcome(), hermesCompletedAction)
+				if err != nil || calls != 4 || files.reads != 2 || (got.Activation == domain.ActivationActive) != (nativeMetadata == "owned") {
+					t.Fatalf("live metadata ABA changed native proof: outcome=%+v calls=%d reads=%d err=%v", got, calls, files.reads, err)
+				}
+				body, err := os.ReadFile(live)
+				if err != nil || !bytes.Equal(body, original) {
+					t.Fatalf("live Skill was not restored: %v", err)
+				}
+			})
+		}
+	}
+}
 
 type hermesSkillRunner func(context.Context, legacyports.Command) (legacyports.CommandResult, error)
 

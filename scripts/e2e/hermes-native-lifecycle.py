@@ -79,15 +79,33 @@ class Lifecycle:
                 "native Hermes trust list is not a list of paths")
         return {Path(item).resolve() for item in value}
 
-    def require_trust_report(self, output, granted, reason=""):
+    def require_trust_report(self, output, granted, reason="", expected_roots=None):
         data = json.loads(output.read_text(encoding="utf-8"))["data"]
         if "targets" in data:
             data = data["targets"][0]["output"]
-        actions = "\n".join((data["result"].get("activation") or {}).get("user_actions") or [])
+        activation = data["result"].get("activation") or {}
+        actions = "\n".join(activation.get("user_actions") or [])
         # Public JSON stays path-free; the exact command is human output only.
         require(str(self.root) not in actions and str(self.root.resolve()) not in actions,
                 "public Hermes trust guidance contains a host path")
-        if granted:
+        if granted and "Hermes now trusts this project's Git repository root" not in actions:
+            # Completed native discovery clears pending trust/session guidance.
+            # Its absence alone proves nothing: require exact public completion
+            # and a separate genuine readback of every expected native Git root.
+            require(data.get("readiness") == "ready"
+                    and activation.get("activation") == "active"
+                    and activation.get("authentication") == "not_required"
+                    and activation.get("policy") == "allowed"
+                    and activation.get("verification") == "installation_verified"
+                    and activation.get("activation_attested", False) is False
+                    and activation.get("authentication_attested", False) is False
+                    and activation.get("user_actions") in (None, [])
+                    and "next_action" not in data and "next_actions" not in data
+                    and isinstance(expected_roots, set) and bool(expected_roots),
+                    "completed Project add lacks exact native readiness")
+            require(self.trusted_roots(output.stem + "-completed-trust") == expected_roots,
+                    "completed Project add changed the expected native trusted Git roots")
+        elif granted:
             require("Hermes now trusts this project's Git repository root" in actions,
                     "explicit Project add did not report verified Hermes trust")
         else:
@@ -233,13 +251,15 @@ class Lifecycle:
     def project_lifecycle(self):
         servers = self.hermes_json("project-before", "mcp_servers")
         require(not self.trusted_roots("project-before"), "disposable profile already trusts a project")
+        expected_roots = set()
         for label, project in (("a", self.project_a), ("b", self.project_b)):
             output = self.run_uap("project-" + label + "-add", "add", self.project_source,
                                   "--scope", "project", "--project-root", project, "--no-save")
-            self.require_trust_report(output, granted=True)
+            expected_roots.add(project.resolve())
+            self.require_trust_report(output, granted=True, expected_roots=expected_roots)
         output = self.run_uap("project-a-repeat", "add", self.project_source, "--scope", "project",
                               "--project-root", self.project_a, "--no-save")
-        self.require_trust_report(output, granted=True)
+        self.require_trust_report(output, granted=True, expected_roots=expected_roots)
         for label, project in (("a", self.project_a), ("b", self.project_b)):
             self.observe("project-" + label + "-add", project, "UAP_NATIVE_USER_V2", 1, True)
         # The user revokes A. Update and repair must not grant it again.

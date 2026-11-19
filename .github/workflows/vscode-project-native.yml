@@ -1,28 +1,6 @@
 name: VS Code Trusted Project Native
+# VS Code plugin-platform support is frozen; keep manual diagnostics only.
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/vscode-project-native.yml'
-      - 'scripts/research-vscode-project.py'
-      - 'scripts/test_vscode_project_research.py'
-      - 'scripts/research-vscode-workspace.py'
-      - 'scripts/project_native_vscode_toolchain.py'
-      - 'scripts/vscode-project-runtime-observer/**'
-      - 'repotests/agentplugins_vscode_project_native_gateway_test.go'
-      - 'repotests/testdata/agentplugins_native_probe/**'
-      - 'install/integrationctl/agentplugins/research/vscodeworkspace/**'
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/vscode-project-native.yml'
-      - 'scripts/research-vscode-project.py'
-      - 'scripts/test_vscode_project_research.py'
-      - 'scripts/research-vscode-workspace.py'
-      - 'scripts/project_native_vscode_toolchain.py'
-      - 'scripts/vscode-project-runtime-observer/**'
-      - 'repotests/agentplugins_vscode_project_native_gateway_test.go'
-      - 'repotests/testdata/agentplugins_native_probe/**'
-      - 'install/integrationctl/agentplugins/research/vscodeworkspace/**'
   workflow_dispatch:
 permissions:
   contents: read

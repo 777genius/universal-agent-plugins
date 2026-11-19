@@ -1,16 +1,7 @@
 name: VS Code Pinned Publisher Research
 
+# VS Code plugin-platform support is frozen; keep manual diagnostics only.
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/vscode-native-research.yml'
-      - 'scripts/research-vscode-native.py'
-      - 'scripts/test_vscode_native_research.py'
-      - 'scripts/native_client_research.py'
-      - 'scripts/test_native_client_research.py'
-      - 'scripts/research-grok-native.py'
-      - 'scripts/run-native-client-matrix.py'
-      - 'scripts/native_client_draft.py'
   workflow_dispatch:
 
 permissions:

@@ -160,17 +160,17 @@ func hermesOwnedSkills(ctx context.Context, env clients.Env, request domain.Acti
 		return nil, fmt.Errorf("hermes Skill package contents differ")
 	}
 	result := map[string]hermesSkillMetadata{}
-	for _, component := range plan.Components {
-		path := filepath.Join(layout.SkillsRoot, component.Name, "SKILL.md")
-		file, err := env.NativeConfig.ReadExactFileBounded(path, 1<<20)
-		if err != nil || !file.Exists {
-			return nil, fmt.Errorf("hermes owned Skill contents unavailable")
+	for _, object := range objects {
+		path := filepath.Join(object.Path, "SKILL.md")
+		body, err := shared.ReadOwnedSkillMetadata(ctx, env.NativeConfig, object.Path, object.ManagedDigest)
+		if err != nil {
+			return nil, fmt.Errorf("hermes owned Skill contents unavailable: %w", err)
 		}
-		skill, err := conformance.ParseSkill(ctx, component.Name, file.Body)
-		if err != nil || skill.Name != component.Name {
+		skill, err := conformance.ParseSkill(ctx, object.LogicalName, body)
+		if err != nil || skill.Name != object.LogicalName {
 			return nil, fmt.Errorf("hermes owned Skill identity differs")
 		}
-		result[component.Name] = hermesSkillMetadata{path: path, digest: fmt.Sprintf("%x", sha256.Sum256(file.Body))}
+		result[object.LogicalName] = hermesSkillMetadata{path: path, digest: fmt.Sprintf("%x", sha256.Sum256(body))}
 	}
 	return result, nil
 }

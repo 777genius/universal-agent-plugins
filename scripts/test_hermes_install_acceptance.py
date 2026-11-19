@@ -3,8 +3,10 @@ import base64
 from contextlib import ExitStack
 import json
 import os
+import runpy
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -92,6 +94,128 @@ class BuilderCleanupAcceptance(unittest.TestCase):
                 changed[index] = 'unreviewed'
                 self.assertFalse(acceptance.reviewed_windows_builder(changed))
             self.assertFalse(acceptance.reviewed_windows_builder(argv + ['extra']))
+
+
+class HermesTrustReportCompletionAcceptance(unittest.TestCase):
+    def test_completed_guidance_requires_exact_public_state_and_native_roots(self):
+        lifecycle = runpy.run_path(str(Path(__file__).parent / "e2e" / "hermes-native-lifecycle.py"))["Lifecycle"]
+        mutations = ("", "grouped", "prepared", "unverified", "unknown-auth", "blocked",
+                     "activation-attested", "authentication-attested", "user-action",
+                     "next-action", "next-actions", "not-ready", "empty-expected",
+                     "missing-expected", "missing-selected", "lost-prior", "extra-root",
+                     "invalid-native", "native-read-failed")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                prior, selected = root / "prior-project", root / "selected-project"
+                activation = {"activation": "active", "authentication": "not_required",
+                              "policy": "allowed", "verification": "installation_verified"}
+                data = {"readiness": "ready", "result": {"activation": activation}}
+                expected, roots = {prior, selected}, [str(prior), str(selected)]
+                if mutation == "prepared":
+                    activation["activation"] = "prepared"
+                elif mutation == "unverified":
+                    activation["verification"] = "package_validated"
+                elif mutation == "unknown-auth":
+                    activation["authentication"] = "not_checked"
+                elif mutation == "blocked":
+                    activation["policy"] = "blocked"
+                elif mutation in ("activation-attested", "authentication-attested"):
+                    activation[mutation.replace("-", "_")] = True
+                elif mutation == "user-action":
+                    activation["user_actions"] = ["Start a new session"]
+                elif mutation in ("next-action", "next-actions"):
+                    data[mutation.replace("-", "_")] = []
+                elif mutation == "not-ready":
+                    del data["readiness"]
+                elif mutation == "empty-expected":
+                    expected = set()
+                elif mutation == "missing-expected":
+                    expected = None
+                elif mutation == "missing-selected":
+                    roots = [str(prior)]
+                elif mutation == "lost-prior":
+                    roots = [str(selected)]
+                elif mutation == "extra-root":
+                    roots.append(str(root / "foreign"))
+                elif mutation == "invalid-native":
+                    roots = {"unknown": True}
+                document = {"data": {"targets": [{"output": data}]} if mutation == "grouped" else data}
+                output, native = root / "project-add.json", root / "native-roots.json"
+                output.write_text(json.dumps(document), encoding="utf-8")
+                native.write_text(json.dumps(roots), encoding="utf-8")
+                suite = lifecycle.__new__(lifecycle)
+                suite.root, suite.hermes = root, ["selected-hermes"]
+                # Inert unit output only. The actual fixture still invokes its
+                # existing genuine config collector, never an attestation flag.
+                with patch.object(suite, "capture", return_value=native) as capture:
+                    if mutation == "native-read-failed":
+                        capture.side_effect = RuntimeError("native readback failed")
+                    if mutation in ("", "grouped"):
+                        suite.require_trust_report(output, granted=True, expected_roots=expected)
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            suite.require_trust_report(output, granted=True, expected_roots=expected)
+                    if capture.called:
+                        self.assertEqual(capture.call_count, 1)
+                        self.assertEqual(capture.call_args.args[0],
+                                         ["selected-hermes", "config", "get", "--json",
+                                          "skills.trusted_project_dirs"])
+                    if mutation in ("", "grouped", "missing-selected", "lost-prior",
+                                    "extra-root", "invalid-native", "native-read-failed"):
+                        self.assertTrue(capture.called)
+
+    def test_existing_granted_and_refused_guidance_keeps_its_boundary(self):
+        lifecycle = runpy.run_path(str(Path(__file__).parent / "e2e" / "hermes-native-lifecycle.py"))["Lifecycle"]
+        granted = "Hermes now trusts this project's Git repository root"
+        refused = "UAP did not change Hermes project trust: maintenance; run `hermes skills trust` inside it"
+        for grant, actions, accepted in ((True, [granted], True),
+                                         (False, [refused], True),
+                                         (False, [], False)):
+            with self.subTest(granted=grant, actions=actions), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                output = root / "project-add.json"
+                output.write_text(json.dumps({"data": {"readiness": "ready", "result": {"activation": {
+                    "activation": "active", "authentication": "not_required", "policy": "allowed",
+                    "verification": "installation_verified", "user_actions": actions}}}}), encoding="utf-8")
+                suite = lifecycle.__new__(lifecycle)
+                suite.root, suite.hermes = root, ["selected-hermes"]
+                with patch.object(suite, "capture") as capture:
+                    if accepted:
+                        suite.require_trust_report(output, granted=grant, reason="maintenance")
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            suite.require_trust_report(output, granted=grant, reason="maintenance")
+                    capture.assert_not_called()
+
+
+class HermesSkillBootstrapArgvAcceptance(unittest.TestCase):
+    def test_actual_bootstrap_preserves_inline_code_arguments_and_child_status(self):
+        source = (Path(__file__).parent.parent / "install/integrationctl/agentplugins/clients/hermes/skill_observation.go").read_text()
+        bootstrap = source.split("const hermesSkillBootstrap = `", 1)[1].split("`", 1)[0]
+        with tempfile.TemporaryDirectory(prefix="hermes argv ") as directory:
+            root = Path(directory).resolve() / "source with spaces"
+            package = root / "hermes_cli"
+            package.mkdir(parents=True)
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            # Only the installation-bound command factory is inert. Execute
+            # the actual production bridge with the host's ordinary argv rules.
+            (package / "_launchers.py").write_text(
+                "def runtime_command(root, args=(), *, python, code):\n"
+                "    return [str(python), '-I', '-c', code, *args]\n", encoding="utf-8")
+            selection = json.dumps({"docs": 'C:\\native path\\quote "docs"\\SKILL.md'})
+            code = ("import json, sys\n"
+                    "print(json.dumps(sys.argv[1:]))\n"
+                    "raise SystemExit(int(sys.argv[3]))\n")
+            for status in (0, 7):
+                with self.subTest(status=status):
+                    arguments = [selection, str(root), str(status)]
+                    child = subprocess.run(
+                        [sys.executable, "-I", "-c", bootstrap, str(root), code, *arguments],
+                        capture_output=True, timeout=10, check=False)
+                    self.assertEqual(child.returncode, status)
+                    self.assertEqual(child.stderr, b"")
+                    self.assertEqual(json.loads(child.stdout), arguments)
 
 
 if __name__ == '__main__':
