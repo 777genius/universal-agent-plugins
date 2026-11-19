@@ -46,7 +46,8 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         # Ordinary source-PR smoke may test historical npm latest; trusted
         # publication must additionally prove newest GitHub/npm parity.
         self.assertIn('releases/latest" --jq', version)
-        self.assertIn('trusted_release=true', version)
+        self.assertIn('latest_parity_required=true', version)
+        self.assertIn('"${GITHUB_EVENT_NAME}" == "workflow_run" || -z "$requested"', version)
         self.assertIn('latest_public_tag', version)
         self.assertIn('tag="agentplugins-v$current"', version)
         self.assertIn('[[ "$current" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]]', version)
@@ -158,6 +159,27 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
                            latest_public_tag=latest, version=exact,
                            tag="agentplugins-v" + exact)
                 result = subprocess.run([bash, "-c", predicate], env=env,
+                                        capture_output=True, timeout=5, check=False)
+                self.assertEqual(result.returncode == 0, expected, name)
+
+        # This is the exact event-mode guard from the resolver, not a
+        # Python reimplementation; published audits pass require=true.
+        mode_guard = ('[[ "${REQUIRE_TRUSTED_PUBLISH}" == "true" && '
+                      '( "${GITHUB_EVENT_NAME}" == "workflow_run" || -z "$requested" ) ]]')
+        self.assertIn(mode_guard, version)
+        modes = [
+            ("published on schedule", "true", "schedule", "", True),
+            ("published manual unpinned", "true", "workflow_dispatch", "", True),
+            ("trusted publish event", "true", "workflow_run", "0.1.112", True),
+            ("manual historical explicit", "true", "workflow_dispatch", "0.1.110", False),
+            ("native source PR smoke", "false", "pull_request", "", False),
+            ("native installer weekly smoke", "false", "schedule", "", False),
+        ]
+        for name, require, event_name, requested, expected in modes:
+            with self.subTest(mode=name):
+                env = dict(os.environ, REQUIRE_TRUSTED_PUBLISH=require,
+                           GITHUB_EVENT_NAME=event_name, requested=requested)
+                result = subprocess.run([bash, "-c", mode_guard], env=env,
                                         capture_output=True, timeout=5, check=False)
                 self.assertEqual(result.returncode == 0, expected, name)
 
