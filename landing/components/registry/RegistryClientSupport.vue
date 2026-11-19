@@ -43,7 +43,7 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
         <div ref="stickyScroll" class="registry-client-support__sticky-scroll" aria-hidden="true">
           <table>
             <colgroup>
-              <col v-for="width in columnWidths" :key="width" :style="{ width }" />
+              <col v-for="(width, index) in columnWidths" :key="index" :style="{ width }" />
             </colgroup>
             <thead>
               <tr>
@@ -66,7 +66,7 @@ const monochromeIcons = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi'
       >
         <table>
           <colgroup>
-            <col v-for="width in columnWidths" :key="width" :style="{ width }" />
+            <col v-for="(width, index) in columnWidths" :key="index" :style="{ width }" />
           </colgroup>
           <caption class="sr-only">
             {{

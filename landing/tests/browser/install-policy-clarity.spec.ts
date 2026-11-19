@@ -51,12 +51,10 @@ for (const width of [1440, 390]) {
     }
     await card.locator('.plugin-card__install-toggle').click();
     for (const [agent, client] of [['Hermes Agent', 'hermes'], ['Google Antigravity', 'antigravity'], ['Pi', 'pi']]) {
-      await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
       await page.locator('.app-multiselect__auto').click();
-      await page.keyboard.press('Escape');
       await targets(page, card, [agent!]);
       const add = `${cli} add ${selector} --target ${client}`;
-      const snippet = page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add');
+      const snippet = page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add');
       await expect(snippet.locator('code')).toHaveText(add);
       await expect(card).not.toContainText(repairNotice);
       await snippet.locator('button').click();
@@ -75,15 +73,11 @@ for (const width of [1440, 390]) {
         .toHaveText(`${cli} ${action} ${manifestName} --target pi`);
     await expect(detail).not.toContainText(repairNotice);
     await detail.getByRole('button', { name: 'This project', exact: true }).click();
-    await detail.locator('.app-multiselect__trigger').click();
     await expect(page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ })).toBeEnabled();
     await page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ }).click();
-    await page.keyboard.press('Escape');
     await expect(detail.locator('.command-snippet--add code'))
       .toHaveText(`${cli} add ${selector} --target hermes --scope project`);
-    await detail.locator('.app-multiselect__trigger').click();
     await page.getByRole('checkbox', { name: /^Google Antigravity(?:\s|$)/ }).click();
-    await page.keyboard.press('Escape');
     await expect(detail.locator('.command-snippet--add code'))
       .toHaveText(`${cli} add ${selector} --target hermes,antigravity --scope project`);
     await expect(detail).not.toContainText(repairNotice);
@@ -95,9 +89,7 @@ for (const width of [1440, 390]) {
       body: await detail.screenshot({ animations: 'disabled' }), contentType: 'image/png',
     });
     await detail.getByRole('button', { name: 'This computer', exact: true }).click();
-    await detail.locator('.app-multiselect__trigger').click();
     await page.locator('.app-multiselect__auto').click();
-    await page.keyboard.press('Escape');
     await targets(page, detail, ['Google Antigravity']);
     const userAdd = `${cli} add ${selector} --target antigravity`;
     await expect(detail.locator('.command-snippet--add code')).toHaveText(userAdd);
@@ -120,10 +112,11 @@ for (const width of [1440, 390]) {
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
     for (const picker of [page.getByRole('dialog'), page.locator('.hero-shell')]) {
-      await picker.locator('.app-multiselect__trigger').click();
+      const compact = await picker.locator('.app-multiselect__trigger').count() > 0;
+      if (compact) await picker.locator('.app-multiselect__trigger').click();
       for (const agent of ['Hermes Agent', 'Google Antigravity', 'Pi'])
         await expect(page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) })).toBeDisabled();
-      await page.keyboard.press('Escape');
+      if (compact) await page.keyboard.press('Escape');
       await expect(picker.locator('.command-snippet--add code')).not.toContainText('github:');
       if (await picker.getAttribute('role') === 'dialog') await page.keyboard.press('Escape');
     }
@@ -137,20 +130,18 @@ for (const width of [1440, 390]) {
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     const web = page.getByRole('checkbox', { name: /^ChatGPT Web/ });
     for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
       const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
       await expect(option).toBeDisabled();
       await expect(option).toContainText(`This plugin has not been published for ${agent} yet.`);
     }
-    await expect(web).toBeDisabled();
-    await expect(web).toContainText('No verified ChatGPT Web app binding for this plugin.');
-    await expect(web).toContainText('Connect Web apps inside ChatGPT.');
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).not.toContainText('chatgptweb');
+    await expect(web).toHaveCount(0);
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).not.toContainText('chatgptweb');
     await page.keyboard.press('Escape');
     await page.locator('.hero-shell .app-multiselect__trigger').click();
+    await expect(web).toBeDisabled();
+    await expect(web).toContainText('No verified ChatGPT Web app binding for this plugin.');
     for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
       const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
       await expect(option).toBeDisabled();
@@ -160,7 +151,6 @@ for (const width of [1440, 390]) {
     await page.keyboard.press('Escape');
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
-    await detail.locator('.app-multiselect__trigger').click();
     for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
       const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
       await expect(option).toBeDisabled();
@@ -190,13 +180,14 @@ for (const width of [1440, 390]) {
     await card.locator('.plugin-card__install-toggle').click();
     const hero = page.locator('.hero-shell');
     for (const picker of [page.getByRole('dialog'), hero]) {
-      await picker.locator('.app-multiselect__trigger').click();
+      const compact = await picker.locator('.app-multiselect__trigger').count() > 0;
+      if (compact) await picker.locator('.app-multiselect__trigger').click();
       for (const agent of ['Pi', 'Hermes Agent', 'Google Antigravity']) {
         const option = page.getByRole('checkbox', { name: new RegExp(`^${agent}(?:\\s|$)`) });
         await expect(option).toBeEnabled();
         await expect(option).not.toContainText('has not been published');
       }
-      await page.keyboard.press('Escape');
+      if (compact) await page.keyboard.press('Escape');
       if (await picker.getAttribute('role') === 'dialog') await page.keyboard.press('Escape');
     }
     await targets(page, card, ['Hermes Agent']);
@@ -206,7 +197,6 @@ for (const width of [1440, 390]) {
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
     await expect(detail.locator('.command-snippet--add code')).toContainText('--target hermes');
-    await detail.locator('.app-multiselect__trigger').click();
     await expect(page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ })).toBeChecked();
     await expect(page.getByRole('checkbox', { name: /^Google Antigravity(?:\s|$)/ })).toBeEnabled();
     await expect(page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ })).toBeEnabled();

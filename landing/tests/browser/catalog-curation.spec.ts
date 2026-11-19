@@ -90,7 +90,6 @@ test('recommended Skills lead the original cards without changing provider data 
   await expect(cards.first().locator('.skill-card__benefit')).toContainText(/browser CLI/i);
   await expect(cards.first()).toContainText('795 installs');
   await cards.first().getByRole('button', { name: 'Install agent-browser' }).click();
-  await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
   const picker = page.locator('.app-multiselect__content');
   await expect(picker).toBeVisible();
   await expect(picker.locator('.app-multiselect__item small')).toHaveCount(0);
@@ -100,7 +99,6 @@ test('recommended Skills lead the original cards without changing provider data 
     body: await page.screenshot({ animations: 'disabled' }),
     contentType: 'image/png',
   });
-  await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog').locator('.command-snippet code'))
     .toContainText('https://github.com/vercel-labs/agent-browser');
   await expect.poll(() => page.evaluate(() =>

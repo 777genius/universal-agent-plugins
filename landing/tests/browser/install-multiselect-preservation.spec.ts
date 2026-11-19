@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { navigate, offline, projections, registryFixture, wording } from './i18n-state.helpers';
 
 function localSourceFixture() {
@@ -24,11 +24,9 @@ function localSourceFixture() {
 }
 
 const names = ['Codex CLI', 'ChatGPT Desktop', 'Cursor', 'Hermes Agent', 'Google Antigravity'];
-async function checkChoices(page: Page, panel: Locator) {
-  await panel.locator('.app-multiselect__trigger').click();
+async function checkChoices(panel: Locator) {
   for (const name of names)
-    await expect(page.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) })).toBeChecked();
-  await page.keyboard.press('Escape');
+    await expect(panel.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) })).toBeChecked();
 }
 
 for (const width of [1440, 390]) {
@@ -41,15 +39,13 @@ for (const width of [1440, 390]) {
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
     const dialog = page.getByRole('dialog');
-    await dialog.locator('.app-multiselect__trigger').click();
     for (const name of names) {
       const choice = page.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) });
       await choice.click({ trial: true });
       await choice.click();
       await expect(choice).toBeChecked();
     }
-    await page.keyboard.press('Escape');
-    await checkChoices(page, dialog);
+    await checkChoices(dialog);
     const source = index.plugins[0]!.distributions[0]!.releases[0]!.source;
     const selector = `github:${source.repository}@${source.revision}//${source.path}`;
     const npxAdd = `npx -y universal-agent-plugins@0.1.110 add ${selector} --target codex,cursor,hermes,antigravity`;
@@ -64,27 +60,23 @@ for (const width of [1440, 390]) {
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(nativeAdd);
     await page.keyboard.press('Escape');
     await card.locator('.plugin-card__install-toggle').click();
-    await checkChoices(page, dialog);
+    await checkChoices(dialog);
     await page.keyboard.press('Escape');
     await card.locator('.plugin-card__title-link').click();
     await expect(page).toHaveURL(/\/plugins\/i18n-state-00\/$/);
     // Nuxt finishes the route's smooth scroll after rendering the detail page.
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     const panel = page.locator('.install-panel');
-    await checkChoices(page, panel);
+    await checkChoices(panel);
     await expect(panel.locator('.command-snippet--add code')).toHaveText(nativeAdd);
     await panel.locator('.native-cli-checkbox input').uncheck();
     await expect(panel.locator('.command-snippet--add code')).toHaveText(npxAdd);
     // Desktop is explicitly user-only. Preserve all choices on scope change;
     // selecting manual intent in Project must refuse without a global fallback.
     await panel.getByRole('button', { name: 'This project', exact: true }).click();
-    await panel.locator('.app-multiselect__trigger').click();
     await page.getByRole('checkbox', { name: /^Codex CLI(?:\s|$)/ }).click();
-    await page.keyboard.press('Escape');
     // Switching automatic to manual starts a fresh explicit Codex request.
-    await panel.locator('.app-multiselect__trigger').click();
     await expect(page.getByRole('checkbox', { name: /^ChatGPT Desktop(?:\s|$)/ })).toBeDisabled();
-    await page.keyboard.press('Escape');
     await expect(panel.locator('.command-snippet--add code')).toContainText('--target codex --scope project');
     expect(errors).toEqual([]);
   });
@@ -105,12 +97,10 @@ test('incompatible local and Web routes remain selected with an explicit explana
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
   await card.locator('.plugin-card__install-toggle').click();
   const dialog = page.getByRole('dialog');
-  await dialog.locator('.app-multiselect__trigger').click();
   await page.getByRole('checkbox', { name: /^ChatGPT Web(?:\s|$)/ }).click();
   await page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ }).click();
   await expect(page.getByRole('checkbox', { name: /^ChatGPT Web(?:\s|$)/ })).toBeChecked();
   await expect(page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ })).toBeChecked();
-  await page.keyboard.press('Escape');
   await expect(dialog.locator('.command-snippet--add')).toHaveCount(0);
   await expect(dialog).toContainText(wording('en')('registryUi.install.selectionRoutesUnavailable'));
   await page.keyboard.press('Escape');
@@ -121,10 +111,8 @@ test('incompatible local and Web routes remain selected with an explicit explana
   const panel = page.locator('.install-panel');
   await expect(panel.locator('.command-snippet--add')).toHaveCount(0);
   await expect(panel).toContainText(wording('en')('registryUi.install.selectionRoutesUnavailable'));
-  await panel.locator('.app-multiselect__trigger').click();
   await expect(page.getByRole('checkbox', { name: /^Hermes Agent(?:\s|$)/ })).toBeChecked();
   await page.getByRole('checkbox', { name: /^ChatGPT Web(?:\s|$)/ }).click();
-  await page.keyboard.press('Escape');
   await expect(panel.locator('.command-snippet--add code')).toContainText('--target hermes');
   expect(errors).toEqual([]);
 });

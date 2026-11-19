@@ -32,9 +32,10 @@ const emit = defineEmits<{
 }>();
 const search = ref('');
 const filteredOptions = computed(() =>
-  props.options.filter((option) =>
-    (!props.fullWidth || option.value !== 'chatgptweb' || !option.disabled) &&
-    option.label.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()),
+  props.options.filter(
+    (option) =>
+      (!props.fullWidth || option.value !== 'chatgptweb' || !option.disabled) &&
+      option.label.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()),
   ),
 );
 const hydrated = ref(false);
@@ -231,6 +232,17 @@ function toggle(value: string) {
             <span class="app-multiselect__check" aria-hidden="true">✓</span>
           </button>
         </div>
+        <p v-if="!fullWidth">
+          {{
+            autoSelected
+              ? (automaticHelp ?? t('registryUi.multi.automaticHelp'))
+              : t(
+                  autoOption
+                    ? 'registryUi.multi.manualHelpWithAuto'
+                    : 'registryUi.multi.manualHelp',
+                )
+          }}
+        </p>
         <PopoverArrow v-if="!fullWidth" class="app-multiselect__arrow" />
       </component>
     </component>

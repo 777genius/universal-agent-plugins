@@ -179,9 +179,14 @@ export async function targets(page: Page, scope: Locator, names: string[]) {
   if (!isCard && await page.locator('.install-dialog').isVisible())
     await page.keyboard.press('Escape');
   const trigger = (isCard ? page.getByRole('dialog') : scope).locator('.app-multiselect__trigger');
-  await expect(trigger).toHaveAttribute('data-hydrated', 'true');
-  await trigger.click();
-  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  const compact = await trigger.count() > 0;
+  if (compact) {
+    await expect(trigger).toHaveAttribute('data-hydrated', 'true');
+    await trigger.click();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  } else {
+    await expect((isCard ? page.getByRole('dialog') : scope).locator('.app-multiselect__content--inline')).toBeVisible();
+  }
   for (const name of names) {
     const checkbox = page.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) });
     const checked = await checkbox.isChecked();
@@ -191,17 +196,21 @@ export async function targets(page: Page, scope: Locator, names: string[]) {
     await checkbox.click();
     await expect(checkbox).toBeChecked({ checked: !checked });
   }
-  await page.keyboard.press('Escape');
-  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  if (compact) {
+    await page.keyboard.press('Escape');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  }
 }
 
 export async function automatic(page: Page, scope: Locator, locale: PublishedLocale) {
-  await scope.locator('.app-multiselect__trigger').click();
+  const trigger = scope.locator('.app-multiselect__trigger');
+  const compact = await trigger.count() > 0;
+  if (compact) await trigger.click();
   const auto = page.locator('.app-multiselect__auto');
   await expect(auto).toContainText(wording(locale)('registryUi.install.allInstalledAgentsRecommended'));
   await auto.click();
   await expect(auto).toHaveAttribute('aria-pressed', 'true');
-  await page.keyboard.press('Escape');
+  if (compact) await page.keyboard.press('Escape');
 }
 
 export async function exactCommands(page: Page, scope: Locator, name: string, target = '') {
