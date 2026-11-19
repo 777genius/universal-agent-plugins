@@ -8,11 +8,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 var _ clients.PreparedSetupCompleter = (*Adapter)(nil)
@@ -48,7 +47,7 @@ func devinSkillContextFor(request domain.ActivationRequest) (devinSkillContext, 
 	return devinSkillContext{layout: devinGlobalComponents(root, plan.ActivePath), cwd: cwd, action: DevinGlobalAction}, err
 }
 
-func devinSkillContextKnown(kernel nativeconfig.Kernel, scope domain.InstallScope, cwd string) bool {
+func devinSkillContextKnown(env clients.Env, scope domain.InstallScope, cwd string) bool {
 	if scope == domain.ScopeProject {
 		return true
 	}
@@ -58,7 +57,7 @@ func devinSkillContextKnown(kernel nativeconfig.Kernel, scope domain.InstallScop
 	// Pinned Devin also imports these project sources without a Git marker.
 	// Check only the neutral volume root, never normal user-level imports.
 	for _, name := range []string{".git", ".jj", ".devin", ".agents", ".windsurf", ".claude", ".cursor", ".github", ".zed", "opencode.json", ".mcp.json"} {
-		file, err := kernel.ReadExactFileBounded(filepath.Join(cwd, name), 0)
+		file, err := env.NativeConfig.ReadExactFileBounded(filepath.Join(cwd, name), 0)
 		if err != nil || file.Exists {
 			return false
 		}
@@ -98,12 +97,15 @@ func completeDevinSkills(ctx context.Context, env clients.Env, request domain.Ac
 		return outcome, err
 	}
 	global, err := requireSelectedDevinGlobal(request.Client)
-	if err != nil || !devinSkillContextKnown(env.NativeConfig, request.Plan.Scope, selected.cwd) {
+	if err != nil || !devinSkillContextKnown(env, request.Plan.Scope, selected.cwd) {
 		return outcome, nil
 	}
-	before, eligible, err := devinSkillPolicyFiles(env.NativeConfig, request.Plan.NativeRegistryRoot, global)
+	before, eligible, err := devinSkillPolicyFiles(env, request.Plan.NativeRegistryRoot, global)
 	if err != nil || !eligible {
 		return outcome, err
+	}
+	if request.VerifyOnly && !devinSkillPolicyVersioned(before[filepath.Join(global, "config.json")]) {
+		return outcome, nil
 	}
 	skills, digest, err := devinOwnedSkills(ctx, env, request, selected.layout)
 	if err != nil {
@@ -111,7 +113,7 @@ func completeDevinSkills(ctx context.Context, env clients.Env, request domain.Ac
 	}
 	bounded, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	result, probeErr := shared.RunNativeRegistry(bounded, env.Runner, legacyports.Command{
+	result, probeErr := shared.RunNativeRegistry(bounded, env.Runner, ports.Command{
 		Argv: []string{request.BackendExecutable, "skills", "list", "--json"},
 		Dir:  selected.cwd, StdoutLimitBytes: 1 << 20,
 	})
@@ -122,13 +124,16 @@ func completeDevinSkills(ctx context.Context, env clients.Env, request domain.Ac
 	if ctx.Err() != nil {
 		return outcome, ctx.Err()
 	}
-	after, eligible, err := devinSkillPolicyFiles(env.NativeConfig, request.Plan.NativeRegistryRoot, global)
-	if err != nil || !eligible || !devinSkillContextKnown(env.NativeConfig, request.Plan.Scope, selected.cwd) || !devinSkillPolicyStable(before, after, global) {
-		return outcome, fmt.Errorf("devin Skill discovery policy changed during native observation")
-	}
 	afterSkills, afterDigest, err := devinOwnedSkills(ctx, env, request, selected.layout)
 	if err != nil || digest != afterDigest || !reflect.DeepEqual(skills, afterSkills) {
 		return outcome, fmt.Errorf("owned devin Skill bytes changed during native observation")
+	}
+	after, eligible, err := devinSkillPolicyFiles(env, request.Plan.NativeRegistryRoot, global)
+	if err != nil || !eligible || !devinSkillContextKnown(env, request.Plan.Scope, selected.cwd) || !devinSkillPolicyStable(before, after, global) {
+		return outcome, fmt.Errorf("devin Skill discovery policy changed during native observation")
+	}
+	if err := ctx.Err(); err != nil {
+		return outcome, err
 	}
 	if !devinSkillProbeMatches(result, probeErr, skills) {
 		return outcome, nil
@@ -142,7 +147,7 @@ func completeDevinSkills(ctx context.Context, env clients.Env, request domain.Ac
 	return outcome, nil
 }
 
-func devinSkillProbeMatches(result legacyports.CommandResult, probeErr error, skills map[string]devinSkillMetadata) bool {
+func devinSkillProbeMatches(result ports.CommandResult, probeErr error, skills map[string]devinSkillMetadata) bool {
 	return probeErr == nil && result.ExitCode == 0 && len(result.Stderr) == 0 && devinProjectSkillsObserved(string(result.Stdout), skills)
 }
 

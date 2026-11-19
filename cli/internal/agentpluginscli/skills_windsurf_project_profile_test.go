@@ -77,7 +77,7 @@ func rawDevinProjectProfileFixture(t *testing.T, authority string) (savedJourney
 	journey.cli.operations = filepath.Join(stateRoot, "operations-v2")
 	app := &journey.cli.app
 	app.Scope, app.ProjectRoot, app.ManagedRoot = domain.ScopeProject, project, filepath.Join(stateRoot, "managed")
-	app.DependenciesRoot, app.StateStore = stateRoot, journey.cli.store
+	app.DependenciesRoot, app.StateStore = project, journey.cli.store
 	app.EnvironmentLockPath, app.EnvironmentStoreRoot = filepath.Join(stateRoot, "environment.lock"), filepath.Join(stateRoot, "store")
 	app.Detector = staticDetector{clients: []domain.DetectedClient{client}}
 	app.ClientRegistry, err = clients.NewRegistry(windsurf.New())
@@ -135,5 +135,60 @@ func TestRawProjectSkillsRetainOriginalUserPolicyAuthority(t *testing.T) {
 				t.Fatal("raw Project installation changed foreign project bytes", err)
 			}
 		})
+	}
+}
+
+func TestRawProjectSkillsRepeatHydratesOnlySelectedVersion(t *testing.T) {
+	journey, runner, _, source := rawDevinProjectProfileFixture(t, "observed")
+	probed, err := journey.cli.app.Detector.Detect(t.Context())
+	if err != nil || len(probed) != 1 {
+		t.Fatalf("fixture detector: %v %v", probed, err)
+	}
+	discovered := append([]domain.DetectedClient(nil), probed...)
+	discovered[0].Version = ""
+	detector := &projectVersionDetector{clients: discovered, probed: probed}
+	journey.cli.app.Detector = detector
+	argv := []string{"skills", "add", source, "--skill", "pdf", "--target", "windsurf", "--scope", "project", "--project-root", runner.project, "--no-ui", "--yes", "--format", "json"}
+	first := journey.run(t, argv...)
+	var document map[string]any
+	if err := json.Unmarshal([]byte(first), &document); err != nil || document["readiness"] != "ready" {
+		t.Fatalf("first add: %s %v", first, err)
+	}
+	binding := savedJourneyBinding(t, journey.state(t), "windsurf")
+	managed := savedJourneyTree(t, binding.TargetLocator)
+	native := savedJourneyTree(t, filepath.Join(runner.project, ".devin"))
+	held := map[string][]byte{}
+	for _, name := range []string{".uap/state-v2.json", "uap.toml", "uap.lock"} {
+		held[name], err = os.ReadFile(filepath.Join(runner.project, filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	calls, probes := runner.calls, len(detector.targets)
+	repeated := journey.run(t, argv...)
+	if err := json.Unmarshal([]byte(repeated), &document); err != nil {
+		t.Fatal(err)
+	}
+	items, ok := document["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("repeat items: %s", repeated)
+	}
+	item, ok := items[0].(map[string]any)
+	if !ok || item["status"] != "unchanged" || document["readiness"] != "ready" || runner.calls != calls+6 || len(detector.targets) != probes+2 || detector.broadCalls != 0 {
+		t.Fatalf("repeat lacked fresh exact version/catalog: %s native=%d probes=%v", repeated, runner.calls, detector.targets)
+	}
+	for _, targets := range detector.targets {
+		if !reflect.DeepEqual(targets, []domain.ClientID{domain.ClientWindsurf}) {
+			t.Fatalf("unrelated version probe: %v", targets)
+		}
+	}
+	if !reflect.DeepEqual(binding, savedJourneyBinding(t, journey.state(t), "windsurf")) || !reflect.DeepEqual(managed, savedJourneyTree(t, binding.TargetLocator)) || !reflect.DeepEqual(native, savedJourneyTree(t, filepath.Join(runner.project, ".devin"))) {
+		t.Fatal("read-only repeat rewrote saved binding or owned native/package bytes")
+	}
+	for name, body := range held {
+		current, err := os.ReadFile(filepath.Join(runner.project, filepath.FromSlash(name)))
+		if err != nil || string(current) != string(body) {
+			t.Fatalf("repeat changed state or lock %s: %v", name, err)
+		}
 	}
 }

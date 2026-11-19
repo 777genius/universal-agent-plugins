@@ -30,6 +30,13 @@ func (files *devinSkillContextFiles) ReadNoFollowBounded(path string, limit int6
 	if path == files.marker {
 		return nil, 0600, files.present, nil
 	}
+	root := filepath.VolumeName(path) + string(filepath.Separator)
+	if filepath.Dir(path) == root {
+		switch filepath.Base(path) {
+		case ".git", ".jj", ".devin", ".agents", ".windsurf", ".claude", ".cursor", ".github", ".zed", "opencode.json", ".mcp.json":
+			return nil, 0600, false, nil
+		}
+	}
 	file, err := files.kernel.ReadExactFileBounded(path, limit)
 	return file.Body, file.Mode, file.Exists, err
 }

@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
@@ -29,6 +29,10 @@ func devinProjectSkillsObserved(body string, expected map[string]devinSkillMetad
 	if !ok || len(rows) > 256 {
 		return false
 	}
+	ownedPaths := make(map[string]bool, len(expected))
+	for _, skill := range expected {
+		ownedPaths[skill.path] = true
+	}
 	seen, found := map[string]bool{}, 0
 	for _, value := range rows {
 		row, ok := value.(map[string]any)
@@ -47,12 +51,8 @@ func devinProjectSkillsObserved(body string, expected map[string]devinSkillMetad
 				return false
 			}
 			found++
-		} else {
-			for _, skill := range expected {
-				if base == skill.path {
-					return false
-				}
-			}
+		} else if ownedPaths[base] {
+			return false
 		}
 	}
 	return found == len(expected)
@@ -90,8 +90,8 @@ func devinSkillTriggers(value any, selected bool) bool {
 	return true
 }
 
-func devinSkillPolicyFiles(kernel nativeconfig.Kernel, project, global string) (map[string]nativeconfig.FileSnapshot, bool, error) {
-	files := map[string]nativeconfig.FileSnapshot{}
+func devinSkillPolicyFiles(env clients.Env, project, global string) (map[string]shared.NativeFileSnapshot, bool, error) {
+	files := map[string]shared.NativeFileSnapshot{}
 	roots := []string{project}
 	if global != project {
 		roots = append(roots, global)
@@ -99,7 +99,7 @@ func devinSkillPolicyFiles(kernel nativeconfig.Kernel, project, global string) (
 	for _, root := range roots {
 		for _, name := range []string{"config.json", "config.local.json", "mcp_config.json", "mcp_config.local.json"} {
 			path := filepath.Join(root, name)
-			file, err := kernel.ReadExactFileBounded(path, 1<<20)
+			file, err := env.NativeConfig.ReadExactFileBounded(path, 1<<20)
 			if err != nil {
 				return nil, false, err
 			}
@@ -107,11 +107,7 @@ func devinSkillPolicyFiles(kernel nativeconfig.Kernel, project, global string) (
 			if !file.Exists || strings.HasPrefix(name, "mcp_") {
 				continue
 			}
-			body, err := nativeconfig.StandardizeCommentedJSON(file.Body)
-			if err != nil {
-				return nil, false, err
-			}
-			document, err := shared.DecodeStrictJSONObject(body)
+			document, err := shared.DecodeCommentedJSONObject(file.Body)
 			if err != nil {
 				return nil, false, err
 			}
@@ -123,7 +119,16 @@ func devinSkillPolicyFiles(kernel nativeconfig.Kernel, project, global string) (
 	return files, true, nil
 }
 
-func devinSkillPolicyStable(before, after map[string]nativeconfig.FileSnapshot, global string) bool {
+// A read-only catalog must not launch the pinned client's initial migration.
+func devinSkillPolicyVersioned(file shared.NativeFileSnapshot) bool {
+	if !file.Exists {
+		return false
+	}
+	document, err := shared.DecodeCommentedJSONObject(file.Body)
+	return err == nil && document["version"] == json.Number("1")
+}
+
+func devinSkillPolicyStable(before, after map[string]shared.NativeFileSnapshot, global string) bool {
 	if len(before) != len(after) {
 		return false
 	}
@@ -145,17 +150,14 @@ func devinSkillPolicyStable(before, after map[string]nativeconfig.FileSnapshot, 
 // Pinned Devin 3000.11.205 adds version:1 on its first ordinary metadata call.
 // Only that native schema marker may change; no policy or other config is
 // accepted as a new baseline, and the installer never writes this migration.
-func devinInitialConfigMigration(before, after nativeconfig.FileSnapshot) bool {
+func devinInitialConfigMigration(before, after shared.NativeFileSnapshot) bool {
 	if !devinConfigMigrationMode(before, after) {
 		return false
 	}
 	old := map[string]any{}
 	if before.Exists {
-		oldBody, err := nativeconfig.StandardizeCommentedJSON(before.Body)
-		if err != nil {
-			return false
-		}
-		old, err = shared.DecodeStrictJSONObject(oldBody)
+		var err error
+		old, err = shared.DecodeCommentedJSONObject(before.Body)
 		if err != nil || !devinSkillPolicyKnown(old) {
 			return false
 		}
@@ -163,11 +165,7 @@ func devinInitialConfigMigration(before, after nativeconfig.FileSnapshot) bool {
 	if _, exists := old["version"]; exists {
 		return false
 	}
-	newBody, err := nativeconfig.StandardizeCommentedJSON(after.Body)
-	if err != nil {
-		return false
-	}
-	current, err := shared.DecodeStrictJSONObject(newBody)
+	current, err := shared.DecodeCommentedJSONObject(after.Body)
 	if err != nil || current["version"] != json.Number("1") {
 		return false
 	}
@@ -175,7 +173,7 @@ func devinInitialConfigMigration(before, after nativeconfig.FileSnapshot) bool {
 	return reflect.DeepEqual(old, current)
 }
 
-func devinConfigMigrationMode(before, after nativeconfig.FileSnapshot) bool {
+func devinConfigMigrationMode(before, after shared.NativeFileSnapshot) bool {
 	// The pinned writer creates/replaces config with 0600. Windows exposes
 	// an ordinary writable file as 0666 through FileMode, without Unix ACLs.
 	if !after.Exists || after.Mode != 0600 && (runtime.GOOS != "windows" || after.Mode != 0666) {

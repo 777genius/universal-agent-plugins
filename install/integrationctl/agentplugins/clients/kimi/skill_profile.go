@@ -10,26 +10,25 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 var errKimiAdditionalDirectories = errors.New("kimi additional project-directory policy is unqualified")
 
 type kimiProfileSnapshot struct {
-	files      map[string]nativeconfig.FileSnapshot
+	files      map[string]shared.NativeFileSnapshot
 	trust      string
-	token      nativeconfig.FileSnapshot
+	token      shared.NativeFileSnapshot
 	executable os.FileInfo
 	profile    os.FileInfo
 }
 
-func kimiSkillProfile(ctx context.Context, env clients.Env, request domain.ActivationRequest) (kimiProfileSnapshot, legacyports.Command, error) {
+func kimiSkillProfile(ctx context.Context, env clients.Env, request domain.ActivationRequest) (kimiProfileSnapshot, ports.Command, error) {
 	var snapshot kimiProfileSnapshot
-	var command legacyports.Command
+	var command ports.Command
 	if err := env.NativeConfig.RequireBoundedRead(); err != nil {
 		return snapshot, command, err
 	}
@@ -65,7 +64,7 @@ func kimiSkillProfile(ctx context.Context, env clients.Env, request domain.Activ
 	if err != nil {
 		return snapshot, command, err
 	}
-	command = legacyports.Command{Argv: []string{request.Client.ExecutablePath, "web", "--no-open", "--host", "127.0.0.1", "--port", "0"}, Dir: project, StdoutLimitBytes: 1 << 20}
+	command = ports.Command{Argv: []string{request.Client.ExecutablePath, "web", "--no-open", "--host", "127.0.0.1", "--port", "0"}, Dir: project, StdoutLimitBytes: 1 << 20}
 	command.Env, err = kimiSkillEnvironment(env.UserHome, profileEnv, os.Environ())
 	return snapshot, command, err
 }
@@ -89,9 +88,9 @@ func kimiProfileIdentities(ctx context.Context, env clients.Env, request domain.
 	return trust, executable, profile, err
 }
 
-func kimiProtectedFiles(env clients.Env, request domain.ActivationRequest) (map[string]nativeconfig.FileSnapshot, error) {
+func kimiProtectedFiles(env clients.Env, request domain.ActivationRequest) (map[string]shared.NativeFileSnapshot, error) {
 	profile, project := request.Client.ConfigRoot, request.Plan.TargetContext.ProjectRoot
-	files := map[string]nativeconfig.FileSnapshot{}
+	files := map[string]shared.NativeFileSnapshot{}
 	paths := []string{filepath.Join(profile, "config.toml"), filepath.Join(profile, "mcp.json"), registryPath(profile), filepath.Join(project, ".mcp.json"), filepath.Join(project, ".kimi-code", "mcp.json"), filepath.Join(project, ".kimi-code", "local.toml")}
 	for _, path := range paths {
 		file, err := env.NativeConfig.ReadExactFileBounded(path, 1<<20)
@@ -153,12 +152,12 @@ func kimiSkillEnvironment(home string, profile, ambient []string) ([]string, err
 	return result, nil
 }
 
-func kimiIssuedToken(env clients.Env, profile, expected string) error {
+func kimiIssuedToken(env clients.Env, profile, expected string) (shared.NativeFileSnapshot, error) {
 	// Official privateFiles.ts blob701c08b3fa9ab08c83c5e8b4fca5a1417209f969
 	// checks POSIX mode only outside Windows; these bits do not represent ACLs.
 	file, err := env.NativeConfig.ReadExactFileBounded(filepath.Join(profile, "server.token"), 43)
 	if err != nil || !file.Exists || (runtime.GOOS != "windows" && file.Mode&0o077 != 0) || len(expected) != 43 || string(file.Body) != expected {
-		return fmt.Errorf("kimi native-issued private bearer differs")
+		return shared.NativeFileSnapshot{}, fmt.Errorf("kimi native-issued private bearer differs")
 	}
-	return nil
+	return file, nil
 }

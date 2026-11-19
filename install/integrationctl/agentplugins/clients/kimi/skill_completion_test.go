@@ -22,15 +22,16 @@ import (
 )
 
 type kimiCompletionFixture struct {
-	t       *testing.T
-	request domain.ActivationRequest
-	env     clients.Env
-	rows    []any
-	calls   []string
-	queries int
-	change  func(*http.Request, map[string]any)
-	closure error
-	banner  string
+	t             *testing.T
+	request       domain.ActivationRequest
+	env           clients.Env
+	rows          []any
+	calls         []string
+	queries       int
+	change        func(*http.Request, map[string]any)
+	closure       error
+	banner        string
+	afterExchange func()
 }
 
 func newKimiCompletionFixture(t *testing.T, version string) *kimiCompletionFixture {
@@ -90,6 +91,9 @@ func (f *kimiCompletionFixture) RunDuplexToCompletion(ctx context.Context, comma
 	}
 	if err := exchange(io.Discard, strings.NewReader(banner)); err != nil {
 		return err
+	}
+	if f.afterExchange != nil {
+		f.afterExchange()
 	}
 	return f.closure
 }

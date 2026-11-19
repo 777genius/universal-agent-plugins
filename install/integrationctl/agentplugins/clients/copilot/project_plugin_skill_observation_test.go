@@ -26,6 +26,7 @@ type copilotWholeSkillRunner struct {
 	mutate          func()
 	result          legacyports.CommandResult
 	err             error
+	expire          bool
 }
 
 func (r *copilotWholeSkillRunner) Run(context.Context, legacyports.Command) (legacyports.CommandResult, error) {
@@ -40,6 +41,10 @@ func (r *copilotWholeSkillRunner) RunWithTreeExitGrace(ctx context.Context, c le
 		panic("unbounded ordinary catalogs")
 	}
 	r.commands = append(r.commands, c)
+	if r.expire {
+		<-ctx.Done()
+		return r.result, ctx.Err()
+	}
 	if r.mutate != nil {
 		r.mutate()
 	}
@@ -169,7 +174,7 @@ func TestCopilotWholeSkillsRefuseCatalogAmbiguityAndScopeSubstitution(t *testing
 			case "wrong-marketplace":
 				runner.plugins = []byte(strings.ReplaceAll(string(runner.plugins), "agentplugins-", "foreign-"))
 			case "wrong-install-root":
-				runner.plugins = []byte(strings.ReplaceAll(string(runner.plugins), request.Plan.ActivePath, filepath.Join(t.TempDir(), "foreign")))
+				runner.plugins = copilotMutateCatalogPath(t, runner.plugins, "installedFrom", filepath.Join(t.TempDir(), "foreign"))
 			case "wrong-version":
 				runner.plugins = []byte(strings.ReplaceAll(string(runner.plugins), "1.0.0", "9.0.0"))
 			case "disabled":
@@ -181,7 +186,7 @@ func TestCopilotWholeSkillsRefuseCatalogAmbiguityAndScopeSubstitution(t *testing
 			case "wrong-skill-source":
 				runner.skills = []byte(strings.ReplaceAll(string(runner.skills), `"plugin"`, `"project"`))
 			case "wrong-skill-path":
-				runner.skills = []byte(strings.ReplaceAll(string(runner.skills), request.Plan.ActivePath, filepath.Join(t.TempDir(), "other")))
+				runner.skills = copilotMutateCatalogPath(t, runner.skills, "path", filepath.Join(t.TempDir(), "other"))
 			case "wrong-description":
 				runner.skills = []byte(strings.ReplaceAll(string(runner.skills), "Inert Skill", "Foreign Skill"))
 			case "stderr":
@@ -309,5 +314,104 @@ func TestCopilotWholeSkillsShareAggregateCaptureBudget(t *testing.T) {
 				t.Fatal("exhausted capture started another process")
 			}
 		})
+	}
+}
+
+func copilotMutateCatalogPath(t *testing.T, body []byte, key, path string) []byte {
+	t.Helper()
+	var rows []map[string]any
+	if err := json.Unmarshal(body, &rows); err != nil {
+		t.Fatal(err)
+	}
+	rows[0][key] = path
+	out, err := json.Marshal(rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+func TestCopilotWholeSkillsClosedTimeoutStillRechecksCustody(t *testing.T) {
+	for _, mode := range []string{"unchanged", "source", "trust", "unclosed", "parent-canceled"} {
+		t.Run(mode, func(t *testing.T) {
+			request, env, runner := copilotWholeSkillFixture(t)
+			out := copilotPreparedSkillOutcome(request)
+			proof := captureCopilotWholeSkills(t.Context(), env, request)
+			if proof == nil {
+				t.Fatal("missing initial proof")
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			queryErr := error(context.DeadlineExceeded)
+			switch mode {
+			case "source":
+				if err := os.WriteFile(filepath.Join(request.Plan.ActivePath, "late.txt"), []byte("late"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "trust":
+				if err := os.WriteFile(filepath.Join(request.Client.ConfigRoot, "config.json"), []byte(`{"trustedFolders":[]}`), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "unclosed":
+				queryErr = &domain.UnclosedClientProbe{Operation: "test", Err: context.DeadlineExceeded}
+			case "parent-canceled":
+				cancel()
+			}
+			got, err := finishCopilotWholeSkills(ctx, env, request, out, proof, copilotWholeSkillCatalog{}, queryErr)
+			if got.Activation == domain.ActivationActive || len(runner.commands) != 0 {
+				t.Fatal("timeout promoted or launched a child")
+			}
+			if mode == "unchanged" && (err != nil || got.NativeEffect != out.NativeEffect || got.Activation != domain.ActivationPrepared) {
+				t.Fatal(got, err)
+			}
+			if (mode == "source" || mode == "trust" || mode == "unclosed") && (err == nil || got.NativeEffect != domain.NativeEffectUncertain) {
+				t.Fatal(got, err)
+			}
+			if mode == "parent-canceled" && !errors.Is(err, context.Canceled) {
+				t.Fatal(got, err)
+			}
+		})
+	}
+}
+
+func TestCopilotWholePluginCatalogRejectsForeignNULPath(t *testing.T) {
+	request, env, runner := copilotWholeSkillFixture(t)
+	proof := captureCopilotWholeSkills(t.Context(), env, request)
+	var rows []map[string]any
+	if err := json.Unmarshal(runner.plugins, &rows); err != nil {
+		t.Fatal(err)
+	}
+	rows[1]["installedFrom"] = filepath.Join(t.TempDir(), "foreign")
+	good, err := json.Marshal(rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !copilotWholePluginListed(good, proof) {
+		t.Fatal("valid foreign row refused")
+	}
+	rows[1]["installedFrom"] = rows[1]["installedFrom"].(string) + "\x00plugin"
+	bad, err := json.Marshal(rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copilotWholePluginListed(bad, proof) {
+		t.Fatal("foreign NUL path accepted")
+	}
+}
+
+// The catalog's real fixed deadline expires while the parent stays alive. A
+// direct finisher test cannot detect accidentally passing that expired context
+// to the post-query custody capture after registration has already committed.
+func TestCopilotWholeSkillsInternalTimeoutKeepsVerifiedPrepared(t *testing.T) {
+	request, env, runner := copilotWholeSkillFixture(t)
+	runner.expire = true
+	out := copilotPreparedSkillOutcome(request)
+	out.NativeEffect = domain.NativeEffectCommitted
+	got, err := observeCopilotWholePluginSkills(t.Context(), env, request, out)
+	if t.Context().Err() != nil {
+		t.Fatal("parent expired instead of internal catalog budget")
+	}
+	if err != nil || got.Activation != domain.ActivationPrepared || got.Verification != out.Verification || got.NativeEffect != domain.NativeEffectCommitted || len(runner.commands) != 1 {
+		t.Fatalf("closed catalog timeout skipped intact custody or promoted: %+v %v", got, err)
 	}
 }

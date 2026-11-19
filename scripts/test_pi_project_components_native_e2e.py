@@ -1,5 +1,7 @@
 """Inert Pi raw-Skills fixture contracts; never starts a native or Go child."""
 import copy
+import os
+import tempfile
 from pathlib import Path
 import unittest
 from unittest import mock
@@ -14,8 +16,8 @@ class PiRawSkillsContracts(unittest.TestCase):
 
     def inventory(self, scope="project"):
         base = Path("/owned/project/.pi") if scope == "project" else Path("/owned/home/.pi/agent")
-        skill = base / "skills/uap-pi-selected/SKILL.md"
-        row = {"name": "skill:uap-pi-selected", "description": "Inert selected Pi Skill", "source": "skill",
+        skill = base / "skills" / fixture.PI_RAW_SKILL / "SKILL.md"
+        row = {"name": "skill:" + fixture.PI_RAW_SKILL, "description": fixture.PI_RAW_DESCRIPTION, "source": "skill",
                "sourceInfo": {"path": str(skill), "source": "auto", "scope": scope, "origin": "top-level",
                               "baseDir": str(base)}}
         receipt = {"passed": True, "closure_proved": True,
@@ -67,6 +69,26 @@ class PiRawSkillsContracts(unittest.TestCase):
         rows.append(copy.deepcopy(rows[0]))
         with self.assertRaises(RuntimeError):
             fixture.pi_raw_inventory(receipt, skill, "project", base)
+
+    def test_preservation_snapshot_records_empty_directories_and_modes(self):
+        with tempfile.TemporaryDirectory() as root:
+            base = Path(root)
+            empty = base / "empty"
+            empty.mkdir(mode=0o700)
+            before = fixture.pi_raw_tree(base)
+            self.assertEqual(before["empty"], ("directory", empty.stat().st_mode & 0o7777))
+            if os.name != "nt":
+                empty.chmod(0o500)
+                self.assertNotEqual(before, fixture.pi_raw_tree(base))
+                empty.chmod(0o700)
+            empty.rmdir()
+            self.assertNotEqual(before, fixture.pi_raw_tree(base))
+
+    def test_raw_source_uses_supported_immutable_git_fixture(self):
+        self.assertIn(fixture.PI_RAW_COMMIT, fixture.PI_RAW_SOURCE)
+        self.assertTrue(fixture.PI_RAW_SOURCE.startswith("https://github.com/"))
+        self.assertIn("benchmark-note", fixture.PI_RAW_BODY)
+        self.assertIn("references/fixture.txt", fixture.PI_RAW_BODY)
 
     def test_existing_native_case_and_public_raw_cases_remain_required(self):
         import ast

@@ -16,7 +16,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 const piSkillObservationTimeout = 30 * time.Second
@@ -42,7 +41,7 @@ func piSkillCLI(request domain.ActivationRequest) bool {
 	return false
 }
 
-func piSkillCommand(request domain.ActivationRequest) legacyports.Command {
+func piSkillCommand(request domain.ActivationRequest) ports.Command {
 	environment := []string{"PI_CODING_AGENT_DIR=" + request.Client.ConfigRoot, "PI_OFFLINE=1"}
 	for _, key := range []string{"PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "LANG", "LC_ALL",
 		"XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_DATA_HOME"} {
@@ -54,7 +53,7 @@ func piSkillCommand(request domain.ActivationRequest) legacyports.Command {
 	if request.Plan.Scope == domain.ScopeProject {
 		cwd = request.Plan.TargetContext.ProjectRoot
 	}
-	return legacyports.Command{Argv: []string{request.Client.ExecutablePath, "--mode", "rpc", "--no-session", "--offline"},
+	return ports.Command{Argv: []string{request.Client.ExecutablePath, "--mode", "rpc", "--no-session", "--offline"},
 		Dir: cwd, Env: environment, StdoutLimitBytes: piSkillCatalogLimit}
 }
 

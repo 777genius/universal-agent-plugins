@@ -149,7 +149,7 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
     def test_raw_case_repeats_same_argv_and_retains_checkable_evidence(self):
         skill = (Path(__file__).resolve().parents[1] /
                  "tests/fixtures/uap_apm/skills/benchmark-note/SKILL.md").read_bytes()
-        for fault in (None, "identity", "binding", "payload", "lock", "foreign", "scope"):
+        for fault in (None, "identity", "binding", "payload", "lock", "foreign", "scope", "initial-resource", "extra-resource", "malformed-state"):
             with self.subTest(fault=fault), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory).resolve()
                 case = root / "raw-project-skills"
@@ -158,7 +158,7 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                 managed = state_root / "managed/clients/windsurf/fixture"
                 native = project / ".devin/skills" / subject.RAW_SKILL
                 state_path = state_root / "state-v2.json"
-                binding = {"client_id": "windsurf", "scope": "project", "activation": "active",
+                binding = {"client_binding_id": "held", "client_id": "windsurf", "scope": "project", "activation": "active",
                            "authentication": "not_required", "policy": "allowed", "verification": "installation_verified",
                            "native_profile_root": str(project / ".devin"), "target_locator": str(managed)}
                 installation = {"installation_id": "held-fixture-id", "clients": {"held": binding},
@@ -171,9 +171,19 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                         self.assertEqual((Path(cwd), timeout), (outside, 90))
                         additions += 1
                         if additions == 1:
-                            for path in (managed, native):
-                                path.mkdir(parents=True)
+                            reference = (Path(__file__).resolve().parents[1] /
+                                         "tests/fixtures/uap_apm/skills/benchmark-note/references/fixture.txt").read_bytes()
+                            for path in (managed / "skills" / subject.RAW_SKILL, native):
+                                (path / "references").mkdir(parents=True)
                                 (path / "SKILL.md").write_bytes(skill)
+                                (path / "references/fixture.txt").write_bytes(reference)
+                            manifest = {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+                                        "name": "skill-4e68c33bfb91dc370d5c3745c0ba746428ff227ed3b3466f9c9d1552"}
+                            (managed / "plugin.json").write_text(json.dumps(manifest, separators=(",", ":")) + "\n")
+                            if fault == "initial-resource":
+                                (native / "references/fixture.txt").write_bytes(b"substituted initial resource")
+                            elif fault == "extra-resource":
+                                (native / "extra.txt").write_bytes(b"unreviewed resource")
                             for name in ("uap.toml", "uap.lock"):
                                 (project / name).write_text("held lock or manifest\n")
                             state_path.write_text(json.dumps(state))
@@ -191,7 +201,7 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                         shutil.rmtree(managed)
                         shutil.rmtree(native)
                         installation["clients"] = {}
-                        state_path.write_text(json.dumps(state))
+                        state_path.write_text(json.dumps({} if fault == "malformed-state" else state))
                         return json.dumps({"result": "success"})
                     self.assertEqual((argv[1:], timeout), (["skills", "list", "--json"], 45))
                     present = native.exists() and (Path(cwd) == project or (fault == "scope" and additions == 2))
@@ -217,6 +227,16 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                 self.assertEqual({row["stage"] for row in evidence["inventories"]},
                                  {"before-add", "after-add", "after-repeat", "after-remove"})
 
+    def test_raw_removal_state_requires_actual_schema_and_typed_records(self):
+        valid = {"schema_version": 5, "installations": []}
+        self.assertEqual(subject.raw_state_installations(valid), [])
+        for invalid in ({}, {"schema_version": 5}, {"schema_version": 5, "installations": None},
+                        {"schema_version": 5, "installations": [{}]},
+                        {"schema_version": 5, "installations": [{"installation_id": "held", "clients": None}]},
+                        {"schema_version": 5, "installations": [{"installation_id": "held", "clients": {"key": {}}}]}):
+            with self.subTest(invalid=invalid), self.assertRaises(RuntimeError):
+                subject.raw_state_installations(invalid)
+
     def test_raw_case_is_required_without_replacing_original_mixed_oracle(self):
         for mixed, raw in ((False, False), (True, False), (False, True), (True, True)):
             with self.subTest(mixed=mixed, raw=raw):
@@ -227,6 +247,7 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
             "https://github.com/777genius/universal-agent-plugins/tree/b5d80336b53397be5bbb72c84f680e5885a6ac0d/tests/fixtures/uap_apm/skills")
         fixture = Path(__file__).resolve().parents[1] / "tests/fixtures/uap_apm/skills/benchmark-note/SKILL.md"
         self.assertEqual(hashlib.sha256(fixture.read_bytes()).hexdigest(), subject.RAW_SKILL_SHA)
+        self.assertEqual(hashlib.sha256((fixture.parent / "references/fixture.txt").read_bytes()).hexdigest(), subject.RAW_REFERENCE_SHA)
 
     def test_mcp_inventory_requires_structured_selected_enabled_source(self):
         config = Path("/tmp/project-a/.devin/mcp_config.json")

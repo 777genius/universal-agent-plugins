@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -45,6 +46,7 @@ func devinGlobalSkillFixture(t *testing.T) (domain.ActivationRequest, clients.En
 	request.Delivery.ActivePath, request.Delivery.OwnedBase = active, request.Plan.TargetRoot
 	request.Delivery.NativeObjects = []domain.NativeObjectOwnership{object, packageObject}
 	request.PreviousNativeObjects = append([]domain.NativeObjectOwnership(nil), request.Delivery.NativeObjects...)
+	env.NativeConfig = nativeconfig.NewWithFileIO(&devinSkillContextFiles{kernel: env.NativeConfig})
 	row["base_dir"] = object.Path
 	return request, env, row, foreignProject
 }
@@ -97,7 +99,15 @@ func TestDevinGlobalSkillsObserveOriginalProfileAndRejectScopeSubstitution(t *te
 				if activationErr != nil || calls != 1 || outcome.Activation != domain.ActivationActive || outcome.Authentication != domain.AuthenticationNotRequired || outcome.Verification != domain.VerificationInstalled || len(outcome.UserActions) != 0 {
 					t.Fatalf("exact Global observation did not qualify: %+v %v", outcome, activationErr)
 				}
-			} else if outcome.Activation == domain.ActivationActive {
+			} else if mutation == "project-shadow" {
+				if calls != 1 || activationErr != nil || outcome.Activation != domain.ActivationPrepared || outcome.Verification != domain.VerificationInstalled {
+					t.Fatalf("closed Global source mismatch lost Prepared state: calls=%d outcome=%+v err=%v", calls, outcome, activationErr)
+				}
+			} else if mutation == "native-resource" || mutation == "package-resource" || mutation == "global-policy" {
+				if calls != 1 || activationErr == nil || outcome.Activation == domain.ActivationActive {
+					t.Fatalf("Global callback mutation did not reach the probe or fail: calls=%d outcome=%+v err=%v", calls, outcome, activationErr)
+				}
+			} else if calls != 0 || outcome.Activation == domain.ActivationActive {
 				t.Fatalf("unproven Global authority promoted: %+v %v", outcome, activationErr)
 			}
 			foreignAfter, readErr := os.ReadFile(foreignFile)

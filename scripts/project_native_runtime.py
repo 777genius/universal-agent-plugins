@@ -251,6 +251,11 @@ def kimi_members(bodies, source):
     if not result["test_failed"]:
         if set(bodies) != allowed or any(not qualification[key] for key in shared.QUALIFICATION_CASES if key != "mcp-tools-call"):
             raise ValueError("successful Kimi lifecycle must contain all selected stages")
+        for label in KIMI_COMMANDS:
+            if label.startswith("observe-"):
+                command = strict_json(bodies[label + ".command.json"])
+                if command["exit"] != 0 or command["error"] is not False or command["deadline"] is not False:
+                    raise ValueError("Kimi observer command did not close successfully")
         kimi_raw_skills_members(bodies, result)
     identity = result.get("source_identity")
     if identity is not None and identity != {"installer_base_commit": source["source_commit"], "installer_tree": source["source_tree"],
@@ -280,7 +285,7 @@ def kimi_raw_skills_members(bodies, result):
         if any(not isinstance(public[label+suffix], str) for suffix in suffixes):
             raise ValueError("Kimi raw public capture is not text")
         command = strict_json(public[label+".command.json"].encode())
-        if (set(command) != {"argv", "cwd", "exit", "error", "deadline", "cleanup"}
+        if (not isinstance(command, dict) or set(command) != {"argv", "cwd", "exit", "error", "deadline", "cleanup"}
                 or type(command["exit"]) is not int or command["exit"] != 0
                 or command["error"] is not False or command["deadline"] is not False
                 or not isinstance(command["argv"], list) or not command["argv"]
@@ -289,14 +294,15 @@ def kimi_raw_skills_members(bodies, result):
             raise ValueError("Kimi raw public command did not close successfully")
         commands[label] = command
         value = strict_json(public[label+".stdout.log"].encode())
-        if value.get("schema_version") != 1 or type(value["schema_version"]) is not int or value.get("result") != "success":
+        if not isinstance(value, dict) or value.get("schema_version") != 1 or type(value["schema_version"]) is not int or value.get("result") != "success":
             raise ValueError("Kimi raw public outcome differs")
         if label != "raw-remove":
             items = value.get("items")
             if (value.get("command") != "skills add" or value.get("scope") != "project" or value.get("status") != "succeeded"
                     or value.get("readiness") != "ready" or value.get("next_actions", []) != []
                     or not isinstance(items, list) or len(items) != 1 or not isinstance(items[0], dict)
-                    or items[0].get("targetId") != "kimi" or items[0].get("status") != "succeeded"):
+                    or items[0].get("targetId") != "kimi"
+                    or items[0].get("status") not in (("succeeded", "unchanged") if label == "raw-repeat" else ("succeeded",))):
                 raise ValueError("Kimi raw public Skills are not Ready")
         elif (value.get("command") != "agentplugins remove" or value.get("outcome") != "completed" or value.get("scope") != "project"):
             raise ValueError("Kimi raw public removal differs")
@@ -310,13 +316,22 @@ def kimi_raw_skills_members(bodies, result):
             or commands["raw-remove"]["argv"] != remove):
         raise ValueError("Kimi raw repeat changed pinned public arguments or project")
     for stage in ("raw-empty", "raw-add", "raw-repeat", "raw-removed"):
+        command = strict_json(bodies["observe-"+stage+".command.json"])
+        if (not isinstance(command, dict) or type(command.get("exit")) is not int or command["exit"] != 0
+                or command.get("error") is not False or command.get("deadline") is not False):
+            raise ValueError("Kimi raw observer command did not close successfully")
         capture = strict_json(bodies["observe-"+stage+".stdout.log"])
+        if (not isinstance(capture, dict) or not isinstance(capture.get("files"), dict)
+                or not isinstance(capture["files"].get("research.json"), str)):
+            raise ValueError("Kimi raw observer capture is not an object")
         research = strict_json(capture["files"]["research.json"].encode())
-        observed, native = research["observations"], research["commands"]
+        if not isinstance(research, dict) or not isinstance(research.get("observations"), dict):
+            raise ValueError("Kimi raw observer research is not an object")
+        observed, native = research["observations"], research.get("commands")
         expected = {scope: (["frontend-design"] if scope == "a" and stage in ("raw-add", "raw-repeat") else []) for scope in ("a", "b", "c", "user")}
         if (observed.get("stage") != stage or observed.get("skill_names") != expected
                 or observed.get("tools_call_count") != 0 or type(observed.get("tools_call_count")) is not int or observed.get("provider_configured") is not False
-                or not isinstance(native, list) or len(native) != 1 or native[0].get("exit") != 0 or type(native[0].get("exit")) is not int
+                or not isinstance(native, list) or len(native) != 1 or not isinstance(native[0], dict) or native[0].get("exit") != 0 or type(native[0].get("exit")) is not int
                 or native[0].get("error") is not None
                 or not isinstance(native[0].get("cleanup"), dict)
                 or any(type(value) is not bool for value in native[0]["cleanup"].values())

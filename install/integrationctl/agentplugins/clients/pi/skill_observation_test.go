@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -31,6 +33,7 @@ type piSkillCatalogRunner struct {
 	mutate        func(map[string]any)
 	cleanup       error
 	bounded       bool
+	expire        bool
 }
 
 func (*piSkillCatalogRunner) Run(context.Context, legacyports.Command) (legacyports.CommandResult, error) {
@@ -43,6 +46,10 @@ func (runner *piSkillCatalogRunner) RunDuplexToCompletion(ctx context.Context, c
 	}
 	runner.calls++
 	runner.command = command
+	if runner.expire {
+		<-ctx.Done()
+		return ctx.Err()
+	}
 	runner.input.Reset()
 	if deadline, ok := ctx.Deadline(); ok {
 		runner.bounded = time.Until(deadline) > 0 && time.Until(deadline) <= 30*time.Second
@@ -130,8 +137,12 @@ func piSkillFixture(t *testing.T, scope domain.InstallScope) (domain.ActivationR
 	if err != nil {
 		t.Fatal(err)
 	}
-	digest, err := (packagesnapshot.Builder{}).Digest(t.Context(), request.Plan.ActivePath)
+	artifact, err := (packagesnapshot.Builder{}).Build(t.Context(), request.Plan.ActivePath)
 	if err != nil {
+		t.Fatal(err)
+	}
+	digest := artifact.Digest
+	if err := artifact.Close(); err != nil {
 		t.Fatal(err)
 	}
 	request.Delivery.ArtifactDigest = digest
@@ -350,13 +361,20 @@ func (piNoExchangeSkillRunner) RunDuplexToCompletion(context.Context, legacyport
 }
 
 func TestPiSkillsTrustChangesAndOwnedMutationsFailClosed(t *testing.T) {
-	for _, mode := range []string{"native-resource", "source-resource", "trust", "profile-policy", "component"} {
+	for _, mode := range []string{"native-resource", "native-missing", "source-resource", "trust", "foreign-hook", "profile-policy", "component"} {
 		t.Run(mode, func(t *testing.T) {
 			request, env, runner := piSkillFixture(t, domain.ScopeProject)
 			runner.after = func() {
 				switch mode {
 				case "native-resource":
 					piTrustWrite(t, filepath.Join(request.Delivery.NativeObjects[1].Path, "extra.txt"), "late native edit")
+				case "native-missing":
+					if err := os.RemoveAll(request.Delivery.NativeObjects[1].Path); err != nil {
+						t.Fatal(err)
+					}
+				case "foreign-hook":
+					_, entry, _ := piTrustHookPaths(request.Client.ConfigRoot)
+					piTrustWrite(t, entry, "foreign extension bytes")
 				case "source-resource":
 					piTrustWrite(t, filepath.Join(request.Plan.ActivePath, "late.txt"), "late source edit")
 				case "trust":
@@ -552,5 +570,182 @@ func TestPiSkillsCompletedTrustDisclosureRemainsInformational(t *testing.T) {
 				t.Fatal("User catalog gained Project trust disclosure")
 			}
 		})
+	}
+}
+
+// Inject only read behavior; the observer must not obtain an OS fallback or
+// turn a failed read into evidence that a native mutation occurred.
+type piSkillFinalReadFiles struct {
+	piReadOnlySkillFiles
+	afterQuery *bool
+	settings   string
+	cancel     context.CancelFunc
+	fail       bool
+}
+
+func (f piSkillFinalReadFiles) ReadNoFollowBounded(path string, limit int64) ([]byte, os.FileMode, bool, error) {
+	if *f.afterQuery && path == f.settings && f.fail {
+		return nil, 0, false, &os.PathError{Op: "read", Path: path, Err: syscall.EACCES}
+	}
+	v, err := nativeconfig.New().ReadExactFileBounded(path, limit)
+	if *f.afterQuery && strings.HasSuffix(path, "trust.json") && f.cancel != nil {
+		f.cancel()
+	}
+	return v.Body, v.Mode, v.Exists, err
+}
+func TestPiSkillsFailedObservationReadPreservesVerifiedBinding(t *testing.T) {
+	for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
+		for _, effect := range []domain.NativeEffectState{domain.NativeEffectCommitted, domain.NativeEffectUnchanged} {
+			t.Run(string(scope)+"/"+string(effect), func(t *testing.T) {
+				request, env, runner := piSkillFixture(t, scope)
+				after := false
+				env.NativeConfig = nativeconfig.NewWithFileIO(piSkillFinalReadFiles{afterQuery: &after, settings: filepath.Join(request.Client.ConfigRoot, "settings.json"), fail: true})
+				runner.after = func() { after = true }
+				out := piSkillOutcome(request)
+				out.NativeEffect = effect
+				got, err := completePiSkills(t.Context(), env, request, out)
+				if err != nil || !reflect.DeepEqual(got, out) || runner.calls != 1 {
+					t.Fatalf("read failure replaced verified binding: %+v %v", got, err)
+				}
+				after = false
+				runner.after = nil
+				active, err := completePiSkills(t.Context(), env, request, out)
+				if err != nil || active.Activation != domain.ActivationActive || runner.calls != 2 {
+					t.Fatalf("fresh retry blocked: %+v %v", active, err)
+				}
+			})
+		}
+	}
+}
+
+func TestPiSkillsCancellationDuringFinalTrustReadCannotPromote(t *testing.T) {
+	request, env, runner := piSkillFixture(t, domain.ScopeUser)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	after := false
+	env.NativeConfig = nativeconfig.NewWithFileIO(piSkillFinalReadFiles{afterQuery: &after, cancel: cancel})
+	runner.after = func() { after = true }
+	got, err := completePiSkills(ctx, env, request, piSkillOutcome(request))
+	if !errors.Is(err, context.Canceled) || got.Activation == domain.ActivationActive || runner.calls != 1 {
+		t.Fatal(got, err)
+	}
+}
+
+func TestPiSkillsInternalTimeoutKeepsVerifiedPrepared(t *testing.T) {
+	request, env, runner := piSkillFixture(t, domain.ScopeUser)
+	runner.expire = true
+	out := piSkillOutcome(request)
+	out.NativeEffect = domain.NativeEffectCommitted
+	got, err := completePiSkills(t.Context(), env, request, out)
+	if t.Context().Err() != nil {
+		t.Fatal("parent expired instead of internal catalog budget")
+	}
+	if err != nil || !reflect.DeepEqual(got, out) || runner.calls != 1 {
+		t.Fatalf("closed catalog timeout replaced verified binding or skipped custody: %+v %v", got, err)
+	}
+}
+
+func TestPiSkillsReadFailureClassifierPreservesStrictErrors(t *testing.T) {
+	ioFailure := &os.PathError{Op: "read", Path: "authority.json", Err: syscall.EIO}
+	for _, tc := range []struct {
+		name string
+		err  error
+		soft bool
+	}{
+		{"direct-permission", &os.PathError{Op: "open", Path: "authority.json", Err: syscall.EACCES}, true},
+		{"direct-io", ioFailure, true},
+		{"missing", &os.PathError{Op: "lstat", Path: "authority.json", Err: syscall.ENOENT}, false},
+		{"not-directory", &os.PathError{Op: "lstat", Path: "authority.json", Err: syscall.ENOTDIR}, false},
+		{"symlink-loop", &os.PathError{Op: "open", Path: "authority.json", Err: syscall.ELOOP}, false},
+		{"wrapped", fmt.Errorf("unknown observation: %w", ioFailure), false},
+		{"joined-race", errors.Join(ioFailure, nativeconfig.ErrConcurrentChange), false},
+		{"nested-race", &os.PathError{Op: "read", Path: "authority.json", Err: errors.Join(syscall.EIO, nativeconfig.ErrConcurrentChange)}, false},
+		{"opaque", errors.New("unknown reader refusal"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := piSkillReadFailure(tc.err)
+			if errors.Is(got, errPiSkillObservationRead) != tc.soft {
+				t.Fatalf("incorrect read classification: %v", got)
+			}
+			if !tc.soft && got != tc.err {
+				t.Fatal("strict error identity changed")
+			}
+		})
+	}
+}
+
+type piSkillFinalAdmissionFiles struct {
+	piReadOnlySkillFiles
+	afterQuery *bool
+	target     string
+	beforeRead func()
+	failure    error
+	observed   error
+}
+
+func (f *piSkillFinalAdmissionFiles) ReadNoFollowBounded(path string, limit int64) ([]byte, os.FileMode, bool, error) {
+	if *f.afterQuery && path == f.target {
+		if f.beforeRead != nil {
+			before := f.beforeRead
+			f.beforeRead = nil
+			before()
+		}
+		if f.failure != nil {
+			f.observed = f.failure
+			return nil, 0, false, f.failure
+		}
+	}
+	v, err := nativeconfig.New().ReadExactFileBounded(path, limit)
+	if *f.afterQuery && path == f.target {
+		f.observed = err
+	}
+	return v.Body, v.Mode, v.Exists, err
+}
+
+func TestPiSkillsFinalAuthorityAdmissionRefusalsStayHard(t *testing.T) {
+	for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
+		for _, mode := range []string{"directory", "symlink", "oversized", "joined-race"} {
+			t.Run(string(scope)+"/"+mode, func(t *testing.T) {
+				request, env, runner := piSkillFixture(t, scope)
+				after := false
+				path := filepath.Join(request.Client.ConfigRoot, "settings.json")
+				files := &piSkillFinalAdmissionFiles{afterQuery: &after, target: path}
+				if mode == "joined-race" {
+					files.failure = errors.Join(&os.PathError{Op: "lstat", Path: path, Err: syscall.EACCES}, nativeconfig.ErrConcurrentChange)
+				} else {
+					files.beforeRead = func() {
+						if err := os.RemoveAll(path); err != nil {
+							t.Fatal(err)
+						}
+						if mode == "directory" {
+							if err := os.Mkdir(path, 0700); err != nil {
+								t.Fatal(err)
+							}
+						} else if mode == "symlink" {
+							target := filepath.Join(t.TempDir(), "ordinary.json")
+							if err := os.WriteFile(target, []byte("{}"), 0600); err != nil {
+								t.Fatal(err)
+							}
+							if err := os.Symlink(target, path); err != nil {
+								t.Skipf("symlink unavailable: %v", err)
+							}
+						} else {
+							if err := os.WriteFile(path, make([]byte, (1<<20)+1), 0600); err != nil {
+								t.Fatal(err)
+							}
+						}
+					}
+				}
+				env.NativeConfig = nativeconfig.NewWithFileIO(files)
+				runner.after = func() { after = true }
+				got, err := completePiSkills(t.Context(), env, request, piSkillOutcome(request))
+				if files.observed == nil {
+					t.Fatal("final bounded-read admission path was not reached")
+				}
+				if err == nil || got.Activation != domain.ActivationFailed || got.NativeEffect != domain.NativeEffectUncertain || errors.Is(err, errPiSkillObservationRead) {
+					t.Fatalf("strict admission softened: %+v %v", got, err)
+				}
+			})
+		}
 	}
 }

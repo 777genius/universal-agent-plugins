@@ -764,7 +764,7 @@ _FAILURE_STAGES = frozenset({
     "preserved-authority", "shutdown", "service-cleanup", "serialization", "emission", "trust-untrusted-c",
     *[prefix + "-" + scope for prefix in ("workspace", "trust-before", "trust-set", "trust-after",
                                          "catalog", "mcp", "skills", "probe-events") for scope in WORKSPACES],
-    "catalog-user", "test-a", "test-b", "test-refused-c",
+    "catalog-user", "workspace-outside", "skills-outside", "test-a", "test-b", "test-refused-c",
 })
 _FAILURE_PHASES = frozenset({"enter", "request", "envelope", "validate", "complete"})
 _FAILURE_KINDS = frozenset({"validation", "type", "key", "os", "timeout", "other"})

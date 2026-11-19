@@ -4,16 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
+	"syscall"
+	"time"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
+
+var errPiSkillObservationRead = errors.New("pi Skill observation could not read current authority")
 
 type piObservedSkill struct {
 	name, description, path string
@@ -23,7 +27,7 @@ type piSkillProof struct {
 	objects        []domain.NativeObjectOwnership
 	components     []domain.ComponentDecision
 	skills         map[string]piObservedSkill
-	trust          []nativeconfig.FileSnapshot
+	trust          []shared.NativeFileSnapshot
 	authentication domain.AuthenticationState
 }
 
@@ -44,7 +48,9 @@ func completePiSkills(ctx context.Context, env clients.Env, request domain.Activ
 		return out, bounded.Err()
 	}
 	observed, queryErr := runPiSkillCatalog(bounded, runner, request)
-	return finishPiSkills(bounded, env, request, out, proof, observed, queryErr)
+	verification, finish := context.WithTimeout(ctx, 5*time.Second)
+	defer finish()
+	return finishPiSkills(verification, env, request, out, proof, observed, queryErr)
 }
 
 func finishPiSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, out domain.ActivationOutcome, proof *piSkillProof, observed []any, queryErr error) (domain.ActivationOutcome, error) {
@@ -57,6 +63,14 @@ func finishPiSkills(ctx context.Context, env clients.Env, request domain.Activat
 		return out, err
 	}
 	fresh, err := capturePiSkills(ctx, env, request)
+	if stopped := ctx.Err(); stopped != nil {
+		return out, stopped
+	}
+	if errors.Is(err, errPiSkillObservationRead) {
+		// Read-only uncertainty is not evidence of a new native mutation. Retain
+		// the verified binding and its already recorded effect, without promotion.
+		return out, nil
+	}
 	if err != nil || !reflect.DeepEqual(proof, fresh) {
 		out.NativeEffect = domain.NativeEffectUncertain
 		return shared.FailedActivation(out, "repair the exact owned Pi Skills and review the selected profile before retrying",
@@ -165,7 +179,7 @@ func capturePiSkills(ctx context.Context, env clients.Env, request domain.Activa
 		return nil, errors.New("pi Skill receipt count differs")
 	}
 	if err := layout.Verify(objects, false, env.NativeConfig); err != nil {
-		return nil, err
+		return nil, piSkillReadFailure(err)
 	}
 	proof := &piSkillProof{objects: slices.Clone(request.Delivery.NativeObjects), components: slices.Clone(request.Plan.Components),
 		skills:         make(map[string]piObservedSkill, len(objects)),
@@ -173,7 +187,7 @@ func capturePiSkills(ctx context.Context, env clients.Env, request domain.Activa
 	for _, object := range objects {
 		skill, err := piOwnedSkillMetadata(ctx, env, layout, request.Delivery.ActivePath, object)
 		if err != nil {
-			return nil, err
+			return nil, piSkillReadFailure(err)
 		}
 		proof.skills[skill.name] = skill
 	}
@@ -185,7 +199,7 @@ func capturePiSkills(ctx context.Context, env clients.Env, request domain.Activa
 			return nil, errors.New("pi native Skill differs from selected component")
 		}
 	}
-	proof.trust, err = piSkillTrust(env.NativeConfig, request)
+	proof.trust, err = piSkillTrust(env, request)
 	return proof, err
 }
 
@@ -228,7 +242,7 @@ func piPackageSkillReceipt(ctx context.Context, snapshots ports.DirectorySnapsho
 	}
 	digest, err := snapshots.Digest(ctx, request.Delivery.ActivePath)
 	if err != nil {
-		return err
+		return piSkillReadFailure(err)
 	}
 	if digest != request.Delivery.ArtifactDigest {
 		return errors.New("pi managed package bytes changed")
@@ -236,19 +250,20 @@ func piPackageSkillReceipt(ctx context.Context, snapshots ports.DirectorySnapsho
 	return nil
 }
 
-func piSkillTrust(kernel nativeconfig.Kernel, request domain.ActivationRequest) ([]nativeconfig.FileSnapshot, error) {
+func piSkillTrust(env clients.Env, request domain.ActivationRequest) ([]shared.NativeFileSnapshot, error) {
+	kernel := env.NativeConfig
 	paths := []string{filepath.Join(request.Client.ConfigRoot, "settings.json"), filepath.Join(request.Client.ConfigRoot, "trust.json")}
 	if request.Plan.Scope == domain.ScopeProject {
 		recorded, err := observePiProjectTrust(kernel, request)
 		if err != nil {
-			return nil, err
+			return nil, piSkillReadFailure(err)
 		}
 		if !recorded {
 			return nil, errors.New("pi project trust was not previously confirmed")
 		}
 		blocker, err := piTrustBlocker(kernel, request.Client.ConfigRoot, request.Plan.TargetContext.ProjectRoot)
 		if err != nil {
-			return nil, err
+			return nil, piSkillReadFailure(err)
 		}
 		if blocker != "" {
 			return nil, fmt.Errorf("pi project trust is blocked: %s", blocker)
@@ -256,11 +271,11 @@ func piSkillTrust(kernel nativeconfig.Kernel, request domain.ActivationRequest) 
 		_, entry, projects := piTrustHookPaths(request.Client.ConfigRoot)
 		paths = append(paths, entry, projects)
 	}
-	snapshots := make([]nativeconfig.FileSnapshot, 0, len(paths))
+	snapshots := make([]shared.NativeFileSnapshot, 0, len(paths))
 	for _, path := range paths {
 		snapshot, err := kernel.ReadExactFileBounded(path, 1<<20)
 		if err != nil {
-			return nil, err
+			return nil, piSkillReadFailure(err)
 		}
 		snapshots = append(snapshots, snapshot)
 	}
@@ -268,3 +283,17 @@ func piSkillTrust(kernel nativeconfig.Kernel, request domain.ActivationRequest) 
 }
 
 const piCompletedTrustNotice = "Pi discovered the owned Skills in a fresh catalog. UAP's trust hook covers this exact project only while its .pi holds unchanged UAP-managed resources. Trust covers the whole folder; a running Pi session keeps it across /reload. Project node_modules imports, MCP working directories and .uap data are not checked. This catalog does not verify vendor authentication or model calls."
+
+// Only a direct OS read failure is inconclusive. Do not traverse wrapped or
+// joined errors: they may also contain a strict admission or custody refusal.
+func piSkillReadFailure(err error) error {
+	pathError, ok := err.(*os.PathError)
+	if !ok {
+		return err
+	}
+	cause, ok := pathError.Err.(syscall.Errno)
+	if ok && (cause.Is(os.ErrPermission) || cause == syscall.EIO) {
+		return errors.Join(errPiSkillObservationRead, err)
+	}
+	return err
+}

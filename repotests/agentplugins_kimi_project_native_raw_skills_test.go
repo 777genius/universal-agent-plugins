@@ -43,7 +43,7 @@ func (f *kimiProjectNativeFixture) rawSkillsCycle(t *testing.T) {
 	var continuity map[string]string
 	for attempt, stage := range []string{"raw-add", "raw-repeat"} {
 		result := f.rawSkillsCommand(t, public, stage, args)
-		if err := kimiRawPublicReady(result.Stdout); err != nil {
+		if err := kimiRawPublicReady(result.Stdout, attempt > 0); err != nil {
 			t.Fatal(err)
 		}
 		installation, selected := f.rawSkillsReceipt(t)
@@ -171,7 +171,7 @@ func (f *kimiProjectNativeFixture) rawSkillsReceipt(t *testing.T) (domain.Instal
 	return installation, binding
 }
 
-func kimiRawPublicReady(body []byte) error {
+func kimiRawPublicReady(body []byte, repeated bool) error {
 	value, err := kimiProjectObject(body)
 	if err != nil {
 		return err
@@ -187,7 +187,9 @@ func kimiRawPublicReady(body []byte) error {
 		}
 	}
 	item, ok := items[0].(map[string]any)
-	if !ok || item["targetId"] != "kimi" || item["status"] != "succeeded" {
+	// A confirmed repeat may finish native setup as succeeded while keeping
+	// the exact installed Skill and lock unchanged. Ready is still mandatory.
+	if !ok || item["targetId"] != "kimi" || (item["status"] != "succeeded" && (!repeated || item["status"] != "unchanged")) {
 		return fmt.Errorf("Kimi raw public Skill item differs")
 	}
 	return nil

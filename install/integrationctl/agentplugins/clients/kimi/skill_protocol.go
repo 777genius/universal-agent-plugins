@@ -17,7 +17,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 var kimiLocalReady = regexp.MustCompile(`^  Local:    (http://127\.0\.0\.1:([1-9][0-9]{0,4}))/#token=([A-Za-z0-9_-]{43})$`)
@@ -41,12 +40,13 @@ type kimiSkillAPI struct {
 	registration domain.NativeEffectState
 }
 
-func observeKimiSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, command legacyports.Command, expected map[string]kimiSkillMetadata) (domain.NativeEffectState, error) {
+func observeKimiSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, command ports.Command, expected map[string]kimiSkillMetadata) (domain.NativeEffectState, shared.NativeFileSnapshot, error) {
 	runner, ok := env.Runner.(ports.CompletionCommandRunner)
 	if !ok || env.NativeHTTP == nil {
-		return domain.NativeEffectUnchanged, fmt.Errorf("kimi finite native observation is unavailable")
+		return domain.NativeEffectUnchanged, shared.NativeFileSnapshot{}, fmt.Errorf("kimi finite native observation is unavailable")
 	}
 	registration := domain.NativeEffectUnchanged
+	var token shared.NativeFileSnapshot
 	err := runner.RunDuplexToCompletion(ctx, command, func(_ io.Writer, stdout io.Reader) error {
 		api := kimiSkillAPI{ctx: ctx, transport: env.NativeHTTP, remaining: 1 << 20}
 		scanner := bufio.NewScanner(&kimiBudgetReader{reader: stdout, remaining: &api.remaining})
@@ -54,9 +54,11 @@ func observeKimiSkills(ctx context.Context, env clients.Env, request domain.Acti
 		if err := api.ready(scanner, request.Client.Version); err != nil {
 			return err
 		}
-		if err := kimiIssuedToken(env, request.Client.ConfigRoot, api.token); err != nil {
+		issued, err := kimiIssuedToken(env, request.Client.ConfigRoot, api.token)
+		if err != nil {
 			return err
 		}
+		token = issued
 		observed := api.catalog(request, expected)
 		if api.registration != "" {
 			registration = api.registration
@@ -68,16 +70,17 @@ func observeKimiSkills(ctx context.Context, env clients.Env, request domain.Acti
 			shutdownErr = fmt.Errorf("kimi shutdown was not acknowledged")
 		}
 		for scanner.Scan() {
-			if kimiLocalReady.MatchString(scanner.Text()) || kimiTokenReady.MatchString(scanner.Text()) {
+			if strings.Contains(scanner.Text(), "Kimi server ready") || kimiLocalReady.MatchString(scanner.Text()) || kimiTokenReady.MatchString(scanner.Text()) {
 				observed = errors.Join(observed, fmt.Errorf("kimi readiness identity was repeated"))
 			}
 		}
-		return errors.Join(observed, shutdownErr, scanner.Err(), ctx.Err(), kimiIssuedToken(env, request.Client.ConfigRoot, api.token))
+		_, tokenErr := kimiIssuedToken(env, request.Client.ConfigRoot, api.token)
+		return errors.Join(observed, shutdownErr, scanner.Err(), ctx.Err(), tokenErr)
 	})
 	if err == nil {
-		return registration, ctx.Err()
+		return registration, token, ctx.Err()
 	}
-	return registration, shared.CompletionProbeFailure(kimiObservationError{cause: err})
+	return registration, token, shared.CompletionProbeFailure(kimiObservationError{cause: err})
 }
 
 func (api *kimiSkillAPI) ready(scanner *bufio.Scanner, version string) error {

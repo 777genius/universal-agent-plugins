@@ -63,7 +63,7 @@ func completeKimiSkills(ctx context.Context, env clients.Env, request domain.Act
 	}
 	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	effect, probeErr := observeKimiSkills(bounded, env, request, command, expected)
+	effect, issuedToken, probeErr := observeKimiSkills(bounded, env, request, command, expected)
 	if effect != domain.NativeEffectUnchanged {
 		outcome.NativeEffect = effect
 	}
@@ -77,19 +77,24 @@ func completeKimiSkills(ctx context.Context, env clients.Env, request domain.Act
 	if effect == domain.NativeEffectUncertain {
 		return outcome, probeErr
 	}
-	return finishKimiSkills(ctx, env, request, outcome, before, expected, probeErr)
+	return finishKimiSkills(ctx, env, request, outcome, before, issuedToken, expected, probeErr)
 }
 
 func kimiSkillCompletionEligible(plan domain.DeliveryPlan, outcome domain.ActivationOutcome) bool {
 	return kimiPureSkillPlan(plan) && outcome.Activation == domain.ActivationPrepared && outcome.Verification == domain.VerificationInstalled && outcome.Policy == domain.PolicyAllowed && !outcome.ActivationAttested && !outcome.AuthenticationAttested && outcome.NativeEffect != domain.NativeEffectUncertain
 }
 
-func finishKimiSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome, before kimiProfileSnapshot, expected map[string]kimiSkillMetadata, probeErr error) (domain.ActivationOutcome, error) {
-	if after, _, profileErr := kimiSkillProfile(ctx, env, request); profileErr != nil || !before.same(after) {
+func finishKimiSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome, before kimiProfileSnapshot, issuedToken shared.NativeFileSnapshot, expected map[string]kimiSkillMetadata, probeErr error) (domain.ActivationOutcome, error) {
+	owned := kimiOwnedSkillsMatch(ctx, env, request, expected)
+	after, _, profileErr := kimiSkillProfile(ctx, env, request)
+	if err := ctx.Err(); err != nil {
+		return outcome, err
+	}
+	if profileErr != nil || !before.same(after) || issuedToken.Exists && !reflect.DeepEqual(issuedToken, after.token) {
 		outcome.NativeEffect = domain.NativeEffectUncertain
 		return outcome, fmt.Errorf("kimi protected profile or discovery policy changed during native observation")
 	}
-	if !kimiOwnedSkillsMatch(ctx, env, request, expected) {
+	if !owned {
 		return outcome, fmt.Errorf("owned Kimi Skill contents changed during native observation")
 	}
 	if probeErr == nil {

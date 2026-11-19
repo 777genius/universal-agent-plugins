@@ -17,7 +17,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 type clineProjectSkillProof struct {
@@ -60,7 +60,7 @@ func clineProjectSkillExecutable(env clients.Env, request domain.ActivationReque
 		(request.BackendExecutable == "" || request.BackendExecutable == executable)
 }
 
-func finishClineProjectSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, out domain.ActivationOutcome, proof *clineProjectSkillProof, result legacyports.CommandResult, err error) (domain.ActivationOutcome, error) {
+func finishClineProjectSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, out domain.ActivationOutcome, proof *clineProjectSkillProof, result ports.CommandResult, err error) (domain.ActivationOutcome, error) {
 	if !result.CleanupComplete && !result.NoChildStarted && err == nil {
 		err = &domain.UnclosedClientProbe{Operation: "Cline Skill catalog", Err: errors.New("runner did not confirm process cleanup")}
 	}
@@ -100,7 +100,7 @@ func finishClineProjectSkills(ctx context.Context, env clients.Env, request doma
 	return out, nil
 }
 
-func clineProjectSkillQueryMatches(result legacyports.CommandResult, err error, expected map[string]clineObservedSkill) bool {
+func clineProjectSkillQueryMatches(result ports.CommandResult, err error, expected map[string]clineObservedSkill) bool {
 	return err == nil && result.ExitCode == 0 && !result.NoChildStarted && result.CleanupComplete &&
 		len(result.Stdout) <= 1<<20 && len(result.Stderr) == 0 && clineProjectSkillsListed(result.Stdout, expected)
 }
@@ -196,7 +196,7 @@ func clineProjectSkillMetadata(ctx context.Context, env clients.Env, name, path 
 		instructions: strings.TrimSpace(string(instructions)), frontmatter: metadata}, err == nil
 }
 
-func runClineProjectSkills(ctx context.Context, env clients.Env, executable, project string) (legacyports.CommandResult, error) {
+func runClineProjectSkills(ctx context.Context, env clients.Env, executable, project string) (ports.CommandResult, error) {
 	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	// No provider, credential, MCP source, or approval override is needed by
@@ -208,7 +208,7 @@ func runClineProjectSkills(ctx context.Context, env clients.Env, executable, pro
 			environment = append(environment, key+"="+value)
 		}
 	}
-	return shared.RunNativeRegistry(bounded, env.Runner, legacyports.Command{
+	return shared.RunNativeRegistry(bounded, env.Runner, ports.Command{
 		Argv: []string{executable, "--auto-approve", "false", "--cwd", project, "config", "skills", "--json"},
 		Dir:  project, Env: environment, StdoutLimitBytes: 1 << 20,
 	})

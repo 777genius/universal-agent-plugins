@@ -7,6 +7,7 @@ on:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/devin_project_auto_install_e2e.py'
       - 'scripts/test_devin_project_auto_install_e2e.py'
       - 'scripts/prepare-codex-linux-sandbox.sh'
@@ -56,11 +57,9 @@ jobs:
         with:
           node-version: '24'
       - name: Refuse inherited real client profile overrides before live cases
-        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
-      - name: Prepare the native Codex sandbox for ChatGPT Desktop
-        if: matrix.target == 'chatgpt' && matrix.kind == 'plugin'
-        shell: bash
-        run: bash scripts/prepare-codex-linux-sandbox.sh
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+          python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
       - name: Acquire actual public vendor client where a headless Linux build exists
         id: vendor-install
         # Preserve a complete explicit client-unavailable record even when a
@@ -74,6 +73,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [[ "$TARGET" == chatgpt && "$KIND" == plugin ]]; then
+            bash scripts/prepare-codex-linux-sandbox.sh
+          fi
           mkdir -p "$RUNNER_TEMP/vendor-proof" "$HOME/.local/bin"
           # Runner toolchain must precede any vendor-controlled executable.
           export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"

@@ -434,6 +434,7 @@ def raw_skills(record, rows, decode, stream):
             if phase == "add": add_argv = argv
             if phase == "repeat": require(argv == add_argv)
             doc = decode(stream(command["stdout"]))
+            stream(command["stderr"])
             require(type(doc) is dict and type(doc["schema_version"]) is int and doc["schema_version"] == 1 and doc["command"] == ("agentplugins remove" if phase == "remove" else "skills add") and doc["result"] == "success")
             if phase != "remove":
                 require(doc["status"] == "succeeded" and doc["readiness"] == "ready" and not doc.get("next_actions") and len(doc["items"]) == 1)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -101,6 +102,7 @@ func devinSkillFixture(t *testing.T) (domain.ActivationRequest, clients.Env, map
 			t.Fatal(err)
 		}
 	}
+	globalOfflineWrite(t, filepath.Join(global, "config.json"), `{"version":1,"auto_update":false}`)
 	client := domain.DetectedClient{ClientID: domain.ClientWindsurf, Version: "3000.11.205", ExecutablePath: filepath.Join(base, "bin", "devin"), ConfigRoot: legacy, NativeConfigRoot: global}
 	plan := domain.DeliveryPlan{ClientID: domain.ClientWindsurf, Scope: domain.ScopeProject, PackageMode: domain.PackagePrepared,
 		TargetContext:      domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: project, UserConfigRoot: legacy},
@@ -178,8 +180,12 @@ func TestDevinProjectSkillsRequireFreshExactNativeAndOwnedResources(t *testing.T
 				if err != nil || outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled || outcome.Authentication != domain.AuthenticationNotRequired || len(outcome.UserActions) != 0 {
 					t.Fatalf("fresh exact discovery did not qualify: %+v %v", outcome, err)
 				}
-			} else if outcome.Activation == domain.ActivationActive || mutation == "unclosed" && (!domain.IsUnclosedClientProbe(err) || outcome.NativeEffect != domain.NativeEffectUncertain) {
-				t.Fatalf("unqualified discovery promoted: %+v %v", outcome, err)
+			} else if mutation == "source-resource" || mutation == "native-resource" || mutation == "policy-change" || mutation == "unclosed" {
+				if err == nil || outcome.Activation == domain.ActivationActive || mutation == "unclosed" && (!domain.IsUnclosedClientProbe(err) || outcome.NativeEffect != domain.NativeEffectUncertain) {
+					t.Fatalf("changed or unclosed observation was not refused: %+v %v", outcome, err)
+				}
+			} else if err != nil || outcome.Activation != domain.ActivationPrepared || outcome.Verification != domain.VerificationInstalled || !reflect.DeepEqual(outcome.UserActions, []string{DevinProjectAction}) {
+				t.Fatalf("closed negative observation lost Prepared state: %+v %v", outcome, err)
 			}
 		})
 	}
@@ -237,12 +243,17 @@ func TestDevinProjectSkillsAllowOnlyNativeGlobalSchemaMarkerMigration(t *testing
 	for _, mutation := range []string{"version", "absent-version", "public-mode", "project-config", "changed-policy", "unknown-field", "wrong-version", "string-version", "existing-version"} {
 		t.Run(mutation, func(t *testing.T) {
 			request, env, row := devinSkillFixture(t)
+			request.VerifyOnly = false
 			path := filepath.Join(request.Client.NativeConfigRoot, "config.json")
 			before := `{"auto_update":false}`
 			if mutation == "existing-version" {
 				before = `{"auto_update":false,"version":1}`
 			}
-			if mutation != "absent-version" {
+			if mutation == "absent-version" {
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+			} else {
 				globalOfflineWrite(t, path, before)
 			}
 			if mutation == "public-mode" {
@@ -290,5 +301,122 @@ func TestDevinInitialConfigMigrationPreservesExistingFileMode(t *testing.T) {
 	after := nativeconfig.FileSnapshot{Exists: true, Mode: 0644, Body: []byte(`{"auto_update":false,"version":1}`)}
 	if devinInitialConfigMigration(before, after) {
 		t.Fatal("schema marker authorized a mode change")
+	}
+}
+
+func TestDevinReadOnlySkillsDoNotMigrateUnversionedProfile(t *testing.T) {
+	for _, absent := range []bool{false, true} {
+		t.Run(fmt.Sprint(absent), func(t *testing.T) {
+			request, env, _ := devinSkillFixture(t)
+			path := filepath.Join(request.Client.NativeConfigRoot, "config.json")
+			if absent {
+				if err := os.Remove(path); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				globalOfflineWrite(t, path, `{"auto_update":false}`)
+			}
+			before, err := env.NativeConfig.ReadExactFileBounded(path, 1<<20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			calls := 0
+			env.Runner = devinSkillRunner(func(context.Context, legacyports.Command) (legacyports.CommandResult, error) {
+				calls++
+				return legacyports.CommandResult{}, nil
+			})
+			outcome, err := New().Activate(t.Context(), env, request)
+			after, readErr := env.NativeConfig.ReadExactFileBounded(path, 1<<20)
+			if err != nil || readErr != nil || calls != 0 || outcome.Activation != domain.ActivationPrepared || outcome.Verification != domain.VerificationInstalled || !reflect.DeepEqual(before, after) {
+				t.Fatalf("VerifyOnly migrated or observed an unversioned profile: %+v %v %v calls=%d", outcome, err, readErr, calls)
+			}
+		})
+	}
+}
+
+func TestDevinSkillsRecheckPolicyAfterOwnedMetadata(t *testing.T) {
+	for _, mutation := range []string{"project-policy", "global-context"} {
+		t.Run(mutation, func(t *testing.T) {
+			request, env, row := devinSkillFixture(t)
+			var files *devinSkillContextFiles
+			if mutation == "global-context" {
+				request, env, row, _ = devinGlobalSkillFixture(t)
+				root := filepath.VolumeName(request.Client.NativeConfigRoot) + string(filepath.Separator)
+				files = &devinSkillContextFiles{kernel: env.NativeConfig, marker: filepath.Join(root, ".git")}
+				env.NativeConfig = nativeconfig.NewWithFileIO(files)
+			}
+			parse, reads, calls := env.ParseSkill, 0, 0
+			env.ParseSkill = func(ctx context.Context, name string, body []byte) (domain.Skill, error) {
+				reads++
+				if reads == 2 {
+					if files != nil {
+						files.present = true
+					} else {
+						globalOfflineWrite(t, filepath.Join(request.Plan.NativeRegistryRoot, "config.json"), `{"unknown":true}`)
+					}
+				}
+				return parse(ctx, name, body)
+			}
+			env.Runner = devinSkillRunner(func(context.Context, legacyports.Command) (legacyports.CommandResult, error) {
+				calls++
+				body, err := json.Marshal([]any{row})
+				return legacyports.CommandResult{Stdout: body}, err
+			})
+			outcome, err := New().Activate(t.Context(), env, request)
+			if err == nil || calls != 1 || reads != 2 || outcome.Activation == domain.ActivationActive {
+				t.Fatalf("policy changed during final owned read was accepted: %+v %v calls=%d reads=%d", outcome, err, calls, reads)
+			}
+		})
+	}
+}
+
+type devinFinalPolicyCancelFiles struct {
+	*devinSkillContextFiles
+	target     string
+	cancel     context.CancelFunc
+	afterQuery bool
+	lateReads  int
+}
+
+func (files *devinFinalPolicyCancelFiles) ReadNoFollowBounded(path string, limit int64) ([]byte, os.FileMode, bool, error) {
+	body, mode, exists, err := files.devinSkillContextFiles.ReadNoFollowBounded(path, limit)
+	if files.afterQuery && path == files.target {
+		files.lateReads++
+		files.cancel()
+	}
+	return body, mode, exists, err
+}
+
+func TestDevinSkillsCancelAfterFinalPolicyReadCannotPromote(t *testing.T) {
+	for _, scope := range []domain.InstallScope{domain.ScopeProject, domain.ScopeUser} {
+		t.Run(string(scope), func(t *testing.T) {
+			request, env, row := devinSkillFixture(t)
+			if scope == domain.ScopeUser {
+				request, env, row, _ = devinGlobalSkillFixture(t)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			files := &devinFinalPolicyCancelFiles{devinSkillContextFiles: &devinSkillContextFiles{kernel: env.NativeConfig}, target: filepath.Join(request.Client.NativeConfigRoot, "mcp_config.local.json"), cancel: cancel}
+			env.NativeConfig = nativeconfig.NewWithFileIO(files)
+			parse, parses, calls := env.ParseSkill, 0, 0
+			env.ParseSkill = func(ctx context.Context, name string, body []byte) (domain.Skill, error) {
+				parses++
+				return parse(ctx, name, body)
+			}
+			env.Runner = devinSkillRunner(func(context.Context, legacyports.Command) (legacyports.CommandResult, error) {
+				calls++
+				files.afterQuery = true
+				body, err := json.Marshal([]any{row})
+				return legacyports.CommandResult{Stdout: body, CleanupComplete: true}, err
+			})
+			before := domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, Policy: domain.PolicyAllowed, Authentication: domain.AuthenticationNotChecked, UserActions: []string{DevinProjectAction}}
+			got, err := completeDevinSkills(ctx, env, request, before)
+			if calls != 1 || parses != 2 || files.lateReads != 1 {
+				t.Fatalf("late policy read path not reached: native=%d metadata=%d final=%d", calls, parses, files.lateReads)
+			}
+			if !errors.Is(err, context.Canceled) || !reflect.DeepEqual(got, before) {
+				t.Fatalf("late cancellation promoted or changed verified outcome: %+v %v", got, err)
+			}
+		})
 	}
 }

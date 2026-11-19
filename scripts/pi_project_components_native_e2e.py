@@ -14,6 +14,14 @@ from pi_project_native_e2e import PINS, checked_release, require_hosted, run, wr
 from pi_local_model_fixture import ScriptedPiModel
 
 
+PI_RAW_COMMIT = "b5d80336b53397be5bbb72c84f680e5885a6ac0d"
+PI_RAW_SOURCE = "https://github.com/777genius/universal-agent-plugins/tree/" + PI_RAW_COMMIT + "/tests/fixtures/uap_apm/skills"
+PI_RAW_SKILL = "benchmark-note"
+PI_RAW_DESCRIPTION = "An inert note for checking Agent Skills 1.0 installation."
+PI_RAW_BODY = "---\nname: benchmark-note\ndescription: An inert note for checking Agent Skills 1.0 installation.\n---\n\nRead the adjacent references/fixture.txt when explicitly asked. Do not access networks, credentials, or external tools.\n"
+PI_RAW_RESOURCE = b"Portable Agent Skills 1.0 fixture. This exact file must be preserved without transformation.\n"
+
+
 class PiHTTPMCPProbe:
     """Single bounded, stateless HTTP MCP fixture for both native Pi scopes."""
     def __init__(self, *, nonce=None):
@@ -180,10 +188,10 @@ def pi_raw_inventory(receipt, expected, scope, base):
     rows = response.get("data", {}).get("commands")
     if not isinstance(rows, list) or len(rows) > 512 or not all(isinstance(row, dict) for row in rows):
         raise RuntimeError("Pi inventory rows are malformed")
-    selected = [row for row in rows if row.get("name") == "skill:uap-pi-selected"]
+    selected = [row for row in rows if row.get("name") == "skill:" + PI_RAW_SKILL]
     if len(selected) != int(expected is not None):
         raise RuntimeError("Pi selected Skill presence differs")
-    if selected and selected[0] != {"name": "skill:uap-pi-selected", "description": "Inert selected Pi Skill",
+    if selected and selected[0] != {"name": "skill:" + PI_RAW_SKILL, "description": PI_RAW_DESCRIPTION,
                                    "source": "skill", "sourceInfo": {"path": str(expected), "source": "auto",
                                    "scope": scope, "origin": "top-level", "baseDir": str(base)}}:
         raise RuntimeError("Pi selected Skill source authority differs")
@@ -200,6 +208,8 @@ def pi_raw_tree(root):
         info = path.lstat()
         if stat.S_ISLNK(info.st_mode) or not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode)):
             raise RuntimeError("Pi fixture snapshot contains nonordinary path")
+        if stat.S_ISDIR(info.st_mode):
+            result[str(path.relative_to(root))] = ("directory", stat.S_IMODE(info.st_mode))
         if stat.S_ISREG(info.st_mode):
             if info.st_size > 1 << 20:
                 raise RuntimeError("Pi fixture snapshot file exceeds bound")
@@ -232,9 +242,8 @@ def pi_raw_skills_case(pi, release, driver, installer, parent, destination, scop
         path = raw / leaf
         path.mkdir(mode=0o700)
         env[key] = str(path)
-    source = raw / "source/uap-pi-selected"
-    body = "---\nname: uap-pi-selected\ndescription: Inert selected Pi Skill\n---\nText only. No model task, executable, hook or MCP.\n"
-    write(source, "SKILL.md", body)
+    source = PI_RAW_SOURCE
+    body = PI_RAW_BODY
     foreign_user = user / "skills/uap-pi-foreign-user/SKILL.md"
     write(foreign_user.parent, "SKILL.md",
           "---\nname: uap-pi-foreign-user\ndescription: Foreign user marker\n---\nInert text.\n")
@@ -265,8 +274,8 @@ def pi_raw_skills_case(pi, release, driver, installer, parent, destination, scop
         if selected_scope == "project":
             args += ["--project-root", project]
         return args
-    native = (a / ".pi/skills/uap-pi-selected/SKILL.md" if scope == "project"
-              else user / "skills/uap-pi-selected/SKILL.md")
+    native = (a / ".pi/skills" / PI_RAW_SKILL / "SKILL.md" if scope == "project"
+              else user / "skills" / PI_RAW_SKILL / "SKILL.md")
     base = a / ".pi" if scope == "project" else user
     state_root = a / ".uap" if scope == "project" else data
     lock_root = a if scope == "project" else data
@@ -287,7 +296,9 @@ def pi_raw_skills_case(pi, release, driver, installer, parent, destination, scop
             if (binding.get("activation"), binding.get("verification"), binding.get("authentication"),
                     binding.get("policy")) != ("active", "installation_verified", "not_required", "allowed"):
                 raise RuntimeError("Pi raw owned binding is not Active/verified/not_required")
-            if native.read_bytes() != body.encode():
+            if (ins.get("source", {}).get("resolved_revision") != PI_RAW_COMMIT
+                    or native.read_bytes() != body.encode()
+                    or (native.parent / "references/fixture.txt").read_bytes() != PI_RAW_RESOURCE):
                 raise RuntimeError("Pi raw native Skill bytes differ")
             item.update(installation_id=ins["installation_id"], binding=binding,
                         native_tree=pi_raw_tree(Path(binding["target_locator"])),
@@ -315,9 +326,9 @@ def pi_raw_skills_case(pi, release, driver, installer, parent, destination, scop
                                          "origin": "top-level", "baseDir": str(user)}}]:
                 raise RuntimeError("Pi inventory lost foreign user Skill")
             if scope == "project":
-                others = [row for row in rows if row.get("name") == "skill:uap-pi-foreign-b"]
-                want = [{"name": "skill:uap-pi-foreign-b", "description": "Foreign project B marker", "source": "skill",
-                         "sourceInfo": {"path": str(b / ".pi/skills/uap-pi-foreign-b/SKILL.md"), "source": "auto",
+                others = [row for row in rows if row.get("name") == "skill:benchmark-secondary"]
+                want = [{"name": "skill:benchmark-secondary", "description": "An inert second Skill for verifying dependency removal.", "source": "skill",
+                         "sourceInfo": {"path": str(b / ".pi/skills/benchmark-secondary/SKILL.md"), "source": "auto",
                                         "scope": "project", "origin": "top-level", "baseDir": str(b / ".pi")}}]
                 if others != (want if label == "b" else []):
                     raise RuntimeError("fresh trusted B inventory lost or leaked its foreign Skill")
@@ -325,15 +336,13 @@ def pi_raw_skills_case(pi, release, driver, installer, parent, destination, scop
         # B's trust is granted only by a normal explicit public installation,
         # never a manually authored trust file or --approve flag.
         if scope == "project":
-            other = raw / "source/uap-pi-foreign-b"
-            write(other, "SKILL.md", "---\nname: uap-pi-foreign-b\ndescription: Foreign project B marker\n---\nInert text.\n")
-            pi_raw_ready(public("foreign-b-setup", add_argv(other, "uap-pi-foreign-b", b, "project"), b))
+            pi_raw_ready(public("foreign-b-setup", add_argv(PI_RAW_SOURCE, "benchmark-secondary", b, "project"), b))
         else:
             write(b, ".pi/skills/uap-pi-foreign-b/SKILL.md",
                   "---\nname: uap-pi-foreign-b\ndescription: Foreign project B marker\n---\nInert text.\n")
         foreign_b = pi_raw_tree(b)
         inventories("baseline", False)
-        add = add_argv(source, "uap-pi-selected", a, scope)
+        add = add_argv(source, PI_RAW_SKILL, a, scope)
         pi_raw_ready(public("add", add, a))
         first = proof("add", True)
         inventories("add", True)

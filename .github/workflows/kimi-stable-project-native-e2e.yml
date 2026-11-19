@@ -98,29 +98,37 @@ jobs:
                   continue
               missing = [key for key in required_positive if row.get(key) is not True]
               states = row.get("public_target_states", {})
+              ready = row.get("public_skill_ready")
               exact_state = {"materialization": "materialized", "activation": "active",
                              "authentication": "not_required", "policy": "allowed",
                              "verification": "installation_verified"}
-              state_ready = all(
+              state_ready = isinstance(states, dict) and all(
                   isinstance(observed := states.get(phase), dict)
                   and observed.get("status") == "observed"
+                  and type(observed.get("selected_installations")) is int
                   and observed.get("selected_installations") == 1
+                  and type(observed.get("selected_bindings")) is int
                   and observed.get("selected_bindings") == 1
+                  and type(observed.get("invalid_rows")) is int
                   and observed.get("invalid_rows") == 0
                   and observed.get("truncated") is False
                   and observed.get("states") == [exact_state]
                   for phase in ("after-add", "repeat-add"))
               if (row.get("status") != "passed"
                       or row.get("post_remove_identity_registered") is not False
-                      or row.get("public_skill_ready") != {"after-add": True, "repeat-add": True}
+                      or not isinstance(ready, dict) or set(ready) != {"after-add", "repeat-add"}
+                      or any(value is not True for value in ready.values())
                       or not state_ready
                       or missing):
                   failures.append(
                       f"{index}: status={row.get('status')}, missing={missing}, "
                       f"remaining={row.get('post_remove_identity_registered')}")
           if (evidence.get("pr_head_sha") != expected_head
+                  or type(evidence.get("passed")) is not int
                   or evidence.get("passed") != 30
+                  or type(evidence.get("verified_negative_coverage")) is not int
                   or evidence.get("verified_negative_coverage") != 0
+                  or type(evidence.get("cases_attempted")) is not int
                   or evidence.get("cases_attempted") != 30
                   or evidence.get("full_coverage") is not True
                   or evidence.get("source_selection_complete") is not True

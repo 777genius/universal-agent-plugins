@@ -34,6 +34,9 @@ func (d piSignedProjectDetector) Detect(context.Context) ([]domain.DetectedClien
 		ConfigRoot:     filepath.Join(d.home, ".pi", "agent"),
 		ExecutablePath: filepath.Join(d.home, "pi-test-host-never-launched"),
 		Version:        "1.5.0",
+		// This saved-package fixture observes configuration only; its inert
+		// executable is deliberately not a native catalog capability.
+		Surfaces: []domain.ClientSurface{{ID: "pi_config", Detected: true}},
 	}}, nil
 }
 
@@ -253,6 +256,16 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 			t.Fatalf("Pi signed test-only saved closure in %q omitted packages: %+v", root, state)
 		}
 		for _, installed := range state.Installations {
+			if installed.DeclaredName == "marketing-kit" {
+				if len(installed.Clients) != 1 {
+					t.Fatalf("configuration-only Pi fixture lost its exact binding: %+v", installed.Clients)
+				}
+				for _, binding := range installed.Clients {
+					if binding.ClientID != domain.ClientPi || binding.Activation != domain.ActivationPrepared {
+						t.Fatalf("configuration-only Pi fixture claimed native discovery: %+v", binding)
+					}
+				}
+			}
 			if installed.Directory == nil || installed.Directory.FeedID != client.FeedID {
 				t.Fatalf("Pi installation lost signed fixture lineage in %q: %+v", root, installed.Directory)
 			}

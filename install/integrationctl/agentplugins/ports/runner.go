@@ -8,6 +8,12 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
+// Command exposes the existing process DTO without duplicating its definition.
+type Command = legacyports.Command
+
+// CommandResult preserves the existing runner result contract for adapters.
+type CommandResult = legacyports.CommandResult
+
 // CommandRunner executes one client command. Command and CommandResult stay in
 // install/integrationctl/ports: they are plain data with no behavior, and
 // duplicating them into domain would create a second source of truth and a

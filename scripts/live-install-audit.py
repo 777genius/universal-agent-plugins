@@ -1969,7 +1969,7 @@ def copilot_settings_windows_descriptor(path, initial, expected):
         raise
 
 
-def copilot_settings_read(path, case_root):
+def copilot_settings_read(path, case_root, max_bytes=1 << 20):
     """Read bounded owned bytes through descriptors, never a replaced symlink."""
     descriptors = []
     try:
@@ -1982,7 +1982,7 @@ def copilot_settings_read(path, case_root):
             return None, "unsafe-path"
         expected = canonical_root / relative
         initial = path.lstat()
-        if not stat.S_ISREG(initial.st_mode) or initial.st_size > 1024 * 1024:
+        if not stat.S_ISREG(initial.st_mode) or initial.st_size > max_bytes:
             return None, "not-regular-or-too-large"
         if initial.st_nlink != 1 or not path_inside_case(path, case_root):
             return None, "unsafe-path"
@@ -2019,11 +2019,11 @@ def copilot_settings_read(path, case_root):
                 or identity != (current.st_dev, current.st_ino)
                 or not path_inside_case(path, case_root)):
             return None, "unsafe-path"
-        if opened.st_size > 1024 * 1024:
+        if opened.st_size > max_bytes:
             return None, "not-regular-or-too-large"
         with os.fdopen(os.dup(descriptor), "rb") as stream:
-            body = stream.read(1024 * 1024 + 1)
-        if len(body) > 1024 * 1024:
+            body = stream.read(max_bytes + 1)
+        if len(body) > max_bytes:
             return None, "not-regular-or-too-large"
         return body.decode("utf-8"), None
     except FileNotFoundError:
@@ -2033,6 +2033,72 @@ def copilot_settings_read(path, case_root):
     finally:
         for descriptor in reversed(descriptors):
             os.close(descriptor)
+
+
+def kimi_repeat_log_capture(home, project, case_root):
+    """Private bounded bytes; only hashes leave the isolated audit case."""
+    path = home / ".kimi-code/logs/kimi-code.log"
+    try:
+        parents = (case_root, home, home / ".kimi-code", path.parent)
+        def parent_facts():
+            values = [directory.lstat() for directory in parents]
+            if any(not stat.S_ISDIR(value.st_mode) for value in values):
+                raise ValueError("Kimi log parent is not ordinary")
+            return [(value.st_dev, value.st_ino, value.st_mode) for value in values]
+        before_parents, initial = parent_facts(), path.lstat()
+        body, error = copilot_settings_read(path, case_root, max_bytes=6 << 20)
+        final = path.lstat()
+        fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_size", "st_mtime_ns")
+        identity = tuple(getattr(initial, key) for key in fields)
+        if (error is not None or before_parents != parent_facts()
+                or identity != tuple(getattr(final, key) for key in fields)):
+            return None
+        scope = scoped_snapshot((home, project / ".kimi-code", project / ".uap/managed"))
+        log_key = home.name + "/.kimi-code/logs/kimi-code.log"
+        body = body.encode("utf-8")
+        if (scope.get(log_key) != hashlib.sha256(body).hexdigest()
+                or identity != tuple(getattr(path.lstat(), key) for key in fields)
+                or before_parents != parent_facts()):
+            return None
+        return {"body": body, "identity": identity,
+                "parents": before_parents, "scope": scope, "log_key": log_key}
+    except (OSError, ValueError, AssertionError):
+        return None
+
+
+def kimi_repeat_log_append(before, after, listed, added, repeated, command):
+    """Admit one same-inode append, not rotation or other native mutations."""
+    if (any(value is None for value in (before, after, listed)) or after != listed
+            or type(command.get("exit_code")) is not int or command["exit_code"] != 0
+            or command.get("timeout") is not False):
+        return None
+    for index, response in enumerate((added, repeated)):
+        items = response.get("items") if isinstance(response, dict) else None
+        if (not isinstance(response, dict) or response.get("schema_version") != 1
+                or type(response.get("schema_version")) is not int
+                or response.get("command") != "skills add" or response.get("result") != "success"
+                or response.get("status") != "succeeded" or response.get("scope") != "project"
+                or response.get("readiness") != "ready" or response.get("next_actions") not in (None, [])
+                or not isinstance(items, list) or len(items) != 1 or not isinstance(items[0], dict)
+                or items[0].get("targetId") != "kimi"
+                or items[0].get("status") not in (("succeeded", "unchanged") if index else ("succeeded",))):
+            return None
+    if (before["identity"][:4] != after["identity"][:4]
+            or before["parents"] != after["parents"] or before["log_key"] != after["log_key"]
+            or not after["body"].startswith(before["body"])
+            or not len(before["body"]) < len(after["body"]) <= 6 << 20):
+        return None
+    ignored = {before["log_key"], "metadata:0:.kimi-code/logs/kimi-code.log"}
+    original = {key: value for key, value in before["scope"].items() if key not in ignored}
+    current = {key: value for key, value in after["scope"].items() if key not in ignored}
+    if original != current:
+        return None
+    return {"status": "verified-owned-log-append", "path": ".kimi-code/logs/kimi-code.log",
+            "before_bytes": len(before["body"]), "after_bytes": len(after["body"]),
+            "before_sha256": hashlib.sha256(before["body"]).hexdigest(),
+            "after_sha256": hashlib.sha256(after["body"]).hexdigest(),
+            "append_sha256": hashlib.sha256(after["body"][len(before["body"]):]).hexdigest(),
+            "same_inode_mode_parents": True, "post_list_unchanged": True}
 
 
 def copilot_settings_sanitized_shape(home, case_root, identity):
@@ -2467,6 +2533,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_lock_unchanged = None
     repeat_project_unchanged = None
     repeat_verified = False
+    kimi_repeat_log_proof = None
+    kimi_log_case = (target == "kimi" and kind == "skill" and sys.platform == "linux"
+                     and isinstance(client_version, dict) and client_version.get("status") == "reported"
+                     and client_version.get("value") == "2.5.2"
+                     and type(client_version.get("exit_code")) is int and client_version["exit_code"] == 0)
     if installed:
         before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
@@ -2482,10 +2553,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 for path in lock_paths
             )
         before_repeat_lock = lock_state()
+        kimi_log_before = kimi_repeat_log_capture(home, project, case_root) if kimi_log_case else None
         repeat_add_started = datetime.now(timezone.utc)
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
                                   **capture_option)
         repeat_add_finished = datetime.now(timezone.utc)
+        kimi_log_after = kimi_repeat_log_capture(home, project, case_root) if kimi_log_case else None
         after_repeat_add = (snapshot(native_roots, include_directories=gemini_runtime is not None)
                             if codex_runtime is not None or gemini_runtime is not None else None)
         if gemini_runtime is not None:
@@ -2513,6 +2586,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
                 repeat_add_json, repeat_matches, identity)
         after_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
+        kimi_log_listed = kimi_repeat_log_capture(home, project, case_root) if kimi_log_case else None
         gemini_repeat_valid = (gemini_runtime.finish(after_repeat_native)
                               if gemini_runtime is not None else False)
         if codex_runtime is not None or gemini_runtime is not None:
@@ -2527,6 +2601,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     before_repeat_native, after_repeat_native, before_repeat_runtime)
             elif gemini_runtime is not None:
                 repeat_native_runtime_only = gemini_repeat_valid
+            elif kimi_log_case:
+                kimi_repeat_log_proof = kimi_repeat_log_append(
+                    kimi_log_before, kimi_log_after, kimi_log_listed, added_json, repeat_add_json, repeat_add)
+                repeat_native_runtime_only = kimi_repeat_log_proof is not None
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
@@ -2863,6 +2941,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
             "repeat_native_runtime_only": repeat_native_runtime_only,
+            "kimi_repeat_log_proof": kimi_repeat_log_proof,
             "repeat_native_changes": repeat_native_changes,
             "repeat_native_phases": repeat_native_phases,
             "repeat_lock_unchanged": repeat_lock_unchanged,
@@ -3120,7 +3199,7 @@ def main():
                                  doc["plugin_declared_names"],
                                  doc["signed_release_pins"],
                                  **({"client_version": report.get("client_version")}
-                                    if (args.target, args.kind) == ("gemini", "skill")
+                                    if (args.target, args.kind) in (("gemini", "skill"), ("kimi", "skill"))
                                     or args.target == "opencode" else {}),
                                  **({"historical_baseline": True} if historical_baseline else {}))
             except Exception as e:

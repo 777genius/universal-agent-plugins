@@ -10,11 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 type copilotProjectSkillProof struct {
@@ -22,7 +21,7 @@ type copilotProjectSkillProof struct {
 	components     []domain.ComponentDecision
 	authentication domain.AuthenticationState
 	skills         map[string]copilotObservedSkill
-	trust          nativeconfig.FileSnapshot
+	trust          shared.NativeFileSnapshot
 	activeDigest   string
 }
 
@@ -53,7 +52,7 @@ func observeCopilotProjectSkills(ctx context.Context, env clients.Env, request d
 	return finishCopilotProjectSkills(ctx, env, request, out, proof, result, err)
 }
 
-func finishCopilotProjectSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, out domain.ActivationOutcome, proof *copilotProjectSkillProof, result legacyports.CommandResult, err error) (domain.ActivationOutcome, error) {
+func finishCopilotProjectSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, out domain.ActivationOutcome, proof *copilotProjectSkillProof, result ports.CommandResult, err error) (domain.ActivationOutcome, error) {
 	if !result.CleanupComplete && !result.NoChildStarted && err == nil {
 		err = &domain.UnclosedClientProbe{Operation: "Copilot Skill catalog", Err: errors.New("runner did not confirm process cleanup")}
 	}
@@ -97,7 +96,7 @@ func copilotProjectSkillCustodyChanged(proof, fresh *copilotProjectSkillProof) b
 	return fresh == nil || !slices.Equal(proof.objects, fresh.objects) || !reflect.DeepEqual(proof.skills, fresh.skills) || !reflect.DeepEqual(proof.trust, fresh.trust) || proof.activeDigest != fresh.activeDigest
 }
 
-func copilotProjectSkillCatalogFailed(result legacyports.CommandResult, err error, skills map[string]copilotObservedSkill) bool {
+func copilotProjectSkillCatalogFailed(result ports.CommandResult, err error, skills map[string]copilotObservedSkill) bool {
 	return err != nil || result.ExitCode != 0 || result.NoChildStarted || !result.CleanupComplete ||
 		len(result.Stdout) > 1<<20 || len(result.Stderr) != 0 || !copilotProjectSkillsListed(result.Stdout, skills)
 }
@@ -186,8 +185,8 @@ func captureCopilotProjectSkills(ctx context.Context, env clients.Env, request d
 			return nil
 		}
 	}
-	proof.activeDigest, err = shared.DigestSkillDirectory(request.Delivery.ActivePath)
-	if err != nil {
+	proof.activeDigest, err = env.Snapshots.Digest(ctx, request.Delivery.ActivePath)
+	if err != nil || request.Delivery.ArtifactDigest == "" || proof.activeDigest != request.Delivery.ArtifactDigest {
 		return nil
 	}
 	return proof
@@ -216,13 +215,13 @@ func copilotProjectSkillMetadata(ctx context.Context, env clients.Env, name, pat
 	return copilotObservedSkill{name: name, path: path, description: skill.Description}, true
 }
 
-func runCopilotProjectSkills(ctx context.Context, env clients.Env, executable string, target domain.TargetContext) (legacyports.CommandResult, error) {
+func runCopilotProjectSkills(ctx context.Context, env clients.Env, executable string, target domain.TargetContext) (ports.CommandResult, error) {
 	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	return shared.RunNativeRegistry(bounded, env.Runner, copilotProjectCatalogCommand(executable, target, "skill"))
 }
 
-func copilotProjectCatalogCommand(executable string, target domain.TargetContext, kind string) legacyports.Command {
+func copilotProjectCatalogCommand(executable string, target domain.TargetContext, kind string) ports.Command {
 	// The offline catalog needs no provider, model, credentials or permission
 	// overrides. Bind the same selected profile used by ownership and trust.
 	environment := []string{"COPILOT_OFFLINE=true", "COPILOT_AUTO_UPDATE=false", "COPILOT_HOME=" + target.UserConfigRoot}
@@ -232,7 +231,7 @@ func copilotProjectCatalogCommand(executable string, target domain.TargetContext
 			environment = append(environment, key+"="+value)
 		}
 	}
-	return legacyports.Command{
+	return ports.Command{
 		Argv: []string{executable, kind, "list", "--json"},
 		Dir:  target.ProjectRoot, Env: environment, StdoutLimitBytes: 1 << 20,
 	}

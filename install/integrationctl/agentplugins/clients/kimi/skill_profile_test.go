@@ -1,6 +1,8 @@
 package kimi
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,6 +47,65 @@ func TestKimiFirstTokenMayOnlyHardenSameProfileDirectory(t *testing.T) {
 			}
 			if !scenario.ready && (err == nil || out.NativeEffect != domain.NativeEffectUncertain) {
 				t.Fatal("unexplained profile mutation lost uncertainty", out, err)
+			}
+		})
+	}
+}
+
+func TestKimiAuthenticatedFirstTokenMustSurviveCompletedExchange(t *testing.T) {
+	for _, change := range []string{"removed", "replaced"} {
+		t.Run(change, func(t *testing.T) {
+			f := newKimiCompletionFixture(t, "2.5.2")
+			f.afterExchange = func() {
+				path := filepath.Join(f.request.Client.ConfigRoot, "server.token")
+				if change == "removed" {
+					if err := os.Remove(path); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					write(t, path, strings.Repeat("B", 43))
+				}
+			}
+			out, err := New().Activate(t.Context(), f.env, f.request)
+			if err == nil || out.Activation != domain.ActivationPrepared || out.NativeEffect != domain.NativeEffectUncertain || f.queries != 1 {
+				t.Fatal("authenticated first token changed after closed exchange without refusal", out, err)
+			}
+			if len(f.calls) == 0 || f.calls[len(f.calls)-1] != "POST /api/v1/shutdown" {
+				t.Fatal("token test did not complete ordinary authenticated shutdown", f.calls)
+			}
+		})
+	}
+}
+
+func TestKimiFinalValidSkillParseCannotHideCancellationOrProfileChange(t *testing.T) {
+	for _, change := range []string{"cancel", "profile"} {
+		t.Run(change, func(t *testing.T) {
+			f := newKimiCompletionFixture(t, "2.5.2")
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			parse := f.env.ParseSkill
+			finalParses := 0
+			f.env.ParseSkill = func(ctx context.Context, name string, body []byte) (domain.Skill, error) {
+				metadata, err := parse(ctx, name, body)
+				if len(f.calls) > 0 && f.calls[len(f.calls)-1] == "POST /api/v1/shutdown" {
+					finalParses++
+					if change == "cancel" {
+						cancel()
+					} else {
+						write(t, filepath.Join(f.request.Client.ConfigRoot, "config.toml"), "telemetry = true\n")
+					}
+				}
+				return metadata, err
+			}
+			out, err := New().Activate(ctx, f.env, f.request)
+			if err == nil || out.Activation != domain.ActivationPrepared || finalParses != 1 || f.queries != 1 {
+				t.Fatal("final valid parse escaped cancellation/profile refusal", out, err, finalParses)
+			}
+			if change == "cancel" && !errors.Is(err, context.Canceled) {
+				t.Fatal("final parse cancellation was not propagated", err)
+			}
+			if change == "profile" && out.NativeEffect != domain.NativeEffectUncertain {
+				t.Fatal("last-parse profile mutation lost uncertainty", out, err)
 			}
 		})
 	}

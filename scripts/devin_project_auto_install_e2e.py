@@ -40,6 +40,8 @@ RAW_SOURCE = "https://github.com/777genius/universal-agent-plugins/tree/b5d80336
 RAW_SKILL = "benchmark-note"
 RAW_DESCRIPTION = "An inert note for checking Agent Skills 1.0 installation."
 RAW_SKILL_SHA = "53e39c4f1dcaa4c2ed1196654678ede091b71fb837f77a1beb07ba556abc1198"
+RAW_REFERENCE_SHA = "674bbf87f1469969103f15f60ea1389829fe431dfca5439da1fc57da211d1f2f"
+RAW_MANIFEST_SHA = "c9bbd0b5bbb39d2ae168390ee53a28d4e825de8c0b5334dbc4a55e300b095ab0"
 
 
 def digest(data):
@@ -300,6 +302,50 @@ def raw_repeat_snapshot(managed, native, project_root):
     return result
 
 
+def raw_state_installations(document):
+    if (not isinstance(document, dict) or type(document.get("schema_version")) is not int
+            or document["schema_version"] != 5 or not isinstance(document.get("installations"), list)):
+        raise RuntimeError("raw Project saved state schema differs")
+    seen = set()
+    for item in document["installations"]:
+        if (not isinstance(item, dict) or not isinstance(item.get("installation_id"), str)
+                or not item["installation_id"] or item["installation_id"] in seen
+                or not isinstance(item.get("clients"), dict)):
+            raise RuntimeError("raw Project saved installation shape differs")
+        seen.add(item["installation_id"])
+        for key, client in item["clients"].items():
+            if (not isinstance(key, str) or not key or not isinstance(client, dict)
+                    or client.get("client_binding_id") != key or client.get("client_id") != "windsurf"
+                    or client.get("scope") != "project" or not isinstance(client.get("target_locator"), str)
+                    or not client["target_locator"]):
+                raise RuntimeError("raw Project saved client shape differs")
+    return document["installations"]
+
+
+def raw_pinned_resources(managed, native):
+    skill_files = {"SKILL.md": RAW_SKILL_SHA, "references/fixture.txt": RAW_REFERENCE_SHA}
+    expected = ({"plugin.json": RAW_MANIFEST_SHA,
+                 **{"skills/" + RAW_SKILL + "/" + name: sha for name, sha in skill_files.items()}}, skill_files)
+    evidence = {}
+    for root, pinned in zip((managed, native), expected):
+        if root.is_symlink() or not root.is_dir():
+            raise RuntimeError("raw Project pinned tree is not an ordinary directory")
+        found = {}
+        for index, path in enumerate(root.rglob("*")):
+            if index >= 32 or path.is_symlink():
+                raise RuntimeError("raw Project pinned tree exceeds bounds or contains a symlink")
+            if path.is_dir():
+                continue
+            relative = path.relative_to(root).as_posix()
+            if not path.is_file() or relative not in pinned or path.stat().st_size > 1 << 20:
+                raise RuntimeError("raw Project pinned file set differs")
+            found[relative] = digest(path.read_bytes())
+        if found != pinned:
+            raise RuntimeError("raw Project pinned resources differ")
+        evidence[str(root)] = found
+    return evidence
+
+
 def raw_project_skills(root, report, binary, cli, base_env):
     # Reuse the same pinned native runtime, public CLI and bounded runner. A
     # separate owned profile makes the exact read-only global policy explicit.
@@ -353,8 +399,8 @@ def raw_project_skills(root, report, binary, cli, base_env):
     evidence["public"]["add"] = json.loads(body)
     raw_ready_output(body)
     document = json.loads((projects[0] / ".uap" / "state-v2.json").read_text())
-    installations = document.get("installations", [])
-    if document.get("schema_version") != 5 or len(installations) != 1:
+    installations = raw_state_installations(document)
+    if len(installations) != 1:
         raise RuntimeError("raw Project saved installation shape differs")
     installation = installations[0]
     if installation.get("source", {}).get("resolved_revision") != "b5d80336b53397be5bbb72c84f680e5885a6ac0d":
@@ -374,6 +420,7 @@ def raw_project_skills(root, report, binary, cli, base_env):
     skill = projects[0] / ".devin" / "skills" / RAW_SKILL / "SKILL.md"
     if skill.is_symlink() or digest(skill.read_bytes()) != RAW_SKILL_SHA:
         raise RuntimeError("raw Project Skill differs from pinned public source bytes")
+    evidence["pinned_resources"] = raw_pinned_resources(managed, skill.parent)
     evidence["binding"] = binding
     evidence["installation_source"] = installation.get("source")
     inventory("after-add", True)
@@ -382,7 +429,10 @@ def raw_project_skills(root, report, binary, cli, base_env):
     body = run("skills-repeat", add_argv, outside)
     evidence["public"]["repeat"] = json.loads(body)
     raw_ready_output(body, repeated=True)
-    repeated = json.loads((state_root / "state-v2.json").read_text())["installations"][0]
+    repeated_rows = raw_state_installations(json.loads((state_root / "state-v2.json").read_text()))
+    if len(repeated_rows) != 1:
+        raise RuntimeError("raw Project repeated installation count differs")
+    repeated = repeated_rows[0]
     after = raw_repeat_snapshot(managed, skill.parent, projects[0])
     evidence["repeat_continuity"] = {"before": before, "after": after,
         "installation_id": repeated.get("installation_id"), "binding": list(repeated.get("clients", {}).values())}
@@ -400,7 +450,7 @@ def raw_project_skills(root, report, binary, cli, base_env):
     if managed.exists() or managed.is_symlink() or skill.parent.exists() or skill.parent.is_symlink():
         raise RuntimeError("raw Project removal retained owned files")
     remaining = json.loads((projects[0] / ".uap" / "state-v2.json").read_text())
-    if any(item.get("clients") for item in remaining.get("installations", [])):
+    if any(item["clients"] for item in raw_state_installations(remaining)):
         raise RuntimeError("raw Project removal retained an active client binding")
     report["raw_project_skills_native_ready"] = True
 

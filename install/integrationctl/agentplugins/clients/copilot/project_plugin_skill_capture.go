@@ -7,10 +7,9 @@ import (
 	"io"
 	"path/filepath"
 	"slices"
+	"strings"
 	"unicode/utf8"
 
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/pathpolicy"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -19,7 +18,7 @@ import (
 type copilotWholeSkillProof struct {
 	objects                                    []domain.NativeObjectOwnership
 	skills                                     map[string]copilotObservedSkill
-	trust, settings                            nativeconfig.FileSnapshot
+	trust, settings                            shared.NativeFileSnapshot
 	authentication                             domain.AuthenticationState
 	name, marketplace, active, version, digest string
 	versionPresent                             bool
@@ -88,7 +87,7 @@ func copilotWholeSkillPackageReceipt(request domain.ActivationRequest) bool {
 }
 
 func captureCopilotWholeSkill(ctx context.Context, env clients.Env, name, sealed, active string) (copilotObservedSkill, bool) {
-	if pathpolicy.ValidateLeafID(name) != nil {
+	if shared.ValidateLeafID(name) != nil {
 		return copilotObservedSkill{}, false
 	}
 	path := filepath.Join(sealed, "skills", name, "SKILL.md")
@@ -183,7 +182,7 @@ func copilotWholePluginRow(row map[string]any) bool {
 	}
 	if path, present := row["installedFrom"]; present {
 		text, ok := path.(string)
-		if !ok || !filepath.IsAbs(text) || filepath.Clean(text) != text {
+		if !ok || strings.ContainsRune(text, '\x00') || !filepath.IsAbs(text) || filepath.Clean(text) != text {
 			return false
 		}
 	}

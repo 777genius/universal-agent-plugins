@@ -12,11 +12,11 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 type copilotWholeSkillCatalog struct {
-	plugins, skills legacyports.CommandResult
+	plugins, skills ports.CommandResult
 }
 
 // Native registration retains its own receipt and delivery semantics. Only a
@@ -41,7 +41,10 @@ func observeCopilotWholePluginSkills(ctx context.Context, env clients.Env, reque
 		return out, bounded.Err()
 	}
 	observed, err := runCopilotWholeSkills(bounded, env, request, proof)
-	return finishCopilotWholeSkills(bounded, env, request, out, proof, observed, err)
+	// Catalog cancellation must not skip the post-commit custody observation.
+	verification, finish := context.WithTimeout(ctx, 5*time.Second)
+	defer finish()
+	return finishCopilotWholeSkills(verification, env, request, out, proof, observed, err)
 }
 
 func copilotWholeSkillsAuthority(request domain.ActivationRequest, out domain.ActivationOutcome) bool {
@@ -83,7 +86,7 @@ func runCopilotWholeSkills(ctx context.Context, env clients.Env, request domain.
 	return result, copilotWholeCatalogFailure(result.skills, err)
 }
 
-func copilotWholeCatalogFailure(result legacyports.CommandResult, err error) error {
+func copilotWholeCatalogFailure(result ports.CommandResult, err error) error {
 	if !result.CleanupComplete && !result.NoChildStarted && err == nil {
 		return &domain.UnclosedClientProbe{Operation: "Copilot plugin Skill catalog", Err: errors.New("runner did not confirm process cleanup")}
 	}

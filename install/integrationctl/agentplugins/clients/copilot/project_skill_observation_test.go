@@ -50,10 +50,18 @@ func copilotProjectSkillFixture(t *testing.T) (domain.ActivationRequest, clients
 		NativeRegistryRoot: project, TargetAnchor: managed, TargetRoot: target, ActivePath: active,
 		PhysicalArtifactID: "package", DeclaredName: "package",
 		Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "owned", Support: domain.SupportNative}}}
+	artifact, err := (packagesnapshot.Builder{}).Build(t.Context(), active)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := artifact.Digest
+	if err := artifact.Close(); err != nil {
+		t.Fatal(err)
+	}
 	request := domain.ActivationRequest{Plan: plan, DeclaredName: "package", VerifyOnly: true,
 		Client: domain.DetectedClient{ClientID: domain.ClientCopilot, Status: domain.DetectionDetected,
 			ConfigRoot: plan.TargetContext.UserConfigRoot, ExecutablePath: filepath.Join(home, "bin", "copilot"), Surfaces: []domain.ClientSurface{{ID: "copilot_cli", Detected: true}}},
-		Delivery:              domain.StagedDelivery{ClientID: domain.ClientCopilot, OwnedBase: target, ActivePath: active, NativeObjects: []domain.NativeObjectOwnership{object}},
+		Delivery:              domain.StagedDelivery{ClientID: domain.ClientCopilot, OwnedBase: target, ActivePath: active, ArtifactDigest: digest, NativeObjects: []domain.NativeObjectOwnership{object}},
 		PreviousNativeObjects: []domain.NativeObjectOwnership{object}}
 	if err := os.MkdirAll(plan.TargetContext.UserConfigRoot, 0o700); err != nil {
 		t.Fatal(err)
@@ -449,5 +457,33 @@ func TestCopilotProjectSkillsRemovalPreservesForeignAndDoesNotRunCatalog(t *test
 	}
 	if !slices.Equal(trustRead(t, filepath.Join(foreign, "SKILL.md")), body) || !slices.Equal(trustRead(t, filepath.Join(request.Client.ConfigRoot, "config.json")), trust) {
 		t.Fatal("removal changed foreign Skill or retained trust")
+	}
+}
+
+func TestCopilotProjectSkillsRequireDeliveredPackageDigest(t *testing.T) {
+	for _, phase := range []string{"before", "during"} {
+		t.Run(phase, func(t *testing.T) {
+			request, env, runner := copilotProjectSkillFixture(t)
+			mutate := func() {
+				if err := os.WriteFile(filepath.Join(request.Plan.ActivePath, "unselected.txt"), []byte("changed resource"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if phase == "before" {
+				mutate()
+			} else {
+				runner.onRun = mutate
+			}
+			got, err := observeCopilotProjectSkills(t.Context(), env, request, copilotPreparedSkillOutcome(request))
+			if got.Activation == domain.ActivationActive {
+				t.Fatal("modified delivered package promoted")
+			}
+			if phase == "before" && (err != nil || runner.command.Argv != nil) {
+				t.Fatal(got, err)
+			}
+			if phase == "during" && (err == nil || got.NativeEffect != domain.NativeEffectUncertain) {
+				t.Fatal(got, err)
+			}
+		})
 	}
 }

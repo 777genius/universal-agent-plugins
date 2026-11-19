@@ -5247,7 +5247,12 @@ module.exports = {
     def test_chatgpt_desktop_bootstrap_binds_the_shared_pin_and_regular_binary(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     ".github/workflows/live-install-remaining-clients.yml").read_text()
-        self.assertIn("run: bash scripts/prepare-codex-linux-sandbox.sh", workflow)
+        vendor = workflow.split("        id: vendor-install\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("        continue-on-error: true\n", vendor)
+        self.assertIn('if [[ "$TARGET" == chatgpt && "$KIND" == plugin ]]; then\n'
+                      '            bash scripts/prepare-codex-linux-sandbox.sh\n          fi', vendor)
+        self.assertLess(vendor.index("bash scripts/prepare-codex-linux-sandbox.sh"),
+                        vendor.index('mkdir -p "$RUNNER_TEMP/vendor-proof"'))
         self.assertIn("exclude:\n          - target: chatgpt\n            kind: skill", workflow)
         block = textwrap.dedent(workflow.split("<<'CHATGPT_CODEX'\n", 1)[1]
                                 .split("          CHATGPT_CODEX", 1)[0])
@@ -5512,7 +5517,7 @@ module.exports = {
         binary_sha = "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d"
         for mode in ("good", "integrity", "version", "url", "binary", "path", "acquisition"):
             with self.subTest(mode=mode), TemporaryDirectory() as temporary:
-                root = Path(temporary)
+                root = Path(temporary).resolve(strict=True)
                 (root / "vendor-proof").mkdir()
                 install = Mock(return_value=(root / "vendor-devin/bin/devin", integrity))
                 module = SimpleNamespace(VERSION="3000.12.57", TARBALL_URL=url,
