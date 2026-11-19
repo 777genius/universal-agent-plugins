@@ -46,7 +46,7 @@ func (lock Lock) AcquireReadOnly(ctx context.Context) (ports.UnlockFunc, error) 
 		return nil, errors.Join(fmt.Errorf("mutation lock identity changed before observation"), err, pathErr, file.Close())
 	}
 	if err := acquireFile(file); err != nil {
-		return nil, errors.Join(fmt.Errorf("%w: %v", ErrActive, err), file.Close())
+		return nil, errors.Join(fmt.Errorf("%w: %w", ErrActive, err), file.Close())
 	}
 	return readOnlyLockRelease(file, absolute, opened), nil
 }

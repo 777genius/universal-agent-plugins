@@ -160,7 +160,7 @@ func TestReadOnlyLockRejectsReplacedIdentityOnRelease(t *testing.T) {
 		t.Fatal(err)
 	}
 	first, second := release(), release()
-	if first == nil || first != second || errors.Is(first, ErrActive) {
+	if first == nil || !errors.Is(first, second) || !errors.Is(second, first) || errors.Is(first, ErrActive) {
 		t.Fatalf("replaced identity accepted/retried: %v %v", first, second)
 	}
 	body, err := os.ReadFile(path)
