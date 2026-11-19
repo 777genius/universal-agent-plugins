@@ -9,7 +9,9 @@ const test = require("node:test");
 
 const script = path.resolve(__dirname, "..", "scripts", "platform-proof.js");
 const {
+  AUTHORING_UNSUPPORTED_TARGETS,
   assertAssetManifest,
+  assertAuthoringUnsupported,
   assertContext7Search,
   assertInstalledShimInvocation,
   assertPublicJSONPathFree,
@@ -300,4 +302,16 @@ test("platform proof binds the local binary to the frozen release manifest and n
     () => frozenReleaseAsset(root, commit, version, target, { ...pinned, sha256: "0".repeat(64) }),
     /manifest does not match/
   );
+});
+
+test("platform proof requires authoring to fail closed only on unsupported Intel macOS", () => {
+  assert.deepEqual([...AUTHORING_UNSUPPORTED_TARGETS], ["darwin-amd64"]);
+  const closed = { command: "author.init", result: "failure", committed: false,
+    error: { code: "platform_unavailable" } };
+  assert.doesNotThrow(() => assertAuthoringUnsupported(1, closed));
+  assert.throws(() => assertAuthoringUnsupported(0, closed), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(1, { ...closed, result: "success" }), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(1, { ...closed, committed: true }), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(1, { ...closed, error: { code: "root_unreadable" } }), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(1, undefined), /fail closed/);
 });
