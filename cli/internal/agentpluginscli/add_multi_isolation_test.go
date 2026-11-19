@@ -698,50 +698,31 @@ func TestGroupAddWithVSCodeKeepsWholeSelectionBehaviour(t *testing.T) {
 }
 
 // machineProblems are causes the plain-cause classifier names for one agent.
-// Without that classifier they are unclassified.
 var machineProblems = map[string]struct {
 	err  error
 	kind failureKind
 }{
-	"permission":    {permissionDenied(domain.ClientKiro), "PERMISSION_DENIED"},
-	"read-only":     {fmt.Errorf("create client target root: %w", &fs.PathError{Op: "mkdir", Path: "/project/.kiro", Err: syscall.EROFS}), "READ_ONLY_LOCATION"},
-	"agent missing": {fmt.Errorf("probe kiro: %w", &exec.Error{Name: "kiro-cli", Err: exec.ErrNotFound}), "AGENT_PROGRAM_MISSING"},
+	"permission":    {permissionDenied(domain.ClientKiro), failurePermission},
+	"read-only":     {fmt.Errorf("create client target root: %w", &fs.PathError{Op: "mkdir", Path: "/project/.kiro", Err: syscall.EROFS}), failureReadOnly},
+	"agent missing": {fmt.Errorf("probe kiro: %w", &exec.Error{Name: "kiro-cli", Err: exec.ErrNotFound}), failureAgentMissing},
 }
 
-// Each machine problem is in exactly one of two modes. Unclassified: it stops
-// every agent and the result equals the whole-selection refusal. Classified
-// with its own kind: it stays with the agent and the peers install. Any other
-// kind fails the test.
-func TestMachineProblemsAreGroupWideUntilClassifiedThenTargetLocal(t *testing.T) {
+// A machine problem of one agent stays with it: the peers install.
+func TestMachineProblemsStayWithTheAgent(t *testing.T) {
 	t.Parallel()
 	for name, tc := range machineProblems {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
+			if kind := failureKindOf(tc.err); kind != tc.kind || !failureStaysWithTarget(tc.err) {
+				t.Fatalf("%s: kind %s, stays %v", name, kind, failureStaysWithTarget(tc.err))
+			}
 			fixture := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientKiro: tc.err})
 			_, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
-			switch kind := failureKindOf(tc.err); kind {
-			case failureUnknown:
-				if failureStaysWithTarget(tc.err) {
-					t.Fatal("an unclassified cause stayed with the agent")
-				}
-				if err == nil || !strings.HasPrefix(err.Error(), "group preparation failed before client changes (selected targets: [codex cursor kiro])") {
-					t.Fatalf("unclassified cause = %v", err)
-				}
-				if got := installedProjection(t, fixture); len(got) != 0 {
-					t.Fatalf("unclassified cause changed state: %v", got)
-				}
-			case tc.kind:
-				if !failureStaysWithTarget(tc.err) {
-					t.Fatalf("%s did not stay with the agent", kind)
-				}
-				if err == nil || err.Error() != "1 of 3 client installations failed; see results above" {
-					t.Fatalf("classified cause = %v", err)
-				}
-				if got := installedProjection(t, fixture); len(got) != 3 {
-					t.Fatalf("peers were not installed: %v", got)
-				}
-			default:
-				t.Fatalf("unexpected kind %s for %s", kind, name)
+			if err == nil || err.Error() != "1 of 3 client installations failed; see results above" {
+				t.Fatalf("classified cause = %v", err)
+			}
+			if got := installedProjection(t, fixture); len(got) != 3 {
+				t.Fatalf("peers were not installed: %v", got)
 			}
 		})
 	}

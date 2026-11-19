@@ -168,17 +168,15 @@ func targetLocalGroupFailure(ctx context.Context, result usecase.GroupResult, er
 
 // targetLocalKinds are the only causes that leave the other agents to install:
 // problems with one agent's own folder, program, facts, support or install
-// location. PERMISSION_DENIED, READ_ONLY_LOCATION and AGENT_PROGRAM_MISSING are
-// produced by failureKindOf's plain machine-problem classification. Disk full
-// and network problems concern the whole machine and stop every agent, as do
-// all other and unclassified causes.
+// location. Disk full and network problems concern the whole machine and stop
+// every agent, as do all other and unclassified causes.
 var targetLocalKinds = map[failureKind]bool{
 	failureForeignTarget:     true,
 	failureTargetUnavailable: true,
 	failureTargetUnsupported: true,
-	"PERMISSION_DENIED":      true,
-	"READ_ONLY_LOCATION":     true,
-	"AGENT_PROGRAM_MISSING":  true,
+	failurePermission:        true,
+	failureReadOnly:          true,
+	failureAgentMissing:      true,
 }
 
 // isolationKindOf classifies a cause for the group isolation decision only. It
