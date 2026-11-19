@@ -41,9 +41,11 @@ func inventorySchemaOriginals(t *testing.T, req domain.ActivationRequest) []*inv
 	if err := os.Mkdir(foreign, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := shared.WriteJSON(filepath.Join(foreign, "plugin.json"), map[string]any{
-		"$schema": "https://antigravity.google/schemas/v1/plugin.json", "name": "foreign-readback-control", "version": "1.0.0",
-	}); err != nil {
+	manifest := map[string]any{"$schema": "https://antigravity.google/schemas/v1/plugin.json", "name": "foreign-readback-control"}
+	if req.Plan.DeclaredVersion != "" {
+		manifest["version"] = "1.0.0"
+	}
+	if err := shared.WriteJSON(filepath.Join(foreign, "plugin.json"), manifest); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(foreign, "sentinel"), []byte("foreign must survive\n"), 0600); err != nil {
@@ -189,6 +191,9 @@ func TestInventoryOptionalFieldsKeepEveryRowStrict(t *testing.T) {
 	plan, selected := inventorySchemaSelection(t, "both", false, false)
 	for index, kind := range []string{"foreign", "selected"} {
 		for name, mutate := range inventorySchemaFaults() {
+			if index == 0 && (name == "missing-version" || name == "version-empty") {
+				continue // Foreign raw Skills can also have no declared version.
+			}
 			t.Run(kind+"/"+name, func(t *testing.T) {
 				rows := []map[string]any{inventorySchemaForeign(plan), maps.Clone(selected)}
 				mutate(rows[index])
@@ -227,6 +232,86 @@ func TestInventoryOmittedListsKeepIdentityAndRequiredComponents(t *testing.T) {
 			}
 			if _, _, err := selectedInventory(body, plan); !errors.Is(err, errInventoryUnavailable) {
 				t.Fatal("omitted lists hid an identity conflict or required component", err)
+			}
+		})
+	}
+}
+
+func TestInventoryVersionlessSelectedUserRetainsPrepared(t *testing.T) {
+	for _, phase := range []string{"initial", "repeat", "verify-only"} {
+		for _, omitted := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/omitted=%v", phase, omitted), func(t *testing.T) {
+				req, env, runner := inventoryFixture(t)
+				req.Plan.DeclaredVersion = ""
+				req.Plan.Components = req.Plan.Components[:1]
+				req.PackageUnchanged, req.VerifyOnly = phase == "repeat", phase == "verify-only"
+				originals := inventorySchemaOriginals(t, req)
+				selected := inventorySchemaRow(req.Plan, false)
+				selected["skills"] = []string{"skill"}
+				if omitted {
+					delete(selected, "version")
+				}
+				foreign := inventorySchemaForeign(req.Plan)
+				foreign["version"] = ""
+				if omitted {
+					delete(foreign, "version")
+				}
+				body := inventorySchemaBody(t, foreign, selected)
+				runner.reply = func(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+					stdout := []byte("1.5.3\n")
+					if len(command.Argv) == 4 {
+						stdout = body
+					}
+					return legacyports.CommandResult{CleanupComplete: true, Stdout: stdout}, nil
+				}
+				got, err := New().Activate(t.Context(), env, req)
+				if err != nil || len(runner.calls) != 2 || got.Activation != domain.ActivationPrepared ||
+					got.Verification != domain.VerificationInstalled || got.NativeEffect != domain.NativeEffectUnchanged ||
+					got.ActivationAttested || got.AuthenticationAttested || !got.AuthoritativeObservation {
+					t.Fatal("versionless readback failed or promoted activation", got, err, runner.calls)
+				}
+				for _, original := range originals {
+					if err := original.verify(t.Context()); err != nil {
+						t.Fatal("versionless observation changed protected files", err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestInventoryVersionlessSelectionKeepsVersionAndIdentityRefusals(t *testing.T) {
+	for _, fault := range []string{"selected-version", "selected-null", "selected-number", "foreign-null", "foreign-number", "versioned-omitted", "versioned-mismatch", "selected-path", "selected-name", "missing-skill"} {
+		t.Run(fault, func(t *testing.T) {
+			plan, selected := inventorySchemaSelection(t, "skills", false, false)
+			plan.DeclaredVersion = ""
+			delete(selected, "version")
+			foreign := inventorySchemaForeign(plan)
+			switch fault {
+			case "selected-version":
+				selected["version"] = "1.0.0"
+			case "selected-null":
+				selected["version"] = nil
+			case "selected-number":
+				selected["version"] = 0
+			case "foreign-null":
+				foreign["version"] = nil
+			case "foreign-number":
+				foreign["version"] = 0
+			case "versioned-omitted":
+				plan.DeclaredVersion = "1.0.0"
+			case "versioned-mismatch":
+				plan.DeclaredVersion = "1.0.0"
+				selected["version"] = "2.0.0"
+			case "selected-path":
+				selected["path"] = plan.ActivePath + "-other"
+			case "selected-name":
+				selected["name"] = "other"
+			case "missing-skill":
+				delete(selected, "skills")
+			}
+			if _, _, err := selectedInventory(inventorySchemaBody(t, foreign, selected), plan); !errors.Is(err, errInventoryUnavailable) {
+				t.Fatal("versionless selection bypassed exact authority", err)
 			}
 		})
 	}
