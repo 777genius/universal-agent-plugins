@@ -75,18 +75,18 @@ def _skill_help(body, listing=False):
     return parse_help(body, usage[0])
 
 
-def _skill_catalogs(ctx, stage):
+def _skill_catalogs(ctx, stage, arguments):
     rows = {}
     for project in ("a", "b", "user"):
         label = "skills-" + stage + "-" + project
-        record, stdout, stderr = ctx.probe(label, ["skills", "list", "--json"],
-                                           project=project, timeout=30)
+        record, stdout, stderr = ctx.probe(label, arguments,
+                                          project=project, timeout=30)
         if (not isinstance(record, dict) or type(record.get("exit")) is not int
                 or record["exit"] != 0 or record.get("error") is not None
                 or "error" not in record or type(stdout) is not bytes
                 or type(stderr) is not bytes or stderr != b""):
             raise ValueError("Qoder opaque Skills capture did not finish cleanly")
-        rows[project] = {"probe": label, "arguments": ["skills", "list", "--json"],
+        rows[project] = {"probe": label, "arguments": list(arguments),
                          "project": project, "surface": "opaque-skills-catalog"}
     return rows
 
@@ -128,12 +128,20 @@ def observe_skills_surface(ctx, top_help):
     body = _probe(ctx, "skills-list-help", ("skills", "list", "--help"))
     result["list_usage"] = _skill_help(body, listing=True)
     option = _help_entry(body, "Options", r"(?:-[A-Za-z], )?--json")
-    if re.fullmatch(r"  (?:-[A-Za-z], )?--json[ \t]{2,}[^\n]+", option) is None:
+    arguments, catalog_format = ["skills", "list"], "plaintext"
+    if re.fullmatch(r"  (?:-[A-Za-z], )?--json[ \t]{2,}[^\n]+", option) is not None:
+        arguments.append("--json")
+        catalog_format = "json"
+    elif (not _help_section(body, "Options")
+          or any(re.match(r"  (?:-[A-Za-z], )?--json", row)
+                 for row in _help_section(body, "Options"))):
+        # A malformed/ambiguous JSON option must not authorize a fallback.
         return result
-    result.update(status="opaque-catalog-captured", baseline=_skill_catalogs(ctx, "empty"))
+    result.update(status="opaque-catalog-captured", catalog_format=catalog_format,
+                  baseline=_skill_catalogs(ctx, "empty", arguments))
     if getattr(ctx, "phase", "help") == "observe":
         result["authored_inert_skills"] = _author_inert_skills(ctx)
-        result["populated"] = _skill_catalogs(ctx, "populated")
+        result["populated"] = _skill_catalogs(ctx, "populated", arguments)
     return result
 
 

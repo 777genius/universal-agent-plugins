@@ -88,6 +88,77 @@ class QoderAcquisitionContract(unittest.TestCase):
         self.assertFalse(result["native_skill_discovery_qualified"])
         self.assertFalse(result["public_ready_qualified"])
 
+    def test_actual_plaintext_list_help_captures_scopes_without_inventing_json(self):
+        # Exact native 1.1.78 help admitted from job 135413058547. It advertises
+        # list, --all and --help, but no JSON option or machine schema.
+        help_body = (b"Usage: qodercli skills list [options]\n\n"
+                     b"Lists discovered agent skills.\n\nOptions:\n"
+                     b"  --all       Show all skills, including built-in ones. (default: false)\n"
+                     b"  -h, --help  display help for command\n")
+        for populated in (False, True):
+            with self.subTest(populated=populated), tempfile.TemporaryDirectory() as temporary:
+                leaf, ctx = self.skills_context()
+                root = Path(temporary)
+                ctx.home, ctx.identities = root / "home", {}
+                ctx.home.mkdir()
+                ctx.phase = "observe" if populated else "help"
+                ctx.projects = {label: root / label for label in ("a", "b", "user")}
+                for path in ctx.projects.values():
+                    path.mkdir()
+                ctx.replace["skills-help"] = ({"exit": 0, "error": None},
+                    ctx.replace["skills-help"][1].replace(b"List discovered Skills", b"Lists discovered agent skills."), b"")
+                ctx.replace["skills-list-help"] = {"exit": 0, "error": None}, help_body, b""
+                for stage in ("empty", "populated"):
+                    for project in ("a", "b", "user"):
+                        ctx.replace["skills-" + stage + "-" + project] = (
+                            {"exit": 0, "error": None}, b"Opaque plain catalog\n", b"")
+                research = leaf.observe_skills_surface(ctx, ctx.replace["top-help"][1])
+                self.assertEqual(research["status"], "opaque-catalog-captured")
+                self.assertEqual(research["catalog_format"], "plaintext")
+                stages = ("empty", "populated") if populated else ("empty",)
+                self.assertEqual(ctx.calls[2:], [
+                    ("skills-" + stage + "-" + project, ["skills", "list"], project, 30)
+                    for stage in stages for project in ("a", "b", "user")])
+                for stage in ("baseline", "populated") if populated else ("baseline",):
+                    self.assertEqual(set(research[stage]), {"a", "b", "user"})
+                    self.assertTrue(all(row["arguments"] == ["skills", "list"]
+                                        for row in research[stage].values()))
+                self.assertFalse(research["native_skill_discovery_qualified"])
+                self.assertFalse(research["public_ready_qualified"])
+                self.assertEqual(len(ctx.identities), 3 if populated else 0)
+                for path, digest in ctx.identities.items():
+                    self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), digest)
+
+    def test_plaintext_list_refusal_stops_before_other_scopes_or_authorship(self):
+        for record, stdout, stderr in (
+                ({"exit": 1, "error": None}, b"", b"Authentication required\n"),
+                ({"exit": 0, "error": "deadline"}, b"partial", b""),
+                ({"exit": 0, "error": None}, b"unreviewed catalog", b"warning")):
+            with self.subTest(record=record, stderr=stderr):
+                leaf, ctx = self.skills_context()
+                ctx.phase, ctx.identities = "observe", {}
+                ctx.replace["skills-list-help"] = ({"exit": 0, "error": None},
+                    b"Usage: qodercli skills list [options]\n\nOptions:\n  -h, --help  Help\n", b"")
+                ctx.replace["skills-empty-a"] = record, stdout, stderr
+                with self.assertRaises(ValueError):
+                    leaf.observe_skills_surface(ctx, ctx.replace["top-help"][1])
+                self.assertEqual(ctx.calls[-1], ("skills-empty-a", ["skills", "list"], "a", 30))
+                self.assertEqual(len(ctx.calls), 3)
+                self.assertEqual(ctx.identities, {})
+
+        for options in (b"  --json=<path>  Write JSON\n",
+                        b"\nOptions:\n  -h, --help  Duplicate section\n"):
+            with self.subTest(options=options):
+                leaf, ctx = self.skills_context()
+                ctx.replace["skills-list-help"] = ({"exit": 0, "error": None},
+                    b"Usage: qodercli skills list [options]\n\nOptions:\n  -h, --help  Help\n" + options, b"")
+                research = leaf.observe_skills_surface(ctx, ctx.replace["top-help"][1])
+                self.assertEqual(research["status"], "help-observed")
+                self.assertNotIn("baseline", research)
+                self.assertFalse(research["native_skill_discovery_qualified"])
+                self.assertFalse(research["public_ready_qualified"])
+                self.assertEqual(len(ctx.calls), 2)
+
     def test_skills_prose_alias_prefix_and_duplicate_commands_never_authorize(self):
         for replacement in (
                 "Examples:\n  skills --help  Example only\n",
