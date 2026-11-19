@@ -269,8 +269,17 @@ jobs:
           run_agentplugins deps sync --locked --yes --format json > "${root}/locked-repeat.json"
           jq -e '.outcome == "completed" and (.actions | length) == 1 and .actions[0].action == "unchanged" and (.results | length) == 0' "${root}/locked-repeat.json" >/dev/null
           sha256sum --check "${root}/repeat-before.sha256"
-          run_agentplugins deps status --format json > "${root}/saved-status.json"
-          jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified" or . == "activation_prepared")' "${root}/saved-status.json" >/dev/null
+          # The historic public E2E failed at this first saved-status boundary.
+          # Keep raw CLI output and stderr private; emit only booleans/counts.
+          if ! run_agentplugins deps status --format json > "${root}/saved-status.json" 2> "${root}/saved-status-stderr.log"; then
+            echo "::error::Saved deps status command failed" >&2
+            exit 1
+          fi
+          if ! jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified" or . == "activation_prepared")' "${root}/saved-status.json" >/dev/null 2> "${root}/saved-status-jq-stderr.log"; then
+            jq -r --arg digest "${package_digest}" '"saved status: recovery=\(.pending_recovery == true), facts=\((.facts // []) | length), pin_matches=\((.facts[0].package_digest // "") == $digest), owner_matches=\((.facts[0].owner // "") == "user-default"), flags_permitted=\(all((.facts[0].facts // [])[]; . == "auth_unverified" or . == "activation_prepared"))"' "${root}/saved-status.json" >&2 2>> "${root}/saved-status-jq-stderr.log" || true
+            echo "::error::Saved dependency status rejected" >&2
+            exit 1
+          fi
           # Only the portable agreement crosses into a second empty profile.
           # The released CLI must fetch and verify the same immutable digest.
           mkdir -p "${root}/transfer/state" "${root}/transfer/home" "${root}/transfer/config/opencode" "${root}/transfer/tmp"
