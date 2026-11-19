@@ -2375,7 +2375,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         try:
             claude_retirement = CLAUDE_RETIREMENT_AUDIT["CacheRetirement"](
                 case_root, home, project, matching[0], repeat_add_json, item,
-                claude_document, scoped_snapshot, claude_before)
+                claude_document, scoped_snapshot, claude_before,
+                lambda observed: native_identity_residuals(
+                    native_roots, identity, observed, target, native_components))
             audits.callback(claude_retirement.close)
         except (OSError, ValueError, TypeError, KeyError, IndexError):
             claude_retirement_proof = {"status": "unresolved-cache-retirement"}

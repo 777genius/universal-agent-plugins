@@ -10719,7 +10719,9 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
         return audit.CLAUDE_RETIREMENT_AUDIT['CacheRetirement'](
             f['home'].parent, f['home'], f['project'], f['public'], f['added'],
             {'repo': 'example/skills', 'folder': 'owned-test'}, document,
-            audit.scoped_snapshot, f['before'])
+            audit.scoped_snapshot, f['before'],
+            lambda observed: audit.native_identity_residuals(
+                [f['profile']], 'owned-test', observed, 'claude'))
 
     def retire(self, f, marker=True):
         import shutil
@@ -10783,7 +10785,7 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
     def test_ambiguous_unsafe_modified_or_extra_residue_keeps_negative(self):
         audit = load_audit()
         for mutation in ('ambiguous', 'private-mode', 'bytes', 'extra', 'symlink', 'marker',
-                         'registry', 'foreign', 'external-residual', 'cleanup-binding', 'new-marker-race'):
+                         'registry', 'foreign', 'external-residual', 'cleanup-binding', 'new-marker-race', 'late-residual-scan'):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
                 f = self.fixture(Path(temporary).resolve(), audit)
                 subject = self.capture(audit, f); moved = self.retire(f)
@@ -10798,6 +10800,10 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
                 elif mutation == 'foreign': (f['profile'] / 'foreign-neighbor.txt').write_text('changed')
                 residuals = self.residuals(audit, f)
                 if mutation == 'external-residual': residuals.append('.claude/other-owned-test.json')
+                if mutation == 'late-residual-scan':
+                    # The original list passed to finish is not authoritative:
+                    # the fresh post-registry scanner must reject new residue.
+                    subject.residual_scanner = lambda observed: list(residuals) + ['.claude/other-owned-test.json']
                 if mutation == 'new-marker-race':
                     # A post-read foreign mutation cannot be hidden by a matching inode.
                     original = subject.snapshotter
