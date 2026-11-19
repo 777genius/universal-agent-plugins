@@ -23,10 +23,10 @@ const (
 func readCommandProject(t *testing.T, files map[string]string) project.Result {
 	t.Helper()
 	switch runtime.GOOS + "/" + runtime.GOARCH {
-	case "darwin/arm64", "windows/amd64", "windows/arm64":
+	case "darwin/arm64", "darwin/amd64", "windows/amd64", "windows/arm64":
 	default:
 		if runtime.GOOS != "linux" {
-			t.Skip("writable native authoring requires Linux, Darwin arm64 APFS or Windows amd64/arm64 NTFS")
+			t.Skip("writable native authoring requires Linux, Darwin amd64/arm64 APFS or Windows amd64/arm64 NTFS")
 		}
 	}
 	root := t.TempDir()

@@ -1,0 +1,53 @@
+name: Authoring Darwin Intel APFS native E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'install/integrationctl/agentplugins/adapters/packageview/**'
+      - 'cli/internal/authoring/project/**'
+      - 'cli/internal/authoring/commands/**'
+      - 'cli/internal/authoring/report/**'
+      - '.github/workflows/authoring-darwin-amd64-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authoring-darwin-amd64-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native:
+    name: Held APFS metadata, swaps and real authoring (macos-15-intel)
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: macos-15-intel
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Exercise the exact Darwin Intel kernel and strict local APFS contract
+        env:
+          GOTOOLCHAIN: local
+          GOENV: 'off'
+          GOFLAGS: '-p=1'
+          GOWORK: ${{ github.workspace }}/go.work
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = x86_64
+          test "$(go env GOVERSION)" = go1.26.11
+          test "$(go env GOARCH)" = amd64
+          test "$(stat -f %T "$RUNNER_TEMP")" = apfs
+          # All existing APFS device/link/rename/read-only/writable negative
+          # contracts must execute on the actual Intel kernel; no mock or skip.
+          go test -count=1 -timeout=38m ./install/integrationctl/agentplugins/adapters/packageview
+          # Retain source-root identity, author.init and strict scratch effects.
+          go test -count=1 -timeout=10m ./cli/internal/authoring/project ./cli/internal/authoring/commands ./cli/internal/authoring/report

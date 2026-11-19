@@ -563,8 +563,8 @@ func TestCleanupFailureSurvivesCancellation(t *testing.T) {
 }
 
 func TestNativeBinaryVerticalSlice(t *testing.T) {
-	if runtime.GOOS != "linux" && !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
-		t.Skip("writable native authoring requires Linux, Darwin arm64 APFS or Windows amd64/arm64 NTFS")
+	if runtime.GOOS != "linux" && !(runtime.GOOS == "darwin" && (runtime.GOARCH == "arm64" || runtime.GOARCH == "amd64")) && !(runtime.GOOS == "windows" && (runtime.GOARCH == "amd64" || runtime.GOARCH == "arm64")) {
+		t.Skip("writable native authoring requires Linux, Darwin amd64/arm64 APFS or Windows amd64/arm64 NTFS")
 	}
 	_, file, _, _ := runtime.Caller(0)
 	module := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
