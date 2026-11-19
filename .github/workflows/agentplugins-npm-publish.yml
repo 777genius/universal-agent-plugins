@@ -314,8 +314,8 @@ jobs:
             echo "::error::Post-remove deps status command failed" >&2
             exit 1
           fi
-          if ! jq -e '.pending_recovery == false and (.facts | length) == 0 and (.manifest_digest | length) > 0 and .manifest_digest == .lock_digest' "${root}/post-remove-status.json" >/dev/null; then
-            jq -r '"post-remove status: recovery=\(.pending_recovery == true), facts=\((.facts // []) | length), has_manifest=\((.manifest_digest // "") | length > 0), has_lock=\((.lock_digest // "") | length > 0), digest_agreement=\((.manifest_digest // "") == (.lock_digest // ""))"' "${root}/post-remove-status.json" >&2 || true
+          if ! jq -e '.pending_recovery == false and (.facts | length) == 0 and (.manifest_digest | length) > 0 and .manifest_digest == .lock_digest' "${root}/post-remove-status.json" >/dev/null 2> "${root}/post-remove-jq-stderr.log"; then
+            jq -r '"post-remove status: recovery=\(.pending_recovery == true), facts=\((.facts // []) | length), has_manifest=\((.manifest_digest // "") | length > 0), has_lock=\((.lock_digest // "") | length > 0), digest_agreement=\((.manifest_digest // "") == (.lock_digest // ""))"' "${root}/post-remove-status.json" >&2 2>> "${root}/post-remove-jq-stderr.log" || true
             echo "::error::Post-remove dependency status rejected" >&2
             exit 1
           fi

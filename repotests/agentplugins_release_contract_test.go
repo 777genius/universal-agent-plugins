@@ -501,6 +501,8 @@ func TestAgentpluginsPublicNPMPostRemoveStatusIsRedactedAndFailClosed(t *testing
 	job := yamlJob(t, workflow, "verify-public")
 	mustContain(t, job, "Post-remove deps status command failed")
 	mustContain(t, job, "Post-remove dependency status rejected")
+	mustContain(t, job, `2> "${root}/post-remove-jq-stderr.log"`)
+	mustContain(t, job, `2>> "${root}/post-remove-jq-stderr.log"`)
 	mustContain(t, job, "post-remove status: recovery=")
 	mustContain(t, job, "digest_agreement=")
 	mustContain(t, job, "facts=")
