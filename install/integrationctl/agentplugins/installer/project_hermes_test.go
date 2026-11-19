@@ -165,6 +165,34 @@ func hermesSDKSession(t *testing.T, fixture *hermesSDKFixture, binding domain.Cl
 	}
 }
 
+func TestProjectHermesSDKPreviewDisclosesActualTrustConsent(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	pkg := filepath.Join(base, "package")
+	claudeSDKWrite(t, filepath.Join(pkg, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"sdk-hermes","version":"1.0.0"}`)
+	claudeSDKWrite(t, filepath.Join(pkg, "skills", "docs", "SKILL.md"), "---\nname: docs\ndescription: Inert trust disclosure\n---\nFixture.\n")
+	fixture := newHermesSDKFixture(t, filepath.Join(base, "project"), filepath.Join(base, "user"), pkg)
+	fixture.request.Operation, fixture.request.OperationID = installer.OpInstall, "trust-disclosure-preview"
+	fixture.request.RequiredComponents = []string{"skills"}
+	for _, consent := range []bool{false, true} {
+		fixture.request.ProjectTrustConsent = consent
+		handle, err := fixture.engine.Prepare(t.Context(), fixture.request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		actions := strings.Join(handle.Plan().Delivery.UserActions, "\n")
+		if err := handle.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(actions, "A confirmed explicit add asks") != consent ||
+			strings.Contains(actions, "This operation does not change Hermes project trust") == consent || fixture.runner.calls != 0 {
+			t.Fatalf("preview consent=%v ran native work or misrepresented trust: %s", consent, actions)
+		}
+	}
+}
+
 func hermesSDKUpdateRepairRemove(t *testing.T, fixture *hermesSDKFixture, pkg, original string) {
 	t.Helper()
 	skill := filepath.Join(fixture.project, ".hermes", "skills", "docs", "SKILL.md")

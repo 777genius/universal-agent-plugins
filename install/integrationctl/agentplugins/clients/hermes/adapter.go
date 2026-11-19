@@ -234,7 +234,7 @@ func (*Adapter) QualifyPlan(in clients.PlanInput, plan *domain.DeliveryPlan) err
 	return nil
 }
 
-func (*Adapter) RefinePlan(ctx context.Context, _ clients.PlanInput, plan *domain.DeliveryPlan) error {
+func (*Adapter) RefinePlan(ctx context.Context, input clients.PlanInput, plan *domain.DeliveryPlan) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -249,8 +249,12 @@ func (*Adapter) RefinePlan(ctx context.Context, _ clients.PlanInput, plan *domai
 	plan.Activation = domain.ActivationPrepared
 	if plan.Scope == domain.ScopeProject {
 		if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
-			plan.UserActions = shared.AppendUnique(plan.UserActions, "A confirmed explicit add asks your Hermes CLI to trust this whole Git repository root: Skills in its .hermes/skills and .agents/skills, including ones added later, load until `hermes skills untrust`, and trust stays after UAP removal")
-			plan.UserActions = shared.AppendUnique(plan.UserActions, "Hermes still quarantines Skills its skills_guard flags as dangerous; update, repair and dependency sync never grant trust, and if UAP cannot verify a grant it says so with the manual `hermes skills trust` step; start a new Hermes session afterwards")
+			action := "This operation does not change Hermes project trust. To trust this whole Git repository root for Skills in .hermes/skills and .agents/skills, including ones added later, run `hermes skills trust` inside it; trust stays until `hermes skills untrust`, including after UAP removal"
+			if input.ProjectTrustConsent {
+				action = "A confirmed explicit add asks your Hermes CLI to trust this whole Git repository root: Skills in its .hermes/skills and .agents/skills, including ones added later, load until `hermes skills untrust`, and trust stays after UAP removal"
+			}
+			plan.UserActions = shared.AppendUnique(plan.UserActions, action)
+			plan.UserActions = shared.AppendUnique(plan.UserActions, "Hermes still quarantines Skills its skills_guard flags as dangerous; if UAP cannot verify a grant it says so with the manual `hermes skills trust` step; start a new Hermes session afterwards")
 		}
 		if shared.HasSupportedMCP(plan.Components) {
 			plan.UserActions = shared.AppendUnique(plan.UserActions, "Use an explicitly confirmed UAP Hermes project session with the qualified bundled client; ordinary startup does not select this MCP home")

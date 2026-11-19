@@ -401,17 +401,18 @@
     },
     "dependencies": {
       "eyebrow": "Пов'язані залежності",
-      "title": "Два плагіни. Одна спільна залежність.",
+      "title": "Два плагіни\nОдна спільна залежність",
       "description": "Установіть плагін разом із залежностями. Спільні залежності однієї сумісної версії встановлюються один раз.",
       "demoPackage": "Демонстраційний пакет",
       "installed": "Установлено",
       "alreadyInstalled": "Уже встановлено",
-      "shared": "спільна",
+      "shared": "Використовується обома плагінами",
       "caption": "Пакети та граф наведено для прикладу. Обидва пакети використовують спільний Playwright; Context7 уже встановлено.",
-      "graphDescription": "marketing-kit залежить від Playwright, HubSpot і Notion. Web Design Kit залежить від того самого пакета Playwright, Figma та Context7. Усі пакети встановлено; Context7 було встановлено раніше."
+      "graphDescription": "Приклад версій: marketing-kit v{marketingVersion} і Web Design Kit v{designVersion} використовують одну спільну залежність — міст Playwright v{playwrightVersion}. Marketing Kit також використовує HubSpot і Notion, а Web Design Kit — Figma та Context7.",
+      "exampleVersions": "Приклад версій"
     },
     "restore": {
-      "title": "Ті самі версії плагінів. Для всієї команди.",
+      "title": "Ті самі версії плагінів\nДля всієї команди",
       "guide": "Інструкція",
       "from": "Мій комп’ютер",
       "to": "Комп’ютер колеги",
@@ -599,7 +600,7 @@
       "more": "Ще +{count}"
     },
     "command": {
-      "terminal": "Термінал",
+      "terminal": "Ваш термінал",
       "copiedLabel": "Команду скопійовано",
       "copyLabel": "Скопіювати команду",
       "copied": "Скопійовано",
@@ -841,9 +842,10 @@
       "unsupportedPluginComponents": "{agent} підтримує не всі компоненти цього плагіна.",
       "dialogDescription": "Виберіть агентів і область установлення, потім виконайте команду в терміналі.",
       "closeDialog": "Закрити встановлення",
-      "pinnedSourceShort": "Закріплене Git-джерело",
+      "pinnedSourceShort": "Установлення з Git",
       "desktopSourceShort": "Локальне підключення Desktop",
-      "webSetupShort": "Налаштування Web за інструкцією"
+      "webSetupShort": "Налаштування Web за інструкцією",
+      "selectionRoutesUnavailable": "Вибрані агенти збережені. Для цієї комбінації немає спільного джерела встановлення у вибраній області. Змініть агентів або область, щоб отримати команду встановлення."
     },
     "authentication": {
       "not_required": "Обліковий запис не потрібен",

@@ -39,6 +39,7 @@ func (service Service) planInstall(ctx context.Context, input *AddInput, physica
 	}
 	plan, err := service.Planner.Plan(ctx, domain.PlanRequest{
 		ProjectRoot:               service.ProjectRoot,
+		ProjectTrustConsent:       input.ProjectTrustConsent,
 		LocalEntryObservation:     observation.Clone(),
 		PreviousNativeObjects:     append([]domain.NativeObjectOwnership(nil), objects...),
 		PreviousNativeProfileRoot: previousNativeRoot,

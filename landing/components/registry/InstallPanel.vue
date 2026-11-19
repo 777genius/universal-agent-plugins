@@ -297,9 +297,11 @@ const vendorInstall = computed(() =>
     >
       <strong>{{ t('registryUi.install.commandsUnavailable') }}</strong>
       {{
-        scope === 'project'
-          ? t('registryUi.install.scope.selectionUnavailable')
-          : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
+        targets.length > 1
+          ? t('registryUi.install.selectionRoutesUnavailable')
+          : scope === 'project'
+            ? t('registryUi.install.scope.selectionUnavailable')
+            : diagnosticText(resolution.unavailable_diagnostic, resolution.unavailable_reason)
       }}
     </p>
     <p v-if="autoDetect && commands" class="install-panel__notice">

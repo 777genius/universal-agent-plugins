@@ -22,20 +22,27 @@ async function page(
   filename: string,
   parameters = { slug: 'gitlab', client: 'codex' },
   registry: unknown = fixture,
+  query: Record<string, string | string[]> = {},
 ) {
   const locale = ref('en');
   const directoryCurrent = ref(true);
   let registryInitialized = false;
   const discoveryStatus = ref({ state: 'current' });
   let seo: any;
-  const route = { params: parameters, query: { source: fixture.plugins[0].install_source } };
+  const route = { params: parameters, query: { source: fixture.plugins[0].install_source, ...query } };
+  const mounted: (() => void)[] = [];
   const source = readFileSync(new URL(`../pages/${filename}`, import.meta.url), 'utf8')
     .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)![1]
     .replace(/^import[\s\S]*?from '[^']+';\n/gm, '');
   const exposed = await runInNewContext(`(async () => { ${discoverySource}\n${stripTypeScriptTypes(source)}
     return { installCommand: typeof installCommand === 'undefined' ? undefined : installCommand,
-      pinnedRepairLimitation: typeof pinnedRepairLimitation === 'undefined' ? undefined : pinnedRepairLimitation };
+      pinnedRepairLimitation: typeof pinnedRepairLimitation === 'undefined' ? undefined : pinnedRepairLimitation,
+      originPlugin: typeof originPlugin === 'undefined' ? undefined : originPlugin,
+      exampleScope: typeof exampleScope === 'undefined' ? undefined : exampleScope,
+      navigationParents: typeof navigationParents === 'undefined' ? undefined : navigationParents };
   })()`, {
+    // SSR setup queues client effects; tests explicitly mount when needed.
+    onMounted: (callback: () => void) => { mounted.push(callback); },
     computed, ref, watch, clients, clientLandingBySlug, clientLandingById, localizedPath, productRootUrl, seoDescription, spdxLicenseUrl, catalogVisiblePlugins,
     resolveDistribution, vendorInstallSource, isFullyRetired, pluginBenefit,
     installTargets, canonicalInstallTarget, hasPluginInstallTarget, pluginInstallAvailability, agentInstallExample, pluginCommands, pinnedCatalogCommands, pinnedCatalogRepairLimitation,
@@ -59,7 +66,9 @@ async function page(
     createError: (options: object) => Object.assign(new Error(), options),
   });
   return { locale, seo, directoryCurrent, installCommand: exposed.installCommand,
-    pinnedRepairLimitation: exposed.pinnedRepairLimitation };
+    pinnedRepairLimitation: exposed.pinnedRepairLimitation, originPlugin: exposed.originPlugin,
+    exampleScope: exposed.exampleScope, navigationParents: exposed.navigationParents,
+    mount: () => mounted.forEach(callback => callback()) };
 }
 
 test('registry index/detail/client structured data follows locale and uses benefit copy without rewriting source metadata', async () => {
@@ -152,3 +161,48 @@ test('agent pages use the exact source command and stop offering it when the Dir
       'Released repair is available without a stale warning');
   }
 });
+
+for (const client of ['claude', 'codex', 'cursor'] as const) {
+  test(`mounted ${client} context preserves a Project-only origin without changing the prerendered default`, async () => {
+    const registry = structuredClone(fixture);
+    const origin = registry.plugins[0];
+    origin.trust_state = 'reviewed';
+    for (const distribution of origin.distributions) {
+      for (const release of distribution.releases) {
+        release.targets = [{ client, scopes: ['project'], delivery: 'prepared', authentication: 'not_required' }];
+      }
+    }
+    const defaultPlugin = structuredClone(origin);
+    defaultPlugin.name = defaultPlugin.install_source = 'context7';
+    defaultPlugin.display_name = 'Context7';
+    for (const distribution of defaultPlugin.distributions)
+      for (const release of distribution.releases) release.targets[0].scopes = ['user'];
+    registry.plugins.push(defaultPlugin);
+    const slug = clientLandingById.get(client)!.slug;
+    const state = await page('agents/[client].vue', { slug: 'gitlab', client: slug }, registry, { plugin: 'gitlab' });
+    const defaultCommand = `npx -y universal-agent-plugins add context7 --target ${client}`;
+    assert.equal(toValue(state.installCommand), defaultCommand, 'Query context must not change the initial SSG/hydration tree');
+    assert.equal(toValue(state.originPlugin), undefined);
+    assert.equal(toValue(state.navigationParents).length, 1);
+    state.mount();
+    assert.equal(toValue(state.originPlugin).name, 'gitlab');
+    assert.equal(toValue(state.exampleScope), 'project');
+    assert.equal(toValue(state.installCommand), `npx -y universal-agent-plugins add gitlab --target ${client} --scope project`);
+    assert.equal(toValue(state.navigationParents)[1].to, '/plugins/gitlab/');
+    state.locale.value = 'uk';
+    assert.equal(toValue(state.navigationParents)[1].to, '/uk/plugins/gitlab/');
+    const breadcrumb = toValue(state.seo.options.structuredData).find((entry: any) => entry['@type'] === 'BreadcrumbList');
+    assert.equal(breadcrumb.itemListElement[1].item, 'https://example.test/universal-agent-plugins/uk/plugins/gitlab/');
+    assert.equal(breadcrumb.itemListElement.at(-1).item, `https://example.test/universal-agent-plugins/uk/agents/${slug}/`);
+    assert.ok(!JSON.stringify(breadcrumb).includes('?plugin='), 'Context never changes canonical schema URLs');
+    assert.equal(state.seo.options.canonicalPath, undefined, 'The shared SEO helper retains canonical ownership');
+    state.directoryCurrent.value = false;
+    assert.equal(toValue(state.installCommand), '', 'Project context must still honor Directory expiry');
+
+    const noQuery = await page('agents/[client].vue', { slug: 'gitlab', client: slug }, registry);
+    noQuery.mount();
+    assert.equal(toValue(noQuery.originPlugin), undefined);
+    assert.equal(toValue(noQuery.exampleScope), 'user');
+    assert.equal(toValue(noQuery.installCommand), defaultCommand, 'Default examples stay user-scoped');
+  });
+}

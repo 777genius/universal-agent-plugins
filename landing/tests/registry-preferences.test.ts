@@ -160,11 +160,11 @@ test('Desktop has its own picker command, shares Codex backend, and keeps Web se
   assert.match(instance.state.command.value, /--target chatgpt$/);
   assert.equal(instance.state.deliverySummary.value.includes('1 automatic setup'), true);
   instance.state.updateTargets(['chatgpt', 'codex']);
-  assert.deepEqual(Array.from(instance.state.targets.value), ['codex']);
-  assert.match(instance.state.command.value, /--target codex$/);
-  instance.state.updateTargets(['codex', 'chatgpt']);
-  assert.deepEqual(Array.from(instance.state.targets.value), ['chatgpt']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['chatgpt', 'codex']);
   assert.match(instance.state.command.value, /--target chatgpt$/);
+  instance.state.updateTargets(['codex', 'chatgpt']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['codex', 'chatgpt']);
+  assert.match(instance.state.command.value, /--target codex$/);
   instance.stop();
   assert.deepEqual(cliInstallTargets(['chatgptweb', 'chatgpt']), ['chatgptweb', 'chatgpt']);
   assert.equal(canonicalInstallTarget('chatgptweb'), 'chatgpt');

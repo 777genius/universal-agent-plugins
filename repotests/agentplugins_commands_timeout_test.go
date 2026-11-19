@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -17,9 +18,9 @@ const commandsTimeoutEntries = 32
 
 // This is a post-return snapshot of persisted fixture metadata. It neither
 // observes a live child nor changes cancellation, cleanup or the original fatal.
-func commandsRecordTimeout(t *testing.T, root, label string, pid int, elapsed time.Duration, cause error) {
+func commandsRecordTimeout(t *testing.T, root, label string, cmd *exec.Cmd, elapsed time.Duration, cause error) {
 	t.Helper()
-	body := commandsTimeoutSummary(root, label, pid, elapsed, cause)
+	body := commandsTimeoutSummary(root, label, cmd, elapsed, cause)
 	t.Logf("installer timeout persisted-state diagnostic (not a live process trace): %s", body)
 	base, err := os.OpenRoot(root)
 	if err != nil {
@@ -40,10 +41,14 @@ func commandsRecordTimeout(t *testing.T, root, label string, pid int, elapsed ti
 	}
 }
 
-func commandsTimeoutSummary(root, label string, pid int, elapsed time.Duration, cause error) []byte {
+func commandsTimeoutSummary(root, label string, cmd *exec.Cmd, elapsed time.Duration, cause error) []byte {
 	reason := "canceled"
 	if errors.Is(cause, context.DeadlineExceeded) {
 		reason = "deadline_exceeded"
+	}
+	pid := 0
+	if cmd.Process != nil {
+		pid = cmd.Process.Pid
 	}
 	report := map[string]any{"label": commandsTimeoutToken(label), "pid": pid,
 		"elapsed_ms": elapsed.Milliseconds(), "reason": reason,
@@ -53,33 +58,115 @@ func commandsTimeoutSummary(root, label string, pid int, elapsed time.Duration, 
 		report["root_status"] = "unavailable"
 	} else {
 		defer func() { _ = base.Close() }()
-		report["state"] = commandsTimeoutState(base)
-		report["journals"] = commandsTimeoutJournals(base)
+		report["user"] = commandsTimeoutMetadata(base, "installer-state")
+		report["project"] = commandsTimeoutProject(base, root, cmd)
 		report["scratch"] = commandsTimeoutNames(base, "tmp")
-		report["logs"] = commandsTimeoutNames(base, filepath.Join("installer-state", "logs"))
-		locks := map[string]any{}
-		for _, name := range []string{"environment.lock", "mutation.lock"} {
-			var lock struct {
-				PID        int    `json:"pid"`
-				AcquiredAt string `json:"acquired_at"`
-			}
-			status := commandsTimeoutRead(base, filepath.Join("installer-state", name), &lock)
-			if status != "read" {
-				lock.PID, lock.AcquiredAt = 0, ""
-			}
-			acquired := ""
-			if parsed, parseErr := time.Parse(time.RFC3339Nano, lock.AcquiredAt); parseErr == nil {
-				acquired = parsed.UTC().Format(time.RFC3339Nano)
-			}
-			locks[name] = map[string]any{"status": status, "pid": lock.PID, "acquired_at": acquired}
-		}
-		report["locks"] = locks
 	}
 	body, err := json.Marshal(report)
 	if err != nil || len(body) > 64<<10 {
 		return []byte(`{"diagnostic_status":"unavailable"}`)
 	}
 	return body
+}
+
+func commandsTimeoutMetadata(root *os.Root, stateDir string) map[string]any {
+	report := map[string]any{
+		"state":    commandsTimeoutState(root, stateDir),
+		"journals": commandsTimeoutJournals(root, stateDir),
+		"logs":     commandsTimeoutNames(root, filepath.Join(stateDir, "logs")),
+	}
+	locks := map[string]any{}
+	for _, name := range []string{"environment.lock", "mutation.lock"} {
+		var lock struct {
+			PID        int    `json:"pid"`
+			AcquiredAt string `json:"acquired_at"`
+		}
+		status := commandsTimeoutRead(root, filepath.Join(stateDir, name), &lock)
+		if status != "read" {
+			lock.PID, lock.AcquiredAt = 0, ""
+		}
+		acquired := ""
+		if parsed, err := time.Parse(time.RFC3339Nano, lock.AcquiredAt); err == nil {
+			acquired = parsed.UTC().Format(time.RFC3339Nano)
+		}
+		locks[name] = map[string]any{"status": status, "pid": lock.PID, "acquired_at": acquired}
+	}
+	report["locks"] = locks
+	return report
+}
+
+func commandsTimeoutProject(root *os.Root, fixture string, cmd *exec.Cmd) map[string]any {
+	scope, project := commandsTimeoutSelection(cmd.Args)
+	if scope != "project" {
+		return map[string]any{"status": "not_selected"}
+	}
+	if project == "" {
+		project = cmd.Dir
+	} else if !filepath.IsAbs(project) {
+		project = filepath.Join(cmd.Dir, project)
+	}
+	owned, ownedErr := filepath.EvalSymlinks(fixture)
+	selected, selectedErr := filepath.EvalSymlinks(project)
+	if ownedErr != nil || selectedErr != nil {
+		return map[string]any{"scope": "project", "status": "unavailable"}
+	}
+	relative, err := filepath.Rel(owned, selected)
+	if err != nil || !filepath.IsLocal(relative) {
+		return map[string]any{"scope": "project", "status": "outside_fixture"}
+	}
+	base, err := root.OpenRoot(relative)
+	if err != nil {
+		return map[string]any{"scope": "project", "status": "unavailable"}
+	}
+	defer func() { _ = base.Close() }()
+	report := commandsTimeoutMetadata(base, ".uap")
+	report["scope"], report["status"] = "project", "read"
+	files := map[string]any{}
+	for _, name := range []string{"uap.toml", "uap.lock"} {
+		files[name] = commandsTimeoutFileMetadata(base, name)
+	}
+	report["environment_files"] = files
+	return report
+}
+
+func commandsTimeoutSelection(args []string) (string, string) {
+	scope, project := "user", ""
+	for i := 1; i < len(args); i++ {
+		flag, value, assigned := strings.Cut(args[i], "=")
+		if flag == "--" {
+			break
+		}
+		if flag != "--scope" && flag != "--project-root" {
+			continue
+		}
+		if !assigned {
+			i++
+			if i == len(args) {
+				return "invalid", ""
+			}
+			value = args[i]
+		}
+		if flag == "--scope" {
+			scope = value
+		} else {
+			project = value
+		}
+	}
+	return scope, project
+}
+
+func commandsTimeoutFileMetadata(root *os.Root, name string) map[string]any {
+	info, err := root.Lstat(name)
+	if errors.Is(err, os.ErrNotExist) {
+		return map[string]any{"status": "absent"}
+	}
+	if err != nil {
+		return map[string]any{"status": "unavailable"}
+	}
+	if !info.Mode().IsRegular() {
+		return map[string]any{"status": "refused"}
+	}
+	return map[string]any{"status": "present", "bytes": info.Size()}
 }
 
 func commandsTimeoutRead(root *os.Root, name string, value any) string {
@@ -112,7 +199,7 @@ func commandsTimeoutRead(root *os.Root, name string, value any) string {
 	return "read"
 }
 
-func commandsTimeoutState(root *os.Root) map[string]any {
+func commandsTimeoutState(root *os.Root, stateDir string) map[string]any {
 	var state struct {
 		Installations []struct {
 			InstallationID string `json:"installation_id"`
@@ -128,7 +215,7 @@ func commandsTimeoutState(root *os.Root) map[string]any {
 			} `json:"clients"`
 		} `json:"installations"`
 	}
-	status := commandsTimeoutRead(root, filepath.Join("installer-state", "state-v2.json"), &state)
+	status := commandsTimeoutRead(root, filepath.Join(stateDir, "state-v2.json"), &state)
 	rows := []map[string]any{}
 	if status != "read" {
 		return map[string]any{"status": status, "bindings": rows, "truncated": false}
@@ -158,8 +245,8 @@ func commandsTimeoutState(root *os.Root) map[string]any {
 	return map[string]any{"status": status, "bindings": rows, "truncated": false}
 }
 
-func commandsTimeoutJournals(root *os.Root) map[string]any {
-	dir := filepath.Join("installer-state", "operations-v2")
+func commandsTimeoutJournals(root *os.Root, stateDir string) map[string]any {
+	dir := filepath.Join(stateDir, "operations-v2")
 	entries, status, truncated := commandsTimeoutDirectory(root, dir)
 	rows := []map[string]string{}
 	for _, entry := range entries {
@@ -240,12 +327,14 @@ func TestCommandsTimeoutSummaryKeepsOnlyBoundedPersistedMetadata(t *testing.T) {
 		name := strings.Repeat("x", i+1)
 		nativeWrite(t, filepath.Join(root, "tmp", name), []byte(secret), 0o600)
 	}
-	body := commandsTimeoutSummary(root, "replay", 42, 90*time.Second, context.DeadlineExceeded)
+	body := commandsTimeoutSummary(root, "replay", &exec.Cmd{Process: &os.Process{Pid: 42}}, 90*time.Second, context.DeadlineExceeded)
 	var report struct {
-		PID   int `json:"pid"`
-		State struct {
-			Bindings []map[string]any `json:"bindings"`
-		} `json:"state"`
+		PID  int `json:"pid"`
+		User struct {
+			State struct {
+				Bindings []map[string]any `json:"bindings"`
+			} `json:"state"`
+		} `json:"user"`
 		Scratch struct {
 			Names     []string `json:"names"`
 			Truncated bool     `json:"truncated"`
@@ -254,10 +343,10 @@ func TestCommandsTimeoutSummaryKeepsOnlyBoundedPersistedMetadata(t *testing.T) {
 	if err := json.Unmarshal(body, &report); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(body), secret) || len(body) > 64<<10 || report.PID != 42 || len(report.State.Bindings) != 1 || report.State.Bindings[0]["attempt_id"] != "attempt-1" || !strings.Contains(string(body), `"phase":"state_committed"`) || !report.Scratch.Truncated || len(report.Scratch.Names) != commandsTimeoutEntries {
+	if strings.Contains(string(body), secret) || len(body) > 64<<10 || report.PID != 42 || len(report.User.State.Bindings) != 1 || report.User.State.Bindings[0]["attempt_id"] != "attempt-1" || !strings.Contains(string(body), `"phase":"state_committed"`) || !report.Scratch.Truncated || len(report.Scratch.Names) != commandsTimeoutEntries {
 		t.Fatalf("timeout metadata missing or over-disclosed: %s", body)
 	}
-	commandsRecordTimeout(t, root, "replay", 42, 90*time.Second, context.DeadlineExceeded)
+	commandsRecordTimeout(t, root, "replay", &exec.Cmd{Process: &os.Process{Pid: 42}}, 90*time.Second, context.DeadlineExceeded)
 	retained, err := os.ReadFile(filepath.Join(root, "replay-installer-timeout.json"))
 	if err != nil || !json.Valid(retained) || strings.Contains(string(retained), secret) {
 		t.Fatalf("bounded diagnostic was not retained safely: %v", err)
@@ -284,16 +373,105 @@ func TestCommandsTimeoutSummaryRefusesOutsideAndOversizedState(t *testing.T) {
 			default:
 				nativeWrite(t, path, []byte(`{"installations":`), 0o600)
 			}
-			body := commandsTimeoutSummary(root, "replay", 42, 90*time.Second, context.DeadlineExceeded)
+			body := commandsTimeoutSummary(root, "replay", &exec.Cmd{Process: &os.Process{Pid: 42}}, 90*time.Second, context.DeadlineExceeded)
 			var report struct {
-				State struct {
-					Status   string `json:"status"`
-					Bindings []any  `json:"bindings"`
-				} `json:"state"`
+				User struct {
+					State struct {
+						Status   string `json:"status"`
+						Bindings []any  `json:"bindings"`
+					} `json:"state"`
+				} `json:"user"`
 			}
-			if json.Unmarshal(body, &report) != nil || report.State.Status == "read" || len(report.State.Bindings) != 0 || strings.Contains(string(body), "FOREIGN-CANARY") {
+			if json.Unmarshal(body, &report) != nil || report.User.State.Status == "read" || len(report.User.State.Bindings) != 0 || strings.Contains(string(body), "FOREIGN-CANARY") {
 				t.Fatalf("unsafe state was read: %s", body)
 			}
 		})
+	}
+}
+
+func TestCommandsTimeoutSummarySelectsOwnedProjectMetadata(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	secret := "private project credential canary"
+	nativeWrite(t, filepath.Join(project, ".uap", "state-v2.json"), []byte(`{"private":"`+secret+`","installations":[{"installation_id":"project-owned","clients":{"binding":{"client_id":"codex","activation":"active"}}}]}`), 0o600)
+	nativeWrite(t, filepath.Join(project, ".uap", "operations-v2", "owned.json"), []byte(`{"operation_id":"project-operation","phase":"state_committed","private":"`+secret+`"}`), 0o600)
+	nativeWrite(t, filepath.Join(project, ".uap", "mutation.lock"), []byte(`{"pid":73,"private":"`+secret+`"}`), 0o600)
+	for _, name := range []string{"uap.toml", "uap.lock"} {
+		nativeWrite(t, filepath.Join(project, name), []byte(secret), 0o600)
+	}
+	for _, args := range [][]string{
+		{"installer", "skills", "add", "source", "--scope", "project", "--project-root", project},
+		{"installer", "--scope=project", "--project-root=."},
+		{"installer", "--scope", "project"},
+	} {
+		cmd := &exec.Cmd{Dir: project, Args: args}
+		body := commandsTimeoutSummary(root, "project-replay", cmd, 90*time.Second, context.DeadlineExceeded)
+		var report struct {
+			User struct {
+				State struct{ Status string } `json:"state"`
+			} `json:"user"`
+			Project struct {
+				Scope, Status string
+				State         struct {
+					Status   string
+					Bindings []map[string]any
+				}
+				Locks map[string]struct{ PID int }
+				Files map[string]struct {
+					Status string
+					Bytes  int64
+				} `json:"environment_files"`
+			} `json:"project"`
+		}
+		if err := json.Unmarshal(body, &report); err != nil {
+			t.Fatal(err)
+		}
+		p := report.Project
+		if report.User.State.Status != "absent" || p.Scope != "project" || p.Status != "read" || p.State.Status != "read" || len(p.State.Bindings) != 1 || p.State.Bindings[0]["installation_id"] != "project-owned" || p.Locks["mutation.lock"].PID != 73 {
+			t.Fatalf("selected project metadata missing: %s", body)
+		}
+		if strings.Contains(string(body), secret) || strings.Contains(string(body), project) || !strings.Contains(string(body), `"operation_id":"project-operation"`) || p.Files["uap.toml"].Status != "present" || p.Files["uap.lock"].Bytes != int64(len(secret)) {
+			t.Fatalf("project metadata missing or over-disclosed: %s", body)
+		}
+	}
+}
+
+func TestCommandsTimeoutProjectRequiresSelectionAndOwnedContainment(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	foreign := `{"installations":[{"installation_id":"FOREIGN-CANARY","clients":{"foreign":{"client_id":"codex"}}}]}`
+	nativeWrite(t, filepath.Join(outside, ".uap", "state-v2.json"), []byte(foreign), 0o600)
+	base, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = base.Close() }()
+	for _, tc := range []struct {
+		args   []string
+		status string
+	}{
+		{[]string{"installer", "--project-root", outside}, "not_selected"},
+		{[]string{"installer", "--scope", "project", "--scope", "user", "--project-root", outside}, "not_selected"},
+		{[]string{"installer", "--", "--scope", "project", "--project-root", outside}, "not_selected"},
+		{[]string{"installer", "--scope", "project", "--project-root", outside}, "outside_fixture"},
+		{[]string{"installer", "--scope=project", "--project-root=../" + filepath.Base(outside)}, "outside_fixture"},
+	} {
+		report := commandsTimeoutProject(base, root, &exec.Cmd{Dir: root, Args: tc.args})
+		body, err := json.Marshal(report)
+		if err != nil || report["status"] != tc.status || strings.Contains(string(body), "FOREIGN-CANARY") || strings.Contains(string(body), outside) {
+			t.Fatalf("unselected or outside metadata was read: %s %v", body, err)
+		}
+	}
+	project := filepath.Join(root, "project")
+	if err := os.Mkdir(project, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(outside, ".uap"), filepath.Join(project, ".uap")); err != nil {
+		t.Skipf("symlink prerequisite unavailable: %v", err)
+	}
+	report := commandsTimeoutProject(base, root, &exec.Cmd{Dir: project, Args: []string{"installer", "--scope", "project"}})
+	body, err := json.Marshal(report)
+	state, ok := report["state"].(map[string]any)
+	if err != nil || !ok || state["status"] == "read" || strings.Contains(string(body), "FOREIGN-CANARY") {
+		t.Fatalf("outside project state was read: %s %v", body, err)
 	}
 }

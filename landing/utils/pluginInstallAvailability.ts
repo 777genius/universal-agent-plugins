@@ -1,12 +1,12 @@
 import { canonicalInstallTargets, type InstallTargetID } from '../data/installTargets.ts';
 import type { ClientID, DistributionResolution, InstallScope, RegistryPlugin } from '../types/registry.ts';
 import { expectedDistribution, resolveDistribution } from './registry.ts';
-import { pinnedCatalogSelection, projectCatalogSelection } from './projectCatalogSource.ts';
+import { pinnedCatalogGroupSelection, pinnedCatalogSelection, projectCatalogSelection } from './projectCatalogSource.ts';
 
 export type PluginInstallAvailability =
   | { kind: 'signed'; resolution: DistributionResolution }
   | { kind: 'guided_web'; resolution: DistributionResolution }
-  | { kind: 'pinned_git'; selection: NonNullable<ReturnType<typeof pinnedCatalogSelection>> };
+  | { kind: 'pinned_git'; selection: NonNullable<ReturnType<typeof pinnedCatalogSelection>> & { clients?: readonly ClientID[] } };
 
 function context7Preparation(plugin: RegistryPlugin, peers: ClientID[] = []) {
   if (
@@ -61,8 +61,15 @@ export function pluginInstallAvailability(
   if (scope === 'user' && web && context7Preparation(plugin,
       canonicalInstallTargets(targets.filter(target => target !== 'chatgptweb'))))
     return { kind: 'guided_web', resolution };
-  // Public ChatGPT aliases keep their own routes; only a canonical local
-  // agent can explicitly request an independent saved Git source.
+  // A shared explicit source remains a Git request, never a new signed grant.
+  // Qualify each visible surface first: Desktop cannot borrow a canonical
+  // Codex Git fallback when its own signed route is unavailable.
+  if (!web && canonical.length > 1 &&
+      targets.every(target => pluginInstallAvailability(plugin, [target], scope))) {
+    const selection = pinnedCatalogGroupSelection(plugin, canonical, scope);
+    if (selection) return { kind: 'pinned_git', selection };
+  }
+  // A Desktop-only surface keeps its existing signed Codex route.
   if (targets.length === 1 && canonical[0] === targets[0]) {
     const selection = pinnedCatalogSelection(plugin, canonical[0]!, scope);
     if (selection) return { kind: 'pinned_git', selection };
@@ -70,26 +77,12 @@ export function pluginInstallAvailability(
   return undefined;
 }
 
-/** A source request is exclusive; selecting a signed peer returns to that route. */
+/** Picker reconciliation preserves intent; route compatibility is checked separately. */
 export function reconcilePluginSourceTargets(
-  plugin: RegistryPlugin, next: InstallTargetID[], previous: readonly InstallTargetID[],
-  scope: InstallScope = 'user',
+  _plugin: RegistryPlugin, next: InstallTargetID[], _previous: readonly InstallTargetID[],
+  _scope: InstallScope = 'user',
 ): InstallTargetID[] {
-  if (next.length < 2) return next;
-  const availability = new Map(next.map(target =>
-    [target, pluginInstallAvailability(plugin, [target], scope)?.kind]));
-  // Keep withdrawn choices visible until the user adds an eligible replacement.
-  // Picker events include both the old checked option and the newly added one.
-  const addedAvailable = next.some(target => !previous.includes(target) && availability.get(target));
-  const candidates = addedAvailable
-    ? next.filter(target => !previous.includes(target) || availability.get(target))
-    : next;
-  const sources = candidates.filter(target => availability.get(target) === 'pinned_git');
-  if (!sources.length) return candidates;
-  const addedSource = sources.find(target => !previous.includes(target));
-  if (addedSource) return [addedSource];
-  const signed = candidates.filter(target => !sources.includes(target));
-  return signed.length ? signed : [sources[0]!];
+  return [...new Set(next)];
 }
 
 export function hasPluginInstallTarget(plugin: RegistryPlugin, target: InstallTargetID): boolean {

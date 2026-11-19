@@ -31,9 +31,10 @@ func readCancellationWorkflow(t *testing.T, name string) cancellationWorkflow {
 	return workflow
 }
 
+// The legacy Firebase/Claude 0.1.101 diagnostic is manual-only; its event
+// policy is checked by scripts/test_package_manager_ci_policy.py instead.
 func TestCISupersession_RegularPRChecksOnly(t *testing.T) {
 	for name, prefix := range map[string]string{
-		"agentplugins-windows-firebase-capture-probe.yml": "firebase-capture-",
 		"docs-canary.yml":                          "docs-canary-",
 		"grok-enable-readonly.yml":                 "grok-enable-readonly-",
 		"remotion-windows-source-diagnostic.yml":   "remotion-win-diagnostic-",

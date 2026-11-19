@@ -71,8 +71,10 @@ jobs:
                 URL="https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz"
                 BIN="cursor-agent"
               else
-                # User-scope Plugins require the editor; its .deb has no reviewed digest.
-                URL="https://downloads.cursor.com/production/25b52e7d03ebf2d5608914158e119f7992432a34/linux/x64/deb/amd64/deb/cursor_3.28.7_amd64.deb"
+                # User-scope Plugins require the editor. #931 hosted E2E
+                # has checked this exact official APT .deb SHA-256.
+                # This qualifies acquisition, not native plugin activation.
+                URL="https://downloads.cursor.com/aptrepo/pool/stable/c/cu/cursor_3.30.14_amd64.deb"
                 BIN="cursor"
               fi
               ;;
@@ -113,7 +115,7 @@ jobs:
               if [[ "$KIND" == skill ]]; then
                 SHA256="85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294"
               else
-                SHA256="" # No independent digest for the editor .deb; fail closed.
+                SHA256="c8003e009f96a6e4fd7185f7016c66d7e36e03d8fa2e2394197511907bcd8226" # Official Cursor 3.30.14 APT amd64 .deb; verified #931
               fi
               ;;
             vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20" ;; # Microsoft official SHA-256 for Linux .deb x64 1.144.0
@@ -186,6 +188,14 @@ jobs:
               test -f "$executable" && test -x "$executable" && test ! -L "$executable"
               test "$(readlink -f "$executable")" = "$executable"
               ln -s "$executable" "$HOME/.local/bin/code"
+            fi
+            if [[ "$TARGET" == cursor ]]; then
+              # The signed .deb normally registers /usr/bin/cursor in postinst.
+              # Select the reviewed extracted binary without running scripts.
+              executable="$RUNNER_TEMP/vendor-root/usr/share/cursor/bin/cursor"
+              test -f "$executable" && test -x "$executable" && test ! -L "$executable"
+              test "$(readlink -f "$executable")" = "$executable"
+              ln -s "$executable" "$HOME/.local/bin/cursor"
             fi
           elif [[ "$TARGET" == kiro ]]; then
             # This archive is verified above against the independently pinned

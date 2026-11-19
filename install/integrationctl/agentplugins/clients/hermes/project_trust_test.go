@@ -423,7 +423,7 @@ func TestHermesConfirmedProjectActivationGrantsTrustOnlyOutsideVerification(t *t
 	request, env := hermesTrustActivation(t, f.project, f.cli, f.profile)
 	plan := request.Plan
 	plan.UserActions = nil
-	if err := New().RefinePlan(context.Background(), clients.PlanInput{}, &plan); err != nil || len(f.cli.calls) != 0 ||
+	if err := New().RefinePlan(context.Background(), clients.PlanInput{ProjectTrustConsent: true}, &plan); err != nil || len(f.cli.calls) != 0 ||
 		!strings.Contains(strings.Join(plan.UserActions, "\n"), "trust this whole Git repository root") {
 		t.Fatalf("planning ran native trust or omitted the disclosure: %v %v %v", plan.UserActions, err, f.cli.calls)
 	}
@@ -459,6 +459,28 @@ func TestHermesConfirmedProjectActivationGrantsTrustOnlyOutsideVerification(t *t
 	mismatch, err := New().Activate(context.Background(), env, request)
 	if err != nil || len(f.cli.calls) != calls || !strings.Contains(mismatch.UserActions[len(mismatch.UserActions)-1], "recorded Hermes profile differs") {
 		t.Fatalf("a different recorded profile was not reported accurately: %v %v", mismatch.UserActions, err)
+	}
+}
+
+func TestHermesProjectPlanDisclosureFollowsTrustConsent(t *testing.T) {
+	t.Parallel()
+	for _, consent := range []bool{false, true} {
+		plan := domain.DeliveryPlan{Scope: domain.ScopeProject, Status: domain.PlanReady,
+			NativeRegistryRoot: filepath.Join(t.TempDir(), ".hermes"),
+			Components: []domain.ComponentDecision{
+				{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative},
+				{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative},
+			}}
+		if err := New().RefinePlan(t.Context(), clients.PlanInput{ProjectTrustConsent: consent}, &plan); err != nil {
+			t.Fatal(err)
+		}
+		actions := strings.Join(plan.UserActions, "\n")
+		if strings.Contains(actions, "A confirmed explicit add asks") != consent ||
+			strings.Contains(actions, "This operation does not change Hermes project trust") == consent ||
+			!strings.Contains(actions, "qualified bundled client") || !strings.Contains(actions, "quarantines") ||
+			strings.Contains(actions, "repair and dependency sync never grant trust") {
+			t.Fatalf("consent=%v has inaccurate or incomplete guidance: %s", consent, actions)
+		}
 	}
 }
 
