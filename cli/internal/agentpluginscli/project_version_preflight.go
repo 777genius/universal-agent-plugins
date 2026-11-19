@@ -44,24 +44,66 @@ func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, 
 		// without targeted probing must never execute unrelated clients.
 		return nil
 	}
-	probed, err := targeted.DetectTargetsWithVersionProbe(ctx, requested)
-	if err != nil {
-		return fmt.Errorf("targets %v version detection failed; no target was changed: %w", requested, err)
-	}
+	return probeMissingProjectVersions(ctx, app.ClientRegistry, app.scope(), targeted, requested, detected)
+}
+
+// Preserve mandatory version requirements as one atomic probe. Optional
+// client capabilities are queried separately, so their failures cannot
+// suppress an existing mandatory host-version requirement.
+func probeMissingProjectVersions(ctx context.Context, registry *clients.Registry, scope domain.InstallScope,
+	detector ports.TargetedVersionProbingClientDetector, requested []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) error {
+	mandatory, optional := splitProjectVersionProbes(registry, scope, requested)
 	versions := make(map[domain.ClientID]string, len(requested))
-	for _, id := range requested {
-		version, err := selectedProjectVersion(detected[id], probed)
+	if len(mandatory) > 0 {
+		probed, err := detector.DetectTargetsWithVersionProbe(ctx, mandatory)
 		if err != nil {
+			return fmt.Errorf("targets %v version detection failed; no target was changed: %w", mandatory, err)
+		}
+		for _, id := range mandatory {
+			version, err := selectedProjectVersion(detected[id], probed)
+			if err != nil {
+				return err
+			}
+			versions[id] = version
+		}
+	}
+	for _, id := range optional {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
-		versions[id] = version
+		probed, err := detector.DetectTargetsWithVersionProbe(ctx, []domain.ClientID{id})
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			continue
+		}
+		if version, err := selectedProjectVersion(detected[id], probed); err == nil {
+			versions[id] = version
+		}
 	}
-	for _, id := range requested {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	for id, version := range versions {
 		client := detected[id]
-		client.Version = versions[id]
+		client.Version = version
 		detected[id] = client
 	}
 	return nil
+}
+
+func splitProjectVersionProbes(registry *clients.Registry, scope domain.InstallScope,
+	requested []domain.ClientID) (mandatory, optional []domain.ClientID) {
+	for _, id := range requested {
+		probe, ok := clients.As[clients.BestEffortProjectVersionProbe](registry, id)
+		if scope == domain.ScopeProject && ok && probe.ProjectVersionProbeBestEffort() {
+			optional = append(optional, id)
+		} else {
+			mandatory = append(mandatory, id)
+		}
+	}
+	return mandatory, optional
 }
 
 func missingProjectVersionTargets(registry *clients.Registry, targets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient, scopes ...domain.InstallScope) []domain.ClientID {

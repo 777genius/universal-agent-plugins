@@ -10,6 +10,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/copilot"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kimi"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -330,5 +331,43 @@ func TestUserDevinSavedDependencyMutationProbesExactSelectedVersion(t *testing.T
 	if adapter.detected[domain.ClientWindsurf].Version != "3000.11.205" ||
 		!reflect.DeepEqual(detector.targets, [][]domain.ClientID{{domain.ClientWindsurf}}) || detector.broadCalls != 0 {
 		t.Fatal("user dependency mutation did not observe exact selected Devin version")
+	}
+}
+
+func TestCopilotOptionalVersionProbeNeverBlocksLegacyProjectDelivery(t *testing.T) {
+	registry, err := clients.NewRegistry(copilot.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := domain.DetectedClient{
+		ClientID: domain.ClientCopilot, Status: domain.DetectionDetected,
+		ExecutablePath: projectVersionFixturePath("bin", "copilot"), ConfigRoot: projectVersionFixturePath("profile", ".copilot"),
+	}
+	for _, tc := range []struct {
+		name          string
+		probeErr      error
+		probedVersion string
+		wantVersion   string
+	}{
+		{name: "failed", probeErr: errors.New("native version probe failed")},
+		{name: "empty", probedVersion: ""},
+		{name: "observed", probedVersion: "1.0.103", wantVersion: "1.0.103"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			observed := original
+			observed.Version = tc.probedVersion
+			detector := &projectVersionDetector{err: tc.probeErr, probed: []domain.DetectedClient{observed}}
+			detected := map[domain.ClientID]domain.DetectedClient{domain.ClientCopilot: original}
+			if err := ensureSelectedProjectVersions(t.Context(), App{ClientRegistry: registry, Scope: domain.ScopeProject, Detector: detector},
+				&options{}, []domain.ClientID{domain.ClientCopilot}, detected); err != nil {
+				t.Fatalf("optional Copilot version blocked existing project installer: %v", err)
+			}
+			if got := detected[domain.ClientCopilot].Version; got != tc.wantVersion {
+				t.Fatalf("version=%q want=%q", got, tc.wantVersion)
+			}
+			if len(detector.targets) != 1 || !reflect.DeepEqual(detector.targets[0], []domain.ClientID{domain.ClientCopilot}) {
+				t.Fatalf("unexpected native probes: %+v", detector.targets)
+			}
+		})
 	}
 }

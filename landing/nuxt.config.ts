@@ -112,17 +112,7 @@ export default defineNuxtConfig({
         { rel: 'ard', type: 'application/json', href: `${baseURL}.well-known/ard.json` },
         { rel: 'describedby', type: 'text/plain', href: `${baseURL}llms.txt` },
         { rel: 'dns-prefetch', href: 'https://api.github.com' },
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        {
-          rel: 'preload',
-          href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap',
-          as: 'style',
-        },
-        {
-          rel: 'stylesheet',
-          href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap',
-        },
+        { rel: 'stylesheet', href: `${baseURL}fonts/fonts.css` },
       ],
     },
   },

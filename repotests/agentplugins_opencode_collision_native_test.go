@@ -45,8 +45,12 @@ func TestAgentpluginsOpenCodeNativeToolCollision(t *testing.T) {
 			var calls, offered []string
 			var requests []json.RawMessage
 			var resultSeen bool
+			var httpRefusals openCodeCollisionHTTPFacts
 			mcp := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.Method != "POST" {
+					mu.Lock()
+					httpRefusals.record(r.Method, r.URL.Path)
+					mu.Unlock()
 					w.WriteHeader(http.StatusMethodNotAllowed)
 					return
 				}
@@ -193,20 +197,34 @@ func TestAgentpluginsOpenCodeNativeToolCollision(t *testing.T) {
 				offered = nil
 				requests = nil
 				resultSeen = false
+				httpRefusals = openCodeCollisionHTTPFacts{}
 				mu.Unlock()
+				selectedConfigStatus := "not_captured"
+				redact := openCodeCollisionRedactor(f.Root, client, provider.URL, mcp.URL)
+				if label == "same-version-refresh" {
+					var selected []byte
+					selected, selectedConfigStatus = openCodeCollisionSelectedConfig(filepath.Join(f.XDGConfig, "opencode", "opencode.json"))
+					selected, _ = openCodeCollisionDiagnostic(selected, redact)
+					f.record(t, "selected-config-"+label, selected)
+				}
 				ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 				defer cancel()
-				cmd := exec.CommandContext(ctx, client, "run", "--model", "uap-fixture/fixture", "--format", "json", "Call the fixture inspect_runtime tool once if available, then finish.")
+				cmd := exec.CommandContext(ctx, client, openCodeCollisionNativeArgs()...)
 				cmd.Dir = f.Project
 				cmd.Env = f.env(filepath.Dir(client))
 				out, err := cmd.CombinedOutput()
-				f.record(t, "native-"+label, out)
+				diagnostic, diagnosticTruncated := openCodeCollisionDiagnostic(out, redact)
+				f.record(t, "native-"+label, diagnostic)
 				mu.Lock()
 				defer mu.Unlock()
 				stage := map[string]any{"status": "failed", "native_tool_names": offered, "mcp_methods": methods, "dispatch_servers": calls, "tool_result_returned_to_provider": resultSeen, "provider_requests": requests, "expected_revision": revision}
+				stage["mcp_http_refusals"] = httpRefusals
+				stage["selected_config_file_capture"] = selectedConfigStatus
+				stage["native_diagnostic"] = map[string]any{"captured_bytes": len(out), "retained_bytes": len(diagnostic), "truncated": diagnosticTruncated}
 				stages[label] = stage
 				if err != nil {
-					t.Fatalf("native %s: %v\n%s", label, err, out)
+					failure, _ := openCodeCollisionDiagnostic([]byte(err.Error()), redact)
+					t.Fatalf("native %s: %s\n%s", label, failure, diagnostic)
 				}
 				if len(requests) == 0 {
 					t.Fatal("native session never contacted scripted provider")
@@ -220,7 +238,7 @@ func TestAgentpluginsOpenCodeNativeToolCollision(t *testing.T) {
 						t.Fatalf("unexpected native namespace: %v", offered)
 					}
 					if len(calls) != 1 || !resultSeen {
-						t.Fatalf("dispatch missing: calls=%v returned=%v\n%s", calls, resultSeen, out)
+						t.Fatalf("dispatch missing: calls=%v returned=%v\n%s", calls, resultSeen, diagnostic)
 					}
 					if len(names) == 1 && calls[0] != "server-0"+revision {
 						t.Fatalf("stale dispatch: %q, want %q", calls[0], "server-0"+revision)

@@ -32,6 +32,12 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 	if err := verifyCopilotTrust(env, request, false); err != nil {
 		return err
 	}
+	if copilotSwitchesToComponents(request) {
+		return copilotPreflightComponentSwitch(env, request, root)
+	}
+	if request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.Delivery.NativeObjects) {
+		return copilotPreflightWholePlugin(env, request)
+	}
 	if shared.ComponentKindPresent(request.Plan.Components, domain.ComponentMCPServer) {
 		layout, err := copilotComponents(root)
 		if err != nil {
@@ -53,6 +59,9 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 	if err := New().PreflightActivation(env, request); err != nil {
 		return domain.ActivationOutcome{}, err
 	}
+	if request.Plan.HasNativePluginRegistration() || copilotHasProjectPlugin(request.Delivery.NativeObjects) {
+		return activateCopilotProjectPlugin(ctx, env, request, root)
+	}
 	layout, err := copilotComponents(root)
 	if err != nil {
 		return domain.ActivationOutcome{}, err
@@ -69,20 +78,23 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 			return layout.Verify(copilotNativeObjects(request.Delivery.NativeObjects), false, env.NativeConfig)
 		},
 		Activate: func(ctx context.Context, request domain.ActivationRequest) error {
-			servers := map[string]nativeconfig.Server{}
-			for _, object := range copilotNativeObjects(request.Delivery.NativeObjects) {
-				if object.Kind == copilotProjectMCPKind {
-					server, err := readCopilotProjectServer(request.Delivery.ActivePath, object.LogicalName)
-					if err != nil {
-						return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
-					}
-					servers[object.LogicalName] = server
-				}
+			servers, err := copilotProjectMCPServers(request)
+			if err != nil {
+				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+			}
+			previous := copilotNativeObjects(request.PreviousNativeObjects)
+			if copilotSwitchesToComponents(request) {
+				// The owned plugin registration belongs to the separate settings
+				// transaction; it is not an owned loose Skill or MCP object.
+				previous = nil
 			}
 			mutation := shared.ProjectComponentMutation{Layout: layout, ActivePath: request.Delivery.ActivePath,
-				Previous: copilotNativeObjects(request.PreviousNativeObjects), Desired: copilotNativeObjects(request.Delivery.NativeObjects), Servers: servers, Kernel: env.NativeConfig}
+				Previous: previous, Desired: copilotNativeObjects(request.Delivery.NativeObjects), Servers: servers, Kernel: env.NativeConfig}
 			if err := mutation.Preflight(ctx); err != nil {
 				return &shared.NativeEffectError{Effect: domain.NativeEffectUnchanged, Err: err}
+			}
+			if copilotSwitchesToComponents(request) {
+				return copilotApplyComponentSwitch(ctx, env, request, root, mutation)
 			}
 			return withCopilotTrust(ctx, env, request, func() error { return mutation.Apply(ctx) })
 		},
@@ -93,11 +105,43 @@ func activateCopilotProject(ctx context.Context, env clients.Env, request domain
 	return outcome, err
 }
 
+// Keep the read-only MCP resolution separate from the activation transaction.
+// A missing source must remain an unchanged effect before any native mutation.
+func copilotProjectMCPServers(request domain.ActivationRequest) (map[string]nativeconfig.Server, error) {
+	servers := map[string]nativeconfig.Server{}
+	for _, object := range copilotNativeObjects(request.Delivery.NativeObjects) {
+		if object.Kind != copilotProjectMCPKind {
+			continue
+		}
+		server, err := readCopilotProjectServer(request.Delivery.ActivePath, object.LogicalName)
+		if err != nil {
+			return nil, err
+		}
+		servers[object.LogicalName] = server
+	}
+	return servers, nil
+}
+
 func deactivateCopilotProject(ctx context.Context, env clients.Env, request domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
 	outcome := shared.StartedDeactivation()
 	root, err := copilotProjectRoot(request.Client, request.TargetContext, request.NativeRegistryRoot)
 	if err != nil {
 		return outcome, err
+	}
+	if copilotHasProjectPlugin(request.NativeObjects) {
+		if err := copilotValidateProjectPluginName(root, request.PhysicalArtifactID, request.DeclaredName, request.NativeObjects); err != nil {
+			return outcome, err
+		}
+		if !request.Confirmed {
+			outcome.UserActions = append(outcome.UserActions, "agentplugins will unregister only its exact Copilot project plugin settings; project trust is retained")
+			return outcome, nil
+		}
+		if err := copilotMutateProjectPlugin(ctx, env.NativeConfig, root, request.PhysicalArtifactID, request.DeclaredName, true, true); err != nil && !shared.CommittedNativeDeactivationCleanup(&outcome, err) {
+			return outcome, err
+		}
+		outcome.ExternalRemovalComplete = true
+		outcome.UserActions = append(outcome.UserActions, "Copilot remembered folder trust is retained as your project choice")
+		return outcome, nil
 	}
 	if !request.Confirmed {
 		outcome.UserActions = append(outcome.UserActions, "agentplugins will remove only exact owned Copilot repository skills and MCP members; remembered folder trust is retained")
