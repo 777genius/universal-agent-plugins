@@ -75,7 +75,7 @@ func TestProjectGrokUnrelatedNativeSourcesCannotForgeOwnedSkillProof(t *testing.
 			f.runner.document["skills"] = append(f.runner.document["skills"].([]any), map[string]any{
 				"name": "another", "description": "Other", "userInvocable": true,
 				"collidesWith": 1,
-				"source": map[string]any{"type": "user", "path": "/tmp/foreign/SKILL.md"}})
+				"source":       map[string]any{"type": "user", "path": "/tmp/foreign/SKILL.md"}})
 		},
 	}
 	for name, alter := range cases {

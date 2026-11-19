@@ -195,6 +195,7 @@ func (adapter *ProjectAdapter) Activate(ctx context.Context, env clients.Env, re
 		// File ownership is not a live Pi session, including user scope.
 		out.Activation, out.ActivationAttested = domain.ActivationPrepared, false
 		out = completePiProjectTrust(env, request, out)
+		return completePiSkills(ctx, env, request, out)
 	}
 	return out, err
 }

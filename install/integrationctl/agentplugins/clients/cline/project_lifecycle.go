@@ -81,6 +81,7 @@ func activateClineProject(ctx context.Context, env clients.Env, request domain.A
 	})
 	if err == nil && out.Verification == domain.VerificationInstalled {
 		out.Activation, out.ActivationAttested = domain.ActivationPrepared, false
+		return observeClineProjectSkills(ctx, env, request, out)
 	}
 	return out, err
 }

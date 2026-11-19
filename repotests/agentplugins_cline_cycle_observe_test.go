@@ -62,7 +62,7 @@ func clineCycleRows(raw []byte) ([]any, error) {
 	}
 	return rows, nil
 }
-func (c *clineProjectCycle) skills(raw []byte, r *clineCycleRecipe, selected []string) error {
+func (c *clineProjectCycle) skills(raw []byte, r *clineCycleRecipe, selected []string, extra ...map[string]string) error {
 	rows, err := clineCycleRows(raw)
 	if err != nil {
 		return err
@@ -79,6 +79,11 @@ func (c *clineProjectCycle) skills(raw []byte, r *clineCycleRecipe, selected []s
 	for _, scope := range selected {
 		q := c.recipes[scope]
 		want[q.SkillPath] = string(q.Authored["skills/"+q.Skill+"/SKILL.md"])
+	}
+	for _, skills := range extra {
+		for path, body := range skills {
+			want[path] = body
+		}
 	}
 	if len(rows) != len(want) {
 		return fmt.Errorf("Cline exact native skill inventory count")
