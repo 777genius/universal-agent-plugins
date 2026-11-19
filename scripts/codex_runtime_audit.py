@@ -719,7 +719,8 @@ async def _finish_native(process, job, completed, readers, diagnostic=None):
                 await _close_native_transport(process)
 
 
-async def _exchange(binary, project, profile, environment, *, sqlite_baseline=False):
+async def _exchange(binary, project, profile, environment, *, sqlite_baseline=False,
+                    versions=("0.153.4",), with_metadata=False):
     startup = {"sqlite_baseline": True} if sqlite_baseline else {}
     process, job = await _start_native(binary, project, environment, **startup)
     errors = asyncio.create_task(_drain(process.stderr, 1 << 20))
