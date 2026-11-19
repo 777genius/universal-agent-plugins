@@ -30,6 +30,14 @@ const emit = defineEmits<{
   'update:modelValue': [value: string[]];
   'update:autoSelected': [value: boolean];
 }>();
+const search = ref('');
+const filteredOptions = computed(() =>
+  props.options.filter(
+    (option) =>
+      (!props.fullWidth || option.value !== 'chatgptweb' || !option.disabled) &&
+      option.label.toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase()),
+  ),
+);
 const hydrated = ref(false);
 onMounted(() => {
   hydrated.value = true;
@@ -110,6 +118,7 @@ function toggle(value: string) {
 <template>
   <PopoverRoot>
     <PopoverTrigger
+      v-if="!fullWidth"
       class="app-multiselect__trigger"
       :aria-label="t('registryUi.multi.summary', { label, summary })"
       :data-hydrated="hydrated ? 'true' : 'false'"
@@ -141,11 +150,12 @@ function toggle(value: string) {
         ><svg viewBox="0 0 16 16" fill="none"><path d="m3.5 6 4.5 4 4.5-4" /></svg
       ></span>
     </PopoverTrigger>
-    <PopoverPortal>
+    <component :is="fullWidth ? 'div' : PopoverPortal">
       <!-- Keep the menu clear of the fixed 64px header when it flips upward. -->
-      <PopoverContent
+      <component
+        :is="fullWidth ? 'section' : PopoverContent"
         class="app-multiselect__content"
-        :class="{ 'app-multiselect__content--wide': fullWidth }"
+        :class="{ 'app-multiselect__content--inline': fullWidth }"
         align="start"
         :side-offset="7"
         :collision-padding="{ top: 80, right: 14, bottom: 14, left: 14 }"
@@ -185,9 +195,16 @@ function toggle(value: string) {
         <div v-if="autoOption" class="app-multiselect__separator">
           <span>{{ t('registryUi.multi.choose') }}</span>
         </div>
+        <CatalogSearchField
+          v-if="fullWidth"
+          v-model="search"
+          :label="t('registryUi.multi.search')"
+          :placeholder="t('registryUi.multi.search')"
+          :clear-label="t('plugins.clearSearch')"
+        />
         <div class="app-multiselect__options" role="group" :aria-label="label">
           <button
-            v-for="option in options"
+            v-for="option in filteredOptions"
             :key="option.value"
             type="button"
             class="app-multiselect__item"
@@ -215,7 +232,7 @@ function toggle(value: string) {
             <span class="app-multiselect__check" aria-hidden="true">✓</span>
           </button>
         </div>
-        <p>
+        <p v-if="!fullWidth">
           {{
             autoSelected
               ? (automaticHelp ?? t('registryUi.multi.automaticHelp'))
@@ -227,8 +244,8 @@ function toggle(value: string) {
           }}
         </p>
         <PopoverArrow v-if="!fullWidth" class="app-multiselect__arrow" />
-      </PopoverContent>
-    </PopoverPortal>
+      </component>
+    </component>
   </PopoverRoot>
 </template>
 

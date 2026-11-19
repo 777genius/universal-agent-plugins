@@ -17,6 +17,23 @@ type projectGroupReportFixture struct {
 	state    domain.StateFileV2
 }
 
+func TestProjectGroupCompletedDisclosureIsNotPendingSetup(t *testing.T) {
+	fixture := newProjectGroupReportFixture(t)
+	outcome := &fixture.got.Targets[0].Activation
+	outcome.Activation = domain.ActivationActive
+	outcome.Verification = domain.VerificationInstalled
+	outcome.Authentication = domain.AuthenticationNotRequired
+	outcome.Policy = domain.PolicyAllowed
+	outcome.UserActions = []string{"Verified setup disclosure", "Independent pending action"}
+	outcome.CompletedUserActions = []string{"Verified setup disclosure"}
+	result := Result{}
+	attachGroupAttemptResult(&result, fixture.got)
+	wanted := append([]string{"Independent pending action"}, fixture.got.Targets[1].Activation.UserActions...)
+	if !reflect.DeepEqual(result.ManualActions, wanted) || outcome.UserActions[0] != "Verified setup disclosure" {
+		t.Fatalf("completed disclosure was lost or still required setup: %+v", result.ManualActions)
+	}
+}
+
 func newProjectGroupReportFixture(t *testing.T) projectGroupReportFixture {
 	t.Helper()
 	project := filepath.Join(t.TempDir(), "project")

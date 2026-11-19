@@ -438,11 +438,12 @@ func inventorySelectedRow(rows []any, active string) (map[string]any, error) {
 		}
 		name, nameOK := row["name"].(string)
 		path, pathOK := row["path"].(string)
-		version, versionOK := row["version"].(string)
+		version, versionPresent := row["version"]
+		_, versionOK := version.(string)
 		_, enabledOK := row["enabled"].(bool)
 		_, skillErr := inventoryRowNames(row, "skills")
 		_, serverErr := inventoryRowNames(row, "mcpServers")
-		if !nameOK || !pathOK || !inventoryPhysicalRow(name, path) || !versionOK || version == "" || !enabledOK || skillErr != nil || serverErr != nil {
+		if !nameOK || !pathOK || !inventoryPhysicalRow(name, path) || versionPresent && !versionOK || !enabledOK || skillErr != nil || serverErr != nil {
 			return nil, errInventoryUnavailable
 		}
 		foldedName, foldedPath := strings.ToLower(name), strings.ToLower(path)
@@ -460,7 +461,8 @@ func inventorySelectedRow(rows []any, active string) (map[string]any, error) {
 	return selected, nil
 }
 
-// Native inventory has four required fields and omits empty component arrays.
+// Native inventory may omit a version for versionless raw Skills.
+// A selected version, including genuine absence, must match its exact plan.
 func selectedInventory(body []byte, plan domain.DeliveryPlan) (bool, bool, error) {
 	if len(body) == 0 || len(body) >= 1<<20 || !utf8.Valid(body) {
 		return false, false, errInventoryUnavailable
@@ -475,7 +477,7 @@ func selectedInventory(body []byte, plan domain.DeliveryPlan) (bool, bool, error
 		return false, false, errInventoryUnavailable
 	}
 	rows, ok := value.([]any)
-	if !ok || len(rows) > 4096 || plan.DeclaredVersion == "" || !cleanAbsolute(plan.ActivePath) {
+	if !ok || len(rows) > 4096 || !cleanAbsolute(plan.ActivePath) {
 		return false, false, errInventoryUnavailable
 	}
 	expected, err := inventoryComponents(plan.Components)
@@ -490,10 +492,10 @@ func selectedInventory(body []byte, plan domain.DeliveryPlan) (bool, bool, error
 		return false, false, nil
 	}
 	enabled, enabledOK := selected["enabled"].(bool)
-	version, versionOK := selected["version"].(string)
+	version, _ := selected["version"].(string)
 	skills, skillErr := inventoryRowNames(selected, "skills")
 	servers, serverErr := inventoryRowNames(selected, "mcpServers")
-	if !enabledOK || !versionOK || version != plan.DeclaredVersion || skillErr != nil || serverErr != nil ||
+	if !enabledOK || version != plan.DeclaredVersion || skillErr != nil || serverErr != nil ||
 		!slices.Equal(skills, expected[domain.ComponentSkill]) || !slices.Equal(servers, expected[domain.ComponentMCPServer]) {
 		return false, false, errInventoryUnavailable
 	}

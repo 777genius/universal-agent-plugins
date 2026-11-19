@@ -707,8 +707,8 @@ test('directory filters and reviewed detail keep terminal agent choice as the de
   await expect(page).toHaveURL(/\/plugins\/gitlab\/?$/, { timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'GitLab', exact: true })).toBeVisible();
   await expect(
-    page.getByRole('button', {
-      name: 'Choose target agents: Choose agents in terminal',
+    page.getByRole('group', {
+      name: 'Choose target agents',
       exact: true,
     }),
   ).toBeVisible();

@@ -22,6 +22,16 @@ async function assertDialogFits(page: Page, width: number) {
   expect(geometry.scroll).toBe('auto');
   expect(geometry.bodyOverflow).toBe(false);
   expect(geometry.viewportOverflow).toBe(false);
+  const footer = dialog.locator('.install-dialog__footer');
+  const footerBefore = (await footer.boundingBox())!;
+  const command = footer.locator('.command-snippet--add');
+  expect((await command.boundingBox())!.y).toBeLessThan(footerBefore.y);
+  await dialog.locator('.install-dialog__body').evaluate((body) => { body.scrollTop = body.scrollHeight; });
+  const footerAfter = (await footer.boundingBox())!;
+  expect(Math.abs(footerBefore.y - footerAfter.y)).toBeLessThan(1);
+  expect(footerAfter.y + footerAfter.height).toBeLessThanOrEqual(844);
+  await expect(command.getByRole('button')).toBeInViewport();
+  await dialog.locator('.install-dialog__body').evaluate((body) => { body.scrollTop = 0; });
   await expect(dialog).toHaveAttribute('aria-labelledby', /.+/);
   await expect(dialog).toHaveAttribute('aria-describedby', /.+/);
   expect(await page.evaluate(() => document.elementFromPoint(5, 5)?.classList.contains('install-dialog__overlay'))).toBe(true);
@@ -52,15 +62,17 @@ for (const width of [1280, 390]) {
       await expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
       await expect(page.getByRole('dialog', { name: 'Install I18n State 00', exact: true })).toBeVisible();
       await assertDialogFits(page, width);
+      const projectInfo = page.getByRole('dialog').locator('.install-scope__info');
+      await projectInfo.focus();
+      await expect(page.locator('.app-tooltip:visible')).toContainText(await projectInfo.getAttribute('aria-label') ?? '');
+      await page.getByRole('dialog').locator('.install-dialog__close').focus();
       await targets(page, card, ['Codex']);
       const dialog = page.locator('.install-dialog');
-      await expect(dialog.locator('.app-multiselect__trigger')).toContainText('Codex');
-      await expect(dialog.locator('.app-multiselect__trigger img')).toHaveCount(1);
-      await dialog.locator('.app-multiselect__trigger').click();
+      await expect(dialog.getByRole('checkbox', { name: /^Codex(?:\s|$)/ })).toBeChecked();
+      await expect(dialog.locator('.app-multiselect__item--selected img')).toHaveCount(1);
       await expect(page.getByRole('checkbox', { name: /^ChatGPT Desktop/ })).toContainText('Local desktop connection');
       await expect(page.getByRole('checkbox', { name: /^ChatGPT Desktop/ })).not.toContainText('does not prove Desktop runtime');
       await testInfo.attach(`plugin-agent-menu-${width}.png`, { body: await page.screenshot({ path: testInfo.outputPath(`agent-menu-${width}.png`) }), contentType: 'image/png' });
-      await page.keyboard.press('Escape');
       await dialog.getByRole('button', { name: 'This project', exact: true }).click();
       await targets(page, card, ['Codex']);
       await expect(dialog.locator('.command-snippet--add code')).toContainText('--target codex --scope project');
@@ -108,12 +120,10 @@ for (const width of [1280, 390]) {
     const dialog = page.locator('.install-dialog');
     await expect(dialog).toContainText('anthropics/skills');
     await targets(page, card, ['Hermes Agent', 'Kiro', 'Pi', 'Codex']);
-    const picker = dialog.locator('.app-multiselect__trigger');
-    await expect(picker).toContainText('+1 more');
-    await expect(picker).toHaveAttribute('aria-label', /(?=.*Codex)(?=.*Hermes Agent)(?=.*Kiro)(?=.*Pi)/);
-    await picker.click();
+    await expect(dialog.locator('.app-multiselect__heading > span')).toHaveText('4 selected');
+    for (const name of ['Codex', 'Hermes Agent', 'Kiro', 'Pi'])
+      await expect(dialog.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) })).toBeChecked();
     await testInfo.attach(`skill-agent-menu-${width}.png`, { body: await page.screenshot({ path: testInfo.outputPath(`agent-menu-${width}.png`) }), contentType: 'image/png' });
-    await page.keyboard.press('Escape');
     await dialog.getByRole('button', { name: 'This project', exact: true }).click();
     await expect(dialog.locator('.command-snippet--add code')).toContainText('--scope project');
     for (const agent of ['hermes', 'kiro', 'pi', 'codex'])

@@ -17,7 +17,6 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
@@ -29,6 +28,7 @@ func TestHermesSourceSkillsConfirmedAddsNative(t *testing.T) {
 	for _, kind := range []string{"raw-https", "saved-git"} {
 		t.Run(kind, func(t *testing.T) { input.scenario(t, kind) })
 	}
+	t.Run("user-repeat", func(t *testing.T) { input.userRepeat(t) })
 	if !t.Failed() {
 		if got := input.run(t, "uap-clean-after", input.checkout, "git", "status", "--porcelain"); len(got) != 0 {
 			t.Fatal("native acceptance changed source checkout")
@@ -57,6 +57,9 @@ type hermesSourceSkills struct {
 	completed                          []string
 	commands                           []map[string]any
 	provenance                         map[string]string
+	productionQueries                  int
+	recordingError                     error
+	userCompleted                      bool
 }
 
 func hermesSourceSkillsSelection(t *testing.T) *hermesSourceSkills {
@@ -133,10 +136,11 @@ func hermesSourceSkillsSelection(t *testing.T) *hermesSourceSkills {
 	// Register before scenario cleanups: a successful report is written only
 	// after their servers and held fixture resources have returned.
 	t.Cleanup(func() {
-		packet := map[string]any{"completed": !t.Failed() && len(input.completed) == 2,
+		packet := map[string]any{"completed": !t.Failed() && len(input.completed) == 2 && input.userCompleted && input.recordingError == nil,
 			"scenarios": input.completed, "provenance": input.provenance, "commands": input.commands,
-			"native_discovery": !t.Failed() && len(input.completed) == 2,
-			"tools_call":       false, "real_model_inference": false, "vendor_authentication": false}
+			"native_discovery":           !t.Failed() && len(input.completed) == 2,
+			"production_catalog_queries": input.productionQueries, "user_repeat_completed": input.userCompleted,
+			"tools_call": false, "real_model_inference": false, "vendor_authentication": false}
 		body, err := json.MarshalIndent(packet, "", "  ")
 		if err == nil {
 			err = os.WriteFile(filepath.Join(input.root, "report.json"), append(body, '\n'), 0600)
@@ -208,7 +212,7 @@ func (input *hermesSourceSkills) scenario(t *testing.T, kind string) {
 		t.Setenv(key, value)
 	}
 	t.Setenv("PYTHONDONTWRITEBYTECODE", "1")
-	journey.app = configureHermesColdJourney(input.ctx, t, journey.app, input.profile, input.launcher)
+	journey.app = input.recordProduction(t, configureHermesColdJourney(input.ctx, t, journey.app, input.profile, input.launcher))
 	for _, project := range []string{journey.a, journey.b} {
 		source.transport.git(t, project, "init", "-b", "main")
 	}
@@ -229,11 +233,10 @@ func (input *hermesSourceSkills) scenario(t *testing.T, kind string) {
 			t.Fatal("raw preview installed files or changed native trust")
 		}
 	}
+	queries := input.productionQueries
 	input.cli(t, journey, kind+"-fresh", args...)
 	installation, binding := journey.owned(t, journey.a)
-	if binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
-		t.Fatal("native observation promoted production Prepared status", binding)
-	}
+	input.requireCompletion(t, binding, queries)
 	intent := journey.assertPortablePair(t, journey.a)
 	input.observe(t, kind+"-fresh-observe", journey.a)
 	input.nativeRun(t, kind+"-untrust", journey.a, "skills", "untrust", journey.a)
@@ -244,11 +247,13 @@ func (input *hermesSourceSkills) scenario(t *testing.T, kind string) {
 	if !reflect.DeepEqual(baselineTrust, input.trusted(t, kind+"-after-sync", journey.a)) {
 		t.Fatal("maintenance restored revoked native trust")
 	}
+	queries = input.productionQueries
 	input.cli(t, journey, kind+"-repeat", args...)
 	after, selected := journey.owned(t, journey.a)
+	input.requireCompletion(t, selected, queries)
 	if installation.InstallationID != after.InstallationID || binding.ClientBindingID != selected.ClientBindingID ||
-		installation.Source != after.Source || intent != journey.assertPortablePair(t, journey.a) || selected.Activation != domain.ActivationPrepared {
-		t.Fatal("explicit same-source re-add replaced ownership, pin, intent or Prepared semantics")
+		installation.Source != after.Source || intent != journey.assertPortablePair(t, journey.a) {
+		t.Fatal("explicit same-source re-add replaced ownership, pin or intent")
 	}
 	input.observe(t, kind+"-repeat-observe", journey.a)
 	expectedTrust := append(slices.Clone(baselineTrust), journey.a)
@@ -277,6 +282,11 @@ func (input *hermesSourceSkills) scenario(t *testing.T, kind string) {
 
 func (input *hermesSourceSkills) cli(t *testing.T, journey projectJourney, label string, args ...string) {
 	t.Helper()
+	input.cliAt(t, journey, label, journey.a, args...)
+}
+
+func (input *hermesSourceSkills) cliAt(t *testing.T, journey projectJourney, label, project string, args ...string) {
+	t.Helper()
 	var output, stderr bytes.Buffer
 	app := journey.app
 	app.Input, app.Output, app.ErrorOutput, app.Terminal = strings.NewReader(""), &output, &stderr, false
@@ -284,7 +294,11 @@ func (input *hermesSourceSkills) cli(t *testing.T, journey projectJourney, label
 	command.SetContext(input.ctx)
 	command.SetOut(&output)
 	command.SetErr(&stderr)
-	command.SetArgs(append(args, "--scope", "project", "--project-root", journey.a, "--format", "json"))
+	flags := []string{"--scope", "user", "--format", "json"}
+	if project != "" {
+		flags = []string{"--scope", "project", "--project-root", project, "--format", "json"}
+	}
+	command.SetArgs(append(args, flags...))
 	err := command.Execute()
 	for suffix, body := range map[string][]byte{"stdout": output.Bytes(), "stderr": stderr.Bytes()} {
 		if writeErr := os.WriteFile(filepath.Join(input.root, label+".cobra."+suffix), body, 0600); writeErr != nil {

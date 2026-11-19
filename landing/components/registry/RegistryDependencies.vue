@@ -290,7 +290,7 @@ onBeforeUnmount(() => observer?.disconnect());
     font-size: .65rem;
     line-height: 1.3;
   }
-  &__version + &__status {
+  &__package > &__version + &__status {
     margin-top: 8px;
   }
   &__progress {
@@ -489,5 +489,15 @@ onBeforeUnmount(() => observer?.disconnect());
     animation: none;
     stroke-dashoffset: 0;
   }
+}
+</style>
+
+<style scoped>
+.dependency-scene__dependency-copy > .dependency-scene__version,
+.dependency-scene__dependency-copy > .dependency-scene__status {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  line-height: 1.4;
 }
 </style>

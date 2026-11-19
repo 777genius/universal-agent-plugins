@@ -33,6 +33,35 @@ func readCancellationWorkflow(t *testing.T, name string) cancellationWorkflow {
 
 // The legacy Firebase/Claude 0.1.101 diagnostic is manual-only; its event
 // policy is checked by scripts/test_package_manager_ci_policy.py instead.
+func TestVSCodePluginNativeWorkflowsAreManualOnly(t *testing.T) {
+	// Preserve the historical VS Code harness without automatic PR/main runs.
+	for _, name := range []string{
+		"vscode-project-native.yml",
+		"vscode-native-research.yml",
+		"vscode-workspace-research.yml",
+		"vscode-local-native.yml",
+	} {
+		t.Run(name, func(t *testing.T) {
+			workflow := readCancellationWorkflow(t, name)
+			_, selected := workflow.On["workflow_dispatch"]
+			if !selected || len(workflow.On) != 1 {
+				t.Fatalf("%s must remain manual-only, got events: %#v", name, workflow.On)
+			}
+		})
+	}
+}
+
+func TestRemainingClientMatrixDoesNotScheduleVSCode(t *testing.T) {
+	body := readRepoFile(t, RepoRoot(t), ".github", "workflows", "live-install-remaining-clients.yml")
+	if !strings.Contains(body, "target: [cursor, kiro, windsurf, grok, chatgpt]") {
+		t.Fatal("remaining-client automatic matrix must exclude the retired VS Code plugin target")
+	}
+	// Preserve the existing vendor acquisition code for intentional manual diagnostics.
+	if !strings.Contains(body, "vscode)") {
+		t.Fatal("VS Code historical client diagnostics were unexpectedly removed")
+	}
+}
+
 func TestCISupersession_RegularPRChecksOnly(t *testing.T) {
 	for name, prefix := range map[string]string{
 		"docs-canary.yml":                          "docs-canary-",
