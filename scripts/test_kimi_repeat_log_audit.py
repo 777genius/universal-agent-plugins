@@ -1,5 +1,6 @@
 """Inert filesystem checks for one bounded owned Kimi diagnostic append."""
 import copy
+import json
 import os
 import stat
 from pathlib import Path
@@ -29,20 +30,25 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
         self.repeated = copy.deepcopy(self.added)
         self.repeated["items"][0]["status"] = "unchanged"
 
-    def capture(self):
-        return self.audit.kimi_repeat_log_capture(self.home, self.project, self.root)
+    def capture(self, facts=None):
+        return self.audit.kimi_repeat_log_capture(self.home, self.project, self.root, facts)
 
     def append(self):
         with self.log.open("ab") as stream:
             stream.write(b"catalog completed\n")
 
-    def classify(self, before, after, listed):
-        return self.audit.kimi_repeat_log_append(before, after, listed, self.added, self.repeated, self.command)
+    def classify(self, before, after, listed, *, native_before=None, native_after=None, facts=None):
+        return self.audit.kimi_repeat_log_append(
+            before, after, listed, self.added, self.repeated, self.command,
+            (before or {}).get("native") if native_before is None else native_before,
+            (listed or {}).get("native") if native_after is None else native_after, facts)
 
     def test_same_inode_append_retains_ready_and_exports_only_hashes(self):
         self.fixture()
         before = self.capture()
         self.assertIsNotNone(before)
+        self.assertEqual(before["native"], self.audit.snapshot(
+            [self.home / name for name in self.audit.NATIVE_ROOTS["kimi"]]))
         self.append()
         after = self.capture()
         for status in ("unchanged", "succeeded"):
@@ -138,7 +144,31 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
                     command["exit_code"] = 1
                 elif boundary == "timeout":
                     command["timeout"] = True
-                self.assertIsNone(self.audit.kimi_repeat_log_append(before, after, after, added, repeated, command))
+                self.assertIsNone(self.audit.kimi_repeat_log_append(
+                    before, after, after, added, repeated, command, before["native"], after["native"]))
+
+    def test_refuses_mutations_between_native_and_log_captures(self):
+        for phase in ("before", "after"):
+            for name in ("foreign", "logs/kimi-code.log"):
+                with self.subTest(phase=phase, name=name):
+                    self.fixture()
+                    native = self.home / ".kimi-code"
+                    neighbor = native / "foreign"
+                    neighbor.write_bytes(b"original")
+                    before_native = self.audit.snapshot([native, self.home / ".kimi"])
+                    if phase == "before":
+                        with (native / name).open("ab") as stream:
+                            stream.write(b"unverified before capture\n")
+                    before = self.capture()
+                    self.append()
+                    after = self.capture()
+                    if phase == "after":
+                        with (native / name).open("ab") as stream:
+                            stream.write(b"unverified after capture\n")
+                    after_native = self.audit.snapshot([native, self.home / ".kimi"])
+                    self.assertIsNotNone(self.classify(before, after, after))
+                    self.assertIsNone(self.classify(before, after, after,
+                        native_before=before_native, native_after=after_native))
 
     def test_append_bound_matches_existing_removal_scan(self):
         for size in ((1 << 20) - 1, 1 << 20, (1 << 20) + 1):
@@ -162,3 +192,180 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
                     self.assertIsNone(after)
                     self.assertIsNone(proof)
                     self.assertEqual(leftovers, [".kimi-code/logs/kimi-code.log: unscanned-too-large"])
+
+
+    def test_capture_failure_facts_never_export_private_bytes_paths_or_errors(self):
+        cases = {"reader": "log-read-refused", "unsafe": "log-read-unsafe", "absent": "log-absent",
+                 "bound": "log-read-type-or-bound", "os-error": "filesystem-read-refused",
+                 "path-error": "parent-or-path-refused", "scope": "scope-unreadable",
+                 "parent": "log-parent-changed", "identity": "log-identity-changed",
+                 "hash": "log-hash-mismatch", "late-identity": "log-identity-after-scope-changed",
+                 "late-parent": "log-parent-after-scope-changed"}
+        for mode, expected in cases.items():
+            with self.subTest(mode=mode):
+                self.fixture()
+                canary = "private-profile-and-log-canary"
+                self.log.write_text(canary)
+                (self.home / canary).write_text(canary)
+                read, scope = self.audit.copilot_settings_read, self.audit.scoped_snapshot
+                def change_identity():
+                    info = self.log.stat()
+                    os.utime(self.log, ns=(info.st_atime_ns, info.st_mtime_ns + 1))
+                def change_parent():
+                    self.log.parent.chmod(stat.S_IMODE(self.log.parent.stat().st_mode) ^ stat.S_IRGRP)
+                def observed_read(*args):
+                    if mode in ("reader", "unsafe", "absent", "bound"):
+                        return None, {"reader": canary, "unsafe": "unsafe-path", "absent": "absent",
+                                      "bound": "not-regular-or-too-large"}[mode]
+                    if mode == "os-error":
+                        raise OSError(canary)
+                    if mode == "path-error":
+                        raise ValueError(canary)
+                    result = read(*args)
+                    if mode == "parent":
+                        change_parent()
+                    elif mode == "identity":
+                        change_identity()
+                    return result
+                def observed_scope(*args):
+                    if mode == "scope":
+                        raise AssertionError(canary)
+                    result = scope(*args)
+                    if mode == "hash":
+                        result[self.home.name + "/.kimi-code/logs/kimi-code.log"] = canary
+                    elif mode == "late-identity":
+                        change_identity()
+                    elif mode == "late-parent":
+                        change_parent()
+                    return result
+                facts = {}
+                with patch.object(self.audit, "copilot_settings_read", observed_read), \
+                     patch.object(self.audit, "scoped_snapshot", observed_scope):
+                    self.assertIsNone(self.capture(facts))
+                self.assertEqual(facts, {"reason": expected})
+                diagnostic = self.audit.failed_case_diagnostics({"kimi_repeat_log_facts": facts})
+                self.assertEqual(diagnostic["kimi_repeat_log_facts"], facts)
+                self.assertNotIn(canary, json.dumps(diagnostic))
+                self.assertNotIn(str(self.root), json.dumps(diagnostic))
+
+    def test_append_first_refusal_facts_are_bounded_without_changing_qualification(self):
+        self.fixture()
+        canary = "private-native-path-and-body-canary"
+        self.log.write_text(canary)
+        (self.home / canary).write_text(canary)
+        captured = {}
+        original = self.capture(captured)
+        self.assertEqual(captured, {"reason": "captured", "log_bytes": len(canary)})
+        self.append()
+        completed = self.capture()
+        cases = ("capture-unavailable-before", "capture-unavailable-after-add", "capture-unavailable-post-list",
+                 "post-list-changed", "repeat-command-refused", "native-before-mismatch", "native-after-mismatch",
+                 "fresh-public-refused", "repeat-public-refused", "log-identity-changed", "log-parent-changed",
+                 "log-key-changed", "log-prefix-changed", "log-over-one-mib", "log-not-append", "protected-scope-changed")
+        for reason in cases:
+            with self.subTest(reason=reason):
+                before, after = copy.deepcopy(original), copy.deepcopy(completed)
+                listed, added, repeated, command = after, copy.deepcopy(self.added), copy.deepcopy(self.repeated), dict(self.command)
+                native_before, native_after = before["native"], after["native"]
+                if reason == "capture-unavailable-before":
+                    before = None
+                elif reason == "capture-unavailable-after-add":
+                    after = None
+                elif reason == "capture-unavailable-post-list":
+                    listed = None
+                elif reason == "post-list-changed":
+                    listed = copy.deepcopy(after)
+                    listed["body"] += canary.encode()
+                elif reason == "repeat-command-refused":
+                    command["exit_code"] = False
+                elif reason == "native-before-mismatch":
+                    native_before = {canary: canary}
+                elif reason == "native-after-mismatch":
+                    native_after = {canary: canary}
+                elif reason == "fresh-public-refused":
+                    added["readiness"] = "needs_action"
+                elif reason == "repeat-public-refused":
+                    repeated["readiness"] = "needs_action"
+                elif reason == "log-identity-changed":
+                    after["identity"] = (after["identity"][0] + 1, *after["identity"][1:])
+                elif reason == "log-parent-changed":
+                    after["parents"] = []
+                elif reason == "log-key-changed":
+                    after["log_key"] = canary
+                elif reason == "log-prefix-changed":
+                    after["body"] = b"different"
+                elif reason == "log-over-one-mib":
+                    after["body"] = before["body"] + b"x" * (1 << 20)
+                elif reason == "log-not-append":
+                    after["body"] = before["body"]
+                elif reason == "protected-scope-changed":
+                    after["scope"][canary] = canary
+                arguments = (before, after, listed, added, repeated, command, native_before, native_after)
+                facts = {}
+                self.assertIsNone(self.audit.kimi_repeat_log_append(*arguments))
+                self.assertIsNone(self.audit.kimi_repeat_log_append(*arguments, facts))
+                self.assertEqual(facts["reason"], reason)
+                if reason == "protected-scope-changed":
+                    self.assertEqual(facts["changed_entries_capped"], 1)
+                diagnostic = self.audit.failed_case_diagnostics({"kimi_repeat_log_facts": facts})
+                self.assertNotIn(canary, json.dumps(diagnostic))
+                self.assertLess(len(json.dumps(diagnostic)), 200)
+        facts = {}
+        expected = self.classify(original, completed, completed)
+        with patch.object(Path, "lstat", side_effect=AssertionError("diagnostics must not reread files")):
+            self.assertEqual(self.classify(original, completed, completed, facts=facts), expected)
+        self.assertEqual(facts, {"reason": "verified-append"})
+
+
+class NativeSnapshotReadTest(unittest.TestCase):
+    def test_snapshot_refuses_replacement_before_open_and_closes_descriptors(self):
+        mutations = ["symlink", "replacement"] + (["fifo"] if hasattr(os, "mkfifo") else [])
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                root = Path(temporary) / "profile"
+                root.mkdir()
+                target = root / "entry"
+                target.write_bytes(b"original")
+                outside = Path(temporary) / "outside"
+                outside.write_bytes(b"foreign bytes")
+                open_member = audit.NATIVE_ARTIFACTS["open_member"]
+                opened, reached = [], []
+                def replace_before_open(path):
+                    reached.append(path)
+                    path.unlink()
+                    if mutation == "symlink":
+                        path.symlink_to(outside)
+                    elif mutation == "fifo":
+                        os.mkfifo(path)
+                    else:
+                        path.write_bytes(b"replacement")
+                    descriptor = open_member(path)
+                    opened.append(descriptor)
+                    return descriptor
+                with patch.dict(audit.NATIVE_ARTIFACTS, {"open_member": replace_before_open}):
+                    found = audit.snapshot([root])
+                self.assertEqual(reached, [target])
+                self.assertEqual(found["profile/entry"], "non-regular" if mutation == "fifo" else "unreadable")
+                for descriptor in opened:
+                    with self.assertRaises(OSError):
+                        os.fstat(descriptor)
+                self.assertEqual(outside.read_bytes(), b"foreign bytes")
+
+    def test_snapshot_refuses_a_write_during_the_held_read(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary) / "profile"
+            root.mkdir()
+            target = root / "entry"
+            target.write_bytes(b"original")
+            read, changed = os.read, []
+            def write_after_read(descriptor, limit):
+                body = read(descriptor, limit)
+                if not changed:
+                    changed.append(True)
+                    target.write_bytes(b"different bytes")
+                return body
+            with patch.object(os, "read", write_after_read):
+                self.assertEqual(audit.snapshot([root])["profile/entry"], "unreadable")
+            self.assertTrue(changed)

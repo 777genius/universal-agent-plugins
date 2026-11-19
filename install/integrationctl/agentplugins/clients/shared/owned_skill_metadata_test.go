@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -142,6 +143,56 @@ func TestOwnedSkillMetadataCancellationAndReadRefusalStayClosed(t *testing.T) {
 			body, err := ReadOwnedSkillMetadata(ctx, nativeconfig.NewWithFileIO(files), packagesnapshot.Builder{}, root, digest)
 			if err == nil || body != nil || (mode == "cancel" && !errors.Is(err, context.Canceled)) || (mode == "read-error" && !errors.Is(err, cause)) {
 				t.Fatalf("bounded refusal/cancellation qualified: %q %v", body, err)
+			}
+		})
+	}
+}
+
+func TestOwnedSkillMetadataPreservesBareCancellationUnlessCustodyFails(t *testing.T) {
+	for _, mode := range []string{"healthy-close", "cleanup-failure", "owned-mismatch"} {
+		t.Run(mode, func(t *testing.T) {
+			root, _, digest := ownedSkillMetadataFixture(t)
+			sealed, closeSealed, err := (packagesnapshot.Builder{}).CaptureDirectory(t.Context(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			reads, closes := 0, 0
+			cause := errors.New("actual snapshot cleanup refused")
+			files := ownedSkillMetadataIO{read: func(path string, limit int64) ([]byte, os.FileMode, bool, error) {
+				reads++
+				if mode == "owned-mismatch" {
+					if err := os.WriteFile(filepath.Join(root, "resource.txt"), []byte("changed resource"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					cancel()
+				}
+				return ownedSkillMetadataDiskRead(path, limit)
+			}}
+			closeSnapshot := func() error {
+				closes++
+				cancel()
+				closed := closeSealed()
+				if mode == "cleanup-failure" {
+					return errors.Join(closed, cause)
+				}
+				return closed
+			}
+			body, err := readOwnedSkillSnapshot(ctx, nativeconfig.NewWithFileIO(files), root, digest, sealed, closeSnapshot)
+			if body != nil || err == nil || reads != 1 || closes != 1 {
+				t.Fatalf("cancellation/custody failed open: body%q err%v reads%d closes%d", body, err, reads, closes)
+			}
+			// Reverse Is requires the bare context sentinel, not a wrapper containing it.
+			if bare := errors.Is(ctx.Err(), err); bare != (mode == "healthy-close") {
+				t.Fatalf("wrong bare cancellation identity for %s: %v", mode, err)
+			}
+			if mode == "cleanup-failure" && (!errors.Is(err, cause) || !errors.Is(err, context.Canceled)) {
+				t.Fatalf("real cleanup failure or cancellation lost: %v", err)
+			}
+			if mode == "owned-mismatch" && !strings.Contains(err.Error(), "owned Skill changed while capturing metadata") {
+				t.Fatalf("actual owned-resource mismatch was softened: %v", err)
 			}
 		})
 	}

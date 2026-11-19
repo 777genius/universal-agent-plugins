@@ -296,7 +296,7 @@ func TestPiSkillsUnqualifiedAuthorityNeverStartsNativeQuery(t *testing.T) {
 				out.NativeObjects = slices.Clone(request.Delivery.NativeObjects)
 			}
 			got, err := completePiSkills(t.Context(), env, request, out)
-			if mode == "missing-bounded-reader" || mode == "wrong-selected-name" {
+			if mode == "missing-bounded-reader" || mode == "wrong-selected-name" || mode == "no-package-receipt" {
 				if err == nil || got.Activation != domain.ActivationFailed || got.NativeEffect != domain.NativeEffectUncertain || runner.calls != 0 {
 					t.Fatalf("unqualified capture did not fail closed: %+v %v calls%d", got, err, runner.calls)
 				}

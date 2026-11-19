@@ -31,11 +31,9 @@ type piSignedProjectDetector struct{ home string }
 func (d piSignedProjectDetector) Detect(context.Context) ([]domain.DetectedClient, error) {
 	return []domain.DetectedClient{{
 		ClientID: domain.ClientPi, DisplayName: "Pi", Status: domain.DetectionDetected,
-		ConfigRoot:     filepath.Join(d.home, ".pi", "agent"),
-		ExecutablePath: filepath.Join(d.home, "pi-test-host-never-launched"),
-		Version:        "1.5.0",
-		// This saved-package fixture observes configuration only; its inert
-		// executable is deliberately not a native catalog capability.
+		ConfigRoot: filepath.Join(d.home, ".pi", "agent"),
+		// This saved-package fixture observes configuration only and supplies
+		// no executable. Genuine Pi catalog discovery has separate native E2E.
 		Surfaces: []domain.ClientSurface{{ID: "pi_config", Detected: true}},
 	}}, nil
 }
@@ -100,7 +98,6 @@ func TestPiProjectSignedV1SavedFourPackageLifecycle(t *testing.T) {
 		b: projectJourneyTemp(t), transport: transport,
 	}
 	journey.cache = filepath.Join(journey.home, "uap")
-	projectJourneyWrite(t, filepath.Join(journey.home, "pi-test-host-never-launched"), "inert Pi host fixture; never execute\n")
 	for _, root := range []string{"", journey.a, journey.b} {
 		native := piSignedProjectNativeRoot(journey, root)
 		projectJourneyWrite(t, filepath.Join(native, "mcp.json"), "{\"mcpServers\":{\"foreign\":{\"type\":\"streamable-http\",\"url\":\"https://foreign.example.test/mcp\"}},\"keep\":true}")

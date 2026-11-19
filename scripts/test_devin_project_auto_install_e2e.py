@@ -145,6 +145,36 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
         self.assertNotIn("Z" * 16, subject.command_diagnostic(large, {}))
         self.assertIn("<redacted>", subject.command_diagnostic(large, {}))
 
+    def test_authorization_redaction_without_environment_secrets_precedes_all_limits(self):
+        for scheme in ("Basic", "Bearer"):
+            for template in ("Authorization: {} {}", '"Authorization": "{} {}"',
+                             "'authorization': '{} {}'"):
+                for secret in ("dXNlcjpwYXNz-canary", "canary-0123456789abcdef" * 200):
+                    header = template.format(scheme, secret)
+                    for capture_error in (None, "capture failed: " + header):
+                        with self.subTest(scheme=scheme, template=template,
+                                          long=len(secret) > 2048, capture=capture_error is not None):
+                            stderr = (header + "\nselected native inventory is unavailable").encode()
+                            record = {"error": capture_error, "exit": 1}
+                            diagnostic = subject.command_diagnostic(stderr, {})
+                            self.assertLessEqual(len(diagnostic), 2048)
+                            for receipt in ({"stage": "skills-add"}, None):
+                                with patch.object(subject, "run_probe", return_value=(record, b"", stderr)):
+                                    with self.assertRaises(RuntimeError) as raised:
+                                        subject.command(["agentplugins", "skills", "add"], "/tmp", {},
+                                                        receipt=receipt)
+                                rendered = diagnostic + json.dumps(receipt) + str(raised.exception)
+                                self.assertNotIn(secret[:16], rendered)
+                                self.assertIn("<redacted>", diagnostic)
+                                self.assertIn("<redacted>", str(raised.exception))
+                                self.assertIn("selected native inventory is unavailable", rendered)
+                                if receipt is not None:
+                                    result = receipt["result"]
+                                    self.assertIn("<redacted>", result["stderr_diagnostic"])
+                                    self.assertEqual(result["stderr_sha256"], hashlib.sha256(stderr).hexdigest())
+                                    if capture_error is not None:
+                                        self.assertIn("<redacted>", result["capture_error"])
+
     def test_raw_failure_keeps_selected_command_stage_and_result(self):
         with tempfile.TemporaryDirectory() as temporary:
             report = {}
@@ -216,6 +246,7 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                     nonlocal additions
                     if argv[1:3] == ["skills", "add"]:
                         self.assertEqual((Path(cwd), timeout), (outside, 90))
+                        self.assertIn("--no-ui", argv)
                         additions += 1
                         if additions == 1:
                             reference = (Path(__file__).resolve().parents[1] /
@@ -245,6 +276,10 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                             "status": "succeeded", "readiness": "ready", "items": [{"alias": subject.RAW_SKILL,
                             "targetId": "windsurf", "status": "succeeded" if additions == 1 else "unchanged"}]})
                     if argv[1] == "remove":
+                        self.assertEqual(argv, ["/selected/uap", "remove", installation["installation_id"],
+                            "--target", "windsurf", "--scope", "project", "--project-root", str(project),
+                            "--yes", "--format", "json"])
+                        self.assertEqual((Path(cwd), timeout), (outside, 90))
                         shutil.rmtree(managed)
                         shutil.rmtree(native)
                         installation["clients"] = {}

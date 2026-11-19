@@ -27,6 +27,7 @@ HISTORICAL_CODEX = run_path(str(ROOT / "scripts/published_codex_baseline.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
 GEMINI_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/gemini_runtime_audit.py"))
 OPENCODE_BOOTSTRAP_AUDIT = run_path(str(ROOT / "scripts/opencode_bootstrap_audit.py"))
+NATIVE_ARTIFACTS = run_path(str(ROOT / "scripts/native_client_project_artifacts.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -397,6 +398,39 @@ def version_evidence(argv, env, cwd):
     return {"status": "reported", "value": value[:200], "exit_code": 0}
 
 
+def native_file_digest(path):
+    """Hash one held regular file; a pathname swap cannot redirect or block the read."""
+    try:
+        initial = path.lstat()
+        if stat.S_ISLNK(initial.st_mode):
+            return "symlink"
+        if not stat.S_ISREG(initial.st_mode):
+            return "non-regular"
+        descriptor = NATIVE_ARTIFACTS["open_member"](path)
+        try:
+            opened = os.fstat(descriptor)
+            if not stat.S_ISREG(opened.st_mode):
+                return "non-regular"
+            if not NATIVE_ARTIFACTS["same_opened"](initial, opened):
+                return "unreadable"
+            sha, remaining = hashlib.sha256(), opened.st_size + 1
+            while remaining:
+                chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+                if not chunk:
+                    break
+                sha.update(chunk)
+                remaining -= len(chunk)
+            identity = NATIVE_ARTIFACTS["identity"]
+            if (remaining != 1 or identity(opened) != identity(os.fstat(descriptor))
+                    or identity(initial) != identity(path.lstat())):
+                return "unreadable"
+            return sha.hexdigest()
+        finally:
+            os.close(descriptor)
+    except (OSError, ValueError):
+        return "unreadable"
+
+
 def snapshot(root, *, include_directories=False):
     """Record native entries; Gemini repeat also preserves ordinary directory identities."""
     found = {}
@@ -432,22 +466,7 @@ def snapshot(root, *, include_directories=False):
             for name in files:
                 path = Path(base) / name
                 relative = str(path.relative_to(target_root))
-                try:
-                    if path.is_symlink():
-                        digest = "symlink"
-                    elif not path.is_file():
-                        digest = "non-regular"
-                    else:
-                        # Never reuse a constant digest for a large native artifact:
-                        # repeat-add and remove can rewrite files above 4 MiB.
-                        sha = hashlib.sha256()
-                        with path.open("rb") as stream:
-                            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                                sha.update(chunk)
-                        digest = sha.hexdigest()
-                except OSError:
-                    digest = "unreadable"
-                found[f"{target_root.name}/{relative}"] = digest
+                found[f"{target_root.name}/{relative}"] = native_file_digest(path)
     return found
 
 
@@ -496,7 +515,7 @@ def failed_case_diagnostics(row):
     """Expose existing failed-case evidence in logs; never change qualification."""
     keys = ("codex_public_add_ready", "codex_public_repeat_ready", "public_skill_ready",
             "repeat_native_unchanged", "repeat_native_runtime_only", "repeat_native_changes",
-            "repeat_native_phases", "repeat_verified",
+            "repeat_native_phases", "repeat_verified", "kimi_repeat_log_facts",
             "removal_verified", "sentinels_preserved", "public_target_states")
     evidence = {key: row[key] for key in keys if row.get(key) is not None}
     for key in ("error", "error_traceback"):
@@ -2035,7 +2054,16 @@ def copilot_settings_read(path, case_root):
             os.close(descriptor)
 
 
-def kimi_repeat_log_capture(home, project, case_root):
+def kimi_log_fact(facts, reason, changed=None):
+    """Fixed diagnostic enums/counts only; never change the proof decision."""
+    if isinstance(facts, dict):
+        facts["reason"] = reason
+        if changed is not None:
+            facts["changed_entries_capped"] = min(changed, 100000)
+    return None
+
+
+def kimi_repeat_log_capture(home, project, case_root, facts=None):
     """Private bounded bytes; only hashes leave the isolated audit case."""
     path = home / ".kimi-code/logs/kimi-code.log"
     try:
@@ -2050,28 +2078,55 @@ def kimi_repeat_log_capture(home, project, case_root):
         final = path.lstat()
         fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_size", "st_mtime_ns")
         identity = tuple(getattr(initial, key) for key in fields)
-        if (error is not None or before_parents != parent_facts()
-                or identity != tuple(getattr(final, key) for key in fields)):
-            return None
+        if error is not None:
+            reasons = {"absent": "log-absent", "unsafe-path": "log-read-unsafe",
+                       "not-regular-or-too-large": "log-read-type-or-bound"}
+            return kimi_log_fact(facts, reasons.get(error, "log-read-refused") if isinstance(error, str) else "log-read-refused")
+        if before_parents != parent_facts():
+            return kimi_log_fact(facts, "log-parent-changed")
+        if identity != tuple(getattr(final, key) for key in fields):
+            return kimi_log_fact(facts, "log-identity-changed")
         scope = scoped_snapshot((home, project / ".kimi-code", project / ".uap/managed"))
         log_key = home.name + "/.kimi-code/logs/kimi-code.log"
         body = body.encode("utf-8")
-        if (scope.get(log_key) != hashlib.sha256(body).hexdigest()
-                or identity != tuple(getattr(path.lstat(), key) for key in fields)
-                or before_parents != parent_facts()):
-            return None
-        return {"body": body, "identity": identity,
+        if scope.get(log_key) != hashlib.sha256(body).hexdigest():
+            return kimi_log_fact(facts, "log-hash-mismatch")
+        if identity != tuple(getattr(path.lstat(), key) for key in fields):
+            return kimi_log_fact(facts, "log-identity-after-scope-changed")
+        if before_parents != parent_facts():
+            return kimi_log_fact(facts, "log-parent-after-scope-changed")
+        # Derive the native comparison from the same captured bytes. A separate
+        # earlier/later snapshot must match before this can explain its delta.
+        prefix = home.name + "/"
+        native = {key[len(prefix):]: value for key, value in scope.items()
+                  if any(key.startswith(prefix + root + "/") for root in NATIVE_ROOTS["kimi"])}
+        kimi_log_fact(facts, "captured")
+        if isinstance(facts, dict):
+            facts["log_bytes"] = len(body)
+        return {"body": body, "identity": identity, "native": native,
                 "parents": before_parents, "scope": scope, "log_key": log_key}
-    except (OSError, ValueError, AssertionError):
-        return None
+    except OSError:
+        return kimi_log_fact(facts, "filesystem-read-refused")
+    except ValueError:
+        return kimi_log_fact(facts, "parent-or-path-refused")
+    except AssertionError:
+        return kimi_log_fact(facts, "scope-unreadable")
 
 
-def kimi_repeat_log_append(before, after, listed, added, repeated, command):
+def kimi_repeat_log_append(before, after, listed, added, repeated, command, native_before, native_after, facts=None):
     """Admit one same-inode append, not rotation or other native mutations."""
-    if (any(value is None for value in (before, after, listed)) or after != listed
-            or type(command.get("exit_code")) is not int or command["exit_code"] != 0
+    for phase, value in (("before", before), ("after-add", after), ("post-list", listed)):
+        if value is None:
+            return kimi_log_fact(facts, "capture-unavailable-" + phase)
+    if after != listed:
+        return kimi_log_fact(facts, "post-list-changed")
+    if (type(command.get("exit_code")) is not int or command["exit_code"] != 0
             or command.get("timeout") is not False):
-        return None
+        return kimi_log_fact(facts, "repeat-command-refused")
+    if before["native"] != native_before:
+        return kimi_log_fact(facts, "native-before-mismatch")
+    if listed["native"] != native_after:
+        return kimi_log_fact(facts, "native-after-mismatch")
     for index, response in enumerate((added, repeated)):
         items = response.get("items") if isinstance(response, dict) else None
         if (not isinstance(response, dict) or response.get("schema_version") != 1
@@ -2082,17 +2137,26 @@ def kimi_repeat_log_append(before, after, listed, added, repeated, command):
                 or not isinstance(items, list) or len(items) != 1 or not isinstance(items[0], dict)
                 or items[0].get("targetId") != "kimi"
                 or items[0].get("status") not in (("succeeded", "unchanged") if index else ("succeeded",))):
-            return None
-    if (before["identity"][:4] != after["identity"][:4]
-            or before["parents"] != after["parents"] or before["log_key"] != after["log_key"]
-            or not after["body"].startswith(before["body"])
-            or not len(before["body"]) < len(after["body"]) <= 1 << 20):
-        return None
+            return kimi_log_fact(facts, "fresh-public-refused" if index == 0 else "repeat-public-refused")
+    if before["identity"][:4] != after["identity"][:4]:
+        return kimi_log_fact(facts, "log-identity-changed")
+    if before["parents"] != after["parents"]:
+        return kimi_log_fact(facts, "log-parent-changed")
+    if before["log_key"] != after["log_key"]:
+        return kimi_log_fact(facts, "log-key-changed")
+    if not after["body"].startswith(before["body"]):
+        return kimi_log_fact(facts, "log-prefix-changed")
+    if len(after["body"]) > 1 << 20:
+        return kimi_log_fact(facts, "log-over-one-mib")
+    if len(after["body"]) <= len(before["body"]):
+        return kimi_log_fact(facts, "log-not-append")
     ignored = {before["log_key"], "metadata:0:.kimi-code/logs/kimi-code.log"}
     original = {key: value for key, value in before["scope"].items() if key not in ignored}
     current = {key: value for key, value in after["scope"].items() if key not in ignored}
     if original != current:
-        return None
+        changed = sum(original.get(key) != current.get(key) for key in original.keys() | current.keys())
+        return kimi_log_fact(facts, "protected-scope-changed", changed)
+    kimi_log_fact(facts, "verified-append")
     return {"status": "verified-owned-log-append", "path": ".kimi-code/logs/kimi-code.log",
             "before_bytes": len(before["body"]), "after_bytes": len(after["body"]),
             "before_sha256": hashlib.sha256(before["body"]).hexdigest(),
@@ -2538,6 +2602,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                      and isinstance(client_version, dict) and client_version.get("status") == "reported"
                      and client_version.get("value") == "2.5.2"
                      and type(client_version.get("exit_code")) is int and client_version["exit_code"] == 0)
+    kimi_repeat_log_facts = ({"captures": {phase: {} for phase in ("before", "after-add", "post-list")},
+                              "append": {"reason": "not-reached"}} if kimi_log_case else None)
     if installed:
         before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
@@ -2553,12 +2619,14 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 for path in lock_paths
             )
         before_repeat_lock = lock_state()
-        kimi_log_before = kimi_repeat_log_capture(home, project, case_root) if kimi_log_case else None
+        kimi_log_before = (kimi_repeat_log_capture(home, project, case_root,
+                            kimi_repeat_log_facts["captures"]["before"]) if kimi_log_case else None)
         repeat_add_started = datetime.now(timezone.utc)
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
                                   **capture_option)
         repeat_add_finished = datetime.now(timezone.utc)
-        kimi_log_after = kimi_repeat_log_capture(home, project, case_root) if kimi_log_case else None
+        kimi_log_after = (kimi_repeat_log_capture(home, project, case_root,
+                            kimi_repeat_log_facts["captures"]["after-add"]) if kimi_log_case else None)
         after_repeat_add = (snapshot(native_roots, include_directories=gemini_runtime is not None)
                             if codex_runtime is not None or gemini_runtime is not None else None)
         if gemini_runtime is not None:
@@ -2586,7 +2654,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
                 repeat_add_json, repeat_matches, identity)
         after_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
-        kimi_log_listed = kimi_repeat_log_capture(home, project, case_root) if kimi_log_case else None
+        kimi_log_listed = (kimi_repeat_log_capture(home, project, case_root,
+                            kimi_repeat_log_facts["captures"]["post-list"]) if kimi_log_case else None)
         gemini_repeat_valid = (gemini_runtime.finish(after_repeat_native)
                               if gemini_runtime is not None else False)
         if codex_runtime is not None or gemini_runtime is not None:
@@ -2603,7 +2672,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 repeat_native_runtime_only = gemini_repeat_valid
             elif kimi_log_case:
                 kimi_repeat_log_proof = kimi_repeat_log_append(
-                    kimi_log_before, kimi_log_after, kimi_log_listed, added_json, repeat_add_json, repeat_add)
+                    kimi_log_before, kimi_log_after, kimi_log_listed, added_json, repeat_add_json, repeat_add,
+                    before_repeat_native, after_repeat_native, kimi_repeat_log_facts["append"])
                 repeat_native_runtime_only = kimi_repeat_log_proof is not None
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
@@ -2942,6 +3012,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "repeat_native_unchanged": repeat_native_unchanged,
             "repeat_native_runtime_only": repeat_native_runtime_only,
             "kimi_repeat_log_proof": kimi_repeat_log_proof,
+            "kimi_repeat_log_facts": kimi_repeat_log_facts,
             "repeat_native_changes": repeat_native_changes,
             "repeat_native_phases": repeat_native_phases,
             "repeat_lock_unchanged": repeat_lock_unchanged,

@@ -56,7 +56,8 @@ def command_diagnostic(body, env):
                 r"(?i)token|password|secret|api[_-]?key|authorization|credential", key):
             text = text.replace(value, "<redacted>")
             text = text.replace(json.dumps(value)[1:-1], "<redacted>")
-    text = re.sub(r"(?i)(Authorization\s*:\s*Bearer\s+)\S+", r"\1<redacted>", text)
+    text = re.sub(r"""(?i)(["']?Authorization["']?\s*:\s*["']?(?:Basic|Bearer)\s+)[^\s"',;}]+""",
+                  r"\1<redacted>", text)
     text = re.sub(r"""(?i)((?:token|password|secret|api[_-]?key|credential)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}]+)""",
                   r"\1<redacted>", text)
     return text[-2048:]
@@ -482,7 +483,7 @@ def raw_project_skills(root, report, binary, cli, base_env):
     inventory("after-repeat", True)
     removed = json.loads(run("remove", [str(cli), "remove", installation["installation_id"],
         "--target", "windsurf", "--scope", "project", "--project-root", str(projects[0]),
-        "--yes", "--no-ui", "--format", "json"], outside))
+        "--yes", "--format", "json"], outside))
     evidence["public"]["remove"] = removed
     if removed.get("result") != "success":
         raise RuntimeError("raw Project ordinary removal failed")

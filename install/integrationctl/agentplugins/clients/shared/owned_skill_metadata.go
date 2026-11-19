@@ -35,7 +35,9 @@ func ReadOwnedSkillMetadata(ctx context.Context, kernel nativeconfig.Kernel, sna
 
 func readOwnedSkillSnapshot(ctx context.Context, kernel nativeconfig.Kernel, original, expected, sealed string, closeSnapshot func() error) (body []byte, err error) {
 	defer func() {
-		err = errors.Join(err, closeSnapshot())
+		if closeErr := closeSnapshot(); closeErr != nil {
+			err = errors.Join(err, closeErr)
+		}
 		if err != nil {
 			body = nil
 		}

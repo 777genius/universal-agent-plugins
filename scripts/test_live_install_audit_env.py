@@ -12,7 +12,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 def load_audit():
@@ -6113,7 +6113,7 @@ module.exports = {
             self.assertEqual(initial[".codex/linked-dir"], "symlink")
             self.assertIn(".codex/managed.yaml", initial)
             self.assertNotIn(".codex/linked-dir/unrelated.txt", initial)
-            with patch.object(Path, "open", side_effect=OSError("unreadable")):
+            with patch.dict(audit.NATIVE_ARTIFACTS, open_member=Mock(side_effect=OSError("unreadable"))):
                 invalid = audit.snapshot([root])
             self.assertEqual(invalid[".codex/managed.yaml"], "unreadable")
             self.assertIn("unknown-link: symlink", " ".join(
