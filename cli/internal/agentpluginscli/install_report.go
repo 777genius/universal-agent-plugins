@@ -342,7 +342,10 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 	// same preflight would refuse again, and the person is told why already.
 	switch combined.Status {
 	case string(usecase.GroupPhasePlanned), string(usecase.GroupPhasePreparationFailed):
-		return cause
+		if unclosed {
+			return cause
+		}
+		return app.explainRefusedGroup(cmd, opts, items, cause)
 	}
 	outcome := app.finishInstall(opts, "add", items)
 	if outcome.LogFile != "" && opts.format == "human" {
@@ -400,4 +403,24 @@ func runUpdateAllRetryable(cmd *cobra.Command, app App, opts *options) error {
 		return retryConverge(cmd, app, opts, err, run)
 	}
 	return run()
+}
+
+// explainRefusedGroup handles a group refused before any client changed. For an
+// ordinary machine problem the person can fix (permission, full disk, network,
+// missing agent program) it keeps the technical chain in the install log and
+// puts only the plain cause in the public error. Retrying is not offered
+// automatically: nothing was applied, and the same command is the retry.
+// Every other refusal keeps its own error and writes no log.
+func (app App) explainRefusedGroup(cmd *cobra.Command, opts *options, items []agentItem, cause error) error {
+	if environmentFailureKind(cause) == failureUnknown {
+		return cause
+	}
+	failure := describeSyncFailure(cause)
+	for index := range items {
+		items[index].failure = failure
+	}
+	if path := app.recordInstallRun("add", 1+opts.retryAttempt, agentLogEntries(items)); path != "" && opts.format == "human" {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(path))
+	}
+	return installFailureWithCause{summary: strings.TrimSuffix(failure.Summary, "."), cause: cause}
 }

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
@@ -59,5 +60,38 @@ func TestEnvironmentClassificationDoesNotOverrideTimeoutOrCancel(t *testing.T) {
 	}
 	if got := failureKindOf(errors.New("something else")); got != failureUnknown {
 		t.Fatalf("unrelated errors stay generic: %s", got)
+	}
+}
+
+// A group refused before any client changed because of a fixable machine
+// problem keeps the technical chain in the log and shows only the plain cause,
+// without offering an automatic retry (nothing was applied).
+func TestRefusedGroupExplainsFixableCauseAndLogsDetail(t *testing.T) {
+	secret := "/Users/someone/project/.claude/skills"
+	cause := fmt.Errorf("create client target root: %w", &fs.PathError{Op: "mkdir", Path: secret, Err: syscall.EACCES})
+	for _, status := range []string{"planned", "preparation_failed"} {
+		t.Run(status, func(t *testing.T) {
+			var offered []string
+			app, _ := retryAppAndOptions(t, &offered)
+			app.InstallLogDir = filepath.Join(t.TempDir(), "logs")
+			opts := &options{format: "human"}
+			cmd, _, errOut := retryTestCommand(t)
+			combined := addMultiResult{Status: status, Plugin: "demo", Targets: []addTargetResult{{Target: "claude"}, {Target: "gemini"}}}
+			got := app.recordGroupOutcome(cmd, opts, &combined, cause)
+			if !errors.Is(got, cause) || opts.installResult != nil {
+				t.Fatalf("the cause must survive and no retry may be offered: %v %+v", got, opts.installResult)
+			}
+			if strings.Contains(got.Error(), secret) || !strings.Contains(got.Error(), "not allowed to write") {
+				t.Fatalf("public error must be plain: %q", got.Error())
+			}
+			files, err := filepath.Glob(filepath.Join(app.InstallLogDir, "install-*.jsonl"))
+			if err != nil || len(files) != 1 || !strings.Contains(errOut.String(), "Technical details: "+files[0]) {
+				t.Fatalf("the log must exist and be announced: %v %v %q", err, files, errOut.String())
+			}
+			log, err := os.ReadFile(files[0])
+			if err != nil || !strings.Contains(string(log), secret) || !strings.Contains(string(log), string(failurePermission)) {
+				t.Fatalf("the log must hold the code and the full detail: %v %s", err, log)
+			}
+		})
 	}
 }
