@@ -3,6 +3,8 @@ package usecase
 import (
 	"context"
 	"fmt"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func (session *groupSession) cleanupStaged() {
@@ -31,14 +33,14 @@ func (session *groupSession) stageGroupDeliveries() error {
 				installation := session.state.Installations[session.installationIndex]
 				if err := session.service.prepareExistingRuntime(session.ctx, target.input.Envelope, target.plan, installation, *target.managed); err != nil {
 					session.cleanupStaged()
-					return fmt.Errorf("prepare installed MCP runtime for %s: %w", target.input.Client.ClientID, err)
+					return attributeGroupTarget(fmt.Errorf("prepare installed MCP runtime for %s: %w", target.input.Client.ClientID, err), session.plannedClients(*target)...)
 				}
 			}
 			continue
 		}
 		if err := session.stageOneGroupDelivery(targetIndex, target); err != nil {
 			session.cleanupStaged()
-			return err
+			return attributeGroupTarget(err, session.plannedClients(*target)...)
 		}
 	}
 	if err := session.requireRecordedRepairProjections(); err != nil {
@@ -152,4 +154,13 @@ func (session *groupSession) reobserveRecoveringTarget(target plannedGroupTarget
 		return fmt.Errorf("staged reconstruction for %s does not match the recorded package digest", target.input.Client.ClientID)
 	}
 	return nil
+}
+
+// plannedClients lists the selected clients that share one planned delivery.
+func (session *groupSession) plannedClients(target plannedGroupTarget) []domain.ClientID {
+	clients := make([]domain.ClientID, 0, len(target.resultIndexes))
+	for _, index := range target.resultIndexes {
+		clients = append(clients, session.input.Targets[index].Client.ClientID)
+	}
+	return clients
 }

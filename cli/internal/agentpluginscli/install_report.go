@@ -291,6 +291,9 @@ func groupAgentItems(alias string, targets []addTargetResult) []agentItem {
 }
 
 func groupFailure(target addTargetResult, kind failureKind) *installFailure {
+	if target.failure != nil {
+		return target.failure
+	}
 	failure := installFailure{Kind: kind}
 	if target.Error != nil {
 		failure.Detail = target.Error.Stage + ": " + target.Error.Message

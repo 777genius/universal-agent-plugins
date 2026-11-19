@@ -81,6 +81,12 @@ func renderAddMultiDryRun(writer io.Writer, result addMultiResult) error {
 			}
 			continue
 		}
+		if target.failure != nil {
+			if _, err := fmt.Fprintf(writer, "  %s: cannot be installed\n    %s\n", target.Target, target.Error.Message); err != nil {
+				return err
+			}
+			continue
+		}
 		if err := renderOpenCodeRuntimeNotice(writer, target.Output.Result); err != nil {
 			return err
 		}

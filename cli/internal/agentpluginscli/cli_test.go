@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -973,24 +974,34 @@ func TestUnavailableSelectedTargetFailsBeforePackageAcquisition(t *testing.T) {
 	}
 }
 
-func TestThirdTargetNativeCollisionFailsBeforeAnyGroupedMutation(t *testing.T) {
+// A foreign object at one target's destination fails only that target; the
+// other selected targets install and the foreign target is never touched.
+func TestThirdTargetNativeCollisionLeavesOnlyThatTargetUnchanged(t *testing.T) {
 	t.Parallel()
 	fixture := newCLIFixture(t, []domain.DetectedClient{
 		fixtureClient(t, domain.ClientCodex), fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientKiro),
 	})
 	fixture.app.Lifecycle.NativeObserver = selectiveNativeObserver{foreign: domain.ClientKiro}
-	_, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
-	if err == nil || !strings.Contains(err.Error(), "unmanaged") || !strings.Contains(err.Error(), "no target was changed") {
-		t.Fatalf("third-target collision error = %v", err)
+	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
+	if err == nil || err.Error() != "1 of 3 client installations failed; see results above" || !strings.Contains(stdout, "Retry: run the same command with --target kiro") {
+		t.Fatalf("third-target collision error = %v\n%s", err, stdout)
 	}
 	state, loadErr := fixture.store.Load()
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
-	if len(state.Installations) != 0 {
-		t.Fatalf("third-target collision mutated state: %+v", state)
+	if len(state.Installations) != 1 {
+		t.Fatalf("peers were not installed: %+v", state)
 	}
-	if entries, readErr := os.ReadDir(fixture.app.ManagedRoot); readErr == nil && len(entries) != 0 {
+	var installed []string
+	for _, binding := range state.Installations[0].Clients {
+		installed = append(installed, binding.ClientID)
+	}
+	sort.Strings(installed)
+	if !reflect.DeepEqual(installed, []string{"codex", "cursor"}) {
+		t.Fatalf("installed targets = %v", installed)
+	}
+	if entries, readErr := os.ReadDir(filepath.Join(fixture.app.ManagedRoot, "clients", "kiro")); readErr == nil && len(entries) != 0 {
 		t.Fatalf("third-target collision staged managed files: %v", entries)
 	}
 }

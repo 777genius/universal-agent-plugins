@@ -84,6 +84,29 @@ only at call sites; expect a mechanical rebase on whichever lands second.
 - A retried `add` installs exactly the package of its first attempt (tree digest pinned) or asks for a new review.
 - The SDK `Config.IndependentActivations` keeps working with the new `providers.Activator.Concurrent` gate.
 
+## Follow-up: plugin group preflight and preparation
+
+Before this change one agent that failed its preflight or package preparation
+(for example `mkdir <project>/.claude/skills: permission denied`) stopped every
+selected agent: "No selected client was changed".
+
+- The usecase returns `GroupTargetError` (clients + unchanged cause) only for a
+  target's own planning, identity/namespace preflight and staging, before
+  anything changed. Input, scope, collision, state and lifecycle refusals and
+  cancellation are never attributed.
+- `add --target a,b,c` then runs the remaining agents as a new group with a new
+  operation id: the same `AddGroup`, lock, staging and one commit as selecting
+  only them. The failed agent is a `external_failed` row with
+  `error.stage: "preparation"`, a plain cause, the technical chain in the
+  install log, and a retry step (`Retry:` line or the interactive retry).
+- The overall status is the existing `external_partial_failure`, exit code is
+  non-zero. No JSON field or status was added.
+- Causes that stay group-wide: process cleanup unconfirmed, recovery required,
+  security block, edited or differently versioned installed copy, plan or
+  source change, timeout and cancellation.
+- If every agent fails on its own, the result is exactly the old one: the first
+  agent's cause and "No selected client was changed".
+
 ## Not done, on purpose
 
 - Binding-level parallel apply for Skills and saved installs (shared `state-v2.json`, `mutation.lock`).

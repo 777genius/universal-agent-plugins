@@ -24,6 +24,8 @@ type addTargetResult struct {
 	RetryCommand string                      `json:"retry_command,omitempty"`
 	Output       addResultData               `json:"output"`
 	displayName  string
+	// failure is the typed cause of an agent left out of its group.
+	failure *installFailure
 }
 
 type addMultiResult struct {
@@ -172,20 +174,24 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 	if err != nil {
 		return err
 	}
-	combined.OperationID = operationID
-	groupInput := usecase.GroupInput{Targets: inputs, OperationGroupID: operationID, DryRun: true, OnlinePreview: !opts.dryRun}
-	planned, err := service.AddGroup(ctx, groupInput)
+	isolation := newGroupIsolation(selected, inputs, operationID)
+	groupInput := usecase.GroupInput{DryRun: true, OnlinePreview: !opts.dryRun}
+	planned, err := isolation.addGroup(ctx, service, groupInput)
+	combined.OperationID = isolation.operationID
+	sourceArg := batchRetrySource(loaded.envelope, loaded.origin, combined.Source)
 	combined.Targets = combined.Targets[:0]
-	for index, result := range planned.Targets {
+	for position, result := range planned.Targets {
+		index := isolation.active[position]
 		output := newAddResultData(inputs[index].Envelope, result, true)
-		output.OperationID = operationID
+		output.OperationID = combined.OperationID
 		combined.Targets = append(combined.Targets, addTargetResult{
 			Target: string(selected[index].ClientID), Status: groupTargetStatus(result), Output: output,
 			NextAction: nextLifecycleAction(result), displayName: clientDisplayName(selected[index]),
 		})
 		combined.setTargetProof(selected[index].ClientID, "not_run")
 	}
-	combined.Succeeded = len(planned.Targets)
+	combined.Succeeded, combined.Failed = len(planned.Targets), len(isolation.excluded)
+	combined.Targets = isolation.withExcluded(combined.Targets, &combined, true, sourceArg)
 	if err != nil {
 		combined.Status, combined.Failed, combined.Succeeded = "preflight_failed", len(inputs), 0
 		setPreflightNextActions(combined.Targets)
@@ -196,10 +202,24 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		if deferredChatGPT {
 			appendDeferredChatGPT(&combined, cmd, loaded)
 		}
-		return renderAddMultiResult(cmd, opts, combined, loaded.envelope)
+		if err := renderAddMultiResult(cmd, opts, combined, loaded.envelope); err != nil {
+			return err
+		}
+		return isolation.excludedError(combined)
 	}
 	if needsInstallConfirmation && !opts.yes {
-		accepted, err := confirmInstall(ctx, cmd, app, loaded, humanAddGroupPlans(combined.Targets))
+		reviewed := make([]addTargetResult, 0, len(combined.Targets))
+		for _, target := range combined.Targets {
+			if target.failure == nil {
+				reviewed = append(reviewed, target)
+			}
+		}
+		if opts.format == "human" {
+			for _, line := range isolation.excludedNotice() {
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), prompt.SafeText(line))
+			}
+		}
+		accepted, err := confirmInstall(ctx, cmd, app, loaded, humanAddGroupPlans(reviewed))
 		if err != nil {
 			return err
 		}
@@ -222,11 +242,12 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			combined.setTargetProof(client.ClientID, "not_run")
 		}
 	}
-	writeProgress(app, opts.format, fmt.Sprintf("Installing %s for %d selected clients...", prompt.SafeText(loaded.envelope.Manifest.Name), len(selected)))
-	retainPreparedClients(groupInput.Targets, planned.PreparedClients)
+	writeProgress(app, opts.format, fmt.Sprintf("Installing %s for %d selected clients...", prompt.SafeText(loaded.envelope.Manifest.Name), len(isolation.active)))
+	retainPreparedClients(inputs, planned.PreparedClients)
 	groupInput.OnlinePreview = false
 	groupInput.DryRun, groupInput.Confirmed = false, true
-	board := startGroupProgressBoard(app, opts, selected)
+	boardClients := isolation.activeClients()
+	board := startGroupProgressBoard(app, opts, boardClients)
 	if board != nil {
 		groupInput.Progress = board.observe
 	} else if app.Terminal && opts.format == "human" {
@@ -255,21 +276,25 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			_, _ = fmt.Fprintf(app.errorOutput(), "%s  %s\n", name, stage)
 		}
 	}
-	applied, err := service.AddGroup(ctx, groupInput)
-	if board != nil {
-		board.finish(applied.Targets)
-	}
-	if len(applied.Targets) != len(selected) || len(applied.Targets) != len(inputs) {
-		if err != nil {
-			return fmt.Errorf("group apply returned %d targets for %d selected clients: %w", len(applied.Targets), len(selected), err)
+	applied, err := isolation.addGroup(ctx, service, groupInput)
+	combined.OperationID = isolation.operationID
+	if len(applied.Targets) != len(isolation.active) {
+		if board != nil {
+			board.finish(applied.Targets)
 		}
-		return fmt.Errorf("group apply returned %d targets for %d selected clients", len(applied.Targets), len(selected))
+		if err != nil {
+			return fmt.Errorf("group apply returned %d targets for %d selected clients: %w", len(applied.Targets), len(isolation.active), err)
+		}
+		return fmt.Errorf("group apply returned %d targets for %d selected clients", len(applied.Targets), len(isolation.active))
 	}
 	combined.Status, combined.Targets, combined.Succeeded, combined.Failed, combined.ActionRequired = string(applied.Phase), combined.Targets[:0], 0, 0, 0
-	sourceArg := batchRetrySource(loaded.envelope, loaded.origin, combined.Source)
-	for index, result := range applied.Targets {
+	if err == nil && len(isolation.excluded) > 0 && applied.Phase == usecase.GroupPhaseCompleted {
+		combined.Status = string(usecase.GroupPhaseExternalPartialFailure)
+	}
+	for position, result := range applied.Targets {
+		index := isolation.active[position]
 		output := newAddResultData(inputs[index].Envelope, result, false)
-		output.OperationID = operationID
+		output.OperationID = combined.OperationID
 		entry := addTargetResult{
 			Target: string(selected[index].ClientID), Status: groupTargetStatus(result), Output: output,
 			NextAction: nextLifecycleAction(result), displayName: clientDisplayName(selected[index]),
@@ -280,8 +305,12 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		}
 		combined.Targets = append(combined.Targets, entry)
 		combined.setTargetProof(selected[index].ClientID, addTargetProofOutcome(result))
+	}
+	combined.Targets = isolation.withExcluded(combined.Targets, &combined, false, sourceArg)
+	for _, entry := range combined.Targets {
 		countBatchTarget(&combined, entry)
 	}
+	board.finish(boardResults(boardClients, combined.Targets))
 	err = app.recordGroupOutcome(cmd, opts, &combined, err)
 	if err != nil {
 		cleanupUnconfirmed := domain.IsUnclosedClientProbe(err)
@@ -324,10 +353,10 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		return batchActivationAggregateError(combined)
 	}
 	if app.Terminal && opts.format == "human" && !opts.yes && len(applied.Targets) == 1 && !deferredChatGPT {
-		input := inputs[0]
+		input := inputs[isolation.active[0]]
 		input.DryRun = false
 		input.InstallationID = applied.Targets[0].InstallationID
-		return resumeInteractiveLifecycle(ctx, cmd, service, input, inputs[0].Envelope, applied.Targets[0])
+		return resumeInteractiveLifecycle(ctx, cmd, service, input, input.Envelope, applied.Targets[0])
 	}
 	return nil
 }
@@ -403,6 +432,12 @@ func renderAddMultiApplySummary(writer io.Writer, result addMultiResult, envelop
 				return err
 			}
 			if _, err := fmt.Fprintf(writer, "    %s\n", prompt.SafeText(target.RetryCommand)); err != nil {
+				return err
+			}
+		} else if target.failure != nil && target.failure.Retryable && !result.DryRun {
+			// Sources without a portable retry command (local paths) keep the
+			// person's own command, scope and project root.
+			if _, err := fmt.Fprintf(writer, "  Retry: run the same command with --target %s\n", prompt.SafeText(publicCLITargetName(domain.ClientID(target.Target)))); err != nil {
 				return err
 			}
 		}
