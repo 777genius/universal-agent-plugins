@@ -269,8 +269,17 @@ jobs:
           run_agentplugins deps sync --locked --yes --format json > "${root}/locked-repeat.json"
           jq -e '.outcome == "completed" and (.actions | length) == 1 and .actions[0].action == "unchanged" and (.results | length) == 0' "${root}/locked-repeat.json" >/dev/null
           sha256sum --check "${root}/repeat-before.sha256"
-          run_agentplugins deps status --format json > "${root}/saved-status.json"
-          jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified" or . == "activation_prepared")' "${root}/saved-status.json" >/dev/null
+          # The historic public E2E failed at this first saved-status boundary.
+          # Keep raw CLI output and stderr private; emit only booleans/counts.
+          if ! run_agentplugins deps status --format json > "${root}/saved-status.json" 2> "${root}/saved-status-stderr.log"; then
+            echo "::error::Saved deps status command failed" >&2
+            exit 1
+          fi
+          if ! jq -e --arg digest "${package_digest}" '.pending_recovery == false and (.facts | length) == 1 and .facts[0].package_digest == $digest and .facts[0].owner == "user-default" and all((.facts[0].facts // [])[]; . == "auth_unverified" or . == "activation_prepared")' "${root}/saved-status.json" >/dev/null 2> "${root}/saved-status-jq-stderr.log"; then
+            jq -r --arg digest "${package_digest}" '"saved status: recovery=\(.pending_recovery == true), facts=\((.facts // []) | length), pin_matches=\((.facts[0].package_digest // "") == $digest), owner_matches=\((.facts[0].owner // "") == "user-default"), flags_permitted=\(all((.facts[0].facts // [])[]; . == "auth_unverified" or . == "activation_prepared"))"' "${root}/saved-status.json" >&2 2>> "${root}/saved-status-jq-stderr.log" || true
+            echo "::error::Saved dependency status rejected" >&2
+            exit 1
+          fi
           # Only the portable agreement crosses into a second empty profile.
           # The released CLI must fetch and verify the same immutable digest.
           mkdir -p "${root}/transfer/state" "${root}/transfer/home" "${root}/transfer/config/opencode" "${root}/transfer/tmp"
@@ -308,7 +317,17 @@ jobs:
           jq -e '.outcome == "completed" and (.results | length) == 1 and .results[0].operation == "remove" and .results[0].outcome == "completed"' "${root}/saved-remove.json" >/dev/null
           jq -e '[.environment_receipts[]? | select(.alias == "context7")] | length == 0' "${AGENTPLUGINS_HOME}/state-v2.json" >/dev/null
           jq -e '(.packages // []) | all(.[]; .alias != "context7")' "${AGENTPLUGINS_HOME}/uap.lock" >/dev/null
-          run_agentplugins deps status --format json | jq -e '.pending_recovery == false and (.facts | length) == 0 and (.manifest_digest | length) > 0 and .manifest_digest == .lock_digest' >/dev/null
+          # Retain private post-removal evidence without printing package paths
+          # or original status facts into the public release job log.
+          if ! run_agentplugins deps status --format json > "${root}/post-remove-status.json" 2> "${root}/post-remove-stderr.log"; then
+            echo "::error::Post-remove deps status command failed" >&2
+            exit 1
+          fi
+          if ! jq -e '.pending_recovery == false and (.facts | length) == 0 and (.manifest_digest | length) > 0 and .manifest_digest == .lock_digest' "${root}/post-remove-status.json" >/dev/null 2> "${root}/post-remove-jq-stderr.log"; then
+            jq -r '"post-remove status: recovery=\(.pending_recovery == true), facts=\((.facts // []) | length), has_manifest=\((.manifest_digest // "") | length > 0), has_lock=\((.lock_digest // "") | length > 0), digest_agreement=\((.manifest_digest // "") == (.lock_digest // ""))"' "${root}/post-remove-status.json" >&2 2>> "${root}/post-remove-jq-stderr.log" || true
+            echo "::error::Post-remove dependency status rejected" >&2
+            exit 1
+          fi
           jq -e '.mcp.context7 == null' "${repair_file}" >/dev/null
           test ! -e "${managed_path}"
           sha256sum --check "${root}/retained-store.sha256"

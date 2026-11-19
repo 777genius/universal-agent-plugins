@@ -91,7 +91,7 @@ def inputs():
         manifest = "sha256:" + cycle.sha(cycle.authored(who, revision, NONCE)["plugin.json"])
         stamp = "2026-10-28T00:00:00Z"
         b = {"client_binding_id": bid, "client_id": "grok", "scope": "project", "target_locator": active, "physical_artifact_id": physical,
-             "materialization": "materialized", "activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "package_validated",
+             "materialization": "materialized", "activation": "active", "authentication": "not_required", "policy": "allowed", "verification": "installation_verified",
              "affected_surfaces": ["grok"], "native_profile_root": paths["project_" + who] + "/.grok", "updated_at": stamp,
              "package_revision": {"version": "1.0.0", "tree_digest": source["digest"], "manifest_digest": manifest},
              "native_objects": [{"object_id": "package:grok:" + physical, "kind": "managed_package_directory", "logical_name": name, "path": active, "protection_class": "managed", "managed_digest": cycle.tree_digest(cycle.projected(who, revision, NONCE), False)}]}
@@ -149,22 +149,23 @@ def container():
                 group = "op-" + cycle.sha(stage.encode())[:32]
                 output = {"operation_id": group, "plugin": name, "version": "1.0.0", "source": "local" if verb in ("repair", "remove") else "direct local source", "tree_digest": p["source_digest"], "manifest_digest": ins["package"]["manifest_digest"], "dry_run": False,
                           "result": {"installation_id": ins["installation_id"], "requires_confirmation": False, "mutated": stage not in ("repeat-add-a", "unchanged-update-a")}}
+                if verb in ("add", "update"):
+                    output["readiness"] = "ready"
+                    output["result"]["activation"] = {"activation": "active", "authentication": "not_required", "policy": "allowed", "verification": "installation_verified"}
                 target = {"target": "grok", "status": "external_completed", "output": output}
                 if verb == "update": target["selected"] = True
                 data = {"operation_id": group, "batch": True, "status": "data_retained" if verb == "remove" else "completed", "succeeded": 1, "failed": 0, "plugin": name, "dry_run": False, "targets": [target]}
                 if stage == "repeat-add-a":
                     del output["operation_id"]
                     output["result"]["no_change"] = True
-                    action = "Review Grok project trust and discovery"
-                    output.update(scope="project", readiness="needs_action", next_action=action,
-                                  next_actions=[{"code": "verify_native", "actor": "native_client", "message": action}])
+                    output.update(scope="project")
                     data = output
                 if verb == "remove":
                     receipt = next(iter(ins["data_receipts"].values()))
                     data.update(plugin_data_preserved=True, data_retained=True, retained_data=[{key: receipt[key] for key in ("data_receipt_id", "physical_backend_id", "scope", "state")}])
                 out = raw({"schema_version": 1, "command": verb, "result": "success", "data": data})
                 if stage.startswith("add-"): err = f"Resolving and validating one Agent Plugin package for every selected target...\nInstalling {name} for 1 selected clients...\n".encode()
-                elif stage == "repeat-add-a": err = b"Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+                elif stage == "repeat-add-a": err = b"Resolving and validating one Agent Plugin package for every selected target...\n"
                 elif verb == "update": err = b"Resolving and validating one updated Agent Plugin package for every selected target...\n"
                 elif verb == "repair": err = b"Resolving and validating each unique exact installed package revision once...\n"
         public.append({"stage": stage, "value": command(argv, cwd, out, err, exit_code)})
@@ -438,16 +439,44 @@ class GrokCycleContracts(unittest.TestCase):
                     cycle.public_result(raw(bad), stage, verb, proof[stage])
         singleton = cycle.stream(rows["repeat-add-a"]["stdout"])
         with self.assertRaises(ValueError): cycle.public_result(singleton, "add-a", "add", proof["add-a"])
-        # Repeated preparation must not claim native activation or silently
-        # drop the user's explicit verification step.
+        # Fresh exact trusted Skills must remain Ready on repeat. Obsolete
+        # setup instructions cannot accompany this completed installation.
         original = cycle.load(singleton)
-        for key, value in (("scope", "user"), ("readiness", "ready"),
+        for key, value in (("scope", "user"), ("readiness", "needs_action"),
                            ("next_action", "unlinked"), ("next_actions", []),
-                           ("next_actions", [{"code": "verify_native", "actor": "user", "message": original["data"]["next_action"]}])):
+                           ("next_actions", [{"code": "verify_native", "actor": "native_client", "message": "Review trust"}])):
             changed = copy.deepcopy(original)
             changed["data"][key] = value
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 cycle.public_result(raw(changed), "repeat-add-a", "add", proof["repeat-add-a"])
+
+    def test_ready_public_skill_requires_fresh_activation_and_no_setup_hint(self):
+        bodies = container()
+        rows = {row["stage"]: row["value"] for row in map(cycle.load, bodies[cycle.MEMBERS[0]].splitlines())}
+        _, proof = inputs()
+        for stage in ("add-a", "repeat-add-a", "update-a", "unchanged-update-a"):
+            verb = "add" if stage in ("add-a", "repeat-add-a") else "update"
+            original = cycle.load(cycle.stream(rows[stage]["stdout"]))
+            for fault in ("prepared", "unchecked", "unverified", "attested", "hint"):
+                document = copy.deepcopy(original)
+                output = document["data"] if stage == "repeat-add-a" else document["data"]["targets"][0]["output"]
+                activation = output["result"]["activation"]
+                if fault == "prepared": activation["activation"] = "prepared"
+                elif fault == "unchecked": activation["authentication"] = "not_checked"
+                elif fault == "unverified": activation["verification"] = "package_validated"
+                elif fault == "attested": activation["activation_attested"] = True
+                else: output["next_action"] = "Review trust and verify Skills"
+                with self.subTest(stage=stage, fault=fault), self.assertRaises(ValueError):
+                    cycle.public_result(raw(document), stage, verb, proof[stage])
+
+    def test_ready_repeat_refuses_old_applying_progress(self):
+        bodies = container()
+        rows = [cycle.load(line) for line in bodies[cycle.MEMBERS[0]].splitlines()]
+        repeat = next(row["value"] for row in rows if row["stage"] == "repeat-add-a")
+        repeat["stderr"] = stream(cycle.stream(repeat["stderr"]) + b"Applying transactional client package...\n")
+        bodies[cycle.MEMBERS[0]] = b"".join(raw(row) + b"\n" for row in rows)
+        with self.assertRaises(ValueError):
+            cycle.members(bodies, SOURCE)
 
     def test_failed_prefix_retains_unknown_native_output_without_qualification(self):
         bodies = container()

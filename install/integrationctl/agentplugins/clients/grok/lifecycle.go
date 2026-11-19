@@ -23,9 +23,9 @@ func (*Adapter) AutomaticallyActivates(env clients.Env, request domain.Activatio
 	return shared.HasClientCLI(env, request.BackendExecutable)
 }
 
-func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
+func (*Adapter) VerifierAvailable(client domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
 	if plan.Scope == domain.ScopeProject || plan.TargetContext.Scope == domain.ScopeProject || plan.TargetContext.ProjectRoot != "" {
-		return false
+		return projectSkillsVerifiable(client, plan, backendExecutable)
 	}
 	return shared.HasListingCLI(backendExecutable)
 }
