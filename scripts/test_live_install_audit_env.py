@@ -10803,7 +10803,8 @@ class ChatGPTDesktopAuditContracts(unittest.TestCase):
                     (case / "home/.codex/foreign-neighbor.txt").write_text("altered before adoption")
                 if mutation == "prebaseline-managed":
                     (project / 'unexpected-managed-root').mkdir()
-                return "0.162.0", {"data": [{"cwd": str(project), "skills": [], "errors": []}]}
+                inventory = {"data": [{"cwd": str(project), "skills": [], "errors": []}]}
+                return ("0.162.0", inventory) if kwargs.get("with_metadata") else inventory
 
             def reply(code=0, rows=None):
                 doc = {"schema_version": 1, "result": "success",
