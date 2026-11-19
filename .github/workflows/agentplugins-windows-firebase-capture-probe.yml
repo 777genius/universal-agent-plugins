@@ -6,6 +6,8 @@ on:
       - '.github/workflows/agentplugins-windows-firebase-capture-probe.yml'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/firebase_runtime_failure.py'
+      - 'scripts/test_firebase_runtime_failure.py'
   workflow_dispatch:
 
 # Replace superseded PR checks; preserve exact push, scheduled and manual runs.

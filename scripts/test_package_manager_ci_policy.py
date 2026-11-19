@@ -109,6 +109,10 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertRegex(body, r"(?m)^  pull_request:\s*$")
         self.assertRegex(body, r"(?m)^  workflow_dispatch:\s*$")
         self.assertNotIn("workflow_dispatch", body.split("    steps:", 1)[0].split("jobs:", 1)[1])
+        events = body.split("  workflow_dispatch:", 1)[0]
+        for path in ("scripts/firebase_runtime_failure.py",
+                     "scripts/test_firebase_runtime_failure.py"):
+            self.assertIn("      - '" + path + "'", events)
         steps = dict(re.findall(r"(?ms)^      - name: ([^\n]+)\n(.*?)(?=^      - |\Z)", body))
         native = next(step for step in steps.values()
                       if "npm.cmd install --global '@anthropic-ai/claude-code@2.1.263'" in step)
