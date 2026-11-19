@@ -2658,7 +2658,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         if gemini_repeat_phases and GEMINI_RUNTIME_AUDIT["pinned_version"](client_version):
             gemini_runtime = GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
-                home, project, before_repeat_native, client_version)
+                home, project, before_repeat_native, client_version,
+                profile_snapshot=scoped_snapshot)
             audits.callback(gemini_runtime.close)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
                                  if codex_runtime is not None else None)
