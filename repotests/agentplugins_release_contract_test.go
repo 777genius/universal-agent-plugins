@@ -492,3 +492,23 @@ func yamlJob(t *testing.T, workflow, name string) string {
 	}
 	return job.String()
 }
+
+// A failed public lifecycle must not hide its last dependency status behind a
+// pipeline or print raw status facts (which can include private source paths).
+func TestAgentpluginsPublicNPMPostRemoveStatusIsRedactedAndFailClosed(t *testing.T) {
+	root := RepoRoot(t)
+	workflow := readRepoFile(t, root, ".github", "workflows", "agentplugins-npm-publish.yml")
+	job := yamlJob(t, workflow, "verify-public")
+	mustContain(t, job, "Post-remove deps status command failed")
+	mustContain(t, job, "Post-remove dependency status rejected")
+	mustContain(t, job, "post-remove status: recovery=")
+	mustContain(t, job, "digest_agreement=")
+	mustContain(t, job, "facts=")
+	mustContain(t, job, "has_manifest=")
+	mustContain(t, job, "has_lock=")
+	mustContain(t, job, "if ! run_agentplugins deps status --format json >")
+	mustContain(t, job, "if ! jq -e '.pending_recovery == false and (.facts | length) == 0")
+	mustNotContain(t, job, "run_agentplugins deps status --format json | jq -e")
+	mustNotContain(t, job, "cat ${root}/post-remove-status.json")
+	mustAppearBefore(t, job, "run_agentplugins remove context7", "post-remove-status.json")
+}

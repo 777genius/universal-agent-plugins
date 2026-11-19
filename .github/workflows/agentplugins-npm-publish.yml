@@ -308,7 +308,17 @@ jobs:
           jq -e '.outcome == "completed" and (.results | length) == 1 and .results[0].operation == "remove" and .results[0].outcome == "completed"' "${root}/saved-remove.json" >/dev/null
           jq -e '[.environment_receipts[]? | select(.alias == "context7")] | length == 0' "${AGENTPLUGINS_HOME}/state-v2.json" >/dev/null
           jq -e '(.packages // []) | all(.[]; .alias != "context7")' "${AGENTPLUGINS_HOME}/uap.lock" >/dev/null
-          run_agentplugins deps status --format json | jq -e '.pending_recovery == false and (.facts | length) == 0 and (.manifest_digest | length) > 0 and .manifest_digest == .lock_digest' >/dev/null
+          # Retain private post-removal evidence without printing package paths
+          # or original status facts into the public release job log.
+          if ! run_agentplugins deps status --format json > "${root}/post-remove-status.json"; then
+            echo "::error::Post-remove deps status command failed" >&2
+            exit 1
+          fi
+          if ! jq -e '.pending_recovery == false and (.facts | length) == 0 and (.manifest_digest | length) > 0 and .manifest_digest == .lock_digest' "${root}/post-remove-status.json" >/dev/null; then
+            jq -r '"post-remove status: recovery=\(.pending_recovery == true), facts=\((.facts // []) | length), has_manifest=\((.manifest_digest // "") | length > 0), has_lock=\((.lock_digest // "") | length > 0), digest_agreement=\((.manifest_digest // "") == (.lock_digest // ""))"' "${root}/post-remove-status.json" >&2 || true
+            echo "::error::Post-remove dependency status rejected" >&2
+            exit 1
+          fi
           jq -e '.mcp.context7 == null' "${repair_file}" >/dev/null
           test ! -e "${managed_path}"
           sha256sum --check "${root}/retained-store.sha256"
