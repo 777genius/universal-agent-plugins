@@ -207,6 +207,41 @@ func TestGitRootPrefetchProducesTheSerialLockWithOneReadPerRoot(t *testing.T) {
 	assertEmptyDir(t, source.tempRoot)
 }
 
+// install and sync resolve a missing or stale lock through
+// resolveDependencySyncCandidate; that path must use the same prefetch.
+func TestGitRootPrefetchServesInstallAndSyncResolution(t *testing.T) {
+	app, requirements, source := mixedRootsJourney(t)
+	serial, err := resolveMixedRoots(t, t.Context(), app, requirements, nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serialReads := source.sortedReads()
+	source.reads, source.overlap = nil, true
+	preview, cleanup, err := dependencyPreviewApp(app, &options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	_, locked, err := resolveDependencySyncCandidate(t.Context(), preview, &options{}, requirements, environment.Lock{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := encodeDependencyLockBytes(locked)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != string(serial) {
+		t.Fatalf("install/sync lock differs from the serial lock:\n%s\n---\n%s", body, serial)
+	}
+	if got := source.sortedReads(); !slices.Equal(got, serialReads) {
+		t.Fatalf("install/sync remote reads = %v, want %v", got, serialReads)
+	}
+	if source.maxSeen.Load() < 2 {
+		t.Fatal("install/sync resolution did not read independent roots concurrently")
+	}
+	assertEmptyDir(t, source.tempRoot)
+}
+
 func TestGitRootPrefetchFailingSourceReturnsTheSerialError(t *testing.T) {
 	for _, failing := range []string{"acme/pb", "acme/skills//skills/beta", "other/pc"} {
 		t.Run(failing, func(t *testing.T) {
