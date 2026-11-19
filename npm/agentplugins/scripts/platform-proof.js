@@ -82,6 +82,16 @@ function installedShimInvocation(project, args, platform = process.platform) {
   return { command: shim, args, shell: platform === "win32" };
 }
 
+// Windows npm creates a .cmd shim; shell mode must preserve each argument as
+// one token. Do not permit cmd metacharacters or expansion in a proof command.
+function windowsShimArgs(invocation) {
+  if (!invocation.shell) return invocation.args;
+  return invocation.args.map((value) => {
+    if (/[\r\n"%!^&|<>]/.test(value)) fail("unsafe Windows npm shim argument");
+    return /\s/.test(value) ? `"${value}"` : value;
+  });
+}
+
 function assertInstalledShimInvocation(invocation, project, platform = process.platform) {
   const expected = installedShimInvocation(project, [], platform).command;
   if (!invocation || path.resolve(invocation.command) !== path.resolve(expected) ||
@@ -295,13 +305,13 @@ function main() {
   const invoke = (args) => {
     const invocation = installedShimInvocation(project, args);
     assertInstalledShimInvocation(invocation, project);
-    return run(invocation.command, invocation.args, { ...commandOptions, shell: invocation.shell });
+    return run(invocation.command, windowsShimArgs(invocation), { ...commandOptions, shell: invocation.shell });
   };
   const privateRoots = [root, process.env.GITHUB_WORKSPACE, process.env.RUNNER_TEMP];
   const invokeJSON = (args) => {
     const invocation = installedShimInvocation(project, [...args, "--format", "json"]);
     assertInstalledShimInvocation(invocation, project);
-    const output = jsonCommand(invocation.command, invocation.args, { ...commandOptions, shell: invocation.shell });
+    const output = jsonCommand(invocation.command, windowsShimArgs(invocation), { ...commandOptions, shell: invocation.shell });
     assertPublicJSONPathFree(output, `agentplugins ${args[0]} JSON`, privateRoots);
     return output;
   };
@@ -429,5 +439,6 @@ module.exports = {
   lifecycleResult,
   npmInvocation,
   parseBootstrapMode,
-  parseLifecycle
+  parseLifecycle,
+  windowsShimArgs
 };
