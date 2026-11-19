@@ -1,14 +1,69 @@
 package grok
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
+
+type projectSkillMetadataABAIO struct {
+	nativeconfig.FileIO
+	live, captured        string
+	original, substituted []byte
+	reads                 int
+}
+
+func (files *projectSkillMetadataABAIO) ReadNoFollowBounded(path string, limit int64) ([]byte, os.FileMode, bool, error) {
+	files.reads++
+	files.captured = path
+	if err := os.WriteFile(files.live, files.substituted, 0600); err != nil {
+		return nil, 0, false, err
+	}
+	file, err := nativeconfig.New().ReadExactFileBounded(path, limit)
+	restore := os.WriteFile(files.live, files.original, 0600)
+	return file.Body, file.Mode, file.Exists, errors.Join(err, restore)
+}
+
+func TestProjectGrokObservedSkillsBindMetadataDuringLiveABA(t *testing.T) {
+	for _, nativeMetadata := range []string{"owned", "substituted"} {
+		t.Run(nativeMetadata, func(t *testing.T) {
+			f := newProjectSkillFixture(t)
+			live := filepath.Join(f.request.Plan.ActivePath, "skills", "docs", "SKILL.md")
+			original, err := os.ReadFile(live)
+			if err != nil {
+				t.Fatal(err)
+			}
+			files := &projectSkillMetadataABAIO{live: live, original: original,
+				substituted: bytes.ReplaceAll(original, []byte("Exact owned text"), []byte("Substituted metadata"))}
+			f.env.NativeConfig = nativeconfig.NewWithFileIO(files)
+			if nativeMetadata == "substituted" {
+				f.skill()["description"] = "Substituted metadata"
+			}
+			outcome, err := New().Activate(t.Context(), f.env, f.request)
+			if err != nil || f.runner.calls != 1 || files.reads != 1 || (outcome.Activation == domain.ActivationActive) != (nativeMetadata == "owned") {
+				t.Fatalf("live metadata ABA changed native proof: outcome=%+v calls=%d reads=%d err=%v", outcome, f.runner.calls, files.reads, err)
+			}
+			body, err := os.ReadFile(live)
+			if err != nil || !bytes.Equal(body, original) {
+				t.Fatalf("live package was not restored: %v", err)
+			}
+			if files.captured == live {
+				t.Fatal("metadata was reread from the live package")
+			}
+			sealedRoot := filepath.Dir(filepath.Dir(filepath.Dir(files.captured)))
+			if _, err := os.Lstat(sealedRoot); !os.IsNotExist(err) {
+				t.Fatalf("sealed package was not cleaned: %v", err)
+			}
+		})
+	}
+}
 
 func TestProjectGrokObservedSkillsCompleteWithoutNativeWrites(t *testing.T) {
 	for _, verifyOnly := range []bool{false, true} {
@@ -210,10 +265,14 @@ func TestProjectGrokObservedSkillsRealNativeEnvelopeWithoutVersionProbe(t *testi
 	for _, mutation := range []string{"wrong-version", "extra-field", "wrong-type", "untrusted"} {
 		t.Run(mutation, func(t *testing.T) {
 			switch mutation {
-			case "wrong-version": f.runner.document["grokVersion"] = "1.0.67"
-			case "extra-field": f.runner.document["unobservedAuthority"] = true
-			case "wrong-type": f.runner.document["permissions"] = "unknown"
-			case "untrusted": f.runner.document["projectTrusted"] = false
+			case "wrong-version":
+				f.runner.document["grokVersion"] = "1.0.67"
+			case "extra-field":
+				f.runner.document["unobservedAuthority"] = true
+			case "wrong-type":
+				f.runner.document["permissions"] = "unknown"
+			case "untrusted":
+				f.runner.document["projectTrusted"] = false
 			}
 			defer func() {
 				f.runner.document["grokVersion"] = "1.0.70"

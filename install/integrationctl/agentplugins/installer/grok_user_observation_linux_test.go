@@ -186,3 +186,34 @@ func TestGrokUserFreshObservationDoesNotReturnCachedReady(t *testing.T) {
 		})
 	}
 }
+
+func TestGrokUserApplyRechecksNativeStateAfterOnlinePrepare(t *testing.T) {
+	f, native := newGrokUserObservationFixture(t, domain.AuthenticationNotRequired)
+	nativeUnchanged := grokObservedSDKPreserved(t, f, f.binding(t))
+	request := f.selected(t, OpInstall, false)
+	request.OperationID = "grok-user-native-changed-after-preview"
+	request.OnlinePreview = true
+	prepared, err := f.engine.Prepare(t.Context(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := prepared.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	if prepared.Plan().Client.Activation != string(domain.ActivationActive) {
+		t.Fatal("positive online preparation did not observe the installed plugin")
+	}
+	calls := native.lists
+	native.status = "disabled"
+	result, err := f.engine.Apply(t.Context(), prepared, Decision{Confirmed: true})
+	if native.lists <= calls || err == nil && result.Client.Activation == string(domain.ActivationActive) {
+		t.Fatal("Apply reused its prepared native result", result, err, native.lists, calls)
+	}
+	if native.installs != 1 || native.mutations != 1 {
+		t.Fatal("fresh negative observation mutated the native plugin")
+	}
+	// Saving the newly observed failure is permitted; native bytes are not.
+	nativeUnchanged()
+}

@@ -55,20 +55,37 @@ func projectSkillComponents(components []domain.ComponentDecision) bool {
 
 // Hold package authority and metadata before inspect. Neither mutable native
 // output nor a caller's later plan mutation can replace this owned byte proof.
-func captureProjectSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest) *projectSkillProof {
+func captureProjectSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest) (proof *projectSkillProof) {
 	if request.ActivationComplete || request.ConfirmPluginEnable ||
 		!projectSkillsVerifiable(request.Client, request.Plan, request.BackendExecutable) || !projectSkillPackageOwned(request) {
 		return nil
 	}
-	proof := &projectSkillProof{name: request.Plan.DeclaredName, root: request.Plan.ActivePath,
+	// An injected reader must grant bounded authority before the OS snapshot
+	// builder reads the package; unsupported backends cannot gain a fallback.
+	if err := env.NativeConfig.RequireBoundedRead(); err != nil {
+		return nil
+	}
+	proof = &projectSkillProof{name: request.Plan.DeclaredName, root: request.Plan.ActivePath,
 		digest: request.Delivery.ArtifactDigest, authentication: shared.ObservedSkillInstallationAuthentication(request.Plan),
 		skills: map[string]projectSkillMetadata{}}
-	if digest, err := (packagesnapshot.Builder{}).Digest(ctx, proof.root); err != nil || digest != proof.digest {
+	// Parse metadata from the same sealed bytes that produced the receipt
+	// digest. A live-file reread could otherwise observe transient foreign text.
+	snapshot, err := (packagesnapshot.Builder{}).Build(ctx, proof.root)
+	if err != nil {
+		return nil
+	}
+	defer func() {
+		if snapshot.Close() != nil {
+			proof = nil
+		}
+	}()
+	if snapshot.Digest != proof.digest {
 		return nil
 	}
 	for _, component := range request.Plan.Components {
 		path := filepath.Join(proof.root, "skills", component.Name, "SKILL.md")
-		file, err := env.NativeConfig.ReadExactFileBounded(path, 1<<20)
+		capturedPath := filepath.Join(snapshot.Root, "skills", component.Name, "SKILL.md")
+		file, err := env.NativeConfig.ReadExactFileBounded(capturedPath, 1<<20)
 		if err != nil || !file.Exists {
 			return nil
 		}
