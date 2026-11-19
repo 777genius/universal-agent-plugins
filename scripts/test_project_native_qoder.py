@@ -74,6 +74,20 @@ class QoderAcquisitionContract(unittest.TestCase):
         self.assertFalse(result["scope_discovery_qualified"])
         self.assertFalse(result["authentication_qualified"])
 
+    def test_native_1178_list_description_reaches_only_help_admitted_catalogs(self):
+        leaf, ctx = self.skills_context()
+        # Genuine pinned Usage/help/list rows from completed job 135367313805.
+        observed = ("Usage: qodercli skills|skill [options] [command]\n\n"
+                    "Options:\n  -h, --help                  display help for command\n\n"
+                    "Commands:\n  list [options]              Lists discovered agent skills.\n")
+        ctx.replace["skills-help"] = {"exit": 0, "error": None}, observed.encode(), b""
+        result = leaf.collect(ctx)["observations"]["skills_research"]
+        self.assertEqual(ctx.calls[6], ("skills-list-help", ["skills", "list", "--help"], "a", 30))
+        self.assertEqual(result["status"], "opaque-catalog-captured")
+        self.assertEqual(set(result["baseline"]), {"a", "b", "user"})
+        self.assertFalse(result["native_skill_discovery_qualified"])
+        self.assertFalse(result["public_ready_qualified"])
+
     def test_skills_prose_alias_prefix_and_duplicate_commands_never_authorize(self):
         for replacement in (
                 "Examples:\n  skills --help  Example only\n",
@@ -92,6 +106,8 @@ class QoderAcquisitionContract(unittest.TestCase):
         for label, replacement, expected_calls in (
                 ("skills-help", b"  list <source>  List selected Skill\n", 6),
                 ("skills-help", b"  list [options]  Install and list Skills\n", 6),
+                ("skills-help", b"  list [options]  Lists and installs agent skills.\n", 6),
+                ("skills-help", b"  list [options]  Lists discovered agent skills. Install afterward\n", 6),
                 ("skills-help", b"  list [options]  List Skills\n  list <source>  Mutate\n", 6),
                 ("skills-list-help", b"  --json-file <path>  Write JSON\n", 7),
                 ("skills-list-help", b"  --json <path>  Write JSON\n", 7),

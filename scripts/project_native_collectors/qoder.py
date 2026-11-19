@@ -123,7 +123,7 @@ def observe_skills_surface(ctx, top_help):
     body = _probe(ctx, "skills-help", ("skills", "--help"))
     result.update(status="help-observed", usage=_skill_help(body))
     listing = _help_entry(body, "Commands", "list")
-    if re.fullmatch(r"  list(?: \[options\])?[ \t]{2,}List\b[^\n]*", listing) is None:
+    if re.fullmatch(r"  list(?: \[options\])?[ \t]{2,}(?:List\b[^\n]*|Lists discovered agent skills\.)", listing) is None:
         return result
     body = _probe(ctx, "skills-list-help", ("skills", "list", "--help"))
     result["list_usage"] = _skill_help(body, listing=True)
