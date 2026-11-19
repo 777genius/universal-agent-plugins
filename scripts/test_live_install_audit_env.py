@@ -11352,6 +11352,149 @@ class PreparedInstallationRecoveryContracts(unittest.TestCase):
                     self.assertEqual(self.invoke(original, mode, **changed), (2, None, 0, 0))
 
 
+
+class PreparedProjectSkillEvidenceContracts(unittest.TestCase):
+    """Real-source-shaped, strictly Prepared-only Cursor/Kiro Project Skills."""
+
+    def fixture(self, target):
+        audit = load_audit()
+        doc = json.loads(audit.FIXTURES.read_text())
+        host, arch, version, authentication = {
+            "cursor": ("linux", "x86_64", "2026.10.22-27dcf5f", "not_required"),
+            "kiro": ("darwin", "arm64", "kiro-cli 3.0.0", "not_checked"),
+        }[target]
+        rows = []
+        expected = {"materialization": "materialized", "activation": "prepared",
+                    "authentication": authentication, "policy": "allowed",
+                    "verification": "installation_verified"}
+        for index, item in enumerate(doc["skills"]):
+            row = {"target": target, "kind": "skill", "index": index,
+                   "source": item["source"], "identity": item["name"],
+                   "skill_path": f'.{target}/skills/{item["name"]}/SKILL.md',
+                   "status": "incomplete-native-proof", "native_file_delta": 0,
+                   "native_identity_files": [], "native_component_candidates": [],
+                   "native_residuals": [], "signed_release_observation": [],
+                   "prepared_binding": False, "prepared_components_only": False,
+                   "repeat_native_runtime_only": False, "repeat_project_unchanged": None,
+                   "public_skill_ready": {"after-add": False, "repeat-add": False},
+                   "matched_installation_ids": [f"original-binding-{index}"],
+                   "repeat_installation_ids": [f"original-binding-{index}"],
+                   "post_removal_leftovers": [], "post_skill_tree_delta": [],
+                   "post_removal_skill": None, "post_lock_pinned": False}
+            row.update({key: True for key in (
+                "lock_written", "lock_contains_identity", "lock_exact_source_pinned",
+                "skill_bytes_match", "listed_identity", "repeat_verified",
+                "repeat_native_unchanged", "repeat_lock_unchanged",
+                "removal_verified", "post_list_schema_valid", "sentinels_preserved")})
+            row.update({key: False for key in (
+                "failed_install_registered", "failed_install_residue",
+                "post_remove_identity_registered")})
+            row.update({key: {"exit_code": 0, "timeout": False} for key in (
+                "install", "list", "repeat_add", "repeat_list",
+                "cleanup", "post_remove_list")})
+            row["public_target_states"] = {
+                phase: {"status": "observed", "selected_installations": int(active),
+                        "selected_bindings": int(active), "invalid_rows": 0,
+                        "states": [expected] if active else [], "truncated": False}
+                for phase, active in (("after-add", True), ("repeat-add", True),
+                                      ("after-remove", False))}
+            rows.append(row)
+        cli_version = {"status": "reported", "value": "agentplugins 0.1.95", "exit_code": 0}
+        client_version = {"status": "reported", "value": version, "exit_code": 0}
+        report = {"target": target, "kind": "skill", "platform": host, "architecture": arch,
+                  "canonical_client_id": target, "client_version": client_version,
+                  "cli_version": cli_version, "fixture_count": 30, "cases_attempted": 30,
+                  "source_selection_complete": True, "full_coverage": True,
+                  "passed": 0, "verified_negative_coverage": 0, "results": rows}
+        return audit, doc, report
+
+    def test_source_bound_prepared_only_and_strict_rejection(self):
+        import copy
+        for target in ("cursor", "kiro"):
+            with self.subTest(target=target):
+                audit, fixtures, report = self.fixture(target)
+                mode = target + "-prepared-skills-installation"
+                proof = audit.prepared_project_skill_summary(report, fixtures, mode)
+                self.assertEqual(proof, {
+                    "installation_passed": 30, "installation_prepared_lifecycle_passed": 30,
+                    "installation_verified_negative_coverage": 0,
+                    "installation_acceptance_passed": True})
+                mutations = (
+                    ("status", "passed"), ("source", "foreign"), ("identity", "foreign"),
+                    ("index", False), ("skill_path", ".other/skills/foreign/SKILL.md"),
+                    ("lock_exact_source_pinned", False), ("skill_bytes_match", False),
+                    ("native_residuals", ["foreign"]), ("post_skill_tree_delta", ["foreign"]),
+                    ("post_removal_leftovers", ["owned"]), ("post_removal_skill", "owned"),
+                    ("post_lock_pinned", True), ("failed_install_registered", True),
+                    ("failed_install_residue", True), ("sentinels_preserved", False),
+                    ("repeat_verified", False), ("removal_verified", False),
+                    ("repeat_native_unchanged", False), ("repeat_native_runtime_only", True),
+                    ("public_skill_ready", {"after-add": True, "repeat-add": False}),
+                    ("matched_installation_ids", []),
+                    ("repeat_installation_ids", ["other"]))
+                for field, value in mutations:
+                    changed = copy.deepcopy(report)
+                    changed["results"][12][field] = value
+                    self.assertFalse(audit.prepared_project_skill_summary(
+                        changed, fixtures, mode)["installation_acceptance_passed"], field)
+                for phase in ("install", "list", "repeat_add", "repeat_list",
+                              "cleanup", "post_remove_list"):
+                    changed = copy.deepcopy(report)
+                    changed["results"][0][phase]["timeout"] = True
+                    self.assertFalse(audit.prepared_project_skill_summary(
+                        changed, fixtures, mode)["installation_acceptance_passed"], phase)
+                for phase in ("after-add", "repeat-add", "after-remove"):
+                    changed = copy.deepcopy(report)
+                    changed["results"][0]["public_target_states"][phase]["selected_bindings"] = 99
+                    self.assertFalse(audit.prepared_project_skill_summary(
+                        changed, fixtures, mode)["installation_acceptance_passed"], phase)
+                for field, value in (
+                        ("platform", "win32"), ("architecture", "foreign"),
+                        ("client_version", {"status": "not-probed"}),
+                        ("source_selection_complete", False), ("passed", 30)):
+                    changed = copy.deepcopy(report)
+                    changed[field] = value
+                    self.assertFalse(audit.prepared_project_skill_summary(
+                        changed, fixtures, mode)["installation_acceptance_passed"], field)
+                self.assertFalse(audit.prepared_project_skill_summary(
+                    report, fixtures, "native")["installation_acceptance_passed"])
+
+    def test_cli_entry_keeps_native_negative_and_prepared_receipt_distinct(self):
+        import copy
+        from contextlib import redirect_stdout, redirect_stderr
+        from io import StringIO
+        for target in ("cursor", "kiro"):
+            with self.subTest(target=target):
+                audit, _fixtures, report = self.fixture(target)
+                for acceptance, expected_code in (("native", 1),
+                                                  (target + "-prepared-skills-installation", 0)):
+                    with TemporaryDirectory() as directory:
+                        argv = ["live-install-audit", "--cli", sys.executable,
+                                "--target", target, "--kind", "skill",
+                                "--limit", "30", "--report-dir", directory,
+                                "--acceptance", acceptance]
+                        binary = "cursor-agent" if target == "cursor" else "kiro-cli"
+                        with (patch.object(audit.sys, "argv", argv),
+                              patch.object(audit.sys, "platform", report["platform"]),
+                              patch.object(audit.platform, "machine", return_value=report["architecture"]),
+                              patch.object(audit, "vendor_bootstrap_attested", return_value=True),
+                              patch.dict(audit.AGENT_BINARIES, {binary: sys.executable}, clear=True),
+                              patch.object(audit, "version_evidence",
+                                           side_effect=[report["cli_version"], report["client_version"]]),
+                              patch.object(audit, "do_case", side_effect=copy.deepcopy(report["results"])) as runs,
+                              redirect_stdout(StringIO()), redirect_stderr(StringIO())):
+                            code = audit.main()
+                        self.assertEqual(code, expected_code)
+                        self.assertEqual(runs.call_count, 30)
+                        saved = json.loads((Path(directory) / f"{target}-skill.json").read_text())
+                        self.assertEqual(saved["passed"], 0)
+                        if acceptance != "native":
+                            self.assertEqual(saved["installation_passed"], 30)
+                            self.assertIs(saved["installation_acceptance_passed"], True)
+                        else:
+                            self.assertNotIn("installation_acceptance_passed", saved)
+
+
 class WindsurfRecoveredFixtureContracts(unittest.TestCase):
     def run_case(self, negative=False, mutation=None):
         import copy

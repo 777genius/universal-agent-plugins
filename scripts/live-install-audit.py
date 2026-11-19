@@ -3778,6 +3778,98 @@ def prepared_installation_summary(report, fixtures, acceptance):
     return result
 
 
+
+def prepared_project_skill_summary(report, fixtures, acceptance):
+    """Qualify exact owned Project Skill preparation, never native readiness."""
+    routes = {
+        "cursor-prepared-skills-installation": (
+            "cursor", "linux", "x86_64", "2026.10.22-27dcf5f", "not_required"),
+        "kiro-prepared-skills-installation": (
+            "kiro", "darwin", "arm64", "kiro-cli 3.0.0", "not_checked"),
+    }
+    result = {"installation_passed": 0, "installation_prepared_lifecycle_passed": 0,
+              "installation_verified_negative_coverage": 0,
+              "installation_acceptance_passed": False}
+    route = routes.get(acceptance)
+    if route is None:
+        return result
+    target, host, arch, version, authentication = route
+    rows, sources = report.get("results"), fixtures.get("skills")
+    if ((report.get("target"), report.get("kind"), report.get("platform"),
+         report.get("architecture"), report.get("canonical_client_id")) !=
+            (target, "skill", host, arch, target)
+            or report.get("client_version") != {
+                "status": "reported", "value": version, "exit_code": 0}
+            or report.get("cli_version") != {
+                "status": "reported", "value": "agentplugins 0.1.95", "exit_code": 0}
+            or report.get("fixture_count") != 30 or report.get("cases_attempted") != 30
+            or report.get("source_selection_complete") is not True
+            or report.get("full_coverage") is not True
+            or report.get("passed") != 0 or report.get("verified_negative_coverage") != 0
+            or type(rows) is not list or len(rows) != 30
+            or type(sources) is not list or len(sources) != 30):
+        return result
+    expected = {"materialization": "materialized", "activation": "prepared",
+                "authentication": authentication, "policy": "allowed",
+                "verification": "installation_verified"}
+    for index, (row, item) in enumerate(zip(rows, sources)):
+        if (type(row) is not dict or type(item) is not dict
+                or type(row.get("index")) is not int or row["index"] != index
+                or (row.get("kind"), row.get("target")) != ("skill", target)
+                or row.get("source") != item.get("source")
+                or row.get("identity") != item.get("name")
+                or row.get("skill_path") != f'.{target}/skills/{item.get("name")}/SKILL.md'
+                or row.get("status") != "incomplete-native-proof"
+                or row.get("public_skill_ready") != {"after-add": False, "repeat-add": False}
+                or row.get("prepared_binding") is not False
+                or row.get("prepared_components_only") is not False
+                or row.get("repeat_native_runtime_only") is not False
+                or type(row.get("native_file_delta")) is not int or row["native_file_delta"] != 0
+                or row.get("native_identity_files") != []
+                or row.get("native_component_candidates") != []
+                or row.get("native_residuals") != []
+                or row.get("signed_release_observation") != []
+                or row.get("post_removal_leftovers") != []
+                or row.get("post_skill_tree_delta") != []
+                or "post_removal_skill" not in row or row["post_removal_skill"] is not None
+                or row.get("post_lock_pinned") is not False
+                or row.get("repeat_project_unchanged") is not None
+                or any(row.get(key) is not True for key in (
+                    "lock_written", "lock_contains_identity", "lock_exact_source_pinned",
+                    "skill_bytes_match", "listed_identity", "repeat_verified",
+                    "repeat_native_unchanged", "repeat_lock_unchanged",
+                    "removal_verified", "post_list_schema_valid", "sentinels_preserved"))
+                or any(row.get(key) is not False for key in (
+                    "failed_install_registered", "failed_install_residue",
+                    "post_remove_identity_registered")):
+            return result
+        ids = row.get("matched_installation_ids")
+        if (type(ids) is not list or len(ids) != 1
+                or type(ids[0]) is not str or not ids[0]
+                or row.get("repeat_installation_ids") != ids):
+            return result
+        for phase in ("after-add", "repeat-add", "after-remove"):
+            active = phase != "after-remove"
+            expected_state = {"status": "observed",
+                              "selected_installations": int(active),
+                              "selected_bindings": int(active),
+                              "invalid_rows": 0,
+                              "states": [expected] if active else [],
+                              "truncated": False}
+            if (type(row.get("public_target_states")) is not dict
+                    or row["public_target_states"].get(phase) != expected_state):
+                return result
+        if any(type(row.get(phase)) is not dict
+               or type(row[phase].get("exit_code")) is not int
+               or row[phase]["exit_code"] != 0 or row[phase].get("timeout") is not False
+               for phase in ("install", "list", "repeat_add", "repeat_list",
+                             "cleanup", "post_remove_list")):
+            return result
+        result["installation_passed"] += 1
+        result["installation_prepared_lifecycle_passed"] += 1
+    result["installation_acceptance_passed"] = result["installation_passed"] == 30
+    return result
+
 VSCODE_MANUAL_REMOVE_STDERR = (
     "agentplugins: removal requires a manual client step for [vscode]; "
     "complete the displayed uninstall step, then rerun with "
@@ -4089,7 +4181,8 @@ def main():
     p.add_argument("--report-dir", required=True)
     p.add_argument("--acceptance", choices=("native", "kiro-prepared-installation",
                    "cursor-prepared-installation", "grok-prepared-skills-installation",
-                    "windsurf-prepared-installation", "vscode-user-manual-preparation",
+                   "cursor-prepared-skills-installation", "kiro-prepared-skills-installation",
+                   "windsurf-prepared-installation", "vscode-user-manual-preparation",
                     HISTORICAL_CODEX["ACCEPTANCE"]),
                    default="native")
     args = p.parse_args()
@@ -4103,10 +4196,12 @@ def main():
         p.error("Prepared installation acceptance requires the complete Kiro plugin Darwin lane")
     prepared_routes = {"cursor-prepared-installation": ("cursor", "plugin", "linux", 30),
                        "grok-prepared-skills-installation": ("grok", "skill", "linux", 30),
+                       "cursor-prepared-skills-installation": ("cursor", "skill", "linux", 30),
+                       "kiro-prepared-skills-installation": ("kiro", "skill", "darwin", 30),
                        "windsurf-prepared-installation": ("windsurf", "plugin", "linux", 30)}
     if (args.acceptance in prepared_routes
             and (args.target, args.kind, sys.platform, args.limit) != prepared_routes[args.acceptance]):
-        p.error("Prepared installation acceptance requires its complete Linux target and kind lane")
+        p.error("Prepared installation acceptance requires its complete target, kind and host lane")
     if args.acceptance == "windsurf-prepared-installation" and platform.machine() != "x86_64":
         p.error("Windsurf installation acceptance requires the pinned Linux x86_64 lane")
     if (args.acceptance == "vscode-user-manual-preparation"
@@ -4246,7 +4341,11 @@ def main():
               'native activation remains unqualified')
         return 0 if report["installation_acceptance_passed"] else 1
     if args.acceptance in prepared_routes:
-        report.update(prepared_installation_summary(report, doc, args.acceptance))
+        summary = (prepared_project_skill_summary
+                   if args.acceptance in ("cursor-prepared-skills-installation",
+                                          "kiro-prepared-skills-installation")
+                   else prepared_installation_summary)
+        report.update(summary(report, doc, args.acceptance))
         save()
         print(f'{args.target} Prepared installation: {report["installation_passed"]}/30 installed; '
               f'verified refusals={report["installation_verified_negative_coverage"]}; '
