@@ -23,6 +23,14 @@ type gitRootFetch struct {
 // graph decision stay with the solver.
 type gitRootPrefetch = orderedPrefetch[environment.GitSource, gitRootFetch]
 
+// resolveLock resolves the declared graph with the reads of fresh Git roots
+// started ahead of the sequential solver.
+func (resolver dependencyResolver) resolveLock(ctx context.Context, previous environment.Lock, updateAlias string) (environment.Lock, error) {
+	resolver.gitRoots = resolver.prefetchGitRoots(ctx, previous)
+	defer resolver.gitRoots.close()
+	return (environment.Coordinator{EnvironmentID: resolver.app.environmentID(), Resolver: resolver}).Resolve(ctx, resolver.requirements, previous, updateAlias)
+}
+
 // prefetchGitRoots starts the ref resolution and raw acquisition that
 // resolveGit performs for each declared Git root without a previous pin, in the
 // solver's source key order. Roots that resolveGit would reject before
