@@ -507,7 +507,7 @@ func TestAgentpluginsPublicNPMPostRemoveStatusIsRedactedAndFailClosed(t *testing
 	mustContain(t, job, "has_manifest=")
 	mustContain(t, job, "has_lock=")
 	mustContain(t, job, "if ! run_agentplugins deps status --format json >")
-	mustContain(t, job, "2> ${root}/post-remove-stderr.log")
+	mustContain(t, job, "2> \"${root}/post-remove-stderr.log\"")
 	mustContain(t, job, "if ! jq -e '.pending_recovery == false and (.facts | length) == 0")
 	mustNotContain(t, job, "run_agentplugins deps status --format json | jq -e")
 	mustNotContain(t, job, "cat ${root}/post-remove-status.json")
