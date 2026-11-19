@@ -140,9 +140,10 @@ func TestGroupAddInstallsPeersWhenOneAgentCannotBePrepared(t *testing.T) {
 // the whole selection always reported: the first agent's cause.
 func TestGroupAddEveryAgentFailingKeepsTheWholeSelectionResult(t *testing.T) {
 	t.Parallel()
+	// Unclassified causes keep this test about isolation, not about wording.
 	fail := map[domain.ClientID]error{}
 	for _, client := range isolationClients {
-		fail[client] = permissionDenied(client)
+		fail[client] = fmt.Errorf("stage %s: broken fixture", client)
 	}
 	fixture := newIsolationFixture(t, fail)
 	stdout, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
