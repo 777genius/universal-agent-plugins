@@ -3,6 +3,10 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
+	"io/fs"
+	"net"
+	"os/exec"
+	"syscall"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -27,6 +31,11 @@ const (
 	failureUpdateRequired    failureKind = "UPDATE_REQUIRED"
 	failureEnvironmentChange failureKind = "ENVIRONMENT_CHANGED"
 	failureTimeout           failureKind = "TIMEOUT"
+	failurePermission        failureKind = "PERMISSION_DENIED"
+	failureDiskFull          failureKind = "DISK_FULL"
+	failureReadOnly          failureKind = "READ_ONLY_LOCATION"
+	failureNetwork           failureKind = "NETWORK_UNAVAILABLE"
+	failureAgentMissing      failureKind = "AGENT_PROGRAM_MISSING"
 	failureCanceled          failureKind = "CANCELED"
 	failureSkipped           failureKind = "SKIPPED"
 )
@@ -57,6 +66,26 @@ func failureKindOf(err error) failureKind {
 		return failureTimeout
 	case errors.Is(err, context.Canceled), errors.Is(err, installer.ErrCancelled):
 		return failureCanceled
+	}
+	return environmentFailureKind(err)
+}
+
+// environmentFailureKind recognises ordinary machine problems that a person can
+// fix without reading technical detail. It only looks at typed causes that
+// survive error wrapping, never at message text.
+func environmentFailureKind(err error) failureKind {
+	var netErr net.Error
+	switch {
+	case errors.Is(err, syscall.ENOSPC):
+		return failureDiskFull
+	case errors.Is(err, syscall.EROFS):
+		return failureReadOnly
+	case errors.Is(err, fs.ErrPermission):
+		return failurePermission
+	case errors.Is(err, exec.ErrNotFound):
+		return failureAgentMissing
+	case errors.As(err, &netErr):
+		return failureNetwork
 	}
 	return failureUnknown
 }
@@ -141,6 +170,16 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 		return "Installed state changed while installing.", "Run the command again.", true
 	case failureTimeout:
 		return "A step took too long and was stopped.", "Check network access and the agent, then retry.", true
+	case failurePermission:
+		return "UAP is not allowed to write to this agent's folder.", "Fix the folder's permissions, then retry this agent.", true
+	case failureReadOnly:
+		return "This agent's folder is read-only.", "Make the location writable or choose another one, then retry this agent.", true
+	case failureDiskFull:
+		return "There is not enough free disk space.", "Free some space, then retry this agent.", true
+	case failureNetwork:
+		return "A download needed for this agent failed because the network is unavailable.", "Check your connection, then retry this agent.", true
+	case failureAgentMissing:
+		return "The agent's command-line program was not found.", "Install the agent or add it to your PATH, then retry.", true
 	case failureCanceled:
 		return "The installation was canceled.", "Retry when you are ready.", true
 	case failureSkipped:
