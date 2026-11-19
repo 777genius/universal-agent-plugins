@@ -114,7 +114,7 @@ for (const width of [1440, 390]) {
     expect(Math.abs(gridBox.width - rowBox.width)).toBeLessThanOrEqual(3);
     expect(await grid.locator('.app-multiselect__options').evaluate(
       (node) => getComputedStyle(node).gridTemplateColumns.split(' ').length,
-    )).toBe(width < 600 ? 1 : 3);
+    )).toBe(width < 600 ? 2 : 3);
     await expect(dialog.getByRole('checkbox', { name: /^ChatGPT Web(?:\s|$)/ })).toHaveCount(0);
     const search = grid.getByRole('searchbox');
     await search.fill('cOdEx');
