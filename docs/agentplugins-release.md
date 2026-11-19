@@ -45,6 +45,20 @@ Existing immutable producer identity checks retain that historical slug.
 The checked-in npm version `0.0.0-development` is intentional. Staging derives
 the publishable version from the approved tag; do not manually bump it.
 
+## Release-preparation pull requests
+
+During an owner-authorized release, a pull request that only prepares the
+release and changes no executable behavior is merged as soon as it is
+mergeable, without waiting for its own CI. This covers release notes, the
+changelog, documentation and version references in non-executable metadata.
+Do not park the release on such a pull request.
+
+This does not relax any release gate. The candidate commit on `main` still needs
+every required check green before the tag is created, and qualification and
+promotion run unchanged. A pull request that touches code, workflows, release
+scripts, generated files, dependencies or the Directory bootstrap is not covered
+and follows the normal review and CI path.
+
 ## GitHub assets
 
 1. Create the approved annotated stable tag on current `main` and push only that

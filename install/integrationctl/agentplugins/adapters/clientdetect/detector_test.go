@@ -462,15 +462,33 @@ func TestExplicitDetectorProbeNormalizesClientVersionWithoutMakingDetectionFatal
 	}
 }
 
+// Test callbacks observe the same disposable profile authority as the real
+// Copilot CLI. An environment-free probe cannot establish that authority.
+func assertDisposableCopilotVersionEnvironment(t *testing.T, home string, environment []string) {
+	t.Helper()
+	if len(environment) != 1 || !strings.HasPrefix(environment[0], "COPILOT_HOME=") {
+		t.Fatalf("Copilot version probe did not receive isolated profile: %q", environment)
+	}
+	root := strings.TrimPrefix(environment[0], "COPILOT_HOME=")
+	if !filepath.IsAbs(root) || filepath.Clean(root) != root || root == filepath.Join(home, ".copilot") {
+		t.Fatalf("Copilot version probe reused user profile: %q", root)
+	}
+	info, err := os.Lstat(root)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("Copilot version probe root is not an ordinary private directory: %v", err)
+	}
+}
+
 func TestExplicitDetectorProbeNormalizesOfficialCopilotVersionOutput(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
 	copilotPath := filepath.Join(home, "bin", "copilot")
 	detector := testDetector(home, map[string]string{"copilot": copilotPath})
-	detector.ProbeVersion = func(_ context.Context, executable string) (string, error) {
+	detector.ProbeVersionWithEnvironment = func(_ context.Context, executable string, environment []string) (string, error) {
 		if executable != copilotPath {
 			t.Fatalf("version probe executable = %q", executable)
 		}
+		assertDisposableCopilotVersionEnvironment(t, home, environment)
 		return "GitHub Copilot CLI 1.0.80.\nA newer version is available.", nil
 	}
 	clients, err := detector.DetectWithVersionProbe(context.Background())
@@ -510,7 +528,8 @@ func TestTargetedVersionProbeExecutesOnlySelectedClient(t *testing.T) {
 	codePath := filepath.Join(home, "bin", "code")
 	detector := testDetector(home, map[string]string{"copilot": copilotPath, "code": codePath})
 	var probed []string
-	detector.ProbeVersion = func(_ context.Context, executable string) (string, error) {
+	detector.ProbeVersionWithEnvironment = func(_ context.Context, executable string, environment []string) (string, error) {
+		assertDisposableCopilotVersionEnvironment(t, home, environment)
 		probed = append(probed, executable)
 		return "1.0.80.", nil
 	}
@@ -535,10 +554,11 @@ func TestTargetedVersionProbeAllowsSlowAuthoritativeClientWithinExplicitBound(t 
 	detector := testDetector(home, map[string]string{"copilot": copilotPath})
 	detector.VersionTimeout = 2 * time.Second
 	detector.TargetedVersionTimeout = 3 * time.Second
-	detector.ProbeVersion = func(ctx context.Context, executable string) (string, error) {
+	detector.ProbeVersionWithEnvironment = func(ctx context.Context, executable string, environment []string) (string, error) {
 		if executable != copilotPath {
 			t.Fatalf("version probe executable = %q", executable)
 		}
+		assertDisposableCopilotVersionEnvironment(t, home, environment)
 		select {
 		case <-time.After(2100 * time.Millisecond):
 			return "GitHub Copilot CLI 1.0.80.", nil
@@ -559,7 +579,8 @@ func TestTargetedVersionProbeStillBoundsAuthoritativeClientTimeout(t *testing.T)
 	home := t.TempDir()
 	detector := testDetector(home, map[string]string{"copilot": filepath.Join(home, "bin", "copilot")})
 	detector.TargetedVersionTimeout = 10 * time.Millisecond
-	detector.ProbeVersion = func(ctx context.Context, _ string) (string, error) {
+	detector.ProbeVersionWithEnvironment = func(ctx context.Context, _ string, environment []string) (string, error) {
+		assertDisposableCopilotVersionEnvironment(t, home, environment)
 		<-ctx.Done()
 		return "", ctx.Err()
 	}
