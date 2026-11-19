@@ -12,6 +12,9 @@ func TestAgentpluginsGeminiNativeProjectCompleteCycle(t *testing.T) {
 	if os.Getenv("AGENTPLUGINS_GEMINI_PROJECT_RUNTIME_ATTEMPT") != "1" {
 		t.Skip("opt-in genuine hosted Gemini complete lifecycle first capture")
 	}
+	if !t.Run("pure-skill-ready", TestAgentpluginsGeminiNativeProjectSkillReady) {
+		return
+	}
 	f := newGeminiProjectAttempt(t)
 	c := newGeminiProjectCycle(f)
 	heldSource := f.evidence["source_identity"]

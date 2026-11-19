@@ -6,7 +6,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import stat
 import subprocess
 import time
@@ -180,24 +179,41 @@ def historical_add(value, matches, fixture, skill_path, repeated=False):
     if type(item) is not dict or set(item) != {
             "alias", "candidateId", "destinationPath", "message", "status", "targetId"}:
         return False
+    if (type(installed) is not dict or type(installed.get("installation_id")) is not str
+            or not installed["installation_id"] or not skill_path):
+        return False
+    # ec85ee7: skillsource discovery/normalize, environment.SourceKey and
+    # domain.ComputePhysicalArtifactID distinguish the selected native Skill
+    # from its deterministic candidate, synthetic package and managed path.
+    path = "skills/" + fixture["folder"]
+    candidate = "sha256:" + hashlib.sha256(
+        "\0".join((fixture["repo"], fixture["ref"], path)).encode()).hexdigest()
+    source_key = "github-skill:" + fixture["repo"].lower() + ":" + fixture["name"] + ":" + path
+    bundle = "skill-" + hashlib.sha256(source_key.encode()).hexdigest()[:56]
+    native = Path(skill_path)
+    if (not native.is_absolute()
+            or native.parts[-4:] != (".agents", "skills", fixture["name"], "SKILL.md")):
+        return False
+    leaf = bundle[:51].rstrip(".-") + "-" + hashlib.sha256(
+        installed["installation_id"].encode()).hexdigest()[:12]
+    destination = native.parents[3] / ".uap/managed/clients/codex" / leaf
     if (any(type(item[key]) is not str for key in item)
             or item["alias"] != fixture["name"] or item["targetId"] != "codex"
             or item["status"] != ("unchanged" if repeated else "succeeded")
-            or not re.fullmatch(r"candidate-[0-9a-f]{64}", item["candidateId"])
-            or not skill_path or Path(item["destinationPath"]) != Path(skill_path).parent
-            or type(installed) is not dict or installed.get("name") != fixture["name"]
+            or item["candidateId"] != candidate
+            or item["destinationPath"] != str(destination)
+            or installed.get("name") != bundle
             or installed.get("source") != fixture["repo"] + "/skills/" + fixture["folder"]):
         return False
-    # Candidate IDs include a new session nonce on each command; they must not
-    # be equated across sessions. Each result joins the same immutable fixture
-    # through alias/destination and the independently matched list and lock.
     clients = installed.get("clients")
     expected = {"client_id": "codex", "scope": "project",
-                "materialization": "materialized", "activation": "active",
+                "materialization": "materialized", "activation": "prepared",
                 "verification": "installation_verified",
-                "authentication": "not_required", "policy": "allowed"}
+                "authentication": "not_checked", "policy": "allowed"}
     return (type(clients) is list and len(clients) == 1 and type(clients[0]) is dict
-            and all(clients[0].get(key) == expected_value for key, expected_value in expected.items()))
+            and all(clients[0].get(key) == expected_value for key, expected_value in expected.items())
+            and type(clients[0].get("package_revision")) is dict
+            and clients[0]["package_revision"].get("resolved_revision") == fixture["ref"])
 
 
 def summary(report, fixtures):

@@ -165,7 +165,7 @@ for (const mobile of [false, true]) {
       await details.locator('.skillspector__dialog-close').click();
       await expect(details).not.toHaveAttribute('open');
       await card.getByRole('button', { name: 'Install I18n State 00', exact: true }).click();
-      await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add pre')).toContainText(
+      await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add pre')).toContainText(
         'npx -y universal-agent-plugins add i18n-state-00',
       );
       await navigate(page, '/plugins/', 'en', '?tab=skills&skillScan=all');
@@ -182,7 +182,7 @@ for (const mobile of [false, true]) {
       await expect(skill.locator('.skillspector__dialog')).toHaveCount(0);
       await expect(skill.locator('.skillspector > summary')).toBeFocused();
       await skill.getByRole('button', { name: 'Install frontend-design', exact: true }).click();
-      await expect(page.getByRole('dialog').locator('.plugin-card__install-panel pre')).toContainText(
+      await expect(page.getByRole('dialog').locator('.install-dialog__footer pre')).toContainText(
         'skills add https://github.com/anthropics/skills --skill frontend-design',
       );
       await navigate(page, '/plugins/', 'ru', '?tab=skills&skillScan=all');

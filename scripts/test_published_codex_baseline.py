@@ -1,6 +1,8 @@
 """Negative controls for the finite historical npm observer, never native PASS."""
 import copy
 import importlib.util
+import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -18,35 +20,63 @@ def module():
 BASELINE = module()
 
 
-def fixture():
-    return {"name": "selected", "repo": "owner/repo", "folder": "selected",
-            "source": "github:owner/repo@" + "a" * 40 + "//skills/selected"}
+# Genuine published 0.1.95 / Codex 0.153.4 artifact 14386239913.
+# codex-skill.json SHA256 adadc5dc2b760a2ca0822e371ab48261cd12e4703f983250d542c9d1e4c811bd.
+# All four add/list phase pairs are retained; only the private project prefix changed.
+RAW_CASES = [{'fixture': {'repo': 'anthropics/skills',
+              'ref': 'ca45fc496a3436251f191354091d557da31c15b5',
+              'folder': 'frontend-design',
+              'name': 'frontend-design',
+              'source': 'https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/frontend-design',
+              'skill_md_git_blob_sha1': 'a5333457c414d20d625f307df945842c0952ecc3'},
+  'install': '{"status":"succeeded","items":[{"alias":"frontend-design","candidateId":"sha256:b596c15579514b31901b660dcee94def801033e595d112ff5afb9ebfefea6e8b","destinationPath":"/case/project/.uap/managed/clients/codex/skill-b0a5b0253f26020d7acb797250495459c1bd758fe4405-e38b1408fca0","message":"The '
+             'Skill was installed.","status":"succeeded","targetId":"codex"}],"repairInstructions":[]}\n',
+  'list': '{"schema_version":1,"command":"list","result":"success","data":{"installations":[{"installation_id":"e607fe42-39e6-4efd-ae13-77fa856ca440","name":"skill-b0a5b0253f26020d7acb797250495459c1bd758fe440530b3db1347e","source":"anthropics/skills/skills/frontend-design","clients":[{"client_id":"codex","scope":"project","materialization":"materialized","activation":"prepared","authentication":"not_checked","policy":"allowed","verification":"installation_verified","package_revision":{"resolved_revision":"ca45fc496a3436251f191354091d557da31c15b5","tree_digest":"sha256:554fe3a1771a691a315cbf77927c47466ca6d7c0095ba9eba8f91527c2045c83","manifest_digest":"sha256:fd6cec3517f7197db2abcfadd5ef85c5473dcd905b792013c6a5c3f8b41ae99d"},"affected_surfaces":["codex"]}],"mixed_version":false}]}}\n',
+  'repeat_add': '{"status":"succeeded","items":[{"alias":"frontend-design","candidateId":"sha256:b596c15579514b31901b660dcee94def801033e595d112ff5afb9ebfefea6e8b","destinationPath":"/case/project/.uap/managed/clients/codex/skill-b0a5b0253f26020d7acb797250495459c1bd758fe4405-e38b1408fca0","message":"The '
+                'pinned Skill already '
+                'matches.","status":"unchanged","targetId":"codex"}],"repairInstructions":[]}\n',
+  'repeat_list': '{"schema_version":1,"command":"list","result":"success","data":{"installations":[{"installation_id":"e607fe42-39e6-4efd-ae13-77fa856ca440","name":"skill-b0a5b0253f26020d7acb797250495459c1bd758fe440530b3db1347e","source":"anthropics/skills/skills/frontend-design","clients":[{"client_id":"codex","scope":"project","materialization":"materialized","activation":"prepared","authentication":"not_checked","policy":"allowed","verification":"installation_verified","package_revision":{"resolved_revision":"ca45fc496a3436251f191354091d557da31c15b5","tree_digest":"sha256:554fe3a1771a691a315cbf77927c47466ca6d7c0095ba9eba8f91527c2045c83","manifest_digest":"sha256:fd6cec3517f7197db2abcfadd5ef85c5473dcd905b792013c6a5c3f8b41ae99d"},"affected_surfaces":["codex"]}],"mixed_version":false}]}}\n'},
+ {'fixture': {'repo': 'anthropics/skills',
+              'ref': 'ca45fc496a3436251f191354091d557da31c15b5',
+              'folder': 'pdf',
+              'name': 'pdf',
+              'source': 'https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/pdf',
+              'skill_md_git_blob_sha1': 'd3e046a5ae107a6cb23cfb16c219837094ab35d3'},
+  'install': '{"status":"succeeded","items":[{"alias":"pdf","candidateId":"sha256:ad1dd23110116893f4762cf23bcbe4bad649a6eef584fdaaf5223b281bc720f2","destinationPath":"/case/project/.uap/managed/clients/codex/skill-da182d36cdc9982baaa0d65a8e10ce05d57ea882eb83a-de0e4ab626b6","message":"The '
+             'Skill was installed.","status":"succeeded","targetId":"codex"}],"repairInstructions":[]}\n',
+  'list': '{"schema_version":1,"command":"list","result":"success","data":{"installations":[{"installation_id":"a51ddaa9-3fae-40e6-97c2-b6c87b53d301","name":"skill-da182d36cdc9982baaa0d65a8e10ce05d57ea882eb83a03398d4b00a","source":"anthropics/skills/skills/pdf","clients":[{"client_id":"codex","scope":"project","materialization":"materialized","activation":"prepared","authentication":"not_checked","policy":"allowed","verification":"installation_verified","package_revision":{"resolved_revision":"ca45fc496a3436251f191354091d557da31c15b5","tree_digest":"sha256:451b323a647513e5e2d9fec6d3dac2ef32eedaae9a400fd57ec82c9370718b1e","manifest_digest":"sha256:08e01df8ca12c5ff3349857211b34cea5ec5e440ef5b5edacbba18669e702745"},"affected_surfaces":["codex"]}],"mixed_version":false}]}}\n',
+  'repeat_add': '{"status":"succeeded","items":[{"alias":"pdf","candidateId":"sha256:ad1dd23110116893f4762cf23bcbe4bad649a6eef584fdaaf5223b281bc720f2","destinationPath":"/case/project/.uap/managed/clients/codex/skill-da182d36cdc9982baaa0d65a8e10ce05d57ea882eb83a-de0e4ab626b6","message":"The '
+                'pinned Skill already '
+                'matches.","status":"unchanged","targetId":"codex"}],"repairInstructions":[]}\n',
+  'repeat_list': '{"schema_version":1,"command":"list","result":"success","data":{"installations":[{"installation_id":"a51ddaa9-3fae-40e6-97c2-b6c87b53d301","name":"skill-da182d36cdc9982baaa0d65a8e10ce05d57ea882eb83a03398d4b00a","source":"anthropics/skills/skills/pdf","clients":[{"client_id":"codex","scope":"project","materialization":"materialized","activation":"prepared","authentication":"not_checked","policy":"allowed","verification":"installation_verified","package_revision":{"resolved_revision":"ca45fc496a3436251f191354091d557da31c15b5","tree_digest":"sha256:451b323a647513e5e2d9fec6d3dac2ef32eedaae9a400fd57ec82c9370718b1e","manifest_digest":"sha256:08e01df8ca12c5ff3349857211b34cea5ec5e440ef5b5edacbba18669e702745"},"affected_surfaces":["codex"]}],"mixed_version":false}]}}\n'}]
 
 
-def installation():
-    return {"name": "selected", "source": "owner/repo/skills/selected",
-            "clients": [{"client_id": "codex", "scope": "project",
-                         "materialization": "materialized", "activation": "active",
-                         "verification": "installation_verified",
-                         "authentication": "not_required", "policy": "allowed"}]}
+def fixture(index=0):
+    return copy.deepcopy(RAW_CASES[index]["fixture"])
 
 
-def dto(repeated=False):
-    return {"status": "succeeded", "repairInstructions": [], "items": [{
-        "alias": "selected", "candidateId": "candidate-" + ("b" if repeated else "a") * 64,
-        "destinationPath": "/case/project/.agents/skills/selected",
-        "message": "", "status": "unchanged" if repeated else "succeeded", "targetId": "codex"}]}
+def installation(index=0):
+    return json.loads(RAW_CASES[index]["list"])["data"]["installations"][0]
+
+
+def dto(repeated=False, index=0):
+    return json.loads(RAW_CASES[index]["repeat_add" if repeated else "install"])
+
+
+def native_skill_path(index=0, project="/case/project"):
+    return str(Path(project) / ".agents/skills" / fixture(index)["name"] / "SKILL.md")
 
 
 def valid_report():
-    row = {"index": 0, "source": fixture()["source"], "identity": "selected",
+    row = {"index": 0, "source": fixture()["source"], "identity": fixture()["name"],
            "target": "codex", "kind": "skill", "status": "incomplete-native-proof",
            "codex_public_add_ready": False, "codex_public_repeat_ready": False,
            "repeat_verified": False,
            "historical_npm_proof": {"package": "universal-agent-plugins", "version": "0.1.95",
                 "commit": BASELINE.COMMIT, "binary_sha256": BASELINE.DIGEST,
                 "binary_size": BASELINE.SIZE, "launcher_sources_verified": True, "commands_verified": 6},
-           "matched_installation_ids": ["one"], "repeat_installation_ids": ["one"],
+           "matched_installation_ids": [installation()["installation_id"]],
+           "repeat_installation_ids": [installation()["installation_id"]],
            "repeat_native_unchanged": True, "native_residuals": [],
            "post_removal_skill": None, "post_removal_leftovers": [], "post_skill_tree_delta": [],
            "codex_runtime_proof": {"native_version": "0.153.4", "observations": []}}
@@ -69,7 +99,9 @@ def valid_report():
             "runtime_semantics_unchanged": True, "runtime_files_fully_read": {},
             "temporary_git_files_fully_read": {}})
     second = copy.deepcopy(row)
-    second["index"] = 1
+    second.update(index=1, source=fixture(1)["source"], identity=fixture(1)["name"],
+                  matched_installation_ids=[installation(1)["installation_id"]],
+                  repeat_installation_ids=[installation(1)["installation_id"]])
     return {"acceptance": BASELINE.ACCEPTANCE, "target": "codex", "kind": "skill",
             "platform": "linux", "architecture": "x86_64", "cases_attempted": 2,
             "passed": 0, "full_coverage": False, "source_selection_complete": False,
@@ -81,13 +113,71 @@ def valid_report():
 class HistoricalDTOTest(unittest.TestCase):
     def check(self, value, matches=None, repeated=False):
         return BASELINE.historical_add(value, [installation()] if matches is None else matches,
-            fixture(), "/case/project/.agents/skills/selected/SKILL.md", repeated)
+            fixture(), native_skill_path(), repeated)
 
-    def test_exact_old_shape_and_independent_session_candidate_ids(self):
+    def test_exact_release_shape_and_stable_candidate_ids(self):
         self.assertTrue(self.check(dto()))
         self.assertTrue(self.check(dto(True), repeated=True))
-        self.assertNotEqual(dto()["items"][0]["candidateId"], dto(True)["items"][0]["candidateId"])
+        self.assertEqual(dto()["items"][0]["candidateId"], dto(True)["items"][0]["candidateId"])
         self.assertFalse(self.check(dto(), repeated=True))
+
+    def test_actual_four_raw_dtos_and_lists_observe_only_historical_contract(self):
+        for index, case in enumerate(RAW_CASES):
+            for added, listed, repeated in (("install", "list", False),
+                                             ("repeat_add", "repeat_list", True)):
+                with self.subTest(skill=fixture(index)["name"], phase=added):
+                    value = json.loads(case[added])
+                    matches = json.loads(case[listed])["data"]["installations"]
+                    before = copy.deepcopy((value, matches))
+                    self.assertTrue(BASELINE.historical_add(
+                        value, matches, fixture(index), native_skill_path(index), repeated))
+                    self.assertEqual((value, matches), before)
+                    self.assertEqual(matches[0]["clients"][0]["activation"], "prepared")
+                    self.assertEqual(matches[0]["clients"][0]["authentication"], "not_checked")
+
+    def test_source_derived_identity_managed_destination_and_state_fail_closed(self):
+        original = installation()
+        for field, value in (("candidateId", "candidate-" + "a" * 64),
+                             ("candidateId", "sha256:" + "0" * 64),
+                             ("destinationPath", str(Path(native_skill_path()).parent)),
+                             ("destinationPath", dto()["items"][0]["destinationPath"] + "/."),
+                             ("destinationPath", "/outside/" + Path(dto()["items"][0]["destinationPath"]).name)):
+            wrong = dto()
+            wrong["items"][0][field] = value
+            self.assertFalse(self.check(wrong), (field, value))
+        for change in ({"name": fixture()["name"]}, {"installation_id": "other"},
+                       {"installation_id": ""}, {"installation_id": None}):
+            self.assertFalse(self.check(dto(), [{**original, **change}]), change)
+        for field, value in (("activation", "active"), ("authentication", "not_required"),
+                             ("scope", "user"), ("policy", "blocked")):
+            wrong = copy.deepcopy(original)
+            wrong["clients"][0][field] = value
+            self.assertFalse(self.check(dto(), [wrong]), field)
+        wrong = copy.deepcopy(original)
+        wrong["clients"][0]["package_revision"]["resolved_revision"] = "0" * 40
+        self.assertFalse(self.check(dto(), [wrong]))
+        for field in ("repo", "ref", "folder", "name"):
+            changed = fixture()
+            changed[field] = "other"
+            self.assertFalse(BASELINE.historical_add(dto(), [original], changed, native_skill_path()), field)
+        for path in (None, "relative/SKILL.md", "/case/project/.agents/skills/other/SKILL.md"):
+            self.assertFalse(BASELINE.historical_add(dto(), [original], fixture(), path), path)
+
+    def test_legacy_observation_never_replaces_current_public_ready(self):
+        path = Path(__file__).with_name("codex_runtime_audit.py")
+        spec = importlib.util.spec_from_file_location("historical_ready_guard", path)
+        runtime = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(runtime)
+        for index in range(2):
+            for repeated in (False, True):
+                self.assertFalse(runtime.public_skill_ready(
+                    dto(repeated, index), [installation(index)], fixture(index)["name"]))
+        modern = {**dto(), "schema_version": 1, "command": "skills add", "result": "success",
+                  "scope": "project", "readiness": "ready", "next_actions": []}
+        active = installation()
+        active["clients"][0].update(activation="active", authentication="not_required")
+        self.assertTrue(runtime.public_skill_ready(modern, [active], fixture()["name"]))
+        self.assertFalse(BASELINE.historical_add(modern, [active], fixture(), native_skill_path()))
 
     def test_modern_missing_null_wrong_field_type_source_and_destination_refused(self):
         for key, value in (("schema_version", 1), ("readiness", "ready"),
@@ -116,7 +206,7 @@ class HistoricalDTOTest(unittest.TestCase):
 
 class HistoricalSummaryTest(unittest.TestCase):
     def check(self, report):
-        return BASELINE.summary(report, {"skills": [fixture(), fixture()]})["historical_observation_complete"]
+        return BASELINE.summary(report, {"skills": [fixture(), fixture(1)]})["historical_observation_complete"]
 
     def test_complete_observation_keeps_native_status_and_count(self):
         report = valid_report()
@@ -193,6 +283,63 @@ class PublishedProvenanceTest(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "size mismatch"):
                     observer.after_command()
 
+
+
+class HistoricalModeTest(unittest.TestCase):
+    def load_live(self):
+        path = Path(__file__).with_name("live-install-audit.py")
+        spec = importlib.util.spec_from_file_location("historical_mode_live", path)
+        live = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(live)
+        return live
+
+    def test_mode_refuses_other_sources_counts_platforms_and_acceptances(self):
+        live = self.load_live()
+        cases = [("codex", "plugin", "2", "linux", "x86_64", BASELINE.ACCEPTANCE),
+                 ("claude", "skill", "2", "linux", "x86_64", BASELINE.ACCEPTANCE),
+                 ("codex", "skill", "3", "linux", "x86_64", BASELINE.ACCEPTANCE),
+                 ("codex", "skill", "2", "darwin", "x86_64", BASELINE.ACCEPTANCE),
+                 ("codex", "skill", "2", "linux", "aarch64", BASELINE.ACCEPTANCE),
+                 ("codex", "skill", "2", "linux", "x86_64", "kiro-prepared-installation")]
+        for target, kind, count, platform, machine, acceptance in cases:
+            with self.subTest(case=(target, kind, count, platform, machine, acceptance)), \
+                    patch("sys.argv", ["audit", "--cli", "/inert", "--target", target,
+                        "--kind", kind, "--limit", count, "--report-dir", "/inert",
+                        "--acceptance", acceptance]), patch.object(live.sys, "platform", platform), \
+                    patch.object(live.platform, "machine", return_value=machine), \
+                    patch.object(live, "do_case") as case, patch("sys.stderr"):
+                with self.assertRaises(SystemExit) as rejected:
+                    live.main()
+                self.assertEqual(rejected.exception.code, 2)
+                case.assert_not_called()
+
+    def test_source_version_string_cannot_qualify_historical_mode_or_native_ready(self):
+        live = self.load_live()
+        with tempfile.TemporaryDirectory() as temporary:
+            cli = Path(temporary) / "agentplugins-source"
+            cli.write_text("source build labeled agentplugins 0.1.95")
+            versions = [{"status": "reported", "value": "agentplugins 0.1.95", "exit_code": 0},
+                        {"status": "reported", "value": "codex-cli 0.153.4", "exit_code": 0}]
+            def version(argv, *args):
+                return versions[0] if str(argv[0]) == str(cli) else versions[1]
+            with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch.dict(live.AGENT_BINARIES, {"codex": "/inert/codex"}), \
+                    patch("sys.argv", ["audit", "--cli", str(cli), "--target", "codex",
+                        "--kind", "skill", "--limit", "2", "--report-dir", temporary,
+                        "--acceptance", BASELINE.ACCEPTANCE]), \
+                    patch.object(live, "version_evidence", side_effect=version), \
+                    patch.object(live, "call", side_effect=AssertionError("must not execute")) as call, \
+                    patch.object(live.sys, "platform", "linux"), \
+                    patch.object(live.platform, "machine", return_value="x86_64"), patch("builtins.print"):
+                self.assertEqual(live.main(), 1)
+                call.assert_not_called()
+            report = json.loads((Path(temporary) / "codex-skill.json").read_text())
+            self.assertEqual(report["cli_version"], versions[0])
+            self.assertEqual(report["passed"], 0)
+            self.assertEqual(report["historical_lifecycle_observed"], 0)
+            self.assertFalse(report["historical_observation_complete"])
+            self.assertEqual([row["status"] for row in report["results"]], ["harness-error"] * 2)
+            self.assertTrue(all("actual npm launcher" in row["error"] for row in report["results"]))
 
 
 class FiniteReadTest(unittest.TestCase):
@@ -300,16 +447,17 @@ class HistoricalOrchestrationTest(unittest.TestCase):
                 nonlocal add_count, removed
                 command = "add" if argv[1:3] == ["skills", "add"] else argv[1]
                 events.append(("command", command))
-                skill = project / ".agents/skills/selected/SKILL.md"
+                skill = project / ".agents/skills" / selected["name"] / "SKILL.md"
                 if command == "add":
                     add_count += 1
                     if add_count == 1:
                         skill.parent.mkdir()
-                        skill.write_text("---\nname: selected\n---\n")
+                        skill.write_text("---\nname: " + selected["name"] + "\n---\n")
                         (project / "uap.toml").write_text("selected")
                         (project / "uap.lock").write_text("selected")
                     document = dto(add_count == 2)
-                    document["items"][0]["destinationPath"] = str(skill.parent)
+                    document["items"][0]["destinationPath"] = document["items"][0]["destinationPath"].replace(
+                        "/case/project", str(project))
                 elif command == "remove":
                     removed = True
                     skill.unlink()
@@ -319,7 +467,7 @@ class HistoricalOrchestrationTest(unittest.TestCase):
                     document = {"result": "success"}
                 else:
                     self.assertEqual(command, "list")
-                    registered = {**installation(), "installation_id": "one"}
+                    registered = installation()
                     document = {"schema_version": 1, "command": "list", "result": "success",
                                 "data": {"installations": [] if removed else [registered]}}
                 return {"exit_code": 0, "timeout": False, "stdout_tail": "", "stderr_tail": "",

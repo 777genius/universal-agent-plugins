@@ -5,6 +5,15 @@ import "fmt"
 // The CLI can reuse one prepared target through its single-result envelope.
 // Adapt assertions only; captured raw JSON and the input map remain unchanged.
 func openCodeProjectAssertionEnvelope(result map[string]any) (map[string]any, error) {
+	return openCodeProjectAssertionEnvelopeForActivation(result, "prepared")
+}
+
+// The pure Skill proof explicitly expects Active; mixed historical callers keep
+// the Prepared wrapper above and all envelope/unchanged/attestation checks.
+func openCodeProjectAssertionEnvelopeForActivation(result map[string]any, expected string) (map[string]any, error) {
+	if expected != "prepared" && expected != "active" {
+		return nil, fmt.Errorf("unsupported native activation expectation")
+	}
 	data, ok := result["data"].(map[string]any)
 	if result["result"] != "success" || result["error"] != nil || !ok || data["error"] != nil {
 		return nil, fmt.Errorf("project result is not explicit success")
@@ -41,8 +50,8 @@ func openCodeProjectAssertionEnvelope(result map[string]any) (map[string]any, er
 	}
 	plan, _ := outcome["plan"].(map[string]any)
 	activation, _ := outcome["activation"].(map[string]any)
-	if plan["client_id"] != "opencode" || plan["scope"] != "project" || activation["activation"] != "prepared" || activation["verification"] != "installation_verified" {
-		return nil, fmt.Errorf("project result has contradictory client, scope or Prepared identity")
+	if plan["client_id"] != "opencode" || plan["scope"] != "project" || activation["activation"] != expected || activation["verification"] != "installation_verified" {
+		return nil, fmt.Errorf("project result has contradictory client, scope or %s identity", expected)
 	}
 	for _, key := range []string{"activation_attested", "authentication_attested"} {
 		if value, exists := activation[key]; exists && value != false {

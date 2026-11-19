@@ -250,7 +250,9 @@ class NativeMatrixTests(unittest.TestCase):
         })
         self.assertIn("TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle", v2_pattern)
         self.assertIn("TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake", v2_pattern)
-        self.assertEqual(v1_required, matrix.REQUIRED_TESTS["opencode"] | matrix.PROJECT_TESTS["opencode"])
+        self.assertEqual(v1_required, matrix.REQUIRED_TESTS["opencode"] | matrix.PROJECT_TESTS["opencode"] | {matrix.OPENCODE_V1_SKILL_TEST})
+        self.assertNotIn(matrix.OPENCODE_V1_SKILL_TEST, v2_required)
+        self.assertIsNone(re.search(v2_pattern, matrix.OPENCODE_V1_SKILL_TEST))
         self.assertNotIn("TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake", v1_pattern)
         declared = set()
         for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
@@ -275,9 +277,16 @@ class NativeMatrixTests(unittest.TestCase):
         declared = set()
         for path in (Path(__file__).resolve().parents[1] / "repotests").glob("*_test.go"):
             declared.update(re.findall(r"^func (Test\w+)\(t \*testing\.T\)", path.read_text(encoding="utf-8"), re.M))
-        self.assertEqual(required, matrix.REQUIRED_TESTS["opencode"] | {"TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle"})
+        self.assertEqual(required, matrix.REQUIRED_TESTS["opencode"] | matrix.PROJECT_TESTS["opencode"] | {matrix.OPENCODE_V1_SKILL_TEST})
         self.assertEqual({name for name in declared if re.search(pattern, name)}, required)
         self.assertNotIn("TestAgentpluginsOpenCodeNativeProjectComponentsLifecycle", released.CLIENT_TESTS["opencode"])
+        self.assertNotIn(matrix.OPENCODE_V1_SKILL_TEST, released.CLIENT_TESTS["opencode"])
+        for is_release in (False, True):
+            old_pattern, old_required = matrix.select_native_tests("opencode", released=is_release)
+            self.assertNotIn(matrix.OPENCODE_V1_SKILL_TEST, old_required)
+            self.assertIsNone(re.search(old_pattern, matrix.OPENCODE_V1_SKILL_TEST))
+        for suffix in ("Extra", "/child"):
+            self.assertIsNone(re.search(pattern, matrix.OPENCODE_V1_SKILL_TEST + suffix))
 
     def test_source_project_proof_rejects_released_and_unsupported_clients(self):
         for client in matrix.PROJECT_TESTS:
@@ -300,8 +309,18 @@ class NativeMatrixTests(unittest.TestCase):
         body = b"native-client-fixture"
         for pin in ["sha256:" + hashlib.sha256(body).hexdigest(), "sha512-" + base64.b64encode(hashlib.sha512(body).digest()).decode()]:
             matrix.verify_digest(body, pin)
-            with self.assertRaises(ValueError):
-                matrix.verify_digest(body + b"changed", pin)
+            changed = body + b"changed"
+            algorithm = "sha256" if pin.startswith("sha256:") else "sha512"
+            expected = hashlib.new(algorithm, body).hexdigest()
+            actual = hashlib.new(algorithm, changed).hexdigest()
+            for tool, label in (("opencode", "opencode"), ("/private/credential-token", "archive")):
+                with self.subTest(algorithm=algorithm, tool=label):
+                    with self.assertRaises(ValueError) as refused:
+                        matrix.verify_digest(changed, pin, tool)
+                    self.assertEqual(str(refused.exception),
+                                     f"archive integrity mismatch: tool={label} algorithm={algorithm} expected={expected} actual={actual}")
+                    self.assertNotIn("native-client-fixture", str(refused.exception))
+                    self.assertNotIn("credential-token", str(refused.exception))
 
     def test_tar_selects_only_regular_exact_binary(self):
         archive = io.BytesIO()

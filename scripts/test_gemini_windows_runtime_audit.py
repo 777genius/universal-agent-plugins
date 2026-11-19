@@ -123,13 +123,39 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
     VERSION = _contracts.GeminiEmptySessionRuntimeContracts.VERSION
     fixture = _contracts.GeminiEmptySessionRuntimeContracts.fixture
     record = _contracts.GeminiEmptySessionRuntimeContracts.record
-    test_windows_registry_and_marker_require_exact_producer_spelling = (
-        _contracts.GeminiEmptySessionRuntimeContracts
-        .test_windows_registry_and_marker_require_exact_producer_spelling)
     phase = _contracts.GeminiEmptySessionRuntimeContracts.phase
+    test_protected_profile_file_replacement_and_empty_directory_changes_refuse = (
+        _contracts.GeminiEmptySessionRuntimeContracts
+        .test_protected_profile_file_replacement_and_empty_directory_changes_refuse)
     test_strict_existing_metadata_negatives = getattr(
         _contracts.GeminiEmptySessionRuntimeContracts,
         "test_conversation_foreign_duplicate_partial_and_unbounded_records_refuse")
+
+    def test_windows_registry_and_marker_require_exact_producer_spelling(self):
+        for mutation in ("registry", "marker"):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                project = str(case["project"])
+                self.assertNotEqual(project, project.lower())
+                case["observer"].close()
+                if mutation == "registry":
+                    (case["profile"] / "projects.json").write_text(
+                        json.dumps({"projects": {project: "project"}}))
+                else:
+                    (case["chats"].parent / ".project_root").write_text(project)
+                before = case["audit"].snapshot([case["profile"]])
+                observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
+                    case["home"], case["project"], before, self.VERSION,
+                    profile_snapshot=case["audit"].scoped_snapshot)
+                try:
+                    self.assertIsNotNone(observer.windows)
+                    self.assertEqual(observer.reason,
+                        "Gemini runtime registry does not bind the exact project"
+                        if mutation == "registry" else "Gemini runtime ownership marker differs")
+                    self.assertFalse(observer.finish(before))
+                    if mutation == "registry":
+                        self.assertIs(observer.evidence()["failure_facts"]["exact_key_present"], False)
+                finally:
+                    observer.close()
 
     def saved(self, backend):
         return ([handle for handle, _facts in backend.parents.values()],
@@ -187,9 +213,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
             self.assert_closed(native, *held)
             observer.close()
 
-    def test_real_rename_hardlink_junction_and_foreign_delta_refuse(self):
-        for mutation in ("old", "new", "registry", "deleted", "parent",
-                         "junction", "hardlink", "foreign"):
+    def test_real_file_rename_hardlink_and_foreign_delta_refuse(self):
+        for mutation in ("old", "new", "registry", "deleted", "hardlink", "foreign"):
             with self.subTest(mutation=mutation), self.fixture() as case:
                 new = self.record(case, 1)
                 self.phase(case, "after-public-repeat-add")
@@ -203,24 +228,6 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                     self.assertEqual(path.read_bytes(), body)
                 elif mutation == "deleted":
                     new.unlink()
-                elif mutation in ("parent", "junction"):
-                    moved = case["chats"].with_name("held-chats")
-                    case["chats"].rename(moved)
-                    if mutation == "parent":
-                        case["chats"].mkdir()
-                    else:
-                        command = Path(os.environ["SystemRoot"]) / "System32/cmd.exe"
-                        result = subprocess.run(
-                            [str(command), "/d", "/c", "mklink", "/J", str(case["chats"]), str(moved)],
-                            capture_output=True, timeout=10, check=False)
-                        self.assertEqual(result.returncode, 0, result.stderr[:256])
-                        deadline = time.monotonic() + 5
-                        probe = _BACKEND["Custody"](lambda: deadline)
-                        try:
-                            with self.assertRaisesRegex(ValueError, "nonordinary object"):
-                                probe.hold(case["chats"])
-                        finally:
-                            probe.close()
                 elif mutation == "hardlink":
                     os.link(new, case["chats"] / "another-link")
                 else:
@@ -228,6 +235,76 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                 final = self.phase(case, "after-public-repeat-list")
                 self.assertFalse(case["observer"].finish(final))
                 self.assertIsNotNone(case["observer"].reason)
+
+    def test_real_parent_rename_checks_denial_or_changed_namespace(self):
+        with self.fixture() as case:
+            native = case["observer"].windows
+            self.assertIn(str(case["old"]), native.leaves)
+            moved = case["chats"].with_name("held-chats")
+            held = self.saved(native)
+            denial = None
+            try:
+                case["chats"].rename(moved)
+            except OSError as refused:
+                denial = refused
+            if denial is not None:
+                self.assertIn(denial.winerror, (5, 32))
+                self.assertTrue(case["chats"].is_dir())
+                self.assertFalse(moved.exists())
+                self.assertEqual(case["audit"].snapshot([case["profile"]]), case["before"])
+                native.guard()
+                branch = "denied with winerror " + str(denial.winerror)
+            else:
+                # This is a real namespace change, distinct from injected facts.
+                self.assertFalse(case["chats"].exists())
+                self.assertTrue(moved.is_dir())
+                case["chats"].mkdir()
+                with self.assertRaisesRegex(ValueError,
+                                            "^Gemini Windows custody: "
+                                            "(held name changed|current name identity)$"):
+                    native.guard()
+                branch = "real rename succeeded; changed namespace refused"
+            case["observer"].close()
+            self.assert_closed(native, *held)
+            if denial is not None:
+                case["chats"].rename(moved)
+                self.assertFalse(case["chats"].exists())
+            else:
+                self.assertTrue(case["chats"].is_dir())
+                self.assertEqual(list(case["chats"].iterdir()), [])
+            self.assertEqual((moved / case["old"].name).read_bytes(),
+                             b"pre-existing conversation must stay byte-for-byte\n")
+            print("Windows parent rename safety branch: " + branch, flush=True)
+
+    def test_real_existing_junction_is_refused_before_descendant_custody(self):
+        with TemporaryDirectory(prefix="gemini-junction-&-") as temporary:
+            root = Path(temporary).resolve()
+            target, junction = root / "target", root / "junction"
+            target.mkdir()
+            witness = target / "foreign.txt"
+            witness.write_bytes(b"foreign target must survive\n")
+            # Create the reparse point before the first native custody handle.
+            command = Path(os.environ["SystemRoot"]) / "System32/cmd.exe"
+            result = subprocess.run(
+                [str(command), "/d", "/c", "mklink", "/J", "junction", "target"],
+                cwd=root, capture_output=True, timeout=10, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr[:256])
+            self.assertTrue(junction.lstat().st_file_attributes & 0x400)
+            deadline = time.monotonic() + 5
+            probe = _BACKEND["Custody"](lambda: deadline)
+            try:
+                self.assertFalse(probe.parents)
+                with self.assertRaisesRegex(_BACKEND["Refusal"], "nonordinary object"):
+                    probe.hold(junction)
+                self.assertNotIn(str(junction), probe.parents)
+                self.assertFalse(probe.leaves)
+                self.assertEqual(witness.read_bytes(), b"foreign target must survive\n")
+            finally:
+                held = self.saved(probe)
+                probe.close()
+            self.assert_closed(probe, *held)
+            junction.rmdir()
+            self.assertEqual(witness.read_bytes(), b"foreign target must survive\n")
 
     def test_same_bytes_swapped_during_the_real_os_read_are_refused(self):
         with self.fixture() as case:
@@ -249,16 +326,18 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                              "held file changed|held name changed|current name identity")
 
     def test_native_identity_and_membership_disagreements_refuse(self):
-        for mutation in ("high-id", "volume", "parent-entry"):
+        # Facts are injected over real held handles, not filesystem replacements.
+        for mutation in ("high-id", "volume", "parent-entry", "parent-id"):
             with self.subTest(mutation=mutation), self.fixture() as case:
                 native = case["observer"].windows
                 fd, _expected = native.leaves[str(case["old"])]
-                handle = native.msvcrt.get_osfhandle(fd)
+                handle = (native.parents[str(case["chats"])][0] if mutation == "parent-id"
+                          else native.msvcrt.get_osfhandle(fd))
                 real_facts, real_entries = native._facts, native._entries
                 def facts(current, directory):
                     value = real_facts(current, directory)
                     if current == handle:
-                        if mutation == "high-id":
+                        if mutation in ("high-id", "parent-id"):
                             changed = value.file_id[:15] + bytes([value.file_id[15] ^ 1])
                             return value._replace(file_id=changed)
                         if mutation == "volume":
@@ -273,7 +352,7 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                     return value
                 with (patch.object(native, "_facts", side_effect=facts),
                       patch.object(native, "_entries", side_effect=entries)):
-                    with self.assertRaisesRegex(ValueError, "held file changed|parent/member identity"):
+                    with self.assertRaisesRegex(ValueError, "held (file|parent) changed|parent/member identity"):
                         native.guard()
 
     def test_descriptor_transfer_failure_closes_only_its_untransferred_handle(self):
@@ -319,7 +398,9 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
             key = next(key for key in snapshot if key not in case["before"])
             changed = {name: value for name, value in snapshot.items() if name != key}
             changed[key.replace("\\", "/")] = snapshot[key]
-            case["observer"].checkpoint("after-public-repeat-add", changed)
+            case["observer"].checkpoint(
+                "after-public-repeat-add", changed,
+                interval=(case["phase_started"], case['clock'].now()))
             self.assertFalse(case["observer"].finish(changed))
             self.assertIn("outside exact list-session files", case["observer"].reason)
         with self.fixture() as case:
@@ -328,7 +409,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
             (nested / "foreign.jsonl").write_bytes(b"foreign\n")
             snapshot = case["audit"].snapshot([case["profile"]])
             observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
-                case["home"], case["project"], snapshot, self.VERSION)
+                case["home"], case["project"], snapshot, self.VERSION,
+                profile_snapshot=case["audit"].scoped_snapshot)
             try:
                 self.assertIn("not flat", observer.reason)
                 self.assertFalse(observer.windows.parents)
@@ -336,36 +418,60 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
             finally:
                 observer.close()
 
-    def test_public_repeat_gate_preserves_raw_delta_and_refuses_same_byte_parent_replacement(self):
-        for replaced in (False, True):
-            with self.subTest(replaced=replaced), TemporaryDirectory() as temporary:
+    def test_public_repeat_gate_preserves_raw_delta_and_refuses_simulated_parent_identity_change(self):
+        for changed_parent in (False, True):
+            with self.subTest(changed_parent=changed_parent), TemporaryDirectory() as temporary:
                 audit = load_audit()
                 root = Path(temporary).resolve()
                 project = root / 'skill-00/project'
                 profile = root / 'skill-00/home/.gemini'
                 chats = profile / 'tmp/project/chats'
                 skill = project / '.gemini/skills/owned-test/SKILL.md'
+                # An inert argv marker handled only by the mocked call port.
+                # No vendor CLI or replacement executable is run by this test.
+                gemini = str(root / 'fake-gemini.exe')
                 item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
                         'source': 'unused', 'skill_md_git_blob_sha1': '0' * 40}
                 matched = [{'installation_id': 'owned-id', 'name': 'owned-test',
                             'clients': [{'client_id': 'gemini'}]}]
-                operations, held = [], []
+                operations, held, native_calls, public_lists = [], [], [], []
+                parent_changed, injected_parent_facts = [False], []
                 real_observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
-                def observe(*args):
-                    observer = real_observer(*args)
+                clock = _contracts.GeminiFixtureClock()
+                def observe(*args, **kwargs):
+                    observer = real_observer(*args, **kwargs)
                     self.assertIsNone(observer.reason)
                     self.assertIsNotNone(observer.windows)
                     native = observer.windows
-                    close = native.close
+                    parent_handle = native.parents[str(chats)][0]
+                    real_facts, close = native._facts, native.close
+                    def facts(current, directory):
+                        value = real_facts(current, directory)
+                        if parent_changed[0] and current == parent_handle:
+                            # Simulated guard disagreement over a real held handle.
+                            injected_parent_facts.append(current)
+                            changed = value.file_id[:15] + bytes([value.file_id[15] ^ 1])
+                            return value._replace(file_id=changed)
+                        return value
+                    native._facts = facts
                     def capture_close():
                         held.append((native, *self.saved(native)))
+                        native._facts = real_facts
                         close()
                     native.close = capture_close
                     return observer
                 def fake_call(argv, env, cwd, timeout=105):
-                    operation = argv[2] if argv[1] == 'skills' else argv[1]
+                    operation = ('native-list' if argv[0] == gemini else
+                                 argv[2] if argv[1] == 'skills' else argv[1])
                     operations.append(operation)
-                    if operation == 'add':
+                    if operation == 'native-list':
+                        self.assertEqual(argv, [gemini, 'skills', 'list', '--all'])
+                        self.assertEqual(cwd, project)
+                        self.assertEqual(timeout, 30)
+                        native_calls.append(tuple(argv))
+                        # Existing fixture emits millisecond timestamps inside this call.
+                        self.record({'project': project, 'chats': chats, 'clock': clock}, 100, startup=True)
+                    elif operation == 'add':
                         skill.parent.mkdir(parents=True, exist_ok=True)
                         skill.write_text('---\nname: owned-test\n---\n')
                         (project / 'uap.toml').write_text('owned-test')
@@ -375,21 +481,27 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                             registry_project = str(project).lower()
                             (profile / 'projects.json').write_text(json.dumps({'projects': {registry_project: 'project'}}))
                             (chats.parent / '.project_root').write_text(registry_project)
-                        elif replaced:
-                            chats.rename(chats.with_name("held-chats"))
-                            chats.mkdir()
+                        elif changed_parent:
+                            parent_changed[0] = True
                         else:
-                            self.record({'project': project, 'chats': chats}, 1)
-                    elif operation == 'list' and operations.count('list') == 2 and not replaced:
-                        self.record({'project': project, 'chats': chats}, 2)
+                            self.record({'project': project, 'chats': chats, 'clock': clock}, 1, startup=True)
+                    elif operation == 'list':
+                        public_lists.append(tuple(argv))
+                        if len(public_lists) == 2 and not changed_parent:
+                            self.record({'project': project, 'chats': chats, 'clock': clock}, 2, startup=True)
                     elif operation == 'remove':
                         skill.unlink()
                         skill.parent.rmdir()
                         (project / 'uap.lock').unlink()
+                    response = {'data': {'installations': [] if 'remove' in operations else matched}}
+                    if operation == 'add':
+                        response.update(readiness='ready', next_actions=[])
                     return {'exit_code': 0, 'stdout_tail': '', 'stderr_tail': '', 'timeout': False,
-                            '_json': {'data': {'installations': [] if 'remove' in operations else matched}}}
-                with (patch.dict(audit.AGENT_BINARIES, {}, clear=True),
+                            '_json': response}
+                with (patch.dict(audit.AGENT_BINARIES, {'gemini': gemini}, clear=True),
                       patch.dict(audit.GEMINI_RUNTIME_AUDIT, {'GeminiRepeatAudit': observe}),
+                      patch.dict(real_observer.__init__.__globals__, {'_now': clock.now}),
+                      patch.object(audit, 'datetime', clock),
                       patch.object(audit, 'call', side_effect=fake_call),
                       patch.object(audit, 'matching_installations', return_value=matched),
                       patch.object(audit, 'locked_skill_is_pinned',
@@ -397,13 +509,31 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                       patch.object(audit, 'matches_pinned_skill_bytes', return_value=True)):
                     row = audit.do_case('/unused/agentplugins', 'gemini', 'skill', item, 0, root, {},
                                         client_version=self.VERSION)
-                self.assertEqual(operations, ['add', 'list', 'add', 'list', 'remove', 'list'])
+                self.assertEqual(operations, ['add', 'list', 'native-list', 'add', 'list', 'remove', 'list'])
+                self.assertEqual(native_calls, [(gemini, 'skills', 'list', '--all')])
+                self.assertEqual(len(public_lists), 3)
+                baseline = row['gemini_native_baseline']
+                self.assertEqual(baseline['operation'], 'native-skills-list-baseline')
+                self.assertEqual(baseline['observation']['exit_code'], 0)
+                self.assertFalse(baseline['observation']['timeout'])
+                self.assertFalse(baseline['selected_skill_discovery_claimed'])
+                proof = row['gemini_runtime_proof']
+                self.assertEqual(proof['baseline']['records'], 3)
+                self.assertEqual(proof['baseline']['started'], baseline['started'])
+                self.assertEqual(proof['baseline']['finished'], baseline['finished'])
+                self.assertFalse(proof['producer_attribution'])
+                self.assertFalse(proof['writer_closure'])
+                self.assertEqual(bool(injected_parent_facts), changed_parent)
+                if changed_parent:
+                    self.assertIn('held parent changed', proof['reason'])
+                else:
+                    self.assertEqual(len(proof['files']), 2)
                 self.assertTrue(row['removal_verified'])
                 self.assertTrue(row['sentinels_preserved'])
-                self.assertEqual(row['repeat_native_unchanged'], replaced)
-                self.assertEqual(row['repeat_native_runtime_only'], not replaced)
-                self.assertEqual(row['repeat_verified'], not replaced)
-                self.assertEqual(row['status'], 'repeat-add-unqualified' if replaced else 'passed')
+                self.assertEqual(row['repeat_native_unchanged'], changed_parent)
+                self.assertEqual(row['repeat_native_runtime_only'], not changed_parent)
+                self.assertEqual(row['repeat_verified'], not changed_parent)
+                self.assertEqual(row['status'], 'repeat-add-unqualified' if changed_parent else 'passed')
                 self.assertEqual(len(held), 1)
                 self.assert_closed(*held[0])
 

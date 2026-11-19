@@ -349,8 +349,6 @@ class CacheRetirement:
                 prefix = '.claude/' + moved.relative_to(self.profile).as_posix() + '/'
                 exact_files = {prefix + path for path, row in after.items() if row[0] == 'file'}
             require(residuals and all(path in exact_files for path in residuals))
-            # Rescan after native-registry and foreign-file checks; a late owned
-            # registration cannot be hidden behind the previously captured list.
             fresh_residuals = self.residual_scanner(current)
             require(fresh_residuals and all(path in exact_files for path in fresh_residuals))
             # Recheck the complete retained tree after native-registry/foreign reads.

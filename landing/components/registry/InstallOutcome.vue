@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { installTargets, canonicalInstallTarget, type InstallTargetID } from '~/data/installTargets';
+import {
+  installTargets,
+  canonicalInstallTarget,
+  type InstallTargetID,
+} from '~/data/installTargets';
 import { projectComponentSupported } from '~/utils/projectCatalogSource';
 import type { DistributionView, InstallScope } from '~/types/registry';
 
@@ -10,25 +14,27 @@ const props = defineProps<{
 }>();
 const { t } = useI18n();
 const selected = computed(() =>
-  props.targets.map((id) => ({
-    id,
-    canonicalId: canonicalInstallTarget(id),
-    name: installTargets.find((client) => client.id === id)?.name ?? id,
-    policy: props.distribution.targets.find((target) =>
-      target.client === canonicalInstallTarget(id)),
-  })),
+  props.targets
+    .map((id) => ({
+      id,
+      canonicalId: canonicalInstallTarget(id),
+      name: installTargets.find((client) => client.id === id)?.name ?? id,
+      policy: props.distribution.targets.find(
+        (target) => target.client === canonicalInstallTarget(id),
+      ),
+    }))
+    .filter(
+      (target) =>
+        props.scope === 'project' ||
+        target.policy?.delivery !== 'managed' ||
+        (target.policy?.authentication && target.policy.authentication !== 'not_required'),
+    ),
 );
 </script>
 
 <template>
-  <div class="install-outcome">
+  <div v-if="selected.length" class="install-outcome">
     <p v-if="scope === 'project'">{{ t('registryUi.install.outcome.projectPreview') }}</p>
-    <p v-else>
-      {{ t('registryUi.install.outcome.includes') }}
-      <span v-for="(component, index) in distribution.components" :key="component"
-        >{{ index ? ', ' : '' }}{{ t(`registryUi.install.outcome.components.${component}`) }}</span
-      >
-    </p>
     <ul :aria-label="t('registryUi.install.outcome.label')">
       <li v-for="target in selected" :key="target.id">
         <strong>{{ target.name }}:</strong>
@@ -37,13 +43,21 @@ const selected = computed(() =>
             v-for="(component, index) in distribution.components"
             :key="component"
             :data-component="component"
-            :data-support="projectComponentSupported(target.canonicalId, component) ? 'supported' : 'unsupported'"
+            :data-support="
+              projectComponentSupported(target.canonicalId, component) ? 'supported' : 'unsupported'
+            "
           >
             {{ index ? ' · ' : ' ' }}{{ t(`registryUi.install.outcome.components.${component}`) }} —
-            {{ t(`registryUi.install.outcome.${projectComponentSupported(target.canonicalId, component) ? 'projectSupported' : 'projectUnsupported'}`) }}
+            {{
+              t(
+                `registryUi.install.outcome.${projectComponentSupported(target.canonicalId, component) ? 'projectSupported' : 'projectUnsupported'}`,
+              )
+            }}
           </span>
         </template>
-        <template v-else>{{ t(`registryUi.install.outcome.${target.policy?.delivery ?? 'unknown'}`) }}</template>
+        <template v-else-if="target.policy?.delivery !== 'managed'">{{
+          t(`registryUi.install.outcome.${target.policy?.delivery ?? 'unknown'}`)
+        }}</template>
         <span v-if="target.policy?.authentication !== 'not_required'">{{
           t(`registryUi.install.outcome.auth.${target.policy?.authentication ?? 'unknown'}`)
         }}</span>

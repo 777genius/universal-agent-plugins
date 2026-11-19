@@ -46,7 +46,10 @@ jobs:
         run: |
           set -euo pipefail
           ref="${LINT_BASE#origin/}"
-          git fetch --no-tags origin "${ref}:refs/remotes/origin/${ref}"
+          # Full checkout normally already fetched the caller's base branch.
+          if ! git rev-parse --verify "refs/remotes/origin/${ref}^{commit}" >/dev/null 2>&1; then
+            git fetch --no-tags origin "${ref}:refs/remotes/origin/${ref}"
+          fi
           git rev-parse --verify "origin/${ref}^{commit}"
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0

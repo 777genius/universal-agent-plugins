@@ -101,10 +101,10 @@ func validCodexEnvironmentName(key string) bool {
 func runCodex(ctx context.Context, env clients.Env, root, executable string, args ...string) (legacyports.CommandResult, error) {
 	command, err := codexCommand(root, executable, os.Environ(), args...)
 	if err != nil {
-		return legacyports.CommandResult{}, err
+		return legacyports.CommandResult{NoChildStarted: true}, err
 	}
 	if env.Runner == nil {
-		return legacyports.CommandResult{}, fmt.Errorf("%s runner is unavailable", codexCLIName)
+		return legacyports.CommandResult{NoChildStarted: true}, fmt.Errorf("%s runner is unavailable", codexCLIName)
 	}
 	result, err := env.Runner.Run(ctx, command)
 	if err != nil {
@@ -114,4 +114,16 @@ func runCodex(ctx context.Context, env clients.Env, root, executable string, arg
 		return result, fmt.Errorf("%s command failed with exit code %d", codexCLIName, result.ExitCode)
 	}
 	return result, nil
+}
+
+// Listing is a read-only query even when it follows a registration or removal.
+// Keep it finite when the public CLI has only an interruptible parent context.
+func runCodexPluginList(ctx context.Context, env clients.Env, root, executable string) (legacyports.CommandResult, error) {
+	bounded, cancel := context.WithTimeout(ctx, codexProjectDiscoveryTimeout)
+	defer cancel()
+	result, err := runCodex(bounded, env, root, executable, "plugin", "list", "--json")
+	if err == nil {
+		err = bounded.Err()
+	}
+	return result, shared.NativeProbeFailure(result, err)
 }

@@ -20,6 +20,14 @@ authority. Client paths below are relative to the selected project. Configuratio
 ownership and native discovery are separate: Prepared means further client
 selection, reload, trust or session work can remain.
 
+**VS Code plugin-platform maintenance freeze (19 November 2026):** VS Code
+is no longer an active UAP qualification priority and is hidden from the
+public landing. Its four dedicated native/research CI workflows are
+manual-only, not automatic PR or main gates. The shared remaining-client
+live-audit matrix also excludes VS Code from automatic jobs. Existing adapters and historical
+evidence remain intact; this does not affect Copilot CLI, Code-OSS or existing
+installation ownership.
+
 ## Hermes and Antigravity: released installer support {#hermes-antigravity-source}
 
 Published [native CLI 0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) (source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`) includes Hermes and Antigravity. UAP configures supported components automatically; follow the client-specific remaining actions. Signed Directory package eligibility remains separate. Installation does not prove native runtime activation or vendor authentication.

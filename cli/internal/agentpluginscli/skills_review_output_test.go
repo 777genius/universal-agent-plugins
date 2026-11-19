@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -85,5 +86,87 @@ func TestSkillsReviewOversizeFallbackPrintsFullPlanBeforeBoundedConfirmation(t *
 	err := runSkillsReviewedPlan(cmd, App{Prompter: p}, &options{format: "human"}, plan, true)
 	if err != nil || p.calls != 2 || !strings.Contains(output.String(), "Installation canceled") {
 		t.Fatalf("fallback: calls=%d err=%v output=%s", p.calls, err, output.String())
+	}
+}
+
+func TestSkillsReviewAcknowledgesOnlyAcceptedHumanConfirmationBeforeProgress(t *testing.T) {
+	readFailure := errors.New("confirmation input failed")
+	for _, test := range []struct {
+		name, format                         string
+		confirm, accepted, dryRun, wantApply bool
+		confirmError                         error
+	}{
+		{"accepted", "human", true, true, false, true, nil},
+		{"declined", "human", true, false, false, false, nil},
+		{"canceled", "human", true, false, false, false, prompt.ErrPromptCanceled},
+		{"read-failed", "human", true, false, false, false, readFailure},
+		{"accepted-with-error", "human", true, true, false, false, readFailure},
+		{"json", "json", true, true, false, true, nil},
+		{"yes", "human", false, true, false, true, nil},
+		{"dry-run", "human", true, true, true, false, nil},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			const acknowledgment = "Skills installation confirmed."
+			cmd, output, _ := retryTestCommand(t)
+			cmd.SetErr(output)
+			calls := 0
+			app := App{Terminal: true, Output: output, ErrorOutput: output}
+			app.Prompter = fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+				calls++
+				if strings.Contains(output.String(), acknowledgment) {
+					t.Fatal("confirmation was acknowledged before it was accepted")
+				}
+				return prompt.ConfirmationResult{Accepted: test.accepted}, test.confirmError
+			}}
+			// A closed plan makes reaching Apply observable without any effects.
+			plan := &PreparedSkillsBatch{closed: true, actions: []SkillsAction{{Alias: "review", ClientID: "codex", Action: "install", TargetPath: "/exact/path"}}}
+			err := runSkillsReviewedPlan(cmd, app, &options{format: test.format, plain: true, dryRun: test.dryRun}, plan, test.confirm)
+			if test.wantApply {
+				if err == nil || !strings.Contains(err.Error(), "skill plan closed") {
+					t.Fatalf("closed plan did not expose Apply boundary: %v", err)
+				}
+			} else if !errors.Is(err, test.confirmError) {
+				t.Fatalf("confirmation result changed: %v", err)
+			}
+			if (calls == 1) != (test.confirm && !test.dryRun) || calls > 1 {
+				t.Fatalf("confirmation calls = %d", calls)
+			}
+			text := output.String()
+			wantAcknowledgment := test.confirm && test.wantApply && test.format == "human"
+			count := strings.Count(text, acknowledgment)
+			if wantAcknowledgment && count != 1 || !wantAcknowledgment && count != 0 {
+				t.Fatalf("unexpected confirmation acknowledgment: %s", text)
+			}
+			if wantAcknowledgment && strings.Index(text, "0/1 queued") < strings.Index(text, acknowledgment) {
+				t.Fatalf("progress preceded confirmation acknowledgment: %s", text)
+			}
+		})
+	}
+}
+
+func TestSkillsConfirmationWriteFailureStopsBeforeApplyAndProgress(t *testing.T) {
+	writeFailure := errors.New("confirmation output failed")
+	for _, test := range []struct {
+		name   string
+		writer io.Writer
+		want   error
+	}{
+		{"error", retryCleanupWriter{cause: writeFailure, fail: func() bool { return true }}, writeFailure},
+		{"short", shortPromptWriter{}, io.ErrShortWrite},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			cmd, _, progress := retryTestCommand(t)
+			accepted := false
+			app := App{Terminal: true, ErrorOutput: progress, Prompter: fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+				accepted = true
+				cmd.SetOut(test.writer)
+				return prompt.ConfirmationResult{Accepted: true}, nil
+			}}}
+			plan := &PreparedSkillsBatch{actions: []SkillsAction{{Alias: "review", ClientID: "codex", Action: "install", TargetPath: "/exact/path"}}}
+			err := runSkillsReviewedPlan(cmd, app, &options{format: "human", plain: true}, plan, true)
+			if !accepted || !errors.Is(err, test.want) || plan.applied || progress.Len() != 0 {
+				t.Fatalf("failed acknowledgment reached Apply: accepted=%t applied=%t err=%v progress=%s", accepted, plan.applied, err, progress)
+			}
+		})
 	}
 }

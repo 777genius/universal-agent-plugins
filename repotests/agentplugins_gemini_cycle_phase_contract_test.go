@@ -68,49 +68,60 @@ func TestGeminiCycleHeldProviderNoCallStageIssuesOnlySentinelAndCannotRearmAcros
 }
 func TestGeminiCycleExactCurrentBindingIdentityRejectsRootsIDsIntentAndExtraAuthority(t *testing.T) {
 	c := geminiCycleInert(t)
-	geminiCycleStageActual(t, c, "user")
-	r := c.recipes["user"]
-	for _, kind := range []string{"map-key", "client", "scope", "profile", "active", "physical", "binding-id", "revision", "intent", "native-attempt", "affected", "extra-client"} {
-		t.Run(kind, func(t *testing.T) {
-			raw, _ := json.Marshal(r.Installation)
-			var i domain.Installation
-			if json.Unmarshal(raw, &i) != nil {
-				t.Fatal("actual installation clone")
-			}
-			b := i.Clients[r.Binding.ClientBindingID]
-			switch kind {
-			case "map-key":
-				i.Clients = map[string]domain.ClientBinding{"foreign": b}
-			case "client":
-				b.ClientID = "other"
-			case "scope":
-				b.Scope = "project"
-			case "profile":
-				b.NativeProfileRoot = c.recipes["a"].Profile
-			case "active":
-				b.TargetLocator = c.recipes["a"].Source
-			case "physical":
-				b.PhysicalArtifact = "foreign"
-			case "binding-id":
-				b.ClientBindingID = "client_foreign"
-			case "revision":
-				b.PackageRevision.TreeDigest = "sha256:" + strings.Repeat("0", 64)
-			case "intent":
-				b.InstallIntent = domain.InstallIntentPrepare
-			case "native-attempt":
-				b.NativeActivationAttempt = "foreign"
-			case "affected":
-				b.AffectedSurfaces = []string{"gemini", "cline"}
-			case "extra-client":
-				i.Clients["foreign"] = b
-			}
-			if kind != "map-key" {
-				i.Clients[r.Binding.ClientBindingID] = b
-			}
-			if _, err := geminiCycleBindingIdentity(r, i); err == nil {
-				t.Fatal("foreign binding identity/authority accepted")
-			}
-		})
+	for _, scope := range []string{"user", "a"} {
+		geminiCycleStageActual(t, c, scope)
+		r := c.recipes[scope]
+		for _, kind := range []string{"map-key", "client", "scope", "profile", "active", "physical", "binding-id", "revision", "intent", "native-attempt", "affected", "extra-client", "activation", "authentication", "verification"} {
+			t.Run(scope+"/"+kind, func(t *testing.T) {
+				raw, _ := json.Marshal(r.Installation)
+				var i domain.Installation
+				if json.Unmarshal(raw, &i) != nil {
+					t.Fatal("actual installation clone")
+				}
+				b := i.Clients[r.Binding.ClientBindingID]
+				switch kind {
+				case "map-key":
+					i.Clients = map[string]domain.ClientBinding{"foreign": b}
+				case "client":
+					b.ClientID = "other"
+				case "scope":
+					b.Scope = "foreign"
+				case "profile":
+					b.NativeProfileRoot = "foreign"
+				case "active":
+					b.TargetLocator = c.recipes["a"].Source
+				case "physical":
+					b.PhysicalArtifact = "foreign"
+				case "binding-id":
+					b.ClientBindingID = "client_foreign"
+				case "revision":
+					b.PackageRevision.TreeDigest = "sha256:" + strings.Repeat("0", 64)
+				case "intent":
+					b.InstallIntent = domain.InstallIntentPrepare
+				case "native-attempt":
+					b.NativeActivationAttempt = "foreign"
+				case "affected":
+					b.AffectedSurfaces = []string{"gemini", "cline"}
+				case "activation":
+					b.Activation = domain.ActivationPrepared
+				case "authentication":
+					b.Authentication = domain.AuthenticationNotRequired
+					if scope != "user" {
+						b.Authentication = domain.AuthenticationNotChecked
+					}
+				case "verification":
+					b.Verification = domain.VerificationPackageValid
+				case "extra-client":
+					i.Clients["foreign"] = b
+				}
+				if kind != "map-key" {
+					i.Clients[r.Binding.ClientBindingID] = b
+				}
+				if _, err := geminiCycleBindingIdentity(r, i); err == nil {
+					t.Fatal("foreign binding identity/authority accepted")
+				}
+			})
+		}
 	}
 }
 func TestGeminiCycleBindingRefusalReportsBothObservedStatusDifferences(t *testing.T) {
@@ -119,7 +130,7 @@ func TestGeminiCycleBindingRefusalReportsBothObservedStatusDifferences(t *testin
 	r := c.recipes["a"]
 	i := r.Installation
 	b := i.Clients[r.Binding.ClientBindingID]
-	b.Activation, b.Authentication = domain.ActivationActive, domain.AuthenticationNotRequired
+	b.Activation, b.Authentication = domain.ActivationPrepared, domain.AuthenticationNotChecked
 	i.Clients = map[string]domain.ClientBinding{b.ClientBindingID: b}
 	_, err := geminiCycleBindingIdentity(r, i)
 	if err == nil || err.Error() != "Gemini exact binding/materialization/revision authority (activation_match=false authentication_match=false)" {

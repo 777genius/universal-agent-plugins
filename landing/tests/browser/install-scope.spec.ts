@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   navigate,
   offline,
+  openCardInstall,
   projections,
   registryFixture,
   targets,
@@ -40,8 +41,8 @@ function scopedFixture() {
   return index;
 }
 
-const cardAutoSummary = wording('en')('registryUi.card.allInstalledAgents');
-const detailAutoSummary = wording('en')('registryUi.install.allInstalledAgents');
+const cardAutoSummary = wording('en')('registryUi.card.allInstalledAgentsRecommended');
+const detailAutoSummary = wording('en')('registryUi.install.allInstalledAgentsRecommended');
 
 for (const width of [1440, 390]) {
   test(`manual user Cursor never leaks into default project selection at ${width}px`, async ({ page }) => {
@@ -50,12 +51,12 @@ for (const width of [1440, 390]) {
     await projections(page, scopedFixture());
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
-    await card.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, card);
     await targets(page, card, ['Cursor']);
-    await expect(page.getByRole('dialog').locator('.app-multiselect__trigger')).toContainText('Cursor');
+    await expect(page.getByRole('dialog').getByRole('checkbox', { name: /^Cursor(?:\s|$)/ })).toBeChecked();
     await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
-    await expect(page.getByRole('dialog').locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(
+    await expect(page.getByRole('dialog').locator('.app-multiselect__auto')).toContainText(cardAutoSummary);
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00 --scope project',
     );
     expect(errors).toEqual([]);
@@ -69,31 +70,29 @@ for (const width of [1440, 390]) {
     await projections(page, scopedFixture());
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
-    await card.locator('.plugin-card__install-toggle').click();
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(
+    await openCardInstall(page, card);
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00',
     );
     await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
     const autoAdd = 'npx -y universal-agent-plugins add i18n-state-00 --scope project';
-    await expect(page.getByRole('dialog').locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(autoAdd);
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
+    await expect(page.getByRole('dialog').locator('.app-multiselect__auto')).toContainText(cardAutoSummary);
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(autoAdd);
     await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('checkbox', { name: /^Cursor(?:\s|$)/ })).toBeDisabled();
     await expect(page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ })).toBeEnabled();
-    await page.keyboard.press('Escape');
     // An explicit checkbox switches to manual mode; no implicit Cursor selection.
     await targets(page, card, ['Codex']);
     const expectedAdd =
       'npx -y universal-agent-plugins add i18n-state-00 --target codex --scope project';
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(expectedAdd);
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(expectedAdd);
     await expect(page.getByRole('dialog').locator('.install-outcome')).toContainText('Skills');
     await expect(page.getByRole('dialog').locator('.install-outcome')).not.toContainText('MCP tools');
     await expect(page.getByRole('dialog').locator('.install-outcome')).toContainText('Sign-in or credentials');
     await expect(card.locator('.plugin-card__source-label')).toContainText(
       'Agents: 0 automatic setup · 1 need follow-up',
     );
-    await page.getByRole('dialog').locator('.plugin-card__install .command-snippet button').click();
+    await page.getByRole('dialog').locator('.install-dialog__footer .command-snippet button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expectedAdd);
 
     await page.keyboard.press('Escape');
@@ -119,12 +118,10 @@ for (const width of [1440, 390]) {
       await snippet.getByRole('button').click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
     }
-    await panel.locator('.app-multiselect__trigger').click();
     await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'false');
     await page.locator('.app-multiselect__auto').click();
     await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
-    await page.keyboard.press('Escape');
-    await expect(panel.locator('.app-multiselect__trigger')).toContainText(detailAutoSummary);
+    await expect(panel.locator('.app-multiselect__auto')).toContainText(detailAutoSummary);
     await expect(panel.locator('.install-command-row .command-snippet--add code')).toHaveText(autoAdd);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -135,9 +132,9 @@ for (const width of [1440, 390]) {
     });
     await page.goBack();
     await expect(page.locator('.install-dialog')).toHaveCount(0);
-    await card.locator('.plugin-card__install-toggle').click();
-    await expect(page.getByRole('dialog').locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(autoAdd);
+    await openCardInstall(page, card);
+    await expect(page.getByRole('dialog').locator('.app-multiselect__auto')).toContainText(cardAutoSummary);
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(autoAdd);
     await card.scrollIntoViewIfNeeded();
     // Back navigation remounts the existing catalog scroll-reveal observer.
     // Wait for its real visible state before accepting visual evidence.
@@ -148,14 +145,14 @@ for (const width of [1440, 390]) {
     });
     await navigate(page, '/', 'ru', '?q=i18n-state-00');
     await expect(page.locator('.install-dialog')).toHaveCount(0);
-    await card.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, card);
     await expect(
       page.getByRole('dialog').getByRole('button', {
         name: wording('ru')('registryUi.install.scope.project'),
         exact: true,
       }),
     ).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(autoAdd);
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(autoAdd);
     expect(errors).toEqual([]);
   });
 
@@ -168,10 +165,10 @@ for (const width of [1440, 390]) {
     await projections(page, index);
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
-    await card.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, card);
     await targets(page, card, ['Codex']);
     await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toContainText('--scope project');
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toContainText('--scope project');
     // The first detail projection now represents a newer feed that withdrew
     // project support. Preferences must not fall back to automatic user scope.
     index.plugins[0]!.distributions[1]!.releases[0]!.targets[0]!.scopes = ['user'];
@@ -182,7 +179,7 @@ for (const width of [1440, 390]) {
       'aria-pressed',
       'true',
     );
-    await expect(panel.locator('.app-multiselect__trigger')).toContainText(detailAutoSummary);
+    await expect(panel.locator('.app-multiselect__auto')).toContainText(detailAutoSummary);
     await expect(panel.locator('.command-snippet')).toHaveCount(0);
     // The removed project policy must not produce a user-scope fallback command,
     // even though this choice remains visible to let the user recover.
@@ -203,19 +200,19 @@ test('reviewed signed-v1 source uses released short-name Project commands', asyn
   await projections(page, index);
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
-  await card.locator('.plugin-card__install-toggle').click();
+  await openCardInstall(page, card);
   const project = page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true });
   await expect(project).toBeEnabled();
   await project.click();
-  await expect(page.getByRole('dialog').locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
-  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(
+  await expect(page.getByRole('dialog').locator('.app-multiselect__auto')).toContainText(cardAutoSummary);
+  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(
     'npx -y universal-agent-plugins add i18n-state-00 --scope project',
   );
   await expect(card).not.toContainText('This reviewed exact-commit Git source is a reproducible alternative.');
   await targets(page, card, ['Codex']);
   const expected = 'npx -y universal-agent-plugins add i18n-state-00 --target codex --scope project';
-  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(expected);
-  await page.getByRole('dialog').locator('.plugin-card__install .command-snippet button').click();
+  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(expected);
+  await page.getByRole('dialog').locator('.install-dialog__footer .command-snippet button').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
   await page.keyboard.press('Escape');
   await card.locator('.plugin-card__title-link').click();
@@ -240,9 +237,9 @@ test('unqualified project scope is hidden while auto agent delivery stays non-nu
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
   // Terminal auto-detection does not know which local agents are installed.
   await expect(card.locator('.plugin-card__source-label')).toHaveCount(0);
-  await card.locator('.plugin-card__install-toggle').click();
+  await openCardInstall(page, card);
   await expect(page.getByRole('dialog').locator('.install-scope')).toHaveCount(0);
-  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(
+  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(
     'npx -y universal-agent-plugins add i18n-state-00',
   );
   await page.keyboard.press('Escape');
@@ -271,13 +268,13 @@ test('Marketing Kit offers signed-v1 Project installation without fabricating na
   await projections(page, index);
   await navigate(page, '/', 'en', '?q=marketing-kit');
   const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
-  await card.locator('.plugin-card__install-toggle').click();
+  await openCardInstall(page, card);
   await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
-  await expect(page.getByRole('dialog').locator('.app-multiselect__trigger')).toContainText(cardAutoSummary);
-  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(
+  await expect(page.getByRole('dialog').locator('.app-multiselect__auto')).toContainText(cardAutoSummary);
+  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code')).toHaveText(
     'npx -y universal-agent-plugins add marketing-kit --scope project');
   await targets(page, card, ['Codex']);
-  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(
+  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code')).toHaveText(
     'npx -y universal-agent-plugins add marketing-kit --target codex --scope project');
   await expect(card).not.toContainText('Marketing Kit is not yet available for Project');
   await page.keyboard.press('Escape');
@@ -300,11 +297,11 @@ test('Marketing Kit Project still rejects unsupported required components', asyn
   await projections(page, index);
   await navigate(page, '/', 'en', '?q=marketing-kit');
   const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
-  await card.locator('.plugin-card__install-toggle').click();
+  await openCardInstall(page, card);
   // Unsupported components suppress the Project scope switch rather than
   // showing a disabled option. Global remains independently available.
   await expect(page.getByRole('dialog').locator('.install-scope')).toHaveCount(0);
-  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code'))
+  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code'))
     .toHaveText('npx -y universal-agent-plugins add marketing-kit');
   expect(errors).toEqual([]);
 });
@@ -316,7 +313,7 @@ for (const locale of ['en', 'ar'] as const) {
     await projections(page, scopedFixture());
     await navigate(page, '/', locale, '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
-    await card.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, card);
     const options = page.getByRole('dialog').locator('.install-scope__choices');
     const thumb = options.locator('.install-scope__thumb');
     for (const kind of ['user', 'project', 'user'] as const) {
@@ -359,10 +356,10 @@ for (const width of [1440, 390]) {
     await projections(page, partialComponentsFixture(['skills', 'mcp']));
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
-    await card.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, card);
     await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
     await targets(page, card, ['Grok Build']);
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(
       'npx -y universal-agent-plugins add i18n-state-00 --target grok --scope project',
     );
     await expect(page.getByRole('dialog').locator('.install-outcome [data-component="skills"]')).toHaveAttribute('data-support', 'supported');
@@ -386,9 +383,9 @@ test('unsupported extensions-only Project does not show a misleading scope switc
   await projections(page, partialComponentsFixture(['extensions'], ['cursor']));
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
-  await card.locator('.plugin-card__install-toggle').click();
+  await openCardInstall(page, card);
   await expect(page.getByRole('dialog').locator('.install-scope')).toHaveCount(0);
-  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code'))
+  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code'))
     .toHaveText('npx -y universal-agent-plugins add i18n-state-00');
   expect(errors).toEqual([]);
 });
@@ -398,10 +395,10 @@ test('Grok Project MCP-only remains copyable with native MCP preview', async ({ 
   await projections(page, partialComponentsFixture(['mcp'], ['grok']));
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
-  await card.locator('.plugin-card__install-toggle').click();
+  await openCardInstall(page, card);
   await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
   await targets(page, card, ['Grok Build']);
-  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code'))
+  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code'))
     .toHaveText('npx -y universal-agent-plugins add i18n-state-00 --target grok --scope project');
   await expect(page.getByRole('dialog').locator('.install-outcome [data-component="mcp"]'))
     .toHaveAttribute('data-support', 'supported');
@@ -413,10 +410,10 @@ test('Project MCP-only is allowed for Qoder', async ({ page }) => {
   await projections(page, partialComponentsFixture(['mcp'], ['qoder']));
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
-  await card.locator('.plugin-card__install-toggle').click();
+  await openCardInstall(page, card);
   await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
   await targets(page, card, ['Qoder']);
   await expect(page.getByRole('dialog').locator('.install-outcome [data-component="mcp"]')).toHaveAttribute('data-support', 'supported');
-  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toContainText('--scope project');
+  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toContainText('--scope project');
   expect(errors).toEqual([]);
 });

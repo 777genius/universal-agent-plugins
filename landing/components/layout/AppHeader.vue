@@ -17,6 +17,20 @@ const route = useRoute();
 const router = useRouter();
 const localePath = useLocalePath();
 const config = useRuntimeConfig();
+const headerElement = ref<HTMLElement>();
+let headerObserver: ResizeObserver | undefined;
+onMounted(() => {
+  const updateHeaderHeight = () => {
+    document.documentElement.style.setProperty(
+      '--app-header-height',
+      `${headerElement.value?.getBoundingClientRect().bottom ?? 64}px`,
+    );
+  };
+  headerObserver = new ResizeObserver(updateHeaderHeight);
+  if (headerElement.value) headerObserver.observe(headerElement.value);
+  updateHeaderHeight();
+});
+onBeforeUnmount(() => headerObserver?.disconnect());
 const menuOpen = ref(false);
 const languageMenuOpen = ref(false);
 function onMobileEscape(event: KeyboardEvent) {
@@ -50,7 +64,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <header class="app-header">
+  <header ref="headerElement" class="app-header">
     <v-container class="app-header__inner">
       <AppLogo />
       <nav class="app-header__nav">

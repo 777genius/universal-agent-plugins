@@ -39,6 +39,11 @@ func nativeRawUserInstall(t *testing.T, root, dir string, env []string, installe
 	if !repeated && status != "succeeded" || repeated && status != "unchanged" {
 		t.Fatalf("%s: unexpected per-target raw Skill outcome: %v", label, result)
 	}
+	actions, actionsOK := result["next_actions"].([]any)
+	if result["readiness"] != "ready" ||
+		result["next_actions"] != nil && (!actionsOK || len(actions) != 0) {
+		t.Fatalf("%s: native raw User Skill still requires setup: %+v", label, result)
+	}
 }
 
 // nativeRawUserState Validates the persisted immutable Skill, ownership receipt and selected user profile.

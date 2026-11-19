@@ -32,7 +32,6 @@ const catalogIntro = computed(() =>
       : (props.intro ?? t('registryUi.catalog.searchByCapabilityComponentOrSource')),
 );
 const { repositoryUrl } = useSite();
-const localePath = useLocalePath();
 const route = useRoute();
 const skillsActive = computed(() => isSkillsCatalog(route.query));
 const headingLabel = computed(
@@ -97,9 +96,6 @@ const modeLink = (skills: boolean) => ({
       <!-- The reviewed seed is augmented by a verified signed community feed.
            Count-scope metadata remains available to crawlers without a user-facing
            implementation notice. -->
-      <p v-if="skillsActive" class="unified-catalog__skills-guide">
-        <NuxtLink :to="localePath('/agent-skills/')">{{ t('registryUi.skills.overview.learnMore') }}</NuxtLink>
-      </p>
     </div>
     <SkillsCatalog v-if="skillsActive" hide-heading />
     <PluginCatalog v-else :plugins="plugins" hide-heading />
@@ -119,7 +115,18 @@ const modeLink = (skills: boolean) => ({
 <style lang="scss" src="../../features/skills-catalog/catalog.scss"></style>
 
 <style scoped>
-.unified-catalog__skills-guide { margin-top: .5rem; color: var(--muted); font-size: .92rem; line-height: 1.5; }
-.unified-catalog__skills-guide a { color: var(--cyan); text-underline-offset: .2em; }
-.unified-catalog__skills-guide a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+.unified-catalog__skills-guide {
+  margin-top: 0.5rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.unified-catalog__skills-guide a {
+  color: var(--cyan);
+  text-underline-offset: 0.2em;
+}
+.unified-catalog__skills-guide a:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
 </style>

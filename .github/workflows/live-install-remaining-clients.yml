@@ -315,7 +315,7 @@ jobs:
               if [[ "$KIND" == skill ]]; then
                 SHA256="85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294"
               else
-                SHA256="c8003e009f96a6e4fd7185f7016c66d7e36e03d8fa2e2394197511907bcd8226"
+                SHA256="c8003e009f96a6e4fd7185f7016c66d7e36e03d8fa2e2394197511907bcd8226" # Official Cursor 3.30.14 APT amd64 .deb; verified #931
               fi
               ;;
             vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20" ;; # Microsoft official SHA-256 for Linux .deb x64 1.144.0

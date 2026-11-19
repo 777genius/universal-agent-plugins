@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Live, non-mocked UAP install/remove evidence. Runs only on disposable profiles."""
 import argparse
+from contextlib import ExitStack
 import hashlib
 import json
 import os
@@ -13,6 +14,8 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+import traceback
+import uuid
 from runpy import run_path
 from contextlib import ExitStack
 from datetime import datetime, timezone
@@ -22,9 +25,9 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
 HISTORICAL_CODEX = run_path(str(ROOT / "scripts/published_codex_baseline.py"))
-CODEX_RETENTION_AUDIT = run_path(str(ROOT / "scripts/codex_plugin_retention_audit.py"))
-GEMINI_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/gemini_runtime_audit.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
+GEMINI_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/gemini_runtime_audit.py"))
+OPENCODE_BOOTSTRAP_AUDIT = run_path(str(ROOT / "scripts/opencode_bootstrap_audit.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -166,6 +169,144 @@ def validate_fixtures(doc):
         raise ValueError("Insufficiently diverse publishers")
 
 
+def _windows_file_close(job, deadline):
+    """Wait original current-member handles; a job count alone is not exit."""
+    import time
+    C, api = job.C, job.api
+    handles, failure, generation = [], None, None
+    def accounting():
+        info = job.Accounting()
+        job.check(api.QueryInformationJobObject(
+            job.handle, 1, C.byref(info), C.sizeof(info), None))
+        return info
+    try:
+        class Members(C.Structure):
+            _fields_ = [("assigned", C.c_uint32), ("listed", C.c_uint32),
+                        ("pids", C.c_size_t * 64)]
+        for name, args, result in (
+                ("OpenProcess", [C.c_uint32, C.c_int, C.c_uint32], C.c_void_p),
+                ("IsProcessInJob", [C.c_void_p, C.c_void_p, C.POINTER(C.c_int)], C.c_int),
+                ("WaitForSingleObject", [C.c_void_p, C.c_uint32], C.c_uint32)):
+            getattr(api, name).argtypes, getattr(api, name).restype = args, result
+        generation = accounting().total
+        members = Members()
+        job.check(api.QueryInformationJobObject(
+            job.handle, 3, C.byref(members), C.sizeof(members), None))
+        if members.assigned != members.listed or members.listed > 64:
+            raise OSError("owned Windows job member list is incomplete")
+        pids = list(members.pids[:members.listed])
+        if len(set(pids)) != len(pids) or any(not 0 < pid <= 0xffffffff for pid in pids):
+            raise OSError("owned Windows job member identities are invalid")
+        for pid in pids:
+            if time.monotonic() >= deadline:
+                raise OSError("owned Windows job cleanup deadline")
+            handle = api.OpenProcess(0x00101000, False, pid)
+            job.check(handle)
+            handles.append(handle)
+            belongs = C.c_int()
+            job.check(api.IsProcessInJob(handle, job.handle, C.byref(belongs)))
+            if not belongs.value:
+                raise OSError("opened process is not in the owned Windows job")
+        if accounting().total != generation:
+            raise OSError("owned Windows job membership changed during capture")
+    except BaseException as error:
+        failure = error
+    try:
+        # Even an incomplete observation must terminate only this owned job.
+        try:
+            job.check(api.TerminateJobObject(job.handle, 97))
+        except BaseException as error:
+            failure = failure or error
+        try:
+            if generation is None or accounting().total != generation:
+                raise OSError("owned Windows job membership changed during termination")
+        except BaseException as error:
+            failure = failure or error
+        for handle in handles:
+            try:
+                remaining = max(0, int((deadline - time.monotonic()) * 1000))
+                if api.WaitForSingleObject(handle, remaining) != 0:
+                    raise OSError("owned Windows job process did not signal exit")
+            except BaseException as error:
+                failure = failure or error
+        try:
+            final = accounting()
+            while final.active:
+                if time.monotonic() >= deadline:
+                    raise OSError("owned Windows job cleanup deadline")
+                time.sleep(min(.05, max(0, deadline - time.monotonic())))
+                final = accounting()
+            if generation is None or final.total != generation:
+                raise OSError("owned Windows job membership changed during termination")
+            if time.monotonic() > deadline:
+                raise OSError("owned Windows job cleanup deadline")
+        except BaseException as error:
+            failure = failure or error
+    finally:
+        for handle in (*handles, job.handle):
+            try:
+                job.check(api.CloseHandle(handle))
+            except BaseException as error:
+                failure = failure or error
+    if failure is not None:
+        raise failure
+    return bool(pids)
+
+
+def _windows_file_call(argv, *, cwd, env, stdout, stderr, stdin, timeout, check):
+    """Own the blocked bootstrap before it can start any command descendants."""
+    import time
+    started, child, job = time.monotonic(), None, None
+    helpers = run_path(str(ROOT / "scripts/e2e/hermes-noauth-tool-call.py"))
+    try:
+        child = subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), "--windows-owned-file-command",
+             json.dumps(argv)], cwd=cwd, env=env, stdin=subprocess.PIPE,
+            stdout=stdout, stderr=stderr,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+        job = helpers["WindowsJob"](child)
+        remaining = timeout - (time.monotonic() - started)
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(argv, timeout)
+        child.stdin.write(b"!")
+        child.stdin.close()
+        try:
+            code = child.wait(timeout=remaining)
+        except subprocess.TimeoutExpired:
+            raise subprocess.TimeoutExpired(argv, timeout) from None
+        counts = job.Accounting()
+        job.check(job.api.QueryInformationJobObject(
+            job.handle, 1, job.C.byref(counts), job.C.sizeof(counts), None))
+        if counts.active:
+            raise OSError("owned Windows command descendants remained after launcher exit")
+        return subprocess.CompletedProcess(argv, code)
+    finally:
+        if child is not None:
+            deadline = time.monotonic() + 5
+            try:
+                try:
+                    if child.stdin is not None and not child.stdin.closed:
+                        child.stdin.close()
+                finally:
+                    if job is not None:
+                        if _windows_file_close(job, deadline) and child.returncode is not None:
+                            raise OSError("owned Windows command descendants remained after launcher exit")
+                    elif child.poll() is None:
+                        child.kill()  # The unreleased bootstrap cannot have descendants.
+            finally:
+                child.wait(timeout=max(0, deadline - time.monotonic()))
+
+
+def _windows_owned_file_command(argv):
+    if os.name != "nt" or sys.stdin.buffer.read(1) != b"!":
+        raise SystemExit("owned Windows command gate was not released")
+    command = json.loads(argv)
+    if (not isinstance(command, list) or not command
+            or not all(isinstance(value, str) and "\0" not in value for value in command)):
+        raise SystemExit("owned Windows command arguments are invalid")
+    return subprocess.call(command, stdin=subprocess.DEVNULL)
+
+
 def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
     try:
         if capture_files or capture_full:
@@ -178,23 +319,23 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
                 raise OSError("private output capture root unavailable")
             with (tempfile.TemporaryFile(mode="w+b", dir=scratch) as stdout_file,
                   tempfile.TemporaryFile(mode="w+b", dir=scratch) as stderr_file):
+                runner = (_windows_file_call if sys.platform == "win32" and not capture_full
+                          else subprocess.run)
                 try:
-                    p = subprocess.run(argv, cwd=cwd, env=env, stdout=stdout_file,
-                                       stderr=stderr_file, stdin=subprocess.DEVNULL,
-                                       timeout=timeout, check=False)
-                except subprocess.TimeoutExpired as error:
-                    # Retain only partial diagnostic tails while the private
-                    # files are open; a timeout cannot grant success authority.
-                    try:
-                        tails = []
-                        for stream in (stdout_file, stderr_file):
-                            stream.seek(0, os.SEEK_END)
-                            stream.seek(max(0, stream.tell() - 1800))
-                            tails.append(stream.read(1800).decode("utf-8", errors="replace"))
-                    except OSError:
-                        raise error
-                    return {"exit_code": None, "stdout_tail": tails[0],
-                            "stderr_tail": tails[1], "timeout": True, "_json": None}
+                    p = runner(argv, cwd=cwd, env=env, stdout=stdout_file,
+                               stderr=stderr_file, stdin=subprocess.DEVNULL,
+                               timeout=timeout, check=False)
+                except subprocess.TimeoutExpired:
+                    if capture_full or sys.platform != "win32":
+                        raise
+                    stdout_file.seek(0)
+                    stderr_file.seek(0)
+                    output, errors = stdout_file.read((1 << 20) + 1), stderr_file.read((1 << 20) + 1)
+                    if len(output) > 1 << 20 or len(errors) > 1 << 20:
+                        output, errors = b"", b"bounded native output capture exceeded"
+                    return {"exit_code": None, "stdout_tail": output.decode("utf-8", errors="replace")[-1800:],
+                            "stderr_tail": errors.decode("utf-8", errors="replace")[-1800:],
+                            "timeout": True, "_json": None}
                 stdout_file.seek(0)
                 stderr_file.seek(0)
                 limit = 1 << 20
@@ -258,8 +399,8 @@ def version_evidence(argv, env, cwd):
     return {"status": "reported", "value": value[:200], "exit_code": 0}
 
 
-def snapshot(root):
-    """Record native entries without following symlinks or hiding read errors."""
+def snapshot(root, *, include_directories=False):
+    """Record native entries; Gemini repeat also preserves ordinary directory identities."""
     found = {}
     for target_root in root:
         if target_root.is_symlink():
@@ -281,6 +422,15 @@ def snapshot(root):
                 if path.is_symlink():
                     found[f"{target_root.name}/{path.relative_to(target_root)}"] = "symlink"
                     dirs.remove(name)
+                elif include_directories:
+                    # An empty directory is a repeat mutation too. Ignore
+                    # timestamps: native journals may touch existing parents.
+                    try:
+                        info = path.lstat()
+                        identity = f"{info.st_mode}:{info.st_dev}:{info.st_ino}" if stat.S_ISDIR(info.st_mode) else "non-regular"
+                    except OSError:
+                        identity = "unreadable"
+                    found[f"directory:{target_root.name}/{path.relative_to(target_root).as_posix()}"] = identity
             for name in files:
                 path = Path(base) / name
                 relative = str(path.relative_to(target_root))
@@ -323,12 +473,33 @@ def repeat_native_phase_evidence(before, after_add, after_list, after_native):
 
 
 
+def bounded_error_traceback(error):
+    """Keep the failure frames even when a message or note fills the budget."""
+    formatted = "".join(traceback.format_exception(error, limit=-8))
+    if len(formatted) <= 8192:
+        return formatted
+    frames = "".join(
+        f"  File {repr(frame.filename)[-320:]}, line {str(frame.lineno)[:24]}, in {frame.name[:96]}\n"
+        for frame in traceback.extract_tb(error.__traceback__, limit=-8))
+    try:
+        message = str(error)[:2048]
+    except Exception:
+        message = "<exception message unavailable>"
+    notes = getattr(error, "__notes__", ())
+    notes = notes if isinstance(notes, (list, tuple)) else ()
+    notes = "\n".join(note[:192] for note in notes[:8] if isinstance(note, str))[:1536]
+    return ("Traceback (most recent call last):\n" + frames
+            + type(error).__name__[:256] + ": " + message + "\n"
+            + ("Notes:\n" + notes + "\n" if notes else "")
+            + "[traceback truncated; message, notes and earlier context bounded]\n")
+
+
 def failed_case_diagnostics(row):
     """Expose existing failed-case evidence in logs; never change qualification."""
-    keys = ("codex_public_add_ready", "codex_public_repeat_ready",
+    keys = ("codex_public_add_ready", "codex_public_repeat_ready", "public_skill_ready",
             "repeat_native_unchanged", "repeat_native_runtime_only", "repeat_native_changes",
             "repeat_native_phases", "gemini_repeat_evidence", "repeat_verified",
-            "removal_verified", "sentinels_preserved")
+            "removal_verified", "sentinels_preserved", "public_target_states")
     evidence = {key: row[key] for key in keys if row.get(key) is not None}
     gates = row.get("codex_removal_gates")
     if row.get("target") == "codex" and row.get("kind") == "plugin" and type(gates) is dict:
@@ -338,8 +509,46 @@ def failed_case_diagnostics(row):
                   "native_uninstall_completed")
         evidence["codex_removal_gates"] = {
             name: gates.get(name) if type(gates.get(name)) is bool else None for name in fields}
-    if "error" in row:
-        evidence["error"] = str(row["error"])[:8192]
+    for key in ("error", "error_traceback"):
+        if key in row:
+            evidence[key] = str(row[key])[:8192]
+    proof = row.get("gemini_runtime_proof")
+    if isinstance(proof, dict):
+        # Project only bounded facts already emitted by the strict observer.
+        # Never print journal text, native CLI output, or full record/path lists.
+        summary = {key: value[:512] if isinstance(value := proof.get(key), str)
+                   else None if value is None else "invalid"
+                   for key in ("status", "reason")}
+        phases = proof.get("phases")
+        summary["phases"] = [
+            phase if phase in ("after-public-repeat-add", "after-public-repeat-list") else "invalid"
+            for phase in phases[:2]] if isinstance(phases, list) else []
+        summary["phases_truncated"] = isinstance(phases, list) and len(phases) > 2
+        fields = {
+            "baseline": ("bytes", "records", "started", "finished"),
+            "failure_facts": ("phase", "role", "operation", "exact_key_present",
+                              "slug_is_string", "slug_matches_pattern", "slug_binding_count",
+                              "regular", "single_link", "positive_size", "within_limit",
+                              "descriptor_capacity", "bytes", "lf_count", "final_lf"),
+        }
+        for section, keys in fields.items():
+            facts = proof.get(section)
+            summary[section] = ({
+                key: value[:64] if isinstance(value := facts[key], str)
+                else value if value is None or type(value) is bool
+                or type(value) is int and 0 <= value <= 1 << 20 else "invalid"
+                for key in keys if key in facts
+            } if isinstance(facts, dict) else None)
+        facts = proof.get("failure_facts")
+        shapes = facts.get("record_shapes") if isinstance(facts, dict) else None
+        if isinstance(shapes, list):
+            allowed = ("json-refused", "metadata-fields", "user-text-fields",
+                       "last-updated-fields", "other")
+            summary["failure_facts"]["record_shapes"] = [
+                shape if isinstance(shape, str) and shape in allowed else "invalid"
+                for shape in shapes[:3]]
+            summary["failure_facts"]["record_shapes_truncated"] = len(shapes) > 3
+        evidence["gemini_runtime_proof"] = summary
     return evidence
 
 
@@ -1042,8 +1251,27 @@ def copilot_disabled_preference_only(before, after_add, after_remove,
             and after_remove.get("match_counts") == expected_after)
 
 
+def _codex_system_skill_checkpoint(home, original):
+    """Join the full pinned bundle proof to the original objects and fresh bytes."""
+    profile = home / ".codex"
+    files, _, metadata = CODEX_RUNTIME_AUDIT["system_skill_initialization"](profile)
+    if metadata != original:
+        raise ValueError("Codex pinned system Skill authority changed")
+    observed = scoped_snapshot((home,))
+    for path, held in metadata.items():
+        key = "metadata:0:" + path.relative_to(home).as_posix()
+        if observed.get(key) != held:
+            raise ValueError("Codex pinned system Skill snapshot identity changed")
+    for path, digest in files.items():
+        if observed.get(home.name + "/" + str(path.relative_to(home))) != digest:
+            raise ValueError("Codex pinned system Skill snapshot bytes changed")
+    return {profile.name + "/" + str(path.relative_to(profile)): digest
+            for path, digest in files.items()}
+
+
 def native_identity_residuals(native_roots, identity, observed_paths, target,
-                              component_names=()):
+                              component_names=(), *, client_version=None,
+                              bootstrap_proof=None):
     """After remove, reject any remaining named native file/config entry.
 
     Codex may retain its downloaded source cache after its native plugin and
@@ -1052,6 +1280,21 @@ def native_identity_residuals(native_roots, identity, observed_paths, target,
     leftover = []
     identities = tuple(dict.fromkeys((identity, *component_names)))
     normalized = {name.casefold() for name in identities}
+
+    def named_path(relative):
+        return any(
+            part.casefold() in normalized or Path(part).stem.casefold() in normalized
+            or any(re.fullmatch(re.escape(name) + r"@agentplugins-[0-9a-f]{12}",
+                                Path(part).stem, re.IGNORECASE) for name in identities)
+            for part in Path(relative).parts)
+
+    def named_content(contents):
+        qualified = any(re.search(
+            r"(?<![A-Za-z0-9_./:-])" + re.escape(name)
+            + r"@agentplugins-[0-9a-f]{12}(?![A-Za-z0-9_./-])",
+            contents, re.IGNORECASE) for name in identities)
+        return qualified or any(exact_native_identity(contents, name) for name in identities)
+
     for root in native_roots:
         prefix = root.name + "/"
         if root.is_symlink():
@@ -1069,6 +1312,16 @@ def native_identity_residuals(native_roots, identity, observed_paths, target,
             file = root / relative
             try:
                 mode = file.lstat().st_mode
+                if target == "opencode" and OPENCODE_BOOTSTRAP_AUDIT["candidate"](relative):
+                    proof = (OPENCODE_BOOTSTRAP_AUDIT["qualify"](
+                        root, relative, client_version, named_path, named_content)
+                        if all(name.strip() for name in identities) and not named_path(relative)
+                        else None)
+                    if proof is None:
+                        leftover.append(observed + ": unverified-native-bootstrap")
+                    elif bootstrap_proof is not None:
+                        bootstrap_proof.append(proof)
+                    continue
                 if stat.S_ISLNK(mode):
                     if (target != "qoder" or "/".join(Path(relative).parts) != "logs/latest"
                             or not qoder_passive_latest_log_link(root, file)):
@@ -1077,25 +1330,14 @@ def native_identity_residuals(native_roots, identity, observed_paths, target,
                     leftover.append(observed + ": non-regular")
                 elif passive_native_path(target, relative):
                     continue
-                elif any(
-                        part.casefold() in normalized
-                        or Path(part).stem.casefold() in normalized
-                        or any(re.fullmatch(
-                            re.escape(name) + r"@agentplugins-[0-9a-f]{12}",
-                            Path(part).stem, re.IGNORECASE) for name in identities)
-                        for part in Path(relative).parts):
+                elif named_path(relative):
                     leftover.append(observed)
                 elif file.stat().st_size > 1024 * 1024:
                     # Unread content must never count as clean native state.
                     leftover.append(observed + ": unscanned-too-large")
                 else:
                     contents = file.read_text(encoding="utf-8", errors="replace")
-                    qualified = any(re.search(
-                        r"(?<![A-Za-z0-9_./:-])" + re.escape(name)
-                        + r"@agentplugins-[0-9a-f]{12}(?![A-Za-z0-9_./-])",
-                        contents, re.IGNORECASE) for name in identities)
-                    if qualified or any(exact_native_identity(contents, name)
-                                        for name in identities):
+                    if named_content(contents):
                         leftover.append(observed)
             except FileNotFoundError:
                 continue
@@ -1291,7 +1533,7 @@ def matches_pinned_skill_bytes(project, skill_path, blob_sha1):
         return False
 
 
-def has_target_registration(response, identity, target):
+def has_target_registration(response, identity, target, *, skill_source=None):
     """Inspect failed add's list without requiring a verified/active binding."""
     if not isinstance(response, dict):
         return False
@@ -1300,7 +1542,8 @@ def has_target_registration(response, identity, target):
     if not isinstance(installations, list):
         return False
     return any(
-        isinstance(node, dict) and node.get("name") == identity
+        isinstance(node, dict) and (node.get("name") == identity
+                                   or skill_source is not None and node.get("source") == skill_source)
         and isinstance(node.get("clients"), list)
         and any(isinstance(client, dict) and client.get("client_id") == target
                 for client in node["clients"])
@@ -1373,18 +1616,61 @@ def signed_release_public_observation(response, identity, target):
     return evidence[:3]
 
 
-def kiro_prepared_user_client(clients):
-    """Select one observed Prepared User binding, never native activation."""
-    if not isinstance(clients, list):
-        return None
-    selected = [client for client in clients if isinstance(client, dict)
-                and client.get("client_id") == "kiro"]
-    expected = {"scope": "user", "install_intent": "prepare", "materialization": "materialized",
-                "activation": "prepared", "authentication": "not_checked", "policy": "allowed",
-                "verification": "package_validated"}
-    if len(selected) != 1 or any(selected[0].get(key) != value for key, value in expected.items()):
-        return None
-    return selected[0]
+def public_target_state_observation(response, identity, target, *,
+                                    installation_ids=None, skill_source=None):
+    """Bounded public enum projection; never installation acceptance evidence."""
+    if response is None:
+        return {"status": "unobserved"}
+    data = response.get("data") if isinstance(response, dict) else None
+    nodes = data.get("installations") if isinstance(data, dict) else None
+    if not isinstance(nodes, list):
+        return {"status": "invalid"}
+    enums = {
+        "materialization": ("absent", "staged", "materialized", "degraded"),
+        "activation": ("not_required", "prepared", "manual_activation_required", "active", "failed"),
+        "authentication": ("not_required", "not_checked", "auth_pending", "authenticated", "failed"),
+        "policy": ("allowed", "blocked", "approval_required"),
+        "verification": ("not_run", "package_validated", "installation_verified", "runtime_verified", "failed"),
+    }
+    selected_nodes = selected_clients = invalid_rows = 0
+    truncated = len(nodes) > 32
+    states = []
+    for node in nodes[:32]:
+        if not isinstance(node, dict):
+            invalid_rows += 1
+            continue
+        selected = (node.get("name") == identity if installation_ids is None else (
+            (isinstance(node.get("installation_id"), str)
+             and node["installation_id"] in installation_ids)
+            or (skill_source is not None and node.get("source") == skill_source)))
+        if not selected:
+            continue
+        selected_nodes += 1
+        clients = node.get("clients")
+        if not isinstance(clients, list):
+            invalid_rows += 1
+            continue
+        truncated = truncated or len(clients) > 32
+        for client in clients[:32]:
+            if not isinstance(client, dict):
+                invalid_rows += 1
+                continue
+            if client.get("client_id") != target:
+                continue
+            if selected_clients == 32:
+                truncated = True
+                continue
+            selected_clients += 1
+            state = {key: value if isinstance(value := client.get(key), str) and value in allowed
+                     else "invalid" for key, allowed in enums.items()}
+            if state not in states:
+                if len(states) < 4:
+                    states.append(state)
+                else:
+                    truncated = True
+    return {"status": "observed", "selected_installations": selected_nodes,
+            "selected_bindings": selected_clients, "invalid_rows": min(invalid_rows, 32),
+            "states": states, "truncated": truncated}
 
 
 def matching_installations(response, identity, target, kind, item, signed_release_pins=None):
@@ -1997,12 +2283,12 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             signed_release_pins=None, *, client_version=None, historical_baseline=False):
     with ExitStack() as audits:
         return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-                        signed_release_pins, audits, client_version, historical_baseline)
+                        signed_release_pins, audits, client_version,
+                        **({"historical_baseline": True} if historical_baseline else {}))
 
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-             signed_release_pins, audits, client_version, historical_baseline=False):
-    native_target = audit_client_id(target, kind)
+             signed_release_pins, audits, client_version, *, historical_baseline=False):
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
     project = case_root / "project"
@@ -2074,9 +2360,16 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     env = isolated_client_env(home, case_root, data)
     codex_skill_case = target == "codex" and kind == "skill"
     codex_runtime = None
+    gemini_runtime = None
+    gemini_native_baseline = None
+    gemini_settings = gemini_settings_identity = None
+    gemini_settings_text = '{"context":{"includeDirectoryTree":false}}\n'
+    gemini_skill_case = (target == "gemini" and kind == "skill"
+                         and AGENT_BINARIES.get("gemini")
+                         and GEMINI_RUNTIME_AUDIT["pinned_version"](client_version))
     codex_plugin_sqlite = None
-    codex_retention = None
-    codex_retention_proof = None
+    codex_system_metadata = None
+    codex_system_skill_proof = None
     codex_add_ready = False
     codex_repeat_ready = False
     historical_observer = (HISTORICAL_CODEX["PublishedBaseline"](cli, env, project)
@@ -2099,6 +2392,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                          *(project / rel for rel in project_skill_roots)):
                 if not path_inside_case(path, case_root):
                     raise ValueError("audit case native/project ancestor was redirected")
+            if gemini_settings is not None:
+                if (GEMINI_RUNTIME_AUDIT["_FILES"]["identity"](gemini_settings.lstat())
+                        != gemini_settings_identity
+                        or copilot_settings_read(gemini_settings, case_root) != (gemini_settings_text, None)):
+                    raise ValueError("Gemini audit context settings changed after external execution")
             if codex_runtime is not None:
                 codex_runtime.guard()
             if codex_plugin_sqlite is not None:
@@ -2119,6 +2417,15 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_plugin_sqlite.checkpoint("after-public-command")
         return outcome
 
+    if gemini_skill_case:
+        # The pinned native list initializes a model context even without a model call.
+        # Its optional tree includes transient UAP package snapshots; discovery is unchanged.
+        assert_case_unchanged()
+        gemini_settings = home / ".gemini/settings.json"
+        with gemini_settings.open("xb") as stream:
+            stream.write(gemini_settings_text.encode("utf-8"))
+        gemini_settings_identity = GEMINI_RUNTIME_AUDIT["_FILES"]["identity"](gemini_settings.lstat())
+        assert_case_unchanged()
     if kind == "skill" and target in ("kimi", "grok"):
         # Grok inspect reports projectRoot from Git discovery. Never weaken its
         # strict native project identity contract to accept a missing root.
@@ -2127,33 +2434,74 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         codex_runtime = CODEX_RUNTIME_AUDIT["CodexRuntimeAudit"](
             AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign)
         assert_case_unchanged()
-    if native_target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
+        _, _, codex_system_metadata = CODEX_RUNTIME_AUDIT["system_skill_initialization"](
+            home / ".codex")
+        _codex_system_skill_checkpoint(home, codex_system_metadata)
+    if target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
+        # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
+        # Author these fixture objects before protecting every byte and identity.
+        assert_case_unchanged()
+        profile = home / ".codex"
+        for directory in (profile / "tmp", profile / "tmp/arg0"):
+            directory.mkdir(mode=0o700)
+        with (profile / "installation_id").open("xb") as stream:
+            if os.name != "nt":
+                os.fchmod(stream.fileno(), 0o644)
+            stream.write(str(uuid.uuid4()).encode("ascii"))
         protected_home = scoped_snapshot((home,))
         protected_delivery = scoped_snapshot((project, data))
         codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
             AGENT_BINARIES["codex"], case_root, home, project, env)
         assert_case_unchanged()
+        bundle_files, bundle_directories, bundle_metadata = (
+            CODEX_RUNTIME_AUDIT["plugin_initialization"](home / ".codex"))
+        system_root = home / ".codex/skills/.system"
+        codex_system_metadata = {
+            path: fact for path, fact in bundle_metadata.items()
+            if path == system_root.parent or path.is_relative_to(system_root)}
         initialized_home = scoped_snapshot((home,))
-        if (any(initialized_home.get(path) != value for path, value in protected_home.items())
+        # Admit only exact artifacts validated by the bounded Codex initialization
+        # proofs. Every other old or newly created key is protected.
+        initializer = codex_plugin_sqlite
+        sqlite_root = home / ".local/state/codex-sqlite"
+        config_path = home / ".codex/config.toml"
+        if initializer.runtime != sqlite_root or initializer.config != config_path:
+            raise ValueError("Codex preinstall initialization changed protected fixture authority")
+        owned_files = {
+            config_path: hashlib.sha256(
+                CODEX_RUNTIME_AUDIT["_sqlite_config"](initializer.pin)).hexdigest(),
+            **{sqlite_root / name: fact["sha256"] for name, fact in
+               initializer.observations[0]["runtime_files_fully_read"].items()},
+            **bundle_files,
+        }
+        expected_home = dict(protected_home)
+        owned_directories = (home / ".local", home / ".local/state", sqlite_root,
+                             *bundle_directories)
+        for path in (*owned_directories, *owned_files):
+            directory = path in owned_directories
+            relative = path.relative_to(home)
+            metadata_key = "metadata:0:" + relative.as_posix()
+            metadata = initialized_home.get(metadata_key)
+            if (not isinstance(metadata, tuple) or not metadata
+                    or not (stat.S_ISDIR(metadata[0]) if directory
+                            else stat.S_ISREG(metadata[0]))
+                    or (path in bundle_metadata and metadata != bundle_metadata[path])):
+                raise ValueError("Codex preinstall initialization changed protected fixture authority")
+            entries = {metadata_key: metadata}
+            if directory:
+                entries["directory:0:" + relative.as_posix()] = "present"
+            else:
+                entries[home.name + "/" + str(relative)] = owned_files[path]
+            for key, value in entries.items():
+                if key not in protected_home:
+                    expected_home[key] = value
+        initializer.guard()
+        if (initialized_home != expected_home
                 or scoped_snapshot((project, data)) != protected_delivery):
             raise ValueError("Codex preinstall initialization changed protected fixture authority")
-    if (codex_plugin_sqlite is not None and sys.platform == "linux"
-            and codex_plugin_sqlite.native_version == "0.162.0"):
-        try:
-            codex_retention = CODEX_RETENTION_AUDIT["CodexPluginRetention"](
-                home / ".codex", codex_plugin_sqlite.native_version)
-            audits.callback(codex_retention.close)
-        except (OSError, ValueError, TypeError):
-            codex_retention_proof = {"status": "unresolved-preinstall-custody",
-                                     **CODEX_RETENTION_AUDIT["CHECKPOINT_SCOPE"]}
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
-                     if target == "claude" and kind == "skill"
-                     and sys.platform in ("linux", "darwin", "win32") else None)
-    vscode_user = target == "vscode" and kind == "plugin"
-    vscode_roots = (runroot, case_root, home, data, project)
-    vscode_native_before = scoped_snapshot(native_roots) if vscode_user else None
-    vscode_roots_before = vscode_root_identities(vscode_roots) if vscode_user else None
+                     if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)
         args = ["add", item, "--target", target, "--scope", "user", "--format", "json"]
@@ -2239,6 +2587,38 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         (kind == "plugin" or
          (bool(skill_path) and lock_pinned and skill_bytes_match))
     )
+    if gemini_skill_case and installed:
+        gemini_baseline_before = snapshot(native_roots, include_directories=True)
+        gemini_runtime = GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
+            home, project, gemini_baseline_before, client_version,
+            profile_snapshot=scoped_snapshot)
+        audits.callback(gemini_runtime.close)
+        if gemini_runtime.reason is None:
+            # Match runGeminiInventory: locale/timezone and other inherited variables
+            # are absent from its explicit child environment, including model context.
+            native_env = {"GEMINI_CLI_HOME": env["GEMINI_CLI_HOME"]}
+            native_env.update({key: env[key] for key in (
+                "PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR",
+                "GEMINI_RESTRICTED_MODE", "GEMINI_CLI_TRUST_WORKSPACE") if key in env})
+            native_env.update(NO_COLOR="1", TERM="dumb")
+            native_started = datetime.now(timezone.utc)
+            native_observed = audited_call(
+                [AGENT_BINARIES["gemini"], "skills", "list", "--all"], native_env, project, 30)
+            native_finished = datetime.now(timezone.utc)
+            native_observed.pop("_json", None)
+            gemini_baseline_after = snapshot(native_roots, include_directories=True)
+            gemini_native_baseline = {
+                "operation": "native-skills-list-baseline",
+                "started": native_started.isoformat(), "finished": native_finished.isoformat(),
+                "observation": native_observed, "selected_skill_discovery_claimed": False,
+                "native_changes": snapshot_change_evidence(
+                    gemini_baseline_before, gemini_baseline_after),
+            }
+            if native_observed["exit_code"] == 0 and not native_observed["timeout"]:
+                gemini_runtime.baseline(gemini_baseline_after,
+                                        interval=(native_started, native_finished))
+            else:
+                gemini_runtime.reason = "Gemini native baseline command did not complete cleanly"
     if codex_runtime is not None and installed:
         codex_runtime.checkpoint("installed", True)
         codex_add_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](added_json, matching, identity)
@@ -2249,7 +2629,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # Repeat the same source and target only after the first registered add;
     # keep native, managed and foreign state inside the same disposable case.
     repeat_add = None
+    repeat_add_json = None
     repeat_list = None
+    repeat_list_json = None
     repeat_identity_ids = []
     repeat_native_unchanged = None
     repeat_native_runtime_only = False
@@ -2264,7 +2646,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if installed:
         gemini_repeat_phases = target == "gemini" and kind == "skill"
         capture_repeat_phases = codex_runtime is not None or gemini_repeat_phases
-        before_repeat_native = snapshot(native_roots)
+        before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         if gemini_repeat_phases and GEMINI_RUNTIME_AUDIT["pinned_version"](client_version):
             gemini_runtime = GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
                 home, project, before_repeat_native, client_version)
@@ -2282,17 +2664,25 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 for path in lock_paths
             )
         before_repeat_lock = lock_state()
+        repeat_add_started = datetime.now(timezone.utc)
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
                                   **capture_option)
-        after_repeat_add = snapshot(native_roots) if capture_repeat_phases else None
+        repeat_add_finished = datetime.now(timezone.utc)
+        after_repeat_add = (snapshot(native_roots, include_directories=gemini_runtime is not None)
+                            if codex_runtime is not None or gemini_runtime is not None else None)
         if gemini_runtime is not None:
-            gemini_runtime.checkpoint("after-public-repeat-add", after_repeat_add)
+            gemini_runtime.checkpoint("after-public-repeat-add", after_repeat_add,
+                                      interval=(repeat_add_started, repeat_add_finished))
         repeat_add_json = repeat_add.pop("_json", None)
+        repeat_list_started = datetime.now(timezone.utc)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
-        after_repeat_list = snapshot(native_roots) if capture_repeat_phases else None
+        repeat_list_finished = datetime.now(timezone.utc)
+        after_repeat_list = (snapshot(native_roots, include_directories=gemini_runtime is not None)
+                             if codex_runtime is not None or gemini_runtime is not None else None)
         if gemini_runtime is not None:
-            gemini_runtime.checkpoint("after-public-repeat-list", after_repeat_list)
+            gemini_runtime.checkpoint("after-public-repeat-list", after_repeat_list,
+                                      interval=(repeat_list_started, repeat_list_finished))
         repeat_list_json = repeat_list.pop("_json", None)
         if vscode_user:
             vscode_repeat = vscode_manual_binding(repeat_list_json, identity, item, signed_release_pins)
@@ -2306,11 +2696,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_runtime.checkpoint("repeat-installed", True)
             codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
                 repeat_add_json, repeat_matches, identity)
-        after_repeat_native = snapshot(native_roots)
-        if gemini_runtime is not None:
-            gemini_repeat_observed = gemini_runtime.finish(after_repeat_native)
-            gemini_repeat_evidence = gemini_runtime.evidence()
-        if capture_repeat_phases:
+        after_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
+        gemini_repeat_valid = (gemini_runtime.finish(after_repeat_native)
+                              if gemini_runtime is not None else False)
+        if codex_runtime is not None or gemini_runtime is not None:
             repeat_native_phases = repeat_native_phase_evidence(
                 before_repeat_native, after_repeat_add, after_repeat_list, after_repeat_native)
             if gemini_repeat_phases:
@@ -2324,8 +2713,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 repeat_native_runtime_only = codex_runtime.repeat_runtime_only(
                     before_repeat_native, after_repeat_native, before_repeat_runtime)
             elif gemini_runtime is not None:
-                repeat_native_runtime_only = gemini_repeat_observed and (
-                    gemini_repeat_evidence["status"] == "metadata-only-new-records")
+                repeat_native_runtime_only = gemini_repeat_valid
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
                                     == before_repeat_project if grok_prepared else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
@@ -2336,11 +2724,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
             and gemini_repeat_observed
             and (not grok_prepared or repeat_project_unchanged)
-            and (not kiro_prepared or kiro_prepared_user_client(repeat_matches[0].get("clients"))
-                 == kiro_prepared_user_client(matching[0].get("clients")))
         )
-        repeat_verified = (historical_repeat_lifecycle_verified
-                           and (not codex_skill_case or codex_repeat_ready))
+        repeat_verified = bool(historical_repeat_lifecycle_verified
+                               and (not codex_skill_case or codex_repeat_ready)
+                               and (gemini_runtime is None or gemini_repeat_valid))
         if historical_observer is not None:
             historical_repeat_add_verified = HISTORICAL_CODEX["historical_add"](
                 repeat_add_json, repeat_matches, item, project / skill_path, repeated=True)
@@ -2381,15 +2768,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             audits.callback(claude_retirement.close)
         except (OSError, ValueError, TypeError, KeyError, IndexError):
             claude_retirement_proof = {"status": "unresolved-cache-retirement"}
-    if codex_retention is not None and installed and repeat_verified:
-        try:
-            codex_retention.before_remove(
-                data, matching[0], identity, selector=item,
-                expected_pin=(signed_release_pins or {}).get(item))
-        except (OSError, ValueError, TypeError, KeyError, IndexError):
-            codex_retention_proof = {"status": "unresolved-plugin-retention-owner",
-                                     **CODEX_RETENTION_AUDIT["CHECKPOINT_SCOPE"]}
     cleanup = None
+    cleanup_json = None
     native_uninstall = None
     vscode_user_manual = None
     if installed:
@@ -2421,29 +2801,6 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         cleanup = audited_call([cli, "remove", selector, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup_json = cleanup.pop("_json", None)
-        if protected is not None:
-            after_refusal = scoped_snapshot((home, data, project))
-            refused = (vscode_command_complete(cleanup, 1)
-                       and cleanup.get("stderr_tail") == VSCODE_MANUAL_REMOVE_STDERR
-                       and vscode_manual_remove_refusal(cleanup_json, vscode_original))
-            vscode_user_manual.update(
-                refusal_document=cleanup_json, refusal_observed=refused,
-                protected_after_refusal=after_refusal == protected,
-                protected_after_refusal_sha256=vscode_snapshot_digest(after_refusal),
-                roots_unchanged=(vscode_user_manual["roots_unchanged"]
-                                 and vscode_root_identities(vscode_roots) == vscode_roots_before))
-            if refused and after_refusal == protected and vscode_user_manual["roots_unchanged"]:
-                post_refusal = audited_call(vscode_user_manual["list_argv"], env, project, 30)
-                post_refusal_json = post_refusal.pop("_json", None)
-                after_list = scoped_snapshot((home, data, project))
-                vscode_user_manual.update(
-                    post_refusal_list=post_refusal,
-                    post_refusal_binding=vscode_manual_binding(
-                        post_refusal_json, identity, item, signed_release_pins),
-                    protected_after_list=after_list == protected,
-                    protected_after_list_sha256=vscode_snapshot_digest(after_list),
-                    roots_unchanged=(vscode_user_manual["roots_unchanged"]
-                                     and vscode_root_identities(vscode_roots) == vscode_roots_before))
     qoder_native_after_remove = None
     if target == "qoder" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
         qoder_native_after_remove = qoder_native_plugin_state(
@@ -2458,16 +2815,6 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         and all(preserved_regular_text(path, body, case_root) for path, body in windsurf_fixture)
         and (not windsurf_fixture or windsurf_local_policy_preserved(home, case_root))
     )
-    post_skill_tree_delta = []
-    if kind == "skill" and cleanup:
-        after_skill_tree = snapshot([project / name for name in project_skill_roots])
-        post_skill_tree_delta = sorted(
-            path for path in before_skill_tree.keys() | after_skill_tree.keys()
-            if before_skill_tree.get(path) != after_skill_tree.get(path))
-    post_removal_skill = skill_file_present(project, target, identity) if kind == "skill" and cleanup else None
-    post_removal_leftovers = (
-        skill_removal_leftovers(project, target, identity, skill_path)
-        if kind == "skill" and cleanup else [])
     post_list = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
@@ -2482,6 +2829,24 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         assert_case_unchanged()
     copilot_after_remove = (copilot_settings_sanitized_shape(home, case_root, identity)
                             if copilot_before is not None and cleanup else None)
+    post_skill_tree_delta = []
+    if kind == "skill" and cleanup:
+        after_skill_tree = snapshot([project / name for name in project_skill_roots])
+        post_skill_tree_delta = sorted(
+            path for path in before_skill_tree.keys() | after_skill_tree.keys()
+            if before_skill_tree.get(path) != after_skill_tree.get(path))
+    post_removal_skill = skill_file_present(project, target, identity) if kind == "skill" and cleanup else None
+    post_removal_leftovers = (
+        skill_removal_leftovers(project, target, identity, skill_path)
+        if kind == "skill" and cleanup else [])
+    if kind == "skill" and cleanup:
+        sentinels_preserved = sentinels_preserved and (
+            preserved_regular_text(sentinel, "foreign content never belongs to UAP\n", case_root)
+            and preserved_regular_text(user_sentinel, "foreign profile content never belongs to UAP\n", case_root)
+            and preserved_regular_text(native_foreign, "unmanaged native neighbor must survive\n", case_root)
+            and preserved_regular_text(
+                project_foreign, "---\nname: foreign-neighbor\ndescription: unrelated\n---\n", case_root)
+        )
     remaining_ids = set()
     post_list_schema_valid = False
     post_list_empty = False
@@ -2498,7 +2863,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # A successful remove must not re-register this identity under a new ID.
     post_remove_identity_registered = bool(
         post_list_schema_valid and (
-            has_target_registration(post_list_json, identity, native_target)
+            has_target_registration(
+                post_list_json, identity, target,
+                skill_source=f'{item["repo"]}/skills/{item["folder"]}'
+                if kind == "skill" and target == "claude" else None)
             or (grok_prepared and grok_prepared_source_survives(
                 post_list_json, item, matching[0]["name"], matching[0]["installation_id"]))))
     post_lock_pinned = bool(kind == "skill" and (project / "uap.lock").exists()
@@ -2507,13 +2875,36 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     if digest in ("symlink", "unreadable", "non-regular")]
     # The remove step may create new native registrations after the add snapshot.
     # Rescan the disposable roots; preserve earlier observed unsafe paths too.
+    codex_system_files = None
+    if codex_system_metadata is not None and cleanup and cleanup["exit_code"] == 0:
+        assert_case_unchanged()
+        codex_system_files = _codex_system_skill_checkpoint(home, codex_system_metadata)
+    opencode_bootstrap_proof = []
     native_residuals = (
         native_identity_residuals(
             native_roots, identity,
             sorted(set(snapshot(native_roots)) | set(native_attribution) | set(unsafe_paths)),
-            native_target, native_components)
+            target, native_components, client_version=client_version,
+            bootstrap_proof=opencode_bootstrap_proof)
         if cleanup and cleanup["exit_code"] == 0 else []
     )
+    codex_system_residuals_verified = False
+    if codex_system_files is not None:
+        if _codex_system_skill_checkpoint(home, codex_system_metadata) != codex_system_files:
+            raise ValueError("Codex pinned system Skill inventory changed during residual scan")
+        assert_case_unchanged()
+        codex_system_residuals_verified = bool(
+            native_residuals and all(path in codex_system_files for path in native_residuals)
+            and (codex_skill_case or (native_uninstall
+                 and native_uninstall.get("completed") is True
+                 and native_uninstall.get("native_plugin_absent") is True
+                 and native_uninstall.get("native_marketplace_absent") is True)))
+        if codex_system_residuals_verified:
+            codex_system_skill_proof = {
+                "status": "verified-unchanged-pinned-system-files-at-checkpoint",
+                "native_version": "0.153.4",
+                "residuals": {path: codex_system_files[path] for path in native_residuals},
+                "atomic_snapshot_claimed": False, "writer_closure_claimed": False}
     # Preserve truthful disk-state evidence without equating passive cached
     # source/log files to an active Qoder/Codex plugin registration.
     passive_retained = []
@@ -2548,18 +2939,6 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         claude_retirement_proof = claude_retirement.finish(native_residuals, cleanup_json)
         claude_retired_residuals_verified = (
             claude_retirement_proof["status"] == "verified-cache-retirement-at-checkpoint")
-    codex_retention_verified = False
-    if (codex_retention is not None and codex_retention_proof is None
-            and CODEX_RETENTION_AUDIT["lifecycle_ready"](
-                installed=installed, repeat_verified=repeat_verified,
-                sentinels_preserved=sentinels_preserved,
-                native_uninstall=native_uninstall, cleanup=cleanup, post_list=post_list,
-                post_list_schema_valid=post_list_schema_valid, post_list_empty=post_list_empty,
-                old_ids=old_ids, remaining_ids=remaining_ids,
-                post_remove_identity_registered=post_remove_identity_registered)):
-        codex_retention_proof = codex_retention.finish(native_residuals)
-        codex_retention_verified = (codex_retention_proof["status"]
-            == "verified-unchanged-or-preserved-at-checkpoint")
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
@@ -2574,7 +2953,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                  and copilot_native_after_remove["status"] == "absent"))
         and not post_remove_identity_registered
         and (not native_residuals or copilot_disabled_setting_retained
-             or claude_retired_residuals_verified or codex_retention_verified)
+             or claude_retired_residuals_verified or codex_system_residuals_verified)
         and (kind != "skill" or (post_removal_skill is None
                                   and not post_removal_leftovers and not post_lock_pinned
                                   and not post_skill_tree_delta))
@@ -2648,6 +3027,16 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         status = "incomplete-native-proof"
     else:
         status = "install-failed"
+    # A clean file lifecycle cannot override the installer's public setup
+    # result. This is a necessary condition only; every native gate above
+    # remains required, including Codex's independent inventory checkpoints.
+    skill_public_ready = ({phase: bool(
+        isinstance(response, dict) and response.get("readiness") == "ready"
+        and response.get("next_actions") in (None, []))
+        for phase, response in (("after-add", added_json), ("repeat-add", repeat_add_json))}
+        if kind == "skill" else None)
+    if status == "passed" and skill_public_ready is not None and not all(skill_public_ready.values()):
+        status = "incomplete-native-proof"
     return {"kind": kind, "index": index, "identity": identity, "target": target,
             "canonical_client_id": native_target,
             "windsurf_public_commands": windsurf_commands if windsurf_fixture else None,
@@ -2668,6 +3057,20 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "kiro_prepared_lifecycle_verified": bool(kiro_prepared and installed and repeat_verified
                                                      and removal_verified and sentinels_preserved),
             "signed_release_observation": signed_observation,
+            "public_target_states": {
+                "after-add": public_target_state_observation(
+                    listed_json, identity, target,
+                    installation_ids=old_ids if kind == "skill" else None,
+                    skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None),
+                "repeat-add": public_target_state_observation(
+                    repeat_list_json, identity, target,
+                    installation_ids=repeat_identity_ids if kind == "skill" else None,
+                    skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None),
+                "after-remove": public_target_state_observation(
+                    post_list_json, identity, target,
+                    installation_ids=old_ids | set(repeat_identity_ids) if kind == "skill" else None,
+                    skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None)},
+            "public_skill_ready": skill_public_ready,
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
@@ -2692,37 +3095,28 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "post_skill_tree_delta": post_skill_tree_delta,
             "post_lock_pinned": post_lock_pinned,
             "removal_verified": removal_verified, "native_residuals": native_residuals,
-            **({"codex_removal_gates": {
-                "cleanup_succeeded": bool(cleanup and cleanup["exit_code"] == 0),
-                "post_list_succeeded": bool(post_list and post_list["exit_code"] == 0),
-                "post_list_schema_valid": post_list_schema_valid,
-                "original_ids_absent": old_ids.isdisjoint(remaining_ids),
-                "kit_closure_empty_required": item == "marketing-kit",
-                "post_list_empty": post_list_empty,
-                "identity_absent": not post_remove_identity_registered,
-                "native_residuals_absent": not native_residuals,
-                "retention_verified": codex_retention_verified,
-                "native_uninstall_completed": bool(native_uninstall and native_uninstall.get("completed")),
-            }} if native_target == "codex" and kind == "plugin" else {}),
             **({"claude_cache_retirement": claude_retirement_proof}
-               if claude_before is not None else {}),
-            **({"native_residual_diagnostics": codex_residual_diagnostics(native_roots, native_residuals)}
-               if native_target == "codex" and kind == "plugin" and native_residuals else {}),
+               if claude_retirement_proof is not None else {}),
+            **({"codex_system_skill_retention": codex_system_skill_proof}
+               if codex_system_skill_proof is not None else {}),
+            **({"opencode_bootstrap_retention": opencode_bootstrap_proof}
+               if opencode_bootstrap_proof else {}),
             "retained_passive_native_files": sorted(set(passive_retained)),
             "qoder_passive_log_link_verified": qoder_passive_log_link_verified,
             "qoder_native_after_repeat": qoder_native_before_remove,
             "qoder_native_after_remove": qoder_native_after_remove,
             "copilot_native_after_repeat": copilot_native_before_remove,
             "copilot_native_after_remove": copilot_native_after_remove,
-            "historical_npm_proof": historical_observer.proof if historical_observer is not None else None,
-            "historical_add_verified": historical_add_verified,
-            "historical_repeat_add_verified": historical_repeat_add_verified,
-            "historical_repeat_lifecycle_verified": historical_repeat_lifecycle_verified,
+            **({"historical_npm_proof": historical_observer.proof,
+                "historical_add_verified": historical_add_verified,
+                "historical_repeat_add_verified": historical_repeat_add_verified,
+                "historical_repeat_lifecycle_verified": historical_repeat_lifecycle_verified}
+               if historical_observer is not None else {}),
             "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
             "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
             "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
-            **({"codex_plugin_retention_proof": codex_retention_proof}
-               if codex_retention_proof is not None else {}),
+            "gemini_runtime_proof": gemini_runtime.evidence() if gemini_runtime is not None else None,
+            "gemini_native_baseline": gemini_native_baseline,
             **({"codex_plugin_sqlite_proof": codex_plugin_sqlite.evidence()}
                if codex_plugin_sqlite is not None else {}),
             "copilot_disabled_setting_retained": copilot_disabled_setting_retained,
@@ -2951,6 +3345,20 @@ def windsurf_prepared_readout(row, fixtures, cli):
     except (KeyError, TypeError, ValueError, RecursionError):
         return False
     return True
+
+
+def kiro_prepared_user_client(clients):
+    """Select one observed Prepared User binding, never native activation."""
+    if not isinstance(clients, list):
+        return None
+    selected = [client for client in clients if isinstance(client, dict)
+                and client.get("client_id") == "kiro"]
+    expected = {"scope": "user", "install_intent": "prepare", "materialization": "materialized",
+                "activation": "prepared", "authentication": "not_checked", "policy": "allowed",
+                "verification": "package_validated"}
+    if len(selected) != 1 or any(selected[0].get(key) != value for key, value in expected.items()):
+        return None
+    return selected[0]
 
 
 def kiro_prepared_installation_negative(row, fixtures):
@@ -3451,32 +3859,13 @@ def main():
     p.add_argument("--target", required=True)
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--report-dir", required=True)
-    p.add_argument("--acceptance", choices=("native", "kiro-prepared-installation",
-                   "cursor-prepared-installation", "grok-prepared-skills-installation",
-                    "windsurf-prepared-installation", "vscode-user-manual-preparation",
-                    HISTORICAL_CODEX["ACCEPTANCE"]),
+    p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"]),
                    default="native")
     args = p.parse_args()
     historical_baseline = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
     if historical_baseline and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
             "codex", "skill", "linux", "x86_64", 2):
         p.error("Historical npm observation requires exactly two Codex Skills on Linux x86_64")
-    if (args.acceptance == "kiro-prepared-installation"
-            and (args.target, args.kind, sys.platform, args.limit)
-            != ("kiro", "plugin", "darwin", 30)):
-        p.error("Prepared installation acceptance requires the complete Kiro plugin Darwin lane")
-    prepared_routes = {"cursor-prepared-installation": ("cursor", "plugin", "linux", 30),
-                       "grok-prepared-skills-installation": ("grok", "skill", "linux", 30),
-                       "windsurf-prepared-installation": ("windsurf", "plugin", "linux", 30)}
-    if (args.acceptance in prepared_routes
-            and (args.target, args.kind, sys.platform, args.limit) != prepared_routes[args.acceptance]):
-        p.error("Prepared installation acceptance requires its complete Linux target and kind lane")
-    if args.acceptance == "windsurf-prepared-installation" and platform.machine() != "x86_64":
-        p.error("Windsurf installation acceptance requires the pinned Linux x86_64 lane")
-    if (args.acceptance == "vscode-user-manual-preparation"
-            and (args.target, args.kind, sys.platform, platform.machine(), args.limit)
-            != ("vscode", "plugin", "linux", "x86_64", 30)):
-        p.error("Manual preparation observation requires the complete VS Code User plugin Linux lane")
     doc = json.loads(FIXTURES.read_text())
     validate_fixtures(doc)
     if args.target not in doc["targets"] or not 1 <= args.limit <= 30:
@@ -3500,15 +3889,6 @@ def main():
               "fixture_count": len(cases), "cases_attempted": 0,
               "source_selection_complete": args.limit == 30,
               "full_coverage": False, "results": []}
-    if args.acceptance == "kiro-prepared-installation":
-        report["acceptance"] = "kiro-prepared-installation"
-        report.update(kiro_prepared_installation_summary(report, doc))
-    if args.acceptance in prepared_routes:
-        report["acceptance"] = args.acceptance
-        report.update(prepared_installation_summary(report, doc, args.acceptance))
-    if args.acceptance == "vscode-user-manual-preparation":
-        report["acceptance"] = "vscode-user-manual-preparation"
-        report.update(vscode_user_manual_summary(report, doc))
     if historical_baseline:
         report["acceptance"] = args.acceptance
         report.update(HISTORICAL_CODEX["summary"](report, doc))
@@ -3550,7 +3930,10 @@ def main():
     temp_parent = published_audit_temp_parent()
     report["temp_parent_kind"] = ("physical-python-default" if sys.platform == "darwin"
                                   else "github-windows-runner" if temp_parent else "python-default")
-    with tempfile.TemporaryDirectory(prefix="uap-live-30x30-", dir=temp_parent) as temp:
+    # Resolve only the selected parent before creating any owned case; strict
+    # profile/foreign-path checks still reject redirected existing directories.
+    physical_parent = Path(temp_parent or tempfile.gettempdir()).resolve(strict=True)
+    with tempfile.TemporaryDirectory(prefix="uap-live-30x30-", dir=physical_parent) as temp:
         runroot = Path(temp)
         probe_case = runroot / "version-probe"
         probe_home, probe_data = probe_case / "home", probe_case / "uap-data"
@@ -3568,14 +3951,18 @@ def main():
             try:
                 result = do_case(cli, args.target, args.kind, item, i, runroot,
                                  doc["plugin_declared_names"],
-                                 doc["signed_release_pins"], client_version=report["client_version"],
+                                 doc["signed_release_pins"],
+                                 **({"client_version": report.get("client_version")}
+                                    if (args.target, args.kind) == ("gemini", "skill")
+                                    or args.target == "opencode" else {}),
                                  **({"historical_baseline": True} if historical_baseline else {}))
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "source": item if args.kind == "plugin" else item["source"],
                           "identity": (doc["plugin_declared_names"].get(item, item)
                                        if args.kind == "plugin" else item["name"]),
-                          "status": "harness-error", "error": repr(e)}
+                          "status": "harness-error", "error": repr(e),
+                          "error_traceback": bounded_error_traceback(e)}
             report["results"].append(result)
             report["cases_attempted"] += 1
             save()
@@ -3603,29 +3990,6 @@ def main():
     save()
     print(f'{args.target} {args.kind}: {passed}/{args.limit} native PASS; '
           f'verified_negative={len(accepted_negatives)}; attempted={report["cases_attempted"]}')
-    if args.acceptance == "kiro-prepared-installation":
-        report.update(kiro_prepared_installation_summary(report, doc))
-        save()
-        print(f'Kiro Prepared installation: {report["installation_passed"]}/30 installed; '
-              f'prepared={report["installation_prepared_lifecycle_passed"]}; '
-              f'verified_negative={report["installation_verified_negative_coverage"]}; '
-              'native activation remains unqualified')
-        return 0 if report["installation_acceptance_passed"] else 1
-    if args.acceptance in prepared_routes:
-        report.update(prepared_installation_summary(report, doc, args.acceptance))
-        save()
-        print(f'{args.target} Prepared installation: {report["installation_passed"]}/30 installed; '
-              f'verified refusals={report["installation_verified_negative_coverage"]}; '
-              'native activation remains unqualified')
-        return 0 if report["installation_acceptance_passed"] else 1
-    if args.acceptance == "vscode-user-manual-preparation":
-        report.update(vscode_user_manual_summary(report, doc))
-        save()
-        print(f'VS Code User manual preparation: {report["manual_preparations_observed"]}/29 observed; '
-              f'refused removes preserved={report["manual_refusals_preserved"]}; '
-              f'requirements refusals={report["requirements_refusals_observed"]}; '
-              'native activation and uninstall remain unqualified')
-        return 0 if report["manual_preparation_observation_complete"] else 1
     if historical_baseline:
         report.update(HISTORICAL_CODEX["summary"](report, doc))
         save()
@@ -3637,4 +4001,6 @@ def main():
 
 
 if __name__ == "__main__":
+    if len(sys.argv) == 3 and sys.argv[1] == "--windows-owned-file-command":
+        sys.exit(_windows_owned_file_command(sys.argv[2]))
     sys.exit(main())

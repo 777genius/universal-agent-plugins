@@ -21,7 +21,7 @@ defineProps<{ aboveHeader?: boolean }>();
         <TooltipContent
           class="app-tooltip"
           :side-offset="8"
-          :style="aboveHeader ? { zIndex: 1100 } : undefined"
+          :style="aboveHeader ? { zIndex: 1120 } : undefined"
         >
           <slot />
           <TooltipArrow class="app-tooltip__arrow" :width="12" :height="6" />

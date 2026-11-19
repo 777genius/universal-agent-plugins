@@ -1,11 +1,10 @@
-name: Windows published Firebase native capture probe
+name: Legacy Windows Firebase/Claude 0.1.101 diagnostic
 
 on:
-  # Legacy published UAP 0.1.101 diagnostic only. Current-source
-  # Firebase PR acceptance is separate (#990) and must survive integration.
+  # Legacy 0.1.101 flaky-client diagnostic only; not a release gate.
   workflow_dispatch:
 
-# Independent manual diagnostics must never cancel one another.
+# Manual diagnostic runs are independent; do not silently cancel.
 concurrency:
   group: firebase-capture-${{ github.run_id }}
   cancel-in-progress: false
@@ -31,7 +30,7 @@ jobs:
       - name: Focused output capture regression
         shell: pwsh
         run: |
-          python -m unittest scripts.test_live_install_audit_env.CrossPlatformPublishedProofRegressions.test_scoped_file_capture_reads_native_json_without_pipe_wait -v
+          python -m unittest scripts.test_live_install_audit_env.CrossPlatformPublishedProofRegressions.test_scoped_file_capture_reads_native_json_without_pipe_wait scripts.test_live_install_audit_env.WindowsOwnedFileCaptureContracts -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m unittest scripts.test_windows_firebase_probe -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

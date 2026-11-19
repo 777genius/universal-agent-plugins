@@ -305,7 +305,7 @@ func pmInstallPreviewAndDecline(t *testing.T) {
 			if mode == "preview" && err != nil {
 				t.Fatalf("preview: %v\n%s", err, out)
 			}
-			if mode == "decline" && (err != nil || !strings.Contains(out, "Apply the preflighted dependency sync?") || !strings.Contains(out, "No changes made.")) {
+			if mode == "decline" && (err != nil || !strings.Contains(out, "Apply these changes?") || !strings.Contains(out, "No changes made.")) {
 				t.Fatalf("decline was not observed: %v\n%s", err, out)
 			}
 			for _, target := range []string{"cursor", "gemini"} {

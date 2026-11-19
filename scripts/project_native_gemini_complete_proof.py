@@ -129,11 +129,15 @@ def plan_record(view):
     user = r["scope"] == "user"
     action = ("agentplugins will install and verify Gemini CLI skills and MCP servers automatically; reload them in a running session or restart Gemini CLI" if user else
               "project skills and MCP settings can be configured automatically; native discovery, workspace trust and system policy require observation in Gemini CLI")
+    warnings = ["authentication_not_catalog_verified"]
+    if not user:
+        project = binding["native_profile_root"].rsplit("/.gemini", 1)[0]
+        warnings += ['Installation may trust the selected project "' + project + '" in Gemini CLI. Existing distrust is preserved; this preference remains after removal.', "Gemini CLI verification starts or connects to all enabled MCP servers from this project, your profile and extensions under their current policy. Readiness is checked for the selected plugin."]
     return {"client_id": "gemini", "scope": "user" if user else "project", "status": "ready", "package_mode": "native",
             "activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "package_validated",
             "physical_artifact_id": binding["physical_artifact_id"],
             "components": [{"kind": "skill", "name": r["name"], "support": "native"}, {"kind": "mcp_server", "name": r["name"], "support": "native"}],
-            "user_actions": ["verify the plugin's authentication requirements before using it", action], "warnings": ["authentication_not_catalog_verified"]}
+            "user_actions": ["verify the plugin's authentication requirements before using it", action], "warnings": warnings}
 
 
 def operation_result(view, label):
@@ -144,11 +148,10 @@ def operation_result(view, label):
         result.update(plugin=NAME, client_id="gemini", group_phase="external_completed", affected_surfaces=["gemini"],
                       deactivation={"activation": "not_required", "artifact_removal_allowed": True, "external_removal_complete": True})
         return result
-    actions = [RELOAD]
-    if r["scope"] != "user":
-        actions.append("Gemini project configuration is installed; native discovery, workspace trust, system policy and MCP initialization remain unobserved; start Gemini CLI in the selected project and inspect skills list and mcp list")
-    result.update(plan=plan_record(view), activation={"activation": "active" if r["scope"] == "user" else "prepared",
-                  "authentication": "not_checked", "policy": "allowed", "verification": "installation_verified", "user_actions": actions})
+    activation = {"activation": "active", "authentication": "not_required", "policy": "allowed", "verification": "installation_verified"}
+    if r["scope"] == "user":
+        activation.update(authentication="not_checked", user_actions=[RELOAD])
+    result.update(plan=plan_record(view), activation=activation)
     if label != "repeat-add-a":
         result["group_phase"] = "external_completed"
     if label in ("repeat-add-a", "unchanged-update-a"):
@@ -169,17 +172,21 @@ def public_data(view, label, operation, paths):
     source = "local" if "repair-" in label or label.startswith("remove-") else "direct local source"
     output = {"plugin": NAME, "version": "1.0.0", "source": source, "tree_digest": r["digest"],
               "manifest_digest": "sha256:" + r["manifest"]["sha256"], "dry_run": False, "result": operation_result(view, label)}
-    if not label.startswith("remove-"):
+    if r["scope"] == "user" and not label.startswith("remove-"):
         output["next_action"] = NEXT
     if label.startswith("add-") or label in ("repeat-add-a", "update-a", "unchanged-update-a"):
         output.update(scope=b["scope"], readiness="needs_action",
                       next_actions=[{"code": "verify_native", "actor": "native_client", "message": NEXT}])
+    if r["scope"] != "user":
+        if "readiness" in output:
+            output["readiness"] = "ready"
+        output.pop("next_actions", None)
     if label == "repeat-add-a":
         output["security"] = assessment(r, True)
         return output
     output["operation_id"] = operation
     target = {"target": "gemini", "status": "external_completed", "output": output}
-    if not label.startswith("remove-"):
+    if r["scope"] == "user" and not label.startswith("remove-"):
         target["next_action"] = NEXT
     if label in ("update-a", "unchanged-update-a"):
         target["selected"] = True
@@ -188,8 +195,10 @@ def public_data(view, label, operation, paths):
     if label.startswith("add-") or label in ("update-a", "unchanged-update-a"):
         data.update(version="1.0.0", source=source, tree_digest=r["digest"])
     if label.startswith("add-"):
-        data.update(action_required=1, manifest_digest=output["manifest_digest"], security=assessment(r),
+        data.update(manifest_digest=output["manifest_digest"], security=assessment(r),
                     environment={"reason": "no_save_requested", "saved": False, "scope": b["scope"], "scope_selection_reason": "explicit"})
+    if label.startswith("add-") and r["scope"] == "user":
+        data["action_required"] = 1
     if label.startswith("remove-"):
         data.update(status="data_retained", plugin_data_preserved=True, data_retained=True,
                     retained_data=[{"data_receipt_id": b["data_receipt_id"], "physical_backend_id": b["physical_artifact_id"],
@@ -201,11 +210,14 @@ def public_data(view, label, operation, paths):
     return data
 
 
-def public(bodies, paths, context):
+def public(bodies, paths, context, start, end):
+    context["public_probe_sessions"], context["public_probe_pids"] = set(), set()
     operations = set()
     for label in cycle.PUBLIC:
         cwd, argv = cycle.public_command(label, paths)
-        receipt(load(bodies[label + ".command.json"]), argv, cwd, 30000, 1 if label == "repeat-remove-a" else 0)
+        command = load(bodies[label + ".command.json"])
+        public_inventory(command.pop("inventory"), label, paths, context, start, end)
+        receipt(command, argv, cwd, 30000, 1 if label == "repeat-remove-a" else 0)
         stdout, stderr = bodies[label + ".stdout.log"], bodies[label + ".stderr.log"]
         if label.startswith("git-"):
             require(stdout == stderr == b"", "empty Git streams")
@@ -232,5 +244,33 @@ def public(bodies, paths, context):
 
 def verify(bodies, paths, start, end):
     context = source_states(bodies["cycle-proof.jsonl"], paths, start, end)
-    public(bodies, paths, context)
+    public(bodies, paths, context, start, end)
     return context
+
+
+def public_inventory(value, label, paths, context, start, end):
+    from project_native_gemini_complete_protocol import probes
+    row = closed(value, ("scope", "started_at", "finished_at", "provider_requests", "stream"))
+    require(row["scope"] == cycle.scope(label) and type(row["provider_requests"]) is int and row["provider_requests"] == 0, "public inventory scope/no model")
+    begin = window(row["started_at"], start, end)
+    finish = window(row["finished_at"], begin, end)
+    require(finish-begin <= 30_000_000_000, "public inventory bounded window")
+    body = stream(row["stream"])
+    phases = [2, 1] if label in ("add-a", "add-b", "update-a", "intact-repair-a", "missing-repair-a") else [2, 2, 2, 1] if label in ("repeat-add-a", "unchanged-update-a") else []
+    if not phases:
+        require(not body, "unexpected public inventory")
+        return
+    view = context["views"][label]
+    advertised = [view[key]["recipe"] for key in ("user", cycle.scope(label))]
+    require(len({r["nonce"] for r in advertised}) == 2, "distinct public inventory nonces")
+    rows = body.splitlines(keepends=True)
+    require(body.endswith(b"\n") and len(rows) == sum(phases)*len(advertised), "exact public inventory phase count")
+    sessions, pids = set(context["public_probe_sessions"]), set(context["public_probe_pids"])
+    q = {"advertised": advertised, "operation": "none"}
+    offset, phase_start = 0, begin
+    for count in phases:
+        limit = offset + count*len(advertised)
+        probes(b"".join(rows[offset:limit]), q, False, paths["home"], phase_start, finish, sessions, pids, initialize_only=count==1, complete=True)
+        phase_start = max(window(load(raw)["timestamp"], phase_start, finish) for raw in rows[offset:limit])
+        offset = limit
+    context["public_probe_sessions"], context["public_probe_pids"] = sessions, pids

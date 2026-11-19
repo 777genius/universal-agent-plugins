@@ -1,8 +1,9 @@
-"""Strict observation of candidate metadata-only Gemini 0.66.0 list sessions.
+"""Strict observation of pinned Gemini 0.66.0 list-session startup journals.
 
 Pinned upstream 970413207732f5d4d8c50540c7fc359c44fdaaf2 can also persist
 startup environment history and metadata updates during skills-list initialization.
-Those multiple/conversation records remain outside this narrow accepted shape.
+Only exact held startup environment templates can admit three-record startup journals.
+Conversation records remain outside this narrow accepted shape.
 Keep raw changes and custody; never infer who wrote matching bytes.
 """
 
@@ -91,6 +92,26 @@ def _refused_record_shapes(body):
     return shapes
 
 
+def _millisecond(value):
+    # Gemini Date.toISOString() records exactly milliseconds. Compare the same
+    # command bounds at that precision, without an added tolerance; retain raw
+    # bounds for command ordering and evidence.
+    return value.replace(microsecond=value.microsecond // 1000 * 1000)
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def _complete_snapshot(snapshot):
+    if (not isinstance(snapshot, dict) or any(
+            not isinstance(path, str) or not isinstance(digest, str)
+            or digest == "unreadable"
+            or path.replace("\\", "/").rsplit("/", 1)[-1] == ".walk-error"
+            for path, digest in snapshot.items())):
+        raise ValueError("Gemini runtime snapshot is incomplete")
+
+
 def _metadata(body, filename, project_hash, started, finished, diagnostic=None):
     final_lf, lf_count = body.endswith(b"\n"), body.count(b"\n")
     if not final_lf or lf_count != 1:
@@ -120,7 +141,7 @@ def _metadata(body, filename, project_hash, started, finished, diagnostic=None):
             raise ValueError("Gemini runtime record time is invalid")
         values.append(datetime.fromisoformat(value.replace("Z", "+00:00")))
     first, last = values
-    if not started <= first <= last <= finished:
+    if not _millisecond(started) <= first <= last <= _millisecond(finished):
         raise ValueError("Gemini runtime record time is outside the repeat interval")
     match = _NAME.fullmatch(filename)
     if not match:
@@ -130,23 +151,72 @@ def _metadata(body, filename, project_hash, started, finished, diagnostic=None):
     if not started.replace(second=0, microsecond=0) <= named <= first:
         raise ValueError("Gemini runtime filename time is outside the repeat interval")
 
+def _interval(value):
+    if (not isinstance(value, tuple) or len(value) != 2
+            or any(not isinstance(item, datetime) or item.tzinfo != timezone.utc for item in value)
+            or value[0] > value[1]):
+        raise ValueError("Gemini startup command interval is invalid")
+    return value
+
+
+def _startup(body, filename, project_hash, interval, project_temp):
+    started, finished = _interval(interval)
+    if not body.endswith(b"\n") or body.count(b"\n") != 3:
+        raise ValueError("Gemini startup record framing is invalid")
+    first, message, update = body.splitlines()
+    _metadata(first + b"\n", filename, project_hash, started, finished)
+    metadata, message, update = _json(first), _json(message), _json(update)
+    if (set(message) != {"id", "timestamp", "type", "content"}
+            or message["id"] != hashlib.sha256(b"environment-context").hexdigest()[:32]
+            or message["type"] != "user" or type(message["content"]) is not list
+            or len(message["content"]) != 1 or type(message["content"][0]) is not dict
+            or set(message["content"][0]) != {"text"}
+            or type(message["content"][0]["text"]) is not str
+            or type(update) is not dict or set(update) != {"$set"}
+            or type(update["$set"]) is not dict or set(update["$set"]) != {"lastUpdated"}):
+        raise ValueError("Gemini startup record contains non-environment data")
+    text = message["content"][0]["text"]
+    prefix = ("<session_context>\nThis is the Gemini CLI. We are setting up the context for our chat.\n"
+              "Today's date is ")
+    lines = text.split("\n")
+    if (not text.startswith(prefix) or not text.endswith("\n</session_context>")
+            or len(lines) < 7 or not lines[2].endswith(" (formatted according to the user's locale).")
+            or lines[3] != "My operating system is: " + sys.platform
+            or lines[4] != "The project's temporary directory is: " + str(project_temp)
+            or text.count("<session_context>") != 1 or text.count("</session_context>") != 1):
+        raise ValueError("Gemini startup environment framing differs")
+    times = [metadata["startTime"], metadata["lastUpdated"], message["timestamp"],
+             update["$set"]["lastUpdated"]]
+    if any(type(value) is not str or not _TIME.fullmatch(value) for value in times):
+        raise ValueError("Gemini startup record time is invalid")
+    parsed = [datetime.fromisoformat(value.replace("Z", "+00:00")) for value in times]
+    if not (_millisecond(started) <= parsed[0] <= parsed[1] <= parsed[2]
+            <= parsed[3] <= _millisecond(finished)):
+        raise ValueError("Gemini startup record time is outside its command interval")
+    return message["id"], text
+
 
 class GeminiRepeatAudit:
     """Hold the pre-repeat namespace and verify both actual public phases."""
 
-    def __init__(self, home, project, before, version):
+    def __init__(self, home, project, before, version, *, profile_snapshot):
         self.parents, self.leaves, self.files, self.phases = {}, {}, {}, []
         self.reason, self.complete = None, False
         self.failure_facts = None
         self.phase, self.role = "pre-repeat", "registry"
         self.windows = None
+        self.startup_template = None
+        self.baseline_observed = False
+        self.baseline_record = None
         self.before = self.previous = before
+        self.profile_snapshotter = profile_snapshot
         self.profile, self.project = Path(home) / ".gemini", Path(project)
-        self.started = datetime.now(timezone.utc)
-        self.started = self.started.replace(microsecond=self.started.microsecond // 1000 * 1000)
+        self.observed_at = self.command_finished = _now()
         try:
             if not pinned_version(version):
                 raise ValueError("Gemini empty-session proof requires supported custody and native 0.66.0")
+            _complete_snapshot(before)
+            self.initial_paths = set(before)
             self.deadline = time.monotonic() + 5
             if sys.platform == "win32":
                 backend = run_path(str(Path(__file__).with_name("gemini_windows_custody.py")))
@@ -190,10 +260,32 @@ class GeminiRepeatAudit:
                         or self.windows is not None and "\\" in name):
                     raise ValueError("Gemini pre-repeat chat layout is not flat")
                 self._open(self.chats / name, 1 << 20)
+            self.protected_profile = self._profile_snapshot()
             self._guard()
         except (OSError, ValueError, RuntimeError, UnicodeError, TypeError) as error:
-            self.reason = str(error)[:512]
+            self.reason = "os-error" if isinstance(error, OSError) else str(error)[:512]
             self.close()
+
+    def _profile_snapshot(self):
+        try:
+            return self.profile_snapshotter((self.profile,))
+        except AssertionError as error:
+            raise ValueError("Gemini protected profile snapshot is incomplete") from error
+
+    def _guard_profile(self):
+        observed = self._profile_snapshot()
+        allowed = set(self.files)
+        if self.baseline_record is not None:
+            allowed.add(self.baseline_record["path"])
+        for key in allowed - self.initial_paths:
+            # Only exact journal files already admitted through held custody may
+            # appear. Their existing parent directories never gain an exemption.
+            relative = key[len(self.profile.name) + 1:].replace("\\", "/")
+            observed.pop(key, None)
+            observed.pop("metadata:0:" + relative, None)
+        if observed != self.protected_profile:
+            raise ValueError("Gemini protected profile entries changed")
+        self._guard()
 
     def _hold(self, path):
         if self.windows is not None:
@@ -264,7 +356,51 @@ class GeminiRepeatAudit:
             raise ValueError("Gemini runtime file differs from its complete phase snapshot")
         return bytes(body)
 
-    def checkpoint(self, label, snapshot):
+    def baseline(self, snapshot, *, interval):
+        """Join the explicit native list to custody held before that command."""
+        if self.reason:
+            return
+        try:
+            self.deadline = time.monotonic() + 5
+            self._guard()
+            _complete_snapshot(snapshot)
+            started, finished = _interval(interval)
+            if (self.baseline_observed or self.phases or started < self.observed_at
+                    or finished > _now()):
+                raise ValueError("Gemini startup baseline command interval is invalid")
+            if any(snapshot.get(path) != digest for path, digest in self.before.items()):
+                raise ValueError("Gemini startup baseline changed previous entries")
+            added = sorted(set(snapshot) - set(self.before))
+            if len(added) > 1:
+                raise ValueError("Gemini startup baseline exceeds one fresh list record")
+            if sum(key.startswith(self.prefix) for key in snapshot) > 64:
+                raise ValueError("Gemini pre-repeat chat count exceeds its bound")
+            if added:
+                key = added[0]
+                name = key[len(self.prefix):] if key.startswith(self.prefix) else ""
+                if not _NAME.fullmatch(name):
+                    raise ValueError("Gemini startup baseline is outside exact list-session files")
+                body = self._read(self.chats / name, 4096, snapshot)
+                project_hash = hashlib.sha256(str(self.project).encode()).hexdigest()
+                if body.count(b"\n") == 3:
+                    self.startup_template = _startup(
+                        body, name, project_hash, interval, self.chats.parent)
+                else:
+                    _metadata(body, name, project_hash, started, finished)
+                self.baseline_record = {
+                    "path": key, "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest(),
+                    "records": body.count(b"\n"), "started": started.isoformat(),
+                    "finished": finished.isoformat(), "operation": "native-skills-list-baseline",
+                }
+            self._guard()
+            self._guard_profile()
+            self.before = self.previous = snapshot
+            self.command_finished = finished
+            self.baseline_observed = True
+        except (OSError, ValueError, RuntimeError, UnicodeError, TypeError) as error:
+            self.reason = "os-error" if isinstance(error, OSError) else str(error)[:512]
+
+    def checkpoint(self, label, snapshot, *, interval=None):
         if self.reason:
             return
         try:
@@ -274,6 +410,10 @@ class GeminiRepeatAudit:
             if len(self.phases) >= 2 or label != expected[len(self.phases)]:
                 raise ValueError("Gemini runtime phase sequence is invalid")
             self.phase, self.role = label, "new-chat"
+            _complete_snapshot(snapshot)
+            started, finished = _interval(interval)
+            if started < self.command_finished or finished > _now():
+                raise ValueError("Gemini startup command intervals overlap or are in the future")
             if any(snapshot.get(path) != digest for path, digest in self.previous.items()):
                 raise ValueError("Gemini runtime repeat changed a previous entry")
             added = sorted(set(snapshot) - set(self.before))
@@ -288,38 +428,52 @@ class GeminiRepeatAudit:
                 body = self._read(self.chats / filename, 4096, snapshot)
                 framing = {}
                 try:
-                    _metadata(body, filename, hashlib.sha256(str(self.project).encode()).hexdigest(),
-                              self.started, datetime.now(timezone.utc), framing)
+                    if body.count(b"\n") == 3 and self.startup_template is not None:
+                        template = _startup(
+                            body, filename, hashlib.sha256(str(self.project).encode()).hexdigest(),
+                            interval, self.chats.parent)
+                        if template != self.startup_template:
+                            raise ValueError("Gemini startup environment differs from held baseline")
+                    else:
+                        _metadata(body, filename, hashlib.sha256(str(self.project).encode()).hexdigest(),
+                                  started, finished, framing)
                 except ValueError:
                     if framing:
                         self.failure_facts = {"phase": self.phase, "role": self.role, **framing}
                     raise
                 self.files[key] = {"path": key, "bytes": len(body),
                                    "sha256": hashlib.sha256(body).hexdigest(),
-                                   "records": 1, "conversation_records": 0}
+                                   "records": body.count(b"\n"), "conversation_records": 0}
             self._guard()
+            self._guard_profile()
             self.previous = snapshot
+            self.command_finished = finished
             self.phases.append(label)
         except (OSError, ValueError, RuntimeError, UnicodeError, TypeError) as error:
-            self.reason = str(error)[:512]
+            self.reason = "os-error" if isinstance(error, OSError) else str(error)[:512]
 
     def finish(self, snapshot):
         if not self.reason:
             try:
                 self.deadline = time.monotonic() + 5
                 self._guard()
+                _complete_snapshot(snapshot)
+                self._guard_profile()
                 if len(self.phases) != 2 or snapshot != self.previous:
                     raise ValueError("Gemini runtime final snapshot differs from the public phases")
                 self.complete = True
             except (OSError, ValueError, RuntimeError, TypeError) as error:
-                self.reason = str(error)[:512]
+                self.reason = "os-error" if isinstance(error, OSError) else str(error)[:512]
         return self.complete and not self.reason
 
     def evidence(self):
-        status = ("metadata-only-new-records" if self.files else "unchanged") if (
+        changed = ("startup-environment-new-records" if any(
+            value["records"] == 3 for value in self.files.values()) else "metadata-only-new-records")
+        status = (changed if self.files else "unchanged") if (
             self.complete and not self.reason) else "unqualified"
         return {"schema_version": 1, "status": status, "reason": self.reason,
                 "files": list(self.files.values()), "phases": self.phases,
+                "baseline": self.baseline_record,
                 "client_version": "0.66.0", "platform": sys.platform,
                 "producer_attribution": False, "writer_closure": False,
                 "source_reference": "google-gemini/gemini-cli@970413207732f5d4d8c50540c7fc359c44fdaaf2",

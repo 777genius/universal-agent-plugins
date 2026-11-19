@@ -17,6 +17,42 @@ import project_native_runtime as runtime
 class RuntimeTests(unittest.TestCase):
     source = {"source_commit": "a" * 40, "source_tree": "b" * 40}
 
+    def test_failed_test_diagnostic_projects_owned_locations_and_caps_output(self):
+        filename = Path(runtime.CASES["cursor"]["file"]).name
+        lines = [b"native provider body uap-cursor-private-secret password=not-for-logs",
+                 b"    /foreign/" + filename.encode() + b":9: forbidden absolute path",
+                 b"    foreign_test.go:9: unrelated"]
+        lines += [("    " + filename + ":" + str(line) + ": assertion password=not-for-logs").encode()
+                  for line in (11, 11, 22, 33, 44, 55)]
+        raw = b"\n".join(lines)
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr, patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            runtime.failed_test_diagnostic("cursor", raw, False)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), runtime.CASES["cursor"]["test"] + " failed; owned Go locations: "
+                         + ", ".join(filename + ":" + str(line) for line in (11, 22, 33, 44)) + "\n")
+        self.assertNotIn("password", stderr.getvalue())
+        self.assertNotIn("secret", stderr.getvalue())
+        self.assertNotIn("/foreign/", stderr.getvalue())
+
+    def test_failed_test_diagnostic_keeps_success_silent_and_refuses_hostile_locations(self):
+        filename = Path(runtime.CASES["cursor"]["file"]).name.encode()
+        hostile = b"\n".join((b"    " + filename + b":0: invalid",
+                              b"    " + filename + b":1234567: invalid",
+                              b"    " + filename + b":12: \x1b[31mprivate",
+                              b"    ../" + filename + b":12: private",
+                              b"    " + filename + b":12: " + b"x"*1024))
+        for body in (hostile, b"x"*((1 << 20)+1), "not bytes"):
+            with self.subTest(body_type=type(body).__name__):
+                with patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                    runtime.failed_test_diagnostic("cursor", body, False)
+                self.assertEqual(stderr.getvalue(), runtime.CASES["cursor"]["test"]
+                                 + " failed; owned Go locations: unavailable\n")
+        with patch("sys.stderr", new_callable=io.StringIO) as stderr, patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            runtime.failed_test_diagnostic("cursor", hostile, True)
+            runtime.failed_test_diagnostic("unknown-private-client", hostile, False)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(stdout.getvalue(), "")
+
     def test_cursor_refusal_reports_only_owned_callsite_on_stderr(self):
         import project_native_cursor_cycle as cycle
         try:
@@ -135,18 +171,18 @@ class RuntimeTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parent.parent /
                     ".github/workflows/project-native-runtime.yml").read_text()
         contracts, native = workflow.split("\n  native:\n", 1)
-        prepare = "      - name: Prepare pinned Go for selected Copilot or Kiro inert process contracts\n"
-        execute = "      - name: Verify selected Copilot or Kiro inert process contracts before native execution\n"
+        prepare = "      - name: Prepare pinned Go for selected Copilot, Gemini and Kiro inert process contracts\n"
+        execute = "      - name: Verify selected Copilot, Gemini and Kiro inert process contracts before native execution\n"
         selection, toolchain = contracts.split(prepare, 1)
         toolchain, gate = toolchain.split(execute, 1)
-        condition = "        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'kiro') }}\n"
+        condition = "        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'gemini') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'kiro') }}\n"
         self.assertIn("        id: selection\n", selection)
         self.assertTrue(toolchain.startswith(condition))
         self.assertTrue(gate.startswith(condition))
         self.assertIn("actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", toolchain)
         self.assertIn("          go-version: '1.26.10'\n          cache: false\n", toolchain)
         self.assertEqual(gate.removeprefix(condition).strip(),
-                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestKiroCycle)'")
+                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestGeminiPublicCompletionRequiresBothExactFreshInventoryPhases$|TestGeminiPublicCompletionPhasesMatchOperations$|TestGeminiRepeatedPublicCompletionRequiresFourExactFreshInventoryPhases$|TestKiroCycle)'")
         self.assertIn("    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n", contracts)
         self.assertNotIn("AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED", contracts)
         self.assertIn("    needs: contracts\n", native)
@@ -1521,6 +1557,8 @@ def load_tests(loader, tests, pattern):
         tests.addTests(loader.loadTestsFromName("test_project_native_cursor_cycle.CursorCycleContracts"))
         tests.addTests(loader.loadTestsFromName("test_project_native_windsurf_components.WindsurfComponentTests"))
         tests.addTests(loader.loadTestsFromName("test_project_native_windsurf_cycle.WindsurfCycleContracts"))
+        tests.addTests(loader.loadTestsFromName("test_project_native_gemini_complete.GeminiCompleteTests"))
+        tests.addTests(loader.loadTestsFromName("test_project_native_gemini_cycle.GeminiCycleTests"))
     return tests
 
 

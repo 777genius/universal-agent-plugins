@@ -111,7 +111,7 @@ def _data(value, did, physical, target, path):
 def _binding(b, recipe, package, paths, profile, physical, active, data, bid, did, target):
     closed(b, ("client_binding_id", "client_id", "scope", "target_locator", "physical_artifact_id", "materialization", "activation", "authentication", "policy", "verification", "package_revision", "data_receipt_id", "affected_surfaces", "native_profile_root", "native_objects", "receipts", "updated_at"))
     expected = {"client_binding_id": bid, "client_id": "gemini", "scope": target, "target_locator": active, "physical_artifact_id": physical,
-                "materialization": "materialized", "activation": "active" if target == "user" else "prepared", "authentication": "not_checked", "policy": "allowed",
+                "materialization": "materialized", "activation": "active", "authentication": "not_checked" if target == "user" else "not_required", "policy": "allowed",
                 "verification": "installation_verified", "data_receipt_id": did, "affected_surfaces": ["gemini"], "native_profile_root": profile,
                 "package_revision": {"version": "1.0.0", "tree_digest": recipe["digest"], "manifest_digest": package["manifest_digest"]}}
     if any(b[k] != v for k, v in expected.items()) or type(b["updated_at"]) is not str: raise ValueError("Gemini exact binding facts differ")
