@@ -128,9 +128,8 @@ func completeDevinSkills(ctx context.Context, env clients.Env, request domain.Ac
 	if err != nil || digest != afterDigest || !reflect.DeepEqual(skills, afterSkills) {
 		return outcome, fmt.Errorf("owned devin Skill bytes changed during native observation")
 	}
-	after, eligible, err := devinSkillPolicyFiles(env, request.Plan.NativeRegistryRoot, global)
-	if err != nil || !eligible || !devinSkillContextKnown(env, request.Plan.Scope, selected.cwd) || !devinSkillPolicyStable(before, after, global) {
-		return outcome, fmt.Errorf("devin Skill discovery policy changed during native observation")
+	if err := verifyDevinSkillPolicy(env, request.Plan, selected.cwd, global, before); err != nil {
+		return outcome, err
 	}
 	if err := ctx.Err(); err != nil {
 		return outcome, err
@@ -145,6 +144,15 @@ func completeDevinSkills(ctx context.Context, env clients.Env, request domain.Ac
 		outcome.Authentication = domain.AuthenticationNotRequired
 	}
 	return outcome, nil
+}
+
+
+func verifyDevinSkillPolicy(env clients.Env, plan domain.DeliveryPlan, cwd, global string, before map[string]shared.NativeFileSnapshot) error {
+	after, eligible, err := devinSkillPolicyFiles(env, plan.NativeRegistryRoot, global)
+	if err != nil || !eligible || !devinSkillContextKnown(env, plan.Scope, cwd) || !devinSkillPolicyStable(before, after, global) {
+		return fmt.Errorf("devin Skill discovery policy changed during native observation")
+	}
+	return nil
 }
 
 func devinSkillProbeMatches(result ports.CommandResult, probeErr error, skills map[string]devinSkillMetadata) bool {
