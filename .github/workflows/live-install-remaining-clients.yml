@@ -8,6 +8,7 @@ on:
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'tests/live-install/fixtures.json'
+      - 'repotests/agentplugins_acp_metadata_*_test.go'
   workflow_dispatch:
 
 permissions:
@@ -236,6 +237,26 @@ jobs:
             LANG="${LANG:-C.UTF-8}" CI=true DO_NOT_TRACK=1 \
             python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
             | tee "$RUNNER_TEMP/vendor-proof/version.txt"
+      - name: Observe one finite ACP metadata session without authentication
+        if: ${{ matrix.kind == 'skill' && (matrix.target == 'cursor' || matrix.target == 'kiro') && steps.vendor-install.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          AGENTPLUGINS_ACP_METADATA_CLIENT: ${{ matrix.target }}
+          AGENTPLUGINS_NATIVE_DISPOSABLE_LINUX: '1'
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/acp-metadata-supplement"
+          export AGENTPLUGINS_ACP_METADATA_REPORT="$RUNNER_TEMP/acp-metadata-supplement/metadata.json"
+          export AGENTPLUGINS_ACP_METADATA_COMMIT="$(git rev-parse HEAD)"
+          export AGENTPLUGINS_ACP_METADATA_TREE="$(git rev-parse HEAD^{tree})"
+          # Proof-only: original full30 still runs and retains its own assertions.
+          # The same job timeout and existing completion containment remain.
+          go test -json -p=2 -count=1 -timeout=2m ./repotests \
+            -run '^Test(ACPMetadata|AgentpluginsACPMetadataSupplement)' \
+            2> "$RUNNER_TEMP/acp-metadata-supplement/go-test.stderr" \
+            | tee "$RUNNER_TEMP/acp-metadata-supplement/go-test.jsonl"
       - name: Install real Docker CLI for Kiro plugin sources
         if: ${{ matrix.target == 'kiro' && matrix.kind == 'plugin' }}
         id: kiro-docker
@@ -289,5 +310,6 @@ jobs:
           path: |
             ${{ runner.temp }}/live-audit-report/
             ${{ runner.temp }}/vendor-proof/
+            ${{ runner.temp }}/acp-metadata-supplement/
           if-no-files-found: warn
           retention-days: 14
