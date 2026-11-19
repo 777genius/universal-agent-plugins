@@ -326,7 +326,9 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
                                stderr=stderr_file, stdin=subprocess.DEVNULL,
                                timeout=timeout, check=False)
                 except subprocess.TimeoutExpired:
-                    if capture_full or sys.platform != "win32":
+                    # A timed-out command is never qualifying, but its bounded
+                    # private-file tails are useful on Linux and Windows alike.
+                    if capture_full:
                         raise
                     stdout_file.seek(0)
                     stderr_file.seek(0)
