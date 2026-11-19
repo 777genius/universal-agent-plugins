@@ -1,6 +1,9 @@
 """Inert regressions for the builder-only native acceptance boundary."""
 import base64
+import hashlib
+import io
 from contextlib import ExitStack
+from contextlib import redirect_stdout
 import json
 import os
 import runpy
@@ -8,6 +11,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 
@@ -99,9 +103,9 @@ class BuilderCleanupAcceptance(unittest.TestCase):
 class HermesTrustReportCompletionAcceptance(unittest.TestCase):
     def test_completed_guidance_requires_exact_public_state_and_native_roots(self):
         lifecycle = runpy.run_path(str(Path(__file__).parent / "e2e" / "hermes-native-lifecycle.py"))["Lifecycle"]
-        mutations = ("", "grouped", "prepared", "unverified", "unknown-auth", "blocked",
-                     "activation-attested", "authentication-attested", "user-action",
-                     "next-action", "next-actions", "not-ready", "empty-expected",
+        mutations = ("", "grouped", "unverified", "unknown-auth", "blocked",
+                     "activation-attested", "authentication-attested", "missing-disclosure",
+                     "not-ready", "empty-expected",
                      "missing-expected", "missing-selected", "lost-prior", "extra-root",
                      "invalid-native", "native-read-failed")
         for mutation in mutations:
@@ -109,12 +113,11 @@ class HermesTrustReportCompletionAcceptance(unittest.TestCase):
                 root = Path(directory).resolve()
                 prior, selected = root / "prior-project", root / "selected-project"
                 activation = {"activation": "active", "authentication": "not_required",
-                              "policy": "allowed", "verification": "installation_verified"}
+                              "policy": "allowed", "verification": "installation_verified",
+                              "user_actions": ["Hermes now trusts this project's Git repository root"]}
                 data = {"readiness": "ready", "result": {"activation": activation}}
                 expected, roots = {prior, selected}, [str(prior), str(selected)]
-                if mutation == "prepared":
-                    activation["activation"] = "prepared"
-                elif mutation == "unverified":
+                if mutation == "unverified":
                     activation["verification"] = "package_validated"
                 elif mutation == "unknown-auth":
                     activation["authentication"] = "not_checked"
@@ -122,10 +125,8 @@ class HermesTrustReportCompletionAcceptance(unittest.TestCase):
                     activation["policy"] = "blocked"
                 elif mutation in ("activation-attested", "authentication-attested"):
                     activation[mutation.replace("-", "_")] = True
-                elif mutation == "user-action":
-                    activation["user_actions"] = ["Start a new session"]
-                elif mutation in ("next-action", "next-actions"):
-                    data[mutation.replace("-", "_")] = []
+                elif mutation == "missing-disclosure":
+                    activation["user_actions"] = []
                 elif mutation == "not-ready":
                     del data["readiness"]
                 elif mutation == "empty-expected":
@@ -176,7 +177,7 @@ class HermesTrustReportCompletionAcceptance(unittest.TestCase):
                 root = Path(directory).resolve()
                 output = root / "project-add.json"
                 output.write_text(json.dumps({"data": {"readiness": "ready", "result": {"activation": {
-                    "activation": "active", "authentication": "not_required", "policy": "allowed",
+                    "activation": "prepared", "authentication": "not_required", "policy": "allowed",
                     "verification": "installation_verified", "user_actions": actions}}}}), encoding="utf-8")
                 suite = lifecycle.__new__(lifecycle)
                 suite.root, suite.hermes = root, ["selected-hermes"]
@@ -187,6 +188,61 @@ class HermesTrustReportCompletionAcceptance(unittest.TestCase):
                         with self.assertRaises(RuntimeError):
                             suite.require_trust_report(output, granted=grant, reason="maintenance")
                     capture.assert_not_called()
+
+
+class HermesSkillCatalogReadAcceptance(unittest.TestCase):
+    def test_digest_is_from_the_catalog_read_and_not_a_later_file_version(self):
+        source = (Path(__file__).parent.parent / "install/integrationctl/agentplugins/clients/hermes/skill_observation.go").read_text()
+        observation = source.split("const hermesSkillObservation = `", 1)[1].split("`", 1)[0]
+        original = b"---\nname: owned\ndescription: Owned metadata.\n---\nOriginal.\n"
+        substituted = original.replace(b"Original.", b"Substituted.")
+        for mode in ("stable", "aba", "cached", "repeated", "oversized", "bom-crlf"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                skill = root / "skills" / "owned" / "SKILL.md"
+                skill.parent.mkdir(parents=True)
+                raw = b"\xef\xbb\xbf" + original.replace(b"\n", b"\r\n") if mode == "bom-crlf" else original
+                skill.write_bytes(raw)
+                native = types.ModuleType("tools.skills_tool")
+                native.__file__ = str(root / "tools" / "skills_tool.py")
+                native.get_hermes_home = lambda: root
+                reader = lambda path: path.read_text(encoding="utf-8-sig", errors="replace")
+                native._read_skill_text = reader
+
+                def catalog():
+                    # Inert reader-boundary fixture; this is not native runtime proof.
+                    if mode == "aba":
+                        skill.write_bytes(substituted)
+                    elif mode == "oversized":
+                        skill.write_bytes(b"x" * ((1 << 20) + 1))
+                    if mode != "cached":
+                        native._read_skill_text(skill)
+                    if mode == "repeated":
+                        native._read_skill_text(skill)
+                    skill.write_bytes(raw)
+                    return [{"load_name": "owned", "status": "unique", "path": skill, "tier": 1}]
+
+                native._skill_catalog = catalog
+                tools_module = types.ModuleType("tools")
+                tools_module.skills_tool = native
+                utils = types.ModuleType("agent.skill_utils")
+                utils.find_project_root = lambda: None
+                utils.is_project_root_trusted = lambda path: False
+                modules = {"tools": tools_module, "tools.skills_tool": native,
+                           "agent": types.ModuleType("agent"), "agent.skill_utils": utils}
+                stdout = io.StringIO()
+                argv = ["observer", json.dumps({"owned": str(skill)}), str(root)]
+                with patch.dict(sys.modules, modules), patch.object(sys, "argv", argv), redirect_stdout(stdout):
+                    exec(compile(observation, "hermes-production-observer", "exec"), {})
+                rows = json.loads(stdout.getvalue())["skills"]
+                self.assertIs(native._read_skill_text, reader)
+                self.assertEqual(skill.read_bytes(), raw)
+                if mode in ("cached", "repeated", "oversized"):
+                    self.assertEqual(rows, [])
+                else:
+                    observed = substituted if mode == "aba" else original
+                    self.assertEqual(rows[0]["digest"], hashlib.sha256(observed).hexdigest())
+                    self.assertEqual(rows[0]["digest"] == hashlib.sha256(original).hexdigest(), mode != "aba")
 
 
 class HermesSkillBootstrapArgvAcceptance(unittest.TestCase):

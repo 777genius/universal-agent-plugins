@@ -62,7 +62,7 @@ func TestOwnedSkillMetadataUsesSealedBytesDuringLiveMetadataABA(t *testing.T) {
 		}
 		return body, mode, exists, err
 	}}
-	body, err := ReadOwnedSkillMetadata(t.Context(), nativeconfig.NewWithFileIO(files), root, digest)
+	body, err := ReadOwnedSkillMetadata(t.Context(), nativeconfig.NewWithFileIO(files), packagesnapshot.Builder{}, root, digest)
 	if err != nil || !bytes.Equal(body, original) {
 		t.Fatalf("live ABA substituted unowned metadata: %q %v", body, err)
 	}
@@ -86,7 +86,7 @@ func TestOwnedSkillMetadataRefusesDigestOrLateResourceChange(t *testing.T) {
 			if mode == "expected-digest" {
 				digest = "sha256:not-the-owned-digest"
 			}
-			body, err := ReadOwnedSkillMetadata(t.Context(), nativeconfig.NewWithFileIO(files), root, digest)
+			body, err := ReadOwnedSkillMetadata(t.Context(), nativeconfig.NewWithFileIO(files), packagesnapshot.Builder{}, root, digest)
 			if err == nil || body != nil || (mode == "expected-digest" && reads != 0) || (mode == "resource" && reads != 1) {
 				t.Fatalf("unowned or changed Skill qualified: body=%q reads=%d err=%v", body, reads, err)
 			}
@@ -98,7 +98,7 @@ func TestOwnedSkillMetadataRequiresBoundedReaderBeforeSnapshot(t *testing.T) {
 	// A nonexistent source would make Build fail differently. The explicit
 	// injected capability refusal must win without opening that source.
 	kernel := nativeconfig.NewWithFileIO(struct{ nativeconfig.FileIO }{})
-	body, err := ReadOwnedSkillMetadata(t.Context(), kernel, filepath.Join(t.TempDir(), "absent"), "unowned")
+	body, err := ReadOwnedSkillMetadata(t.Context(), kernel, packagesnapshot.Builder{}, filepath.Join(t.TempDir(), "absent"), "unowned")
 	if !errors.Is(err, nativeconfig.ErrBoundedReadUnavailable) || body != nil {
 		t.Fatalf("unsupported backend acquired snapshot authority: %q %v", body, err)
 	}
@@ -106,7 +106,7 @@ func TestOwnedSkillMetadataRequiresBoundedReaderBeforeSnapshot(t *testing.T) {
 
 func TestOwnedSkillMetadataCloseFailureCannotReturnMetadata(t *testing.T) {
 	root, _, digest := ownedSkillMetadataFixture(t)
-	snapshot, err := (packagesnapshot.Builder{}).Build(t.Context(), root)
+	sealed, closeSealed, err := (packagesnapshot.Builder{}).CaptureDirectory(t.Context(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,9 +114,9 @@ func TestOwnedSkillMetadataCloseFailureCannotReturnMetadata(t *testing.T) {
 	closed := 0
 	closeSnapshot := func() error {
 		closed++
-		return errors.Join(snapshot.Close(), cause)
+		return errors.Join(closeSealed(), cause)
 	}
-	body, err := readOwnedSkillSnapshot(t.Context(), nativeconfig.New(), root, digest, snapshot.Root, closeSnapshot)
+	body, err := readOwnedSkillSnapshot(t.Context(), nativeconfig.New(), root, digest, sealed, closeSnapshot)
 	if !errors.Is(err, cause) || body != nil || closed != 1 {
 		t.Fatalf("cleanup failure qualified metadata: %q closes=%d err=%v", body, closed, err)
 	}
@@ -139,7 +139,7 @@ func TestOwnedSkillMetadataCancellationAndReadRefusalStayClosed(t *testing.T) {
 				}
 				return nil, 0, false, cause
 			}}
-			body, err := ReadOwnedSkillMetadata(ctx, nativeconfig.NewWithFileIO(files), root, digest)
+			body, err := ReadOwnedSkillMetadata(ctx, nativeconfig.NewWithFileIO(files), packagesnapshot.Builder{}, root, digest)
 			if err == nil || body != nil || (mode == "cancel" && !errors.Is(err, context.Canceled)) || (mode == "read-error" && !errors.Is(err, cause)) {
 				t.Fatalf("bounded refusal/cancellation qualified: %q %v", body, err)
 			}

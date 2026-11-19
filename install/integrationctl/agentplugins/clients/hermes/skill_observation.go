@@ -40,18 +40,32 @@ root = Path(sys.argv[2])
 if Path(skills_tool.__file__).resolve().parents[1] != root:
     raise RuntimeError("native Hermes source differs")
 expected = json.loads(sys.argv[1])
+selected = set(expected.values())
+captured = {}
+read_skill_text = skills_tool._read_skill_text
+def capture_skill_text(path):
+    text = read_skill_text(path)
+    key = str(path.resolve())
+    if key in selected:
+        body = text.encode("utf-8")
+        if len(body) > 1 << 20 or key in captured:
+            captured[key] = None
+        else:
+            captured[key] = hashlib.sha256(body).hexdigest()
+    return text
+skills_tool._read_skill_text = capture_skill_text
+try:
+    catalog = skills_tool._skill_catalog()
+finally:
+    skills_tool._read_skill_text = read_skill_text
 rows = []
-for entry in skills_tool._skill_catalog():
+for entry in catalog:
     if entry["load_name"] in expected and entry["status"] == "unique":
         path = entry["path"].resolve()
-        if str(path) != expected[entry["load_name"]]:
+        if str(path) != expected[entry["load_name"]] or not captured.get(str(path)):
             continue
-        with path.open("rb") as stream:
-            body = stream.read((1 << 20) + 1)
-        if len(body) > 1 << 20:
-            raise RuntimeError("native Skill exceeds observation bound")
         rows.append({"name": entry["load_name"], "path": str(path),
-                     "digest": hashlib.sha256(body).hexdigest(), "tier": entry["tier"]})
+                     "digest": captured[str(path)], "tier": entry["tier"]})
 project = find_project_root()
 print(json.dumps({"profile": str(skills_tool.get_hermes_home().resolve()),
                   "project": str(project.resolve()) if project else "",
@@ -105,8 +119,9 @@ func observeHermesSkills(ctx context.Context, env clients.Env, request domain.Ac
 }
 
 func hermesSkillCommand(ctx context.Context, env clients.Env, cwd string, argv []string) ([]byte, error) {
+	selection := clients.SessionPlan{Environment: map[string]string{"TERMINAL_CWD": cwd}}
 	result, err := shared.RunNativeRegistry(ctx, env.Runner, legacyports.Command{
-		Argv: argv, Dir: cwd, Env: os.Environ(), StdoutLimitBytes: 1 << 20,
+		Argv: argv, Dir: cwd, Env: selection.ChildEnvironment(os.Environ()), StdoutLimitBytes: 1 << 20,
 	})
 	if err != nil {
 		return nil, err

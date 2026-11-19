@@ -16,6 +16,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
@@ -132,7 +133,7 @@ func hermesObservationFixture(t *testing.T, scope domain.InstallScope) (domain.A
 	}
 	row := map[string]any{"name": "document", "path": f.skill, "digest": fmt.Sprintf("%x", sha256.Sum256(body)), "tier": tier}
 	doc := map[string]any{"profile": profile, "project": projectValue, "project_trusted": trusted, "skills": []any{row}}
-	return request, clients.Env{NativeConfig: nativeconfig.New()}, doc
+	return request, clients.Env{NativeConfig: nativeconfig.New(), ParseSkill: conformance.ParseSkill, Snapshots: packagesnapshot.Builder{}}, doc
 }
 
 func hermesObservationRunner(t *testing.T, request domain.ActivationRequest, doc map[string]any, mutate func(legacyports.CommandResult) (legacyports.CommandResult, error)) hermesSkillRunner {
@@ -150,7 +151,8 @@ func hermesObservationRunner(t *testing.T, request domain.ActivationRequest, doc
 		if request.Plan.Scope == domain.ScopeUser {
 			cwd = filepath.VolumeName(request.Client.ConfigRoot) + string(filepath.Separator)
 		}
-		if command.Dir != cwd || !slices.Contains(command.Env, "HERMES_HOME="+request.Client.ConfigRoot) {
+		if command.Dir != cwd || !slices.Contains(command.Env, "HERMES_HOME="+request.Client.ConfigRoot) ||
+			!slices.Contains(command.Env, "TERMINAL_CWD="+cwd) {
 			t.Fatal("native Skill observation selected another context")
 		}
 		result := legacyports.CommandResult{CleanupComplete: true}
@@ -410,7 +412,8 @@ func TestHermesTrustReportControlsSkillObservation(t *testing.T) {
 				t.Fatal("trust completion lost existing authority or guidance", outcome, err, cli.calls)
 			}
 			if scenario == "granted" {
-				if queries != 4 || outcome.Activation != domain.ActivationActive || !slices.Contains(outcome.LocalActions, "Hermes trusted Git repository root: "+project) {
+				if queries != 4 || outcome.Activation != domain.ActivationActive || !slices.Contains(outcome.LocalActions, "Hermes trusted Git repository root: "+project) ||
+					!strings.Contains(strings.Join(outcome.UserActions, "\n"), "Hermes now trusts this project's Git repository root") || len(outcome.PendingUserActions()) != 0 {
 					t.Fatal("verified trust did not reach the existing observer or retain its informational guidance", outcome, queries)
 				}
 				return

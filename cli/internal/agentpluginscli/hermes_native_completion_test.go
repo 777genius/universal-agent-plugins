@@ -113,7 +113,14 @@ func TestHermesPublicSkillsRepeatUsesConfirmedNativeCompletion(t *testing.T) {
 					t.Fatalf("review started native completion: catalogs=%d err=%v", runner.catalogs, err)
 				}
 				preview.Close()
-				journey.run(t, args...)
+				output := journey.run(t, args...)
+				var response struct {
+					Readiness   string        `json:"readiness"`
+					NextActions []AgentAction `json:"next_actions"`
+				}
+				if json.Unmarshal([]byte(output), &response) != nil || response.Readiness != "ready" || len(response.NextActions) != 0 {
+					t.Fatalf("completed native setup remained a manual step: %s", output)
+				}
 				binding := savedJourneyBinding(t, journey.state(t), "hermes")
 				if binding.Activation != domain.ActivationActive || binding.Verification != domain.VerificationInstalled || runner.catalogs != attempt+1 {
 					t.Fatalf("confirmed public add did not complete exact native Skills: %+v catalogs=%d", binding, runner.catalogs)

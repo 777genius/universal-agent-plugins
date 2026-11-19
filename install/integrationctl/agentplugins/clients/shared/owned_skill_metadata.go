@@ -7,23 +7,29 @@ import (
 	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 // ReadOwnedSkillMetadata binds the parsed SKILL.md bytes to the same sealed
 // component tree as its existing ownership digest. The caller retains the
 // original installed path for native catalog matching, never the temporary one.
-func ReadOwnedSkillMetadata(ctx context.Context, kernel nativeconfig.Kernel, root, expected string) ([]byte, error) {
+func ReadOwnedSkillMetadata(ctx context.Context, kernel nativeconfig.Kernel, snapshots ports.DirectorySnapshots, root, expected string) ([]byte, error) {
 	// An unsupported injected backend cannot acquire OS read authority by way
 	// of the snapshot builder. Its explicit bounded capability is mandatory.
 	if err := kernel.RequireBoundedRead(); err != nil {
 		return nil, err
 	}
-	snapshot, err := (packagesnapshot.Builder{}).Build(ctx, root)
+	if snapshots == nil {
+		return nil, fmt.Errorf("owned Skill snapshot reader is unavailable")
+	}
+	sealed, closeSnapshot, err := snapshots.CaptureDirectory(ctx, root)
 	if err != nil {
 		return nil, err
 	}
-	return readOwnedSkillSnapshot(ctx, kernel, root, expected, snapshot.Root, snapshot.Close)
+	if closeSnapshot == nil {
+		return nil, fmt.Errorf("owned Skill snapshot has no cleanup operation")
+	}
+	return readOwnedSkillSnapshot(ctx, kernel, root, expected, sealed, closeSnapshot)
 }
 
 func readOwnedSkillSnapshot(ctx context.Context, kernel nativeconfig.Kernel, original, expected, sealed string, closeSnapshot func() error) (body []byte, err error) {

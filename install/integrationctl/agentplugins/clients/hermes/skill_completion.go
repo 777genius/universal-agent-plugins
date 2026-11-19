@@ -9,14 +9,13 @@ import (
 	"reflect"
 	"runtime"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/conformance"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
 
 type hermesSkillMetadata struct {
@@ -26,7 +25,7 @@ type hermesSkillMetadata struct {
 func hermesSkillObservationAllowed(env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) bool {
 	// The installer facade carries an explicitly selected executable without
 	// detector surfaces. Its native protocol must still prove the CLI below.
-	if request.VerifyOnly || env.Runner == nil || !hermesSkillCLISelected(request.Client) ||
+	if request.VerifyOnly || env.Runner == nil || env.ParseSkill == nil || env.Snapshots == nil || !hermesSkillCLISelected(request.Client) ||
 		request.ActivationComplete || request.ConfirmPluginEnable ||
 		outcome.Verification != domain.VerificationInstalled || outcome.Policy != domain.PolicyAllowed ||
 		outcome.ActivationAttested || outcome.AuthenticationAttested || outcome.NativeEffect == domain.NativeEffectUncertain {
@@ -155,24 +154,32 @@ func hermesOwnedSkills(ctx context.Context, env clients.Env, request domain.Acti
 	if err := layout.Verify(objects, false, env.NativeConfig); err != nil {
 		return nil, err
 	}
-	digest, err := (packagesnapshot.Builder{}).Digest(ctx, delivery.ActivePath)
+	digest, err := env.Snapshots.Digest(ctx, delivery.ActivePath)
 	if err != nil || digest != delivery.ArtifactDigest {
 		return nil, fmt.Errorf("hermes Skill package contents differ")
 	}
 	result := map[string]hermesSkillMetadata{}
 	for _, object := range objects {
 		path := filepath.Join(object.Path, "SKILL.md")
-		body, err := shared.ReadOwnedSkillMetadata(ctx, env.NativeConfig, object.Path, object.ManagedDigest)
+		body, err := shared.ReadOwnedSkillMetadata(ctx, env.NativeConfig, env.Snapshots, object.Path, object.ManagedDigest)
 		if err != nil {
 			return nil, fmt.Errorf("hermes owned Skill contents unavailable: %w", err)
 		}
-		skill, err := conformance.ParseSkill(ctx, object.LogicalName, body)
+		skill, err := env.ParseSkill(ctx, object.LogicalName, body)
 		if err != nil || skill.Name != object.LogicalName {
 			return nil, fmt.Errorf("hermes owned Skill identity differs")
 		}
-		result[object.LogicalName] = hermesSkillMetadata{path: path, digest: fmt.Sprintf("%x", sha256.Sum256(body))}
+		result[object.LogicalName] = hermesSkillMetadata{path: path, digest: hermesSkillTextDigest(body)}
 	}
 	return result, nil
+}
+
+// Pinned Hermes reads utf-8-sig text with universal newlines. The catalog's
+// captured text must match the text of the sealed, valid UTF-8 owned document.
+func hermesSkillTextDigest(body []byte) string {
+	text := strings.TrimPrefix(string(body), "\ufeff")
+	text = strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n")
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(text)))
 }
 
 func hermesSkillPackageReceipt(request domain.ActivationRequest) error {

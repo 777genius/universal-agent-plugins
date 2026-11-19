@@ -181,6 +181,7 @@ func finishHermesActivation(ctx context.Context, env clients.Env, req domain.Act
 	}
 	outcome.Activation, outcome.ActivationAttested = domain.ActivationPrepared, false
 	action := hermesCompletedAction
+	completed := ""
 	if hermesTrustApplies(req) {
 		var report hermesTrustReport
 		outcome, report, err = completeHermesProjectTrust(ctx, env, req, outcome)
@@ -192,9 +193,18 @@ func finishHermesActivation(ctx context.Context, env clients.Env, req domain.Act
 		if req.ProjectTrustConsent && !report.granted {
 			return outcome, nil
 		}
-		action = outcome.UserActions[len(outcome.UserActions)-1]
+		// A verified grant is durable user information, not pending setup.
+		if !report.granted {
+			action, _ = report.actions()
+		} else {
+			completed, _ = report.actions()
+		}
 	}
-	return completeHermesSkills(ctx, env, req, outcome, action)
+	outcome, err = completeHermesSkills(ctx, env, req, outcome, action)
+	if err == nil && outcome.Activation == domain.ActivationActive && completed != "" {
+		outcome.CompletedUserActions = append(outcome.CompletedUserActions, completed)
+	}
+	return outcome, err
 }
 
 func (adapter *Adapter) Deactivate(ctx context.Context, env clients.Env, req domain.DeactivationRequest) (domain.DeactivationOutcome, error) {
