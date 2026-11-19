@@ -34,21 +34,21 @@ func readCancellationWorkflow(t *testing.T, name string) cancellationWorkflow {
 // The legacy Firebase/Claude 0.1.101 diagnostic is manual-only; its event
 // policy is checked by scripts/test_package_manager_ci_policy.py instead.
 func TestVSCodePluginNativeWorkflowsAreManualOnly(t *testing.T) {
-    // Preserve the historical VS Code harness without automatic PR/main runs.
-    for _, name := range []string{
-        "vscode-project-native.yml",
-        "vscode-native-research.yml",
-        "vscode-workspace-research.yml",
-        "vscode-local-native.yml",
-    } {
-        t.Run(name, func(t *testing.T) {
-            workflow := readCancellationWorkflow(t, name)
-            _, selected := workflow.On["workflow_dispatch"]
-            if !selected || len(workflow.On) != 1 {
-                t.Fatalf("%s must remain manual-only, got events: %#v", name, workflow.On)
-            }
-        })
-    }
+	// Preserve the historical VS Code harness without automatic PR/main runs.
+	for _, name := range []string{
+		"vscode-project-native.yml",
+		"vscode-native-research.yml",
+		"vscode-workspace-research.yml",
+		"vscode-local-native.yml",
+	} {
+		t.Run(name, func(t *testing.T) {
+			workflow := readCancellationWorkflow(t, name)
+			_, selected := workflow.On["workflow_dispatch"]
+			if !selected || len(workflow.On) != 1 {
+				t.Fatalf("%s must remain manual-only, got events: %#v", name, workflow.On)
+			}
+		})
+	}
 }
 
 func TestCISupersession_RegularPRChecksOnly(t *testing.T) {
