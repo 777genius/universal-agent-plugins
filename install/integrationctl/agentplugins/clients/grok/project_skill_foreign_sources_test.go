@@ -64,7 +64,7 @@ func TestProjectGrokUnrelatedNativeSourcesCannotForgeOwnedSkillProof(t *testing.
 			f.runner.document["skills"] = append(f.runner.document["skills"].([]any), map[string]any{
 				"name": "another", "description": "Other", "userInvocable": true,
 				"compatibilityStatus": "some-future-status",
-				"source": map[string]any{"type": "user", "path": "/tmp/foreign/SKILL.md"}})
+				"source":              map[string]any{"type": "user", "path": "/tmp/foreign/SKILL.md"}})
 		},
 		"unsupported-config-alias": func(f *projectSkillFixture) {
 			f.runner.document["skills"] = append(f.runner.document["skills"].([]any), map[string]any{
