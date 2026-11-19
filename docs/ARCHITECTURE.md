@@ -214,7 +214,7 @@ detects regressions, it does not prove their absence.
 
 Golden files under `planner/testdata/golden`, `adapters/clientdetect/testdata/golden`,
 `providers/testdata/golden` and `agentpluginscli/testdata/golden` record what the
-core produces today for all eleven clients, including the operational fields the
+core produces today for every registered client, including the operational fields the
 public JSON tags hide. Refactor parts must leave them byte-identical; a
 deliberate behavior change rewrites them with `UPDATE_GOLDEN=1 go test ./...` in
 the same commit that explains why.
