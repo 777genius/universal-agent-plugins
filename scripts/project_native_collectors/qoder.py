@@ -3,6 +3,7 @@
 The genuine acquisition selected qodercli; shared code owns immutable bytes,
 host admission, bounded execution and captures. Never import or list a plugin.
 """
+import hashlib
 import json
 import re
 
@@ -54,6 +55,88 @@ def _probe(ctx, label, arguments):
     return stdout
 
 
+def _help_section(body, heading):
+    text = body.decode("utf-8", errors="strict")
+    sections = text.split("\n" + heading + ":\n")
+    return sections[1].lstrip("\n").split("\n\n", 1)[0].splitlines() if len(sections) == 2 else []
+
+
+def _help_entry(body, heading, token):
+    rows = [line for line in _help_section(body, heading)
+            if re.match(r"  " + token + r"(?:[ \t]|$)", line)]
+    return rows[0] if len(rows) == 1 else ""
+
+
+def _skill_help(body, listing=False):
+    usage = body.decode("utf-8", errors="strict").splitlines()
+    suffix = r" list(?: \[options\])?" if listing else r"(?: \[options\])?(?: \[command\])?"
+    if not usage or re.fullmatch(r"Usage: qodercli skills(?:\|skill)?" + suffix, usage[0]) is None:
+        raise ValueError("Qoder Skills command-specific help grammar differs")
+    return parse_help(body, usage[0])
+
+
+def _skill_catalogs(ctx, stage):
+    rows = {}
+    for project in ("a", "b", "user"):
+        label = "skills-" + stage + "-" + project
+        record, stdout, stderr = ctx.probe(label, ["skills", "list", "--json"],
+                                           project=project, timeout=30)
+        if (not isinstance(record, dict) or type(record.get("exit")) is not int
+                or record["exit"] != 0 or record.get("error") is not None
+                or "error" not in record or type(stdout) is not bytes
+                or type(stderr) is not bytes or stderr != b""):
+            raise ValueError("Qoder opaque Skills capture did not finish cleanly")
+        rows[project] = {"probe": label, "arguments": ["skills", "list", "--json"],
+                         "project": project, "surface": "opaque-skills-catalog"}
+    return rows
+
+
+def _author_inert_skills(ctx):
+    authored = []
+    for label, base in (("a", ctx.projects["a"]), ("b", ctx.projects["b"]), ("user", ctx.home)):
+        for parent in (base / ".qoder", base / ".qoder" / "skills"):
+            if parent.is_symlink() or parent.resolve() != parent:
+                raise ValueError("Qoder inert Skill parent is redirected")
+            parent.mkdir(mode=0o700, exist_ok=True)
+        name = "uap-qoder-inert-" + label
+        directory = base / ".qoder" / "skills" / name
+        directory.mkdir(mode=0o700)
+        path = directory / "SKILL.md"
+        body = ("---\nname: " + name + "\ndescription: Inert Qoder " + label
+                + " discovery marker\n---\nDo not execute; discovery fixture only.\n").encode()
+        with path.open("xb") as stream:
+            stream.write(body)
+        path.chmod(0o600)
+        ctx.identities[path] = hashlib.sha256(body).hexdigest()
+        authored.append({"project": label, "name": name, "path": str(path),
+                         "sha256": ctx.identities[path]})
+    return authored
+
+
+def observe_skills_surface(ctx, top_help):
+    """Help gates a closed read-only vector; raw catalogs never qualify discovery."""
+    result = {"status": "not-advertised", "native_skill_discovery_qualified": False,
+              "public_ready_qualified": False}
+    skills = _help_entry(top_help, "Commands", r"skills(?:\|skill)?")
+    if re.fullmatch(r"  skills(?:\|skill)?(?: \[options\])?(?: \[command\])?[ \t]{2,}[^\n]+", skills) is None:
+        return result
+    body = _probe(ctx, "skills-help", ("skills", "--help"))
+    result.update(status="help-observed", usage=_skill_help(body))
+    listing = _help_entry(body, "Commands", "list")
+    if re.fullmatch(r"  list(?: \[options\])?[ \t]{2,}List\b[^\n]*", listing) is None:
+        return result
+    body = _probe(ctx, "skills-list-help", ("skills", "list", "--help"))
+    result["list_usage"] = _skill_help(body, listing=True)
+    option = _help_entry(body, "Options", r"(?:-[A-Za-z], )?--json")
+    if re.fullmatch(r"  (?:-[A-Za-z], )?--json[ \t]{2,}[^\n]+", option) is None:
+        return result
+    result.update(status="opaque-catalog-captured", baseline=_skill_catalogs(ctx, "empty"))
+    if getattr(ctx, "phase", "help") == "observe":
+        result["authored_inert_skills"] = _author_inert_skills(ctx)
+        result["populated"] = _skill_catalogs(ctx, "populated")
+    return result
+
+
 def observe_project_mcp_sources(ctx):
     """Record genuine Qoder MCP inventory, without a model or MCP tool call."""
     a, b = (ctx.projects[name] for name in ("a", "b"))
@@ -97,11 +180,14 @@ def observe_project_mcp_sources(ctx):
 
 
 def collect(ctx):
-    """Only the reviewed five version/help commands; no source selection claim."""
+    """Preserve fixed help/MCP probes before optional opaque Skills research."""
     version = parse_version(_probe(ctx, "version", ("--version",)))
-    help_rows = []
+    help_rows, top_help = [], b""
     for label, arguments, usage in HELP:
-        observed = parse_help(_probe(ctx, label, arguments), usage)
+        body = _probe(ctx, label, arguments)
+        observed = parse_help(body, usage)
+        if label == "top-help":
+            top_help = body
         help_rows.append({"label": label, "arguments": list(arguments), "usage": observed})
     result = {"observations": {"client_version_measured": version, "help": help_rows,
                                "surface": "fixed version and command help only",
@@ -118,4 +204,5 @@ def collect(ctx):
         result["cases"].append({"id": "qoder.scope-observation", "status": "passed",
                                 "reason": "Genuine Qoder A-only project stdio/HTTP configuration listed; no MCP tools/call"})
         result["unobserved"] = ["qoder.mcp-initialize", "qoder.mcp-tools-list", "qoder.mcp-tools-call"]
+    result["observations"]["skills_research"] = observe_skills_surface(ctx, top_help)
     return result
