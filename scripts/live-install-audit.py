@@ -380,12 +380,14 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
 
 
 def install_case_timeout(target, kind, item):
-    # The frozen Firebase Windows runtime can finish durable registration
-    # while a cold native runtime setup still holds the original add process.
-    # Stay bounded: a timeout or any surviving registration still FAILS E2E.
+    # A cold Claude/Firebase npm runtime is allowed 10 minutes by
+    # providers.runLockedNPM. The native Windows add must not be killed after
+    # only 180 seconds while that bounded preparation is still permitted.
+    # Keep other clients' historical budgets, and never accept a timeout,
+    # leftover registration, or an unverified repeat/remove as success.
     if (sys.platform == "win32" and kind == "plugin"
             and item == "firebase"):
-        return 180
+        return 660 if target == "claude" else 180
     return 105
 
 

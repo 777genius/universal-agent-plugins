@@ -8982,7 +8982,9 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
         with patch.object(audit.sys, "platform", "win32"):
             for target in ("codex", "claude", "opencode", "gemini",
                            "copilot", "cline", "kimi", "qoder", "pi"):
-                self.assertEqual(audit.install_case_timeout(target, "plugin", "firebase"), 180)
+                expected = 660 if target == "claude" else 180
+                self.assertEqual(audit.install_case_timeout(target, "plugin", "firebase"), expected)
+                self.assertLess(audit.install_case_timeout(target, "plugin", "firebase"), 900)
                 self.assertEqual(audit.install_case_timeout(target, "plugin", "docker-hub"), 105)
                 self.assertEqual(audit.install_case_timeout(target, "skill", "firebase"), 105)
         with patch.object(audit.sys, "platform", "darwin"):

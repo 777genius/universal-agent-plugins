@@ -20,7 +20,7 @@ from windows_owned_job import WindowsJob
 
 REPO = SCRIPTS.parent
 OUTPUT_LIMIT = 1 << 20
-PROBE_TIMEOUT = 900  # Outer custody bound; the existing add budget remains 180 s.
+PROBE_TIMEOUT = 900  # Outer family bound; bounded Claude/Firebase add is 660 s.
 DIAGNOSTIC_LIMIT = 8 * 1024
 
 
