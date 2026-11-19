@@ -97,13 +97,16 @@ selected agent: "No selected client was changed".
 - `add --target a,b,c` then runs the remaining agents as a new group with a new
   operation id: the same `AddGroup`, lock, staging and one commit as selecting
   only them. The failed agent is a `external_failed` row with
-  `error.stage: "preparation"`, a plain cause, the technical chain in the
-  install log, and a retry step (`Retry:` line or the interactive retry).
+  `error.stage: "preparation"`, a plain cause when `failureKindOf` has one
+  (otherwise the cause itself, also appended to the command error), the
+  technical chain in the install log, and a retry step (`Retry:` line or the
+  interactive retry).
 - The overall status is the existing `external_partial_failure`, exit code is
   non-zero. No JSON field or status was added.
 - Causes that stay group-wide: process cleanup unconfirmed, recovery required,
   security block, edited or differently versioned installed copy, plan or
-  source change, timeout and cancellation.
+  source change, a host that drifted from the reviewed snapshot, timeout and
+  cancellation.
 - If every agent fails on its own, the result is exactly the old one: the first
   agent's cause and "No selected client was changed".
 
