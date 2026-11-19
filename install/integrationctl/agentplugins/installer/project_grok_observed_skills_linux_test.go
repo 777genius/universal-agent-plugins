@@ -127,7 +127,7 @@ func TestProjectGrokSDKRepairPreviewRequiresObservationPermission(t *testing.T) 
 		name              string
 		online, confirmed bool
 	}{
-		{"offline-cancelled", false, false}, {"online-cancelled", true, false},
+		{"offline-canceled", false, false}, {"online-canceled", true, false},
 		{"offline-confirmed", false, true}, {"online-confirmed", true, true},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
@@ -174,7 +174,7 @@ func TestProjectGrokSDKRepairPreviewRequiresObservationPermission(t *testing.T) 
 			}
 			if !scenario.confirmed {
 				if !errors.Is(err, ErrCancelled) || result.Outcome != OutcomeCancelled || f.native.calls != calls || f.native.duplex != 0 {
-					t.Fatalf("cancelled repair observed or acted: %+v %v calls=%d", result, err, f.native.calls)
+					t.Fatalf("canceled repair observed or acted: %+v %v calls=%d", result, err, f.native.calls)
 				}
 				unchanged()
 				return
