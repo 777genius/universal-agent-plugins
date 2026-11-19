@@ -7,10 +7,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 // auditNativeCache records evidence for an otherwise refused native cache
@@ -54,7 +58,8 @@ func (c *windProjectCycle) auditNativeCache(label string, start, end time.Time) 
 		"ended_at":             end.UTC().Format(time.RFC3339Nano),
 		"changed_records":      len(changed),
 	}
-	// Never disclose arbitrary file names, even inside disposable native cache.
+	// Arbitrary names remain opaque. Only a bounded new cli leaf can carry
+	// relative-name/schema facts; none of these facts authorize its mutation.
 	// A large/unreadable delta remains a refusal, not an output-amplification path.
 	if len(changed) > 16 {
 		audit["bounded_out"] = true
@@ -71,7 +76,7 @@ func (c *windProjectCycle) auditNativeCache(label string, start, end time.Time) 
 		} else if !after {
 			operation = "missing"
 		}
-		rows = append(rows, map[string]any{
+		row := map[string]any{
 			"key_sha256":     windsurfConfigDigest([]byte(name)),
 			"parent_sha256":  windsurfConfigDigest([]byte(filepath.ToSlash(filepath.Dir(name)))),
 			"operation":      operation,
@@ -80,11 +85,96 @@ func (c *windProjectCycle) auditNativeCache(label string, start, end time.Time) 
 			"previous":       old,
 			"current":        now,
 			"within_command": after && windRuntimeCommandTimes(now, start, end),
-		})
+		}
+		if !before && after {
+			if fact := windCacheFileObservation(root, name, now); fact != nil {
+				row["file_observation"] = fact
+			}
+		}
+		rows = append(rows, row)
 	}
 	audit["records"] = rows
 	c.w.f.evidence["native_cache_delta"] = audit
 	return nil
+}
+
+var windCacheLeafName = regexp.MustCompile(`^cli/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$`)
+var windCacheSchemaName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,63}$`)
+
+// This optional diagnostic reads a held, bounded file but exports no values.
+// A failed read leaves the original opaque refusal evidence unchanged.
+func windCacheFileObservation(root, name string, want windProfileRecord) (fact map[string]any) {
+	if !windCacheLeafName.MatchString(name) || want.Kind != "file" || want.Size < 0 || want.Size > 1<<20 {
+		return nil
+	}
+	path := filepath.Join(root, filepath.FromSlash(name))
+	edges, err := windOpenDirectory(filepath.Dir(path))
+	if err != nil {
+		return nil
+	}
+	defer func() {
+		if windCloseEdges(edges) != nil {
+			fact = nil
+		}
+	}()
+	var before, after unix.Stat_t
+	if unix.Lstat(path, &before) != nil || windRecord(before, "file", want.SHA256) != want {
+		return nil
+	}
+	body, err := projectNativeRuntimeRead(path, 1<<20)
+	if err != nil || int64(len(body)) != want.Size || windsurfConfigDigest(body) != want.SHA256 {
+		return nil
+	}
+	if unix.Lstat(path, &after) != nil || !windSameStat(before, after) || windCheckEdges(edges) != nil {
+		return nil
+	}
+	fact = map[string]any{"relative_path": name, "bytes": want.Size, "sha256": want.SHA256, "format": "opaque"}
+	value, err := projectNativeRuntimeJSON(body)
+	if err != nil {
+		return fact
+	}
+	kind := windCacheJSONType(value)
+	fact["format"] = "json-scalar"
+	if kind == "array" || kind == "object" {
+		fact["format"] = "json-" + kind
+	}
+	if object, ok := value.(map[string]any); ok {
+		if schema := windCacheJSONSchema(object); schema != nil {
+			fact["top_level_schema"] = schema
+		}
+	}
+	return fact
+}
+
+func windCacheJSONSchema(object map[string]any) map[string]string {
+	if len(object) > 32 {
+		return nil
+	}
+	schema := make(map[string]string, len(object))
+	for name, value := range object {
+		if !windCacheSchemaName.MatchString(name) {
+			return nil
+		}
+		schema[name] = windCacheJSONType(value)
+	}
+	return schema
+}
+
+func windCacheJSONType(value any) string {
+	switch value.(type) {
+	case map[string]any:
+		return "object"
+	case []any:
+		return "array"
+	case string:
+		return "string"
+	case json.Number:
+		return "number"
+	case bool:
+		return "boolean"
+	default:
+		return "null"
+	}
 }
 
 func TestWindsurfCycleCacheAuditRemainsFailClosedAndOpaque(t *testing.T) {
@@ -147,5 +237,99 @@ func TestWindsurfCycleCacheAuditRefusesUnknownSymlink(t *testing.T) {
 	}
 	if windFrozenTrees(c.w.f.ctx, c.w.trees) == nil {
 		t.Fatal("cache symlink escaped closed tree")
+	}
+}
+
+func TestWindsurfCycleCacheFileObservationIsBoundedSchemaOnly(t *testing.T) {
+	for _, scenario := range []struct {
+		name, body, format string
+		schema             map[string]string
+	}{
+		{"cache.json", `{"access_token":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR","servers":{"nested":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"},"items":[],"count":1,"enabled":true,"empty":null}`, "json-object", map[string]string{"access_token": "string", "servers": "object", "items": "array", "count": "number", "enabled": "boolean", "empty": "null"}},
+		{"duplicate.json", `{"key":1,"key":2}`, "opaque", nil},
+		{"malformed.json", `{"token":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"`, "opaque", nil},
+		{"unsafe-schema.json", `{"/private/path":"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"}`, "json-object", nil},
+		{"array.json", `["OWNED_CACHE_VALUE_MUST_NOT_APPEAR"]`, "json-array", nil},
+		{"scalar.json", `"OWNED_CACHE_VALUE_MUST_NOT_APPEAR"`, "json-scalar", nil},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			c := windCycleInert(t)
+			root := filepath.Join(c.w.f.base.Root, "xdg-cache", "devin")
+			name := "cli/" + scenario.name
+			if err := os.WriteFile(filepath.Join(root, name), []byte(scenario.body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := c.auditNativeCache("a-mcp", time.Now().Add(-time.Second), time.Now()); err != nil {
+				t.Fatal(err)
+			}
+			if windFrozenTrees(c.w.f.ctx, c.w.trees) == nil {
+				t.Fatal("schema diagnostic authorized new cache")
+			}
+			audit := c.w.f.evidence["native_cache_delta"].(map[string]any)
+			var fact map[string]any
+			for _, row := range audit["records"].([]map[string]any) {
+				if row["key_sha256"] == windsurfConfigDigest([]byte(name)) {
+					fact, _ = row["file_observation"].(map[string]any)
+				}
+			}
+			if fact == nil || fact["relative_path"] != name || fact["bytes"] != int64(len(scenario.body)) || fact["sha256"] != windsurfConfigDigest([]byte(scenario.body)) || fact["format"] != scenario.format {
+				t.Fatal("cache diagnostic did not bind exact bounded file facts")
+			}
+			schema, _ := fact["top_level_schema"].(map[string]string)
+			if !reflect.DeepEqual(schema, scenario.schema) {
+				t.Fatal("cache diagnostic schema differs")
+			}
+			raw, err := json.Marshal(audit)
+			if err != nil || strings.Contains(string(raw), "OWNED_CACHE_VALUE_MUST_NOT_APPEAR") || strings.Contains(string(raw), "/private/path") || strings.Contains(string(raw), root) {
+				t.Fatal("cache diagnostic disclosed values or host path")
+			}
+		})
+	}
+}
+
+func TestWindsurfCycleCacheFileObservationRefusesUnboundFacts(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "cli"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "cli", "cache.json")
+	body := []byte(`{"count":1}`)
+	if err := os.WriteFile(path, body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var stat unix.Stat_t
+	if err := unix.Lstat(path, &stat); err != nil {
+		t.Fatal(err)
+	}
+	want := windRecord(stat, "file", windsurfConfigDigest(body))
+	if windCacheFileObservation(root, "cli/cache.json", want) == nil {
+		t.Fatal("exact owned file not observed")
+	}
+	for _, name := range []string{"cli/../cache.json", "cli/nested/cache.json", "cli/private\nname", "/cli/cache.json", "cli/" + strings.Repeat("x", 97)} {
+		if windCacheFileObservation(root, name, want) != nil {
+			t.Fatal("unsafe name disclosed")
+		}
+	}
+	wrong := want
+	wrong.SHA256 = strings.Repeat("0", 64)
+	if windCacheFileObservation(root, "cli/cache.json", wrong) != nil {
+		t.Fatal("digest mismatch accepted")
+	}
+	wrong = want
+	wrong.Inode++
+	if windCacheFileObservation(root, "cli/cache.json", wrong) != nil {
+		t.Fatal("identity mismatch accepted")
+	}
+	wrong = want
+	wrong.Size = (1 << 20) + 1
+	if windCacheFileObservation(root, "cli/cache.json", wrong) != nil {
+		t.Fatal("oversize file observation accepted")
+	}
+	large := make(map[string]any, 33)
+	for i := range 33 {
+		large[fmt.Sprintf("key%d", i)] = "PRIVATE_VALUE"
+	}
+	if windCacheJSONSchema(large) != nil {
+		t.Fatal("unbounded schema accepted")
 	}
 }

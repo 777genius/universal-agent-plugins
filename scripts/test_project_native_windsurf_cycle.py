@@ -269,6 +269,39 @@ class WindsurfCycleContracts(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(ValueError):
                 self.admit()
             row[field] = original
+        fact = {"relative_path": "cli/private", "bytes": 1, "sha256": "a"*64,
+                "format": "json-object", "top_level_schema": {"access_token": "string", "servers": "object"}}
+        row["file_observation"] = fact
+        self.assertEqual(self.admit(), self.result)
+        for field, invalid in (("relative_path", "/cli/private"), ("relative_path", "cli/a/b"),
+                               ("relative_path", "cli/../private"), ("relative_path", "cli/private\nvalue"),
+                               ("relative_path", "cli/" + "x"*97), ("relative_path", "cli/other"),
+                               ("bytes", True), ("bytes", 2), ("sha256", "b"*64),
+                               ("format", "raw"), ("format", "opaque"),
+                               ("top_level_schema", {"token": "SECRET_VALUE"}),
+                               ("top_level_schema", {"unsafe/key": "string"}),
+                               ("top_level_schema", {"k"+str(i): "string" for i in range(33)})):
+            original = fact[field]
+            fact[field] = invalid
+            with self.subTest(fact=field, invalid=invalid), self.assertRaises(ValueError):
+                self.admit()
+            fact[field] = original
+        for key, invalid in (("raw_body", "SECRET_VALUE"), ("header", "SECRET_VALUE")):
+            fact[key] = invalid
+            with self.subTest(extra=key), self.assertRaises(ValueError):
+                self.admit()
+            del fact[key]
+        for field, invalid in (("parent_sha256", "b"*64), ("operation", "changed")):
+            original = row[field]
+            row[field] = invalid
+            with self.subTest(row=field), self.assertRaises(ValueError):
+                self.admit()
+            row[field] = original
+        original_size = file["Size"]
+        file["Size"] = fact["bytes"] = (1 << 20) + 1
+        with self.assertRaises(ValueError):
+            self.admit()
+        file["Size"] = fact["bytes"] = original_size
         self.result["runtime_attempt_complete"] = True
         with self.assertRaises(ValueError):
             self.admit()
