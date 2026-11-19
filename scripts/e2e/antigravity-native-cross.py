@@ -74,7 +74,7 @@ def checked_plugin(cli, env, project, path, manifest, enabled=None, *,
         raise AssertionError("Native inventory omitted or duplicated the exact owned path")
     row = matches[0]
     if (row.get("path") != str(path) or row.get("name") != path.name
-            or row.get("version") != manifest["version"]):
+            or ("version" in manifest and row.get("version") != manifest["version"])):
         raise AssertionError("Native inventory changed physical identity or version")
     if not isinstance(row.get("enabled"), bool):
         raise AssertionError("Native inventory omitted boolean enablement")

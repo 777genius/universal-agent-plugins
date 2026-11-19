@@ -27,6 +27,14 @@ class AntigravityRawSkillsAssertions(unittest.TestCase):
             row.pop("mcpServers")
             NATIVE.checked_plugin("never-executed", {}, path.parent, path, manifest,
                                   skills=("frontend-design",), servers=())
+            row.pop("version")
+            NATIVE.checked_plugin("never-executed", {}, path.parent, path, {"name": path.name},
+                                  skills=("frontend-design",), servers=())
+            row["version"] = "2.0.0"
+            with self.assertRaises(AssertionError):
+                NATIVE.checked_plugin("never-executed", {}, path.parent, path, manifest,
+                                      skills=("frontend-design",), servers=())
+            row["version"] = "1.0.0"
             with self.assertRaises(AssertionError):
                 NATIVE.checked_plugin("never-executed", {}, path.parent, path, manifest)
             row["mcpServers"] = ["unselected"]
