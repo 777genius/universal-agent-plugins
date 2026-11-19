@@ -3841,7 +3841,7 @@ def prepared_project_skill_summary(report, fixtures, acceptance):
                     "removal_verified", "post_list_schema_valid", "sentinels_preserved"))
                 or any(row.get(key) is not False for key in (
                     "failed_install_registered", "failed_install_residue",
-                    "post_remove_identity_registered")):
+                    "post_remove_identity_registered"))):
             return result
         ids = row.get("matched_installation_ids")
         if (type(ids) is not list or len(ids) != 1
