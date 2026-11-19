@@ -11,9 +11,34 @@ translationRequired: false
 
 # UAP क्लाइंट संगतता के प्रमाण {#uap-client-compatibility-evidence}
 
+## समर्थित एजेंट {#supported-agents}
+
+UAP इन एजेंटों के लिए पैकेज इंस्टॉल या तैयार करता है। एजेंट स्पष्ट रूप से चुनने के लिए `--target` मान दें, या `--target` छोड़कर अपने कंप्यूटर पर पहचाने गए एजेंटों में से चुनें।
+
+| एजेंट | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop), `chatgptweb` (Web) |
+
+उपयोगकर्ता और प्रोजेक्ट स्कोप का समर्थन, सेटअप और इंस्टॉलेशन के बाद बचे चरण हर एजेंट के लिए अलग होते हैं; [एजेंट समर्थन तालिका](https://universal-agent-plugins.com/hi/#agent-support) देखें। किसी एजेंट के समर्थित होने का अर्थ यह नहीं है कि उसमें हर पैकेज, घटक, संस्करण या स्कोप काम करता है।
+
 ## वर्तमान रिलीज़ और दायरा {#current-release-and-scope}
 
-वर्तमान प्रकाशित नेटिव रिलीज़ [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) में होस्ट द्वारा जीवनचक्र प्रबंधित लोकल मैनेजमेंट API, क्लाइंट और प्रोफ़ाइल की केवल पढ़ने वाली खोज और उपयोगकर्ता स्कोप में Pi के नेटिव एक्सटेंशन का प्रोवाइडर जोड़ा गया है। [लोकल मैनेजमेंट](../use/manage#local-management-api) देखें। पैकेज मैनेजर चैनल पुराने संस्करण दे सकते हैं; `agentplugins version` जाँचें।
+वर्तमान प्रकाशित नेटिव रिलीज़ [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) में होस्ट द्वारा जीवनचक्र प्रबंधित लोकल मैनेजमेंट API, क्लाइंट और प्रोफ़ाइल की केवल पढ़ने वाली खोज और उपयोगकर्ता तथा योग्य प्रोजेक्ट स्कोप में Pi एक्सटेंशन, Skills और stdio/Streamable HTTP MCP का समर्थन जोड़ा गया है। [लोकल मैनेजमेंट](../use/manage#local-management-api) देखें। पैकेज मैनेजर चैनल पुराने संस्करण दे सकते हैं; `agentplugins version` जाँचें।
 
 CLI 0.1.94 से, स्रोत आर्ग्युमेंट के बिना `install` प्रोजेक्ट तभी चुनता है जब ठीक वर्तमान फ़ोल्डर में नियमित `uap.toml` फ़ाइल हो। स्पष्ट स्कोप प्राथमिक होता है और पैरेंट फ़ोल्डर नहीं खोजे जाते। `--locked` के बिना भी मौजूदा लॉक सख्ती से जाँचे जाते हैं। स्पष्ट प्रोजेक्ट डिलीवरी 0.1.93 में आई थी। इंस्टॉलर रिलीज़ का प्रमाण हर नेटिव एजेंट रनटाइम या मानक पैकेज निर्माण एक्ज़ीक्यूटेबल को योग्य नहीं ठहराता। वर्तमान npm/नेटिव इंस्टॉलर में `agentplugins author` शामिल नहीं है; सोर्स टूल के लिए [बिल्ड गाइड](../build/) देखें।
 

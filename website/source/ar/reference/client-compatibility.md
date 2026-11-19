@@ -11,9 +11,34 @@ translationRequired: false
 
 # أدلة توافق عملاء UAP {#uap-client-compatibility-evidence}
 
+## الوكلاء المدعومون {#supported-agents}
+
+يثبّت UAP الحزم أو يجهّزها لهؤلاء الوكلاء. مرّر قيمة `--target` لاختيار الوكلاء صراحةً، أو احذف `--target` لتختار من بين الوكلاء المكتشفين على حاسوبك.
+
+| الوكيل | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop)، `chatgptweb` (Web) |
+
+يختلف دعم نطاقي المستخدم والمشروع وطريقة الإعداد والخطوات المتبقية بعد التثبيت من وكيل إلى آخر؛ راجع [جدول دعم الوكلاء](https://universal-agent-plugins.com/ar/#agent-support). لا يعني دعم وكيل ما أن كل حزمة أو مكوّن أو إصدار أو نطاق يعمل فيه.
+
 ## الإصدار الحالي ونطاقه {#current-release-and-scope}
 
-يضيف [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)، الإصدار الأصلي المنشور، واجهة API للإدارة المحلية يدير المضيف دورة حياتها، واكتشافًا للعملاء وملفات التعريف للقراءة فقط، وموفّرًا لامتدادات Pi الأصلية ضمن نطاق المستخدم. راجع [الإدارة المحلية](../use/manage#local-management-api). قد تتأخر قنوات مديري الحزم؛ تحقّق من `agentplugins version`.
+يضيف [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)، الإصدار الأصلي المنشور، واجهة API للإدارة المحلية يدير المضيف دورة حياتها، واكتشافًا للعملاء وملفات التعريف للقراءة فقط، ودعمًا لامتدادات Pi وSkills وMCP عبر stdio/Streamable HTTP ضمن نطاق المستخدم ونطاق المشروع المؤهل. راجع [الإدارة المحلية](../use/manage#local-management-api). قد تتأخر قنوات مديري الحزم؛ تحقّق من `agentplugins version`.
 
 منذ CLI 0.1.94، يختار `install` دون وسيطة مصدر المشروع إذا احتوى المجلد الحالي نفسه على ملف عادي باسم `uap.toml`. تكون الأولوية للنطاق الصريح، ولا تُبحث المجلدات الأب. تُفحص الأقفال الموجودة بصرامة حتى دون `--locked`. أُضيف التسليم الصريح ضمن نطاق المشروع في 0.1.93. لا تؤهّل أدلة إصدار المثبّت تشغيل كل وكيل أصلي أو الملف التنفيذي للتأليف المعياري. لا يتضمن المثبّت الحالي عبر npm أو التثبيت الأصلي `agentplugins author`؛ راجع [دليل البناء](../build/) لأدوات المصدر.
 

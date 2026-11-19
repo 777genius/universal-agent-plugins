@@ -50,7 +50,7 @@ npx universal-agent-plugins add context7
 
 ## ما المتاح حاليًا {#what-is-available}
 
-[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) هو الإصدار الحالي من المثبّت الأصلي. يضيف واجهة API للإدارة المحلية وامتدادات Pi الأصلية ضمن نطاق المستخدم والمشروعات المؤهلة. راجع [الإدارة المحلية](./use/manage#local-management-api) و[توافق Pi](./reference/client-compatibility#pi-native-extensions).
+[CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) هو الإصدار الحالي من المثبّت الأصلي. يضيف واجهة API للإدارة المحلية وامتدادات Pi الأصلية وSkills وMCP عبر stdio/Streamable HTTP ضمن نطاق المستخدم والمشروعات المؤهلة. راجع [الإدارة المحلية](./use/manage#local-management-api) و[توافق Pi](./reference/client-compatibility#pi-native-extensions).
 
 يحتفظ بتحديد نطاق المشروع صراحةً والاستعادة وفق ملف القفل. تعمل معظم الأوامر افتراضيًا على بيئة المستخدم. منذ 0.1.94، يختار `install` دون وسيطة مصدر المشروع الحالي فقط إذا احتوى المجلد الحالي نفسه على ملف عادي باسم `uap.toml`؛ وتكون الأولوية للنطاق الصريح. حدّد `--scope project` في أوامر الإضافة والصيانة للمشروع. راجع [التثبيت](./use/install) و[الصيانة](./use/manage).
 
@@ -65,5 +65,6 @@ npx universal-agent-plugins add context7
 - [البدء السريع](./guide/quickstart)
 - [بنية الحزمة](./build/layout)
 - [الفحوص والأدلة](./build/checks)
+- [الوكلاء المدعومون](./reference/client-compatibility#supported-agents)
 - [توافق العملاء وحدود الاختبارات](./reference/client-compatibility)
 - [مواصفة Agent Plugins 1.0](https://agent-plugins.org/specification)

@@ -80,5 +80,6 @@ client versions and platforms; they do not certify every plugin or every agent.
 - [Quickstart](./guide/quickstart)
 - [Package layout](./build/layout)
 - [Checks and evidence](./build/checks)
+- [Supported agents](./reference/client-compatibility#supported-agents)
 - [Client compatibility and test boundaries](./reference/client-compatibility)
 - [Agent Plugins 1.0 specification](https://agent-plugins.org/specification)
