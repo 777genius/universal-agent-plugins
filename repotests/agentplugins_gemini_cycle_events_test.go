@@ -77,6 +77,9 @@ func (c *geminiProjectCycle) events(t *testing.T, scope string, before []byte, s
 	c.openEvents = false
 }
 func geminiCycleProbeSegment(segment []byte, allowed map[string]*geminiCycleRecipe, q *geminiCyclePhase, home string, start, end time.Time, priorSessions map[string]bool, priorPIDs map[int64]bool) (map[string]*geminiCycleProbeGroup, error) {
+	return geminiCycleProbeMethods(segment, allowed, q, home, start, end, priorSessions, priorPIDs, false)
+}
+func geminiCycleProbeMethods(segment []byte, allowed map[string]*geminiCycleRecipe, q *geminiCyclePhase, home string, start, end time.Time, priorSessions map[string]bool, priorPIDs map[int64]bool, initializeOnly bool) (map[string]*geminiCycleProbeGroup, error) {
 
 	if len(segment) > 0 && segment[len(segment)-1] != '\n' {
 		return nil, fmt.Errorf("Gemini complete probe event framing")
@@ -130,6 +133,9 @@ func geminiCycleProbeSegment(segment []byte, allowed map[string]*geminiCycleReci
 			return nil, fmt.Errorf("Gemini component method type")
 		}
 		want := []string{"initialize", "tools/list"}
+		if initializeOnly {
+			want = want[:1]
+		}
 		selected := q != nil && q.operation != "none" && q.r == r
 		if selected {
 			want = append(want, "tools/call")
@@ -158,6 +164,9 @@ func geminiCycleProbeSegment(segment []byte, allowed map[string]*geminiCycleReci
 			continue
 		}
 		want := 2
+		if initializeOnly {
+			want = 1
+		}
 		if q != nil && q.operation != "none" && q.r == r {
 			want = 3
 		}

@@ -5,6 +5,7 @@ The driver owns the master; this session leader owns the slave. CLI and probes
 run in foreground process groups in this session, as jobs do under a shell.
 No terminal modes are reset here. Control/status never travels over the PTY.
 """
+import errno
 import fcntl
 import json
 import os
@@ -13,6 +14,26 @@ import socket
 import subprocess
 import sys
 import termios
+
+
+def kill_job(child):
+    try:
+        os.killpg(child.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError as exc:
+        # Darwin can report EPERM for an exited, unreaped process group.
+        # Leader exit alone is insufficient: the same group must be absent.
+        if exc.errno != errno.EPERM or child.poll() is None:
+            raise
+        try:
+            os.killpg(child.pid, 0)
+        except ProcessLookupError as gone:
+            if gone.errno != errno.ESRCH:
+                raise
+        else:
+            raise
+    return child.wait(timeout=2)
 
 
 def main():
@@ -30,9 +51,7 @@ def main():
 
     def cleanup():
         for child in children.values():
-            try: os.killpg(child.pid, signal.SIGKILL)
-            except ProcessLookupError: pass
-            child.wait(timeout=2)
+            kill_job(child)
 
     try:
         for line in channel:
@@ -51,9 +70,7 @@ def main():
                     result = child.pid
                 elif op == 'poll': result = children[request['pid']].poll()
                 elif op == 'kill':
-                    try: os.killpg(request['pid'], signal.SIGKILL)
-                    except ProcessLookupError: pass
-                    result = children[request['pid']].wait(timeout=2)
+                    result = kill_job(children[request['pid']])
                 elif op == 'close':
                     cleanup(); result = True
                 else: raise ValueError('unknown owner operation')

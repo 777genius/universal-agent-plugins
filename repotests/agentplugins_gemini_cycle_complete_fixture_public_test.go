@@ -3,7 +3,10 @@
 package pluginkitairepo_test
 
 import (
+	"fmt"
+	"slices"
 	"strings"
+	"time"
 )
 
 // The public records are authored from the public command schemas, separately
@@ -18,13 +21,12 @@ func (f *geminiCompleteContractFixture) publicOutput(r *geminiCycleRecipe, stage
 		result["affected_surfaces"] = []string{"gemini"}
 	} else {
 		result["plan"] = f.publicPlan(r)
-		actions := []string{"in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI"}
-		activation := "active"
-		if r.Scope != "user" {
-			activation = "prepared"
-			actions = append(actions, "Gemini project configuration is installed; native discovery, workspace trust, system policy and MCP initialization remain unobserved; start Gemini CLI in the selected project and inspect skills list and mcp list")
+		activation := map[string]any{"activation": "active", "authentication": "not_required", "policy": "allowed", "verification": "installation_verified"}
+		if r.Scope == "user" {
+			activation["authentication"] = "not_checked"
+			activation["user_actions"] = []string{geminiCompleteReload}
 		}
-		result["activation"] = map[string]any{"activation": activation, "authentication": "not_checked", "policy": "allowed", "verification": "installation_verified", "user_actions": actions}
+		result["activation"] = activation
 		if stage != "repeat-add-a" {
 			result["group_phase"] = "external_completed"
 		}
@@ -39,12 +41,18 @@ func (f *geminiCompleteContractFixture) publicOutput(r *geminiCycleRecipe, stage
 	output := geminiCompleteContractDecode(f.t, []byte(`{"plugin":"uap-gemini-cycle","version":"1.0.0","source":"","tree_digest":"","manifest_digest":"","dry_run":false}`))
 	output["source"], output["tree_digest"], output["manifest_digest"], output["result"] = source, r.Digest, "sha256:"+geminiCycleSHA(r.Authored["plugin.json"]), result
 	next := "in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI; verify this plugin's authentication requirements before using it"
-	if !strings.HasPrefix(stage, "remove-") {
+	if r.Scope == "user" && !strings.HasPrefix(stage, "remove-") {
 		output["next_action"] = next
 	}
 	if strings.HasPrefix(stage, "add-") || stage == "repeat-add-a" || stage == "update-a" || stage == "unchanged-update-a" {
 		output["scope"], output["readiness"] = r.scopeName(), "needs_action"
 		output["next_actions"] = []any{map[string]any{"code": "verify_native", "actor": "native_client", "message": next}}
+	}
+	if r.Scope != "user" && !strings.HasPrefix(stage, "remove-") {
+		if _, exists := output["readiness"]; exists {
+			output["readiness"] = "ready"
+		}
+		delete(output, "next_actions")
 	}
 	if stage == "repeat-add-a" {
 		output["security"] = f.publicSecurity(r, "cache")
@@ -52,7 +60,7 @@ func (f *geminiCompleteContractFixture) publicOutput(r *geminiCycleRecipe, stage
 	}
 	output["operation_id"] = group
 	target := map[string]any{"target": "gemini", "status": "external_completed", "output": output}
-	if !strings.HasPrefix(stage, "remove-") {
+	if r.Scope == "user" && !strings.HasPrefix(stage, "remove-") {
 		target["next_action"] = next
 	}
 	if stage == "update-a" || stage == "unchanged-update-a" {
@@ -64,7 +72,10 @@ func (f *geminiCompleteContractFixture) publicOutput(r *geminiCycleRecipe, stage
 		data["version"], data["source"], data["tree_digest"] = "1.0.0", source, r.Digest
 	}
 	if strings.HasPrefix(stage, "add-") {
-		data["action_required"], data["manifest_digest"], data["security"] = 1, output["manifest_digest"], f.publicSecurity(r, "local_scan")
+		data["manifest_digest"], data["security"] = output["manifest_digest"], f.publicSecurity(r, "local_scan")
+		if r.Scope == "user" {
+			data["action_required"] = 1
+		}
 		data["environment"] = map[string]any{"reason": "no_save_requested", "saved": false, "scope": r.scopeName(), "scope_selection_reason": "explicit"}
 	}
 	if strings.HasPrefix(stage, "remove-") {
@@ -84,6 +95,9 @@ func (f *geminiCompleteContractFixture) publicPlan(r *geminiCycleRecipe) map[str
 	action := "agentplugins will install and verify Gemini CLI skills and MCP servers automatically; reload them in a running session or restart Gemini CLI"
 	if r.Scope != "user" {
 		action = "project skills and MCP settings can be configured automatically; native discovery, workspace trust and system policy require observation in Gemini CLI"
+	}
+	if r.Scope != "user" {
+		plan["warnings"] = []string{"authentication_not_catalog_verified", "Installation may trust the selected project \"" + r.Project + "\" in Gemini CLI. Existing distrust is preserved; this preference remains after removal.", "Gemini CLI verification starts or connects to all enabled MCP servers from this project, your profile and extensions under their current policy. Readiness is checked for the selected plugin."}
 	}
 	plan["scope"], plan["physical_artifact_id"] = r.scopeName(), r.Binding.PhysicalArtifact
 	plan["components"] = []any{map[string]any{"kind": "skill", "name": r.Name, "support": "native"}, map[string]any{"kind": "mcp_server", "name": r.Name, "support": "native"}}
@@ -145,7 +159,29 @@ func (f *geminiCompleteContractFixture) publicRecords() {
 				exit, stdout, stderr = 1, []byte{}, []byte("agentplugins: plugin is not installed for target \"gemini\" in project scope; no target was changed\n")
 			}
 		}
-		f.files[stage+".command.json"] = geminiCompleteContractEncode(f.t, map[string]any{"argv": argv, "cwd": r.Project, "exit": exit, "error": false, "context_error": false, "elapsed_ms": 1, "cleanup": "ordinary full-descendant supervision; forced cleanup is a failure"})
+		f.files[stage+".command.json"] = geminiCompleteContractEncode(f.t, map[string]any{"inventory": f.publicInventoryFixture(stage), "argv": argv, "cwd": r.Project, "exit": exit, "error": false, "context_error": false, "elapsed_ms": 1, "cleanup": "ordinary full-descendant supervision; forced cleanup is a failure"})
 		f.files[stage+".stdout.log"], f.files[stage+".stderr.log"] = stdout, stderr
 	}
+}
+
+func (f *geminiCompleteContractFixture) publicInventoryFixture(stage string) map[string]any {
+	scope := geminiCycleScope(stage)
+	start, end := f.started.Add(time.Second), f.started.Add(2*time.Second)
+	var segment []byte
+	for phase, methods := range geminiCyclePublicInventoryPhases(stage) {
+		for index, key := range []string{"user", scope} {
+			r := f.views[stage][key]
+			pid := 10000 + 10*slices.Index(geminiCyclePublic, stage) + phase*2 + index
+			for method := range methods {
+				name := "initialize"
+				if method == 1 {
+					name = "tools/list"
+				}
+				body := geminiCompleteContractEncode(f.t, map[string]any{"method": name, "nonce": r.Nonce, "pid": pid, "session": fmt.Sprint(pid), "timestamp": start.Add(time.Duration(phase*4+index*2+method+1) * time.Millisecond).Format(time.RFC3339Nano), "facts": nil})
+				segment = append(segment, body...)
+				segment = append(segment, '\n')
+			}
+		}
+	}
+	return map[string]any{"scope": scope, "started_at": start.Format(time.RFC3339Nano), "finished_at": end.Format(time.RFC3339Nano), "provider_requests": 0, "stream": f.stream(segment)}
 }

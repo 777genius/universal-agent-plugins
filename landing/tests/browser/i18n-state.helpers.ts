@@ -172,10 +172,18 @@ export async function pinnedContext7Example(page: Page, client: ClientID) {
   };
 }
 
+export async function openCardInstall(page: Page, card: Locator) {
+  const trigger = card.locator('.plugin-card__install-toggle');
+  await trigger.click({ trial: true });
+  await trigger.click();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('dialog')).toBeVisible();
+}
+
 export async function targets(page: Page, scope: Locator, names: string[]) {
   const isCard = await scope.evaluate(element => element.classList.contains('plugin-card'));
   if (isCard && !await page.getByRole('dialog').isVisible())
-    await scope.locator('.plugin-card__install-toggle').click();
+    await openCardInstall(page, scope);
   if (!isCard && await page.locator('.install-dialog').isVisible())
     await page.keyboard.press('Escape');
   const trigger = (isCard ? page.getByRole('dialog') : scope).locator('.app-multiselect__trigger');

@@ -72,18 +72,25 @@ def public_data(value, r, label, paths):
                 "physical_artifact_id": b["physical_artifact_id"],
                 "components": [{"kind": "skill", "name": r["name"], "support": "native"}, {"kind": "mcp_server", "name": r["name"], "support": "native"}],
                 "user_actions": ["verify the plugin's authentication requirements before using it", action], "warnings": ["authentication_not_catalog_verified"]}
-        actions = [RELOAD]
         if not user:
-            actions.append("Gemini project configuration is installed; native discovery, workspace trust, system policy and MCP initialization remain unobserved; start Gemini CLI in the selected project and inspect skills list and mcp list")
-        result.update(plan=plan, activation={"activation": "active" if user else "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "installation_verified", "user_actions": actions})
+            plan["warnings"] += ['Installation may trust the selected project "' + paths[r["scope"]] + '" in Gemini CLI. Existing distrust is preserved; this preference remains after removal.', "Gemini CLI verification starts or connects to all enabled MCP servers from this project, your profile and extensions under their current policy. Readiness is checked for the selected plugin."]
+        activation = {"activation": "active", "authentication": "not_required", "policy": "allowed", "verification": "installation_verified"}
+        if user:
+            activation.update(authentication="not_checked", user_actions=[RELOAD])
+        result.update(plan=plan, activation=activation)
         if label != "repeat-add-a":
             result["group_phase"] = "external_completed"
         if label in ("repeat-add-a", "unchanged-update-a"):
             result["no_change"] = True
-        output["next_action"] = NEXT
+        if user:
+            output["next_action"] = NEXT
     if label.startswith("add-") or label in ("repeat-add-a", "update-a", "unchanged-update-a"):
         output.update(scope="user" if user else "project", readiness="needs_action",
                       next_actions=[{"code": "verify_native", "actor": "native_client", "message": NEXT}])
+    if r["scope"] != "user":
+        if "readiness" in output:
+            output["readiness"] = "ready"
+        output.pop("next_actions", None)
     security = {"schema_version": 1, "subject": {"tree_digest": r["digest"], "manifest_digest": output["manifest_digest"]},
                 "scanner": {"id": "lintai", "version": "0.1.3"},
                 "policy": {"id": "agent-plugin-install", "version": 2, "digest": "sha256:9cf869e299d847d7078aeca01f5a182fcdb0144bbf513c83290459991c79e037"},
@@ -95,7 +102,7 @@ def public_data(value, r, label, paths):
     op = "op-" + f"{100:032x}" if label == "unchanged-update-a" else operation(label)
     output["operation_id"] = op
     target = {"target": "gemini", "status": "external_completed", "output": output}
-    if not label.startswith("remove-"):
+    if r["scope"] == "user" and not label.startswith("remove-"):
         target["next_action"] = NEXT
     if label in ("unchanged-update-a", "update-a"):
         target["selected"] = True
@@ -103,7 +110,9 @@ def public_data(value, r, label, paths):
     if label.startswith("add-") or label in ("unchanged-update-a", "update-a"):
         data.update(version="1.0.0", source=local, tree_digest=r["digest"])
     if label.startswith("add-"):
-        data.update(action_required=1, manifest_digest=output["manifest_digest"], security=security, environment={"reason": "no_save_requested", "saved": False, "scope": "user" if user else "project", "scope_selection_reason": "explicit"})
+        data.update(manifest_digest=output["manifest_digest"], security=security, environment={"reason": "no_save_requested", "saved": False, "scope": "user" if user else "project", "scope_selection_reason": "explicit"})
+    if label.startswith("add-") and r["scope"] == "user":
+        data["action_required"] = 1
     if label.startswith("remove-"):
         data.update(status="data_retained", plugin_data_preserved=True, data_retained=True,
                     retained_data=[{"data_receipt_id": b["data_receipt_id"], "physical_backend_id": b["physical_artifact_id"], "scope": b["scope"], "state": "owned"}])
@@ -210,7 +219,18 @@ def fixture(nonces=None, omit_user_a=False):
         elif not label.startswith("git-"):
             verb = {"repeat-add-a": "add", "unchanged-update-a": "update", "intact-repair-a": "repair", "missing-repair-a": "repair"}.get(label, label.split("-")[0])
             stdout = raw({"schema_version": 1, "command": verb, "result": "success", "data": public_data(*by_stage[label], label, paths)})
-        bodies[label + ".command.json"] = raw({"argv": argv, "cwd": cwd, "exit": 1 if label == "repeat-remove-a" else 0, "error": False, "context_error": False, "elapsed_ms": 1, "cleanup": cycle.CLEANUP})
+        phases = [2, 1] if label in ("add-a", "add-b", "update-a", "intact-repair-a", "missing-repair-a") else [2, 2, 2, 1] if label in ("repeat-add-a", "unchanged-update-a") else []
+        inventory_rows = []
+        for phase_index, method_count in enumerate(phases):
+            for selected_index, key in enumerate(("user", cycle.scope(label))):
+                r = recipes["user"]["U-one"] if key == "user" else by_stage[label][1]
+                pid = 10000 + cycle.PUBLIC.index(label)*10 + phase_index*2 + selected_index
+                for method in range(method_count):
+                    inventory_rows.append({"method": "initialize" if method == 0 else "tools/list", "nonce": r["nonce"], "pid": pid,
+                                           "session": str(pid), "timestamp": stamp(1), "facts": None})
+        inventory = {"scope": cycle.scope(label), "started_at": stamp(1), "finished_at": stamp(2), "provider_requests": 0,
+                     "stream": stream(b"".join(raw(row) + b"\n" for row in inventory_rows))}
+        bodies[label + ".command.json"] = raw({"inventory": inventory, "argv": argv, "cwd": cwd, "exit": 1 if label == "repeat-remove-a" else 0, "error": False, "context_error": False, "elapsed_ms": 1, "cleanup": cycle.CLEANUP})
         bodies[label + ".stdout.log"], bodies[label + ".stderr.log"] = stdout, stderr
     aggregates = {name: [] for name in cycle.AGGREGATES}
     aggregates["cycle-proof.jsonl"] = proof_rows
@@ -340,6 +360,95 @@ class GeminiCompleteTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.admit(bodies, source)
 
+    def test_public_completion_inventory_is_exact_and_cannot_claim_model_authority(self):
+        for mutation in ("missing-field", "empty", "missing", "extra", "reordered", "foreign", "call", "provider", "phase-pid", "phase-clock", "comma-clock", "overprecision-clock"):
+            with self.subTest(mutation=mutation):
+                def change(bodies, _source):
+                    key = "add-a.command.json"
+                    command = runtime.strict_json(bodies[key])
+                    if mutation == "missing-field":
+                        del command["inventory"]
+                    else:
+                        inventory = command["inventory"]
+                        events = [runtime.strict_json(line) for line in complete.stream(inventory["stream"]).splitlines()]
+                        if mutation == "empty": events = []
+                        elif mutation == "missing": events.pop()
+                        elif mutation == "extra": events.append(copy.deepcopy(events[-1]))
+                        elif mutation == "reordered": events[0]["method"], events[1]["method"] = events[1]["method"], events[0]["method"]
+                        elif mutation == "foreign": events[-1]["nonce"] = "0"*32
+                        elif mutation == "call": events[-1]["method"] = "tools/call"
+                        elif mutation == "provider": inventory["provider_requests"] = 1
+                        elif mutation == "phase-pid": events[-2]["pid"] = events[0]["pid"]
+                        elif mutation == "phase-clock": events[-1]["timestamp"] = stamp(0)
+                        elif mutation == "comma-clock":
+                            for row in events: row["timestamp"] = "2026-10-27T00:00:01,123Z"
+                        elif mutation == "overprecision-clock":
+                            for row in events: row["timestamp"] = "2026-10-27T00:00:01.0000000001Z"
+                        inventory["stream"] = stream(b"".join(raw(row)+b"\n" for row in events))
+                    bodies[key] = raw(command)
+                self.refuses(change)
+
+    def test_repeated_public_inventory_requires_all_four_fresh_phases(self):
+        for label in ("repeat-add-a", "unchanged-update-a"):
+            bodies, source = fixture()
+            command = runtime.strict_json(bodies[label + ".command.json"])
+            events = [runtime.strict_json(line) for line in complete.stream(command["inventory"]["stream"]).splitlines()]
+            self.assertEqual(len(events), 14)
+            self.assertEqual(len({event["session"] for event in events}), 8)
+            self.assertEqual(len({event["pid"] for event in events}), 8)
+            self.assertTrue(self.admit(bodies, source)["runtime_attempt_complete"])
+            for mutation in ("missing-phase", "missing", "extra", "reordered", "foreign", "call", "facts",
+                             "provider", "phase-pid", "phase-session", "prior-pid", "prior-session", "phase-clock", "late"):
+                with self.subTest(label=label, mutation=mutation):
+                    def change(bodies, _source):
+                        key = label + ".command.json"
+                        command = runtime.strict_json(bodies[key])
+                        inventory = command["inventory"]
+                        events = [runtime.strict_json(line) for line in complete.stream(inventory["stream"]).splitlines()]
+                        if mutation == "missing-phase":
+                            del events[4:8]
+                            self.assertEqual(len(events), 10)
+                        elif mutation == "missing":
+                            events.pop()
+                        elif mutation == "extra":
+                            events.append(copy.deepcopy(events[-1]))
+                        elif mutation == "reordered":
+                            events[8]["method"], events[9]["method"] = "tools/list", "initialize"
+                        elif mutation == "foreign":
+                            for event in events[8:10]:
+                                event["nonce"] = "0" * 32
+                        elif mutation == "call":
+                            events[-1]["method"] = "tools/call"
+                        elif mutation == "facts":
+                            events[-1]["facts"] = {"unearned": True}
+                        elif mutation == "provider":
+                            inventory["provider_requests"] = 1
+                        elif mutation in ("phase-pid", "phase-session", "prior-pid", "prior-session"):
+                            field = mutation.split("-")[1]
+                            earlier = events[0]
+                            if mutation.startswith("prior-"):
+                                prior = runtime.strict_json(bodies["add-a.command.json"])
+                                earlier = runtime.strict_json(complete.stream(prior["inventory"]["stream"]).splitlines()[0])
+                            for event in events[8:10]:
+                                event[field] = earlier[field]
+                        elif mutation == "phase-clock":
+                            for index, event in enumerate(events):
+                                event["timestamp"] = BASE + ("01.100Z" if index < 4 else "01.600Z" if index < 8 else
+                                                             "01.500Z" if index < 12 else "01.900Z")
+                        elif mutation == "late":
+                            events[-1]["timestamp"] = stamp(3)
+                        inventory["stream"] = stream(rows(events))
+                        bodies[key] = raw(command)
+                    self.refuses(change)
+
+    def test_repeat_progress_requires_the_actual_transactional_apply_line(self):
+        expected = (b"Resolving and validating one Agent Plugin package for every selected target...\n"
+                    b"Applying transactional client package...\n")
+        self.assertEqual(cycle.progress("repeat-add-a"), expected)
+        for invalid in (expected.splitlines(keepends=True)[0], expected + b"unexpected progress\n"):
+            with self.subTest(stderr=invalid):
+                self.refuses(lambda bodies, _source, value=invalid: bodies.update({"repeat-add-a.stderr.log": value}))
+
     def test_full_coherent_independent57_member_fixture_and_read_only_result(self):
         bodies, source = fixture()
         before = copy.deepcopy(bodies), copy.deepcopy(source)
@@ -437,7 +546,7 @@ class GeminiCompleteTests(unittest.TestCase):
         bodies, source = fixture()
         self.assertTrue(self.admit(bodies, source)["runtime_attempt_complete"])
         for stage in ("add-user", "add-a", "add-b", "repeat-add-a", "unchanged-update-a", "update-a"):
-            for key in ("scope", "readiness", "next_actions"):
+            for key in (("scope", "readiness", "next_actions") if stage == "add-user" else ("scope", "readiness")):
                 with self.subTest(stage=stage, missing=key):
                     changed = copy.deepcopy(bodies)
                     row = runtime.strict_json(changed[stage + ".stdout.log"])
@@ -485,7 +594,8 @@ class GeminiCompleteTests(unittest.TestCase):
             "dormant-env": lambda d, v: d.update(environment_receipts=[]),
             "dormant-retention": lambda d, v: d["installations"][0].update(data_retained=False),
             "inventory-type": lambda d, v: d["installations"][0]["package"]["inventory"].update(mcp_enabled=1),
-            "binding": lambda d, v: v["binding"].update(activation="active"),
+            "binding": lambda d, v: v["binding"].update(activation="prepared"),
+            "authentication": lambda d, v: v["binding"].update(authentication="not_checked"),
             "object": lambda d, v: v["binding"]["native_objects"][0].update(managed_digest="sha256:" + "0" * 64),
             "receipt-type": lambda d, v: v["binding"]["receipts"][0].update(sequence=True),
             "receipt-empty": lambda d, v: v["binding"]["receipts"][0].update(before_digest=""),

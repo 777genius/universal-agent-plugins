@@ -12,8 +12,8 @@ export function Tick({ checked, mixed = false, disabled, label, onChange }: {
   </Checkbox.Root>;
 }
 
-export function Modal({ open, onOpenChange, title, children, returnFocus }: {
-  open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode; returnFocus?: () => HTMLElement | null;
+export function Modal({ open, onOpenChange, title, children, returnFocus, closeDisabled = false }: {
+  open: boolean; onOpenChange: (open: boolean) => void; title: string; children: ReactNode; returnFocus?: () => HTMLElement | null; closeDisabled?: boolean;
 }) {
   const origin = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
@@ -27,7 +27,7 @@ export function Modal({ open, onOpenChange, title, children, returnFocus }: {
         return document.querySelector<HTMLInputElement>('#skill-search');
       }}>
       <div className="panel-heading"><Dialog.Title>{title}</Dialog.Title>
-        <Dialog.Close className="icon-button" aria-label="Close"><X size={18}/></Dialog.Close></div>
+        <Dialog.Close className="icon-button" aria-label="Close" disabled={closeDisabled}><X size={18}/></Dialog.Close></div>
       {children}
     </Dialog.Popup></Dialog.Portal>
   </Dialog.Root>;

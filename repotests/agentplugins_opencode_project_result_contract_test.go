@@ -102,3 +102,85 @@ func openCodeProjectResultFixture(batch bool) map[string]any {
 	}
 	return map[string]any{"result": "success", "data": data}
 }
+
+func TestOpenCodeProjectActiveAssertionKeepsPreparedBoundary(t *testing.T) {
+	resolve := []byte("Resolving and validating one Agent Plugin package for every selected target...\n")
+	for _, batch := range []bool{false, true} {
+		raw := openCodeProjectResultFixture(batch)
+		outcome, _ := commandsTargetOutcome(codexProjectAssertionEnvelope(raw))
+		outcome["activation"].(map[string]any)["activation"] = "active"
+		if batch {
+			outcome["mutated"] = true
+			delete(outcome, "no_change")
+		}
+		before, _ := json.Marshal(raw)
+		view, err := openCodeProjectAssertionEnvelopeForActivation(raw, "active")
+		if err != nil || view == nil {
+			t.Fatalf("exact active project result refused: %v", err)
+		}
+		if _, err := openCodeProjectAssertionEnvelope(raw); err == nil {
+			t.Fatal("historical Prepared wrapper admitted Active")
+		}
+		after, _ := json.Marshal(raw)
+		if !bytes.Equal(before, after) {
+			t.Fatal("active assertion view changed original captured bytes")
+		}
+		if !batch {
+			if !openCodeProjectProgressForActivation("repeat-add-A", resolve, raw, "active") ||
+				openCodeProjectProgress("repeat-add-A", resolve, raw) ||
+				openCodeProjectProgressForActivation("repeat-add-A", append(bytes.Clone(resolve), []byte("Applying transactional client package...\n")...), raw, "active") {
+				t.Fatal("active replay progress lost its explicit unchanged boundary")
+			}
+		}
+	}
+	if _, err := openCodeProjectAssertionEnvelopeForActivation(openCodeProjectResultFixture(false), "unknown"); err == nil {
+		t.Fatal("unknown activation expectation accepted")
+	}
+	install := append(bytes.Clone(resolve), []byte("Installing uap-commands-fixture for 1 selected clients...\n")...)
+	if openCodeProjectProgressForActivation("add-A", install, openCodeProjectResultFixture(true), "unknown") {
+		t.Fatal("unknown activation expectation gained progress authority")
+	}
+}
+
+func TestOpenCodeProjectActiveAssertionRefusesContradictions(t *testing.T) {
+	resolve := []byte("Resolving and validating one Agent Plugin package for every selected target...\n")
+	for _, name := range []string{"prepared", "client", "scope", "verification", "attestation", "auth attestation", "no_change", "mutated", "target", "mixed", "error"} {
+		t.Run(name, func(t *testing.T) {
+			raw := openCodeProjectResultFixture(name == "target")
+			data := raw["data"].(map[string]any)
+			outcome, _ := commandsTargetOutcome(codexProjectAssertionEnvelope(raw))
+			activation := outcome["activation"].(map[string]any)
+			activation["activation"] = "active"
+			switch name {
+			case "prepared":
+				activation["activation"] = "prepared"
+			case "client":
+				outcome["plan"].(map[string]any)["client_id"] = "codex"
+			case "scope":
+				outcome["plan"].(map[string]any)["scope"] = "user"
+			case "verification":
+				activation["verification"] = "package_validated"
+			case "attestation":
+				activation["activation_attested"] = true
+			case "auth attestation":
+				activation["authentication_attested"] = true
+			case "no_change":
+				outcome["no_change"] = false
+			case "mutated":
+				outcome["mutated"] = true
+			case "target":
+				data["targets"].([]any)[0].(map[string]any)["target"] = "codex"
+			case "mixed":
+				data["targets"] = []any{}
+			case "error":
+				raw["error"] = "native refusal"
+			}
+			if _, err := openCodeProjectAssertionEnvelopeForActivation(raw, "active"); err == nil {
+				t.Fatal("contradictory active result gained assertion authority")
+			}
+			if openCodeProjectProgressForActivation("repeat-add-A", resolve, raw, "active") {
+				t.Fatal("contradictory active replay gained progress authority")
+			}
+		})
+	}
+}

@@ -27,8 +27,14 @@ func NewNativePrepared(executable, root string, environment []string, evidence V
 	return h
 }
 
-// NativeObservationAuthority preserves the concrete prepared token through trusted wrappers.
-func (h *NativePrepared) NativeObservationAuthority() *NativePrepared { return h }
+// NativeObservationAuthority preserves immutable evidence through prepared-client
+// wrappers. The returned copy cannot retarget the original prepared host.
+func (h *NativePrepared) NativeObservationAuthority() *NativePrepared {
+	if h == nil {
+		return nil
+	}
+	return NewNativePrepared(h.executable, h.root, h.environment, h.evidence, h.profile, h.selections)
+}
 
 func (h *NativePrepared) Profile() Profile { return h.profile.Clone() }
 
