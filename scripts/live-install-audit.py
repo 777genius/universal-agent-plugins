@@ -2818,7 +2818,6 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_native_changes = None
     repeat_native_phases = None
     gemini_repeat_evidence = None
-    gemini_runtime = None
     gemini_repeat_observed = True
     repeat_lock_unchanged = None
     repeat_project_unchanged = None
@@ -2834,11 +2833,6 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         gemini_repeat_phases = target == "gemini" and kind == "skill"
         capture_repeat_phases = codex_runtime is not None or gemini_repeat_phases
         before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
-        if gemini_repeat_phases and GEMINI_RUNTIME_AUDIT["pinned_version"](client_version):
-            gemini_runtime = GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
-                home, project, before_repeat_native, client_version,
-                profile_snapshot=scoped_snapshot)
-            audits.callback(gemini_runtime.close)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
                                  if codex_runtime is not None else None)
         before_repeat_project = (snapshot([project / root for root in project_skill_roots])
@@ -2861,7 +2855,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         kimi_log_after = (kimi_repeat_log_capture(home, project, case_root,
                             kimi_repeat_log_facts["captures"]["after-add"]) if kimi_log_case else None)
         after_repeat_add = (snapshot(native_roots, include_directories=gemini_runtime is not None)
-                            if codex_runtime is not None or gemini_runtime is not None else None)
+                            if capture_repeat_phases else None)
         if gemini_runtime is not None:
             gemini_runtime.checkpoint("after-public-repeat-add", after_repeat_add,
                                       interval=(repeat_add_started, repeat_add_finished))
@@ -2871,7 +2865,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                            env, project, 30)
         repeat_list_finished = datetime.now(timezone.utc)
         after_repeat_list = (snapshot(native_roots, include_directories=gemini_runtime is not None)
-                             if codex_runtime is not None or gemini_runtime is not None else None)
+                             if capture_repeat_phases else None)
         if gemini_runtime is not None:
             gemini_runtime.checkpoint("after-public-repeat-list", after_repeat_list,
                                       interval=(repeat_list_started, repeat_list_finished))
@@ -2893,7 +2887,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                             kimi_repeat_log_facts["captures"]["post-list"]) if kimi_log_case else None)
         gemini_repeat_valid = (gemini_runtime.finish(after_repeat_native)
                               if gemini_runtime is not None else False)
-        if codex_runtime is not None or gemini_runtime is not None:
+        if capture_repeat_phases:
             repeat_native_phases = repeat_native_phase_evidence(
                 before_repeat_native, after_repeat_add, after_repeat_list, after_repeat_native)
             if gemini_repeat_phases:

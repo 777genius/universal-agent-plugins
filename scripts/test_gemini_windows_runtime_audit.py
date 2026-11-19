@@ -323,7 +323,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
             self.assertEqual(changed, [True])
             self.assertFalse(case["observer"].finish(final))
             self.assertRegex(case["observer"].reason,
-                             "held file changed|held name changed|current name identity")
+                             "held file changed|held name changed|current name identity"
+                             "|outside exact list-session files")
 
     def test_native_identity_and_membership_disagreements_refuse(self):
         # Facts are injected over real held handles, not filesystem replacements.

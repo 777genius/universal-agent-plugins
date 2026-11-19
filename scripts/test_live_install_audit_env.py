@@ -5293,10 +5293,15 @@ module.exports = {
                     ".github/workflows/live-install-remaining-clients.yml").read_text()
         vendor = workflow.split("        id: vendor-install\n", 1)[1].split("      - name:", 1)[0]
         self.assertIn("        continue-on-error: true\n", vendor)
-        self.assertIn('if [[ "$TARGET" == chatgpt && "$KIND" == plugin ]]; then\n'
-                      '            bash scripts/prepare-codex-linux-sandbox.sh\n          fi', vendor)
-        self.assertLess(vendor.index("bash scripts/prepare-codex-linux-sandbox.sh"),
-                        vendor.index('mkdir -p "$RUNNER_TEMP/vendor-proof"'))
+        # The reviewed AppArmor helper executes as its own ChatGPT-only step
+        # before vendor bootstrap, never inside the untrusted vendor-install step.
+        sandbox = ('      - name: Supply verified bubblewrap for ChatGPT native discovery\n'
+                   "        if: matrix.target == 'chatgpt' && matrix.kind == 'plugin'\n"
+                   '        shell: bash\n'
+                   '        run: bash scripts/prepare-codex-linux-sandbox.sh')
+        self.assertIn(sandbox, workflow)
+        self.assertLess(workflow.index(sandbox),
+                        workflow.index('        id: vendor-install'))
         self.assertIn("exclude:\n          - target: chatgpt\n            kind: skill", workflow)
         block = textwrap.dedent(workflow.split("<<'CHATGPT_CODEX'\n", 1)[1]
                                 .split("          CHATGPT_CODEX", 1)[0])
