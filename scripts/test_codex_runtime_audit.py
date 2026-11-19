@@ -1328,7 +1328,8 @@ class CodexGroupDiagnosticTest(unittest.TestCase):
 
 
 class CodexNativeProcessCleanupTest(unittest.TestCase):
-    def observed_exit(self, exit_code, stderr, *, orphan=False):
+    def observed_exit(self, exit_code, stderr, *, orphan=False, native_version="0.153.4",
+                      versions=("0.153.4",), with_metadata=False):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             profile = root / "profile"
@@ -1345,6 +1346,8 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
                 print(json.dumps({'id': second['id'], 'result': {'data': []}}), flush=True)
                 sys.stdin.read()
             """)
+            script = script.replace("agentplugins/0.153.4 (fixture)",
+                                    f"agentplugins/{native_version} (fixture)")
             if orphan:
                 self.orphan_cleanup_complete = False
                 # This child has no capture pipes; only its owned process group
@@ -1363,7 +1366,8 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
                            if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR"}}
             environment.update(HOME=str(root), USERPROFILE=str(root), CODEX_HOME=str(profile))
             try:
-                return asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment))
+                return asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment,
+                                                  versions=versions, with_metadata=with_metadata))
             finally:
                 # Keep the inert fixture bounded even if the observer regresses.
                 marker = root / "owned-orphan-pid"
