@@ -92,6 +92,48 @@ class ServiceTests(unittest.TestCase):
         self.assertIn(b"[redacted]", admitted["inert-service.stdout.log"])
         self.assertEqual(bodies, {})
 
+    def test_acknowledged_delayed_shutdown_waits_for_natural_whole_group_exit(self):
+        worker = """import signal,sys,time
+from pathlib import Path
+signal.signal(signal.SIGTERM, lambda *_: (Path('unexpected-signal').write_text('signal'), sys.exit(0)))
+Path('worker-ready').write_text('ready')
+while not Path('shutdown-ack').exists():
+    time.sleep(0.01)
+time.sleep(0.35)
+"""
+        for descendant in (False, True):
+            with self.subTest(descendant=descendant), tempfile.TemporaryDirectory() as temporary, patch.object(live, "port_closed", return_value=True):
+                root = Path(temporary)
+                # Both programs synchronize shutdown to the observer's ack.
+                # In the second case the launcher exits immediately while its
+                # child still owns the pipes/group for another 350 ms.
+                if descendant:
+                    child = ("import subprocess,sys,time\nfrom pathlib import Path\n"
+                             + "subprocess.Popen([sys.executable, '-u', '-c', " + repr(worker) + "])\n"
+                             + "while not Path('worker-ready').exists(): time.sleep(0.01)\n"
+                             + "print('ready ' + 'a'*43, flush=True)\n"
+                             + "while not Path('shutdown-ack').exists(): time.sleep(0.01)\n")
+                else:
+                    child = worker.replace("Path('worker-ready').write_text('ready')", "print('ready ' + 'a'*43, flush=True)")
+                service = self.service(root, child)
+
+                def observe(current):
+                    self.ready(current)
+                    current.mark_shutdown()
+                    (root / 'shutdown-ack').write_text('ack')
+                    return {"observed": True}
+
+                record, stdout, stderr, result, _, _ = service.run(observe)
+                self.assertFalse((root / 'unexpected-signal').exists())
+                self.assertIsNone(record["error"])
+                self.assertEqual(record["exit"], 0)
+                self.assertEqual(record["cleanup"], {"shutdown_acknowledged": True,
+                                 "sigterm_sent": False, "forced_kill": False,
+                                 "group_reaped": True, "port_closed": True})
+                self.assertEqual(result, {"observed": True})
+                self.assertEqual(stderr, b"")
+                self.assertIn(TOKEN.encode(), stdout)
+
     def test_unknown_startup_and_private_exception_never_publish_raw_streams(self):
         with tempfile.TemporaryDirectory() as temporary, patch.object(live, "port_closed", return_value=True):
             service = self.service(Path(temporary))
