@@ -14,6 +14,7 @@ const {
   assertInstalledShimInvocation,
   assertPublicJSONPathFree,
   assertSyntheticInfo,
+  createProofRoot,
   frozenReleaseAsset,
   installedShimInvocation,
   lifecycleCommands,
@@ -22,6 +23,27 @@ const {
   parseBootstrapMode,
   parseLifecycle
 } = require(script);
+
+test("platform proof resolves symlinked temporary parents before author init", (t) => {
+  const parent = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agentplugins-proof-parent-"));
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+  const actual = path.join(parent, "actual");
+  const alias = path.join(parent, "alias");
+  fs.mkdirSync(actual);
+  try {
+    fs.symlinkSync(actual, alias, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    if (process.platform === "win32" && ["EPERM", "EACCES", "ENOTSUP"].includes(error.code)) {
+      t.skip("Windows runner does not allow creating junction fixtures");
+      return;
+    }
+    throw error;
+  }
+  const created = createProofRoot(alias);
+  assert.equal(path.dirname(created), fs.realpathSync(actual));
+  assert.equal(created, fs.realpathSync(created));
+  assert.equal(fs.statSync(created).isDirectory(), true);
+});
 
 test("platform proof binds assets.json producer commit in staged and public modes", () => {
   const version = "1.2.3";
