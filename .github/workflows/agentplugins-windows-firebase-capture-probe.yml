@@ -1,8 +1,8 @@
 name: Windows published Firebase native capture probe
 
 on:
-  # Legacy published UAP 0.1.101 diagnostic; source Firebase E2E is gated
-  # separately by agentplugins-windows-firebase-source-e2e.yml.
+  # Legacy published UAP 0.1.101 diagnostic only. Current-source
+  # Firebase PR acceptance is separate (#990) and must survive integration.
   workflow_dispatch:
 
 # Independent manual diagnostics must never cancel one another.
