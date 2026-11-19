@@ -252,20 +252,6 @@ func TestFailureStaysWithTargetClassifiesEveryCause(t *testing.T) {
 			t.Errorf("%s: failureStaysWithTarget = %v, want %v", name, got, tc.local)
 		}
 	}
-	// Machine problems a person fixes for one agent stay with it once the
-	// classifier names them; until then they are unclassified and group-wide.
-	for name, tc := range map[string]struct {
-		err  error
-		kind failureKind
-	}{
-		"permission":    {permissionDenied(domain.ClientClaude), "PERMISSION_DENIED"},
-		"read-only":     {fmt.Errorf("x: %w", &fs.PathError{Op: "mkdir", Path: "/p", Err: syscall.EROFS}), "READ_ONLY_LOCATION"},
-		"agent missing": {fmt.Errorf("x: %w", &exec.Error{Name: "claude", Err: exec.ErrNotFound}), "AGENT_PROGRAM_MISSING"},
-	} {
-		if got, want := failureStaysWithTarget(tc.err), failureKindOf(tc.err) == tc.kind; got != want {
-			t.Errorf("%s: failureStaysWithTarget = %v, want %v (kind %s)", name, got, want, failureKindOf(tc.err))
-		}
-	}
 	for _, kind := range []failureKind{"DISK_FULL", "NETWORK_UNAVAILABLE", failureUnknown, failureSkipped, failureRecovery, failureProcessCleanup} {
 		if targetLocalKinds[kind] {
 			t.Errorf("%s must stop every agent", kind)
@@ -708,5 +694,132 @@ func TestGroupAddWithVSCodeKeepsWholeSelectionBehaviour(t *testing.T) {
 	}
 	if got := installedProjection(t, fixture); len(got) != 0 {
 		t.Fatalf("vscode selection changed state: %v", got)
+	}
+}
+
+// machineProblems are causes the plain-cause classifier names for one agent.
+// Without that classifier they are unclassified.
+var machineProblems = map[string]struct {
+	err  error
+	kind failureKind
+}{
+	"permission":    {permissionDenied(domain.ClientKiro), "PERMISSION_DENIED"},
+	"read-only":     {fmt.Errorf("create client target root: %w", &fs.PathError{Op: "mkdir", Path: "/project/.kiro", Err: syscall.EROFS}), "READ_ONLY_LOCATION"},
+	"agent missing": {fmt.Errorf("probe kiro: %w", &exec.Error{Name: "kiro-cli", Err: exec.ErrNotFound}), "AGENT_PROGRAM_MISSING"},
+}
+
+// Each machine problem is in exactly one of two modes. Unclassified: it stops
+// every agent and the result equals the whole-selection refusal. Classified
+// with its own kind: it stays with the agent and the peers install. Any other
+// kind fails the test.
+func TestMachineProblemsAreGroupWideUntilClassifiedThenTargetLocal(t *testing.T) {
+	t.Parallel()
+	for name, tc := range machineProblems {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fixture := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientKiro: tc.err})
+			_, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor,kiro")
+			switch kind := failureKindOf(tc.err); kind {
+			case failureUnknown:
+				if failureStaysWithTarget(tc.err) {
+					t.Fatal("an unclassified cause stayed with the agent")
+				}
+				if err == nil || !strings.HasPrefix(err.Error(), "group preparation failed before client changes (selected targets: [codex cursor kiro])") {
+					t.Fatalf("unclassified cause = %v", err)
+				}
+				if got := installedProjection(t, fixture); len(got) != 0 {
+					t.Fatalf("unclassified cause changed state: %v", got)
+				}
+			case tc.kind:
+				if !failureStaysWithTarget(tc.err) {
+					t.Fatalf("%s did not stay with the agent", kind)
+				}
+				if err == nil || err.Error() != "1 of 3 client installations failed; see results above" {
+					t.Fatalf("classified cause = %v", err)
+				}
+				if got := installedProjection(t, fixture); len(got) != 3 {
+					t.Fatalf("peers were not installed: %v", got)
+				}
+			default:
+				t.Fatalf("unexpected kind %s for %s", kind, name)
+			}
+		})
+	}
+}
+
+// The group usecase's sentinels are used only for the group decision. Every
+// other path classifies these errors exactly as before: a generic, retryable
+// failure.
+func TestGroupSentinelsDoNotChangeTheSharedClassification(t *testing.T) {
+	t.Parallel()
+	verification := &ports.VerificationError{Kind: ports.VerificationDigestMismatch, Err: errors.New("artifact digest mismatch")}
+	for name, err := range map[string]error{
+		"edited copy":      &domain.TypedError{Text: "managed package was changed or is missing; refusing silent add and retaining state: artifact digest mismatch", Kind: domain.ErrManagedPackageChanged, Cause: verification},
+		"identity absent":  &domain.TypedError{Text: "managed native identity is unexpectedly absent", Kind: domain.ErrManagedPackageChanged},
+		"foreign identity": &domain.TypedError{Text: "native identity is unmanaged; remove it through its owning client or choose a distinct identity", Kind: domain.ErrForeignNativeIdentity},
+		"unsupported":      &domain.TypedError{Text: "target codex is unsupported; group preflight caused no mutation", Kind: domain.ErrTargetUnsupported},
+	} {
+		summary, next, retryable := applyFailureWording(failureUnknown)
+		want := installFailure{Kind: failureUnknown, Summary: summary, Next: next, Retryable: retryable, Detail: err.Error()}
+		if got := describeSyncFailure(err); *got != want || failureKindOf(err) != failureUnknown || !got.Retryable {
+			t.Errorf("%s: shared classification changed: %+v", name, *got)
+		}
+	}
+}
+
+// A single-target VS Code add refused for an edited installed copy returns the
+// group usecase's typed error; the shared classification of that real error is
+// unchanged: generic and retryable.
+func TestSingleTargetVSCodeEditedCopyKeepsItsClassification(t *testing.T) {
+	t.Parallel()
+	plugin := writeCLIPlugin(t)
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientVSCode)})
+	if _, _, err := fixture.execute(false, "add", plugin, "--target", "vscode"); err != nil {
+		t.Fatal(err)
+	}
+	state, err := fixture.store.Load()
+	if err != nil || len(state.Installations) != 1 {
+		t.Fatalf("seed: %+v %v", state, err)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if err := os.WriteFile(filepath.Join(binding.TargetLocator, "plugin.json"), []byte(`{"edited":true}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, _, err = fixture.execute(false, "add", plugin, "--target", "vscode")
+	if err == nil || !errors.Is(err, domain.ErrManagedPackageChanged) {
+		t.Fatalf("edited copy = %v", err)
+	}
+	if failure := describeSyncFailure(err); failure.Kind != failureUnknown || !failure.Retryable {
+		t.Fatalf("shared classification changed: %+v", failure)
+	}
+}
+
+// failingPurge refuses to purge newly created plugin data.
+type failingPurge struct {
+	usecase.PluginDataManager
+	err error
+}
+
+func (data failingPurge) PurgeData(context.Context, domain.DataReceipt) error { return data.err }
+
+// When the failed attempt cannot purge the plugin data it created, its state
+// is not known to be clean, so every agent stops.
+func TestGroupAddPurgeFailureStopsEveryAgent(t *testing.T) {
+	t.Parallel()
+	plugin := writeCLIPlugin(t)
+	mcp := `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"demo":{"type":"stdio","command":"sh"}}}`
+	if err := os.WriteFile(filepath.Join(plugin, "mcp.json"), []byte(mcp), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	purge := errors.New("purge refused")
+	fixture := newIsolationFixture(t, map[domain.ClientID]error{domain.ClientKiro: unavailable(domain.ClientKiro)})
+	fixture.app.Lifecycle.PluginData = failingPurge{PluginDataManager: fixture.app.Lifecycle.PluginData, err: purge}
+	_, _, err := fixture.execute(false, "add", plugin, "--target", "codex,cursor,kiro")
+	if err == nil || !errors.Is(err, purge) || !strings.Contains(err.Error(), "no selected client was changed") {
+		t.Fatalf("purge failure = %v", err)
+	}
+	if got := installedProjection(t, fixture); len(got) != 0 {
+		t.Fatalf("purge failure changed state: %v", got)
 	}
 }

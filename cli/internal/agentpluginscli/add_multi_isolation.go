@@ -181,6 +181,27 @@ var targetLocalKinds = map[failureKind]bool{
 	"AGENT_PROGRAM_MISSING":  true,
 }
 
+// isolationKindOf classifies a cause for the group isolation decision only. It
+// adds the group usecase's own sentinels to failureKindOf without changing the
+// shared classification used by every other installation path: an edited
+// installed copy stops every agent, a foreign native identity and an
+// unsupported agent concern only that agent.
+func isolationKindOf(err error) failureKind {
+	if errors.Is(err, domain.ErrManagedPackageChanged) {
+		return failureManagedChanged
+	}
+	if kind := failureKindOf(err); kind != failureUnknown {
+		return kind
+	}
+	switch {
+	case errors.Is(err, domain.ErrForeignNativeIdentity):
+		return failureForeignTarget
+	case errors.Is(err, domain.ErrTargetUnsupported):
+		return failureTargetUnsupported
+	}
+	return failureUnknown
+}
+
 // failureStaysWithTarget reports whether a cause concerns only the agent it was
 // attributed to. It fails closed: the cause and every cause in its chain,
 // joined causes included, must be target-local; a single group-wide cause
@@ -189,7 +210,7 @@ var targetLocalKinds = map[failureKind]bool{
 // stops every agent.
 func failureStaysWithTarget(err error) bool {
 	var verification *ports.VerificationError
-	if err == nil || errors.As(err, &verification) || !targetLocalKinds[failureKindOf(err)] {
+	if err == nil || errors.As(err, &verification) || !targetLocalKinds[isolationKindOf(err)] {
 		return false
 	}
 	return everyCauseStaysWithTarget(err)
@@ -198,7 +219,7 @@ func failureStaysWithTarget(err error) bool {
 // everyCauseStaysWithTarget walks the cause tree. A cause the classifier
 // recognizes must be target-local, and every innermost cause must be one.
 func everyCauseStaysWithTarget(err error) bool {
-	kind := failureKindOf(err)
+	kind := isolationKindOf(err)
 	var causes []error
 	switch wrapped := err.(type) { //nolint:errorlint // Walking the cause tree needs each node's own Unwrap.
 	case interface{ Unwrap() []error }:
@@ -261,10 +282,11 @@ func (isolation *groupIsolation) excludedRow(index int, dryRun bool) addTargetRe
 	result := excluded.result
 	result.InstallationID = "" // The failed attempt's installation was never recorded.
 	failure := describeSyncFailure(excluded.cause)
+	failure.Kind = isolationKindOf(excluded.cause)
 	if result.Plan.Status == domain.PlanUnsupported {
 		failure.Kind = failureTargetUnsupported
-		failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
 	}
+	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
 	targetFailure := &usecase.GroupTargetFailure{Stage: "preparation", Message: failure.Summary + " " + failure.Next}
 	result.GroupPhase, result.Failure = usecase.GroupTargetExternalFailed, targetFailure
 	output := newAddResultData(isolation.inputs[index].Envelope, result, dryRun)

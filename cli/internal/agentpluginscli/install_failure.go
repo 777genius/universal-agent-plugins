@@ -41,13 +41,13 @@ func failureKindOf(err error) failureKind {
 		return failureRecovery
 	case errors.Is(err, installer.ErrAssessmentRejected):
 		return failureSecurityBlocked
-	case errors.Is(err, installer.ErrForeignSkillDestination), errors.Is(err, nativeconfig.ErrCollision), errors.Is(err, nativeconfig.ErrNotOwned), errors.Is(err, domain.ErrForeignNativeIdentity):
+	case errors.Is(err, installer.ErrForeignSkillDestination), errors.Is(err, nativeconfig.ErrCollision), errors.Is(err, nativeconfig.ErrNotOwned):
 		return failureForeignTarget
-	case errors.Is(err, installer.ErrManagedSkillChanged), errors.Is(err, domain.ErrManagedPackageChanged):
+	case errors.Is(err, installer.ErrManagedSkillChanged):
 		return failureManagedChanged
 	case errors.Is(err, installer.ErrTargetFactsUnavailable), errors.Is(err, installer.ErrCompatibilityUnavailable):
 		return failureTargetUnavailable
-	case errors.Is(err, installer.ErrUnsupported), errors.Is(err, installer.ErrIncomplete), errors.Is(err, domain.ErrTargetUnsupported):
+	case errors.Is(err, installer.ErrUnsupported), errors.Is(err, installer.ErrIncomplete):
 		return failureTargetUnsupported
 	case errors.Is(err, installer.ErrUpdateRequired):
 		return failureUpdateRequired
