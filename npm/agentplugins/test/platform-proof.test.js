@@ -21,7 +21,8 @@ const {
   lifecycleResult,
   npmInvocation,
   parseBootstrapMode,
-  parseLifecycle
+  parseLifecycle,
+  windowsShimArgs
 } = require(script);
 
 test("platform proof resolves symlinked temporary parents before author init", (t) => {
@@ -43,6 +44,19 @@ test("platform proof resolves symlinked temporary parents before author init", (
   assert.equal(path.dirname(created), fs.realpathSync(actual));
   assert.equal(created, fs.realpathSync(created));
   assert.equal(fs.statSync(created).isDirectory(), true);
+});
+
+test("Windows npm shim retains spaced authoring arguments and rejects cmd expansion", () => {
+  const destination = "C:\\Users\\Test Runner\\AppData\\Local\\Temp\\authored-package";
+  const argv = ["author", "init", destination, "--description", "Proof of published package authoring", "--format", "json"];
+  assert.deepEqual(windowsShimArgs({ shell: true, args: argv }), [
+    "author", "init", '"' + destination + '"', "--description",
+    '"Proof of published package authoring"', "--format", "json"
+  ]);
+  assert.deepEqual(windowsShimArgs({ shell: false, args: argv }), argv);
+  for (const unsafe of ["a&whoami", "%PATH%", 'literal"quote', "value|exit", "value^escape", "line\\nbreak"]) {
+    assert.throws(() => windowsShimArgs({ shell: true, args: [unsafe] }), /unsafe Windows npm shim argument/);
+  }
 });
 
 test("platform proof binds assets.json producer commit in staged and public modes", () => {
