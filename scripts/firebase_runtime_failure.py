@@ -193,6 +193,7 @@ def collect(case):
         refusal_phase = "owned-data"
         if dir_fact(data):
             for backend in entries(data):
+                refusal_phase = "owned-data"
                 directory(backend)
                 if backend.name not in source_configs:
                     raise ValueError("unselected backend")
