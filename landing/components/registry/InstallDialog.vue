@@ -124,6 +124,8 @@ const { t } = useI18n();
   outline-offset: 3px;
 }
 .install-dialog__body {
+  position: relative;
+  z-index: 0;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -131,6 +133,7 @@ const { t } = useI18n();
 }
 .install-dialog__footer {
   position: relative;
+  z-index: 1;
   flex-shrink: 0;
   padding: 0 26px 12px;
   border-top: 1px solid var(--line);
