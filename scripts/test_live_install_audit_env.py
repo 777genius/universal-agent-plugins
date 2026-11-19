@@ -8117,6 +8117,94 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                     home, {"QODER_CONFIG_DIR": str(root / "other")},
                     root, "atlassian", "0.1.0")["status"], "unqualified-prerequisites")
 
+    def prepared_signed_package(self, target="kiro"):
+        pin = {"distribution": "777genius/atlassian", "repository": "777genius/universal-agent-plugins",
+               "path": "plugins/atlassian", "revision": "a" * 40, "sequence": 1,
+               "tree_digest": "sha256:" + "b" * 64, "manifest_digest": "sha256:" + "c" * 64}
+        revision = {"distribution_id": pin["distribution"], "resolved_revision": pin["revision"],
+                    "release_sequence": 1, "tree_digest": pin["tree_digest"],
+                    "manifest_digest": pin["manifest_digest"]}
+        binding = {"client_id": target, "scope": "user", "materialization": "materialized",
+                   "activation": "prepared", "verification": "package_validated",
+                   "policy": "allowed", "authentication": "not_checked", "package_revision": revision}
+        row = {"name": "atlassian", "installation_id": "same-prepared-installation",
+               "source": pin["repository"] + "/" + pin["path"], "clients": [binding],
+               "directory": {"product_id": "atlassian", "recorded_distribution": pin["distribution"],
+                             "recorded_revision": pin["revision"], "recorded_release_sequence": 1}}
+        return row, {"atlassian": pin}
+
+    def test_signed_prepared_package_requires_allowed_user_delivery_and_frozen_receipt(self):
+        audit = load_audit()
+        for target in ("kiro", "cursor"):
+            with self.subTest(target=target):
+                row, pins = self.prepared_signed_package(target)
+                def match():
+                    return audit.matching_installations(
+                        {"data": {"installations": [row]}}, "atlassian", target,
+                        "plugin", "atlassian", pins)
+                self.assertEqual(match(), [row])
+                binding = row["clients"][0]
+                for key, bad in (("scope", "project"), ("materialization", "pending"),
+                                 ("activation", "failed"), ("verification", "pending"),
+                                 ("policy", "blocked"), ("client_id", "other")):
+                    with self.subTest(key=key):
+                        row["clients"] = [dict(binding, **{key: bad})]
+                        self.assertEqual(match(), [])
+                row["clients"] = [dict(binding, package_revision={})]
+                self.assertEqual(match(), [])
+                row["clients"] = [binding]
+                pins["atlassian"]["manifest_digest"] = "sha256:" + "d" * 64
+                self.assertEqual(match(), [])
+                pins.clear()
+                self.assertEqual(match(), [])
+
+    def test_signed_prepared_package_runs_repeat_remove_without_native_pass(self):
+        audit = load_audit()
+        for mode in ("clean", "repeat-drift", "remove-residue", "foreign-change"):
+            with self.subTest(mode=mode), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                matched, pins = self.prepared_signed_package()
+                config = root / "plugin-00/home/.kiro/settings/mcp.json"
+                state = {"installed": False, "adds": 0}
+                operations = []
+                def fake_call(argv, _env, cwd, timeout=105):
+                    operation = argv[1]
+                    operations.append(operation)
+                    if operation == "add":
+                        state["adds"] += 1
+                        config.parent.mkdir(parents=True, exist_ok=True)
+                        config.write_text('{"mcpServers":{"atlassian":{"command":"inert"}}}')
+                        state["installed"] = True
+                        if state["adds"] == 2 and mode == "repeat-drift":
+                            config.write_text('{"mcpServers":{"atlassian":{"command":"changed"}}}')
+                    elif operation == "remove":
+                        if mode != "remove-residue":
+                            config.unlink()
+                        state["installed"] = False
+                        if mode == "foreign-change":
+                            (cwd / "foreign-untouched.txt").write_text("changed")
+                    data = ({"actions": [{"component_support": [
+                        {"name": "atlassian", "support": "native"}]}]} if operation == "add" else
+                            {"installations": [matched] if state["installed"] else []})
+                    return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "", "timeout": False,
+                            "_json": {"data": data}}
+                with patch.object(audit, "call", side_effect=fake_call):
+                    row = audit.do_case("/unused/agentplugins", "kiro", "plugin",
+                                        "atlassian", 0, root, {}, pins)
+                self.assertEqual(operations, ["add", "list", "add", "list", "remove", "list"])
+                self.assertTrue(row["prepared_binding"])
+                self.assertNotEqual(row["status"], "passed")
+                self.assertFalse(audit.expected_negative_coverage(row))
+                if mode == "clean":
+                    self.assertEqual(row["status"], "prepared-lifecycle-passed")
+                    self.assertTrue(row["repeat_verified"])
+                    self.assertTrue(row["removal_verified"])
+                    self.assertTrue(row["sentinels_preserved"])
+                    self.assertEqual(row["repeat_installation_ids"], [matched["installation_id"]])
+                    self.assertEqual(row["public_target_states"]["after-add"]["states"][0]["activation"], "prepared")
+                else:
+                    self.assertNotEqual(row["status"], "prepared-lifecycle-passed")
+
     def test_prepared_only_opencode_config_is_not_native_pass(self):
         # Real published 0.1.102 can write opencode.json while all components
         # are reported as prepared, never native. Disk attribution is not activation.
@@ -9601,7 +9689,10 @@ class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
             changed = []
             def replace_during_read(fd, count):
                 body = original_read(fd, count)
-                if not changed:
+                # Snapshots also read descriptors; inject only after this file
+                # is held by the observer whose custody refusal is under test.
+                held = case['observer'].leaves.get(new)
+                if not changed and held is not None and fd == held[0]:
                     original = new.read_bytes()
                     new.unlink()
                     new.write_bytes(original)

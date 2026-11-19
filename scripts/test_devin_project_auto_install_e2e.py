@@ -175,6 +175,45 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                                     if capture_error is not None:
                                         self.assertIn("<redacted>", result["capture_error"])
 
+    def test_authorization_redacts_the_entire_physical_line_without_environment(self):
+        following = "selected native inventory remains unavailable"
+        trailer = "HEADER_TRAILER_CANARY"
+        templates = (
+            "Authorization: token {secret} " + trailer,
+            '"aUtHoRiZaTiOn": "token {secret}", "tail": "' + trailer + '"',
+            "Authorization: {secret} " + trailer,
+            "'AUTHORIZATION': 'Digest username=\"{secret}\", nonce=\"" + trailer + "\"'",
+        )
+        for template in templates:
+            for secret in ("OPAQUE_AUTH_CANARY_" + "z" * 40,
+                           "OPAQUE_AUTH_CANARY_" + "z" * 3200):
+                for ending in ("\n", "\r\n", "\r"):
+                    with self.subTest(template=template, long=len(secret) > 2048,
+                                      ending=repr(ending)):
+                        header = template.format(secret=secret)
+                        stderr = (header + ending + following).encode()
+                        diagnostic = subject.command_diagnostic(stderr, {})
+                        receipt = {"stage": "skills-add"}
+                        record = {"error": "capture failed: " + header, "exit": 1}
+                        with patch.object(subject, "run_probe", return_value=(record, b"", stderr)):
+                            with self.assertRaises(RuntimeError) as raised:
+                                subject.command(["agentplugins", "skills", "add"], "/tmp", {},
+                                                receipt=receipt)
+                        result = receipt["result"]
+                        rendered = diagnostic + json.dumps(receipt) + str(raised.exception)
+                        for private in ("OPAQUE_AUTH_CANARY", "z" * 16, trailer):
+                            self.assertNotIn(private, rendered)
+                        self.assertIn("<redacted>", diagnostic)
+                        self.assertTrue(diagnostic.endswith(ending + following))
+                        self.assertTrue(result["stderr_diagnostic"].endswith(ending + following))
+                        self.assertIn(following, str(raised.exception))
+                        self.assertEqual(result["stderr_sha256"], hashlib.sha256(stderr).hexdigest())
+                        self.assertLessEqual(len(diagnostic), 2048)
+                        self.assertLessEqual(len(result["capture_error"]), 2048)
+        for ending in ("\n", "\r\n", "\r"):
+            diagnostic = subject.command_diagnostic(("Authorization:" + ending + following).encode(), {})
+            self.assertTrue(diagnostic.endswith(ending + following))
+
     def test_raw_failure_keeps_selected_command_stage_and_result(self):
         with tempfile.TemporaryDirectory() as temporary:
             report = {}

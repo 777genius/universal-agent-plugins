@@ -248,6 +248,81 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
                 self.assertNotIn(canary, json.dumps(diagnostic))
                 self.assertNotIn(str(self.root), json.dumps(diagnostic))
 
+    def test_protected_scope_diagnostics_identify_only_fixed_metadata_fields(self):
+        for scope in ("home", "project-native", "managed"):
+            with self.subTest(scope=scope):
+                self.fixture()
+                canary = "private-profile-path-and-content-canary"
+                target = {"home": self.home / canary,
+                          "project-native": self.project / ".kimi-code/skills/docs/SKILL.md",
+                          "managed": self.project / ".uap/managed/package/payload"}[scope]
+                target.write_text(canary)
+                before = self.capture()
+                self.append()
+                info = target.stat()
+                os.utime(target, ns=(info.st_atime_ns, info.st_mtime_ns + 1000000))
+                after = self.capture()
+                facts = {}
+                with patch.object(Path, "lstat", side_effect=AssertionError("no diagnostic filesystem reads")):
+                    self.assertIsNone(self.classify(before, after, after, facts=facts))
+                self.assertEqual(facts["reason"], "protected-scope-changed")
+                self.assertIn("scope_changes", facts)
+                self.assertEqual(len(facts["scope_changes"]), 1)
+                record = facts["scope_changes"][0]
+                self.assertEqual(record["scope"], scope)
+                self.assertEqual(record["key_kind"], "metadata")
+                self.assertEqual(record["change_kind"], "changed")
+                self.assertEqual(record["metadata_fields"], ["mtime_ns"])
+                self.assertRegex(record["key_sha256"], r"^[0-9a-f]{64}$")
+                published = json.dumps(self.audit.failed_case_diagnostics({"kimi_repeat_log_facts": facts}))
+                self.assertNotIn(canary, published)
+                self.assertNotIn(str(self.root), published)
+
+    def test_protected_scope_diagnostics_cap_records_hash_keys_and_hide_values(self):
+        self.fixture()
+        before = self.capture()
+        self.append()
+        after = self.capture()
+        canary = "private-path-and-value-canary"
+        for index in range(10):
+            key = f"metadata:2:{canary}-{index:02d}"
+            before["scope"][key] = (stat.S_IFREG | 0o600, 11, 22, 33)
+            after["scope"][key] = (stat.S_IFREG | 0o600, 11, 22, 34)
+        facts = {}
+        with patch.object(Path, "lstat", side_effect=AssertionError("no diagnostic filesystem reads")):
+            self.assertIsNone(self.classify(before, after, after, facts=facts))
+        self.assertIn("scope_changes", facts)
+        self.assertEqual(len(facts["scope_changes"]), 8)
+        self.assertEqual(facts["scope_changes_omitted"], 2)
+        self.assertEqual(facts["changed_entries_capped"], 10)
+        key = f"metadata:2:{canary}-00"
+        self.assertEqual(facts["scope_changes"][0]["key_sha256"], self.audit.hashlib.sha256(key.encode()).hexdigest())
+        self.assertTrue(all(record["metadata_fields"] == ["mtime_ns"] for record in facts["scope_changes"]))
+        self.assertNotIn(canary, json.dumps(facts))
+        self.assertNotIn(str(self.root), json.dumps(facts))
+        self.assertLess(len(json.dumps(facts)), 2500)
+
+    def test_protected_scope_surrogate_key_remains_private_refusal(self):
+        self.fixture()
+        before = self.capture()
+        self.append()
+        after = self.capture()
+        # A single changed key ensures it reaches the hash, inside the cap.
+        key = "metadata:0:private-name-" + chr(0xDCFF)
+        before["scope"][key] = (stat.S_IFREG | 0o600, 11, 22, 33)
+        after["scope"][key] = (stat.S_IFREG | 0o600, 11, 22, 34)
+        facts = {}
+        with patch.object(Path, "lstat", side_effect=AssertionError("no diagnostic filesystem reads")):
+            self.assertIsNone(self.classify(before, after, after, facts=facts))
+        self.assertEqual(facts["reason"], "protected-scope-changed")
+        self.assertEqual(len(facts["scope_changes"]), 1)
+        self.assertEqual(facts["scope_changes"][0]["key_sha256"],
+                         self.audit.hashlib.sha256(key.encode("utf-8", errors="surrogatepass")).hexdigest())
+        published = json.dumps(facts)
+        self.assertNotIn("private-name", published)
+        self.assertNotIn("\\udcff", published)
+        self.assertLess(len(published), 500)
+
     def test_append_first_refusal_facts_are_bounded_without_changing_qualification(self):
         self.fixture()
         canary = "private-native-path-and-body-canary"
@@ -309,7 +384,7 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
                     self.assertEqual(facts["changed_entries_capped"], 1)
                 diagnostic = self.audit.failed_case_diagnostics({"kimi_repeat_log_facts": facts})
                 self.assertNotIn(canary, json.dumps(diagnostic))
-                self.assertLess(len(json.dumps(diagnostic)), 200)
+                self.assertLess(len(json.dumps(diagnostic)), 500)
         facts = {}
         expected = self.classify(original, completed, completed)
         with patch.object(Path, "lstat", side_effect=AssertionError("diagnostics must not reread files")):

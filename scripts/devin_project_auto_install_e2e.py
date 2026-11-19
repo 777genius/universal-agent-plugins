@@ -56,7 +56,8 @@ def command_diagnostic(body, env):
                 r"(?i)token|password|secret|api[_-]?key|authorization|credential", key):
             text = text.replace(value, "<redacted>")
             text = text.replace(json.dumps(value)[1:-1], "<redacted>")
-    text = re.sub(r"""(?i)(["']?Authorization["']?\s*:\s*["']?(?:Basic|Bearer)\s+)[^\s"',;}]+""",
+    # Header schemes are open-ended; redact the value without consuming the next line.
+    text = re.sub(r"""(?i)(["']?Authorization["']?[ \t]*:[ \t]*)[^\r\n]*""",
                   r"\1<redacted>", text)
     text = re.sub(r"""(?i)((?:token|password|secret|api[_-]?key|credential)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}]+)""",
                   r"\1<redacted>", text)

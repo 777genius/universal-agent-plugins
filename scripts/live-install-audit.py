@@ -1584,6 +1584,16 @@ def public_target_state_observation(response, identity, target, *,
             "states": states, "truncated": truncated}
 
 
+def prepared_package_binding(client, target):
+    """A materialized User package can have a lifecycle without native discovery."""
+    return (isinstance(client, dict) and client.get("client_id") == target
+            and client.get("scope") == "user"
+            and client.get("materialization") == "materialized"
+            and client.get("activation") == "prepared"
+            and client.get("verification") == "package_validated"
+            and client.get("policy") == "allowed")
+
+
 def matching_installations(response, identity, target, kind, item, signed_release_pins=None):
     """Verify the frozen Registry release, never only live self-consistency."""
     signed_release_pins = signed_release_pins or {}
@@ -1610,7 +1620,9 @@ def matching_installations(response, identity, target, kind, item, signed_releas
             (client.get("verification") == "installation_verified" or
              (kind == "plugin" and client.get("materialization") == "materialized" and
               client.get("verification") == "package_validated" and
-              client.get("activation") == "manual_activation_required"))
+              (client.get("activation") == "manual_activation_required" or
+               (isinstance(item, str) and item in signed_release_pins
+                and prepared_package_binding(client, target)))))
         ]
         if not verified_clients:
             continue
@@ -2113,6 +2125,32 @@ def kimi_repeat_log_capture(home, project, case_root, facts=None):
         return kimi_log_fact(facts, "scope-unreadable")
 
 
+def kimi_scope_change_facts(before, after, home_prefix):
+    """Describe held snapshot differences without exposing keys or values."""
+    changed = sorted(key for key in before.keys() | after.keys()
+                     if key not in before or key not in after or before[key] != after[key])
+    records = []
+    scopes = {"0": "home", "1": "project-native", "2": "managed"}
+    for key in changed[:8]:
+        parts = key.split(":", 2)
+        kind = parts[0] if parts[0] in ("metadata", "directory", "link", "root-kind", "root-link") else "file-hash"
+        scope = scopes.get(parts[1], "unknown") if kind != "file-hash" and len(parts) > 1 else "unknown"
+        if kind == "file-hash":
+            scope = {home_prefix: "home", ".kimi-code": "project-native", "managed": "managed"}.get(key.split("/", 1)[0], "unknown")
+        record = {"key_sha256": hashlib.sha256(key.encode("utf-8", errors="surrogatepass")).hexdigest(),
+                  "scope": scope, "key_kind": kind,
+                  "change_kind": "added" if key not in before else "removed" if key not in after else "changed"}
+        if kind == "metadata" and key in before and key in after:
+            left, right = before[key], after[key]
+            if isinstance(left, tuple) and isinstance(right, tuple) and len(left) == len(right) and len(left) in (3, 4):
+                record["metadata_fields"] = [name for index, name in enumerate(("mode", "device", "inode", "mtime_ns")[:len(left)])
+                                             if left[index] != right[index]]
+            else:
+                record["metadata_fields"] = ["shape"]
+        records.append(record)
+    return {"scope_changes": records, "scope_changes_omitted": min(max(0, len(changed) - 8), 100000)}
+
+
 def kimi_repeat_log_append(before, after, listed, added, repeated, command, native_before, native_after, facts=None):
     """Admit one same-inode append, not rotation or other native mutations."""
     for phase, value in (("before", before), ("after-add", after), ("post-list", listed)):
@@ -2155,6 +2193,8 @@ def kimi_repeat_log_append(before, after, listed, added, repeated, command, nati
     current = {key: value for key, value in after["scope"].items() if key not in ignored}
     if original != current:
         changed = sum(original.get(key) != current.get(key) for key in original.keys() | current.keys())
+        if isinstance(facts, dict):
+            facts.update(kimi_scope_change_facts(original, current, before["log_key"].split("/", 1)[0]))
         return kimi_log_fact(facts, "protected-scope-changed", changed)
     kimi_log_fact(facts, "verified-append")
     return {"status": "verified-owned-log-append", "path": ".kimi-code/logs/kimi-code.log",
@@ -2534,8 +2574,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         failed_install_registered or native_attribution or skill_path))
     prepared_binding = bool(listed_identity and (
         grok_prepared or (kind == "plugin" and any(
-            client.get("client_id") == native_target and client.get("verification") == "package_validated"
-            and client.get("activation") == "manual_activation_required"
+            (client.get("client_id") == native_target and client.get("verification") == "package_validated"
+             and client.get("activation") == "manual_activation_required")
+            or prepared_package_binding(client, native_target)
             for client in matching[0].get("clients", []) if isinstance(client, dict)))))
     # Name and file presence alone are insufficient. A true Skill pass also
     # proves the immutable source in the portable lock AND exact upstream bytes.
