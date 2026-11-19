@@ -14,6 +14,10 @@ on:
       - 'scripts/run-native-client-matrix.py'
       - 'tests/live-install/fixtures.json'
       - 'repotests/agentplugins_acp_metadata_*_test.go'
+      - 'repotests/agentplugins_cursor_editor_observation_test.go'
+      - 'scripts/cursor_editor_observation.cjs'
+      - 'scripts/test_cursor_editor_observation.cjs'
+      - 'ui/skills-picker/package*.json'
   workflow_dispatch:
 
 permissions:
@@ -295,6 +299,28 @@ jobs:
             LANG="${LANG:-C.UTF-8}" CI=true DO_NOT_TRACK=1 \
             python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
             | tee "$RUNNER_TEMP/vendor-proof/version.txt"
+      - name: Observe ordinary Cursor Editor Customize without a model
+        if: ${{ matrix.target == 'cursor' && matrix.kind == 'plugin' && steps.vendor-install.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          AGENTPLUGINS_CURSOR_EDITOR_OBSERVE: '1'
+          AGENTPLUGINS_NATIVE_DISPOSABLE_LINUX: '1'
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Proof-only; retain the original full30 lifecycle and aggregate.
+          # Packaged Electron supplies the browser; no Chromium download needed.
+          npm ci --prefix ui/skills-picker --ignore-scripts --no-audit --no-fund
+          node --test scripts/test_cursor_editor_observation.cjs
+          command -v xvfb-run
+          export AGENTPLUGINS_CURSOR_EDITOR_NODE="$(command -v node)"
+          export AGENTPLUGINS_CURSOR_EDITOR_SOURCE="$PWD"
+          export AGENTPLUGINS_CURSOR_EDITOR_COMMIT="$(git rev-parse HEAD)"
+          export AGENTPLUGINS_CURSOR_EDITOR_TREE="$(git rev-parse HEAD^{tree})"
+          xvfb-run -a go test -json -p=2 -count=1 -timeout=4m ./repotests \
+            -run '^TestAgentpluginsCursorEditorObservation$' \
+            | tee "$RUNNER_TEMP/cursor-editor-observation-go.jsonl"
       - name: Observe one finite ACP metadata session without authentication
         if: ${{ matrix.kind == 'skill' && (matrix.target == 'cursor' || matrix.target == 'kiro') && steps.vendor-install.outcome == 'success' }}
         continue-on-error: true
@@ -369,5 +395,7 @@ jobs:
             ${{ runner.temp }}/live-audit-report/
             ${{ runner.temp }}/vendor-proof/
             ${{ runner.temp }}/acp-metadata-supplement/
+            ${{ runner.temp }}/cursor-editor-observation/
+            ${{ runner.temp }}/cursor-editor-observation-go.jsonl
           if-no-files-found: warn
           retention-days: 14
