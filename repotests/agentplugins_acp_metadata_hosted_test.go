@@ -25,10 +25,10 @@ import (
 )
 
 type acpMetadataFile struct {
-	Mode     uint32      `json:"mode"`
-	Bytes    int64       `json:"bytes"`
-	SHA      string      `json:"sha256,omitempty"`
-	Identity []uint64    `json:"identity"`
+	Mode     uint32   `json:"mode"`
+	Bytes    int64    `json:"bytes"`
+	SHA      string   `json:"sha256,omitempty"`
+	Identity []uint64 `json:"identity"`
 	info     os.FileInfo
 }
 
@@ -198,7 +198,7 @@ func acpMetadataFreeze(t *testing.T, client, runtimeRoot, executable, archive st
 	}
 	if client == "cursor" {
 		expected := map[string]string{"cursor-agent": "2ccc9a8e167797641448b5e5c936f006ba137a2555f117f38c5eb76a5238a233",
-			"node": "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
+			"node":     "e32e2d16081cf644f88392934288086e7662529d0d43277c34f7aad2207cfafb",
 			"index.js": "7b4bb3badb36cff7b6cee7996d61bd3c32866cf354214374b77f5a5d33a0b3f2"}
 		for path, expectedSHA := range expected {
 			if before[path].SHA != expectedSHA {
