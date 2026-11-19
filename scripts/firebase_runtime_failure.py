@@ -266,13 +266,19 @@ def collect(case):
         refused["refusal_phase"] = refusal_phase
         # Only enumerated, source-owned categories; never include exception text,
         # captured paths, native config values or npm log contents.
-        if refusal_phase == "staging-binding":
-            known = {"staging-manifest", "staging-server", "staging-env",
-                     "staging-data-parent", "staging-data-identity",
-                     "staging-data-canonical", "staging-root"}
+        categories = {
+            "staging-binding": {"staging-manifest", "staging-server", "staging-env",
+                                "staging-data-parent", "staging-data-identity",
+                                "staging-data-canonical", "staging-root"},
+            "owned-data": {"unselected backend", "owner shape", "data authority",
+                           "redirected directory", "directory replaced",
+                           "entry bound", "file bound", "opened identity",
+                           "changed size", "duplicate key", "deadline"},
+        }
+        if refusal_phase in categories:
+            detail = str(error) if isinstance(error, ValueError) else ""
             refused["refusal_detail"] = (
-                str(error) if isinstance(error, ValueError) and str(error) in known
-                else "unclassified")
+                detail if detail in categories[refusal_phase] else "unclassified")
         refused["refusal_class"] = (
             "missing" if isinstance(error, FileNotFoundError)
             else "deadline" if isinstance(error, TimeoutError) or (

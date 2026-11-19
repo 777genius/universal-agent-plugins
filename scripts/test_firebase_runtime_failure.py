@@ -13,7 +13,7 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
     def test_owned_stage_facts_and_all_or_refusal(self):
         collect = run_path(str(Path(__file__).with_name("firebase_runtime_failure.py")))["collect"]
         for mutation in (None, "link", "foreign", "large", "unknown", "extra-log",
-                         "missing-owner", "owner-state", "owner-digest", "owner-id",
+                         "missing-owner", "owner-state", "owner-digest", "owner-id", "owner-shape", "data-extra",
                          "parent-link", "parent-replacement", "large-log", "package", "lock", "source-shape",
                          "source-staging", "stage-data", "stage-root", "stage-manifest",
                          "stage-duplicate", "stage-link", "stage-name", "stage-owner"):
@@ -32,7 +32,8 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                 elif mutation in ("owner-state", "owner-digest", "owner-id"):
                     owner[{"owner-state": "state", "owner-digest": "ownership_digest",
                            "owner-id": "data_receipt_id"}[mutation]] = "invalid"
-                (backend / ".agentplugins-data-owner.json").write_text(json.dumps(owner))
+                (backend / ".agentplugins-data-owner.json").write_text(
+                    "[]" if mutation == "owner-shape" else json.dumps(owner))
                 package = b'{"dependencies":{"firebase-tools":"14.0.0"}}'
                 (stage / "package.json").write_bytes(package)
                 lock = stage / "package-lock.json"
@@ -68,6 +69,8 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                 elif mutation == "foreign":
                     (backend / ".agentplugins-data-owner.json").write_text(json.dumps({
                         "locator": str(foreign), "scope": "user", "physical_backend_id": "backend"}))
+                elif mutation == "data-extra":
+                    (backend.parent / "foreign-backend").mkdir()
                 elif mutation == "large":
                     lock.write_bytes(b"x" * ((1 << 20) + 1))
                 elif mutation == "unknown":
@@ -156,8 +159,14 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                         }[mutation])
                     elif result["refusal_phase"] == "staging-binding":
                         self.assertEqual(result["refusal_detail"], "unclassified")
-                    if mutation in ("owner-state", "owner-digest", "owner-id"):
+                    if mutation in ("owner-state", "owner-digest", "owner-id",
+                                    "missing-owner", "foreign", "stage-owner",
+                                    "owner-shape", "data-extra"):
                         self.assertEqual(result["refusal_phase"], "owned-data")
+                        wanted = ("owner shape" if mutation == "owner-shape"
+                                  else "unselected backend" if mutation == "data-extra"
+                                  else "data authority")
+                        self.assertEqual(result["refusal_detail"], wanted)
                     elif mutation == "extra-log":
                         self.assertEqual(result["refusal_phase"], "npm-cache")
 
