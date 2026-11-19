@@ -118,7 +118,7 @@ func failedGroupResult(result Result, err error) (Result, error) {
 func attachGroupAttemptResult(result *Result, got usecase.GroupResult) {
 	for _, target := range got.Targets {
 		if target.Plan.Scope == domain.ScopeProject {
-			result.ManualActions = append(result.ManualActions, target.Activation.UserActions...)
+			result.ManualActions = append(result.ManualActions, target.Activation.PendingUserActions()...)
 		}
 		if target.Plan.ClientID == "" || target.GroupPhase == "" {
 			continue

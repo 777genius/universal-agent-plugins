@@ -9,19 +9,24 @@ import (
 
 var _ clients.PreparedSetupCompleter = (*Adapter)(nil)
 
-// CanCompletePreparedSetup admits only an explicit add of an exact Skills-only
-// Project install, whose confirmed repair can ask the detected Hermes CLI for
-// project trust. Update and dependency sync carry no consent, and Project MCP
-// sessions and User installs have no trust step to finish.
+// Existing confirmed repair owns native completion of pure User Skills. Only
+// explicit Project add consent can additionally ask the CLI for project trust;
+// maintenance and Project MCP never acquire that consent here.
 func (*Adapter) CanCompletePreparedSetup(request domain.ActivationRequest, outcome domain.ActivationOutcome) bool {
-	if !request.ProjectTrustConsent || outcome.Activation != domain.ActivationPrepared || outcome.Verification != domain.VerificationInstalled || outcome.Policy != domain.PolicyAllowed ||
-		request.Plan.Scope != domain.ScopeProject || request.Plan.TargetContext.Scope != domain.ScopeProject || request.Plan.InstallIntent != domain.InstallIntentAutomatic {
+	if request.VerifyOnly || outcome.Activation != domain.ActivationPrepared || outcome.Verification != domain.VerificationInstalled || outcome.Policy != domain.PolicyAllowed ||
+		request.Plan.Scope != request.Plan.TargetContext.Scope || request.Plan.InstallIntent != domain.InstallIntentAutomatic {
 		return false
 	}
 	profile, project := request.Client.ConfigRoot, request.Plan.TargetContext.ProjectRoot
-	if !cleanRoot(profile) || !cleanRoot(project) || !cleanRoot(request.Client.ExecutablePath) ||
-		request.Plan.NativeRegistryRoot != filepath.Join(project, ".hermes") ||
+	if !cleanRoot(profile) || !cleanRoot(request.Client.ExecutablePath) ||
 		request.Plan.TargetContext.UserConfigRoot != "" && request.Plan.TargetContext.UserConfigRoot != profile {
+		return false
+	}
+	if request.Plan.Scope == domain.ScopeUser {
+		return hermesUserSkillSetup(request, outcome)
+	}
+	if request.Plan.Scope != domain.ScopeProject || !request.ProjectTrustConsent || !cleanRoot(project) ||
+		request.Plan.NativeRegistryRoot != filepath.Join(project, ".hermes") {
 		return false
 	}
 	if len(request.Plan.Components) == 0 {
@@ -33,4 +38,11 @@ func (*Adapter) CanCompletePreparedSetup(request domain.ActivationRequest, outco
 		}
 	}
 	return true
+}
+
+func hermesUserSkillSetup(request domain.ActivationRequest, outcome domain.ActivationOutcome) bool {
+	return !request.ProjectTrustConsent && request.Plan.TargetContext.ProjectRoot == "" &&
+		request.Plan.NativeRegistryRoot == request.Client.ConfigRoot && !request.ActivationComplete &&
+		!outcome.ActivationAttested && !outcome.AuthenticationAttested && outcome.NativeEffect != domain.NativeEffectUncertain &&
+		hermesSkillCLISelected(request.Client) && hermesPureSkillPlan(request.Plan)
 }

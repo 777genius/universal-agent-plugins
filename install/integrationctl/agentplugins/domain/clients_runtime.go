@@ -177,15 +177,18 @@ type ActivationRequest struct {
 }
 
 type ActivationOutcome struct {
-	LocalEntryObservation  *LocalEntryObservation `json:"-"`
-	Activation             ActivationState        `json:"activation"`
-	Authentication         AuthenticationState    `json:"authentication"`
-	Policy                 PolicyState            `json:"policy"`
-	Verification           VerificationState      `json:"verification"`
-	UserActions            []string               `json:"user_actions,omitempty"`
-	LocalActions           []string               `json:"-"`
-	ActivationAttested     bool                   `json:"activation_attested,omitempty"`
-	AuthenticationAttested bool                   `json:"authentication_attested,omitempty"`
+	LocalEntryObservation *LocalEntryObservation `json:"-"`
+	Activation            ActivationState        `json:"activation"`
+	Authentication        AuthenticationState    `json:"authentication"`
+	Policy                PolicyState            `json:"policy"`
+	Verification          VerificationState      `json:"verification"`
+	UserActions           []string               `json:"user_actions,omitempty"`
+	// CompletedUserActions identifies verified informational entries retained
+	// in UserActions for disclosure. It never changes lifecycle or saved state.
+	CompletedUserActions   []string `json:"-"`
+	LocalActions           []string `json:"-"`
+	ActivationAttested     bool     `json:"activation_attested,omitempty"`
+	AuthenticationAttested bool     `json:"authentication_attested,omitempty"`
 	// AuthoritativeObservation marks recognized negative verifier evidence.
 	// It is transient control-plane metadata and is never persisted as state.
 	AuthoritativeObservation bool `json:"-"`

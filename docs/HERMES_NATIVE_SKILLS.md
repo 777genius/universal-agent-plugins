@@ -88,8 +88,14 @@ retry may retain the identical reviewed trust scope; a changed profile, executab
 source pin, operation or retained ownership requires a fresh full review.
 Preparation, review, recheck, decline and dry run do not invoke
 native trust or write configuration. Installation, binding identity and source
-pins remain unchanged during an exact repeat. Trust still leaves production
-status **Prepared**: native discovery and activation are distinct facts.
+pins remain unchanged during an exact repeat. Trust alone leaves status **Prepared**. The current source candidate can complete
+pure Skills only after a fresh native catalog confirms the selected profile,
+project trust, exact owned Skill paths and bytes. This uses the selected Hermes
+runtime and its own bootstrap/dependency lease; Hermes may complete native startup
+setup and write its scan caches. Read-only verification never starts that
+completion action. A confirmed repeat reuses the existing owned-package repair
+flow; User Skills completion grants no Project trust. These source changes remain
+under native qualification and do not describe a newer published CLI release.
 
 UAP never edits `config.yaml` for trust and never uses `hermes config set`,
 because a sticky active profile can make a bare `hermes` read another file. It
@@ -209,8 +215,11 @@ re-add, unchanged source pins/installation/binding identity, selected Skill path
 and content from `skill_view(preprocess=False)`, retained foreign User/Project
 content and trust persistence after removal. Explicit test-owned native untrust
 cleans up after that persistence assertion; it is not installer rollback.
-Original streams, source/tree and executable hashes, vendor pin, both scenario
-results and process settlement are retained. A skipped or empty test selection
+The current candidate also requires actual production catalog query streams and
+settlement for each qualified positive result, plus a pure User Skills first/repeat
+journey. The two Project journeys retain their trust, maintenance, source identity
+and foreign-content assertions. Original streams, source/tree and executable
+hashes, vendor pin and scenario results are retained. A skipped or empty test selection
 cannot produce a successful native receipt. These new checks are disabled for
 release-tag calls, whose existing released-binary proof remains separate.
 
@@ -218,6 +227,8 @@ This source acceptance is pending execution on the final PR source; no new nativ
 PASS is claimed here. The local environment lacks the proc children interface
 required by the production process supervisor and refuses before child startup.
 Native acceptance therefore requires actual GitHub-hosted jobs. No hosted-state
-spoofing or unsupervised fallback is used. Source-installed Project MCP, native
-Ready promotion, modern `hermes chat` model execution and live-provider
-authentication remain outside this proof.
+spoofing or unsupervised fallback is used. The new production-query Ready gate
+remains pending until those jobs execute the final combined source; existing
+external-observer evidence does not satisfy it. Source-installed Project MCP,
+modern `hermes chat` model execution and live-provider authentication remain
+outside this proof.

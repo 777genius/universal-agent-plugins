@@ -247,6 +247,9 @@ func (*Adapter) RefinePlan(ctx context.Context, input clients.PlanInput, plan *d
 	}
 	shared.PromoteNativeReady(plan, root, shared.OnlyNativeComponents(plan.Components))
 	plan.Activation = domain.ActivationPrepared
+	if hermesPureSkillPlan(*plan) {
+		plan.UserActions = shared.AppendUnique(plan.UserActions, "Confirmed installation starts the selected Hermes runtime to verify Skill discovery; Hermes may complete its own startup setup and update its native caches")
+	}
 	if plan.Scope == domain.ScopeProject {
 		if shared.ComponentKindPresent(plan.Components, domain.ComponentSkill) {
 			action := "This operation does not change Hermes project trust. To trust this whole Git repository root for Skills in .hermes/skills and .agents/skills, including ones added later, run `hermes skills trust` inside it; trust stays until `hermes skills untrust`, including after UAP removal"

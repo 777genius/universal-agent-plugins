@@ -6,6 +6,8 @@ on:
     paths:
       - 'landing/data/catalogCuration.ts'
       - 'landing/scripts/featured-skills-install-e2e.ts'
+      - 'landing/scripts/featured-skills-native-paths.ts'
+      - 'landing/tests/featured-skills-native-paths.test.ts'
       - '.github/workflows/website-featured-skills-e2e.yml'
   workflow_dispatch:
   schedule:
