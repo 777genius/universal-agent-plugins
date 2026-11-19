@@ -5325,6 +5325,7 @@ module.exports = {
                         patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
                                            "--target", "chatgpt", "--kind", "plugin",
                                            "--limit", "1", "--report-dir", temporary]), \
+                        patch.dict(audit.AGENT_BINARIES, {"codex": sys.executable}, clear=True), \
                         patch.object(audit, "version_evidence", return_value={"status": "reported"}), \
                         patch.object(audit, "do_case", side_effect=fail) as run_case, \
                         patch("builtins.print") as printed:
@@ -8439,6 +8440,7 @@ module.exports = {
                                        "--target", "chatgpt", "--kind", "plugin",
                                        "--limit", "1", "--report-dir", str(root)]), \
                     patch.object(audit, "published_audit_temp_parent", return_value=str(alias_parent)), \
+                    patch.dict(audit.AGENT_BINARIES, {"codex": sys.executable}, clear=True), \
                     patch.object(audit, "version_evidence", return_value={"status": "reported"}), \
                     patch.object(audit, "do_case", side_effect=capture_case), \
                     patch.object(audit.tempfile, "TemporaryDirectory", side_effect=create_owned_root):
