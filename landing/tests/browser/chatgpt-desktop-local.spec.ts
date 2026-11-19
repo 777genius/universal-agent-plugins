@@ -34,11 +34,9 @@ for (const width of [1440, 390]) {
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
     await expect(page.getByRole('dialog').locator('.desktop-guide')).toHaveCount(0);
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
-    await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toBeDisabled();
+    await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toHaveCount(0);
     await page.getByRole('checkbox', { name: /^ChatGPT Desktop/ }).click();
-    await page.keyboard.press('Escape');
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet code')).toHaveText(desktopCommand);
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(desktopCommand);
     const guide = page.getByRole('dialog').locator('.desktop-guide');
     await expect(guide).toBeVisible();
     await guide.locator('summary').click();
@@ -46,7 +44,7 @@ for (const width of [1440, 390]) {
     await expect(guide).toContainText('ChatGPT web connection');
     await expect(guide.locator('.command-snippet')).toHaveCount(0);
 
-    await page.getByRole('dialog').locator('.plugin-card__install .command-snippet button').click();
+    await page.getByRole('dialog').locator('.install-dialog__footer .command-snippet button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(desktopCommand);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
@@ -59,10 +57,8 @@ test('Desktop and Web are both disabled when neither signed target is compatible
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
   await card.locator('.plugin-card__install-toggle').click();
-  await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
   await expect(page.getByRole('checkbox', { name: /^ChatGPT Desktop/ })).toBeDisabled();
-  await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toBeDisabled();
-  await page.keyboard.press('Escape');
+  await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toHaveCount(0);
   await expect(page.getByRole('dialog').locator('.desktop-guide')).toHaveCount(0);
 
   await page.keyboard.press('Escape');
@@ -79,9 +75,7 @@ test('detail page uses the same Desktop target in both themes', async ({ page })
   await page.locator('.plugin-card[data-install-source="i18n-state-00"] .plugin-card__title-link').first().click();
   const panel = page.locator('.install-panel');
   await expect(panel.locator('.desktop-guide')).toHaveCount(0);
-  await panel.locator('.app-multiselect__trigger').click();
   await page.getByRole('checkbox', { name: /^ChatGPT Desktop/ }).click();
-  await page.keyboard.press('Escape');
   const guide = panel.locator('.desktop-guide');
   await expect(guide).toBeVisible();
   await expect(panel.locator('.install-command-row .command-snippet code')).toHaveText(desktopCommand);
@@ -127,15 +121,13 @@ for (const width of [1440, 390]) {
     await expect(hero.locator('.install-panel__notice')).toBeVisible();
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     const desktop = page.getByRole('checkbox', { name: /^ChatGPT Desktop/ });
     const web = page.getByRole('checkbox', { name: /^ChatGPT Web/ });
     await expect(desktop).toBeEnabled();
     await expect(web).toBeEnabled();
     await desktop.click();
     await web.click();
-    await page.keyboard.press('Escape');
-    const snippet = page.getByRole('dialog').locator('.plugin-card__install .command-snippet');
+    const snippet = page.getByRole('dialog').locator('.install-dialog__footer .command-snippet');
     const code = snippet.locator('code');
     await expect(code).toHaveText(/--target (chatgpt,chatgptweb|chatgptweb,chatgpt) --no-save$/);
     const command = (await code.textContent())?.trim() ?? '';

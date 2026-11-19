@@ -109,22 +109,18 @@ for (const width of [1440, 390]) {
     const card = page.locator('.plugin-card[data-install-source="sentry"]');
     await card.locator('.plugin-card__install-toggle').click();
 
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     const pi = page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ });
     await expect(pi).toBeEnabled(); // User also offers the explicit source route, without a signed Pi grant.
     await expect(pi).toContainText(wording('en')('registryUi.install.pinnedSourceShort'));
-    await page.keyboard.press('Escape');
 
     await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
-    await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
     await expect(pi).toBeEnabled();
     await expect(pi).toContainText(wording('en')('registryUi.install.pinnedSourceShort'));
     await pi.click();
-    await page.keyboard.press('Escape');
     const direct = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/sentry';
     const add = `npx -y universal-agent-plugins@0.1.110 add ${direct} --target pi --scope project`;
-    await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code')).toHaveText(add);
-    const addSnippet = page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add');
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code')).toHaveText(add);
+    const addSnippet = page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add');
     expect(await addSnippet.locator('code').textContent()).toBe(add);
     await expect(addSnippet.locator('.command-snippet__label')).toHaveText(wording('en')('registryUi.command.terminal'));
     await expect(addSnippet.locator('button .v-icon')).toHaveCount(1);
@@ -133,40 +129,31 @@ for (const width of [1440, 390]) {
 
     // Explicit choices stay selected; the shared Git route adds no signed Pi grant.
     const dialog = page.getByRole('dialog');
-    const picker = dialog.locator('.app-multiselect__trigger');
     const codex = page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ });
     const commonAdd = `npx -y universal-agent-plugins@0.1.110 add ${direct} --target codex,pi --scope project`;
-    await picker.click();
     await codex.click();
     await expect(codex).toBeChecked();
     await expect(pi).toBeChecked();
-    await page.keyboard.press('Escape');
     await expect(addSnippet.locator('code')).toHaveText(commonAdd);
 
     // Removing Pi explicitly returns to Codex's signed Project route.
-    await picker.click();
     await pi.click();
     await expect(pi).not.toBeChecked();
     await expect(codex).toBeChecked();
-    await page.keyboard.press('Escape');
     await expect(addSnippet.locator('code')).toHaveText(
       'npx -y universal-agent-plugins add sentry --target codex --scope project');
 
-    await picker.click();
     await pi.click();
     await expect(pi).toBeChecked();
     await expect(codex).toBeChecked();
-    await page.keyboard.press('Escape');
     await expect(addSnippet.locator('code')).toHaveText(commonAdd);
 
     // Removing Codex explicitly restores the Pi-only source and saved intent.
-    await picker.click();
     await codex.click();
     await expect(codex).not.toBeChecked();
     await expect(pi).toBeChecked();
-    await page.keyboard.press('Escape');
     await expect(addSnippet.locator('code')).toHaveText(add);
-    await page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add button').click();
+    await page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(add);
     await testInfo.attach(`pi-project-card-${width}.png`, {
       body: await page.getByRole('dialog').screenshot({ animations: 'disabled' }),
@@ -188,7 +175,7 @@ for (const width of [1440, 390]) {
     await detail.getByRole('button', { name: 'This computer', exact: true }).click();
     await expect(detail.locator('.command-snippet--add code')).toHaveText(
       'npx -y universal-agent-plugins add sentry');
-    await expect(detail.locator('.app-multiselect__trigger')).toContainText(
+    await expect(detail.locator('.app-multiselect__auto')).toContainText(
       wording('en')('registryUi.install.allInstalledAgents'),
     );
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -231,12 +218,10 @@ test('Pi direct install uses older release provenance without borrowing newer so
   await expect(card.locator('.plugin-card__security')).toHaveCount(1);
   await card.locator('.plugin-card__install-toggle').click();
   await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
-  await page.getByRole('dialog').locator('.app-multiselect__trigger').click();
   await page.getByRole('checkbox', { name: /^Pi(?:\s|$)/ }).click();
-  await page.keyboard.press('Escape');
 
   const sourceUrl = 'https://github.com/777genius/universal-agent-plugins/tree/2ddbb99dd190c1792b79904f9875e6322bccd243/plugins/sentry';
-  await expect(page.getByRole('dialog').locator('.plugin-card__install .command-snippet--add code'))
+  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code'))
     .toContainText('@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/sentry --target pi --scope project');
   await expect(page.getByRole('dialog').locator('.plugin-card__install a', { hasText: 'View source' }))
     .toHaveAttribute('href', sourceUrl);

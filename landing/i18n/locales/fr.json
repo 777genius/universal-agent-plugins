@@ -515,7 +515,7 @@
       "terminal": "Dans votre terminal",
       "refreshNotice": "Les données des plugins sont en cours d’actualisation. Réessayez dans quelques instants.",
       "otherMethods": "Autres méthodes d'installation",
-      "supportedFormats": "Formats pris en charge",
+      "supportedFormats": "Normes",
       "watchDemo": "Voir la démo",
       "demoVideoTitle": "Démo d’installation d’Universal Agent Plugins",
       "supportedClients": "Clients pris en charge",
@@ -589,6 +589,7 @@
       "empty": "Aucune catégorie correspondante"
     },
     "multi": {
+      "search": "Rechercher des agents…",
       "agents": "{count} agent | {count}agents",
       "selected": "{count} sélectionné",
       "auto": "Détection automatique",
@@ -807,6 +808,7 @@
         "label": "Installer pour",
         "user": "Cet ordinateur",
         "project": "Ce projet",
+        "projectLocationHint": "Le projet est le dossier depuis lequel vous exécutez la commande dans le terminal. Exécutez-la à la racine du projet souhaité.",
         "projectHint": "Exécutez ces commandes depuis le dossier du projet. Votre agent peut vous demander de faire confiance au projet ou de l’activer.",
         "projectUnavailable": "L’installation dans un projet n’est pas disponible pour ce paquet.",
         "marketingKitProjectUnavailable": "Marketing Kit n’est pas encore disponible pour Project : chacune de ses dépendances obligatoires Notion, HubSpot et Playwright doit prendre en charge l’installation en Project.",
