@@ -3866,13 +3866,32 @@ def main():
     p.add_argument("--target", required=True)
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--report-dir", required=True)
-    p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"]),
+    p.add_argument("--acceptance", choices=("native", "kiro-prepared-installation",
+                   "cursor-prepared-installation", "grok-prepared-skills-installation",
+                    "windsurf-prepared-installation", "vscode-user-manual-preparation",
+                    HISTORICAL_CODEX["ACCEPTANCE"]),
                    default="native")
     args = p.parse_args()
     historical_baseline = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
     if historical_baseline and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
             "codex", "skill", "linux", "x86_64", 2):
         p.error("Historical npm observation requires exactly two Codex Skills on Linux x86_64")
+    if (args.acceptance == "kiro-prepared-installation"
+            and (args.target, args.kind, sys.platform, args.limit)
+            != ("kiro", "plugin", "darwin", 30)):
+        p.error("Prepared installation acceptance requires the complete Kiro plugin Darwin lane")
+    prepared_routes = {"cursor-prepared-installation": ("cursor", "plugin", "linux", 30),
+                       "grok-prepared-skills-installation": ("grok", "skill", "linux", 30),
+                       "windsurf-prepared-installation": ("windsurf", "plugin", "linux", 30)}
+    if (args.acceptance in prepared_routes
+            and (args.target, args.kind, sys.platform, args.limit) != prepared_routes[args.acceptance]):
+        p.error("Prepared installation acceptance requires its complete Linux target and kind lane")
+    if args.acceptance == "windsurf-prepared-installation" and platform.machine() != "x86_64":
+        p.error("Windsurf installation acceptance requires the pinned Linux x86_64 lane")
+    if (args.acceptance == "vscode-user-manual-preparation"
+            and (args.target, args.kind, sys.platform, platform.machine(), args.limit)
+            != ("vscode", "plugin", "linux", "x86_64", 30)):
+        p.error("Manual preparation observation requires the complete VS Code User plugin Linux lane")
     doc = json.loads(FIXTURES.read_text())
     validate_fixtures(doc)
     if args.target not in doc["targets"] or not 1 <= args.limit <= 30:
@@ -3997,6 +4016,29 @@ def main():
     save()
     print(f'{args.target} {args.kind}: {passed}/{args.limit} native PASS; '
           f'verified_negative={len(accepted_negatives)}; attempted={report["cases_attempted"]}')
+    if args.acceptance == "kiro-prepared-installation":
+        report.update(kiro_prepared_installation_summary(report, doc))
+        save()
+        print(f'Kiro Prepared installation: {report["installation_passed"]}/30 installed; '
+              f'prepared={report["installation_prepared_lifecycle_passed"]}; '
+              f'verified_negative={report["installation_verified_negative_coverage"]}; '
+              'native activation remains unqualified')
+        return 0 if report["installation_acceptance_passed"] else 1
+    if args.acceptance in prepared_routes:
+        report.update(prepared_installation_summary(report, doc, args.acceptance))
+        save()
+        print(f'{args.target} Prepared installation: {report["installation_passed"]}/30 installed; '
+              f'verified refusals={report["installation_verified_negative_coverage"]}; '
+              'native activation remains unqualified')
+        return 0 if report["installation_acceptance_passed"] else 1
+    if args.acceptance == "vscode-user-manual-preparation":
+        report.update(vscode_user_manual_summary(report, doc))
+        save()
+        print(f'VS Code User manual preparation: {report["manual_preparations_observed"]}/29 observed; '
+              f'refused removes preserved={report["manual_refusals_preserved"]}; '
+              f'requirements refusals={report["requirements_refusals_observed"]}; '
+              'native activation and uninstall remain unqualified')
+        return 0 if report["manual_preparation_observation_complete"] else 1
     if historical_baseline:
         report.update(HISTORICAL_CODEX["summary"](report, doc))
         save()
