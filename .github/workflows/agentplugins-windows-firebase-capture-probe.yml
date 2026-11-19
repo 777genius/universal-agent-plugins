@@ -1,13 +1,19 @@
-name: Legacy Windows Firebase/Claude 0.1.101 diagnostic
+name: Windows published Firebase native capture probe
 
 on:
-  # Legacy 0.1.101 flaky-client diagnostic only; not a release gate.
+  pull_request:
+    paths:
+      - '.github/workflows/agentplugins-windows-firebase-capture-probe.yml'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/firebase_runtime_failure.py'
+      - 'scripts/test_firebase_runtime_failure.py'
   workflow_dispatch:
 
-# Manual diagnostic runs are independent; do not silently cancel.
+# Replace superseded PR checks; preserve exact push, scheduled and manual runs.
 concurrency:
-  group: firebase-capture-${{ github.run_id }}
-  cancel-in-progress: false
+  group: firebase-capture-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -34,33 +40,172 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m unittest scripts.test_windows_firebase_probe -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Install exact published UAP 0.1.101 and genuine Claude 2.1.263
+      - name: Install genuine pinned Claude 2.1.263
+        id: native-bootstrap
+        shell: pwsh
+        run: |
+          npm.cmd install --global '@anthropic-ai/claude-code@2.1.263'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          claude --version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Install exact published UAP 0.1.101 legacy control
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         run: |
           npm.cmd install --global universal-agent-plugins@0.1.101
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm.cmd install --global '@anthropic-ai/claude-code@2.1.263'
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $v = (agentplugins version | Out-String).Trim()
           if ($LASTEXITCODE -ne 0 -or $v -ne 'agentplugins 0.1.101') { throw "Wrong UAP release" }
-          claude --version
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Genuine pinned Firebase add, repeat, native attribution and remove
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         env:
           AUDIT_VENDOR_OUTCOME: success
           PYTHONDONTWRITEBYTECODE: '1'
         run: |
-          python scripts/windows_firebase_capture_probe.py
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          @'
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          import tempfile
 
+          source = Path('scripts/live-install-audit.py').resolve()
+          spec = importlib.util.spec_from_file_location('published_firebase', source)
+          audit = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(audit)
+          doc = json.loads(Path('tests/live-install/fixtures.json').read_text(encoding='utf-8'))
+          audit.validate_fixtures(doc)
+          assert doc['plugin_aliases'][6] == 'firebase'
+          cli = shutil.which('agentplugins.cmd')
+          assert cli is not None
+          report = Path(os.environ['RUNNER_TEMP']) / 'published-firebase-claude.json'
+          # Reproduce the original long Windows TEMP profile, unlike the
+          # shorter RUNNER_TEMP positive control from the previous run.
+          with tempfile.TemporaryDirectory(prefix='uap-live-30x30-') as root:
+              case_root_chars = len(str(Path(root) / 'plugin-06'))
+              assert case_root_chars >= 65, 'Original Windows TEMP profile was not reproduced'
+              row = audit.do_case(str(Path(cli).resolve()), 'claude', 'plugin', 'firebase',
+                                  6, Path(root), doc['plugin_declared_names'],
+                                  doc['signed_release_pins'])
+              report.write_text(json.dumps({
+                  'source_sha': os.environ.get('GITHUB_SHA'),
+                  'published_cli': 'agentplugins 0.1.101',
+                  'target': 'claude', 'kind': 'plugin', 'case_index': 6,
+                  'temp_profile': 'original-windows-default', 'case_root_chars': case_root_chars,
+                  'case': row
+              }, indent=2) + '\n', encoding='utf-8')
+              print(json.dumps({'status': row.get('status'),
+                                'repeat_verified': row.get('repeat_verified'),
+                                'removal_verified': row.get('removal_verified'),
+                                'sentinels_preserved': row.get('sentinels_preserved')}))
+              if (row.get('status') != 'passed'
+                      or row.get('repeat_verified') is not True
+                      or row.get('removal_verified') is not True
+                      or row.get('sentinels_preserved') is not True
+                      or row.get('native_residuals') != []):
+                  raise SystemExit('Published Windows Firebase native lifecycle unqualified')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: ${{ !cancelled() }}
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Build exact current-source CLI for Windows
+        id: source-build
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          # Match the source catalog's release-semver fixture for Directory policy.
+          # The report binds this source build to its actual checkout and binary.
+          python -B -m unittest discover -s scripts -p test_firebase_runtime_failure.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          go build -trimpath -ldflags='-X main.version=0.1.95' -o "$env:RUNNER_TEMP\agentplugins-source.exe" ./cli/cmd/agentplugins
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Genuine current-source Firebase add, repeat, native attribution and remove
+        if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}
+        shell: pwsh
+        env:
+          AUDIT_VENDOR_OUTCOME: ${{ steps.native-bootstrap.outcome }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          @'
+          import hashlib
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import tempfile
+
+          source = Path('scripts/live-install-audit.py').resolve()
+          spec = importlib.util.spec_from_file_location('published_firebase', source)
+          audit = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(audit)
+          if not audit.vendor_bootstrap_attested():
+              raise SystemExit('Vendor bootstrap was not verified; no native-client PASS is permitted')
+          doc = json.loads(Path('tests/live-install/fixtures.json').read_text(encoding='utf-8'))
+          audit.validate_fixtures(doc)
+          assert doc['plugin_aliases'][6] == 'firebase'
+          cli = Path(os.environ['RUNNER_TEMP']) / 'agentplugins-source.exe'
+          assert cli.is_file()
+          actual_head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True, timeout=30).strip()
+          actual_tree = subprocess.check_output(['git', 'rev-parse', 'HEAD^{tree}'], text=True, timeout=30).strip()
+          clean_worktree = subprocess.check_output(['git', 'status', '--porcelain'], text=True, timeout=30) == ''
+          assert actual_head == os.environ['GITHUB_SHA'] and clean_worktree
+          cli_version = subprocess.check_output([str(cli), 'version'], text=True, timeout=30).strip()
+          assert cli_version == 'agentplugins 0.1.95', 'Source fixture version differs from Directory policy pin'
+          cli_sha256 = hashlib.sha256(cli.read_bytes()).hexdigest()
+          report = Path(os.environ['RUNNER_TEMP']) / 'source-firebase-claude.json'
+          # Reproduce the original long Windows TEMP profile, unlike the
+          # shorter RUNNER_TEMP positive control from the previous run.
+          with tempfile.TemporaryDirectory(prefix='uap-live-30x30-') as root:
+              case_root_chars = len(str(Path(root) / 'plugin-06'))
+              assert case_root_chars >= 65, 'Original Windows TEMP profile was not reproduced'
+              row = audit.do_case(str(Path(cli).resolve()), 'claude', 'plugin', 'firebase',
+                                  6, Path(root), doc['plugin_declared_names'],
+                                  doc['signed_release_pins'])
+              if row.get('status') != 'passed':
+                  from runpy import run_path
+                  row['runtime_failure_facts'] = run_path(
+                      'scripts/firebase_runtime_failure.py')['collect'](Path(root) / 'plugin-06')
+              report.write_text(json.dumps({
+                  'source_sha': actual_head, 'source_tree': actual_tree,
+                  'clean_worktree': clean_worktree, 'cli_provenance': 'built-exact-checkout',
+                  'source_cli_version': cli_version, 'source_cli_sha256': cli_sha256,
+                  'target': 'claude', 'kind': 'plugin', 'case_index': 6,
+                  'temp_profile': 'original-windows-default', 'case_root_chars': case_root_chars,
+                  'case': row
+              }, indent=2) + '\n', encoding='utf-8')
+              print(json.dumps({'status': row.get('status'),
+                                'repeat_verified': row.get('repeat_verified'),
+                                'removal_verified': row.get('removal_verified'),
+                                'sentinels_preserved': row.get('sentinels_preserved')}))
+              if (row.get('status') != 'passed'
+                      or row.get('repeat_verified') is not True
+                      or row.get('removal_verified') is not True
+                      or row.get('sentinels_preserved') is not True
+                      or row.get('native_residuals') != []):
+                  raise SystemExit('Current-source Windows Firebase native lifecycle unqualified')
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve exact-source evidence on failure
-        if: always()
+        if: ${{ always() && github.event_name == 'workflow_dispatch' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
         with:
           name: published-firebase-claude
-          path: |
-            ${{ runner.temp }}/published-firebase-claude.json
-            ${{ runner.temp }}/published-firebase-process-family.json
+          path: ${{ runner.temp }}/published-firebase-claude.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Preserve current-source Firebase evidence on failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
+        with:
+          name: source-firebase-claude
+          path: ${{ runner.temp }}/source-firebase-claude.json
           if-no-files-found: warn
           retention-days: 7
