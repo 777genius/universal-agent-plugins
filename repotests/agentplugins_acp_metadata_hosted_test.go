@@ -25,10 +25,10 @@ import (
 )
 
 type acpMetadataFile struct {
-	Mode     uint32   `json:"mode"`
-	Bytes    int64    `json:"bytes"`
-	SHA      string   `json:"sha256,omitempty"`
-	Identity []uint64 `json:"identity"`
+	Mode     uint32 `json:"mode"`
+	Bytes    int64  `json:"bytes"`
+	SHA      string `json:"sha256,omitempty"`
+	Identity []any  `json:"identity"`
 	info     os.FileInfo
 }
 
@@ -43,7 +43,7 @@ func acpMetadataFileFact(path string) (acpMetadataFile, error) {
 		return acpMetadataFile{}, fmt.Errorf("metadata custody type/owner")
 	}
 	fact := acpMetadataFile{Mode: uint32(info.Mode()), Bytes: info.Size(),
-		Identity: []uint64{uint64(stat.Dev), stat.Ino, uint64(stat.Nlink), uint64(stat.Uid)}, info: info}
+		Identity: []any{stat.Dev, stat.Ino, stat.Nlink, stat.Uid}, info: info}
 	if info.Mode().IsRegular() {
 		if stat.Nlink != 1 {
 			return acpMetadataFile{}, fmt.Errorf("metadata custody hardlink")
