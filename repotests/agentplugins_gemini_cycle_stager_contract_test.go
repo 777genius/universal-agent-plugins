@@ -114,7 +114,17 @@ func geminiCycleStageActual(t *testing.T, w *geminiProjectCycle, scope string) [
 	}
 	i = state.Installations[0]
 	b = i.Clients[b.ClientBindingID]
+	// The adapter-only seam has no native runner, so it must not claim observed
+	// project readiness. Author only the synthetic earned tuple consumed by the
+	// independent positive proof contracts; no native transcript is fabricated.
+	if scope != "user" && (outcome.Activation != domain.ActivationPrepared || outcome.Authentication != domain.AuthenticationNotChecked) {
+		t.Fatal("unobserved project adapter earned readiness")
+	}
 	b.Activation = outcome.Activation
+	if scope != "user" {
+		b.Activation = domain.ActivationActive
+		b.Authentication = domain.AuthenticationNotRequired
+	}
 	b.Verification = outcome.Verification
 	b.NativeObjects = outcome.NativeObjects
 	i.Clients[b.ClientBindingID] = b

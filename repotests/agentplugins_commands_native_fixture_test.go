@@ -179,10 +179,12 @@ func commandsRunInstaller(t *testing.T, root, dir string, env []string, installe
 	cmd.Env, cmd.Dir = env, dir
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
+	started := time.Now()
 	stdout, err := cmd.Output()
 	nativeWrite(t, filepath.Join(root, label+"-installer.json"), stdout, 0o600)
 	nativeWrite(t, filepath.Join(root, label+"-installer-stderr.log"), stderr.Bytes(), 0o600)
 	if ctx.Err() != nil {
+		commandsRecordTimeout(t, root, label, cmd, time.Since(started), ctx.Err())
 		t.Fatalf("%s timed out:\n%s", label, stderr.Bytes())
 	}
 	var result map[string]any

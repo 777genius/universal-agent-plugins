@@ -8,6 +8,11 @@ on:
         type: string
         required: false
         default: ''
+      require_trusted_publish:
+        description: Verify trusted workflow_run; require latest parity for unpinned published audits
+        type: boolean
+        required: false
+        default: false
     outputs:
       version:
         description: Verified exact npm/GitHub stable release version
@@ -15,6 +20,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   resolve:
@@ -34,15 +40,54 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_VERSION: ${{ inputs.version }}
+          REQUIRE_TRUSTED_PUBLISH: ${{ inputs.require_trusted_publish }}
+          PUBLISH_RUN_ID: ${{ github.event.workflow_run.id || '' }}
+          PUBLISH_HEAD_REF: ${{ github.event.workflow_run.head_branch || '' }}
         run: |
           set -euo pipefail
           requested="${REQUESTED_VERSION:-}"
+          # A successful prepare-only workflow is NOT a published npm release.
+          # The complete run must contain successful publish and verify-public jobs,
+          # and the tested version is bound to that run's immutable release tag.
+          if [[ "${REQUIRE_TRUSTED_PUBLISH}" == "true" && "${GITHUB_EVENT_NAME}" == "workflow_run" ]]; then
+            [[ -z "$requested" && "${PUBLISH_RUN_ID}" =~ ^[0-9]+$ && "${PUBLISH_HEAD_REF}" =~ ^agentplugins-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "::error::Trusted publisher identity missing or ambiguous" >&2
+              exit 2
+            }
+            jobs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PUBLISH_RUN_ID}/jobs?per_page=100")"
+            if ! jq -e '
+              ([.jobs[] | select(.name == "Publish npm package with trusted provenance" and .conclusion == "success")] | length) == 1
+              and ([.jobs[] | select(.name == "Verify public npm provenance and lifecycle" and .conclusion == "success")] | length) == 1
+            ' <<< "$jobs" >/dev/null; then
+              echo "::error::Triggering workflow did not complete trusted npm publish AND public verification" >&2
+              exit 2
+            fi
+            requested="${PUBLISH_HEAD_REF#agentplugins-v}"
+          fi
+          # Trusted publisher events always require current-release parity.
+          # Scheduled/manual published audits require it when unpinned;
+          # explicit historical-version diagnostics and source PR smoke do not.
+          latest_parity_required=false
+          if [[ "${REQUIRE_TRUSTED_PUBLISH}" == "true" && ( "${GITHUB_EVENT_NAME}" == "workflow_run" || -z "$requested" ) ]]; then
+            latest_parity_required=true
+          fi
           if [[ -n "$requested" && ! "$requested" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Only an exact stable version is allowed" >&2
             exit 1
           fi
           if [[ -z "$requested" ]]; then
-            tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+            # GitHub can publish a Release before the environment-approved npm
+            # publish. Select only the npm latest stable version for ordinary
+            # native installer checks, then verify its exact public GitHub tag.
+            # An unpublished GitHub Release must not poison PR/weekly smoke.
+            # Unpinned native source-PR smoke may be historical npm-stable;
+            # published audits without an explicit version must also prove latest parity.
+            current="$(npm view universal-agent-plugins dist-tags.latest 2>/dev/null || true)"
+            [[ "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+              echo "::error::npm latest is missing or not a stable version ('$current')" >&2
+              exit 2
+            }
+            tag="agentplugins-v$current"
           else
             tag="agentplugins-v$requested"
           fi
@@ -57,9 +102,15 @@ jobs:
           # Bound retries; a mismatch is NEVER treated as a qualified release.
           published=""
           current=""
+          latest_public_tag=""
           for attempt in 1 2 3 4 5 6; do
             published="$(npm view "universal-agent-plugins@$version" version 2>/dev/null || true)"
-            if [[ -n "$requested" ]]; then
+            if [[ "$latest_parity_required" == "true" ]]; then
+              # Release certification must not pass on historical npm bytes.
+              current="$(npm view universal-agent-plugins dist-tags.latest 2>/dev/null || true)"
+              latest_public_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+              [[ "$published" == "$version" && "$current" == "$version" && "$latest_public_tag" == "$tag" ]] && break
+            elif [[ -n "$requested" ]]; then
               [[ "$published" == "$version" ]] && break
             else
               current="$(npm view universal-agent-plugins dist-tags.latest 2>/dev/null || true)"
@@ -71,6 +122,10 @@ jobs:
             echo "::error::Published npm package '$version' missing or stale (got '$published')" >&2
             exit 2
           }
+          if [[ "$latest_parity_required" == "true" && ( "$current" != "$version" || "$latest_public_tag" != "$tag" ) ]]; then
+            echo "::error::Latest public release/npm parity failed: GitHub '$latest_public_tag', npm latest '$current', trusted tag '$tag'" >&2
+            exit 2
+          fi
           if [[ -z "$requested" && "$current" != "$version" ]]; then
             echo "::error::npm latest '$current' differs from public release '$version'" >&2
             exit 2

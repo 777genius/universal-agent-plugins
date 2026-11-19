@@ -165,6 +165,11 @@ func TestModernDirectoryProfileRequiresIndependentAuthority(t *testing.T) {
 		{"unsafe identity", func(a *modernMirrorAuthority) { a.FeedID = "../legacy" }},
 		{"historical key id", func(a *modernMirrorAuthority) { a.KeyID = directoryKeyID }},
 		{"historical key bytes", func(a *modernMirrorAuthority) { a.PublicKeyBase64 = directoryPublicKey }},
+		{"successor key id", func(a *modernMirrorAuthority) { a.KeyID = mirrorNextDirectoryKeyID }},
+		{"successor key bytes renamed", func(a *modernMirrorAuthority) {
+			a.KeyID = "alias-for-pretrusted-successor"
+			a.PublicKeyBase64 = mirrorNextDirectoryPublicKey
+		}},
 		{"malformed key", func(a *modernMirrorAuthority) { a.PublicKeyBase64 = "invalid" }},
 		{"historical origin", func(a *modernMirrorAuthority) { a.Origin = defaultPagesOrigin + "registry/modern/schemas/1/" }},
 		{"origin spelling", func(a *modernMirrorAuthority) { a.Origin = "https://777GENIUS.github.io.:00443/other/schemas/1/" }},
@@ -176,6 +181,28 @@ func TestModernDirectoryProfileRequiresIndependentAuthority(t *testing.T) {
 			tc.edit(&approved)
 			if _, err := newModernDirectoryProfile(approved); err == nil {
 				t.Fatal("unreviewed or historical authority accepted")
+			}
+		})
+	}
+}
+
+func TestModernDirectoryMirrorRejectsSuccessorBeforeTrustConstruction(t *testing.T) {
+	for _, tc := range []struct {
+		name, diagnostic string
+		edit             func(*modernMirrorAuthority)
+	}{
+		{"pretrusted_id", "distinct pinned signing key", func(a *modernMirrorAuthority) { a.KeyID = mirrorNextDirectoryKeyID }},
+		{"renamed_pretrusted_bytes", "pretrusted production public key", func(a *modernMirrorAuthority) {
+			a.KeyID = "modern-alias-for-next"
+			a.PublicKeyBase64 = mirrorNextDirectoryPublicKey
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			approved, _ := modernFixtureAuthority()
+			tc.edit(&approved)
+			_, err := newModernDirectoryProfile(approved)
+			if err == nil || !strings.Contains(err.Error(), tc.diagnostic) {
+				t.Fatalf("pretrusted legacy-feed successor was not rejected by mirror: %v", err)
 			}
 		})
 	}

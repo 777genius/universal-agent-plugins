@@ -256,12 +256,28 @@ test('accepted running operation returns modal focus to search when its review t
   const state = await serveFixtures(page);
   const operation = await fixture<Operation>('operation');
   await page.route('**/api/v1/operations/*', (route) => route.fulfill({ json: { ...operation, state: 'running', completed: 0, phase: 'Installing skills', items: [], result: undefined } }));
+  let releaseApply!: () => void;
+  const applyResponse = new Promise<void>((resolve) => { releaseApply = resolve; });
+  await page.route('**/api/v1/plans/*/apply', async (route) => {
+    await applyResponse;
+    await route.fallback();
+  });
   await page.goto('/#capability=test-capability');
   await page.getByRole('checkbox', { name: 'Select docs/review', exact: true }).check();
   await page.getByRole('checkbox', { name: `Target ${state.targets.targets[0].label}` }).check();
   const trigger = page.locator('.bottom-bar').getByRole('button', { name: 'Review installation', exact: true });
   await trigger.click();
-  await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
+  try {
+    await page.getByRole('button', { name: 'Confirm installation', exact: true }).click();
+    const review = page.getByRole('dialog', { name: 'Review installation' });
+    await expect(review).toBeVisible();
+    await expect(review.getByRole('button', { name: 'Confirming…', exact: true })).toBeDisabled();
+    await expect(review.getByRole('button', { name: 'Back', exact: true })).toBeDisabled();
+    await expect(review.getByRole('button', { name: 'Close', exact: true })).toBeDisabled();
+    expect(state.counts().applyCount).toBe(0);
+  } finally {
+    releaseApply();
+  }
   await expect(page.getByRole('heading', { name: 'Installing skills', exact: true })).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(trigger).toBeDisabled();

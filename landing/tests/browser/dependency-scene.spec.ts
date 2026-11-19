@@ -17,6 +17,12 @@ for (const width of [1440, 390]) {
     await expect(scene).not.toHaveClass(/dependency-scene--revealed/);
     await expect(scene.getByText('Demonstration package', { exact: true })).toHaveCount(0);
     await expect(scene.locator('[role="img"]')).toHaveAccessibleName(/Playwright/);
+    await expect(scene.locator('.dependency-scene__package .dependency-scene__version')).toHaveText(['v0.1.0', 'v0.1.0']);
+    await expect(scene.locator('.dependency-scene__dependency--playwright')).toHaveCount(1);
+    await expect(scene.locator('.dependency-scene__dependency--playwright .dependency-scene__version')).toHaveText('v0.0.80');
+    for (const edges of ['marketing', 'design']) {
+      await expect(scene.locator(`.dependency-scene__edges--desktop .dependency-scene__${edges}-edges path`).first()).toHaveAttribute('d', /430 220$/);
+    }
     const graph = await scene.locator('.dependency-scene__graph').boundingBox();
     expect(graph!.height).toBe(width > 900 ? 352 : 544);
     if (width > 900) expect((await scene.boundingBox())!.width).toBe(944);

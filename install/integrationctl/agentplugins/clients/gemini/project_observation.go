@@ -65,7 +65,7 @@ func observeGeminiProjectComponents(ctx context.Context, env clients.Env, reques
 	if observed, probeErr := observeGeminiProjectMCP(ctx, env, request, expected); probeErr != nil || !observed {
 		return false, probeErr
 	}
-	return VerifyGeminiNativeObjects(request.Plan.NativeRegistryRoot, request.Delivery.NativeObjects, false, env.NativeConfig) == nil, nil
+	return verifyGeminiProjectObservation(env.NativeConfig, request)
 }
 
 func observeGeminiProjectSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, skills []domain.ComponentDecision) (bool, error) {
@@ -177,4 +177,14 @@ func geminiSkillMetadataMatches(ctx context.Context, kernel nativeconfig.Kernel,
 		}
 	}
 	return true
+}
+
+// A fresh native listing cannot override restrictions or a shadow alias created
+// while the probe ran. Recheck them before accepting the final owned-byte proof.
+func verifyGeminiProjectObservation(kernel nativeconfig.Kernel, request domain.ActivationRequest) (bool, error) {
+	conditions, err := geminiProjectConditions(kernel, request)
+	if err != nil || len(conditions) != 0 {
+		return false, err
+	}
+	return VerifyGeminiNativeObjects(request.Plan.NativeRegistryRoot, request.Delivery.NativeObjects, false, kernel) == nil, nil
 }

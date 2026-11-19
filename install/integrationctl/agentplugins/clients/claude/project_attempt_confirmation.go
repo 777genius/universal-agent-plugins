@@ -125,8 +125,14 @@ func survivingClaudeCommand(processes []legacyports.LiveProcess, executable, con
 	profile := "CLAUDE_CONFIG_DIR=" + filepath.Clean(configRoot)
 	for _, process := range processes {
 		claude, plugin := names[claudeCommandName(process.Executable)], false
+		nodeScript := false
+		if claudeCommandName(process.Executable) == "node" && len(process.Argv) > 1 {
+			script := filepath.Clean(process.Argv[1])
+			entrypoint := filepath.Join("node_modules", "@anthropic-ai", "claude-code", "cli.js")
+			nodeScript = script == entrypoint || strings.HasSuffix(script, string(filepath.Separator)+entrypoint)
+		}
 		for i, arg := range process.Argv {
-			if names[claudeCommandName(arg)] {
+			if names[claudeCommandName(arg)] || i == 1 && nodeScript {
 				claude = true
 				plugin = plugin || i+1 < len(process.Argv) && process.Argv[i+1] == "plugin"
 			}

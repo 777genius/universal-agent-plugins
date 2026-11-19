@@ -418,17 +418,18 @@
     },
     "dependencies": {
       "eyebrow": "Dependencies, connected",
-      "title": "Two plugins. One shared dependency.",
+      "title": "Two plugins\nOne shared dependency",
       "description": "Install a plugin with its dependencies. Shared dependencies at the same compatible version are installed once.",
       "demoPackage": "Demonstration package",
       "installed": "Installed",
       "alreadyInstalled": "Already installed",
-      "shared": "shared",
+      "shared": "Shared by both plugins",
       "caption": "Illustrative packages and dependency graph. Playwright is shared by both packages; Context7 is already installed.",
-      "graphDescription": "marketing-kit depends on Playwright, HubSpot and Notion. Web Design Kit depends on the same Playwright package, Figma and Context7. All packages are installed; Context7 was already installed."
+      "graphDescription": "Example versions: marketing-kit v{marketingVersion} and Web Design Kit v{designVersion} both reuse one Playwright bridge dependency at v{playwrightVersion}. Marketing Kit also uses HubSpot and Notion; Web Design Kit uses Figma and Context7.",
+      "exampleVersions": "Example versions"
     },
     "restore": {
-      "title": "Same plugin versions. Across your team.",
+      "title": "Same plugin versions\nAcross your team",
       "guide": "Guide",
       "from": "My computer",
       "to": "Teammate's computer",
@@ -616,7 +617,7 @@
       "more": "+{count} more"
     },
     "command": {
-      "terminal": "Terminal",
+      "terminal": "Your terminal",
       "copiedLabel": "Command copied",
       "copyLabel": "Copy command",
       "copied": "Copied",
@@ -858,9 +859,10 @@
       "unsupportedPluginComponents": "{agent} does not support all components of this plugin.",
       "dialogDescription": "Choose agents and an installation scope, then run the command in your terminal.",
       "closeDialog": "Close installation",
-      "pinnedSourceShort": "Pinned Git source",
+      "pinnedSourceShort": "Install via Git",
       "desktopSourceShort": "Local desktop connection",
-      "webSetupShort": "Guided web setup"
+      "webSetupShort": "Guided web setup",
+      "selectionRoutesUnavailable": "Your agent choices are kept. This combination has no common installation source in the selected scope. Adjust the agents or scope to get an installation command."
     },
     "authentication": {
       "not_required": "No account required",

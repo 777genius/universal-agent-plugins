@@ -252,7 +252,7 @@ func TestDevinGlobalPreflightAllowsUnstagedButActivationRequiresExactDelivery(t 
 	}
 }
 
-func TestDevinGlobalNewVersionDoesNotAdmitProjectOrNonprimaryClient(t *testing.T) {
+func TestDevinGlobalNewVersionPreservesProjectAndNonprimaryBoundaries(t *testing.T) {
 	client, plan, _ := globalOfflineFixture(t)
 	client.Version = "3000.12.57"
 	if _, err := devinGlobalPlanRoot(client, plan); err != nil {
@@ -264,8 +264,8 @@ func TestDevinGlobalNewVersionDoesNotAdmitProjectOrNonprimaryClient(t *testing.T
 	project.Scope, project.TargetContext = domain.ScopeProject, target
 	project.NativeRegistryRoot = filepath.Join(target.ProjectRoot, ".devin")
 	globalOfflineWrite(t, filepath.Join(project.NativeRegistryRoot, "config.json"), "{}")
-	if err := New().CheckPlanPrecondition(clients.PlanInput{TargetContext: target, Client: client}, &project); err == nil || !strings.Contains(err.Error(), "observed exact version 3000.11.205") {
-		t.Fatalf("Global version qualification admitted an unobserved Project profile: %v", err)
+	if err := New().CheckPlanPrecondition(clients.PlanInput{TargetContext: target, Client: client}, &project); err != nil {
+		t.Fatalf("observed exact Devin Project version was refused: %v", err)
 	}
 	client.Version = "3000.11.205"
 	if err := New().CheckPlanPrecondition(clients.PlanInput{TargetContext: target, Client: client}, &project); err != nil {

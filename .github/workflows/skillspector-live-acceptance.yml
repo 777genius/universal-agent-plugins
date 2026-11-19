@@ -9,6 +9,7 @@ on:
       - "landing/features/skillspector/**"
       - "landing/utils/skillSpector*.ts"
       - "landing/scripts/skillspector-live-smoke.mjs"
+      - "landing/scripts/hero-video-live-smoke.mjs"
       - "landing/types/skillSpector.ts"
       - ".github/workflows/skillspector-live-acceptance.yml"
   workflow_run:
@@ -129,6 +130,18 @@ jobs:
           UAP_GITHUB_READ_TOKEN: ${{ github.token }}
         run: node --experimental-strip-types scripts/skills-install-live-smoke.ts
 
+      - name: Verify actual production Mux video
+        working-directory: landing
+        timeout-minutes: 5
+        env:
+          UAP_PRODUCTION_SOURCE_RECEIPT: ${{ runner.temp }}/production-site-control/receipt.json
+          UAP_PAGES_RUN_ID: ${{ github.event.workflow_run.id }}
+          UAP_PAGES_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          UAP_HERO_VIDEO_REPORT_DIR: ${{ runner.temp }}/uap-hero-video-live
+        run: |
+          google-chrome --version
+          node scripts/hero-video-live-smoke.mjs
+
       - name: Retain evidence and screenshots
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
@@ -137,6 +150,7 @@ jobs:
           path: |
             ${{ runner.temp }}/uap-skillspector-live/
             ${{ runner.temp }}/uap-skills-install-live/
+            ${{ runner.temp }}/uap-hero-video-live/
             ${{ runner.temp }}/production-site-control/receipt.json
           if-no-files-found: warn
           retention-days: 7

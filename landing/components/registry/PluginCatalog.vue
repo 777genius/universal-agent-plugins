@@ -298,7 +298,7 @@ watch([query, category, component, source, trust, client, authentication, owner,
       <AppSelect
         v-if="!query.trim()"
         v-model="sort"
-        leading-icon="category"
+        leading-icon="sort"
         :label="t('registryUi.catalog.sortLabel')"
         :options="sortOptions"
       />

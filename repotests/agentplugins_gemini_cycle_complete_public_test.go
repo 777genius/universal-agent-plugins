@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 )
 
 const geminiCompleteReload = "in a running Gemini CLI session use `/mcp reload` and `/skills reload`, or restart Gemini CLI"
@@ -37,6 +38,12 @@ func (c *geminiCompleteCapture) public() error {
 			cwd = c.Paths["outside"]
 		}
 		row, readErr := geminiCompleteJSON(c.Files[label+".command.json"])
+		if readErr == nil {
+			if err := c.publicInventoryReceipt(label, row); err != nil {
+				return err
+			}
+			delete(row, "inventory")
+		}
 		exit := 0
 		if label == "repeat-remove-a" {
 			exit = 1
@@ -121,8 +128,12 @@ func geminiCompletePublicPlan(r *geminiCycleRecipe) map[string]any {
 	if r.Scope != "user" {
 		action = "project skills and MCP settings can be configured automatically; native discovery, workspace trust and system policy require observation in Gemini CLI"
 	}
+	warnings := []string{"authentication_not_catalog_verified"}
+	if r.Scope != "user" {
+		warnings = append(warnings, "Installation may trust the selected project \""+r.Project+"\" in Gemini CLI. Existing distrust is preserved; this preference remains after removal.", "Gemini CLI verification starts or connects to all enabled MCP servers from this project, your profile and extensions under their current policy. Readiness is checked for the selected plugin.")
+	}
 	return map[string]any{"client_id": "gemini", "scope": r.scopeName(), "status": "ready", "package_mode": "native", "activation": "prepared", "authentication": "not_checked", "policy": "allowed", "verification": "package_validated", "physical_artifact_id": r.Binding.PhysicalArtifact,
-		"components": []any{map[string]any{"kind": "skill", "name": r.Name, "support": "native"}, map[string]any{"kind": "mcp_server", "name": r.Name, "support": "native"}}, "user_actions": []string{"verify the plugin's authentication requirements before using it", action}, "warnings": []string{"authentication_not_catalog_verified"}}
+		"components": []any{map[string]any{"kind": "skill", "name": r.Name, "support": "native"}, map[string]any{"kind": "mcp_server", "name": r.Name, "support": "native"}}, "user_actions": []string{"verify the plugin's authentication requirements before using it", action}, "warnings": warnings}
 }
 
 func geminiCompletePublicResult(r *geminiCycleRecipe, label string) map[string]any {
@@ -133,13 +144,13 @@ func geminiCompletePublicResult(r *geminiCycleRecipe, label string) map[string]a
 		result["deactivation"] = map[string]any{"activation": "not_required", "artifact_removal_allowed": true, "external_removal_complete": true}
 		return result
 	}
-	activation, actions := "active", []string{geminiCompleteReload}
-	if r.Scope != "user" {
-		activation = "prepared"
-		actions = append(actions, "Gemini project configuration is installed; native discovery, workspace trust, system policy and MCP initialization remain unobserved; start Gemini CLI in the selected project and inspect skills list and mcp list")
+	activation := map[string]any{"activation": "active", "authentication": "not_required", "policy": "allowed", "verification": "installation_verified"}
+	if r.Scope == "user" {
+		activation["authentication"] = "not_checked"
+		activation["user_actions"] = []string{geminiCompleteReload}
 	}
 	result["plan"] = geminiCompletePublicPlan(r)
-	result["activation"] = map[string]any{"activation": activation, "authentication": "not_checked", "policy": "allowed", "verification": "installation_verified", "user_actions": actions}
+	result["activation"] = activation
 	if label != "repeat-add-a" {
 		result["group_phase"] = "external_completed"
 	}
@@ -163,12 +174,18 @@ func geminiCompletePublicData(r *geminiCycleRecipe, label, operation string) map
 		source = "local"
 	}
 	output := map[string]any{"plugin": geminiCycleName, "version": "1.0.0", "source": source, "tree_digest": r.Digest, "manifest_digest": "sha256:" + geminiCycleSHA(r.Authored["plugin.json"]), "dry_run": false, "result": geminiCompletePublicResult(r, label)}
-	if !strings.HasPrefix(label, "remove-") {
+	if r.Scope == "user" && !strings.HasPrefix(label, "remove-") {
 		output["next_action"] = geminiCompleteNext
 	}
 	if strings.HasPrefix(label, "add-") || label == "repeat-add-a" || label == "update-a" || label == "unchanged-update-a" {
 		output["scope"], output["readiness"] = r.scopeName(), "needs_action"
 		output["next_actions"] = []any{map[string]any{"code": "verify_native", "actor": "native_client", "message": geminiCompleteNext}}
+	}
+	if r.Scope != "user" && !strings.HasPrefix(label, "remove-") {
+		if _, exists := output["readiness"]; exists {
+			output["readiness"] = "ready"
+		}
+		delete(output, "next_actions")
 	}
 	if label == "repeat-add-a" {
 		output["security"] = geminiCompleteSecurity(r, true)
@@ -176,7 +193,7 @@ func geminiCompletePublicData(r *geminiCycleRecipe, label, operation string) map
 	}
 	output["operation_id"] = operation
 	target := map[string]any{"target": "gemini", "status": "external_completed", "output": output}
-	if !strings.HasPrefix(label, "remove-") {
+	if r.Scope == "user" && !strings.HasPrefix(label, "remove-") {
 		target["next_action"] = geminiCompleteNext
 	}
 	if label == "update-a" || label == "unchanged-update-a" {
@@ -187,7 +204,10 @@ func geminiCompletePublicData(r *geminiCycleRecipe, label, operation string) map
 		data["version"], data["source"], data["tree_digest"] = "1.0.0", source, r.Digest
 	}
 	if strings.HasPrefix(label, "add-") {
-		data["action_required"], data["manifest_digest"] = 1, output["manifest_digest"]
+		data["manifest_digest"] = output["manifest_digest"]
+		if r.Scope == "user" {
+			data["action_required"] = 1
+		}
 		data["security"], data["environment"] = geminiCompleteSecurity(r, false), map[string]any{"reason": "no_save_requested", "saved": false, "scope": r.scopeName(), "scope_selection_reason": "explicit"}
 	}
 	if strings.HasPrefix(label, "remove-") {
@@ -200,4 +220,39 @@ func geminiCompletePublicData(r *geminiCycleRecipe, label, operation string) map
 		data["retained_data_action"] = "run `" + action + "` to delete retained plugin data"
 	}
 	return data
+}
+
+func (c *geminiCompleteCapture) publicInventoryReceipt(label string, command map[string]any) error {
+	row, err := geminiCompleteObject(command["inventory"], "scope started_at finished_at provider_requests stream")
+	if err != nil || row["scope"] != geminiCycleScope(label) || row["provider_requests"] != json.Number("0") {
+		return geminiCompleteRefusal()
+	}
+	start, err := geminiCompleteTime(row["started_at"])
+	if err != nil {
+		return err
+	}
+	end, err := geminiCompleteTime(row["finished_at"])
+	if err != nil || start.Before(c.Started) || end.Before(start) || end.After(c.Finished) || end.Sub(start) > 30*time.Second {
+		return geminiCompleteRefusal()
+	}
+	segment, err := geminiCompleteStream(row["stream"])
+	if err != nil {
+		return err
+	}
+	allowed := map[string]*geminiCycleRecipe{}
+	if len(geminiCyclePublicInventoryPhases(label)) > 0 {
+		for _, scope := range []string{"user", geminiCycleScope(label)} {
+			r := c.Proof.Views[label][scope]
+			if r == nil || r.Removed || r.Binding.ClientBindingID == "" {
+				return geminiCompleteRefusal()
+			}
+			allowed[r.Nonce] = r
+		}
+	}
+	sessions, pids, err := geminiCyclePublicInventory(segment, label, allowed, c.Paths["home"], start, end, c.PublicProbeSessions, c.PublicProbePIDs)
+	if err != nil {
+		return err
+	}
+	c.PublicProbeSessions, c.PublicProbePIDs = sessions, pids
+	return nil
 }

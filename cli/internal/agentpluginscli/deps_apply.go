@@ -187,6 +187,14 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 	if err != nil || !confirmed {
 		return err
 	}
+	if !yes && app.Terminal && opts.format == "human" {
+		if _, err := fmt.Fprintln(&planWriter{writer: cmd.OutOrStdout()}, "\nChanges confirmed."); err != nil {
+			return err
+		}
+	}
+	stop := startCommandActivity(cmd, app, opts, "Applying changes")
+	defer stop()
+	app = stopPluginActivityOnWrite(app, stop)
 	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, consent: request.consent, trustAliases: explicitAddAliases(cmd, request.aliases)}
 	checked := func(ctx context.Context) error {
 		if err := request.checkInputs(); err != nil {
@@ -209,6 +217,7 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 		return err
 	}
 	applied, applyErr := applyPreparedDependencies(cmd.Context(), app, &request, adapter, checked)
+	stop()
 	results := applied.Results()
 	app.finishInstall(opts, cmd.CommandPath(), outcomeAgentItems(applied.Outcomes))
 	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
@@ -383,8 +392,12 @@ func (request dependencySyncRequest) recheck(cmd *cobra.Command, app App, opts *
 	if err != nil {
 		return nil, err
 	}
-	actions = reviewedCopilotSavedAddActions(cmd, app, opts, request.targets, actions)
-	if _, err = preflightDependencyActions(cmd, app, opts, actions, detected, request.consent); err != nil {
+	actions, err = reviewedSavedAddActions(cmd, app, opts, request.targets, actions)
+	if err != nil {
+		return nil, err
+	}
+	actions, err = preflightDependencyActions(cmd, app, opts, actions, detected, request.consent)
+	if err != nil {
 		return nil, fmt.Errorf("dependency sync changed after preflight: %w", err)
 	}
 	return actions, nil
@@ -397,7 +410,7 @@ func (request dependencySyncRequest) selectedLock() environment.Lock {
 func confirmDependencySync(cmd *cobra.Command, app App, opts *options, yes bool) (bool, error) {
 	if !yes && app.Terminal && opts.format == "human" {
 		reader := bufio.NewReader(cmd.InOrStdin())
-		confirmed, promptErr := promptYesNo(cmd.Context(), reader, cmd.OutOrStdout(), cmd.ErrOrStderr(), "Apply the preflighted dependency sync? [y/N]")
+		confirmed, promptErr := promptYesNo(cmd.Context(), reader, cmd.OutOrStdout(), cmd.ErrOrStderr(), "Apply these changes? [y/N]")
 		if promptErr != nil {
 			return false, promptErr
 		}

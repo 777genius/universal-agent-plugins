@@ -15,6 +15,12 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 )
 
+// This mirror is a separately compiled binary. Refuse the same already-trusted
+// successor credential as the CLI, even if it is relabeled for a modern feed.
+// These are public trust pins, not signing material or publication approval.
+const mirrorNextDirectoryKeyID = "uap-directory-2026-11"
+const mirrorNextDirectoryPublicKey = "k0F0ZlRXsgUa3+OMOUle6GdpihXUUcHI+42wNeuGAMc="
+
 // Only reviewed composition can supply this profile. Production still constructs
 // the historical profile; neither input bytes nor public flags can select modern.
 type directoryMirrorProfile struct {
@@ -43,12 +49,17 @@ func newModernDirectoryProfile(approved modernMirrorAuthority) (directoryMirrorP
 		return directoryMirrorProfile{}, err
 	}
 	key, err := decodeKey(approved.KeyID, approved.PublicKeyBase64, string(directoryv1.KeyCurrent))
-	if err != nil || approved.KeyID == "" || approved.KeyID != strings.TrimSpace(approved.KeyID) || approved.KeyID == directoryKeyID {
+	if err != nil || approved.KeyID == "" || approved.KeyID != strings.TrimSpace(approved.KeyID) ||
+		approved.KeyID == directoryKeyID || approved.KeyID == mirrorNextDirectoryKeyID {
 		return directoryMirrorProfile{}, errors.New("modern Directory requires a distinct pinned signing key")
 	}
-	legacy, err := base64.StdEncoding.Strict().DecodeString(directoryPublicKey)
-	if err != nil || len(legacy) != ed25519.PublicKeySize || bytes.Equal(key.PublicKey, legacy) {
-		return directoryMirrorProfile{}, errors.New("modern Directory cannot reuse historical public key bytes")
+	// A new feed cannot borrow either public key already compiled into the
+	// production legacy CLI trust store, regardless of the submitted key ID.
+	for _, existing := range []string{directoryPublicKey, mirrorNextDirectoryPublicKey} {
+		trusted, decodeErr := base64.StdEncoding.Strict().DecodeString(existing)
+		if decodeErr != nil || len(trusted) != ed25519.PublicKeySize || bytes.Equal(key.PublicKey, trusted) {
+			return directoryMirrorProfile{}, errors.New("modern Directory cannot reuse a pretrusted production public key")
+		}
 	}
 	body, err := json.Marshal(map[string]any{"schema_version": 1, "keys": []map[string]string{{
 		"key_id": approved.KeyID, "public_key": approved.PublicKeyBase64, "state": string(directoryv1.KeyCurrent),

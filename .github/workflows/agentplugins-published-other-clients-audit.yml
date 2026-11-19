@@ -1,13 +1,8 @@
 name: Published npm stable additional native clients audit
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled]
-    paths:
-      - '.github/workflows/agentplugins-published-other-clients-audit.yml'
-      - '.github/workflows/agentplugins-published-version.yml'
-      - 'scripts/live-install-audit.py'
-      - 'scripts/test_live_install_audit_components.py'
+  # Public npm bytes are qualified after a successful trusted publication,
+  # weekly, or by explicit manual dispatch. PRs use current-source native E2E.
   workflow_run:
     workflows: ['Agentplugins NPM Publish']
     types: [completed]
@@ -23,17 +18,19 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: published-other-clients-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.event_name == 'pull_request' && github.run_id || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
+  group: published-other-clients-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   resolve-release:
-    if: ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && (github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}
+      require_trusted_publish: true
 
   published-additional-clients:
     needs: resolve-release
