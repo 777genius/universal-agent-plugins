@@ -145,7 +145,7 @@ def synthetic_cycle():
                 if stage in ("add-a", "add-b"):
                     err = b"Resolving and validating one Agent Plugin package for every selected target...\nInstalling native-proof for 1 selected clients...\n"
                 elif stage == "repeat-add-a":
-                    err = b"Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+                    err = b"Resolving and validating one Agent Plugin package for every selected target...\n"
                 elif "update" in stage:
                     err = b"Resolving and validating one updated Agent Plugin package for every selected target...\n"
                 elif "repair" in stage:

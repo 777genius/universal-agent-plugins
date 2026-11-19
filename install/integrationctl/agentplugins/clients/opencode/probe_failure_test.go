@@ -67,7 +67,7 @@ func nativeProbeFailureFixture(t *testing.T) (domain.ActivationRequest, clients.
 // An unknown close/reap/containment failure must stop activation and group
 // progress. A proved-closed or never-started failure can remain pending.
 func TestNativeProbeFailurePreservesProcessClosureEvidence(t *testing.T) {
-	for index, phase := range []string{"debug config", "debug skill", "mcp list"} {
+	for index, phase := range []string{"debug config", "debug skill", "mcp list", "final debug config"} {
 		for _, closure := range []struct {
 			name   string
 			result legacyports.CommandResult
@@ -83,7 +83,14 @@ func TestNativeProbeFailurePreservesProcessClosureEvidence(t *testing.T) {
 				calls := 0
 				env.Runner = skillObservationRunner(func(_ context.Context, c legacyports.Command) (legacyports.CommandResult, error) {
 					calls++
-					if c.Argv[1]+" "+c.Argv[2] == phase {
+					if calls == index+1 {
+						want := phase
+						if phase == "final debug config" {
+							want = "debug config"
+						}
+						if c.Argv[1]+" "+c.Argv[2] != want {
+							t.Fatalf("wrong failed probe phase: got=%v want=%s", c.Argv, want)
+						}
 						return closure.result, sentinel
 					}
 					output := []byte("┌  MCP Servers\n●  ✓ local connected\n└  1 server(s)\n")
@@ -97,7 +104,7 @@ func TestNativeProbeFailurePreservesProcessClosureEvidence(t *testing.T) {
 				})
 				var outcome domain.ActivationOutcome
 				var err error
-				if phase == "mcp list" {
+				if index >= 2 {
 					// MCP health belongs to the already confirmed acting path.
 					request.VerifyOnly = false
 					outcome, err = observeOpenCodeNativeComponents(t.Context(), env, request, domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectUnchanged})

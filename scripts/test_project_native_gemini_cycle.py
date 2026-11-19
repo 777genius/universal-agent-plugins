@@ -52,7 +52,7 @@ def state_row(stage,r,paths,previous=None):
     objects=[{"object_id":"package:gemini:"+physical,"kind":"managed_package_directory","logical_name":proof.NAME,"path":active,"managed_digest":payload,"protection_class":"managed"},
              {"object_id":"gemini-mcp:"+name,"kind":"gemini_global_mcp_server","logical_name":name,"path":profile+"/settings.json","managed_digest":"sha256:"+sha(("agentplugins-native-mcp-v1\0gemini-mcpServers\0"+name+"\0").encode()+raw(entry)),"protection_class":"managed"},
              {"object_id":"gemini-skill:"+name,"kind":"gemini_global_skill_directory","logical_name":name,"path":profile+"/skills/"+name,"source_relative":"skills/"+name,"managed_digest":"sha256:"+sha(b"f\0SKILL.md\0-\0"+base64.b64decode(r["skill"]["body"])+b"\0"),"protection_class":"managed"}]
-    b={"client_binding_id":bid,"client_id":"gemini","scope":scope,"target_locator":active,"physical_artifact_id":physical,"materialization":"materialized","activation":"active" if selected=="user" else "prepared","authentication":"not_checked","policy":"allowed","verification":"installation_verified","package_revision":{"version":"1.0.0","tree_digest":r["digest"],"manifest_digest":package["manifest_digest"]},"data_receipt_id":did,"affected_surfaces":["gemini"],"native_profile_root":profile,"native_objects":objects,"receipts":receipts,"updated_at":"2026-10-27T00:00:00Z"}
+    b={"client_binding_id":bid,"client_id":"gemini","scope":scope,"target_locator":active,"physical_artifact_id":physical,"materialization":"materialized","activation":"active","authentication":"not_checked" if selected=="user" else "not_required","policy":"allowed","verification":"installation_verified","package_revision":{"version":"1.0.0","tree_digest":r["digest"],"manifest_digest":package["manifest_digest"]},"data_receipt_id":did,"affected_surfaces":["gemini"],"native_profile_root":profile,"native_objects":objects,"receipts":receipts,"updated_at":"2026-10-27T00:00:00Z"}
     item={"installation_id":iid,"declared_name":proof.NAME,"source":{"source_binding_id":"src_"+sha((r["source"]+"\0\0").encode())[:24],"requested_source":r["source"],"canonical_source":r["source"],"resolved_revision":"","tree_digest":r["digest"]},"package":package,"origin_mode":"direct","clients":{} if removed else {bid:b},"created_at":"2026-10-27T00:00:00Z","updated_at":"2026-10-27T00:00:00Z","data_receipts":{did:d}}
     state={"schema_version":5,"installations":[item]}
     if removed:item["data_retained"]=True;state["transaction_receipts"]=[receipt(len(receipts)+1,True)]
@@ -100,6 +100,40 @@ def fixture():
 
 
 class GeminiCycleTests(unittest.TestCase):
+    def test_failed_inventory_retains_command_cleanup_window_without_qualification(self):
+        for start, finish, accepted in (("00Z", "30Z", True), ("00Z", "35Z", True),
+                                        ("00Z", "35.000001Z", False), ("00.000001Z", "00Z", False)):
+            with self.subTest(finish=finish):
+                bodies, source = fixture()
+                command = runtime.strict_json(bodies["git-a.command.json"])
+                command["inventory"] = {"scope": "a", "started_at": "2026-10-27T00:00:" + start,
+                                        "finished_at": "2026-10-27T00:00:" + finish,
+                                        "provider_requests": 0, "stream": stream(b"")}
+                bodies["git-a.command.json"] = raw(command)
+                if not accepted:
+                    with self.assertRaisesRegex(ValueError, "failed public inventory clock"):
+                        runtime.attempt_members(bodies, source, "gemini")
+                    continue
+                result = runtime.attempt_members(bodies, source, "gemini")
+                self.assertTrue(result["test_failed"])
+                self.assertFalse(result["runtime_attempt_complete"])
+                self.assertFalse(any(result["qualification"].values()))
+
+    def test_success_inventory_keeps_strict_thirty_second_work_window(self):
+        from project_native_gemini_complete import instant
+        from project_native_gemini_complete_proof import public_inventory
+        for finish, accepted in (("30Z", True), ("30.000000001Z", False), ("35Z", False)):
+            with self.subTest(finish=finish):
+                row = {"scope": "a", "started_at": "2026-10-27T00:00:00Z",
+                       "finished_at": "2026-10-27T00:00:" + finish,
+                       "provider_requests": 0, "stream": stream(b"")}
+                args = (row, "git-a", {}, {}, instant(row["started_at"]), instant(row["finished_at"]))
+                if accepted:
+                    public_inventory(*args)
+                else:
+                    with self.assertRaisesRegex(ValueError, "public inventory bounded window"):
+                        public_inventory(*args)
+
     def test_every_public_boundary_retains_truthful_closed_failed_prefix(self):
         timeline=[("proof",v) for v in cycle.PROOFS[:3]]
         timeline += [("public",v) for v in cycle.PUBLIC[:4]]

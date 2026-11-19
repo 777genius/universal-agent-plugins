@@ -294,7 +294,7 @@ def catalog(raw, stderr, stage, q, context, paths):
     require(len(stderr) <= 1024 and stderr.decode() in allowed, "finite listing stderr")
 
 
-def probes(raw, q, selected, home, start, end, sessions, pids):
+def probes(raw, q, selected, home, start, end, sessions, pids, *, initialize_only=False, complete=False):
     require(not raw or raw.endswith(b"\n"), "probe whole framing")
     rows = [load(line) for line in raw[:-1].split(b"\n")] if raw else []
     require(len(rows) <= 6, "probe finite count")
@@ -315,7 +315,7 @@ def probes(raw, q, selected, home, start, end, sessions, pids):
         group = groups[nonce]
         require(group["pid"] == pid and group["session"] == row["session"], "stable component process")
         chosen = selected and q["operation"] != "none" and nonce == q["recipe"]["nonce"]
-        methods = ["initialize", "tools/list"] + (["tools/call"] if chosen else [])
+        methods = (["initialize"] if initialize_only else ["initialize", "tools/list"]) + (["tools/call"] if chosen else [])
         index = len(group["methods"])
         require(index < len(methods) and row["method"] == methods[index], "probe exact method sequence")
         group["methods"].append(row["method"])
@@ -326,9 +326,9 @@ def probes(raw, q, selected, home, start, end, sessions, pids):
             require(row["facts"] is None, "noncall facts")
     for nonce in allowed:
         if nonce not in groups:
-            require(not selected, "advertised native component absent")
+            require(not selected and not complete, "advertised native component absent")
         else:
-            expected = 3 if selected and q["operation"] != "none" and nonce == q["recipe"]["nonce"] else 2
+            expected = 1 if initialize_only else 3 if selected and q["operation"] != "none" and nonce == q["recipe"]["nonce"] else 2
             require(len(groups[nonce]["methods"]) == expected, "incomplete component exchange")
 
 
@@ -353,7 +353,7 @@ def verify(bodies, paths, start, end, context):
         stage = row["stage"]
         provider((streams["cycle-provider-requests.jsonl"][stage], streams["cycle-provider-responses.jsonl"][stage], row["value"]), phases[stage], paths["home"])
     previous, native_index, listing_index = start, 0, 0
-    sessions, probe_sessions, pids = set(), set(), set()
+    sessions, probe_sessions, pids = set(), set(context["public_probe_sessions"]), set(context["public_probe_pids"])
     for index, row in enumerate(commands):
         kind, stage = row["stage"].split(":", 1)
         value = closed(row["value"], ("kind", "scope", "argv", "cwd", "exit", "error", "context_error", "started_at", "finished_at", "elapsed_ms", "cleanup", "stdout", "stderr"))

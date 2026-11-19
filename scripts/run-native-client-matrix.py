@@ -123,9 +123,10 @@ PROJECT_TESTS = {
 
 # V2 retains the reviewed A/B lifecycle, then independently proves a real
 # stdio MCP initialize + tools/list path without using vendor credentials.
-# V1 stays on its exact historical selectors and client pin.
+# V1 retains its pin and separately requires current-source pure Skill Ready.
 OPENCODE_V2_PROJECT_TESTS = PROJECT_TESTS["opencode"] | {"TestAgentpluginsOpenCodeV2NativeProjectMCPHandshake"}
 BROWSER_PROJECT_TEST = "TestAgentpluginsCodexClaudeNativeBrowserProjectSkillsLifecycle"
+OPENCODE_V1_SKILL_TEST = "TestAgentpluginsOpenCodeNativeProjectSkillReadyLifecycle"
 
 
 def select_native_tests(client, project_components=False, released=False, opencode_generation="v1"):
@@ -142,6 +143,8 @@ def select_native_tests(client, project_components=False, released=False, openco
     if released or client not in PROJECT_TESTS:
         raise ValueError("project proof requires a qualified current-source client, not a released/draft installer")
     required = REQUIRED_TESTS[client] | PROJECT_TESTS[client]
+    if client == "opencode":
+        required = required | {OPENCODE_V1_SKILL_TEST}
     return "^(?:" + "|".join(re.escape(name) for name in sorted(required)) + ")$", required
 
 
@@ -186,7 +189,7 @@ def require_verified_pin(pin):
         raise ValueError("unfilled or invalid archive pin; verify exact upstream archive before native dispatch")
 
 
-def verify_digest(body, pin):
+def verify_digest(body, pin, tool="archive"):
     require_verified_pin(pin)
     if pin.startswith("sha256:"):
         actual = "sha256:" + hashlib.sha256(body).hexdigest()
@@ -195,7 +198,11 @@ def verify_digest(body, pin):
     else:
         raise ValueError("unsupported archive digest")
     if actual != pin:
-        raise ValueError("archive integrity mismatch")
+        key = tool if tool in ("codex", "claude", "opencode", "lintai", "rg", "kimi") else "archive"
+        algorithm = "sha256" if pin.startswith("sha256:") else "sha512"
+        expected = pin[7:] if algorithm == "sha256" else base64.b64decode(pin[7:]).hex()
+        observed = actual[7:] if algorithm == "sha256" else base64.b64decode(actual[7:]).hex()
+        raise ValueError(f"archive integrity mismatch: tool={key} algorithm={algorithm} expected={expected} actual={observed}")
 
 
 def extract_binary(body, archive, basename):
@@ -226,7 +233,7 @@ def provision(pin, directory, name):
         with urllib.request.urlopen(url, timeout=180) as response:
             body = response.read(400 << 20)
         source = url
-    verify_digest(body, digest)
+    verify_digest(body, digest, name)
     binary = extract_binary(body, archive, basename)
     path = directory / (name + (".exe" if os.name == "nt" else ""))
     path.write_bytes(binary)
