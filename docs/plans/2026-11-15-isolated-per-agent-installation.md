@@ -84,6 +84,46 @@ only at call sites; expect a mechanical rebase on whichever lands second.
 - A retried `add` installs exactly the package of its first attempt (tree digest pinned) or asks for a new review.
 - The SDK `Config.IndependentActivations` keeps working with the new `providers.Activator.Concurrent` gate.
 
+## Follow-up: plugin group preflight and preparation
+
+Before this change one agent that failed its preflight or package preparation
+(for example `mkdir <project>/.claude/skills: permission denied`) stopped every
+selected agent: "No selected client was changed".
+
+- The usecase returns `GroupTargetError` (clients + unchanged cause) only for a
+  target's own planning, identity/namespace preflight and staging, before
+  anything changed, only when the failed attempt's staging was cleaned up, and
+  only while the group-wide profile and recovery checks still pass. Input,
+  scope, cross-target collision, existing-binding, state and lifecycle
+  refusals and cancellation are never attributed.
+- The CLI leaves an agent out only for an allowlisted, target-local cause:
+  `PERMISSION_DENIED`, `READ_ONLY_LOCATION`, `AGENT_PROGRAM_MISSING`,
+  `TARGET_UNAVAILABLE`, `TARGET_UNSUPPORTED`, `FOREIGN_DESTINATION`. The whole
+  cause tree is checked, joined causes included; any other cause anywhere
+  (recovery, unconfirmed cleanup, security block, edited installed copy,
+  update required, plan, source or host change, verification failure, disk
+  full, network, timeout, cancellation, unclassified) stops every agent.
+  Edited installed copies and foreign native identities carry typed sentinels
+  (`domain.ErrManagedPackageChanged`, `domain.ErrForeignNativeIdentity`) with
+  unchanged messages.
+- The remaining agents run as a new group with a new operation id: the same
+  `AddGroup`, lock, staging and one commit as selecting only them. One
+  remaining agent is a one-target group, which is also what `--target <agent>`
+  runs for a new installation.
+- The failed agent is an `external_failed` row with `error.stage:
+  "preparation"`, the plain cause and next step, and no installation id. A
+  `Retry: run the same command with --target <agent>` line is shown only when
+  a rerun can succeed after the next step (not for a foreign destination, an
+  unsupported agent or unconfirmed process cleanup). The retry joins the
+  peers' installation, so it can only install the same package bytes.
+- The overall status is the existing `external_partial_failure`, exit code is
+  non-zero. No JSON field or status was added.
+- If every agent fails on its own, the result is exactly the old one. If the
+  remaining agents are then refused for a group-wide reason, nothing changed
+  and the whole selection is reported with that reason and its phase.
+- A selection with VS Code (frozen, shares delivery with Copilot) keeps the
+  old whole-selection behavior.
+
 ## Not done, on purpose
 
 - Binding-level parallel apply for Skills and saved installs (shared `state-v2.json`, `mutation.lock`).
