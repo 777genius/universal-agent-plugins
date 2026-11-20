@@ -133,6 +133,11 @@ still compares MCP settings and trusted roots semantically.
 no reuse of foreign skill/MCP names. User MCP uses the existing atomic native
 config kernel, strict bounded YAML parsing, per-entry receipts, and
 post-write verification while preserving unrelated settings and comments.
+It re-encodes only the top-level `mcp_servers` block, so every other line,
+including blank lines, stays byte-for-byte; a new block goes at the end of
+the file. Inside that block yaml.v3 normalizes layout. If the block cannot
+be replaced on its own, for example in a flow-style file, UAP re-encodes the
+whole file: settings and comments stay, blank lines do not.
 An ambiguous YAML document, foreign edit, symlink, unknown tag/anchor or
 unsupported transport fails closed. No user YAML is ever changed by Project
 MCP. Packages requiring hooks or unqualified components are refused.
