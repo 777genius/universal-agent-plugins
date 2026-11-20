@@ -98,7 +98,7 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(page.getByRole('heading', { name: 'One plugin All your agents' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Install the Context7 plugin' })).toBeVisible();
   await expect(page.locator('.command-snippet').first()).toContainText(
-    'npx -y universal-agent-plugins add context7',
+    'npx -y universal-agent-plugins@latest add context7',
   );
   await expect(page.locator('.command-snippet').first()).not.toContainText('--target');
   await expect(page.getByText('Supported clients')).toBeVisible();
@@ -498,7 +498,7 @@ test('supported client links open crawlable client-specific landing pages', asyn
     'https://777genius.github.io/universal-agent-plugins/agents/codex/',
   );
   await expect(page.locator('.command-snippet')).toContainText(
-    'npx -y universal-agent-plugins add context7 --target codex',
+    'npx -y universal-agent-plugins@latest add context7 --target codex',
   );
   const graph = await parseJsonLd(page);
   expect(graph.map((item) => item['@type'])).toEqual(
@@ -714,7 +714,7 @@ test('directory filters and reviewed detail keep terminal agent choice as the de
   ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Run with npx' })).toBeVisible();
   await expect(page.locator('.command-snippet').first()).toContainText(
-    'npx -y universal-agent-plugins add',
+    'npx -y universal-agent-plugins@latest add',
   );
   await expect(page.locator('.command-snippet').first()).not.toContainText('--target');
 });
@@ -805,7 +805,7 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
   await expect(page.getByRole('heading', { name: 'Use plugins', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Build plugins', exact: true })).toBeVisible();
   await expect(page.locator('#use-plugins code')).toHaveText(
-    'npx -y universal-agent-plugins add context7',
+    'npx -y universal-agent-plugins@latest add context7',
   );
   await expect(page.locator('#build-plugins')).toContainText(
     'latest stable CLI',
@@ -888,8 +888,8 @@ test('download page recommends the detected OS path and preserves the npx altern
   await expect(page.locator('.download-section__command code')).toContainText('install.sh | sh');
 
   await tabs.filter({ hasText: 'npx' }).click();
-  await expect(page.locator('.download-section__command code')).toHaveText('npx -y universal-agent-plugins add context7');
-  await expect(page.getByText('npx -y universal-agent-plugins version')).toHaveCount(0);
+  await expect(page.locator('.download-section__command code')).toHaveText('npx -y universal-agent-plugins@latest add context7');
+  await expect(page.getByText('npx -y universal-agent-plugins@latest version')).toHaveCount(0);
 
   await context.close();
 });

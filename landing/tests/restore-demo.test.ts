@@ -6,13 +6,13 @@ import { marketingKitUserManifest } from '../data/marketingKitDemo.ts';
 
 test('released Marketing Kit Project and Global restore commands use valid scoped installation', () => {
   assert.deepEqual(restoreDemoCommands.project, {
-    install: 'npx -y universal-agent-plugins install marketing-kit --scope project',
-    restore: 'npx -y universal-agent-plugins install --scope project',
+    install: 'npx -y universal-agent-plugins@latest install marketing-kit --scope project',
+    restore: 'npx -y universal-agent-plugins@latest install --scope project',
     export: '',
   });
-  assert.equal(restoreDemoCommands.global.install, 'npx -y universal-agent-plugins install marketing-kit');
-  assert.equal(restoreDemoCommands.global.export, 'npx -y universal-agent-plugins deps export');
-  assert.equal(restoreDemoCommands.global.restore, 'npx -y universal-agent-plugins deps import --install');
+  assert.equal(restoreDemoCommands.global.install, 'npx -y universal-agent-plugins@latest install marketing-kit');
+  assert.equal(restoreDemoCommands.global.export, 'npx -y universal-agent-plugins@latest deps export');
+  assert.equal(restoreDemoCommands.global.restore, 'npx -y universal-agent-plugins@latest deps import --install');
   for (const mode of Object.values(restoreDemoCommands)) {
     for (const command of Object.values(mode)) assert.doesNotMatch(command, /marketing-kit@|--scope user|--yes/);
   }

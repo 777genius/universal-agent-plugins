@@ -23,7 +23,7 @@ function desktopFixture(withCodex: boolean) {
   return index;
 }
 
-const desktopCommand = 'npx -y universal-agent-plugins add i18n-state-00 --target chatgpt';
+const desktopCommand = 'npx -y universal-agent-plugins@latest add i18n-state-00 --target chatgpt';
 
 for (const width of [1440, 390]) {
   test('ChatGPT Desktop is a distinct selectable target with one copyable command at ' + width + 'px', async ({ page }) => {

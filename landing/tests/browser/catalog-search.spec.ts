@@ -93,7 +93,7 @@ test('reviewed Context7 picker copies the native-qualified Codex and Claude inst
   // The actual browser picker must agree with the public CLI command
   // exercised by the pinned real-client Directory integration test.
   await targets(page, card, ['Codex', 'Claude Code']);
-  const command = 'npx -y universal-agent-plugins add context7 --target codex,claude';
+  const command = 'npx -y universal-agent-plugins@latest add context7 --target codex,claude';
   await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code')).toHaveText(command);
   await page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add button').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);

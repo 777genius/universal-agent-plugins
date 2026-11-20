@@ -57,7 +57,7 @@ for (const width of [1440, 390]) {
     await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
     await expect(page.getByRole('dialog').locator('.app-multiselect__auto')).toContainText(cardAutoSummary);
     await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code')).toHaveText(
-      'npx -y universal-agent-plugins add i18n-state-00 --scope project',
+      'npx -y universal-agent-plugins@latest add i18n-state-00 --scope project',
     );
     expect(errors).toEqual([]);
   });
@@ -72,10 +72,10 @@ for (const width of [1440, 390]) {
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
     await openCardInstall(page, card);
     await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(
-      'npx -y universal-agent-plugins add i18n-state-00',
+      'npx -y universal-agent-plugins@latest add i18n-state-00',
     );
     await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
-    const autoAdd = 'npx -y universal-agent-plugins add i18n-state-00 --scope project';
+    const autoAdd = 'npx -y universal-agent-plugins@latest add i18n-state-00 --scope project';
     await expect(page.getByRole('dialog').locator('.app-multiselect__auto')).toContainText(cardAutoSummary);
     await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(autoAdd);
     await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
@@ -84,7 +84,7 @@ for (const width of [1440, 390]) {
     // An explicit checkbox switches to manual mode; no implicit Cursor selection.
     await targets(page, card, ['Codex']);
     const expectedAdd =
-      'npx -y universal-agent-plugins add i18n-state-00 --target codex --scope project';
+      'npx -y universal-agent-plugins@latest add i18n-state-00 --target codex --scope project';
     await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(expectedAdd);
     await expect(page.getByRole('dialog').locator('.install-outcome')).toContainText('Skills');
     await expect(page.getByRole('dialog').locator('.install-outcome')).not.toContainText('MCP tools');
@@ -113,7 +113,7 @@ for (const width of [1440, 390]) {
           : `.command-stack > .command-snippet--${action}`,
       );
       const target = action === 'add' || action === 'repair' ? ' --target codex' : '';
-      const command = `npx -y universal-agent-plugins ${action} i18n-state-00${target} --scope project`;
+      const command = `npx -y universal-agent-plugins@latest ${action} i18n-state-00${target} --scope project`;
       await expect(snippet.locator('code')).toHaveText(command);
       await snippet.getByRole('button').click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command);
@@ -185,7 +185,7 @@ for (const width of [1440, 390]) {
     // even though this choice remains visible to let the user recover.
     await panel.getByRole('button', { name: 'This computer', exact: true }).click();
     await expect(panel.locator('.install-command-row .command-snippet--add code')).toHaveText(
-      'npx -y universal-agent-plugins add i18n-state-00',
+      'npx -y universal-agent-plugins@latest add i18n-state-00',
     );
     // No project-capable release remains; the unavailable selector is not shown.
     await expect(panel.locator('.install-scope')).toHaveCount(0);
@@ -206,11 +206,11 @@ test('reviewed signed-v1 source uses released short-name Project commands', asyn
   await project.click();
   await expect(page.getByRole('dialog').locator('.app-multiselect__auto')).toContainText(cardAutoSummary);
   await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(
-    'npx -y universal-agent-plugins add i18n-state-00 --scope project',
+    'npx -y universal-agent-plugins@latest add i18n-state-00 --scope project',
   );
   await expect(card).not.toContainText('This reviewed exact-commit Git source is a reproducible alternative.');
   await targets(page, card, ['Codex']);
-  const expected = 'npx -y universal-agent-plugins add i18n-state-00 --target codex --scope project';
+  const expected = 'npx -y universal-agent-plugins@latest add i18n-state-00 --target codex --scope project';
   await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(expected);
   await page.getByRole('dialog').locator('.install-dialog__footer .command-snippet button').click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected);
@@ -219,12 +219,12 @@ test('reviewed signed-v1 source uses released short-name Project commands', asyn
   const panel = page.locator('.install-panel');
   await expect(panel.locator('.install-command-row .command-snippet--add code')).toHaveText(expected);
   await expect(panel.locator('.command-snippet--update code'))
-    .toHaveText('npx -y universal-agent-plugins update i18n-state-00 --scope project');
+    .toHaveText('npx -y universal-agent-plugins@latest update i18n-state-00 --scope project');
   await expect(panel.locator('.command-snippet--remove code'))
-    .toHaveText('npx -y universal-agent-plugins remove i18n-state-00 --scope project');
+    .toHaveText('npx -y universal-agent-plugins@latest remove i18n-state-00 --scope project');
   await panel.getByRole('button', { name: 'This computer', exact: true }).click();
   await expect(panel.locator('.install-command-row .command-snippet--add code'))
-    .toHaveText('npx -y universal-agent-plugins add i18n-state-00 --target codex');
+    .toHaveText('npx -y universal-agent-plugins@latest add i18n-state-00 --target codex');
   expect(errors).toEqual([]);
 });
 
@@ -240,7 +240,7 @@ test('unqualified project scope is hidden while auto agent delivery stays non-nu
   await openCardInstall(page, card);
   await expect(page.getByRole('dialog').locator('.install-scope')).toHaveCount(0);
   await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(
-    'npx -y universal-agent-plugins add i18n-state-00',
+    'npx -y universal-agent-plugins@latest add i18n-state-00',
   );
   await page.keyboard.press('Escape');
   await card.locator('.plugin-card__title-link').click();
@@ -272,10 +272,10 @@ test('Marketing Kit offers signed-v1 Project installation without fabricating na
   await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
   await expect(page.getByRole('dialog').locator('.app-multiselect__auto')).toContainText(cardAutoSummary);
   await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code')).toHaveText(
-    'npx -y universal-agent-plugins add marketing-kit --scope project');
+    'npx -y universal-agent-plugins@latest add marketing-kit --scope project');
   await targets(page, card, ['Codex']);
   await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code')).toHaveText(
-    'npx -y universal-agent-plugins add marketing-kit --target codex --scope project');
+    'npx -y universal-agent-plugins@latest add marketing-kit --target codex --scope project');
   await expect(card).not.toContainText('Marketing Kit is not yet available for Project');
   await page.keyboard.press('Escape');
   await card.locator('.plugin-card__title-link').click();
@@ -302,7 +302,7 @@ test('Marketing Kit Project still rejects unsupported required components', asyn
   // showing a disabled option. Global remains independently available.
   await expect(page.getByRole('dialog').locator('.install-scope')).toHaveCount(0);
   await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code'))
-    .toHaveText('npx -y universal-agent-plugins add marketing-kit');
+    .toHaveText('npx -y universal-agent-plugins@latest add marketing-kit');
   expect(errors).toEqual([]);
 });
 
@@ -360,7 +360,7 @@ for (const width of [1440, 390]) {
     await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
     await targets(page, card, ['Grok Build']);
     await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(
-      'npx -y universal-agent-plugins add i18n-state-00 --target grok --scope project',
+      'npx -y universal-agent-plugins@latest add i18n-state-00 --target grok --scope project',
     );
     await expect(page.getByRole('dialog').locator('.install-outcome [data-component="skills"]')).toHaveAttribute('data-support', 'supported');
     await expect(page.getByRole('dialog').locator('.install-outcome [data-component="mcp"]')).toHaveAttribute('data-support', 'supported');
@@ -386,7 +386,7 @@ test('unsupported extensions-only Project does not show a misleading scope switc
   await openCardInstall(page, card);
   await expect(page.getByRole('dialog').locator('.install-scope')).toHaveCount(0);
   await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code'))
-    .toHaveText('npx -y universal-agent-plugins add i18n-state-00');
+    .toHaveText('npx -y universal-agent-plugins@latest add i18n-state-00');
   expect(errors).toEqual([]);
 });
 
@@ -399,7 +399,7 @@ test('Grok Project MCP-only remains copyable with native MCP preview', async ({ 
   await page.getByRole('dialog').getByRole('button', { name: 'This project', exact: true }).click();
   await targets(page, card, ['Grok Build']);
   await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code'))
-    .toHaveText('npx -y universal-agent-plugins add i18n-state-00 --target grok --scope project');
+    .toHaveText('npx -y universal-agent-plugins@latest add i18n-state-00 --target grok --scope project');
   await expect(page.getByRole('dialog').locator('.install-outcome [data-component="mcp"]'))
     .toHaveAttribute('data-support', 'supported');
   expect(errors).toEqual([]);

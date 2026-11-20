@@ -40,7 +40,7 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.plugin-card__source-label')).toHaveCount(0);
     await card.locator('.plugin-card__install-toggle').click();
     await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(
-      'npx -y universal-agent-plugins add i18n-state-00',
+      'npx -y universal-agent-plugins@latest add i18n-state-00',
     );
     // Switching from terminal detection selects only one initial agent.
     await targets(page, card, ['Cursor']);

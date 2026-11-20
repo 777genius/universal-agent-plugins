@@ -286,7 +286,7 @@ test('publication copy gate rejects English clones while preserving exact brands
   const source = {
     action: 'Install plugins',
     brand: 'Agent Plugins 1.0',
-    command: 'npx -y universal-agent-plugins add context7',
+    command: 'npx -y universal-agent-plugins@latest add context7',
   };
   assertTranslatedCopy(source, source, 'en');
   assert.throws(() => assertTranslatedCopy(source, source, 'uk'), /unchanged English copy/);

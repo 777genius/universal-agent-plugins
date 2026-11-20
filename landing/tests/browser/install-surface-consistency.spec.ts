@@ -62,7 +62,7 @@ for (const width of [1440, 390]) {
       .toHaveText(/add context7 --target (chatgptweb,codex|codex,chatgptweb) --no-save$/);
     for (const action of ['update', 'repair', 'remove'])
       await expect(page.locator(`.install-panel .command-snippet--${action} code`))
-        .toHaveText(`npx -y universal-agent-plugins ${action} context7 --target codex`);
+        .toHaveText(`npx -y universal-agent-plugins@latest ${action} context7 --target codex`);
     expect(errors).toEqual([]);
   });
 }
