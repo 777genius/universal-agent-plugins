@@ -155,6 +155,7 @@ func (source *rootFetchSource) sortedReads() []string {
 // repositories. All repositories are served by one local fixture.
 func mixedRootsJourney(t *testing.T) (App, environment.Requirements, *rootFetchSource) {
 	t.Helper()
+	plentyOfPrefetchDisk(t)
 	repo := t.TempDir()
 	for _, name := range []string{"pa", "pb", "pc"} {
 		dir := filepath.Join(repo, "plugins", name)

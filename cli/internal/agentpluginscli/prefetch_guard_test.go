@@ -7,6 +7,16 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 )
 
+// plentyOfPrefetchDisk makes the free-disk guard admit regardless of the test
+// machine's disk, so journeys exercise prefetch deterministically. Guard tests
+// cover the low-space paths with their own fakes.
+func plentyOfPrefetchDisk(t *testing.T) {
+	t.Helper()
+	original := prefetchFreeDisk
+	prefetchFreeDisk = func(string) (uint64, bool) { return 1 << 62, true }
+	t.Cleanup(func() { prefetchFreeDisk = original })
+}
+
 // The free-disk guard measures the volume the source acquirer stages files on
 // and admits when that cannot be measured.
 func TestPrefetchGuardMeasuresTheAcquirerStagingVolume(t *testing.T) {

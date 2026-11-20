@@ -290,6 +290,7 @@ func (source *countingSkillSource) keys() []rawSkillKey {
 
 func multiSkillJourney(t *testing.T, names []string) (savedJourney, *countingSkillSource, string) {
 	t.Helper()
+	plentyOfPrefetchDisk(t)
 	repo := t.TempDir()
 	for _, name := range names {
 		dir := filepath.Join(repo, "skills", name)
