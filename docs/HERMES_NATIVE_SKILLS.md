@@ -124,10 +124,14 @@ trust was not changed or could not be confirmed and says to run
 stays path-free: the exact command with the absolute root and any earlier
 entries missing after a managed save appear only in human output.
 
-On the pinned version, a successful `hermes skills trust` changes only the trust
-list under `skills` and `_config_version` in `config.yaml`; comments and other
-settings stay byte-for-byte (observed on Hermes 2bd378e). The lifecycle E2E
-still compares MCP settings and trusted roots semantically.
+On the pinned version, a successful `hermes skills trust` saves the whole
+`config.yaml` itself, not only the trust list. On the default file that Hermes'
+installer creates, the save also added 28 missing `gateway` defaults, dropped
+an empty `agent.reasoning_overrides`, wrote `null` values as empty values,
+emptied whitespace-only lines and changed the file mode from 0644 to 0600;
+comments stayed (observed on Hermes 0.23, 2bd378e). UAP does not control this
+Hermes save, so the lifecycle E2E compares MCP settings and trusted roots
+semantically.
 
 **Strict scope:** owned Skills and scoped MCP install/update/repair/remove,
 no reuse of foreign skill/MCP names. User MCP uses the existing atomic native
