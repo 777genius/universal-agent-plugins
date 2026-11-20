@@ -374,6 +374,36 @@ describe('SkillSpector v3 exact producer contract', () => {
     assert.deepEqual(primary.findings, referenceRecord('asc_workflow').findings);
     assert.equal(primary.recovery_witnesses[0]!.record.findings.length, 1);
 
+    // An authenticated third original is required by Registry #482; the
+    // decoder must preserve every original unmodified, but never accept a
+    // fourth or silently promote the quarantined source to Complete.
+    const three = structuredClone(primary);
+    for (const [offset, digit] of [[1, '8'], [2, '7']] as const) {
+      const additional = structuredClone(primary.recovery_witnesses[0]!);
+      additional.origin.run_id += offset;
+      additional.record.report_digest = 'sha256:' + digit.repeat(64);
+      three.recovery_witnesses!.push(additional);
+    }
+    const decodedThree = decodeReference(three);
+    assert.equal(decodedThree.status, 'partial');
+    assert.deepEqual(decodedThree.recovery_witnesses, three.recovery_witnesses);
+    assert.deepEqual(
+      decodedThree.recovery_witnesses!.map(witness => witness.record.report_digest),
+      ['sha256:' + '9'.repeat(64), 'sha256:' + '8'.repeat(64), 'sha256:' + '7'.repeat(64)],
+    );
+    assert.deepEqual(decodedThree.findings, primary.findings);
+
+    const four = structuredClone(three);
+    const fourth = structuredClone(three.recovery_witnesses![0]!);
+    fourth.origin.run_id += 3;
+    fourth.record.report_digest = 'sha256:' + '6'.repeat(64);
+    four.recovery_witnesses!.push(fourth);
+    assert.throws(() => decodeReference(four), /invalid/);
+
+    const injectedThird = structuredClone(three);
+    Object.assign(injectedThird.recovery_witnesses![2]!.record, { retry: structuredClone(primary.retry) });
+    assert.throws(() => decodeReference(injectedThird), /invalid/);
+
     // Once the catalog pin changes, both original findings remain readable,
     // but neither counts as a verification of the new target revision.
     const historical = structuredClone(primary);
