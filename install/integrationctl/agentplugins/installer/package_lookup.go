@@ -12,7 +12,10 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	if !e.SupportsClient(req.ClientID) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: client %q is not registered for this installer", ErrUnsupported, req.ClientID)
 	}
-	if (req.ClientConfigRoot == "" && e.scope() != domain.ScopeProject) || (req.ClientConfigRoot != "" && !validRoot(req.ClientConfigRoot)) {
+	// A User lane with a separate selected native root (current Devin Global)
+	// may legitimately have no legacy profile root; the opted-in native root
+	// itself is validated below.
+	if (req.ClientConfigRoot == "" && e.scope() != domain.ScopeProject && req.ClientNativeConfigRoot == "") || (req.ClientConfigRoot != "" && !validRoot(req.ClientConfigRoot)) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientConfigRoot must be an explicit absolute clean path", ErrInvalidRequest)
 	}
 	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "") {
