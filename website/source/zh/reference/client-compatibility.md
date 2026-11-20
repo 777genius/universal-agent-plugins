@@ -11,6 +11,31 @@ localeDisposition: "current-translation"
 
 # UAP 客户端兼容性证据
 
+## 支持的智能体 {#supported-agents}
+
+UAP 为以下智能体安装或准备软件包。使用 `--target` 的值可显式选择智能体；省略 `--target` 时，可从本机检测到的智能体中选择。
+
+| 智能体 | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt`（桌面版）、`chatgptweb`（网页版） |
+
+各智能体对用户范围和项目范围的支持、设置方式以及安装后仍需完成的步骤各不相同，请参阅[智能体支持表](https://universal-agent-plugins.com/zh/#agent-support)。支持某个智能体并不意味着每个软件包、组件、版本或范围都能在其中使用。
+
 ## 当前版本与范围
 
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)是当前发布的原生 CLI，新增由宿主管理生命周期的本地管理 API、只读客户端和配置目录发现，以及适用于用户与符合条件项目范围的 Pi 扩展、Skills 和 stdio/Streamable HTTP MCP。请参阅[本地管理](../use/manage#local-management-api)。各分发渠道的版本可能滞后，请先用 `agentplugins version` 确认。

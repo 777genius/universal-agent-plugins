@@ -86,6 +86,7 @@ CLI предложит совместимые агенты. Проверьте �
 - [Быстрый старт](./guide/quickstart)
 - [Структура пакета](./build/layout)
 - [Проверки и их границы](./build/checks)
+- [Поддерживаемые агенты](./reference/client-compatibility#supported-agents)
 - [Совместимость клиентов и результаты тестов](./reference/client-compatibility)
 - [Спецификация Agent Plugins 1.0](https://agent-plugins.org/specification)
 

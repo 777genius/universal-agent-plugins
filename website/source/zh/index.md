@@ -70,6 +70,7 @@ CLI 会询问要使用哪些兼容客户端。检查计划，并完成结果中�
 - [快速入门](./guide/quickstart)
 - [包的目录结构](./build/layout)
 - [检查与证据](./build/checks)
+- [支持的智能体](./reference/client-compatibility#supported-agents)
 - [客户端兼容性与测试边界](./reference/client-compatibility)
 - [Agent Plugins 1.0 规范](https://agent-plugins.org/specification)
 
