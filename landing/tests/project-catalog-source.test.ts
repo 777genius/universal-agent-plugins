@@ -283,7 +283,7 @@ test('Hermes Project source uses prepared MCP capability; the CLI qualifies the 
   const plugin = reviewed();
   assert.equal(scopedComponentSupported('hermes', 'mcp', 'project'), true);
   assert.ok(pinnedCatalogSelection(plugin, 'hermes', 'project'));
-  assert.match(pinnedCatalogCommands(plugin, 'hermes', 'project').add, /@0\.1\.110 add github:.* --target hermes --scope project$/);
+  assert.match(pinnedCatalogCommands(plugin, 'hermes', 'project').add, /@0\.1\.114 add github:.* --target hermes --scope project$/);
   plugin.distributions[0]!.releases[0]!.components = ['skills'];
   assert.ok(pinnedCatalogSelection(plugin, 'hermes', 'project'));
   for (const scope of ['user', 'project'] as const)
