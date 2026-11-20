@@ -784,5 +784,43 @@ class HermesSkillBootstrapArgvAcceptance(unittest.TestCase):
                     self.assertEqual(child.stderr, b"")
                     self.assertEqual(json.loads(child.stdout), arguments)
 
+
+class HermesNativeConfigLineEndingContract(unittest.TestCase):
+    def test_disposable_profile_seeds_lf_with_windows_text_translation(self):
+        # Simulate Windows' implicit write_text LF -> CRLF conversion on every
+        # host. Only the test-owned config fixture is translated; the public
+        # installer and its strict, byte-bound observations remain untouched.
+        fixture = runpy.run_path(
+            str(Path(__file__).parent / "e2e/hermes-native-lifecycle.py"),
+            run_name="hermes_native_fixture_contract")
+        Lifecycle = fixture["Lifecycle"]
+        write_text = Path.write_text
+        with tempfile.TemporaryDirectory(prefix="hermes-lf-fixture-") as temporary:
+            root = Path(temporary)
+            profile = root / "profile"
+
+            def windows_text_write(path, content, *args, **kwargs):
+                if path == profile / "config.yaml" and kwargs.get("newline") is None:
+                    return path.write_bytes(content.replace("\n", "\r\n").encode("utf-8"))
+                return write_text(path, content, *args, **kwargs)
+
+            with patch.dict(os.environ, {
+                "HERMES_HOME": str(profile),
+                "HERMES_NATIVE_EVIDENCE": str(root / "evidence"),
+                "UAP_BIN": "inert-uap-not-executed",
+                "HERMES_BIN": "inert-hermes-not-executed",
+                "HERMES_NATIVE_RUNTIME_COMMAND_FILE": "",
+                "HERMES_NATIVE_MCP_URL": "http://127.0.0.1:1/inert",
+            }), patch.object(Path, "write_text", new=windows_text_write), \
+                patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], 0)), \
+                patch.object(Lifecycle, "capture", return_value=None), \
+                patch.object(Lifecycle, "resolved_home", return_value=profile.resolve()):
+                Lifecycle(root).prepare()
+
+            self.assertEqual((profile / "config.yaml").read_bytes(),
+                             b"model: offline-native-smoke\nmcp_servers:\n"
+                             b"  foreign:\n    command: echo\n    args: [foreign]\n")
+
+
 if __name__ == '__main__':
     unittest.main()
