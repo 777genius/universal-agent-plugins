@@ -81,8 +81,20 @@ func TestProjectDevinVersionProbeRejectsWrongIDAndUnboundResults(t *testing.T) {
 	}
 }
 
+func TestProjectDevinVersionProbeReportsDetectionCause(t *testing.T) {
+	observed := projectVersionDevin()
+	cause := errors.New("devin original XDG_DATA_HOME: permission denied")
+	observed.Status, observed.DetectionError = domain.DetectionNotDetected, cause
+	detector := &projectVersionDetector{probed: []domain.DetectedClient{observed}}
+	detected := map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: projectVersionDevin()}
+	err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeUser, Detector: detector}, &options{}, []domain.ClientID{domain.ClientWindsurf}, detected)
+	if !errors.Is(err, cause) {
+		t.Fatalf("version detection hid its cause: %v", err)
+	}
+}
+
 func TestProjectDevinVersionProbeKeepsLegacyPrimaryAndMutationBoundaries(t *testing.T) {
-	for _, kind := range []string{"legacy-primary", "secondary-surface", "relative-executable", "known-version", "user-legacy-primary", "dry-run", "unselected"} {
+	for _, kind := range []string{"legacy-primary", "secondary-surface", "relative-executable", "known-version", "user-legacy-primary", "unselected"} {
 		t.Run(kind, func(t *testing.T) {
 			client := projectVersionDevin()
 			opts, scope, target := &options{}, domain.ScopeProject, domain.ClientWindsurf
@@ -101,8 +113,6 @@ func TestProjectDevinVersionProbeKeepsLegacyPrimaryAndMutationBoundaries(t *test
 				scope = domain.ScopeUser
 				client.ExecutablePath = projectVersionFixturePath("bin", "windsurf")
 				client.ConfigRoot = projectVersionFixturePath("user", ".codeium", "windsurf")
-			case "dry-run":
-				opts.dryRun = true
 			case "unselected":
 				target = domain.ClientGemini
 			}

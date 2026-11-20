@@ -52,7 +52,7 @@ func newInfoCommand(app App, opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			installation, err := selectInstallation(state, args[0])
+			installation, err := selectReadInstallation(app, state, args[0])
 			if err != nil {
 				if strings.Contains(err.Error(), "ambiguous") || !isDirectorySelector(strings.TrimSpace(args[0])) {
 					return err

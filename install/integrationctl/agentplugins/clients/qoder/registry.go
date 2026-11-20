@@ -129,10 +129,18 @@ func findForeign(entries []pluginEntry, name string) bool {
 	return false
 }
 
+// unversionedLocalVersion is what Qoder lists for a local plugin whose
+// manifest declares no version (`manifest.version ?? "local"`), such as a
+// raw Agent Skill package.
+const unversionedLocalVersion = "local"
+
 // versionMatches proves the delivered package only through an exact version
 // match. A listing without a version member proves registration but never the
 // delivered version, so it must not verify anything.
 func versionMatches(entry pluginEntry, declared string) bool {
+	if declared == "" {
+		declared = unversionedLocalVersion
+	}
 	return entry.Version != "" && entry.Version == declared
 }
 
