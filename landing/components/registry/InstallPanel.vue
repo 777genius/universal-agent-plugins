@@ -7,7 +7,7 @@ import {
   type InstallTargetID,
 } from '~/data/installTargets';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
-import { pluginCommands } from '~/utils/commands';
+import { CLI_INVOCATION, pluginCommands } from '~/utils/commands';
 import { projectCatalogCommands } from '~/utils/projectCatalogSource';
 import { isFullyRetired } from '~/utils/filter';
 import { vendorInstallSource } from '~/utils/registry';
@@ -244,6 +244,7 @@ const vendorInstall = computed(() =>
         {{
           t(
             `registryUi.install.dependencySaving.${scope === 'project' && commands.saveMode === 'saved' ? 'projectSaved' : commands.saveMode}`,
+            { command: `${CLI_INVOCATION} deps status${scope === 'project' ? ' --scope project' : ''}` },
           )
         }}
       </p>

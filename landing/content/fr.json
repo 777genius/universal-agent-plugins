@@ -985,7 +985,7 @@
     {
       "id": "fastestStart",
       "question": "Quelle est la manière la plus rapide de commencer ?",
-      "answer": "Installez le CLI Go natif, puis exécutez <code>agentplugins add context7 --target codex,cursor</code>. Choisissez un ou plusieurs agents et suivez l'étape d'activation indiquée par le client."
+      "answer": "Installez le CLI Go natif, puis exécutez <code>agentplugins add context7 --target \"codex,cursor\"</code>. Choisissez un ou plusieurs agents et suivez l'étape d'activation indiquée par le client."
     },
     {
       "id": "whichPathFirst",
@@ -1014,8 +1014,8 @@
       "description": "Le choix le plus rapide si Node.js 22+ est déjà installé : lancez immédiatement la commande du plugin.",
       "href": "https://www.npmjs.com/package/universal-agent-plugins",
       "note": "Sans installation permanente : npx télécharge le CLI vérifié et exécute la commande en une étape.",
-      "command": "npx -y universal-agent-plugins version",
-      "invocation": "npx -y universal-agent-plugins"
+      "command": "npx -y universal-agent-plugins@latest version",
+      "invocation": "npx -y universal-agent-plugins@latest"
     },
     {
       "id": "script",
@@ -1056,25 +1056,25 @@
     {
       "id": "install-cli",
       "title": "Lancez la CLI",
-      "command": "npx -y universal-agent-plugins version",
+      "command": "npx -y universal-agent-plugins@latest version",
       "note": "Utilisez npx pour commencer rapidement ou installez le binaire au quotidien."
     },
     {
       "id": "try-plugin",
       "title": "Installez un vrai plugin",
-      "command": "universal-agent-plugins add context7 --target codex,cursor",
+      "command": "universal-agent-plugins add context7 --target \"codex,cursor\"",
       "note": "La même commande accepte une cible ou une liste séparée par des virgules."
     },
     {
       "id": "build-plugin",
       "title": "Gardez-le à jour",
-      "command": "universal-agent-plugins update context7 --target codex,cursor\nuniversal-agent-plugins repair context7 --target codex,cursor",
+      "command": "universal-agent-plugins update context7 --target \"codex,cursor\"\nuniversal-agent-plugins repair context7 --target \"codex,cursor\"",
       "note": "Utilisez update pour une nouvelle version et repair si un client dérive."
     },
     {
       "id": "validate",
       "title": "Supprimez-le proprement",
-      "command": "universal-agent-plugins remove context7 --target codex,cursor",
+      "command": "universal-agent-plugins remove context7 --target \"codex,cursor\"",
       "note": "La CLI supprime les entrées gérées et conserve les données du plugin par défaut."
     }
   ],

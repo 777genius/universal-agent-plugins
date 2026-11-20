@@ -23,9 +23,9 @@ gemini = ["777genius/marketing-kit"]`;
 // a marketing-kit@0.1.0 positional selector. Schema-1 published policies
 // remain User-only publication evidence; released CLI 0.1.101 separately
 // admits explicit Project placement after checking dependencies and adapters.
-export const marketingKitInstallCommand = 'npx -y universal-agent-plugins install marketing-kit --scope user';
+export const marketingKitInstallCommand = 'npx -y universal-agent-plugins@latest install marketing-kit --scope user';
 // Import uap.toml + uap.lock into this user environment first, then converge.
-export const marketingKitRestoreCommand = 'npx -y universal-agent-plugins install --scope user';
+export const marketingKitRestoreCommand = 'npx -y universal-agent-plugins@latest install --scope user';
 
 /** Names denote declared compatible targets, never detection of local installs. */
 export const marketingKitTargetIDs = ['claude', 'codex', 'gemini'] as const;

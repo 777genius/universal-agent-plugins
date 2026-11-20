@@ -96,7 +96,7 @@ for (const client of clientLandingPages) {
     const pinned = ['pi', 'hermes', 'antigravity'].includes(client.id)
       ? await pinnedContext7Example(page, client.id)
       : undefined;
-    const command = pinned?.command ?? `npx -y universal-agent-plugins add context7 --target ${client.id}`;
+    const command = pinned?.command ?? `npx -y universal-agent-plugins@latest add context7 --target ${client.id}`;
     const install = page.locator('.agent-page__install');
     const snippet = install.locator('.command-snippet--add');
     await expect(snippet).toHaveCount(1);

@@ -31,7 +31,7 @@ for (const width of [1440, 390]) {
     const command = page.locator('.download-section__command code');
     await expect(command).toHaveCount(1);
     for (const [label, snippet] of [
-      ['npx', 'npx -y universal-agent-plugins add context7'],
+      ['npx', 'npx -y universal-agent-plugins@latest add context7'],
       ['Homebrew', 'brew install 777genius/agentplugins/agentplugins'],
       ['Verified install script', 'install.sh | sh'],
       ['PowerShell', 'install.ps1 | iex'],

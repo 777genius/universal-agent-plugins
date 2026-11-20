@@ -1,6 +1,7 @@
 import type { SkillsView, SkillListing } from '../types/skillsCatalog.ts';
 import type { InstallScope } from '../types/registry.ts';
 import { skillClients } from '../data/skillClients.ts';
+import { CLI_INVOCATION } from './commands.ts';
 
 const skillTargetIds = new Set<string>(skillClients.map((client) => client.id));
 
@@ -338,8 +339,18 @@ export function skillInstallCommand(
   if (!skillRepositoryUrl(skill) &&
       (typeof skill.skillNameHint !== 'string' || !supportedSkillName(skill.skillNameHint)))
     return undefined;
-  const tokens = ['npx', 'universal-agent-plugins@latest', 'skills', 'add', source];
-  if (!skillNeedsManualSelection(skill)) tokens.push('--skill', skill.skillNameHint);
+  const args = ['skills', 'add', source];
+  // Unverified names open the CLI picker instead of being guessed.
+  if (!skillNeedsManualSelection(skill)) args.push('--skill', skill.skillNameHint);
+  return skillCommand(args, targets, scope);
+}
+
+function skillCommand(
+  args: readonly string[],
+  targets: readonly string[] | undefined,
+  scope: InstallScope,
+): string | undefined {
+  const tokens = [...CLI_INVOCATION.split(' '), ...args];
   if (targets !== undefined) {
     const ids = [...new Set(targets.map((id) => id.trim()).filter(Boolean))];
     if (!ids.length || ids.some((id) => !skillTargetIds.has(id))) return undefined;
@@ -347,10 +358,55 @@ export function skillInstallCommand(
   }
   if (scope === 'project') tokens.push('--scope', 'project');
   // Every dynamic token is a validated repository, normative name or known
-  // target ID. Unverified names open the CLI picker instead of being guessed.
-  // Double quotes preserve Unicode in CMD and CSV in PowerShell; these
-  // identifiers cannot contain shell expansions or quote delimiters.
+  // target ID. Double quotes preserve Unicode in CMD and CSV in PowerShell;
+  // these identifiers cannot contain shell expansions or quote delimiters.
   return tokens
     .map((token) => (/^[A-Za-z0-9_./:@+=-]+$/.test(token) ? token : `"${token}"`))
     .join(' ');
+}
+
+// The CLI saves a Skill under its exact name when that name is a valid saved
+// alias and no other source already uses it. Otherwise it derives a name that
+// only `list` can show (for example skill-<hash>).
+const SAVED_SKILL_NAME = /^[a-z][a-z0-9_-]{0,63}$/;
+
+/**
+ * Removal by the saved name. There is no `skills remove`: a Skill is removed
+ * like a plugin, and without --target from every agent it is installed for.
+ */
+export function skillRemoveCommand(
+  skill: SkillListing,
+  targets?: readonly string[],
+  scope: InstallScope = 'user',
+): string | undefined {
+  if (!skillInstallCommand(skill, targets, scope) || skillNeedsManualSelection(skill) ||
+      !SAVED_SKILL_NAME.test(skill.skillNameHint)) return undefined;
+  return skillCommand(['remove', skill.skillNameHint], targets, scope);
+}
+
+/** Shows the saved names when the page cannot know the name the CLI chose. */
+export function skillListCommand(scope: InstallScope = 'user'): string | undefined {
+  if (scope !== 'user' && scope !== 'project') return undefined;
+  return skillCommand(['list'], undefined, scope);
+}
+
+/** Stands for the agent's own target ID; deliberately not a runnable token. */
+export const SKILL_AGENT_TARGET_PLACEHOLDER = '<agent-id>';
+
+/**
+ * An agent runs commands without a terminal, where the CLI requires an
+ * explicit --target and --yes. The agent previews the exact plan first and
+ * then accepts that reviewed plan; security findings still block (--yes
+ * never implies --accept-security-risk).
+ */
+export function skillAgentCommands(
+  skill: SkillListing,
+  targets?: readonly string[],
+  scope: InstallScope = 'user',
+): { preview: string; apply: string; needsTarget: boolean } | undefined {
+  const command = skillInstallCommand(skill, targets, scope);
+  if (!command) return undefined;
+  const needsTarget = targets === undefined;
+  const install = needsTarget ? `${command} --target ${SKILL_AGENT_TARGET_PLACEHOLDER}` : command;
+  return { preview: `${install} --dry-run`, apply: `${install} --yes`, needsTarget };
 }

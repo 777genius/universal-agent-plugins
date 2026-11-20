@@ -68,7 +68,8 @@
         "installation": "Installation",
         "command": "Command",
         "prompt": "Prompt",
-        "promptText": "Install this Skill with Universal Agent Plugins. Review the source and the planned changes before running the following command:\n{command}",
+        "promptText": "Install this Skill with Universal Agent Plugins. Review the source and the planned changes first with a dry run:\n{preview}\nIf the plan matches this request, apply it:\n{apply}\nIf the CLI reports a blocking security finding, stop and show it to me.",
+        "promptTargetNote": "In both commands, replace {placeholder} with your agent ID ({agents}).",
         "exactNameUnavailable": "The exact install selector could not be validated. Check the publisher's source.",
         "security": "Security checks",
         "installs": "Installs",
@@ -79,7 +80,11 @@
         "documentUnavailable": "The publisher's SKILL.md could not be loaded. You can inspect its source directly.",
         "viewPublisher": "View publisher source",
         "revision": "Source revision",
-        "rawDocument": "View complete SKILL.md source"
+        "rawDocument": "View complete SKILL.md source",
+        "remove": "Remove",
+        "savedName": "Find the saved name",
+        "removeHint": "Removes the Skill saved under this name. If you installed a Skill with the same name from another source, check the saved names with the list command.",
+        "removeByListedName": "The CLI chooses the saved name for this Skill. Find it next to this source in the list, then run remove with that name."
       },
       "scanFilterLabel": "Scan coverage",
       "scanModes": {

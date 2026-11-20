@@ -228,8 +228,8 @@ export async function exactCommands(page: Page, scope: Locator, name: string, ta
         ? '.install-command-row .command-snippet--add'
         : `.command-stack > .command-snippet--${verb}`,
     );
-    const targetFlag = target && (verb === 'add' || verb === 'repair') ? ` --target ${target}` : '';
-    const expected = `npx -y universal-agent-plugins ${verb} ${name}${targetFlag}`;
+    const targetFlag = target && (verb === 'add' || verb === 'repair') ? ` --target ${target.includes(',') ? `"${target}"` : target}` : '';
+    const expected = `npx -y universal-agent-plugins@latest ${verb} ${name}${targetFlag}`;
     await expect(snippet.locator('code')).toHaveText(expected);
     await snippet.getByRole('button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected);

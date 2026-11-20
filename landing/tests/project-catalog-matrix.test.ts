@@ -31,11 +31,11 @@ test('portable mixed Project package admits each target with one supported compo
     assert.ok(selected.resolution.distribution, 'Project source missing for ' + client);
     assert.equal(selected.resolution.distribution?.targets.find(x => x.client === client)?.delivery, 'prepared');
     assert.equal(projectCatalogCommands(plugin, [client]).add,
-      'npx -y universal-agent-plugins add gitlab --target ' + client + ' --scope project' +
+      'npx -y universal-agent-plugins@latest add gitlab --target ' + client + ' --scope project' +
       (client === 'vscode' ? ' --no-save' : ''));
   }
   assert.equal(projectCatalogCommands(plugin).add,
-    'npx -y universal-agent-plugins add gitlab --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --scope project');
   assert.ok(projectCatalogSelection(plugin, ['codex', 'grok']).resolution.distribution,
     'a mixed Project package must preserve native Grok Skills and MCP delivery');
   assert.equal(projectComponentSupported('grok', 'skills'), true);

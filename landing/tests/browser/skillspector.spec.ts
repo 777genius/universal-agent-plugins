@@ -166,7 +166,7 @@ for (const mobile of [false, true]) {
       await expect(details).not.toHaveAttribute('open');
       await card.getByRole('button', { name: 'Install I18n State 00', exact: true }).click();
       await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add pre')).toContainText(
-        'npx -y universal-agent-plugins add i18n-state-00',
+        'npx -y universal-agent-plugins@latest add i18n-state-00',
       );
       await navigate(page, '/plugins/', 'en', '?tab=skills&skillScan=all');
       const skill = page.locator('.skill-card').first();

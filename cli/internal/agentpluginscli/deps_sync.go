@@ -255,7 +255,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 		}
 	}
 	adapter.currentAction = action
-	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
+	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot, ClientSurfaces: slices.Clone(client.Surfaces),
 		ConfirmPluginEnable:    adapter.opts.confirmPluginEnable && action.Action == "repair",
 		ClientNativeConfigRoot: dependencyNativeConfigRoot(adapter.app, client),
 		ClientExecutable:       backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
@@ -431,7 +431,7 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 			if !ok {
 				return fmt.Errorf("installed sibling %s is not detected", binding.ClientID)
 			}
-			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected, adapter.app.scope())})
+			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected, adapter.app.scope()), Surfaces: slices.Clone(sibling.Surfaces)})
 		}
 	}
 	return nil

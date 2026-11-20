@@ -78,12 +78,12 @@ for (const width of [1440, 390]) {
       .toHaveText(`${cli} add ${selector} --target hermes --scope project`);
     await targets(page, detail, ['Google Antigravity']);
     await expect(detail.locator('.command-snippet--add code'))
-      .toHaveText(`${cli} add ${selector} --target hermes,antigravity --scope project`);
+      .toHaveText(`${cli} add ${selector} --target "hermes,antigravity" --scope project`);
     await expect(detail).not.toContainText(repairNotice);
     await expect(detail.locator('.command-snippet--repair')).toHaveCount(1);
     for (const action of ['update', 'repair', 'remove'])
       await expect(detail.locator(`.command-snippet--${action} code`))
-        .toHaveText(`${cli} ${action} ${manifestName} --target hermes,antigravity --scope project`);
+        .toHaveText(`${cli} ${action} ${manifestName} --target "hermes,antigravity" --scope project`);
     await testInfo.attach(`explicit-source-detail-${width}.png`, {
       body: await detail.screenshot({ animations: 'disabled' }), contentType: 'image/png',
     });
@@ -294,7 +294,7 @@ test('a mounted agent page withdraws its signed Directory example on expiry', as
 
   const install = page.locator('.agent-page__install');
   await expect(install.locator('.command-snippet--add code'))
-    .toHaveText('npx -y universal-agent-plugins add i18n-state-00 --target codex');
+    .toHaveText('npx -y universal-agent-plugins@latest add i18n-state-00 --target codex');
   await page.clock.fastForward(11 * 60_000);
   await expect(install.locator('.command-snippet')).toHaveCount(0);
   await expect(install.locator('p[role="status"]')).toContainText(
@@ -335,7 +335,7 @@ for (const authority of ['expired', 'preview'] as const) {
 
     const install = page.locator('.agent-page__install');
     await expect(install.locator('.command-snippet--add code'))
-      .toHaveText('npx -y universal-agent-plugins add ./my-plugin --target codex');
+      .toHaveText('npx -y universal-agent-plugins@latest add ./my-plugin --target codex');
     await expect(install).toContainText(wording('en')('registryUi.agentPage.packageExampleSourceHint'));
     await expect(install.locator('p[role="status"]')).toHaveCount(0);
     expect(errors).toEqual([]);

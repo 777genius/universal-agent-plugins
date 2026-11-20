@@ -68,7 +68,8 @@
         "installation": "التثبيت",
         "command": "الأمر",
         "prompt": "الموجه",
-        "promptText": "ثبّت هذه المهارة باستخدام Universal Agent Plugins. راجع المصدر والتغييرات قبل تشغيل:\n{command}",
+        "promptText": "ثبّت هذه المهارة باستخدام Universal Agent Plugins. راجع أولًا المصدر والتغييرات المخطط لها بتشغيل تجريبي:\n{preview}\nإذا كانت الخطة مطابقة لهذا الطلب، فطبّقها:\n{apply}\nإذا أبلغت CLI عن مشكلة أمان مانعة، فتوقف واعرضها علي.",
+        "promptTargetNote": "في كلا الأمرين، استبدل {placeholder} بمعرّف وكيلك ({agents}).",
         "exactNameUnavailable": "تعذّر التحقق من اسم التثبيت الدقيق. راجع مصدر الناشر.",
         "security": "فحوص الأمان",
         "installs": "التثبيتات",
@@ -79,7 +80,11 @@
         "documentUnavailable": "تعذر تحميل SKILL.md من الناشر. يمكنك فحص المصدر مباشرة.",
         "viewPublisher": "عرض مصدر الناشر",
         "revision": "مراجعة المصدر",
-        "rawDocument": "عرض ملف SKILL.md الأصلي بالكامل"
+        "rawDocument": "عرض ملف SKILL.md الأصلي بالكامل",
+        "remove": "إزالة",
+        "savedName": "اعثر على الاسم المحفوظ",
+        "removeHint": "يزيل المهارة المحفوظة بهذا الاسم. إذا ثبّتَّ مهارة بالاسم نفسه من مصدر آخر، فتحقق من الأسماء المحفوظة باستخدام الأمر list.",
+        "removeByListedName": "تختار CLI الاسم المحفوظ لهذه المهارة. ابحث عنه بجوار هذا المصدر في مخرجات list، ثم شغّل remove بهذا الاسم."
       },
       "scanFilterLabel": "تغطية الفحص",
       "scanModes": {

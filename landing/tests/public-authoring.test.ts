@@ -49,7 +49,7 @@ test('the authoring front door renders Use/Build and preserves its indexing poli
     assert.ok(!page.includes(legacy));
   }
   assert.ok(page.includes("robots: 'noindex, follow'"));
-  assert.ok(page.includes('npx -y universal-agent-plugins add context7'));
+  assert.ok(page.includes('npx -y universal-agent-plugins@latest add context7'));
   const keys = [...page.matchAll(/(?:t|usePageSeo)\('publicAuthoring\.([^']+)'/g)].map((m) => m[1]);
   for (const locale of locales) {
     const copy = renderedCopy(locale);
