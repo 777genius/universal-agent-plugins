@@ -294,7 +294,7 @@ test('a mounted agent page withdraws its signed Directory example on expiry', as
 
   const install = page.locator('.agent-page__install');
   await expect(install.locator('.command-snippet--add code'))
-    .toHaveText('npx -y universal-agent-plugins add i18n-state-00 --target codex');
+    .toHaveText('npx -y universal-agent-plugins@latest add i18n-state-00 --target codex');
   await page.clock.fastForward(11 * 60_000);
   await expect(install.locator('.command-snippet')).toHaveCount(0);
   await expect(install.locator('p[role="status"]')).toContainText(
@@ -335,7 +335,7 @@ for (const authority of ['expired', 'preview'] as const) {
 
     const install = page.locator('.agent-page__install');
     await expect(install.locator('.command-snippet--add code'))
-      .toHaveText('npx -y universal-agent-plugins add ./my-plugin --target codex');
+      .toHaveText('npx -y universal-agent-plugins@latest add ./my-plugin --target codex');
     await expect(install).toContainText(wording('en')('registryUi.agentPage.packageExampleSourceHint'));
     await expect(install.locator('p[role="status"]')).toHaveCount(0);
     expect(errors).toEqual([]);

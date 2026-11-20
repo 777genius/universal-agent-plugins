@@ -1,6 +1,7 @@
 import type { SkillsView, SkillListing } from '../types/skillsCatalog.ts';
 import type { InstallScope } from '../types/registry.ts';
 import { skillClients } from '../data/skillClients.ts';
+import { CLI_INVOCATION } from './commands.ts';
 
 const skillTargetIds = new Set<string>(skillClients.map((client) => client.id));
 
@@ -349,7 +350,7 @@ function skillCommand(
   targets: readonly string[] | undefined,
   scope: InstallScope,
 ): string | undefined {
-  const tokens = ['npx', 'universal-agent-plugins@latest', ...args];
+  const tokens = [...CLI_INVOCATION.split(' '), ...args];
   if (targets !== undefined) {
     const ids = [...new Set(targets.map((id) => id.trim()).filter(Boolean))];
     if (!ids.length || ids.some((id) => !skillTargetIds.has(id))) return undefined;

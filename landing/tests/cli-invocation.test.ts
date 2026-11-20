@@ -3,7 +3,7 @@ import test from 'node:test';
 import { hasNpxUapInvocation, withNativeCliInvocation } from '../utils/cliInvocation.ts';
 
 const projectSkill =
-  'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
+  'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
 
 test('native CLI option changes only the executable and preserves the Skill arguments', () => {
   assert.equal(hasNpxUapInvocation(projectSkill), true);
@@ -13,7 +13,7 @@ test('native CLI option changes only the executable and preserves the Skill argu
 });
 
 test('native CLI option handles the Directory CLI and a command inside a Skill prompt', () => {
-  const plugin = 'npx -y universal-agent-plugins add context7 --target codex --scope project';
+  const plugin = 'npx -y universal-agent-plugins@latest add context7 --target codex --scope project';
   assert.equal(withNativeCliInvocation(plugin, true),
     'agentplugins add context7 --target codex --scope project');
   assert.equal(withNativeCliInvocation('npx --yes universal-agent-plugins@0.1.108 repair context7', true),
@@ -31,7 +31,7 @@ test('does not rewrite unrelated npx calls, vendor installers or arbitrary text'
     'npx universal-agent-plugins-fake skills add context7',
     'npm install -g agentplugins',
     'curl -fsSL https://example.com/install.sh | sh',
-    'echo npx universal-agent-plugins@latest add context7',
+    'echo npx -y universal-agent-plugins@latest add context7',
     'agentplugins add context7',
   ]) {
     assert.equal(hasNpxUapInvocation(command), false, command);

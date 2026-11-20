@@ -327,7 +327,7 @@ test('mixed explicit choices use one eligible source and survive navigation', as
   assert.deepEqual(state.pinnedSourceCommands.value, command);
   state.updateAutoDetect(true);
   assert.equal(unref(state.pinnedSourceCommands), undefined);
-  assert.equal(pluginCommands(plugin).add, 'npx -y universal-agent-plugins add gitlab');
+  assert.equal(pluginCommands(plugin).add, 'npx -y universal-agent-plugins@latest add gitlab');
   state.stop();
 });
 

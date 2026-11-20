@@ -44,23 +44,23 @@ test('every project lifecycle command carries scope and owned management retains
     const commands = pluginCommands(fixture, targets, true, 'project');
     assert.equal(
       commands.add,
-      `npx -y universal-agent-plugins add gitlab --target ${targets.join(',')} --scope project`,
+      `npx -y universal-agent-plugins@latest add gitlab --target ${targets.join(',')} --scope project`,
     );
-    assert.equal(commands.update, 'npx -y universal-agent-plugins update gitlab --scope project');
+    assert.equal(commands.update, 'npx -y universal-agent-plugins@latest update gitlab --scope project');
     assert.equal(
       commands.repair,
-      `npx -y universal-agent-plugins repair gitlab --target ${targets.join(',')} --scope project`,
+      `npx -y universal-agent-plugins@latest repair gitlab --target ${targets.join(',')} --scope project`,
     );
-    assert.equal(commands.remove, 'npx -y universal-agent-plugins remove gitlab --scope project');
+    assert.equal(commands.remove, 'npx -y universal-agent-plugins@latest remove gitlab --scope project');
     assert.equal(
       commands.switch,
-      'npx -y universal-agent-plugins switch gitlab --to <distribution-id> --scope project',
+      'npx -y universal-agent-plugins@latest switch gitlab --to <distribution-id> --scope project',
     );
     const imperative = pluginCommands(fixture, targets, false, 'project');
     for (const action of ['update', 'repair', 'remove'] as const) {
       assert.equal(
         imperative[action],
-        `npx -y universal-agent-plugins ${action} gitlab --target ${targets.join(',')} --scope project`,
+        `npx -y universal-agent-plugins@latest ${action} gitlab --target ${targets.join(',')} --scope project`,
       );
     }
   }
@@ -76,7 +76,7 @@ test('every project lifecycle command carries scope and owned management retains
   );
   assert.equal(
     pluginCommands(fixture, undefined, true, 'project').add,
-    'npx -y universal-agent-plugins add gitlab --scope project',
+    'npx -y universal-agent-plugins@latest add gitlab --scope project',
     'targetless project adds delegate compatible agent selection to the interactive CLI',
   );
   assert.throws(() => installCommands('gitlab', 'gitlab', [], true, 'project'), /target/);
@@ -96,7 +96,7 @@ test('project community re-add retains exact validated source and every scope su
   const commands = pluginCommands(community, ['codex'], true, 'project');
   assert.equal(
     commands.add,
-    `npx -y universal-agent-plugins add 'github:example/demo@${'b'.repeat(40)}//plugin with spaces' --target codex --scope project`,
+    `npx -y universal-agent-plugins@latest add 'github:example/demo@${'b'.repeat(40)}//plugin with spaces' --target codex --scope project`,
   );
   assert.equal(commands.update, commands.add);
   assert.equal(community.install_source, fixture.install_source);

@@ -20,17 +20,17 @@ test('published signed-v1 short name installs into explicit Project without v2 g
   assert.deepEqual(plugin.distributions[0]!.releases[0]!.targets, original,
     'Project preview must not alter signed User evidence');
   const commands = projectCatalogCommands(plugin, ['codex']);
-  assert.equal(commands.add, 'npx -y universal-agent-plugins add gitlab --target codex --scope project');
-  assert.equal(commands.update, 'npx -y universal-agent-plugins update gitlab --scope project');
-  assert.equal(commands.repair, 'npx -y universal-agent-plugins repair gitlab --target codex --scope project');
-  assert.equal(commands.remove, 'npx -y universal-agent-plugins remove gitlab --scope project');
+  assert.equal(commands.add, 'npx -y universal-agent-plugins@latest add gitlab --target codex --scope project');
+  assert.equal(commands.update, 'npx -y universal-agent-plugins@latest update gitlab --scope project');
+  assert.equal(commands.repair, 'npx -y universal-agent-plugins@latest repair gitlab --target codex --scope project');
+  assert.equal(commands.remove, 'npx -y universal-agent-plugins@latest remove gitlab --scope project');
 });
 
 test('automatic Project command defers compatible installed-agent selection to CLI', () => {
   const plugin = reviewed();
   assert.ok(projectCatalogAutomaticSelection(plugin)?.resolution.distribution);
   assert.equal(projectCatalogCommands(plugin).add,
-    'npx -y universal-agent-plugins add gitlab --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --scope project');
 });
 
 test('Marketing Kit with signed-v1 user grants and null Git revision can use Project', () => {
@@ -45,9 +45,9 @@ test('Marketing Kit with signed-v1 user grants and null Git revision can use Pro
   };
   assert.ok(projectCatalogSelection(plugin, ['codex']).resolution.distribution);
   assert.equal(projectCatalogCommands(plugin, ['codex']).add,
-    'npx -y universal-agent-plugins add marketing-kit --target codex --scope project');
+    'npx -y universal-agent-plugins@latest add marketing-kit --target codex --scope project');
   assert.equal(projectCatalogCommands(plugin).add,
-    'npx -y universal-agent-plugins add marketing-kit --scope project');
+    'npx -y universal-agent-plugins@latest add marketing-kit --scope project');
 });
 
 test('an explicit project grant is compatible but never claims native execution', () => {
@@ -56,7 +56,7 @@ test('an explicit project grant is compatible but never claims native execution'
   const choice = projectCatalogSelection(plugin, ['codex']);
   assert.equal(choice.resolution.distribution?.targets.find(x => x.client === 'codex')?.delivery, 'prepared');
   assert.equal(projectCatalogCommands(plugin, ['codex']).add,
-    'npx -y universal-agent-plugins add gitlab --target codex --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --target codex --scope project');
 });
 
 test('revoked, unsigned, malformed and unsupported sources still refuse Project', () => {
@@ -83,7 +83,7 @@ test('extra unsupported sibling does not revoke signed-v1 Project selection', ()
   const chosen = projectCatalogSelection(plugin, ['codex']);
   assert.ok(chosen.resolution.distribution);
   assert.equal(projectCatalogCommands(plugin, ['codex']).add,
-    'npx -y universal-agent-plugins add gitlab --target codex --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --target codex --scope project');
 });
 
 test('signed-v2 canonical closure cannot fall back from User to ungranted Project', () => {
@@ -168,7 +168,7 @@ test('signed Pi Project grant keeps the original signed short-name route', () =>
   assert.ok(projectCatalogSelection(plugin, ['pi']).resolution.distribution);
   assert.equal(pinnedCatalogSelection(plugin, 'pi', 'project')?.selector, undefined);
   assert.equal(projectCatalogCommands(plugin, ['pi']).add,
-    'npx -y universal-agent-plugins add gitlab --target pi --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --target pi --scope project');
 });
 
 test('signed Pi extension Project grant retains its normal signed route', () => {
@@ -181,7 +181,7 @@ test('signed Pi extension Project grant retains its normal signed route', () => 
   assert.ok(projectCatalogSelection(plugin, ['pi']).resolution.distribution);
   assert.equal(pinnedCatalogSelection(plugin, 'pi', 'project'), undefined);
   assert.equal(projectCatalogCommands(plugin, ['pi']).add,
-    'npx -y universal-agent-plugins add gitlab --target pi --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --target pi --scope project');
 });
 
 test('ChatGPT app-only binding does not authorize portable Pi Project source', () => {

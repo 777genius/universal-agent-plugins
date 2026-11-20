@@ -45,11 +45,11 @@ const skill: SkillListing = {
 test('Skill command preserves repository identity and exact selector without inventing a path', () => {
   assert.equal(
     skillInstallCommand(skill),
-    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design',
+    'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design',
   );
   assert.equal(
     skillInstallCommand(skill, ['codex', 'claude', 'codex']),
-    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --target "codex,claude"',
+    'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --target "codex,claude"',
   );
   assert.equal(
     skillRepositoryUrl({
@@ -71,15 +71,15 @@ test('Skill command preserves repository identity and exact selector without inv
 test('Skills user/project choice uses the same explicit CLI scope as plugins', () => {
   assert.equal(skillInstallCommand(skill, undefined, 'user'), skillInstallCommand(skill));
   assert.equal(skillInstallCommand(skill, undefined, 'project'),
-    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project');
+    'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project');
   assert.equal(skillInstallCommand(skill, ['codex', 'claude'], 'project'),
-    'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --target "codex,claude" --scope project');
+    'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --target "codex,claude" --scope project');
   assert.equal(skillInstallCommand(skill, ['chatgpt'], 'project'), undefined);
   assert.equal(skillInstallCommand(skill, ['codex; echo unsafe'], 'project'), undefined);
 });
 
 test('agent prompt commands run without a terminal: explicit target, dry-run review, then --yes', () => {
-  const add = 'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design';
+  const add = 'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design';
   assert.deepEqual(skillAgentCommands(skill, ['codex', 'claude'], 'project'), {
     preview: `${add} --target "codex,claude" --scope project --dry-run`,
     apply: `${add} --target "codex,claude" --scope project --yes`,
@@ -99,7 +99,7 @@ test('agent prompt commands run without a terminal: explicit target, dry-run rev
 });
 
 test('Skill removal uses the name the CLI saves, and list when the page cannot know it', () => {
-  const cli = 'npx universal-agent-plugins@latest';
+  const cli = 'npx -y universal-agent-plugins@latest';
   assert.equal(skillRemoveCommand(skill), `${cli} remove frontend-design`);
   assert.equal(skillRemoveCommand(skill, ['codex', 'claude'], 'project'),
     `${cli} remove frontend-design --target "codex,claude" --scope project`);
@@ -128,6 +128,7 @@ test(
     assert.equal(result.status, 0);
     assert.deepEqual(result.stdout.trim().split('\n'), [
       'npx',
+      '-y',
       'universal-agent-plugins@latest',
       'skills',
       'add',
@@ -155,7 +156,7 @@ test('Skill metadata cannot inject shell syntax or external install sources', ()
     assert.equal(skillNeedsManualSelection(untrusted), true, hint);
     assert.equal(
       skillInstallCommand(untrusted, ['codex']),
-      'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --target codex',
+      'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --target codex',
       hint,
     );
   }
@@ -217,7 +218,7 @@ test('HTTPS publishers use their origin and exact names, never a listing page or
     source: { kind: 'external' as const, url: 'https://uizze.com' },
   };
   assert.equal(skillInstallCommand(supported, ['codex']),
-    'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar --target codex');
+    'npx -y universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar --target codex');
   // An explicit current API source may use a non-/skills scope: only ambiguous
   // legacy unsupported-source IDs must satisfy the narrower recovery rule.
   const explicitScoped: SkillListing = {
@@ -228,7 +229,7 @@ test('HTTPS publishers use their origin and exact names, never a listing page or
     availability: 'unverified',
   };
   assert.equal(skillInstallCommand(explicitScoped),
-    'npx universal-agent-plugins@latest skills add https://publisher.com/team/custom --skill ui-radar');
+    'npx -y universal-agent-plugins@latest skills add https://publisher.com/team/custom --skill ui-radar');
   assert.deepEqual(skillDetailRoute(website), {
     path: '/skills/',
     query: { id: website.id, q: 'lark-mail' },
@@ -269,7 +270,7 @@ test('legacy Skills API website records recover only canonical publisher install
     source: { kind: 'external' as const, url: 'https://www.skills.sh/site/uizze.com/ui-radar' },
   };
   assert.equal(skillInstallCommand(uizze),
-    'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar');
+    'npx -y universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar');
 
   // Do not broaden the recovery into trusting arbitrary directory or publisher
   // URLs: the canonical listing ID, origin, slug and source must all agree.
@@ -542,7 +543,7 @@ test('legacy source variants produce CLI commands without using directory pages 
     assert.equal(skillIdentityFromId(listing.id)?.kind, 'github', raw);
     assert.equal(
       skillInstallCommand(listing),
-      `npx universal-agent-plugins@latest skills add ${source} --skill frontend-design`,
+      `npx -y universal-agent-plugins@latest skills add ${source} --skill frontend-design`,
       raw,
     );
   }
@@ -554,7 +555,7 @@ test('legacy source variants produce CLI commands without using directory pages 
   assert.equal(skillPublisherUrl(scoped), 'https://publisher.com/scoped/skills');
   assert.equal(
     skillInstallCommand(scoped),
-    'npx universal-agent-plugins@latest skills add https://publisher.com/scoped/skills --skill review',
+    'npx -y universal-agent-plugins@latest skills add https://publisher.com/scoped/skills --skill review',
   );
     const bareScoped = unknown('open.feishu.cn/lark-cli/skills/regular', 'lark-mail');
   assert.equal(skillPublisherUrl(bareScoped), 'https://open.feishu.cn/lark-cli/skills/regular');
@@ -572,7 +573,7 @@ test('legacy source variants produce CLI commands without using directory pages 
   );
   assert.equal(
     skillInstallCommand(unknown('https://github.com/owner/repo', 'UPPER')),
-    'npx universal-agent-plugins@latest skills add https://github.com/owner/repo',
+    'npx -y universal-agent-plugins@latest skills add https://github.com/owner/repo',
   );
   for (const raw of [
     'owner/repo#main', 'owner/repo/tree', 'owner/repo/tree/../secret',

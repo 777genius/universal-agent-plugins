@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { navigate, offline, projections, registryFixture } from './i18n-state.helpers';
 
 const npxSkillCommand =
-  'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
+  'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
 const nativeSkillCommand =
   'agentplugins skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
 const checkboxName = 'Use installed agentplugins CLI instead of npx';

@@ -71,7 +71,7 @@ async function catalogFixture(root: string, empty = false) {
   const registry = parseDirectoryData(snapshot, 'published_snapshot');
   for (const value of ['hermes', 'antigravity', 'pi'] as const)
     await writeFile(path.join(root, '.pages-dist/api/registry/client', value), JSON.stringify(projectRegistry(registry, { kind: 'client', value })));
-  if (empty) return (id: string) => `npx -y universal-agent-plugins add ./my-plugin --target ${id}`;
+  if (empty) return (id: string) => `npx -y universal-agent-plugins@latest add ./my-plugin --target ${id}`;
   // Independently select the same reviewed Context7 fixture as browser E2E.
   const plugin = registry.plugins.find(item => item.name === 'context7')!;
   const distribution = plugin.distributions.find(item => item.id === plugin.default_distribution)!;
@@ -102,7 +102,7 @@ test('selected public source binds homepage and download with 16-client or 14-cl
 
 test('prepared source independently enforces Hermes Project/User MCP boundary and exact target command', () => {
   const route = '/agents/hermes/';
-  const command = 'npx -y universal-agent-plugins add ./my-plugin --target hermes';
+  const command = 'npx -y universal-agent-plugins@latest add ./my-plugin --target hermes';
   const boundary = 'Project installation never modifies User MCP configuration';
   checkHtml(agentHtml(route, command, boundary), route, 'hermes', command);
   assert.throws(() => checkHtml(agentHtml(route, command), route, 'hermes', command), /MCP boundary/);
@@ -111,7 +111,7 @@ test('prepared source independently enforces Hermes Project/User MCP boundary an
 
 test('prepared source independently enforces Antigravity Prepared status', () => {
   const route = '/agents/antigravity/';
-  const command = 'npx -y universal-agent-plugins add ./my-plugin --target antigravity';
+  const command = 'npx -y universal-agent-plugins@latest add ./my-plugin --target antigravity';
   checkHtml(agentHtml(route, command, 'Prepared by CLI'), route, 'antigravity', command);
   assert.throws(() => checkHtml(agentHtml(route, command, 'Supported'), route, 'antigravity', command), /Prepared boundary/);
 });
@@ -128,7 +128,7 @@ test('immutable agent commands bind the actual catalog projection and cannot bec
       checkHtml(agentHtml(route, command, boundary), route, id, command);
       for (const wrong of [command.replace(/@[a-f0-9]{40}\/\//, `@${'a'.repeat(40)}//`),
         command.replace('upstash/context7', 'foreign/package'), command.replace(`--target ${id}`, '--target codex'),
-        `npx -y universal-agent-plugins add ./my-plugin --target ${id}`, command + ' --no-save'])
+        `npx -y universal-agent-plugins@latest add ./my-plugin --target ${id}`, command + ' --no-save'])
         assert.throws(() => checkHtml(agentHtml(route, wrong, boundary), route, id, command), /target command/);
       assert.throws(() => checkHtml(html(route, command + ' ' + boundary), route, id, command), /target command/);
       assert.throws(() => checkHtml(html(route, `<code>${command}</code><code>${command}</code> ${boundary}`), route, id, command), /target command/);

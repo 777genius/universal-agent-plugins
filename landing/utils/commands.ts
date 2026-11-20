@@ -6,7 +6,10 @@ import {
 } from './savedDependencies.ts';
 import type { InstallScope, RegistryPlugin } from '../types/registry';
 
-const CLI_INVOCATION = 'npx -y universal-agent-plugins';
+// Shared by plugin and Skill commands. @latest makes npx resolve the current
+// release; a bare name runs any older global or project install instead. The
+// exact-source catalog route keeps its own tested pin (projectCatalogSource).
+export const CLI_INVOCATION = 'npx -y universal-agent-plugins@latest';
 
 /** Encode one shell argument; safe tokens retain the familiar readable command. */
 export function shellToken(value: string): string {

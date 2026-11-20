@@ -798,12 +798,12 @@
       "chatgptFinish": "打开 ChatGPT，在 Apps 或 Plugins 中选择 {name}，完成连接后开始新聊天。可用性取决于你的账户和工作区。",
       "expectedFallback": "预期的源回退：{source}。",
       "dependencySaving": {
-        "saved": "保存在当前用户的 uap.toml 和 uap.lock 中。运行 npx -y universal-agent-plugins deps status 查看文件路径。移除操作会影响所有已保存的目标。",
+        "saved": "保存在当前用户的 uap.toml 和 uap.lock 中。运行 {command} 查看文件路径。移除操作会影响所有已保存的目标。",
         "noSave": "此目标选择使用 --no-save，不会记录依赖。",
         "local": "本地包不会保存为可移植依赖。",
         "discovery": "discovery 选择器不会保存为依赖。",
         "chatgpt": "ChatGPT 准备操作不会保存依赖。",
-        "projectSaved": "已保存到此项目的 uap.toml 和 uap.lock。在此文件夹中运行 npx -y universal-agent-plugins deps status --scope project 即可检查。移除操作会影响此项目中所有已保存的代理目标。"
+        "projectSaved": "已保存到此项目的 uap.toml 和 uap.lock。在此文件夹中运行 {command} 即可检查。移除操作会影响此项目中所有已保存的代理目标。"
       },
       "scope": {
         "label": "安装范围",
