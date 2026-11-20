@@ -18,8 +18,11 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	if (req.ClientConfigRoot == "" && e.scope() != domain.ScopeProject && req.ClientNativeConfigRoot == "") || (req.ClientConfigRoot != "" && !validRoot(req.ClientConfigRoot)) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientConfigRoot must be an explicit absolute clean path", ErrInvalidRequest)
 	}
-	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "") {
+	if req.ClientExecutable != "" && !validRoot(req.ClientExecutable) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientExecutable must be an explicit absolute clean path", ErrInvalidRequest)
+	}
+	if req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "" {
+		return domain.DetectedClient{}, missingExecutableError(ErrInvalidRequest, id)
 	}
 	if req.ClientNativeConfigRoot != "" {
 		_, opted := clients.As[clients.UserNativeRegistryLayout](e.cfg.Registry, id)
