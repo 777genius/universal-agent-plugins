@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 )
 
 // prefetchWindow bounds how far one prefetch may run ahead of its sequential
@@ -30,6 +33,8 @@ type prefetchEvent struct {
 	Seconds  float64 `json:"seconds,omitempty"`
 	Waited   float64 `json:"waited_seconds,omitempty"`
 	InFlight int     `json:"in_flight,omitempty"`
+	// Retried counts connection retries made inside the acquisition.
+	Retried int32 `json:"retried,omitempty"`
 }
 
 // Outcomes reported to prefetchGuard.trace.
@@ -59,6 +64,7 @@ type prefetchEntry[K comparable, V any] struct {
 	panicked  bool
 	inFlight  int
 	seconds   float64
+	retries   atomic.Int32
 }
 
 // orderedPrefetch starts acquisitions that a sequential consumer would perform
@@ -188,7 +194,7 @@ func (prefetch *orderedPrefetch[K, V]) run(entry *prefetchEntry[K, V]) {
 			}
 		}
 	}()
-	entry.value, entry.err = prefetch.acquire(entry.ctx, entry.key)
+	entry.value, entry.err = prefetch.acquire(sourceacquisition.WithConnectRetryCounter(entry.ctx, &entry.retries), entry.key)
 }
 
 // take transfers ownership of a prefetched result to the caller. served is
@@ -229,7 +235,7 @@ func (prefetch *orderedPrefetch[K, V]) take(ctx context.Context, key K) (value V
 	prefetch.outstanding--
 	prefetch.advanceLocked()
 	prefetch.mu.Unlock()
-	event := prefetchEvent{Key: fmt.Sprint(key), Seconds: entry.seconds, Waited: time.Since(waitStart).Seconds(), InFlight: entry.inFlight}
+	event := prefetchEvent{Key: fmt.Sprint(key), Seconds: entry.seconds, Waited: time.Since(waitStart).Seconds(), InFlight: entry.inFlight, Retried: entry.retries.Load()}
 	switch {
 	case entry.err == nil:
 		event.Outcome = prefetchHit

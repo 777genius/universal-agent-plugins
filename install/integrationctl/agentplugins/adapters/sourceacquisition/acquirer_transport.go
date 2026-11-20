@@ -100,6 +100,12 @@ func gitAcquisitionFailure(repository, revision, operation string) error {
 	return fmt.Errorf("acquire GitHub repository %q at revision %s: %s failed", repository, revision, operation)
 }
 
+// gitReadFailure is gitAcquisitionFailure for a remote read; it keeps the same
+// message and stays connect-class when cause is.
+func gitReadFailure(cause error, repository, revision, operation string) error {
+	return gitFailure(cause, gitAcquisitionFailure(repository, revision, operation).Error())
+}
+
 func publicTreeError(err error) string {
 	message := err.Error()
 	switch {
