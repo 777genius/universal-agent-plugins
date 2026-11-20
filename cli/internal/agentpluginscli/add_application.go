@@ -147,13 +147,7 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 		request.Choices = append(request.Choices, prompt.TargetChoice{ID: c.ClientID, Label: prompt.SafeText(c.DisplayName)})
 		request.DefaultIDs = append(request.DefaultIDs, c.ClientID)
 	}
-	for _, c := range skipped {
-		label := string(c.Client)
-		if definition, ok := domain.ClientDefinitionFor(c.Client); ok {
-			label = definition.DisplayName
-		}
-		request.SkippedLabels = append(request.SkippedLabels, prompt.SafeText(label+": "+c.Reason))
-	}
+	request.SkippedLabels = humanSkippedTargetLabels(skipped)
 	if len(detected) > 0 {
 		if err := prompt.ValidateRequest(request); err != nil {
 			return nil, nil, err

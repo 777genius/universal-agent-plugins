@@ -1,0 +1,173 @@
+'use strict';
+// Proof-only Cursor Editor UI observation. No chat, model, MCP or policy changes.
+const fs = require('node:fs');
+const path = require('node:path');
+const { once } = require('node:events');
+const { createHash } = require('node:crypto');
+
+function isolationArguments(help, directories) {
+  if (typeof help !== 'string' || help.length > 65536 || /[\x00-\x08\x0b-\x1f\x7f]/u.test(help)) throw new Error('help-refused');
+  const rows = help.split(/\r?\n/u);
+  if (rows[0] !== 'Cursor 3.30.14'
+      || rows.filter(row => row.startsWith('Usage:')).length !== 1
+      || !rows.includes('Usage: cursor [options] [paths...]')) throw new Error('help-refused');
+  for (const pattern of [
+    /^\s+(?:-n[ ,]+)?--new-window\s{2,}\S.*$/u,
+    /^\s+--user-data-dir <dir>\s{2,}\S.*$/u,
+    /^\s+--extensions-dir <dir>\s{2,}\S.*$/u,
+  ]) if (rows.filter(row => pattern.test(row)).length !== 1) throw new Error('help-refused');
+  return ['--new-window', '--user-data-dir', directories.userData,
+    '--extensions-dir', directories.extensions, directories.project];
+}
+
+function gate(text) {
+  if (/sign in to (?:continue|use cursor)|log in to continue/iu.test(text)) return 'login-gate';
+  if (/do you trust the authors|trust this (?:workspace|project)/iu.test(text)) return 'trust-gate';
+  if (/local plugin imports (?:are )?(?:disabled|not allowed)|blocked by (?:your )?(?:organization|administrator)/iu.test(text)) return 'import-policy-gate';
+  return '';
+}
+
+async function bounded(promise, milliseconds) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('phase-deadline')), milliseconds);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+function ordinary(value, directory) {
+  if (typeof value !== 'string' || !path.isAbsolute(value) || path.resolve(value) !== value
+      || fs.realpathSync(value) !== value) throw new Error('path-refused');
+  const info = fs.lstatSync(value);
+  if (directory ? !info.isDirectory() : !info.isFile() || info.nlink !== 1) throw new Error('path-refused');
+  return value;
+}
+
+async function screenshot(page, directory, name) {
+  ordinary(directory, true);
+  const parentBefore = fs.lstatSync(directory);
+  const destination = path.join(directory, name);
+  const descriptor = fs.openSync(destination, 'wx', 0o600);
+  try {
+    const before = fs.fstatSync(descriptor);
+    const body = await page.screenshot({ timeout: 5000 });
+    if (body.length > 8 << 20) throw new Error('screenshot-bound');
+    fs.writeFileSync(descriptor, body);
+    const held = fs.fstatSync(descriptor), current = fs.lstatSync(destination);
+    const parentAfter = fs.lstatSync(directory);
+    if (before.ino !== held.ino || held.ino !== current.ino || held.dev !== current.dev
+        || before.mode !== held.mode || held.mode !== current.mode || held.uid !== current.uid
+        || !current.isFile() || current.nlink !== 1 || current.size !== body.length
+        || parentBefore.ino !== parentAfter.ino || parentBefore.dev !== parentAfter.dev
+        || fs.realpathSync(directory) !== directory) throw new Error('screenshot-custody');
+    return { name, bytes: body.length, sha256: createHash('sha256').update(body).digest('hex') };
+  } finally { fs.closeSync(descriptor); }
+}
+
+async function visibleText(page) {
+  const visible = await page.locator('body').evaluate(node => {
+    const text = node.innerText;
+    return { text: text.slice(0, 32768), overflow: text.length > 32768 };
+  }, undefined, { timeout: 3000 });
+  const text = visible.text;
+  if (visible.overflow || Buffer.byteLength(text) > 128 << 10) throw new Error('ui-text-bound');
+  const refused = gate(text);
+  if (refused) throw new Error(refused);
+  return text;
+}
+
+async function clickNamed(page, name) {
+  await visibleText(page);
+  const control = page.getByText(name, { exact: true }).filter({ visible: true });
+  if (await control.count() !== 1) throw new Error('ui-control-unobserved');
+  await control.click({ timeout: 5000 });
+}
+
+async function quit(app, closed, result) {
+  // Use the real Electron application's ordinary Quit; never app.close(), whose
+  // Playwright BrowserContext closure can fall back to process termination.
+  result.quit_requested = true;
+  const acknowledged = await bounded(app.evaluate(({ app: native }) => {
+    setImmediate(() => native.quit());
+    return true;
+  }), 1000).catch(() => false);
+  result.quit_acknowledged = acknowledged === true;
+  const [code, signal] = await bounded(closed, 5000);
+  result.native_exit = { code, signal };
+  if (code !== 0 || signal !== null || acknowledged !== true) throw new Error('non-natural-exit');
+}
+
+async function observe(input) {
+  const result = { status: 'unqualified', stage: 'preflight', observation: 'not-started',
+    skills_ready: false, model_runtime_qualified: false, authentication_qualified: false,
+    sandbox_requested: true, quit_requested: false, screenshots: [], markers: {},
+    source_paths_visible: false, source_attribution_qualified: false };
+  let app, closed;
+  try {
+    for (const name of ['root', 'project', 'userData', 'extensions', 'output', 'playwright']) ordinary(input[name], true);
+    ordinary(input.electron, false);
+    if (JSON.parse(fs.readFileSync(path.join(input.playwright, 'package.json'), 'utf8')).version !== '1.64.1') throw new Error('tool-version-refused');
+    const args = isolationArguments(input.help, input);
+    const { _electron } = require(input.playwright);
+    result.stage = 'editor-launch';
+    app = await _electron.launch({ executablePath: input.electron, args,
+      cwd: input.project, env: process.env, chromiumSandbox: true, timeout: 30000 });
+    const child = app.process();
+    closed = once(child, 'close');
+    if (child.spawnargs.includes('--no-sandbox') || child.spawnfile !== input.electron) throw new Error('launch-authority-refused');
+    result.sandbox_request_and_argv_verified = true;
+    const page = await app.firstWindow({ timeout: 10000 });
+    page.setDefaultTimeout(5000);
+    result.screenshots.push(await screenshot(page, input.output, 'startup.png'));
+    await visibleText(page);
+    result.stage = 'customize';
+    await clickNamed(page, 'Customize');
+    result.stage = 'skills';
+    await clickNamed(page, 'Skills');
+    result.screenshots.push(await screenshot(page, input.output, 'skills.png'));
+    const skills = await visibleText(page);
+    for (const name of [input.projectSkill, input.pluginSkill]) {
+      result.markers[name] = await page.getByText(name, { exact: true }).filter({ visible: true }).count() === 1;
+    }
+    result.source_paths_visible = skills.includes(input.projectSkillPath) && skills.includes(input.pluginSkillPath);
+    result.stage = 'plugins';
+    await clickNamed(page, 'Plugins');
+    result.screenshots.push(await screenshot(page, input.output, 'plugins.png'));
+    await visibleText(page);
+    result.markers[input.pluginName] = await page.getByText(input.pluginName, { exact: true }).filter({ visible: true }).count() === 1;
+    if (Object.values(result.markers).some(value => value !== true)) throw new Error('component-unobserved');
+    result.observation = 'component-names-observed';
+    result.stage = 'ordinary-quit';
+    await quit(app, closed, result);
+    app = undefined;
+    result.status = 'observed';
+  } catch (error) {
+    const classes = ['help-refused', 'path-refused', 'tool-version-refused', 'phase-deadline', 'screenshot-bound',
+      'screenshot-custody', 'ui-text-bound', 'login-gate', 'trust-gate', 'import-policy-gate',
+      'ui-control-unobserved', 'launch-authority-refused', 'non-natural-exit', 'component-unobserved'];
+    const message = error instanceof Error ? error.message : '';
+    result.observation = classes.includes(message) ? message : 'editor-observation-refused';
+    if (app && closed) {
+      try { await quit(app, closed, result); } catch { result.shutdown_unqualified = true; }
+    }
+  }
+  return result;
+}
+
+async function main() {
+  let body = Buffer.alloc(0);
+  for await (const chunk of process.stdin) {
+    body = Buffer.concat([body, chunk]);
+    if (body.length > 65536) throw new Error('input-bound');
+  }
+  const result = await observe(JSON.parse(body.toString('utf8')));
+  process.stdout.write(JSON.stringify(result) + '\n');
+  if (result.status !== 'observed') process.exitCode = 1;
+}
+
+module.exports = { isolationArguments, gate, ordinary };
+if (require.main === module) main().catch(() => {
+  process.stdout.write('{"status":"unqualified","observation":"driver-refused"}\n');
+  process.exitCode = 1;
+});
