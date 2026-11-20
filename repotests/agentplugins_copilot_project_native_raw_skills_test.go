@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -35,7 +36,7 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	f.preparePackage(t)
 	foreign := copilotRawForeign(t, f)
 	before := copilotRawInventories(t, f, "before", nil)
-	eventsExist, events, err := copilotRawEventSnapshot(f.base.Events)
+	events, err := copilotRawEventSnapshot(f.base.Events)
 	if err != nil {
 		t.Fatal("raw initial MCP event snapshot refused", err)
 	}
@@ -84,73 +85,109 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	if _, err := os.Lstat(binding.TargetLocator); !os.IsNotExist(err) {
 		t.Fatal("raw removed package remains", err)
 	}
-	afterEventsExist, afterEvents, err := copilotRawEventSnapshot(f.base.Events)
-	if err != nil || eventsExist != afterEventsExist || !bytes.Equal(events, afterEvents) {
+	afterEvents, err := copilotRawEventSnapshot(f.base.Events)
+	if err != nil || !events.equal(afterEvents) {
 		t.Fatal("ordinary catalog mutated MCP probe events", err)
 	}
 	f.check(t)
 }
 
-/*
-copilotRawEventSnapshot distinguishes absent output from an empty native event
-file. This no-provider journey must not create, replace or modify events.
-The shared bounded owner/regular-file read rejects unsafe existing leaves.
-*/
-func copilotRawEventSnapshot(path string) (bool, []byte, error) {
+// A no-provider journey must preserve the event leaf's presence, bytes and
+// file identity, not merely its final content. The shared nofollow reader
+// preserves ownership and bounds; a separate stat guards its call boundary.
+type copilotRawEventState struct {
+	exists bool
+	body   []byte
+	info   os.FileInfo
+}
+
+func (before copilotRawEventState) equal(after copilotRawEventState) bool {
+	if before.exists != after.exists || !bytes.Equal(before.body, after.body) {
+		return false
+	}
+	if !before.exists {
+		return before.info == nil && after.info == nil
+	}
+	return before.info != nil && after.info != nil &&
+		projectNativeRuntimeStableStat(before.info.Sys(), after.info.Sys())
+}
+
+func copilotRawEventSnapshot(path string) (copilotRawEventState, error) {
 	return copilotRawEventSnapshotRead(path, projectNativeRuntimeRead)
 }
 
-// Only a missing leaf observed before a held read is ordinary absence. A file
-// disappearing during the nofollow read must remain a failure, not a no-op.
-func copilotRawEventSnapshotRead(path string, read func(string, int64) ([]byte, error)) (bool, []byte, error) {
+// Only a missing leaf observed before a held read is ordinary absence. A leaf
+// disappearing or being replaced during the held read must remain a failure.
+func copilotRawEventSnapshotRead(path string, read func(string, int64) ([]byte, error)) (copilotRawEventState, error) {
 	if err := projectNativeRuntimeParents(path); err != nil {
-		return false, nil, err
+		return copilotRawEventState{}, err
 	}
-	if _, err := os.Lstat(path); err != nil {
+	initial, err := os.Lstat(path)
+	if err != nil {
 		if !os.IsNotExist(err) {
-			return false, nil, err
+			return copilotRawEventState{}, err
 		}
 		if parentErr := projectNativeRuntimeParents(path); parentErr != nil {
-			return false, nil, parentErr
+			return copilotRawEventState{}, parentErr
 		}
-		return false, nil, nil
+		return copilotRawEventState{}, nil
 	}
 	body, err := read(path, 1<<20)
 	if err != nil {
-		return false, nil, err
+		return copilotRawEventState{}, err
 	}
-	return true, body, nil
+	current, err := os.Lstat(path)
+	if err != nil {
+		return copilotRawEventState{}, err
+	}
+	if !projectNativeRuntimeStableStat(initial.Sys(), current.Sys()) {
+		return copilotRawEventState{}, fmt.Errorf("MCP event file changed during held snapshot")
+	}
+	return copilotRawEventState{exists: true, body: body, info: initial}, nil
 }
 
 func TestCopilotRawEventSnapshotPreservesAbsenceAndRefusesAliases(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "events.jsonl")
-	exists, body, err := copilotRawEventSnapshot(path)
-	if err != nil || exists || len(body) != 0 {
+	absent, err := copilotRawEventSnapshot(path)
+	if err != nil || absent.exists || len(absent.body) != 0 || absent.info != nil {
 		t.Fatal("uncreated event file must remain absent", err)
 	}
 	// Losing the parent is foreign fixture drift, not an absent event leaf.
-	if _, _, err := copilotRawEventSnapshot(filepath.Join(root, "missing-parent", "events.jsonl")); !os.IsNotExist(err) {
+	if _, err := copilotRawEventSnapshot(filepath.Join(root, "missing-parent", "events.jsonl")); !os.IsNotExist(err) {
 		t.Fatal("missing event parent was accepted as an absent leaf", err)
 	}
 	if err := os.WriteFile(path, nil, 0600); err != nil {
 		t.Fatal(err)
 	}
-	exists, body, err = copilotRawEventSnapshot(path)
-	if err != nil || !exists || len(body) != 0 {
+	empty, err := copilotRawEventSnapshot(path)
+	if err != nil || !empty.exists || len(empty.body) != 0 || empty.info == nil || absent.equal(empty) {
 		t.Fatal("present empty event file must not resemble absence", err)
 	}
 	if err := os.WriteFile(path, []byte("event\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := copilotRawEventSnapshotRead(path, func(string, int64) ([]byte, error) {
+	if _, err := copilotRawEventSnapshotRead(path, func(string, int64) ([]byte, error) {
 		return nil, os.ErrNotExist
 	}); err == nil {
 		t.Fatal("event leaf disappearance during protected read was accepted as no events")
 	}
-	exists, body, err = copilotRawEventSnapshot(path)
-	if err != nil || !exists || string(body) != "event\n" {
+	original, err := copilotRawEventSnapshot(path)
+	if err != nil || !original.exists || string(original.body) != "event\n" {
 		t.Fatal("existing event bytes must remain observable", err)
+	}
+	// Atomic replacement with byte-identical content must not prove no MCP
+	// activity: the original file identity was lost.
+	replacement := filepath.Join(root, "replacement.jsonl")
+	if err := os.WriteFile(replacement, []byte("event\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(replacement, path); err != nil {
+		t.Fatal(err)
+	}
+	replaced, err := copilotRawEventSnapshot(path)
+	if err != nil || original.equal(replaced) || !bytes.Equal(original.body, replaced.body) {
+		t.Fatal("same-content MCP event replacement was accepted", err)
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
@@ -158,7 +195,7 @@ func TestCopilotRawEventSnapshotPreservesAbsenceAndRefusesAliases(t *testing.T) 
 	if err := os.Symlink(filepath.Join(root, "foreign-events"), path); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := copilotRawEventSnapshot(path); err == nil {
+	if _, err := copilotRawEventSnapshot(path); err == nil {
 		t.Fatal("event snapshot must refuse symlinked leaf")
 	}
 }
