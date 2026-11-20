@@ -53,7 +53,10 @@ func checkNativeProjectionIntegrity(ctx context.Context, app App, client domain.
 		}
 		return []doctorFinding{scopedFinding("degraded", "native_projection_changed", installation, binding.ClientID, "an owned native client configuration entry or skill is missing or differs from its recorded projection", repairAction(installation, binding))}
 	}
-	if outcome.Activation != domain.ActivationActive || outcome.Verification != domain.VerificationInstalled {
+	// Installed verification proves the exact owned objects. Clients whose
+	// native discovery stays unobserved report that as Prepared; doctor reports
+	// the binding's activation separately, so it is not a projection gap.
+	if (outcome.Activation != domain.ActivationActive && outcome.Activation != domain.ActivationPrepared) || outcome.Verification != domain.VerificationInstalled {
 		return nativeProjectionNotChecked(installation, binding)
 	}
 	return nil
