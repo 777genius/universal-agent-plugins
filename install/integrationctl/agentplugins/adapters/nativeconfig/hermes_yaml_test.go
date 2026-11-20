@@ -160,16 +160,16 @@ func TestHermesYAMLRejectsMalformedAndAmbiguousConfig(t *testing.T) {
 	}
 }
 
-// Hermes' official installer copies config.yaml with the umask, so a default
-// profile is 0644 (0664 with user private groups). Only a file every local
-// user may rewrite is refused, and the existing mode is never changed.
+// The official installer uses the umask: 0644 is safe, but 0664 is unsafe
+// without proof the owning group is private. Never change the mode on behalf
+// of the user; reject group/other-writable files without touching their bytes.
 func TestHermesConfigModeFromOfficialInstaller(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows security uses ACLs rather than POSIX mode bits")
 	}
 	t.Parallel()
 	body := []byte("model: demo\n")
-	for _, mode := range []os.FileMode{0o644, 0o664, 0o666} {
+	for _, mode := range []os.FileMode{0o600, 0o644, 0o664, 0o666, 0o620} {
 		path := filepath.Join(t.TempDir(), "config.yaml")
 		if err := os.WriteFile(path, body, 0o600); err != nil {
 			t.Fatal(err)
@@ -181,10 +181,12 @@ func TestHermesConfigModeFromOfficialInstaller(t *testing.T) {
 		req := Request{Paths: Paths{JSON: path}, Codec: CodecHermes, Action: ActionAdd,
 			Name: "managed", Server: Server{Type: "stdio", Command: "node"}}
 		receipt, err := kernel.Apply(req)
-		if mode&0o002 != 0 {
+		if mode&0o022 != 0 {
 			now, readErr := os.ReadFile(path)
-			if err == nil || !strings.Contains(err.Error(), "chmod o-w") || readErr != nil || !bytes.Equal(now, body) {
-				t.Fatalf("world-writable %o config must be refused unchanged: %v %q %v", mode, err, now, readErr)
+			info, statErr := os.Lstat(path)
+			if err == nil || !strings.Contains(err.Error(), "chmod go-w") || readErr != nil ||
+				!bytes.Equal(now, body) || statErr != nil || info.Mode().Perm() != mode {
+				t.Fatalf("group/other-writable %o config must be refused unchanged: %v %q %v %v", mode, err, now, readErr, statErr)
 			}
 			continue
 		}

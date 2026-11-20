@@ -133,6 +133,8 @@ comments stayed (observed on Hermes 0.23, 2bd378e). UAP does not control this
 Hermes save, so the lifecycle E2E compares MCP settings and trusted roots
 semantically.
 
+On Unix, existing Hermes `config.yaml` must not be group- or other-writable. UAP cannot assume the owning group is private, including for mode `0664`; it refuses the change with `chmod go-w` guidance and never changes the file's permissions itself. Owner-only or read-only-for-others modes such as `0600` and `0644` are preserved.
+
 **Strict scope:** owned Skills and scoped MCP install/update/repair/remove,
 no reuse of foreign skill/MCP names. User MCP uses the existing atomic native
 config kernel, strict bounded YAML parsing, per-entry receipts, and

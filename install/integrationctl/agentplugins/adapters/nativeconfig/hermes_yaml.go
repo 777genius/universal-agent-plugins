@@ -339,21 +339,18 @@ func hermesValueNode(encoded json.RawMessage) (*yaml.Node, error) {
 	return &value, nil
 }
 
-// Refuse to manage an existing config that any local user may rewrite: such a
-// user could plant MCP commands that Hermes runs. Hermes' own installer copies
-// config.yaml with the umask (0644, or 0664 under Debian/Ubuntu user private
-// groups), so readable or group-writable files are accepted. UAP writes only
-// package-declared MCP entries, no user credentials, and the mutation kernel
-// keeps the existing mode, never widening it. Symlinks and non-regular files
-// are already refused when the file is opened, and the atomic replacement
-// leaves a file the current user owns. Windows uses ACLs rather than
-// meaningful POSIX permission bits.
+// Refuse existing group- or other-writable Hermes configuration. The owning
+// group is not proven private; even if the installer used a common user-private
+// group umask, a second group member could replace an owned MCP command.
+// Require the user to remove write permission rather than changing a foreign
+// config's mode. Group/other read permission is safe; preserve the original
+// mode on successful mutation. Windows uses ACLs, not POSIX permission bits.
 func requireHermesPrivateConfig(file resolvedFile, codec Codec) error {
 	if codec != CodecHermes || !file.exists || runtime.GOOS == "windows" {
 		return nil
 	}
-	if file.mode.Perm()&0o002 != 0 {
-		return fmt.Errorf("hermes config.yaml %q has mode %04o, so every local user can change it; run chmod o-w %q and retry",
+	if file.mode.Perm()&0o022 != 0 {
+		return fmt.Errorf("hermes config.yaml %q has mode %04o and is writable by a group or other users; run chmod go-w %q and retry",
 			file.path, file.mode.Perm(), file.path)
 	}
 	return nil
