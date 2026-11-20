@@ -21,23 +21,38 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
-type refusingGeminiRunner struct{ calls int }
+type refusingClientRunner struct{ calls int }
 
-func (runner *refusingGeminiRunner) Run(context.Context, legacyports.Command) (legacyports.CommandResult, error) {
+func (runner *refusingClientRunner) Run(context.Context, legacyports.Command) (legacyports.CommandResult, error) {
 	runner.calls++
-	return legacyports.CommandResult{}, errors.New("inert Gemini fixture never runs a client")
+	return legacyports.CommandResult{}, errors.New("inert fixture never runs a client")
 }
 
 // Doctor once reported every healthy Gemini project installation as a changed
 // projection and sent users to repair, which could never clear the finding.
-// The real Gemini adapter verifies the exact owned objects here; native
-// discovery stays unobserved and is reported separately.
-func TestProjectGeminiDoctorRecognizesIntactOwnedProjection(t *testing.T) {
+// The real adapters verify the exact owned objects here; native discovery
+// stays unobserved and is reported separately, also by clients that answer
+// the read-only check with a prepared activation.
+func TestProjectDoctorRecognizesIntactOwnedProjection(t *testing.T) {
+	for _, tc := range []struct {
+		client domain.ClientID
+		skills string
+	}{
+		{domain.ClientGemini, ".gemini/skills"},
+		{domain.ClientOpenCode, ".opencode/skills"},
+		{domain.ClientCursor, ".cursor/skills"},
+		{domain.ClientCodex, ".agents/skills"},
+	} {
+		t.Run(string(tc.client), func(t *testing.T) { testProjectDoctorRecognizesIntactOwnedProjection(t, tc.client, tc.skills) })
+	}
+}
+
+func testProjectDoctorRecognizesIntactOwnedProjection(t *testing.T, clientID domain.ClientID, skills string) {
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := fixtureClient(t, domain.ClientGemini)
+	client := fixtureClient(t, clientID)
 	f := newCLIFixtureAt(t, []domain.DetectedClient{client}, root)
 	project := filepath.Join(root, "project")
 	for _, path := range []string{project, client.ConfigRoot} {
@@ -51,7 +66,7 @@ func TestProjectGeminiDoctorRecognizesIntactOwnedProjection(t *testing.T) {
 	f.app.EnvironmentLockPath = filepath.Join(stateRoot, "environment.lock")
 	planner := plannertest.NewPlanner(clientplanner.Planner{ProjectRoot: project, ManagedRoot: f.app.ManagedRoot})
 	f.app.Planner, f.app.Targets = planner, planner
-	runner := &refusingGeminiRunner{}
+	runner := &refusingClientRunner{}
 	f.app.Lifecycle.ProjectRoot, f.app.Lifecycle.StateStore = project, f.store
 	f.app.Lifecycle.Planner, f.app.Lifecycle.Targets = planner, planner
 	f.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
@@ -71,10 +86,11 @@ func TestProjectGeminiDoctorRecognizesIntactOwnedProjection(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(source, "skills", "guide", "SKILL.md"), []byte("---\nname: guide\ndescription: Inert doctor fixture\n---\nBody.\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	scope := []string{"--scope", "project", "--project-root", project, "--target", "gemini", "--format", "json"}
+	scope := []string{"--scope", "project", "--project-root", project, "--target", publicCLITargetName(clientID), "--format", "json"}
 	if stdout, stderr, err := f.execute(false, append([]string{"add", source, "--no-save"}, scope...)...); err != nil {
 		t.Fatalf("project add: %v\n%s\n%s", err, stdout, stderr)
 	}
+	runner.calls = 0
 	projectionFindings := func() []string {
 		t.Helper()
 		stdout, stderr, err := f.execute(false, append([]string{"doctor", "demo"}, scope...)...)
@@ -98,16 +114,16 @@ func TestProjectGeminiDoctorRecognizesIntactOwnedProjection(t *testing.T) {
 		return codes
 	}
 	if codes := projectionFindings(); len(codes) != 0 {
-		t.Fatalf("intact Gemini project projection was diagnosed as %v", codes)
+		t.Fatalf("intact %s project projection was diagnosed as %v", clientID, codes)
 	}
 	if runner.calls != 0 {
-		t.Fatalf("read-only doctor started the Gemini client %d times", runner.calls)
+		t.Fatalf("read-only doctor started the %s client %d times", clientID, runner.calls)
 	}
-	skill := filepath.Join(project, ".gemini", "skills", "guide", "SKILL.md")
+	skill := filepath.Join(project, filepath.FromSlash(skills), "guide", "SKILL.md")
 	if err := os.WriteFile(skill, []byte("---\nname: guide\ndescription: Foreign edit\n---\nChanged.\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if codes := projectionFindings(); len(codes) != 1 || codes[0] != "degraded:native_projection_changed" {
-		t.Fatalf("changed Gemini project skill was diagnosed as %v", codes)
+		t.Fatalf("changed %s project skill was diagnosed as %v", clientID, codes)
 	}
 }
