@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -104,11 +105,13 @@ func TestRefusedGroupExplainsFixableCauseAndLogsDetail(t *testing.T) {
 func TestEnvironmentClassificationStaysGenericForLookalikes(t *testing.T) {
 	t.Parallel()
 	cases := map[string]error{
-		"url syntax":              &url.Error{Op: "Get", URL: "http://bad host", Err: errors.New("invalid character in host name")},
-		"tls authority":           &url.Error{Op: "Get", URL: "https://x", Err: x509.UnknownAuthorityError{}},
-		"tls alert from the peer": &net.OpError{Op: "remote error", Err: errors.New("tls: bad certificate")},
-		"unrelated":               errors.New("boom"),
-		"wrapped unknown":         fmt.Errorf("a: %w", fmt.Errorf("b: %w", errors.New("c"))),
+		"url syntax":                       &url.Error{Op: "Get", URL: "http://bad host", Err: errors.New("invalid character in host name")},
+		"tls authority":                    &url.Error{Op: "Get", URL: "https://x", Err: x509.UnknownAuthorityError{}},
+		"tls alert from the peer":          &net.OpError{Op: "remote error", Err: errors.New("tls: bad certificate")},
+		"tls alert raised locally":         &net.OpError{Op: "local error", Err: errors.New("tls: unexpected message")},
+		"certificate error behind a proxy": &net.OpError{Op: "proxyconnect", Net: "tcp", Err: &tls.CertificateVerificationError{Err: errors.New("x509: certificate signed by unknown authority")}},
+		"unrelated":                        errors.New("boom"),
+		"wrapped unknown":                  fmt.Errorf("a: %w", fmt.Errorf("b: %w", errors.New("c"))),
 	}
 	for name, err := range cases {
 		if got := failureKindOf(err); got != failureUnknown {

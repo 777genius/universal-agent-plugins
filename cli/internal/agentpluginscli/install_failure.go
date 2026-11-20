@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io/fs"
 	"net"
@@ -90,7 +91,7 @@ func environmentFailureKind(err error) failureKind {
 		return failureAgentMissing
 	case errors.Is(err, fs.ErrPermission):
 		return failurePermission
-	case errors.As(err, &opErr) && !tlsAlert(opErr), errors.As(err, &dnsErr):
+	case errors.As(err, &opErr) && !tlsAlert(opErr, err), errors.As(err, &dnsErr):
 		// Only connection-level causes. TLS, URL syntax and other errors that
 		// merely implement net.Error stay generic, and a timeout is a timeout.
 		if timeoutCause(err) {
@@ -101,9 +102,21 @@ func environmentFailureKind(err error) failureKind {
 	return failureUnknown
 }
 
-// tlsAlert reports a failure the remote end sent as a TLS alert: the network
-// was reachable, so it is not an unreachable-network problem.
-func tlsAlert(opErr *net.OpError) bool { return opErr.Op == "remote error" }
+// tlsAlert reports a TLS failure that surfaces as a net.OpError: an alert sent
+// by the remote end ("remote error"), one raised by the local client ("local
+// error"), or a handshake or certificate error that an https proxy path wraps
+// in an operation error. The network was reachable, so none of them is an
+// unreachable-network problem.
+func tlsAlert(opErr *net.OpError, err error) bool {
+	if opErr.Op == "remote error" || opErr.Op == "local error" {
+		return true
+	}
+	var (
+		certErr   *tls.CertificateVerificationError
+		headerErr tls.RecordHeaderError
+	)
+	return errors.As(err, &certErr) || errors.As(err, &headerErr)
+}
 
 func timeoutCause(err error) bool {
 	var timeout interface{ Timeout() bool }
