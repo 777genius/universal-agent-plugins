@@ -168,7 +168,7 @@ export async function pinnedContext7Example(page: Page, client: ClientID) {
   const selector = `github:${source.repository}@${source.revision}//${source.path}`;
   return {
     selector,
-    command: `npx -y universal-agent-plugins@0.1.110 add ${selector} --target ${client}`,
+    command: `npx -y universal-agent-plugins@0.1.114 add ${selector} --target ${client}`,
   };
 }
 

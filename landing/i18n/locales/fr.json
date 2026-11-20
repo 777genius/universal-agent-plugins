@@ -359,7 +359,7 @@
         "nextStep": "Après l’installation"
       },
       "scrollHint": "Faites défiler le tableau horizontalement pour voir toutes les colonnes.",
-      "note": "Automatique : UAP installe les composants pris en charge. Guidée : suivez les instructions de l’agent. Préparée : activez les fichiers préparés. Manuelle : terminez la configuration dans l’application. Après confirmation, UAP termine la configuration native prise en charge et indique les étapes de confiance, connexion ou rechargement restantes. La disponibilité dépend du plugin et de la version de l’agent. Référence : CLI natif 0.1.110. La publication sur npm est indépendante et peut être décalée. La prise en charge d’un agent ne garantit pas une version signée du catalogue compatible avec chaque plugin et chaque portée.",
+      "note": "Automatique : UAP installe les composants pris en charge. Guidée : suivez les instructions de l’agent. Préparée : activez les fichiers préparés. Manuelle : terminez la configuration dans l’application. Après confirmation, UAP termine la configuration native prise en charge et indique les étapes de confiance, connexion ou rechargement restantes. La disponibilité dépend du plugin et de la version de l’agent. Référence : CLI natif 0.1.114. La publication sur npm est indépendante et peut être décalée. La prise en charge d’un agent ne garantit pas une version signée du catalogue compatible avec chaque plugin et chaque portée.",
       "details": "Voir les détails de compatibilité",
       "capabilities": {
         "pluginsSkillsMcp": "Plugins, compétences, MCP",
@@ -371,6 +371,7 @@
         "personalAppSetup": "Configuration d’application personnelle",
         "skillsOnly": "Compétences uniquement",
         "skillsMcpPrepared": "Compétences, MCP (préparés)",
+        "pluginsSkillsMcpPrepared": "Plugins, compétences, MCP (préparés)",
         "notSupported": "Non pris en charge"
       },
       "setup": {
@@ -911,7 +912,7 @@
         "note": "Plugin natif géré",
         "status": "Pris en charge",
         "intro": "Installez Agent Plugins 1.0 via GitHub Copilot CLI à l'aide de son workflow de plugin natif et de la même commande de cycle de vie utilisée pour les autres agents.",
-        "delivery": "La CLI utilise la disposition du plugin Copilot prise en charge et vérifie l'état d'installation résultant.",
+        "delivery": "La CLI utilise la disposition du plugin Copilot prise en charge et vérifie l'état d'installation résultant. Dans la portée projet, avec une version stable de Copilot CLI 1.0.81 ou ultérieure, un paquet compatible est enregistré comme plugin de projet natif.",
         "activation": "Redémarrez ou rechargez le client uniquement lorsque le workflow natif Copilot le demande."
       },
       "vscode": {
@@ -960,7 +961,7 @@
         "note": "Paquet préparé ; activation manuelle requise",
         "status": "Préparé par CLI",
         "intro": "Préparez Agent Plugins 1.0 pour Windsurf avec une commande CLI, puis terminez explicitement l'étape d'activation spécifique au client.",
-        "delivery": "Le CLI écrit ses Skills et la configuration MCP pour Devin utilisateur 3000.11.205 ou 3000.12.57 et projet 3000.11.205. La préparation ne prouve ni découverte, ni confiance, ni connexion, ni exécution réelle.",
+        "delivery": "Le CLI écrit ses Skills et la configuration MCP pour Devin 3000.11.205 ou 3000.12.57 dans les portées utilisateur et projet. La préparation ne prouve ni découverte, ni confiance, ni connexion, ni exécution réelle.",
         "activation": "Suivez le chemin d’activation manuel exact imprimé après la préparation."
       },
       "grok": {

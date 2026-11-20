@@ -794,15 +794,18 @@
     "sourceRef": "reference/client-compatibility.md",
     "anchorsByLocale": {
       "en": [
+        "supported-agents",
         "hermes-antigravity-source",
         "pi-native-extensions"
       ],
       "ru": [
+        "supported-agents",
         "hermes-antigravity-source",
         "pi-native-extensions"
       ],
       "uk": [
         "uap-client-compatibility-evidence",
+        "supported-agents",
         "current-release-and-scope",
         "hermes-antigravity-source",
         "pi-native-extensions",
@@ -818,15 +821,18 @@
         "project-scope-evidence"
       ],
       "zh": [
+        "supported-agents",
         "hermes-antigravity-source",
         "pi-native-extensions"
       ],
       "es": [
+        "supported-agents",
         "hermes-antigravity-source",
         "pi-native-extensions"
       ],
       "hi": [
         "uap-client-compatibility-evidence",
+        "supported-agents",
         "current-release-and-scope",
         "hermes-antigravity-source",
         "pi-native-extensions",
@@ -843,6 +849,7 @@
       ],
       "ar": [
         "uap-client-compatibility-evidence",
+        "supported-agents",
         "current-release-and-scope",
         "hermes-antigravity-source",
         "pi-native-extensions",
@@ -859,6 +866,7 @@
       ],
       "pt": [
         "uap-client-compatibility-evidence",
+        "supported-agents",
         "current-release-and-scope",
         "hermes-antigravity-source",
         "pi-native-extensions",
@@ -874,6 +882,7 @@
         "project-scope-evidence"
       ],
       "fr": [
+        "supported-agents",
         "hermes-antigravity-source",
         "pi-native-extensions"
       ]

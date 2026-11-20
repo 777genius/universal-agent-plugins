@@ -359,7 +359,7 @@
         "nextStep": "Después de instalar"
       },
       "scrollHint": "Desplázate horizontalmente para ver todas las columnas.",
-      "note": "Automática: UAP instala los componentes compatibles. Guiada: sigue las indicaciones del agente. Preparada: activa los archivos preparados. Manual: termina la configuración en la aplicación. Tras la confirmación, UAP completa la configuración nativa compatible e indica los pasos de confianza, inicio de sesión o recarga pendientes. La disponibilidad depende del complemento y de la versión del agente. Referencia: CLI nativo 0.1.110. La publicación en npm es independiente y puede demorarse. Admitir un agente no garantiza una versión firmada del catálogo compatible con cada plugin y ámbito.",
+      "note": "Automática: UAP instala los componentes compatibles. Guiada: sigue las indicaciones del agente. Preparada: activa los archivos preparados. Manual: termina la configuración en la aplicación. Tras la confirmación, UAP completa la configuración nativa compatible e indica los pasos de confianza, inicio de sesión o recarga pendientes. La disponibilidad depende del complemento y de la versión del agente. Referencia: CLI nativo 0.1.114. La publicación en npm es independiente y puede demorarse. Admitir un agente no garantiza una versión firmada del catálogo compatible con cada plugin y ámbito.",
       "details": "Ver detalles de compatibilidad",
       "capabilities": {
         "pluginsSkillsMcp": "Complementos, habilidades, MCP",
@@ -371,6 +371,7 @@
         "personalAppSetup": "Configuración de aplicación personal",
         "skillsOnly": "Solo habilidades",
         "skillsMcpPrepared": "Habilidades, MCP (preparado)",
+        "pluginsSkillsMcpPrepared": "Complementos, habilidades, MCP (preparado)",
         "notSupported": "No compatible"
       },
       "setup": {
@@ -911,7 +912,7 @@
         "note": "Complemento nativo administrado",
         "status": "Compatible",
         "intro": "Instala Agent Plugins 1.0 a través de GitHub Copilot CLI usando su flujo de trabajo de complemento nativo y el mismo comando de ciclo de vida usado para otros agentes.",
-        "delivery": "La CLI utiliza el diseño del complemento Copilot compatible y verifica el estado de instalación resultante.",
+        "delivery": "La CLI utiliza el diseño del complemento Copilot compatible y verifica el estado de instalación resultante. En el ámbito de proyecto, con una versión estable de Copilot CLI 1.0.81 o posterior, un paquete compatible se registra como plugin nativo del proyecto.",
         "activation": "Reinicia o recarga el cliente solo cuando el proceso nativo de Copilot lo solicite."
       },
       "vscode": {
@@ -960,7 +961,7 @@
         "note": "Paquete preparado; Se requiere activación manual",
         "status": "Preparado por CLI",
         "intro": "Prepara Agent Plugins 1.0 para Windsurf con un comando de la CLI y después completa el paso de activación específico del cliente.",
-        "delivery": "La CLI escribe sus Skills y la configuración MCP para Devin de usuario 3000.11.205 o 3000.12.57 y de proyecto 3000.11.205. La preparación no prueba descubrimiento, confianza, inicio de sesión ni ejecución real.",
+        "delivery": "La CLI escribe sus Skills y la configuración MCP para Devin 3000.11.205 o 3000.12.57 en los ámbitos de usuario y de proyecto. La preparación no prueba descubrimiento, confianza, inicio de sesión ni ejecución real.",
         "activation": "Sigue la ruta de activación manual exacta impresa después de la preparación."
       },
       "grok": {

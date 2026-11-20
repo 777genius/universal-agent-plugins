@@ -12,13 +12,43 @@ translationRequired: false
 
 # Evidências de compatibilidade dos clientes UAP {#uap-client-compatibility-evidence}
 
+## Agentes compatíveis {#supported-agents}
+
+O UAP instala ou prepara pacotes para estes agentes. Informe o valor de `--target`
+para escolher agentes explicitamente ou omita `--target` para escolher entre os
+agentes detectados no seu computador.
+
+| Agente | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop), `chatgptweb` (Web) |
+
+O suporte aos escopos de usuário e de projeto, a configuração e as etapas que
+restam após a instalação variam conforme o agente; consulte a
+[tabela de suporte a agentes](https://universal-agent-plugins.com/pt/#agent-support). O suporte a um agente não significa que
+todo pacote, componente, versão ou escopo funcione nele.
+
 ## Versão atual e escopo {#current-release-and-scope}
 
 A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest),
 versão nativa publicada, adiciona uma API local de
 gerenciamento com processo controlado pelo aplicativo, descoberta de clientes
-e perfis sem alterações e um provedor de extensões nativas do Pi no escopo de
-usuário. Consulte [gerenciamento local](../use/manage#local-management-api).
+e perfis sem alterações e extensões nativas do Pi, Skills e MCP stdio/Streamable HTTP
+nos escopos de usuário e de projeto elegível. Consulte [gerenciamento local](../use/manage#local-management-api).
 Canais de gerenciadores de pacotes podem demorar para receber a atualização;
 confira `agentplugins version`.
 

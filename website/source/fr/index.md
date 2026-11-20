@@ -65,6 +65,7 @@ La validation du paquet, l’installation, la découverte par le client, l’ex�
 - [Démarrage rapide](./guide/quickstart)
 - [Structure du paquet](./build/layout)
 - [Vérifications et preuves](./build/checks)
+- [Agents pris en charge](./reference/client-compatibility#supported-agents)
 - [Compatibilité des clients et portée des tests](./reference/client-compatibility)
 - [Spécification Agent Plugins 1.0](https://agent-plugins.org/specification)
 

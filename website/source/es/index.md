@@ -63,6 +63,7 @@ La validación del paquete, la instalación, la detección por el cliente, la ej
 - [Inicio rápido](./guide/quickstart)
 - [Estructura del paquete](./build/layout)
 - [Comprobaciones y pruebas](./build/checks)
+- [Agentes compatibles](./reference/client-compatibility#supported-agents)
 - [Compatibilidad de clientes y límites de las pruebas](./reference/client-compatibility)
 - [Especificación Agent Plugins 1.0](https://agent-plugins.org/specification)
 
