@@ -102,7 +102,7 @@ func TestSavedDependencyConfirmationPrecedesActivityAndApply(t *testing.T) {
 			if test.wantACK && strings.Count(view, "Changes confirmed.") != 1 {
 				t.Fatalf("confirmation acknowledgment was repeated: %q", view)
 			}
-			if test.wantPrompt && strings.Index(view, "remove demo/codex") > strings.Index(view, "Apply these changes?") {
+			if test.wantPrompt && (!strings.Contains(view, "Remove demo for OpenAI Codex") || strings.Index(view, "Remove demo for OpenAI Codex") > strings.Index(view, "Apply these changes?")) {
 				t.Fatalf("confirmation preceded its review: %q", view)
 			}
 		})
@@ -168,7 +168,7 @@ func TestSavedDependencyDryRunHasNoAcknowledgmentOrApplyActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, stderr, err := f.executeInput(true, "y\n", "deps", "sync", "--locked", "--dry-run", "--format", "human")
-	if err != nil || !strings.Contains(out, "install demo/codex") {
+	if err != nil || !strings.Contains(out, "Install demo for OpenAI Codex") {
 		t.Fatalf("dry run did not render the actionable plan: %v\n%s\n%s", err, out, stderr)
 	}
 	for _, unexpected := range []string{"Apply these changes?", "Changes confirmed.", "Applying changes"} {

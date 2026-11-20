@@ -12,6 +12,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/antigravity"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/cline"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -43,7 +44,7 @@ func newDevinGlobalHostFixture(t *testing.T, project bool) devinGlobalHostFixtur
 	}
 	pkg := filepath.Join(root, "package")
 	devinSDKRemotePackage(t, pkg)
-	registry, err := clients.NewRegistry(windsurf.New(), cline.New())
+	registry, err := clients.NewRegistry(windsurf.New(), cline.New(), antigravity.New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,6 +114,93 @@ func TestFacadeDevinGlobalOriginalRootAdmission(t *testing.T) {
 			}
 			if _, statErr := os.Lstat(filepath.Join(f.profile, "skills", "docs")); !os.IsNotExist(statErr) {
 				t.Fatal("refusal installed native Skill", statErr)
+			}
+		})
+	}
+}
+
+func TestFacadeDevinGlobalCLIOnlyUserRoot(t *testing.T) {
+	f := newDevinGlobalHostFixture(t, false)
+	if err := os.RemoveAll(filepath.Join(f.root, ".codeium")); err != nil {
+		t.Fatal(err)
+	}
+	detection := windsurf.New().DetectSurfaces(clients.NewHost(clients.HostProbes{
+		HomeDir: f.root, GOOS: "linux", Lstat: os.Lstat, EvalSymlinks: filepath.EvalSymlinks, ReadDir: os.ReadDir,
+		Environment: map[string]string{"XDG_CONFIG_HOME": filepath.Dir(f.profile)},
+		LookPath: func(name string) (string, error) {
+			if name == "devin" {
+				return f.request.ClientExecutable, nil
+			}
+			return "", os.ErrNotExist
+		},
+	}))
+	if detection.Err != nil || detection.ConfigRoot != "" || detection.NativeConfigRoot != f.profile {
+		t.Fatal("CLI-only detection changed authority", detection)
+	}
+	f.request.ClientConfigRoot, f.request.ClientNativeConfigRoot = detection.ConfigRoot, detection.NativeConfigRoot
+	prepared, err := f.engine.Prepare(t.Context(), f.request)
+	if err != nil {
+		t.Fatal("explicit native User authority must not require a Cascade profile", err)
+	}
+	t.Cleanup(func() {
+		if err := prepared.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	if prepared.Plan().ConfigRoot != "" {
+		t.Fatal("native authority invented a legacy profile")
+	}
+	result, err := f.engine.Apply(t.Context(), prepared, installer.Decision{Confirmed: true})
+	if err != nil || result.Client.Activation != string(domain.ActivationPrepared) || result.Client.Verification != string(domain.VerificationInstalled) || f.runner.calls != 0 {
+		t.Fatal("CLI-only native file installation failed or claimed runtime discovery", result, err)
+	}
+	state, err := f.store.Load()
+	if err != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+		t.Fatal("CLI-only binding missing", err)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.NativeProfileRoot != f.profile {
+			t.Fatal("CLI-only binding lost original native authority")
+		}
+		if err := windsurf.New().ValidateBindingProfile(f.profile, binding); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(f.root, ".codeium")); !os.IsNotExist(err) {
+		t.Fatal("CLI-only route created an unrelated Cascade profile", err)
+	}
+}
+
+func TestFacadeDevinGlobalCLIOnlyUserRootRefusals(t *testing.T) {
+	for _, mode := range []string{"missing", "relative", "non-opted", "non-primary", "malformed-legacy", "antigravity"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newDevinGlobalHostFixture(t, false)
+			f.request.ClientConfigRoot = ""
+			switch mode {
+			case "missing":
+				f.request.ClientNativeConfigRoot = ""
+			case "relative":
+				f.request.ClientNativeConfigRoot = "relative/devin"
+			case "non-opted":
+				f.request.ClientID = "cline"
+			case "non-primary":
+				f.request.ClientExecutable = filepath.Join(f.root, "windsurf")
+			case "malformed-legacy":
+				f.request.ClientConfigRoot = "relative/cascade"
+			case "antigravity":
+				f.request.ClientID = "antigravity"
+			}
+			before := devinSDKRead(t, filepath.Join(f.profile, "mcp_config.json"))
+			prepared, err := f.engine.Prepare(t.Context(), f.request)
+			if prepared != nil {
+				_ = prepared.Close()
+			}
+			if !errors.Is(err, installer.ErrInvalidRequest) || f.runner.calls != 0 {
+				t.Fatal("missing or unselected authority accepted", err)
+			}
+			state, loadErr := f.store.Load()
+			if loadErr != nil || len(state.Installations) != 0 || before != devinSDKRead(t, filepath.Join(f.profile, "mcp_config.json")) {
+				t.Fatal("refusal changed native profile or installation state", loadErr)
 			}
 		})
 	}

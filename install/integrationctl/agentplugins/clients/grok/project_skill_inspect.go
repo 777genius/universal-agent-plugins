@@ -134,9 +134,10 @@ func projectSkillEntry(row map[string]any) bool {
 		return false
 	}
 	source, ok := row["source"].(map[string]any)
-	if !ok {
-		return false
-	}
+	return ok && projectSkillSource(source)
+}
+
+func projectSkillSource(source map[string]any) bool {
 	path, located := source["path"].(string)
 	if !located || path == "" {
 		return false
