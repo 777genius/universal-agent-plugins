@@ -83,10 +83,19 @@ for (const width of [1440, 1024, 390, 320]) {
       }),
     );
     const rows = [...new Set(geometry.map((item) => Math.round(item.y)))];
-    if (width >= 1440) {
-      expect(rows).toHaveLength(1);
-    } else if (width < 1024) {
+    const perRow = geometry.filter((item) => Math.round(item.y) === rows[0]).length;
+    const install = (await page.locator('.hero-quick-start').boundingBox())!;
+    const agents = (await page.locator('.client-section__agents').boundingBox())!;
+    if (width >= 1024) {
+      // Two columns: the install steps sit beside a wrapping agent grid.
+      expect(install.x + install.width).toBeLessThanOrEqual(agents.x + 0.5);
+      expect(rows.length).toBeGreaterThanOrEqual(2);
+      expect(perRow).toBeGreaterThanOrEqual(4);
+    } else {
+      // Stacked: install steps first, then several agents per row.
+      expect(install.y + install.height).toBeLessThanOrEqual(agents.y + 0.5);
       expect(rows.length).toBeGreaterThanOrEqual(3);
+      expect(perRow).toBeGreaterThanOrEqual(3);
     }
     for (const item of geometry) {
       expect(item.x).toBeGreaterThanOrEqual(0);
@@ -221,7 +230,7 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   expect(preview.width).toBeCloseTo(800, 0);
   expect(preview.y - (supported.y + supported.height)).toBeGreaterThanOrEqual(15);
   expect(install.y + install.height).toBeLessThan(preview.y);
-  await expect(page.locator('.hero__demo .hero-demo-video')).toHaveCount(0);
+  await expect(page.locator('.hero-shell .hero-demo-video')).toHaveCount(0);
   // After seven seconds the hidden warm-up frame is intentional. It must not
   // become an active, focusable or autoplay-enabled player without a gesture.
   const muxFrames = page.locator('iframe[src*="player.mux.com"]');
