@@ -151,6 +151,12 @@ The following `agentplugins` changes are breaking. They ship in the next minor
   healthy OpenCode, Cursor, Codex project and Kiro project installations whose
   owned files verify intact. Native discovery that is still unobserved keeps
   its own finding.
+- Claude Code project installs now record workspace trust in the file a plain
+  `claude` reads. Without `CLAUDE_CONFIG_DIR` that is `~/.claude.json`; it was
+  written to `~/.claude/.claude.json`, and native checks ran with
+  `CLAUDE_CONFIG_DIR=~/.claude`, so `active` was reported while Claude Code
+  still listed the project as untrusted. A set `CLAUDE_CONFIG_DIR` keeps using
+  `$CLAUDE_CONFIG_DIR/.claude.json`.
 - A pending ChatGPT registration no longer cancels a multi-client Context7
   installation. Other selected clients are installed and ChatGPT is reported
   as a separate setup step with a ChatGPT-only resume command.

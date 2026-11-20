@@ -112,7 +112,8 @@ func requireNoSurvivingClaudeCommand(ctx context.Context, env clients.Env, execu
 
 // survivingClaudeCommand finds a Claude Code process running a `plugin`
 // command, or one bound to this profile through CLAUDE_CONFIG_DIR, which every
-// native command of this adapter carries even if it rewrote its arguments.
+// native command of this adapter carries for a non-default profile even if it
+// rewrote its arguments. Default-profile commands are found by `plugin`.
 // A wrapper script counts as Claude Code through its own name. A Claude
 // process that hides both its arguments and its environment cannot be
 // cleared, so it counts as well.
