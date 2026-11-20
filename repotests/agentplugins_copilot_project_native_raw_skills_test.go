@@ -91,7 +91,6 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	f.check(t)
 }
 
-
 /*
 copilotRawEventSnapshot distinguishes absent output from an empty native event
 file. This no-provider journey must not create, replace or modify events.
