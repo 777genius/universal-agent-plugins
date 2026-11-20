@@ -566,7 +566,7 @@ jobs:
 
   dispatch-promotion:
     if: ${{ inputs.publish_release != true && inputs.auto_publish == true }}
-    needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof]
+    needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof, verified-draft]
     runs-on: ubuntu-24.04
     permissions:
       actions: write

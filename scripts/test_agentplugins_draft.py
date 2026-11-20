@@ -354,12 +354,12 @@ class ProducerPermissionTests(unittest.TestCase):
             self.assertIn(guard, validate)
         self.assertIn("needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof]",
                       self.job("verified-draft"))
-        # Promotion is dispatched once every proof passed, in parallel with
-        # verified-draft; the tag-keyed concurrency group holds it until the
-        # qualification run completes, and reuse authenticates that run.
+        # Auto-promotion must not dispatch until verified-draft succeeds.
+        # Tag-keyed concurrency and later reuse checks remain defense in depth,
+        # not substitutes for positive qualification before dispatch.
         dispatch = self.job("dispatch-promotion")
         self.assertIn("if: ${{ inputs.publish_release != true && inputs.auto_publish == true }}", dispatch)
-        self.assertIn("needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof]\n",
+        self.assertIn("needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof, verified-draft]\n",
                       dispatch)
         self.assertIn("    permissions:\n      actions: write\n    steps:", dispatch)
         self.assertIn("concurrency:\n  group: agentplugins-release-${{ inputs.tag }}\n  cancel-in-progress: false\n",
