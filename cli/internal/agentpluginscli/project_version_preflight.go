@@ -27,10 +27,8 @@ func preflightProjectLifecycleTargets(ctx context.Context, app App, opts *option
 	return selected, detected, nil
 }
 
-// A dry run executes the same read-only targeted version probe as the real
-// operation, so its preview admits or refuses a version-gated target alike.
-func ensureSelectedProjectVersions(ctx context.Context, app App, _ *options, targets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) error {
-	if app.scope() != domain.ScopeProject && app.scope() != domain.ScopeUser {
+func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, targets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) error {
+	if (app.scope() != domain.ScopeProject && app.scope() != domain.ScopeUser) || opts.dryRun {
 		return nil
 	}
 	if app.ClientRegistry == nil {
