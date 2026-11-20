@@ -120,6 +120,7 @@ func claudeListCommand(executable, configRoot, activePath, skillsRoot, workingDi
 		environment = append(environment, "CLAUDE_CONFIG_DIR="+configRoot)
 	}
 	environment = append(environment,
+		claudeProfileMarker+"="+configRoot,
 		"DISABLE_AUTOUPDATER=1",
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
 	)
@@ -136,13 +137,19 @@ func claudeListCommand(executable, configRoot, activePath, skillsRoot, workingDi
 	}, nil
 }
 
+// claudeProfileMarker binds every native command to its profile for the
+// interrupted-run census, also when the command runs without CLAUDE_CONFIG_DIR.
+const claudeProfileMarker = "AGENTPLUGINS_CLAUDE_PROFILE"
+
 // claudeDefaultProfile reports the profile a plain `claude` uses without
 // CLAUDE_CONFIG_DIR. Its settings live in HOME/.claude, but its global config,
 // which holds project trust, is HOME/.claude.json. Setting the variable to
 // HOME/.claude would move that file to HOME/.claude/.claude.json, so native
-// commands for this profile run without it.
+// commands for this profile run without it unless the user selected exactly
+// that folder through the variable.
 func claudeDefaultProfile(configRoot, home string) bool {
-	return strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")) == "" && filepath.Clean(configRoot) == filepath.Join(home, ".claude")
+	root, selected := filepath.Clean(configRoot), strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR"))
+	return root == filepath.Join(home, ".claude") && (selected == "" || filepath.Clean(selected) != root)
 }
 
 // Claude Code adds every opened project to its global config, so a long-used

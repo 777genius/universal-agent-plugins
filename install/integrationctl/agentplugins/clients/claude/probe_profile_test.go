@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 // A plain `claude` without CLAUDE_CONFIG_DIR reads project trust from
@@ -27,6 +28,7 @@ func TestClaudeProfileMatchesTheUsersOwnGlobalConfig(t *testing.T) {
 		bound                    bool
 	}{
 		{name: "default", root: defaultRoot, profile: filepath.Join(home, ".claude.json")},
+		{name: "default beside another selected profile", env: customRoot, root: defaultRoot, profile: filepath.Join(home, ".claude.json")},
 		{name: "explicit default folder", env: defaultRoot, root: defaultRoot, profile: filepath.Join(defaultRoot, ".claude.json"), bound: true},
 		{name: "custom", env: customRoot, root: customRoot, profile: filepath.Join(customRoot, ".claude.json"), bound: true},
 	} {
@@ -37,7 +39,7 @@ func TestClaudeProfileMatchesTheUsersOwnGlobalConfig(t *testing.T) {
 				t.Fatal(err)
 			}
 			bound := slices.ContainsFunc(command.Env, func(entry string) bool { return strings.HasPrefix(entry, "CLAUDE_CONFIG_DIR=") })
-			if bound != tc.bound || bound && !slices.Contains(command.Env, "CLAUDE_CONFIG_DIR="+tc.root) {
+			if bound != tc.bound || bound && !slices.Contains(command.Env, "CLAUDE_CONFIG_DIR="+tc.root) || !slices.Contains(command.Env, claudeProfileMarker+"="+tc.root) {
 				t.Fatalf("native command environment = %v", command.Env)
 			}
 			profile, err := claudeGlobalConfigPath(tc.root)
@@ -48,14 +50,23 @@ func TestClaudeProfileMatchesTheUsersOwnGlobalConfig(t *testing.T) {
 	}
 }
 
-// A long-used Claude Code global config passes the shared 1 MiB trust bound;
-// trust must still be read and granted there instead of failing the install.
-func TestClaudeProjectTrustFitsALargeGlobalConfig(t *testing.T) {
+// The default profile's trust lives in HOME/.claude.json, which a long-used
+// Claude Code grows past the shared 1 MiB trust bound. Trust must be read and
+// granted there instead of failing the install or using HOME/.claude.
+func TestClaudeDefaultProfileTrustFitsALargeGlobalConfig(t *testing.T) {
 	request := newClaudeMarketplaceRequest(t)
-	profile, err := claudeGlobalConfigPath(request.Client.ConfigRoot)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatal(err)
 	}
+	root := filepath.Join(home, ".claude")
+	target, err := domain.NewTargetContext(domain.ScopeProject, request.Plan.TargetContext.ProjectRoot, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Client.ConfigRoot, request.Plan.TargetContext = root, target
+	profile := filepath.Join(home, ".claude.json")
 	if err := os.WriteFile(profile, []byte(`{"history":"`+strings.Repeat("x", 2<<20)+`"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -65,5 +76,8 @@ func TestClaudeProjectTrustFitsALargeGlobalConfig(t *testing.T) {
 	}
 	if trusted, err := claudeProjectTrustRecorded(env, request); err != nil || !trusted {
 		t.Fatalf("trust in a large global config: trusted=%v err=%v", trusted, err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, ".claude.json")); !os.IsNotExist(err) {
+		t.Fatalf("default profile trust also reached the config folder: %v", err)
 	}
 }
