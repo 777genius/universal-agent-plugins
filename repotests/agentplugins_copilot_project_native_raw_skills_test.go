@@ -97,15 +97,25 @@ file. This no-provider journey must not create, replace or modify events.
 The shared bounded owner/regular-file read rejects unsafe existing leaves.
 */
 func copilotRawEventSnapshot(path string) (bool, []byte, error) {
-	body, err := projectNativeRuntimeRead(path, 1<<20)
-	if os.IsNotExist(err) {
-		// Only an absent leaf is allowed: an absent parent means the
-		// native fixture root has disappeared, not that MCP stayed idle.
+	return copilotRawEventSnapshotRead(path, projectNativeRuntimeRead)
+}
+
+// Only a missing leaf observed before a held read is ordinary absence. A file
+// disappearing during the nofollow read must remain a failure, not a no-op.
+func copilotRawEventSnapshotRead(path string, read func(string, int64) ([]byte, error)) (bool, []byte, error) {
+	if err := projectNativeRuntimeParents(path); err != nil {
+		return false, nil, err
+	}
+	if _, err := os.Lstat(path); err != nil {
+		if !os.IsNotExist(err) {
+			return false, nil, err
+		}
 		if parentErr := projectNativeRuntimeParents(path); parentErr != nil {
 			return false, nil, parentErr
 		}
 		return false, nil, nil
 	}
+	body, err := read(path, 1<<20)
 	if err != nil {
 		return false, nil, err
 	}
@@ -132,6 +142,11 @@ func TestCopilotRawEventSnapshotPreservesAbsenceAndRefusesAliases(t *testing.T) 
 	}
 	if err := os.WriteFile(path, []byte("event\n"), 0600); err != nil {
 		t.Fatal(err)
+	}
+	if _, _, err := copilotRawEventSnapshotRead(path, func(string, int64) ([]byte, error) {
+		return nil, os.ErrNotExist
+	}); err == nil {
+		t.Fatal("event leaf disappearance during protected read was accepted as no events")
 	}
 	exists, body, err = copilotRawEventSnapshot(path)
 	if err != nil || !exists || string(body) != "event\n" {
