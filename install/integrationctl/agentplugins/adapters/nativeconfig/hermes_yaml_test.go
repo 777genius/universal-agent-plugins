@@ -62,6 +62,42 @@ func TestHermesYAMLOwnedMCPAddUpdateRemovePreservesForeignConfig(t *testing.T) {
 	}
 }
 
+// Hermes' installer seeds config.yaml from a long commented example. MCP edits
+// must leave every line outside the mcp_servers block byte-for-byte.
+func TestHermesYAMLKeepsInstallerLayoutOutsideMCPBlock(t *testing.T) {
+	t.Parallel()
+	head := "# Hermes Agent CLI Configuration\n\n_config_version: 52\n\n# =====\n# Database\n# =====\n" +
+		"database:\n  journal_mode: \"wal\"  # Supported values: \"wal\", \"delete\"\n  \n  # synchronous: FULL\n\n"
+	tail := "\n# mcp_servers:\n#   example:\n#     command: npx\n\nmax_concurrent_sessions: null\n"
+	for _, block := range []string{"", "mcp_servers:\n  foreign:\n    command: echo\n"} {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(path, []byte(head+block+tail), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		kernel := New()
+		req := Request{Paths: Paths{JSON: path}, Codec: CodecHermes, Action: ActionAdd,
+			Name: "owned", Server: Server{Type: "stdio", Command: "node"}}
+		receipt, err := kernel.Apply(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		added, err := os.ReadFile(path)
+		if err != nil || !strings.HasPrefix(string(added), head) || !strings.Contains(string(added), tail) ||
+			!strings.Contains(string(added), "  owned:\n    command: node\n") {
+			t.Fatalf("add rewrote lines outside mcp_servers: %q %v", added, err)
+		}
+		req.Action, req.Owned = ActionRemove, &receipt
+		if _, err := kernel.Apply(req); err != nil {
+			t.Fatal(err)
+		}
+		removed, err := os.ReadFile(path)
+		if err != nil || !strings.HasPrefix(string(removed), head) || !strings.Contains(string(removed), tail) ||
+			strings.Contains(string(removed), "owned") || !strings.Contains(string(removed), block) {
+			t.Fatalf("remove rewrote lines outside mcp_servers: %q %v", removed, err)
+		}
+	}
+}
+
 func TestHermesYAMLRefusesForeignEditBeforeRemove(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "config.yaml")
