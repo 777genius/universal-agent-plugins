@@ -147,6 +147,10 @@ The following `agentplugins` changes are breaking. They ship in the next minor
 
 ### Fixed
 
+- `agentplugins doctor` no longer reports `native_projection_not_checked` for
+  healthy OpenCode, Cursor, Codex project and Kiro project installations whose
+  owned files verify intact. Native discovery that is still unobserved keeps
+  its own finding.
 - A pending ChatGPT registration no longer cancels a multi-client Context7
   installation. Other selected clients are installed and ChatGPT is reported
   as a separate setup step with a ChatGPT-only resume command.
