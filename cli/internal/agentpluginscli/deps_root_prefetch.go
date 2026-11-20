@@ -72,6 +72,10 @@ func (resolver dependencyResolver) prefetchGitRoots(ctx context.Context, previou
 		if err != nil {
 			return gitRootFetch{}, err
 		}
+		// An earlier key's failure cancels this one; do not start its tree.
+		if err := ctx.Err(); err != nil {
+			return gitRootFetch{}, err
+		}
 		var snapshot domain.PackageSnapshot
 		if source.Kind == environment.SkillKind {
 			snapshot, err = skills.AcquireGitHubSkill(ctx, source.Repository, resolution.Commit, source.Path)

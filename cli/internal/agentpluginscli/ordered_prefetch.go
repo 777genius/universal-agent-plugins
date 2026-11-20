@@ -2,10 +2,8 @@ package agentpluginscli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -73,8 +71,8 @@ type prefetchEntry[K comparable, V any] struct {
 // with the same arguments, so repeating it would only double the cost of a
 // failure. The first failure stops further prefetching and cancels the
 // acquisitions after it in key order, which the consumer can no longer reach;
-// it keeps those before it. A panic, or a failure while the guard no longer admits
-// concurrent work (for example low free disk), is not served: the consumer
+// it keeps those before it. A panic, or a failure while the guard no longer
+// admits concurrent work (low free disk), is not served: the consumer
 // repeats that acquisition alone and prefetching stops. An unstarted or
 // mismatched key is a miss. close releases everything not taken.
 type orderedPrefetch[K comparable, V any] struct {
@@ -177,9 +175,9 @@ func (prefetch *orderedPrefetch[K, V]) run(entry *prefetchEntry[K, V]) {
 			entry.redo = true
 			return
 		}
-		if recovered == nil && (errors.Is(entry.err, syscall.ENOSPC) || !prefetch.admits()) {
-			// The failure may come from concurrent pressure such as a full
-			// disk; the consumer repeats it alone.
+		if recovered == nil && !prefetch.admits() {
+			// The failure may come from concurrent pressure on a disk that is
+			// now below the free-space bound; the consumer repeats it alone.
 			entry.redo = true
 		}
 		prefetch.stopLocked(errorClass(entry.err))

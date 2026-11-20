@@ -8,12 +8,14 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 )
 
 // prefetchMinFreeBytes is the free disk below which no further concurrent
 // acquisition starts; the sequential consumer then continues alone.
 const prefetchMinFreeBytes = 1 << 30
+
+// prefetchFreeDisk is replaced in tests.
+var prefetchFreeDisk = freeDiskBytes
 
 // prefetchTraceEnv names an optional debug file that receives one JSON line per
 // prefetch outcome. It is off unless set.
@@ -21,15 +23,17 @@ const prefetchTraceEnv = "AGENTPLUGINS_PREFETCH_TRACE"
 
 var prefetchTraceMu sync.Mutex
 
-// prefetchGuard admits concurrent acquisitions while the disk holding the
-// dependency data keeps prefetchMinFreeBytes free, and wires the debug trace.
+// prefetchGuard admits concurrent acquisitions while the volume the source
+// acquirer stages files on keeps prefetchMinFreeBytes free, and wires the
+// debug trace. When free space cannot be measured the guard admits (fail-open):
+// a failing acquisition is then reported exactly as without prefetch.
 func (app App) prefetchGuard() prefetchGuard {
-	root := app.DependenciesRoot
-	if root == "" {
-		root = os.TempDir()
+	root := os.TempDir()
+	if staged, ok := app.SourceAcquirer.(interface{ AcquisitionTempRoot() string }); ok && staged.AcquisitionTempRoot() != "" {
+		root = staged.AcquisitionTempRoot()
 	}
 	guard := prefetchGuard{admit: func() bool {
-		free, known := freeDiskBytes(existingAncestor(root))
+		free, known := prefetchFreeDisk(existingAncestor(root))
 		return !known || free >= prefetchMinFreeBytes
 	}}
 	if path := os.Getenv(prefetchTraceEnv); path != "" {
@@ -75,8 +79,6 @@ func errorClass(err error) string {
 		return "canceled"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "deadline"
-	case errors.Is(err, syscall.ENOSPC):
-		return "no_space"
 	default:
 		return fmt.Sprintf("%T", err)
 	}

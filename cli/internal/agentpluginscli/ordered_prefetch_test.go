@@ -7,7 +7,6 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"testing"
 )
 
@@ -146,7 +145,6 @@ func TestOrderedPrefetchRedoesPanicAndEnvironmentalFailures(t *testing.T) {
 		outcome string
 	}{
 		{name: "panic", acquire: &countingAcquire{panics: map[int]bool{0: true}}, outcome: prefetchPanic},
-		{name: "no space", acquire: &countingAcquire{fail: map[int]error{0: fmt.Errorf("write: %w", syscall.ENOSPC)}}, outcome: prefetchRedo},
 		{name: "low disk at failure", acquire: &countingAcquire{fail: map[int]error{0: errors.New("opaque git failure")}}, outcome: prefetchRedo,
 			admit: func(failing *atomic.Bool) func() bool { return func() bool { return !failing.Load() } }},
 	} {
