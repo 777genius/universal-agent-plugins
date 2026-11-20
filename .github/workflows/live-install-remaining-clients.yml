@@ -175,7 +175,7 @@ jobs:
               python3 - "$RUNNER_TEMP" <<'CHATGPT_CODEX'
           import importlib.util, json, os, platform, stat, sys
           from pathlib import Path
-                    if sys.platform != "linux" or platform.machine() != "x86_64":
+          if sys.platform != "linux" or platform.machine() != "x86_64":
               raise SystemExit("ChatGPT Desktop bootstrap requires Linux amd64")
           root = Path(sys.argv[1]).resolve(strict=True)
           directory = root / "vendor-root"

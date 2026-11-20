@@ -5305,7 +5305,8 @@ module.exports = {
         self.assertIn("exclude:\n          - target: chatgpt\n            kind: skill", workflow)
         block = textwrap.dedent(workflow.split("<<'CHATGPT_CODEX'\n", 1)[1]
                                 .split("          CHATGPT_CODEX", 1)[0])
-        pin = ("existing", "immutable", "catalog", "pin")
+        pin = runpy.run_path(str(Path(__file__).with_name("run-native-client-matrix.py")))[
+            "PINS"]["linux-amd64"]["codex"]
         for mode in ("regular", "symlink", "not-executable", "foreign-path"):
             with self.subTest(mode=mode), TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve()
@@ -5327,12 +5328,8 @@ module.exports = {
                     observed.append(binary)
                     return binary, {"source": "https://example.invalid/pinned-archive"}
 
-                def selected_pin(args, name):
-                    self.assertEqual((args.target, args.release_state, name),
-                                     ("linux-amd64", "public", "codex"))
-                    return pin
-
-                module = SimpleNamespace(selected_pin=selected_pin, provision=provision)
+                module = SimpleNamespace(
+                    PINS={"linux-amd64": {"codex": pin}}, provision=provision)
                 spec = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda _module: None))
                 with patch("sys.argv", ["bootstrap", str(root)]), \
                         patch("sys.platform", "linux"), patch("platform.machine", return_value="x86_64"), \
@@ -10919,7 +10916,7 @@ class KiroPreparedInstallationAcceptanceContracts(unittest.TestCase):
 
 
 class ChatGPTDesktopAuditContracts(unittest.TestCase):
-    def test_workflow_reuses_current_source_pin_and_checks_selected_member(self):
+    def test_workflow_reuses_reviewed_sqlite_pin_and_checks_selected_member(self):
         import hashlib
         from runpy import run_path
         from types import SimpleNamespace
@@ -10928,11 +10925,11 @@ class ChatGPTDesktopAuditContracts(unittest.TestCase):
         workflow = (scripts.parent / ".github/workflows/live-install-remaining-clients.yml").read_text()
         source = textwrap.dedent(workflow.split("<<'CHATGPT_CODEX'\n", 1)[1].split(
             "\n          CHATGPT_CODEX\n", 1)[0])
-        selected_pin = matrix["CODEX_SOURCE_PINS"]["linux-amd64"]
+        selected_pin = matrix["PINS"]["linux-amd64"]["codex"]
         self.assertEqual(selected_pin[2:5], (
-            "rust-v0.162.0", "codex-x86_64-unknown-linux-musl.tar.gz",
-            "sha256:8daf67f6261161aa5939d8d42a516032d760406216779d7ce6040f242140ff73"))
-        self.assertNotEqual(selected_pin, matrix["PINS"]["linux-amd64"]["codex"])
+            "rust-v0.153.4", "codex-x86_64-unknown-linux-musl.tar.gz",
+            "sha256:f479424eca092484dc40d87ae28c44f4cc40234a60045d6131e493800d814a30"))
+        self.assertNotEqual(selected_pin, matrix["CODEX_SOURCE_PINS"]["linux-amd64"])
         for mutation in (None, "symlink", "not-executable", "wrong-name"):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve()
@@ -10953,7 +10950,8 @@ class ChatGPTDesktopAuditContracts(unittest.TestCase):
                                     "version": pin[2], "archive": pin[3],
                                     "archive_integrity": pin[4],
                                     "binary_sha256": hashlib.sha256(body).hexdigest()}
-                module = SimpleNamespace(selected_pin=matrix["selected_pin"], provision=provision)
+                module = SimpleNamespace(
+                    PINS={"linux-amd64": {"codex": selected_pin}}, provision=provision)
                 spec = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda _module: None))
                 with (patch("sys.argv", ["-", str(root)]),
                       patch("sys.platform", "linux"), patch("platform.machine", return_value="x86_64"),
