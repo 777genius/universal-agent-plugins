@@ -58,7 +58,7 @@ func collectDoctorSnapshotOnce(ctx context.Context, app App, clients []domain.De
 		return report, state, nil, err
 	}
 	if len(args) == 1 {
-		installation, err := selectInstallation(state, args[0])
+		installation, err := selectReadInstallation(app, state, args[0])
 		if err != nil {
 			return report, state, nil, err
 		}

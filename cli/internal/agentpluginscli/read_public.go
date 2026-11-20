@@ -211,6 +211,28 @@ func selectInstallation(state domain.StateFileV2, selector string) (domain.Insta
 	return matches[0], nil
 }
 
+// selectReadInstallation also accepts the saved dependency alias, so read-only
+// commands find a Skill by the name `skills add` saved, as remove and update do.
+func selectReadInstallation(app App, state domain.StateFileV2, selector string) (domain.Installation, error) {
+	installation, err := selectInstallation(state, selector)
+	if err == nil {
+		return installation, nil
+	}
+	manifest, _ := app.dependencyPaths()
+	requirements, readErr := readDependencyManifest(manifest)
+	if readErr != nil {
+		return installation, err
+	}
+	_, saved, aliasErr := resolveSavedAlias(state, requirements, strings.TrimSpace(selector), app.environmentID())
+	if aliasErr != nil {
+		return installation, aliasErr
+	}
+	if saved == nil {
+		return installation, err
+	}
+	return *saved, nil
+}
+
 func renderInstallationList(writer io.Writer, installations []publicInstallation) error {
 	if len(installations) == 0 {
 		_, _ = fmt.Fprintln(writer, terminaltheme.For(writer).Text(terminaltheme.Muted, "No Agent Plugins installations are tracked."))
