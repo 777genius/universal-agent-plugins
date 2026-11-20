@@ -26,6 +26,8 @@ type dependencyResolver struct {
 	dryRun       bool
 	// rawSkills optionally supplies raw Skill fetches started ahead of selection.
 	rawSkills *rawSkillPrefetch
+	// gitRoots optionally supplies fresh Git root reads started ahead of the solver.
+	gitRoots *gitRootPrefetch
 }
 
 func readDependencyLock(path string, requirements environment.Requirements) (environment.Lock, error) {
@@ -121,17 +123,32 @@ func sameRequestedSelector(requirement environment.Requirement, previous environ
 
 func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement environment.Requirement, targets []string, previous *environment.LockedPackage, update bool) (environment.LockedPackage, error) {
 	source := requirement.Git
-	resolution, err := resolver.resolveGitSelector(ctx, source)
+	fetched, prefetched, err := resolver.gitRoots.take(ctx, *source)
 	if err != nil {
+		// The prefetch ran this resolution's own calls with the same arguments.
 		return environment.LockedPackage{}, err
+	}
+	resolution := fetched.resolution
+	if !prefetched {
+		var err error
+		if resolution, err = resolver.resolveGitSelector(ctx, source); err != nil {
+			return environment.LockedPackage{}, err
+		}
 	}
 	commit, resolvedRef, defaultBranch := resolution.Commit, resolution.ResolvedRef, resolution.DefaultBranch
 	if source.Kind == environment.SkillKind {
-		return resolver.resolveSkill(ctx, requirement, targets, previous, commit, resolvedRef, defaultBranch)
+		var raw *domain.PackageSnapshot
+		if prefetched {
+			raw = &fetched.snapshot
+		}
+		return resolver.resolveSkill(ctx, requirement, targets, previous, commit, resolvedRef, defaultBranch, raw)
 	}
-	snapshot, err := resolver.app.acquireDependencyGit(ctx, *source, commit, "")
-	if err != nil {
-		return environment.LockedPackage{}, err
+	snapshot := fetched.snapshot
+	if !prefetched {
+		var err error
+		if snapshot, err = resolver.app.acquireDependencyGit(ctx, *source, commit, ""); err != nil {
+			return environment.LockedPackage{}, err
+		}
 	}
 	sourcePin := environment.LockedPackage{Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: source.Repository, URL: source.URL, Path: source.Path, Commit: commit}}}
 	snapshot.Source = identityFromLocked(sourcePin)
