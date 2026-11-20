@@ -85,16 +85,16 @@ func devinVersionDirectory(host clients.Host, path string, required bool) error 
 	}
 	info, err := host.Lstat(path)
 	if err != nil {
-		if required || !os.IsNotExist(err) {
-			return err
+		// CanonicalDirectory has already proved every existing ancestor is an
+		// ordinary directory. Devin creates a missing XDG or APPDATA tree itself,
+		// for example XDG_DATA_HOME below a ~/.local that does not exist yet.
+		if !required && os.IsNotExist(err) {
+			return nil
 		}
-		info, err = host.Lstat(filepath.Dir(path))
-		if err != nil {
-			return err
-		}
+		return err
 	}
 	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("original directory or its parent is not ordinary")
+		return fmt.Errorf("original directory is not ordinary")
 	}
 	return nil
 }
