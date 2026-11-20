@@ -20,6 +20,12 @@ func UpdateProjectTrustFile(kernel nativeconfig.Kernel, path string, mutate func
 // UpdateProjectTrustFileWithInitial supports clients whose absent document is
 // not an empty JSON object, such as Codex's empty TOML configuration.
 func UpdateProjectTrustFileWithInitial(kernel nativeconfig.Kernel, path string, initial []byte, mutate func([]byte) ([]byte, error)) (changed bool, err error) {
+	return UpdateProjectTrustFileWithLimit(kernel, path, initial, 1<<20, mutate)
+}
+
+// UpdateProjectTrustFileWithLimit serves a document the client itself keeps
+// growing past the default bound, such as Claude Code's global config.
+func UpdateProjectTrustFileWithLimit(kernel nativeconfig.Kernel, path string, initial []byte, limit int, mutate func([]byte) ([]byte, error)) (changed bool, err error) {
 	if mutate == nil {
 		return false, fmt.Errorf("project trust mutation is unavailable")
 	}
@@ -29,7 +35,7 @@ func UpdateProjectTrustFileWithInitial(kernel nativeconfig.Kernel, path string, 
 	}
 	defer func() { err = errors.Join(err, file.Close()) }()
 	original := file.Original()
-	if len(original.Body) > 1<<20 {
+	if len(original.Body) > limit {
 		return false, fmt.Errorf("project trust document exceeds limit")
 	}
 	body := original.Body
@@ -43,7 +49,7 @@ func UpdateProjectTrustFileWithInitial(kernel nativeconfig.Kernel, path string, 
 	if bytes.Equal(body, next) {
 		return false, nil
 	}
-	if len(next) == 0 || len(next) > 1<<20 {
+	if len(next) == 0 || len(next) > limit {
 		return false, fmt.Errorf("project trust mutation exceeds document limits")
 	}
 	if err := file.Apply(next); err != nil {
