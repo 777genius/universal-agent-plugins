@@ -108,7 +108,7 @@ for (const width of [1440, 390]) {
     const errors = await offline(page);
     await projections(page, signedMixedSurfaceFixture());
     await navigate(page, '/', 'en', '?q=i18n-state-00');
-    const hero = page.locator('.hero__demo');
+    const hero = page.locator('.hero-quick-start');
     await hero.locator('.app-multiselect__trigger').click();
     await page.getByRole('checkbox', { name: /^ChatGPT Desktop/ }).click();
     await page.keyboard.press('Escape');

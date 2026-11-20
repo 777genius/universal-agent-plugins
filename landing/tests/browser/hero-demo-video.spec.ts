@@ -68,7 +68,7 @@ for (const width of [1440, 390, 320]) {
     expect(before.y).toBeGreaterThanOrEqual(supported.y + supported.height - 1);
     expect(before.width).toBeGreaterThanOrEqual(Math.min(width - 32, 800) - 4);
     expect(before.width).toBeLessThanOrEqual(800);
-    await expect(page.locator('.hero__demo .hero-demo-video')).toHaveCount(0);
+    await expect(page.locator('.hero-shell .hero-demo-video')).toHaveCount(0);
     await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
     const overlay = await button.evaluate((element) => {
       const video = element.closest('.hero-demo-video')!.getBoundingClientRect();
@@ -97,10 +97,10 @@ for (const width of [1440, 390, 320]) {
     )).toBe(true);
     await expect(frame).toHaveAttribute(
       'src',
-      /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=true&no-muted-pref=true&preload=auto$/,
+      /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=any&no-muted-pref=true&preload=auto$/,
     );
     await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
-      .getAttribute('data-autoplay')).toBe('true');
+      .getAttribute('data-autoplay')).toBe('any');
     await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
       .getAttribute('data-muted')).toBe('');
     await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
@@ -169,7 +169,7 @@ test('denied fullscreen still launches a viewport-filling autoplay player on one
   await demo.getByRole('button', { name: 'Watch demo' }).click();
   const frame = demo.locator('iframe');
   await expect(frame).toBeVisible();
-  await expect(frame).toHaveAttribute('src', /\?autoplay=true&no-muted-pref=true&preload=auto$/);
+  await expect(frame).toHaveAttribute('src', /\?autoplay=any&no-muted-pref=true&preload=auto$/);
   await expect(demo).toHaveClass(/hero-demo-video--fallback/);
   // The site root isolates stacking contexts; the fallback must escape to <body>.
   await expect.poll(() => demo.evaluate((el) => el.parentElement === document.body)).toBe(true);
