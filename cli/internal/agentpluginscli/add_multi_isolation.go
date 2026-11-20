@@ -126,17 +126,14 @@ func (isolation *groupIsolation) leaveOut(failed map[domain.ClientID]bool, resul
 	return keep
 }
 
-// enabled reports whether targets can be retried separately. A prepared
-// client delivered through another native sibling's physical backend (VS Code
-// through Copilot today) must keep the whole-selection behavior. The physical
-// owner is resolved from the existing declarative client registry, not IDs.
+// enabled keeps the frozen native-backed sibling out of partial group retries.
+// The shared User backend is the conservative freeze authority even when Project
+// registries are independent: a prepared VS Code sibling must never become
+// splittable just because its Project backend family differs from Copilot's.
+// Native ownership remains declarative; the generic CLI does not name clients.
 func (isolation *groupIsolation) enabled() bool {
-	for i, client := range isolation.selected {
-		scope := domain.ScopeUser
-		if i < len(isolation.inputs) && isolation.inputs[i].Scope != "" {
-			scope = isolation.inputs[i].Scope
-		}
-		if owner, ok := nativePackageSibling(client.ClientID, scope); ok && owner != client.ClientID {
+	for _, client := range isolation.selected {
+		if owner, ok := nativePackageSibling(client.ClientID, domain.ScopeUser); ok && owner != client.ClientID {
 			return false
 		}
 	}
