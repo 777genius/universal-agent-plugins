@@ -47,9 +47,9 @@ func (acquirer Acquirer) resolveGitHubSelector(ctx context.Context, repository, 
 		return acquirer.runner().Run(ctx, Command{Dir: acquirer.TempRoot, Args: args, MaxOutputBytes: maxGitHubDiscoveryMetadataBytes})
 	}
 	if !exactRef && (selector == "HEAD" || selector == "default") {
-		output, err := run("ls-remote", "--symref", url, "HEAD")
+		output, err := acquirer.lsRemote(ctx, acquirer.TempRoot, "ls-remote", "--symref", url, "HEAD")
 		if err != nil {
-			return RefResolution{}, gitAcquisitionFailure(repository, selector, "resolve repository default branch")
+			return RefResolution{}, gitReadFailure(err, repository, selector, "resolve repository default branch")
 		}
 		branch, commit, err := parseDefaultBranch(output)
 		if err != nil {
@@ -94,7 +94,20 @@ func parseDefaultBranch(output []byte) (string, string, error) {
 	return branch, commit, nil
 }
 
+// lsRemote runs one stateless ls-remote read with the connect retry.
+func (acquirer Acquirer) lsRemote(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	return withGitConnectRetry(ctx, func(ctx context.Context) ([]byte, error) {
+		return acquirer.runner().Run(ctx, Command{Dir: dir, Args: args, MaxOutputBytes: maxGitHubDiscoveryMetadataBytes})
+	})
+}
+
 func (acquirer Acquirer) resolveCommit(ctx context.Context, url, repository, object string) (string, error) {
+	return withGitConnectRetry(ctx, func(ctx context.Context) (string, error) {
+		return acquirer.resolveCommitOnce(ctx, url, repository, object)
+	})
+}
+
+func (acquirer Acquirer) resolveCommitOnce(ctx context.Context, url, repository, object string) (string, error) {
 	if !fullSHA.MatchString(object) {
 		return "", fmt.Errorf("git returned an invalid object ID")
 	}
@@ -114,7 +127,7 @@ func (acquirer Acquirer) resolveCommit(ctx context.Context, url, repository, obj
 		return "", gitAcquisitionFailure(repository, object, "configure ref remote")
 	}
 	if _, err := run("-C", repoRoot, "fetch", "--quiet", "--depth=1", "--no-tags", "origin", object); err != nil {
-		return "", gitAcquisitionFailure(repository, object, "fetch exact Git object")
+		return "", gitReadFailure(err, repository, object, "fetch exact Git object")
 	}
 	output, err := run("-C", repoRoot, "rev-parse", "FETCH_HEAD^{commit}")
 	if err != nil {
@@ -144,9 +157,9 @@ func (acquirer Acquirer) resolveNamedGitRef(ctx context.Context, repository, sel
 			return RefResolution{}, fmt.Errorf("invalid exact Git ref %q", selector)
 		}
 	}
-	output, err := run(append([]string{"ls-remote", "--refs", url}, patterns...)...)
+	output, err := acquirer.lsRemote(ctx, acquirer.TempRoot, append([]string{"ls-remote", "--refs", url}, patterns...)...)
 	if err != nil {
-		return RefResolution{}, gitAcquisitionFailure(repository, selector, "resolve Git ref")
+		return RefResolution{}, gitReadFailure(err, repository, selector, "resolve Git ref")
 	}
 	match, err := selectExactGitRef(output, patterns, selector, resolvedRef)
 	if err != nil {
@@ -229,9 +242,9 @@ func (acquirer Acquirer) ResolveGitHubURLPath(ctx context.Context, repository, t
 	if acquirer.URLForRepo != nil {
 		url = acquirer.URLForRepo(repository)
 	}
-	out, err := acquirer.runner().Run(ctx, Command{Dir: acquirer.TempRoot, Args: []string{"ls-remote", "--refs", url}, MaxOutputBytes: maxGitHubDiscoveryMetadataBytes})
+	out, err := acquirer.lsRemote(ctx, acquirer.TempRoot, "ls-remote", "--refs", url)
 	if err != nil {
-		return RefResolution{}, "", gitAcquisitionFailure(repository, "URL", "enumerate Git refs")
+		return RefResolution{}, "", gitReadFailure(err, repository, "URL", "enumerate Git refs")
 	}
 	matches, paths := urlRefMatches(out, tail)
 	if len(matches) != 1 {
