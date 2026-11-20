@@ -68,6 +68,13 @@ func projectKimiEmptyVersionLifecycle(t *testing.T, saved bool) {
 	before := len(detector.targeted)
 	journey.run(t, journey.a, "info", installation.InstallationID, "--target", "kimi")
 	detector.assertCalls(t, before, 1)
+	// A dry run of a direct local source runs the same targeted version probe
+	// as the real operation. A saved source does not probe in a dry run yet,
+	// so its preview and the real operation can differ.
+	dryRunProbes := 1
+	if saved {
+		dryRunProbes = 0
+	}
 	for _, args := range [][]string{
 		append(append([]string{}, add...), "--dry-run"),
 		{"update", selector, "--target", "kimi", "--dry-run"},
@@ -79,7 +86,7 @@ func projectKimiEmptyVersionLifecycle(t *testing.T, saved bool) {
 		if err != nil && !strings.Contains(err.Error(), "kimi project components require") {
 			t.Fatalf("unexpected dry-run failure: %v", err)
 		}
-		detector.assertCalls(t, before, 0)
+		detector.assertCalls(t, before, dryRunProbes)
 		if !reflect.DeepEqual(snapshot, securityFixtureTree(t, journey.a)) {
 			t.Fatal("dry-run changed project authority")
 		}
