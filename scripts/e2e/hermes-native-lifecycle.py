@@ -154,7 +154,7 @@ class Lifecycle:
         self.config.write_text("model: offline-native-smoke\nmcp_servers:\n"
                                "  foreign:\n    command: echo\n    args: [foreign]\n",
                                encoding="utf-8")
-        self.config.chmod(0o600)
+        # Keep the umask-derived mode Hermes' own installer leaves (0644).
         self.capture([*self.hermes, "--version"], "native-version.txt")
         self.native_home = self.resolved_home("native")
         require(self.native_home == self.profile.resolve(),

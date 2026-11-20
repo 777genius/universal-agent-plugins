@@ -261,16 +261,20 @@ func hermesValueNode(encoded json.RawMessage) (*yaml.Node, error) {
 	return &value, nil
 }
 
-// Refuse to mutate an existing provider config that is readable by another
-// local Unix user. The mutation kernel retains existing file modes by design,
-// so writing credentials into a pre-existing 0644 file would preserve the leak.
-// Windows uses ACLs rather than meaningful POSIX permission bits.
+// Refuse to manage an existing config that any local user may rewrite: such a
+// user could plant MCP commands that Hermes runs. Hermes' own installer copies
+// config.yaml with the umask (0644, or 0664 under Debian/Ubuntu user private
+// groups), so readable or group-writable files are accepted. UAP writes only
+// package-declared MCP entries, no user credentials, and the mutation kernel
+// keeps the existing mode, never widening it. Symlinks and non-regular files
+// are already refused when the file is opened. Windows uses ACLs rather than
+// meaningful POSIX permission bits.
 func requireHermesPrivateConfig(file resolvedFile, codec Codec) error {
 	if codec != CodecHermes || !file.exists || runtime.GOOS == "windows" {
 		return nil
 	}
-	if file.mode.Perm()&0o077 != 0 {
-		return fmt.Errorf("hermes config.yaml must have owner-only permissions before UAP manages MCP entries")
+	if file.mode.Perm()&0o002 != 0 {
+		return fmt.Errorf("hermes config.yaml is writable by every local user; run chmod o-w on it before UAP manages MCP entries")
 	}
 	return nil
 }
