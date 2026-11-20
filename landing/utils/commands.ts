@@ -17,6 +17,18 @@ export function shellToken(value: string): string {
   return /^[A-Za-z0-9_./:@+=-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
 }
 
+/**
+ * PowerShell reads an unquoted comma list as an array and passes the IDs as
+ * separate arguments. Double quotes keep one argument in PowerShell, CMD and
+ * POSIX shells; target IDs never contain characters these quotes expand.
+ */
+function targetOption(values: readonly string[]): string {
+  if (!values.length) return '';
+  if (values.some((target) => !/^[a-z][a-z0-9-]*$/.test(target)))
+    throw new Error('Unsupported target');
+  return ` --target ${values.length > 1 ? `"${values.join(',')}"` : values[0]}`;
+}
+
 function communityAddSource(plugin: RegistryPlugin): string {
   const source = plugin.source;
   if (
@@ -84,8 +96,8 @@ export function installCommands(
     throw new Error('Lifecycle targets must be a nonempty subset of installation targets');
   // In an interactive terminal, a targetless project add prompts for the
   // compatible installed agents. Non-interactive CLI calls require --target.
-  const targetFlag = values.length ? ` --target ${values.join(',')}` : '';
-  const lifecycleTargetFlag = lifecycleValues.length ? ` --target ${lifecycleValues.join(',')}` : '';
+  const targetFlag = targetOption(values);
+  const lifecycleTargetFlag = targetOption(lifecycleValues);
   const scopeFlag = scope === 'project' ? ' --scope project' : '';
   const mode = dependencySaveMode(source, values);
   const owned = savedDependenciesReleased && mode === 'saved';

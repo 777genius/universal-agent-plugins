@@ -130,7 +130,7 @@ for (const width of [1440, 390]) {
     // Explicit choices stay selected; the shared Git route adds no signed Pi grant.
     const dialog = page.getByRole('dialog');
     const codex = page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ });
-    const commonAdd = `npx -y universal-agent-plugins@0.1.114 add ${direct} --target codex,pi --scope project`;
+    const commonAdd = `npx -y universal-agent-plugins@0.1.114 add ${direct} --target "codex,pi" --scope project`;
     await codex.click();
     await expect(codex).toBeChecked();
     await expect(pi).toBeChecked();

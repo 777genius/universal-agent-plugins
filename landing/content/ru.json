@@ -985,7 +985,7 @@
     {
       "id": "fastestStart",
       "question": "Как начать быстрее всего?",
-      "answer": "Установите нативный Go CLI, затем запустите <code>agentplugins add context7 --target codex,cursor</code>. Выберите одного или нескольких агентов и выполните показанный шаг активации."
+      "answer": "Установите нативный Go CLI, затем запустите <code>agentplugins add context7 --target \"codex,cursor\"</code>. Выберите одного или нескольких агентов и выполните показанный шаг активации."
     },
     {
       "id": "whichPathFirst",
@@ -1062,19 +1062,19 @@
     {
       "id": "try-plugin",
       "title": "Установите настоящий плагин",
-      "command": "universal-agent-plugins add context7 --target codex,cursor",
+      "command": "universal-agent-plugins add context7 --target \"codex,cursor\"",
       "note": "Одна команда работает для одного агента или для списка через запятую."
     },
     {
       "id": "build-plugin",
       "title": "Поддерживайте установку в актуальном состоянии",
-      "command": "universal-agent-plugins update context7 --target codex,cursor\nuniversal-agent-plugins repair context7 --target codex,cursor",
+      "command": "universal-agent-plugins update context7 --target \"codex,cursor\"\nuniversal-agent-plugins repair context7 --target \"codex,cursor\"",
       "note": "Используйте update для новой версии, а repair — если клиент рассинхронизировался."
     },
     {
       "id": "validate",
       "title": "Удалите без мусора",
-      "command": "universal-agent-plugins remove context7 --target codex,cursor",
+      "command": "universal-agent-plugins remove context7 --target \"codex,cursor\"",
       "note": "CLI удалит управляемые записи клиентов и по умолчанию сохранит данные плагина."
     }
   ],

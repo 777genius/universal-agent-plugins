@@ -468,7 +468,7 @@ describe('unified registry landing', () => {
         item.client_support.clients.includes('cursor'),
     );
     assert.ok(plugin);
-    assert.match(pluginCommands(plugin, ['codex', 'cursor']).add, / --target codex,cursor$/);
+    assert.match(pluginCommands(plugin, ['codex', 'cursor']).add, / --target "codex,cursor"$/);
   });
 
   it('reserves a local logo for the newly published marketing kit', () => {

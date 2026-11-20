@@ -985,7 +985,7 @@
     {
       "id": "fastestStart",
       "question": "What is the fastest way to start?",
-      "answer": "Install the native Go CLI, then run <code>agentplugins add context7 --target codex,cursor</code>. Choose one or more targets explicitly, then follow any client activation step."
+      "answer": "Install the native Go CLI, then run <code>agentplugins add context7 --target \"codex,cursor\"</code>. Choose one or more targets explicitly, then follow any client activation step."
     },
     {
       "id": "whichPathFirst",
@@ -1062,19 +1062,19 @@
     {
       "id": "try-plugin",
       "title": "Install a real plugin",
-      "command": "universal-agent-plugins add context7 --target codex,cursor",
+      "command": "universal-agent-plugins add context7 --target \"codex,cursor\"",
       "note": "The same command accepts one target or a comma-separated list."
     },
     {
       "id": "build-plugin",
       "title": "Keep it current",
-      "command": "universal-agent-plugins update context7 --target codex,cursor\nuniversal-agent-plugins repair context7 --target codex,cursor",
+      "command": "universal-agent-plugins update context7 --target \"codex,cursor\"\nuniversal-agent-plugins repair context7 --target \"codex,cursor\"",
       "note": "Use update for a new release and repair when a client drifts."
     },
     {
       "id": "validate",
       "title": "Remove cleanly",
-      "command": "universal-agent-plugins remove context7 --target codex,cursor",
+      "command": "universal-agent-plugins remove context7 --target \"codex,cursor\"",
       "note": "The CLI removes managed client entries while retaining package data by default."
     }
   ],

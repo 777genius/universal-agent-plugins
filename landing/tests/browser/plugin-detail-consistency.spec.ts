@@ -51,7 +51,7 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.plugin-card__source-label')).toContainText(
       'Agents: 1 automatic setup · 1 need follow-up',
     );
-    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toContainText('--target codex,cursor');
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toContainText('--target "codex,cursor"');
 
     await page.keyboard.press('Escape');
 
@@ -72,7 +72,7 @@ for (const width of [1440, 390]) {
     await expect(detail.locator('.plugin-detail__client').filter({ hasText: 'Kiro' })).toHaveCount(0);
     await expect(detail.getByRole('checkbox', { name: /^Cursor(?:\s|$)/ })).toBeChecked();
     await expect(detail.getByRole('checkbox', { name: /^Codex CLI(?:\s|$)/ })).toBeChecked();
-    await expect(detail.locator('.install-command-row .command-snippet--add code')).toContainText('--target codex,cursor');
+    await expect(detail.locator('.install-command-row .command-snippet--add code')).toContainText('--target "codex,cursor"');
     expect(errors).toEqual([]);
   });
 }

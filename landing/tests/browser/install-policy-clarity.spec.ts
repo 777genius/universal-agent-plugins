@@ -78,12 +78,12 @@ for (const width of [1440, 390]) {
       .toHaveText(`${cli} add ${selector} --target hermes --scope project`);
     await targets(page, detail, ['Google Antigravity']);
     await expect(detail.locator('.command-snippet--add code'))
-      .toHaveText(`${cli} add ${selector} --target hermes,antigravity --scope project`);
+      .toHaveText(`${cli} add ${selector} --target "hermes,antigravity" --scope project`);
     await expect(detail).not.toContainText(repairNotice);
     await expect(detail.locator('.command-snippet--repair')).toHaveCount(1);
     for (const action of ['update', 'repair', 'remove'])
       await expect(detail.locator(`.command-snippet--${action} code`))
-        .toHaveText(`${cli} ${action} ${manifestName} --target hermes,antigravity --scope project`);
+        .toHaveText(`${cli} ${action} ${manifestName} --target "hermes,antigravity" --scope project`);
     await testInfo.attach(`explicit-source-detail-${width}.png`, {
       body: await detail.screenshot({ animations: 'disabled' }), contentType: 'image/png',
     });
