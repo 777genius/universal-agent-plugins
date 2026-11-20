@@ -786,6 +786,7 @@ async def _exchange(binary, project, profile, environment, *, sqlite_baseline=Fa
                     f"exit_code={process.returncode}, stderr_bytes={len(stderr)}, "
                     f"stderr_prefix={stderr[:2048]!r}")
             group_drain = True
+            phase = "group-check"
             while _windows_active(job) if job is not None else _posix_group_active(process.pid):
                 await asyncio.sleep(.02)  # Still inside the same finite 15-second budget.
             completed = True
@@ -799,15 +800,19 @@ async def _exchange(binary, project, profile, environment, *, sqlite_baseline=Fa
     finally:
         failure = sys.exception()
         diagnose = failure is not None and group_drain and job is None
+        cleanup_phase = {}
         try:
             if diagnose:
                 _note_group_drain_failure(failure, process, "before-owned-cleanup", transcript)
         finally:
             try:
-                await _finish_native(process, job, completed, readers)
+                await _finish_native(process, job, completed, readers,
+                                     diagnostic=cleanup_phase)
             except Exception as cleanup:
                 if failure is not None:
-                    raise RuntimeError(f"Codex discovery failed ({failure}); owned cleanup failed ({cleanup})") from failure
+                    raise RuntimeError(
+                        f"Codex discovery failed: phase={phase}; {failure}; "
+                        f"owned cleanup failed: phase={cleanup_phase.get('phase', 'unknown')}; {cleanup}") from failure
                 raise
             finally:
                 if diagnose:

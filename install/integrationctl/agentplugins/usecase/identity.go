@@ -39,7 +39,7 @@ func (service Service) verifyManagedTarget(
 		return fmt.Errorf("refuse %s from untrusted persisted target: %w", operation, err)
 	}
 	if err := service.Stager.Verify(ctx, binding.TargetLocator, expectedDigest); err != nil {
-		return fmt.Errorf("managed package was changed or is missing; refusing silent %s and retaining state: %w", operation, err)
+		return &domain.TypedError{Text: fmt.Sprintf("managed package was changed or is missing; refusing silent %s and retaining state: %v", operation, err), Kind: domain.ErrManagedPackageChanged, Cause: err}
 	}
 	return nil
 }
@@ -64,20 +64,20 @@ func validateNativeIdentityObservation(observation domain.NativeIdentityObservat
 	switch observation.State {
 	case NativeIdentityAbsent:
 		if managed != nil && managed.Materialization != domain.MaterializationAbsent {
-			return fmt.Errorf("managed native identity is unexpectedly absent")
+			return &domain.TypedError{Text: "managed native identity is unexpectedly absent", Kind: domain.ErrManagedPackageChanged}
 		}
 		return nil
 	case NativeIdentityManaged:
 		if managed == nil {
-			return fmt.Errorf("native identity already exists without matching agentplugins ownership; automatic adoption is disabled")
+			return &domain.TypedError{Text: "native identity already exists without matching agentplugins ownership; automatic adoption is disabled", Kind: domain.ErrForeignNativeIdentity}
 		}
 		expected := managedDigest(*managed)
 		if expected == "" || observation.Digest == "" || expected != observation.Digest {
-			return fmt.Errorf("native identity ownership digest is stale or does not match")
+			return &domain.TypedError{Text: "native identity ownership digest is stale or does not match", Kind: domain.ErrManagedPackageChanged}
 		}
 		return nil
 	case NativeIdentityUnmanaged:
-		return fmt.Errorf("native identity is unmanaged; remove it through its owning client or choose a distinct identity")
+		return &domain.TypedError{Text: "native identity is unmanaged; remove it through its owning client or choose a distinct identity", Kind: domain.ErrForeignNativeIdentity}
 	case NativeIdentityIndeterminate:
 		return fmt.Errorf("native identity ownership is indeterminate; refusing mutation")
 	default:

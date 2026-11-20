@@ -1461,7 +1461,9 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
                         await audit._exchange(Path("/inert/codex"), Path("/inert/project"),
                                               profile, {})
                     self.assertIs(raised.exception, primary)
-            self.assertEqual(signals, [(12345, 0), (12345, signal.SIGKILL)])
+            # One gate probe, two read-only failure diagnostics, one owned kill.
+            self.assertEqual(signals, [(12345, 0), (12345, 0),
+                                       (12345, signal.SIGKILL), (12345, 0)])
             self.assertEqual(closed, [True])
 
         with tempfile.TemporaryDirectory() as temporary:
