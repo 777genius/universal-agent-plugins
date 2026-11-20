@@ -110,7 +110,7 @@ func (req Request) acquiredCompatibility() domain.CompatibilityHints {
 // Group removal retains the published Claude/Codex boundary.
 type ClientTarget struct {
 	ClientID, ClientConfigRoot, ClientExecutable string
-	ClientSurfaces []domain.ClientSurface `json:"-"`
+	ClientSurfaces                               []domain.ClientSurface `json:"-"`
 	PackageRoot                                  string
 	ExternalUninstalled                          bool
 }
