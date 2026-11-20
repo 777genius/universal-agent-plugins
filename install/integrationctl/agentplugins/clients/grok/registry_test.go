@@ -47,7 +47,7 @@ func TestGrokListRejectsDuplicateAndCaseAmbiguousIdentity(t *testing.T) {
 		`[{"name":"demo","status":"installed","Version":"2.0.0"}]`,
 		`[{"name":"demo","status":"installed","ſtatus":"disabled"}]`,
 		`[{"name":"demo","status":"installed","source":null}]`,
-		`[{"name":"demo","status":"installed","version":null}]`,
+		`[{"name":"demo","status":"installed","Version":null}]`,
 		`[{"name":"demo","status":"installed","source":42}]`,
 		`[{"name":"demo","status":"installed","version":{}}]`,
 		`[{"name":"demo","status":"installed","extension":{"id":1,"ID":2}}]`,
@@ -61,12 +61,15 @@ func TestGrokListRejectsDuplicateAndCaseAmbiguousIdentity(t *testing.T) {
 func TestGrokListPreservesRecognizedNativeOutput(t *testing.T) {
 	body := `[
 		{"name":"demo","status":"installed","source":"/fixture/managed/demo","version":"2.0.0","extension":{"progress":1}},
-		{"name":"other","status":"disabled"}
+		{"name":"other","status":"disabled"},
+		{"status":"installed","name":"skill","repo_key":"skill-1","version":null,"path":"/fixture/installed/skill-1","source":"/fixture/managed/skill","marketplace":null}
 	]`
 	got, err := parseList([]byte(body))
 	want := []pluginEntry{
 		{Name: "demo", Status: "installed", Source: "/fixture/managed/demo", Version: "2.0.0"},
 		{Name: "other", Status: "disabled"},
+		// Genuine Grok 1.0.70 shape for a package without a declared version.
+		{Name: "skill", Status: "installed", Source: "/fixture/managed/skill"},
 	}
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("recognized listing = %+v, %v; want %+v", got, err, want)
