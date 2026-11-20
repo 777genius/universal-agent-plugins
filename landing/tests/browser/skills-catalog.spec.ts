@@ -138,6 +138,9 @@ test('Skills catalog and detail reuse the plugin scope choice and copy the proje
   await expect(detail.locator('.command-snippet code')).toHaveText(scopedCommand);
   await detail.getByRole('tab', { name: 'Prompt' }).click();
   await expect(detail.locator('.command-snippet code')).toContainText('--scope project');
+  // An agent has no terminal: it previews the plan, then accepts it.
+  await expect(detail.locator('.command-snippet code')).toContainText('--dry-run');
+  await expect(detail.locator('.command-snippet code')).toContainText('--yes');
   await detail.getByRole('tab', { name: 'Command' }).click();
   await page.screenshot({ path: testInfo.outputPath('skills-detail-project-mobile.png'), fullPage: true, animations: 'disabled' });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

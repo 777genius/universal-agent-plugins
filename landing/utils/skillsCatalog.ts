@@ -354,3 +354,24 @@ export function skillInstallCommand(
     .map((token) => (/^[A-Za-z0-9_./:@+=-]+$/.test(token) ? token : `"${token}"`))
     .join(' ');
 }
+
+/** Stands for the agent's own target ID; deliberately not a runnable token. */
+export const SKILL_AGENT_TARGET_PLACEHOLDER = '<agent-id>';
+
+/**
+ * An agent runs commands without a terminal, where the CLI requires an
+ * explicit --target and --yes. The agent previews the exact plan first and
+ * then accepts that reviewed plan; security findings still block (--yes
+ * never implies --accept-security-risk).
+ */
+export function skillAgentCommands(
+  skill: SkillListing,
+  targets?: readonly string[],
+  scope: InstallScope = 'user',
+): { preview: string; apply: string; needsTarget: boolean } | undefined {
+  const command = skillInstallCommand(skill, targets, scope);
+  if (!command) return undefined;
+  const needsTarget = targets === undefined;
+  const install = needsTarget ? `${command} --target ${SKILL_AGENT_TARGET_PLACEHOLDER}` : command;
+  return { preview: `${install} --dry-run`, apply: `${install} --yes`, needsTarget };
+}

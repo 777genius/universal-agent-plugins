@@ -12,6 +12,8 @@ import {
   restoreSkillsFilters,
   skillsFiltersQuery,
   skillsCatalogQuery,
+  SKILL_AGENT_TARGET_PLACEHOLDER,
+  skillAgentCommands,
   skillInstallCommand,
   skillNeedsManualSelection,
   skillRepositoryUrl,
@@ -72,6 +74,26 @@ test('Skills user/project choice uses the same explicit CLI scope as plugins', (
     'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --target "codex,claude" --scope project');
   assert.equal(skillInstallCommand(skill, ['chatgpt'], 'project'), undefined);
   assert.equal(skillInstallCommand(skill, ['codex; echo unsafe'], 'project'), undefined);
+});
+
+test('agent prompt commands run without a terminal: explicit target, dry-run review, then --yes', () => {
+  const add = 'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design';
+  assert.deepEqual(skillAgentCommands(skill, ['codex', 'claude'], 'project'), {
+    preview: `${add} --target "codex,claude" --scope project --dry-run`,
+    apply: `${add} --target "codex,claude" --scope project --yes`,
+    needsTarget: false,
+  });
+  // Without a chosen agent the CLI refuses a non-interactive run, so the
+  // prompt asks the agent to name itself instead of guessing a target.
+  assert.deepEqual(skillAgentCommands(skill), {
+    preview: `${add} --target ${SKILL_AGENT_TARGET_PLACEHOLDER} --dry-run`,
+    apply: `${add} --target ${SKILL_AGENT_TARGET_PLACEHOLDER} --yes`,
+    needsTarget: true,
+  });
+  for (const commands of [skillAgentCommands(skill), skillAgentCommands(skill, ['codex'])])
+    assert.ok(!Object.values(commands!).join(' ').includes('--accept-security-risk'));
+  assert.equal(skillAgentCommands(skill, []), undefined);
+  assert.equal(skillAgentCommands(skill, ['codex; echo unsafe']), undefined);
 });
 
 test(
