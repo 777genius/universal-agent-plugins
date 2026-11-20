@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestAgentSkillsSuccessAndPartialMachineOutcomes(t *testing.T) {
@@ -78,6 +80,20 @@ func TestAgentYesIsScopedToMutatingCommands(t *testing.T) {
 	if err != nil || list.Flags().Lookup("yes") != nil {
 		t.Fatalf("read-only list must not accept --yes: %v", err)
 	}
+}
+
+func TestRemoveYesWithoutTargetNamesInstalledTargetsAndCommand(t *testing.T) {
+	fixture := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCodex), fixtureClient(t, domain.ClientCursor)})
+	if _, _, err := fixture.execute(false, "add", writeCLIPlugin(t), "--target", "codex,cursor", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := fixture.execute(false, "remove", "demo", "--yes")
+	var usage CLIUsageError
+	if !errors.As(err, &usage) || usage.Code != "TARGET_REQUIRED" ||
+		!strings.HasSuffix(usage.Message, "installed targets: codex, cursor. To remove all of them, run: agentplugins remove demo --target codex,cursor --yes") {
+		t.Fatalf("remove --yes without --target is not actionable: %v", err)
+	}
+	assertClientBindings(t, fixture, domain.MaterializationMaterialized, 1)
 }
 
 func TestAgentExplicitYesNeverStartsAmbiguousTargetSelection(t *testing.T) {
