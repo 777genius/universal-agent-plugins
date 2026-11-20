@@ -147,7 +147,7 @@ func TestHermesConfigModeFromOfficialInstaller(t *testing.T) {
 		receipt, err := kernel.Apply(req)
 		if mode&0o002 != 0 {
 			now, readErr := os.ReadFile(path)
-			if err == nil || readErr != nil || !bytes.Equal(now, body) {
+			if err == nil || !strings.Contains(err.Error(), "chmod o-w") || readErr != nil || !bytes.Equal(now, body) {
 				t.Fatalf("world-writable %o config must be refused unchanged: %v %q %v", mode, err, now, readErr)
 			}
 			continue

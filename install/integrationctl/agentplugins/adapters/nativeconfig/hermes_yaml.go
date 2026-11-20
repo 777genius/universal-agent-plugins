@@ -267,14 +267,16 @@ func hermesValueNode(encoded json.RawMessage) (*yaml.Node, error) {
 // groups), so readable or group-writable files are accepted. UAP writes only
 // package-declared MCP entries, no user credentials, and the mutation kernel
 // keeps the existing mode, never widening it. Symlinks and non-regular files
-// are already refused when the file is opened. Windows uses ACLs rather than
+// are already refused when the file is opened, and the atomic replacement
+// leaves a file the current user owns. Windows uses ACLs rather than
 // meaningful POSIX permission bits.
 func requireHermesPrivateConfig(file resolvedFile, codec Codec) error {
 	if codec != CodecHermes || !file.exists || runtime.GOOS == "windows" {
 		return nil
 	}
 	if file.mode.Perm()&0o002 != 0 {
-		return fmt.Errorf("hermes config.yaml is writable by every local user; run chmod o-w on it before UAP manages MCP entries")
+		return fmt.Errorf("hermes config.yaml %q has mode %04o, so every local user can change it; run chmod o-w %q and retry",
+			file.path, file.mode.Perm(), file.path)
 	}
 	return nil
 }
