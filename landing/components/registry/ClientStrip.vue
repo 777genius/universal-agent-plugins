@@ -10,11 +10,7 @@ const { asset } = useSite();
 </script>
 
 <template>
-  <ul
-    class="client-strip"
-    :aria-label="t('shell.accessibility.supportedAgents')"
-    :style="{ '--client-strip-columns': clients.length }"
-  >
+  <ul class="client-strip" :aria-label="t('shell.accessibility.supportedAgents')">
     <li v-for="client in clients" :key="client.id">
       <NuxtLink :to="clientPath(clientLandingById.get(client.id)!.slug)">
         <span class="client-strip__icon"

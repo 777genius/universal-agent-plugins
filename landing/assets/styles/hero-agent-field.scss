@@ -29,7 +29,8 @@
 .hero-agent-field__plane {
   position: absolute;
   top: 50%;
-  left: calc(62% - 100px);
+  // The hub is the centered hero visual now that no install card covers it.
+  left: 50%;
   width: min(720px, 150%);
   aspect-ratio: 1;
   translate: -50% -50%;
