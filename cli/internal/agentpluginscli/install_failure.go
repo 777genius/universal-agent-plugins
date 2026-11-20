@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"io/fs"
@@ -90,12 +91,15 @@ func environmentFailureKind(err error) failureKind {
 	case errors.Is(err, exec.ErrNotFound), errors.As(err, &execErr):
 		return failureAgentMissing
 	case errors.As(err, &opErr), errors.As(err, &dnsErr):
-		// A rejected socket is not evidence of a non-writable folder. TLS
-		// certificate failures may also be wrapped in net.OpError.
+		// Network-shaped failures are not automatically connectivity defects:
+		// socket permission and wrapped certificate/TLS errors stay generic.
 		if timeoutCause(err) {
 			return failureTimeout
 		}
 		if errors.Is(err, fs.ErrPermission) || certificateValidationFailure(err) {
+			return failureUnknown
+		}
+		if opErr != nil && tlsAlert(opErr, err) {
 			return failureUnknown
 		}
 		return failureNetwork
@@ -116,6 +120,22 @@ func certificateValidationFailure(err error) bool {
 	)
 	return errors.As(err, &unknownAuthority) || errors.As(err, &invalid) ||
 		errors.As(err, &hostname) || errors.As(err, &roots)
+}
+
+// tlsAlert reports a TLS failure that surfaces as a net.OpError: an alert sent
+// by the remote end ("remote error"), one raised by the local client ("local
+// error"), or a handshake or certificate error that an https proxy path wraps
+// in an operation error. The network was reachable, so none of them is an
+// unreachable-network problem.
+func tlsAlert(opErr *net.OpError, err error) bool {
+	if opErr.Op == "remote error" || opErr.Op == "local error" {
+		return true
+	}
+	var (
+		certErr   *tls.CertificateVerificationError
+		headerErr tls.RecordHeaderError
+	)
+	return errors.As(err, &certErr) || errors.As(err, &headerErr)
 }
 
 func timeoutCause(err error) bool {
@@ -204,7 +224,7 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 	case failureTimeout:
 		return "A step took too long and was stopped.", "Check network access and the agent, then retry.", true
 	case failurePermission:
-		return "UAP is not allowed to write to a folder this agent needs.", "Fix the folder's permissions, then retry this agent.", true
+		return "UAP does not have permission to use a folder this agent needs.", "Fix the folder's permissions, then retry this agent.", true
 	case failureReadOnly:
 		return "A folder this agent needs is read-only.", "Make the location writable or choose another one, then retry this agent.", true
 	case failureDiskFull:

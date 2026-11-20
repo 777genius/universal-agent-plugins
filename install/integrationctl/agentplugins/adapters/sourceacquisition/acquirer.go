@@ -91,7 +91,7 @@ func (runner OSRunner) Run(ctx context.Context, command Command) (body []byte, r
 		return nil, fmt.Errorf("git %s failed: %w: %s", strings.Join(command.Args, " "), err, strings.TrimSpace(string(output)))
 	}
 	if result.ExitCode != 0 {
-		return nil, gitTransportExitFailure(command, result.ExitCode, output)
+		return nil, gitExitResult(command, result.ExitCode, result.Stdout, result.Stderr)
 	}
 	// Blob callers require byte-exact stdout; diagnostic stderr is never content.
 	return append([]byte(nil), result.Stdout...), nil
@@ -127,6 +127,12 @@ func (acquirer Acquirer) DiscoverGitHubPackages(ctx context.Context, repository,
 }
 
 func (acquirer Acquirer) discoverGitPackages(ctx context.Context, url, repository, revision string, native bool) ([]string, error) {
+	return withGitConnectRetry(ctx, func(ctx context.Context) ([]string, error) {
+		return acquirer.discoverGitPackagesOnce(ctx, url, repository, revision, native)
+	})
+}
+
+func (acquirer Acquirer) discoverGitPackagesOnce(ctx context.Context, url, repository, revision string, native bool) ([]string, error) {
 	tempRoot, err := os.MkdirTemp(acquirer.TempRoot, "agentplugins-discovery-*")
 	if err != nil {
 		return nil, gitAcquisitionFailure(repository, revision, "create temporary discovery workspace")
@@ -153,7 +159,7 @@ func (acquirer Acquirer) discoverGitPackages(ctx context.Context, url, repositor
 		fetchArgs = append(fetchArgs[:5], append([]string{"--filter=blob:none"}, fetchArgs[5:]...)...)
 	}
 	if _, err := run(fetchArgs...); err != nil {
-		return nil, gitAcquisitionFailure(repository, revision, "fetch immutable revision for package discovery")
+		return nil, gitReadFailure(err, repository, revision, "fetch immutable revision for package discovery")
 	}
 	resolved, err := run("-C", repoRoot, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
 	if err != nil || strings.TrimSpace(string(resolved)) != revision {
@@ -187,6 +193,12 @@ func (acquirer Acquirer) discoverGitPackages(ctx context.Context, url, repositor
 }
 
 func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repository, revision, subpath string, native, allowRootGitlinks bool) (domain.PackageSnapshot, error) {
+	return withGitConnectRetry(ctx, func(ctx context.Context) (domain.PackageSnapshot, error) {
+		return acquirer.acquireGitTransportOnce(ctx, url, repository, revision, subpath, native, allowRootGitlinks)
+	})
+}
+
+func (acquirer Acquirer) acquireGitTransportOnce(ctx context.Context, url, repository, revision, subpath string, native, allowRootGitlinks bool) (domain.PackageSnapshot, error) {
 	tempRoot, err := os.MkdirTemp(acquirer.TempRoot, "agentplugins-git-*")
 	if err != nil {
 		return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "create temporary workspace")
@@ -217,7 +229,7 @@ func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repositor
 		fetchArgs = append(fetchArgs[:5], append([]string{"--filter=blob:none"}, fetchArgs[5:]...)...)
 	}
 	if _, err := run(fetchArgs...); err != nil {
-		return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "fetch immutable revision")
+		return domain.PackageSnapshot{}, gitReadFailure(err, repository, revision, "fetch immutable revision")
 	}
 	resolved, err := run("-C", repoRoot, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
 	if err != nil {
@@ -256,7 +268,7 @@ func (acquirer Acquirer) acquireGitTransport(ctx context.Context, url, repositor
 		}
 	}
 	if _, err := run("-C", repoRoot, "checkout", "--quiet", "--detach", revision); err != nil {
-		return domain.PackageSnapshot{}, gitAcquisitionFailure(repository, revision, "checkout immutable revision")
+		return domain.PackageSnapshot{}, gitReadFailure(err, repository, revision, "checkout immutable revision")
 	}
 	packageRoot := repoRoot
 	if subpath != "" {

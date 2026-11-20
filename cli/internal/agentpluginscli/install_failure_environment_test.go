@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -29,8 +30,8 @@ func TestEnvironmentFailuresGetPlainCauses(t *testing.T) {
 		kind  failureKind
 		words string
 	}{
-		"permission":           {&fs.PathError{Op: "mkdir", Path: secretPath, Err: syscall.EACCES}, failurePermission, "not allowed to write"},
-		"os-sentinel":          {fmt.Errorf("create client target root: %w", os.ErrPermission), failurePermission, "not allowed to write"},
+		"permission":           {&fs.PathError{Op: "mkdir", Path: secretPath, Err: syscall.EACCES}, failurePermission, "does not have permission"},
+		"os-sentinel":          {fmt.Errorf("create client target root: %w", os.ErrPermission), failurePermission, "does not have permission"},
 		"disk full":            {fmt.Errorf("write: %w", &fs.PathError{Op: "write", Path: secretPath, Err: syscall.ENOSPC}), failureDiskFull, "free disk space"},
 		"read only":            {fmt.Errorf("write: %w", &fs.PathError{Op: "mkdir", Path: secretPath, Err: syscall.EROFS}), failureReadOnly, "read-only"},
 		"network":              {fmt.Errorf("fetch: %w", &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("no route to host")}), failureNetwork, "network could not be reached"},
@@ -84,7 +85,7 @@ func TestRefusedGroupExplainsFixableCauseAndLogsDetail(t *testing.T) {
 			if !errors.Is(got, cause) || opts.installResult != nil {
 				t.Fatalf("the cause must survive and no retry may be offered: %v %+v", got, opts.installResult)
 			}
-			if strings.Contains(got.Error(), secret) || !strings.Contains(got.Error(), "not allowed to write") {
+			if strings.Contains(got.Error(), secret) || !strings.Contains(got.Error(), "does not have permission") {
 				t.Fatalf("public error must be plain: %q", got.Error())
 			}
 			files, err := filepath.Glob(filepath.Join(app.InstallLogDir, "install-*.jsonl"))
@@ -104,10 +105,13 @@ func TestRefusedGroupExplainsFixableCauseAndLogsDetail(t *testing.T) {
 func TestEnvironmentClassificationStaysGenericForLookalikes(t *testing.T) {
 	t.Parallel()
 	cases := map[string]error{
-		"url syntax":      &url.Error{Op: "Get", URL: "http://bad host", Err: errors.New("invalid character in host name")},
-		"tls authority":   &url.Error{Op: "Get", URL: "https://x", Err: x509.UnknownAuthorityError{}},
-		"unrelated":       errors.New("boom"),
-		"wrapped unknown": fmt.Errorf("a: %w", fmt.Errorf("b: %w", errors.New("c"))),
+		"url syntax":                       &url.Error{Op: "Get", URL: "http://bad host", Err: errors.New("invalid character in host name")},
+		"tls authority":                    &url.Error{Op: "Get", URL: "https://x", Err: x509.UnknownAuthorityError{}},
+		"tls alert from the peer":          &net.OpError{Op: "remote error", Err: errors.New("tls: bad certificate")},
+		"tls alert raised locally":         &net.OpError{Op: "local error", Err: errors.New("tls: unexpected message")},
+		"certificate error behind a proxy": &net.OpError{Op: "proxyconnect", Net: "tcp", Err: &tls.CertificateVerificationError{Err: errors.New("x509: certificate signed by unknown authority")}},
+		"unrelated":                        errors.New("boom"),
+		"wrapped unknown":                  fmt.Errorf("a: %w", fmt.Errorf("b: %w", errors.New("c"))),
 	}
 	for name, err := range cases {
 		if got := failureKindOf(err); got != failureUnknown {
