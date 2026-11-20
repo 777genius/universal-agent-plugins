@@ -81,7 +81,7 @@ func TestConnectRetryRescuesEverySourceSeriallyAndPrefetched(t *testing.T) {
 	stalled := map[bool]int{}
 	for _, serial := range []bool{true, false} {
 		runner.reset()
-		lock, err := resolveMixedRoots(t, t.Context(), app, requirements, nil, serial)
+		lock, err := resolveMixedRoots(t.Context(), t, app, requirements, nil, serial)
 		if err != nil {
 			t.Fatalf("serial=%v: one stalled connection per source was not rescued: %v", serial, err)
 		}
