@@ -157,13 +157,15 @@ func TestProjectLifecycleVersionProbeEligibility(t *testing.T) {
 	tests := []struct {
 		name   string
 		scope  domain.InstallScope
+		dryRun bool
 		target domain.ClientID
 		change func(*domain.DetectedClient)
 	}{
-		{"user scope", domain.ScopeUser, domain.ClientKimi, nil},
-		{"unselected", domain.ScopeProject, domain.ClientGemini, nil},
-		{"known version", domain.ScopeProject, domain.ClientKimi, func(c *domain.DetectedClient) { c.Version = "2.3.1" }},
-		{"no executable", domain.ScopeProject, domain.ClientKimi, func(c *domain.DetectedClient) { c.ExecutablePath = "" }},
+		{"user scope", domain.ScopeUser, false, domain.ClientKimi, nil},
+		{"dry run", domain.ScopeProject, true, domain.ClientKimi, nil},
+		{"unselected", domain.ScopeProject, false, domain.ClientGemini, nil},
+		{"known version", domain.ScopeProject, false, domain.ClientKimi, func(c *domain.DetectedClient) { c.Version = "2.3.1" }},
+		{"no executable", domain.ScopeProject, false, domain.ClientKimi, func(c *domain.DetectedClient) { c.ExecutablePath = "" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -173,26 +175,13 @@ func TestProjectLifecycleVersionProbeEligibility(t *testing.T) {
 			}
 			detector := &projectVersionDetector{err: errors.New("must not probe")}
 			detected := map[domain.ClientID]domain.DetectedClient{domain.ClientKimi: client}
-			if err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: test.scope, Detector: detector}, &options{}, []domain.ClientID{test.target}, detected); err != nil {
+			if err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: test.scope, Detector: detector}, &options{dryRun: test.dryRun}, []domain.ClientID{test.target}, detected); err != nil {
 				t.Fatal(err)
 			}
 			if len(detector.targets) != 0 || detector.broadCalls != 0 || !reflect.DeepEqual(detected[domain.ClientKimi], client) {
 				t.Fatalf("ineligible operation probed or changed discovery: %+v", detector)
 			}
 		})
-	}
-}
-
-// add --dry-run must admit a version-gated target exactly as the real add does,
-// through the same targeted read-only version probe.
-func TestProjectLifecycleDryRunObservesVersionLikeInstall(t *testing.T) {
-	client := projectVersionClient()
-	probed := client
-	probed.Version = "2.5.2"
-	detector := &projectVersionDetector{clients: []domain.DetectedClient{client}, probed: []domain.DetectedClient{probed}}
-	selected, _, err := preflightProjectLifecycleTargets(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, &options{dryRun: true}, []domain.ClientID{domain.ClientKimi}, nil, false)
-	if err != nil || len(selected) != 1 || selected[0].Version != "2.5.2" || detector.broadCalls != 0 {
-		t.Fatalf("dry run did not observe the version a real add observes: %v %+v", err, selected)
 	}
 }
 
