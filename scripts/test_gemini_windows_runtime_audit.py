@@ -310,16 +310,20 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
         with self.fixture() as case:
             new = self.record(case, 1)
             original, read = new.read_bytes(), os.read
+            interval = (case["phase_started"], case["clock"].now())
+            final = case["audit"].snapshot([case["profile"]])
             changed = []
             def swap(fd, count):
                 block = read(fd, count)
-                if not changed:
+                selected = case["observer"].windows.leaves.get(str(new))
+                if not changed and selected is not None and fd == selected[0]:
                     new.rename(new.with_name("held-old-session"))
                     new.write_bytes(original)
                     changed.append(True)
                 return block
             with patch.object(os, "read", side_effect=swap):
-                final = self.phase(case, "after-public-repeat-add")
+                case["observer"].checkpoint("after-public-repeat-add", final,
+                                            interval=interval)
             self.assertEqual(changed, [True])
             self.assertFalse(case["observer"].finish(final))
             self.assertRegex(case["observer"].reason,
@@ -358,6 +362,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
     def test_descriptor_transfer_failure_closes_only_its_untransferred_handle(self):
         with self.fixture() as case:
             new = self.record(case, 1)
+            interval = (case["phase_started"], case["clock"].now())
+            final = case["audit"].snapshot([case["profile"]])
             native, opened = case["observer"].windows, []
             original = native.kernel.OpenFileById
             def capture(*args):
@@ -366,7 +372,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                 return handle
             with (patch.object(native.kernel, "OpenFileById", side_effect=capture),
                   patch.object(native.msvcrt, "open_osfhandle", side_effect=OSError("transfer control"))):
-                final = self.phase(case, "after-public-repeat-add")
+                case["observer"].checkpoint("after-public-repeat-add", final,
+                                            interval=interval)
             self.assertEqual(len(opened), 1)
             self.assertFalse(case["observer"].finish(final))
             flags = ctypes.c_uint32()

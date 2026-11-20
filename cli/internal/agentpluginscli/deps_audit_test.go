@@ -89,7 +89,7 @@ func TestDependencySyncShowsPlanBeforeDeclinedConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	if !strings.Contains(text, "remove demo/codex") || !strings.Contains(text, "No changes made.") || strings.Index(text, "remove demo/codex") > strings.Index(text, "Apply these changes?") {
+	if !strings.Contains(text, "Remove demo for OpenAI Codex") || !strings.Contains(text, "No changes made.") || strings.Index(text, "Remove demo for OpenAI Codex") > strings.Index(text, "Apply these changes?") {
 		t.Fatal(text)
 	}
 }

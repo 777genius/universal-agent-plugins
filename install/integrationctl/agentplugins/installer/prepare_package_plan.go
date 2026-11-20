@@ -89,8 +89,15 @@ func clonePrepareRequest(req Request) Request {
 	copied := req
 	copied.RequiredComponents = append([]string(nil), req.RequiredComponents...)
 	copied.ExecutableFiles = slices.Clone(req.ExecutableFiles)
+	copied.ClientSurfaces = slices.Clone(req.ClientSurfaces)
 	copied.Targets = append([]ClientTarget(nil), req.Targets...)
+	for i := range copied.Targets {
+		copied.Targets[i].ClientSurfaces = slices.Clone(copied.Targets[i].ClientSurfaces)
+	}
 	copied.KnownTargets = append([]TargetFacts(nil), req.KnownTargets...)
+	for i := range copied.KnownTargets {
+		copied.KnownTargets[i].Surfaces = slices.Clone(copied.KnownTargets[i].Surfaces)
+	}
 	if req.Assessment != nil {
 		assessment := *req.Assessment
 		copied.Assessment = &assessment
@@ -115,6 +122,9 @@ func clonePrepareRequest(req Request) Request {
 func validatePrepareInput(ctx context.Context, req Request) error {
 	if req.ConfirmPluginEnable && (req.Operation != OpRepair || req.Scope != domain.ScopeProject || req.InstallationID == "" || len(req.Targets) > 1 || req.ClientID == "" && len(req.Targets) == 0) {
 		return fmt.Errorf("%w: explicit plugin enablement requires one selected Project repair", ErrInvalidRequest)
+	}
+	if len(req.ClientSurfaces) != 0 && len(req.Targets) > 0 {
+		return fmt.Errorf("%w: group surface observations must be per target", ErrInvalidRequest)
 	}
 	if req.ClientNativeConfigRoot != "" && len(req.Targets) > 0 {
 		return fmt.Errorf("%w: independent native User root requires a single target", ErrInvalidRequest)

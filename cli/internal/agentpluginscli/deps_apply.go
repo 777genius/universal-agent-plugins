@@ -163,11 +163,7 @@ func renderDependencySync(cmd *cobra.Command, opts *options, actions []dependenc
 		}
 	}
 	for _, action := range actions {
-		reason := ""
-		if action.Reason != "" {
-			reason = ": " + action.Reason
-		}
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s/%s%s\n", action.Action, action.Alias, action.ClientID, reason); err != nil {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), humanDependencyPlanLine(action)); err != nil {
 			return err
 		}
 	}

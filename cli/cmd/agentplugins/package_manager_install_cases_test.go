@@ -309,7 +309,11 @@ func pmInstallPreviewAndDecline(t *testing.T) {
 				t.Fatalf("decline was not observed: %v\n%s", err, out)
 			}
 			for _, target := range []string{"cursor", "gemini"} {
-				if !strings.Contains(out, target) {
+				expected := target
+				if mode == "decline" {
+					expected = map[string]string{"cursor": "Install rich for Cursor", "gemini": "Install rich for Gemini CLI"}[target]
+				}
+				if !strings.Contains(out, expected) {
 					t.Fatalf("complete target plan missing %s: %s", target, out)
 				}
 			}
