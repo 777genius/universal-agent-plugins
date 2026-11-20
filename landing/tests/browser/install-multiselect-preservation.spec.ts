@@ -48,7 +48,7 @@ for (const width of [1440, 390]) {
     await checkChoices(dialog);
     const source = index.plugins[0]!.distributions[0]!.releases[0]!.source;
     const selector = `github:${source.repository}@${source.revision}//${source.path}`;
-    const npxAdd = `npx -y universal-agent-plugins@0.1.114 add ${selector} --target codex,cursor,hermes,antigravity`;
+    const npxAdd = `npx -y universal-agent-plugins@0.1.114 add ${selector} --target "codex,cursor,hermes,antigravity"`;
     const snippet = dialog.locator('.command-snippet--add');
     await expect(snippet.locator('code')).toHaveText(npxAdd);
     await snippet.locator('button').click();

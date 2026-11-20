@@ -5,6 +5,10 @@ import { installCommands, pluginCommands } from '../utils/commands.ts';
 import { resolveDistribution } from '../utils/registry.ts';
 import type { DistributionView, RegistryPlugin } from '../types/registry.ts';
 
+// PowerShell would split an unquoted comma list, so the CLI commands quote it.
+const targetList = (targets: readonly string[]) =>
+  targets.length > 1 ? `"${targets.join(',')}"` : targets[0];
+
 const fixture: RegistryPlugin = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
 ).plugins[0];
@@ -44,12 +48,12 @@ test('every project lifecycle command carries scope and owned management retains
     const commands = pluginCommands(fixture, targets, true, 'project');
     assert.equal(
       commands.add,
-      `npx -y universal-agent-plugins@latest add gitlab --target ${targets.join(',')} --scope project`,
+      `npx -y universal-agent-plugins@latest add gitlab --target ${targetList(targets)} --scope project`,
     );
     assert.equal(commands.update, 'npx -y universal-agent-plugins@latest update gitlab --scope project');
     assert.equal(
       commands.repair,
-      `npx -y universal-agent-plugins@latest repair gitlab --target ${targets.join(',')} --scope project`,
+      `npx -y universal-agent-plugins@latest repair gitlab --target ${targetList(targets)} --scope project`,
     );
     assert.equal(commands.remove, 'npx -y universal-agent-plugins@latest remove gitlab --scope project');
     assert.equal(
@@ -60,7 +64,7 @@ test('every project lifecycle command carries scope and owned management retains
     for (const action of ['update', 'repair', 'remove'] as const) {
       assert.equal(
         imperative[action],
-        `npx -y universal-agent-plugins@latest ${action} gitlab --target ${targets.join(',')} --scope project`,
+        `npx -y universal-agent-plugins@latest ${action} gitlab --target ${targetList(targets)} --scope project`,
       );
     }
   }

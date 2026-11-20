@@ -25,14 +25,14 @@ test('community commands save exact source pins and retain package identity', ()
     const commands = pluginCommands(plugin, ['codex', 'cursor']);
     assert.equal(
       commands.add,
-      `npx -y universal-agent-plugins@latest add github:example/plugin@${revision}${path ? `//${path}` : ''} --target codex,cursor`,
+      `npx -y universal-agent-plugins@latest add github:example/plugin@${revision}${path ? `//${path}` : ''} --target "codex,cursor"`,
     );
     assert.equal(plugin.install_source, identity);
     assert.equal(
       commands.update,
-      `npx -y universal-agent-plugins@latest add github:example/plugin@${revision}${path ? `//${path}` : ''} --target codex,cursor`,
+      `npx -y universal-agent-plugins@latest add github:example/plugin@${revision}${path ? `//${path}` : ''} --target "codex,cursor"`,
     );
-    assert.equal(commands.repair, `npx -y universal-agent-plugins@latest repair ${plugin.name} --target codex,cursor`);
+    assert.equal(commands.repair, `npx -y universal-agent-plugins@latest repair ${plugin.name} --target "codex,cursor"`);
     assert.equal(commands.remove, `npx -y universal-agent-plugins@latest remove ${plugin.name}`);
     assert.equal(
       commands.switch,
