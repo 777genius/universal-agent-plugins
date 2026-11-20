@@ -111,10 +111,10 @@ test('Pi project uses an explicit immutable Git source instead of inventing a si
   const source = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab';
   assert.equal(pinnedCatalogSelection(plugin, 'pi', 'project')?.selector, source);
   const commands = pinnedCatalogCommands(plugin, 'pi', 'project');
-  assert.equal(commands.add, `npx -y universal-agent-plugins@0.1.110 add ${source} --target pi --scope project`);
-  assert.equal(commands.update, 'npx -y universal-agent-plugins@0.1.110 update gitlab --target pi --scope project');
-  assert.equal(commands.repair, 'npx -y universal-agent-plugins@0.1.110 repair gitlab --target pi --scope project');
-  assert.equal(commands.remove, 'npx -y universal-agent-plugins@0.1.110 remove gitlab --target pi --scope project');
+  assert.equal(commands.add, `npx -y universal-agent-plugins@0.1.114 add ${source} --target pi --scope project`);
+  assert.equal(commands.update, 'npx -y universal-agent-plugins@0.1.114 update gitlab --target pi --scope project');
+  assert.equal(commands.repair, 'npx -y universal-agent-plugins@0.1.114 repair gitlab --target pi --scope project');
+  assert.equal(commands.remove, 'npx -y universal-agent-plugins@0.1.114 remove gitlab --target pi --scope project');
   assert.deepEqual(plugin.distributions, previous, 'The signed target list must not be rewritten');
 });
 
@@ -235,7 +235,7 @@ test('Pi pinned source identity follows the selected older release, not newer Ch
   assert.deepEqual(selected?.components, ['mcp']);
   assert.equal(pinnedCatalogSelection(plugin, 'pi', 'project')?.selector, selected?.selector);
   assert.equal(pinnedCatalogCommands(plugin, 'pi', 'project').add,
-    `npx -y universal-agent-plugins@0.1.110 add ${selected?.selector} --target pi --scope project`);
+    `npx -y universal-agent-plugins@0.1.114 add ${selected?.selector} --target pi --scope project`);
 });
 
 test('all source commands pin the released npm facade and preserve explicit saved maintenance', () => {
@@ -245,7 +245,7 @@ test('all source commands pin the released npm facade and preserve explicit save
       const selected = pinnedCatalogSelection(plugin, client, scope)!;
       const commands = pinnedCatalogCommands(plugin, client, scope);
       const suffix = ` --target ${client}${scope === 'project' ? ' --scope project' : ''}`;
-      const invocation = 'npx -y universal-agent-plugins@0.1.110';
+      const invocation = 'npx -y universal-agent-plugins@0.1.114';
       assert.equal(commands.add, `${invocation} add ${selected.selector}${suffix}`);
       for (const action of ['update', 'repair', 'remove'] as const)
         assert.equal(commands[action], `${invocation} ${action} gitlab${suffix}`);
@@ -262,7 +262,7 @@ test('release 0.1.110 restores explicit Antigravity MCP repair in both scopes', 
     assert.ok(selection);
     assert.equal(pinnedCatalogRepairLimitation(selection), undefined);
     assert.equal(pinnedCatalogCommands(plugin, 'antigravity', scope).repair,
-      `npx -y universal-agent-plugins@0.1.110 repair gitlab --target antigravity${scope === 'project' ? ' --scope project' : ''}`);
+      `npx -y universal-agent-plugins@0.1.114 repair gitlab --target antigravity${scope === 'project' ? ' --scope project' : ''}`);
   }
 });
 
@@ -274,9 +274,9 @@ test('saved maintenance uses the selected source manifest identity, not the cata
   const selection = pinnedCatalogSelection(plugin, 'hermes', 'user')!;
   assert.equal(selection.manifestName, 'source-package');
   const commands = pinnedCatalogCommands(plugin, 'hermes', 'user');
-  assert.equal(commands.add, `npx -y universal-agent-plugins@0.1.110 add ${selection.selector} --target hermes`);
+  assert.equal(commands.add, `npx -y universal-agent-plugins@0.1.114 add ${selection.selector} --target hermes`);
   for (const action of ['update', 'repair', 'remove'] as const)
-    assert.equal(commands[action], `npx -y universal-agent-plugins@0.1.110 ${action} source-package --target hermes`);
+    assert.equal(commands[action], `npx -y universal-agent-plugins@0.1.114 ${action} source-package --target hermes`);
 });
 
 test('Hermes Project source uses prepared MCP capability; the CLI qualifies the host bundle and session', () => {

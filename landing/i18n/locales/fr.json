@@ -359,7 +359,7 @@
         "nextStep": "Après l’installation"
       },
       "scrollHint": "Faites défiler le tableau horizontalement pour voir toutes les colonnes.",
-      "note": "Automatique : UAP installe les composants pris en charge. Guidée : suivez les instructions de l’agent. Préparée : activez les fichiers préparés. Manuelle : terminez la configuration dans l’application. Après confirmation, UAP termine la configuration native prise en charge et indique les étapes de confiance, connexion ou rechargement restantes. La disponibilité dépend du plugin et de la version de l’agent. Référence : CLI natif 0.1.113. La publication sur npm est indépendante et peut être décalée. La prise en charge d’un agent ne garantit pas une version signée du catalogue compatible avec chaque plugin et chaque portée.",
+      "note": "Automatique : UAP installe les composants pris en charge. Guidée : suivez les instructions de l’agent. Préparée : activez les fichiers préparés. Manuelle : terminez la configuration dans l’application. Après confirmation, UAP termine la configuration native prise en charge et indique les étapes de confiance, connexion ou rechargement restantes. La disponibilité dépend du plugin et de la version de l’agent. Référence : CLI natif 0.1.114. La publication sur npm est indépendante et peut être décalée. La prise en charge d’un agent ne garantit pas une version signée du catalogue compatible avec chaque plugin et chaque portée.",
       "details": "Voir les détails de compatibilité",
       "capabilities": {
         "pluginsSkillsMcp": "Plugins, compétences, MCP",

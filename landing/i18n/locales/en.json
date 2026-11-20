@@ -376,7 +376,7 @@
         "nextStep": "What you do after installing"
       },
       "scrollHint": "Scroll sideways to see every column.",
-      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. After confirmation, UAP completes supported native setup and reports remaining trust, sign-in or reload steps. Availability depends on the plugin and client version. Baseline: native CLI 0.1.113. npm publication is separate and may lag. Agent support does not guarantee a compatible signed catalog release for every plugin and scope.",
+      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. After confirmation, UAP completes supported native setup and reports remaining trust, sign-in or reload steps. Availability depends on the plugin and client version. Baseline: native CLI 0.1.114. npm publication is separate and may lag. Agent support does not guarantee a compatible signed catalog release for every plugin and scope.",
       "details": "Check compatibility details",
       "capabilities": {
         "pluginsSkillsMcp": "Plugins, Skills, MCP",

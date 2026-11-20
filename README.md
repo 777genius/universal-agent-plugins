@@ -306,7 +306,7 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 client prompts; Prepared = files are ready but need activation; Manual = complete
 setup in the app. After confirmation, UAP completes supported native setup and
 reports remaining trust, sign-in or reload steps. This matrix
-describes the released installer capabilities of [native CLI 0.1.113](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.113)
+describes the released installer capabilities of [native CLI 0.1.114](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.114)
 for every agent above; signed Directory packages still need an eligible target. Installation does not prove native runtime activation or vendor authentication.
 
 See the [compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
