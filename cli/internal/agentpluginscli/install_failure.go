@@ -90,7 +90,7 @@ func environmentFailureKind(err error) failureKind {
 		return failureAgentMissing
 	case errors.Is(err, fs.ErrPermission):
 		return failurePermission
-	case errors.As(err, &opErr), errors.As(err, &dnsErr):
+	case errors.As(err, &opErr) && !tlsAlert(opErr), errors.As(err, &dnsErr):
 		// Only connection-level causes. TLS, URL syntax and other errors that
 		// merely implement net.Error stay generic, and a timeout is a timeout.
 		if timeoutCause(err) {
@@ -100,6 +100,10 @@ func environmentFailureKind(err error) failureKind {
 	}
 	return failureUnknown
 }
+
+// tlsAlert reports a failure the remote end sent as a TLS alert: the network
+// was reachable, so it is not an unreachable-network problem.
+func tlsAlert(opErr *net.OpError) bool { return opErr.Op == "remote error" }
 
 func timeoutCause(err error) bool {
 	var timeout interface{ Timeout() bool }
@@ -187,7 +191,7 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 	case failureTimeout:
 		return "A step took too long and was stopped.", "Check network access and the agent, then retry.", true
 	case failurePermission:
-		return "UAP is not allowed to write to a folder this agent needs.", "Fix the folder's permissions, then retry this agent.", true
+		return "UAP does not have permission to use a folder this agent needs.", "Fix the folder's permissions, then retry this agent.", true
 	case failureReadOnly:
 		return "A folder this agent needs is read-only.", "Make the location writable or choose another one, then retry this agent.", true
 	case failureDiskFull:
