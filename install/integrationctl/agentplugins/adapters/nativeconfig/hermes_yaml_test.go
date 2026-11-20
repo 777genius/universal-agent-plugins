@@ -124,24 +124,42 @@ func TestHermesYAMLRejectsMalformedAndAmbiguousConfig(t *testing.T) {
 	}
 }
 
-func TestHermesRefusesExistingWorldReadableConfig(t *testing.T) {
+// Hermes' official installer copies config.yaml with the umask, so a default
+// profile is 0644 (0664 with user private groups). Only a file every local
+// user may rewrite is refused, and the existing mode is never changed.
+func TestHermesConfigModeFromOfficialInstaller(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows security uses ACLs rather than POSIX mode bits")
 	}
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "config.yaml")
 	body := []byte("model: demo\n")
-	if err := os.WriteFile(path, body, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	kernel := New()
-	req := Request{Paths: Paths{JSON: path}, Codec: CodecHermes, Action: ActionAdd,
-		Name: "managed", Server: Server{Type: "stdio", Command: "node"}}
-	if _, err := kernel.Apply(req); err == nil {
-		t.Fatal("Hermes must not write secrets into an existing 0644 config")
-	}
-	now, err := os.ReadFile(path)
-	if err != nil || !bytes.Equal(now, body) {
-		t.Fatalf("unsafe file changed on refusal: %q %v", now, err)
+	for _, mode := range []os.FileMode{0o644, 0o664, 0o666} {
+		path := filepath.Join(t.TempDir(), "config.yaml")
+		if err := os.WriteFile(path, body, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(path, mode); err != nil {
+			t.Fatal(err)
+		}
+		kernel := New()
+		req := Request{Paths: Paths{JSON: path}, Codec: CodecHermes, Action: ActionAdd,
+			Name: "managed", Server: Server{Type: "stdio", Command: "node"}}
+		receipt, err := kernel.Apply(req)
+		if mode&0o002 != 0 {
+			now, readErr := os.ReadFile(path)
+			if err == nil || !strings.Contains(err.Error(), "chmod o-w") || readErr != nil || !bytes.Equal(now, body) {
+				t.Fatalf("world-writable %o config must be refused unchanged: %v %q %v", mode, err, now, readErr)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("installer-created %o config refused: %v", mode, err)
+		}
+		if present, owned, err := kernel.Inspect(req.Paths, req.Codec, req.Name, &receipt); err != nil || !present || !owned {
+			t.Fatalf("%o config entry not observed: %t %t %v", mode, present, owned, err)
+		}
+		if info, err := os.Lstat(path); err != nil || info.Mode().Perm() != mode {
+			t.Fatalf("mode of %o config changed: %v %+v", mode, err, info)
+		}
 	}
 }
