@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -52,6 +53,9 @@ func (runner *stallingRunner) reset() {
 // A stalled connection on every source costs one retry per source, and the
 // serial and prefetched resolutions retry the same reads to the same lock.
 func TestConnectRetryRescuesEverySourceSeriallyAndPrefetched(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("per-repository fixture links need symlink privileges on Windows")
+	}
 	app, requirements, source := mixedRootsJourney(t)
 	fixture := source.Acquirer.Acquirer.URLForRepo("")
 	links := t.TempDir()

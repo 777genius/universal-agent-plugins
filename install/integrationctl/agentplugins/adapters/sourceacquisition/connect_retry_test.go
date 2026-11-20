@@ -112,10 +112,108 @@ func TestIsGitConnectFailureFailsClosed(t *testing.T) {
 		{"partial stdout", 128, "abc\trefs/heads/main\n", connectStderr, false},
 		{"unknown", 128, "", "fatal: something unexpected\n", false},
 		{"failed to connect without timing", 128, "", "Failed to connect to proxy\n", false},
+		// Repository names and millisecond counts never look like a refusal.
+		{"openssl repository", 128, "", "fatal: unable to access 'https://github.com/openssl/openssl.git/': Failed to connect to github.com port 443 after 14031 ms: Couldn't connect to server\n", true},
+		{"rustls repository", 128, "", "fatal: unable to access 'https://github.com/rustls/rustls.git/': Recv failure: Operation timed out\n", true},
+		{"tls-named repository", 128, "", "fatal: unable to access 'https://github.com/acme/tls-invalid-notfound.git/': Couldn't connect to server\n", true},
+		{"404 milliseconds", 128, "", "fatal: unable to access 'https://github.com/acme/repo.git/': Failed to connect to github.com port 443 after 40404 ms: Couldn't connect to server\n", true},
+		{"401 and 403 milliseconds", 128, "", "fatal: unable to access 'x': Failed to connect to github.com port 443 after 14031 ms: Couldn't connect to server\nafter 1403 ms\n", true},
+		// Git's real refusals stay refusals.
+		{"http 403", 128, "", "fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 403\n", false},
+		{"http 404", 128, "", "fatal: unable to access 'https://github.com/acme/repo.git/': The requested URL returned error: 404\n", false},
+		{"remote not found", 128, "", "remote: Not Found\nfatal: repository 'https://github.com/acme/repo.git/' not found\n", false},
+		{"repository not found beside a stall", 128, "", "fatal: repository 'https://github.com/acme/repo.git/' not found\nRecv failure: Operation timed out\n", false},
+		{"ssh permission", 128, "", "git@github.com: Permission denied (publickey).\nfatal: Could not read from remote repository.\n", false},
+		{"tls verify", 128, "", "fatal: unable to access 'https://github.com/acme/repo.git/': SSL: certificate subject name 'x' does not match target host name 'y'\n", false},
+		{"tls with a timeout", 128, "", "fatal: unable to access 'x': server certificate verification failed. CAfile: none CRLfile: none\nConnection timed out\n", false},
 	} {
 		if got := isGitConnectFailure(test.code, []byte(test.stdout), []byte(test.stderr)); got != test.connect {
 			t.Errorf("%s: connect = %v, want %v", test.name, got, test.connect)
 		}
+	}
+}
+
+type fakeClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func (clock *fakeClock) Now() time.Time {
+	clock.mu.Lock()
+	defer clock.mu.Unlock()
+	return clock.now
+}
+
+func (clock *fakeClock) advance(by time.Duration) {
+	clock.mu.Lock()
+	defer clock.mu.Unlock()
+	clock.now = clock.now.Add(by)
+}
+
+func useFakeClock(t *testing.T) *fakeClock {
+	t.Helper()
+	clock := &fakeClock{now: time.Unix(1_000_000, 0)}
+	original := connectRetryNow
+	connectRetryNow = clock.Now
+	t.Cleanup(func() { connectRetryNow = original })
+	return clock
+}
+
+// The budget runs from the first attempt: a retry is skipped when the first
+// attempt used most of it, and otherwise gets only what is left.
+func TestConnectRetryBudgetCountsFromTheFirstAttempt(t *testing.T) {
+	noRetryPause(t, time.Millisecond)
+	for _, test := range []struct {
+		firstTook time.Duration
+		attempts  int
+	}{
+		{firstTook: connectRetryBudget - 10*time.Second, attempts: 1},
+		{firstTook: connectRetryBudget - 30*time.Second, attempts: 2},
+	} {
+		clock := useFakeClock(t)
+		start := clock.Now()
+		attempts := 0
+		var retryDeadline time.Time
+		_, err := withGitConnectRetry(t.Context(), func(ctx context.Context) (int, error) {
+			attempts++
+			if attempts == 1 {
+				clock.advance(test.firstTook)
+				return 0, &gitConnectError{message: "stalled"}
+			}
+			retryDeadline, _ = ctx.Deadline()
+			return 1, nil
+		})
+		if attempts != test.attempts {
+			t.Fatalf("first attempt took %v: %d attempts, want %d (err %v)", test.firstTook, attempts, test.attempts, err)
+		}
+		if attempts == 2 {
+			// The retry may run only for what is left of the budget (real time).
+			left := connectRetryBudget - clock.Now().Sub(start)
+			if until := time.Until(retryDeadline); until > left || until <= 0 {
+				t.Fatalf("retry deadline in %v, want within the %v left of the budget", until, left)
+			}
+		}
+	}
+}
+
+// Cancellation during the pause returns context.Canceled without a second
+// attempt.
+func TestConnectRetryCancelDuringPauseRunsNoSecondAttempt(t *testing.T) {
+	noRetryPause(t, 10*time.Second)
+	ctx, cancel := context.WithCancel(t.Context())
+	var canceled atomic.Bool
+	var afterCancel atomic.Int32
+	attempts := 0
+	_, err := withGitConnectRetry(ctx, func(context.Context) (int, error) {
+		attempts++
+		if canceled.Load() {
+			afterCancel.Add(1)
+		}
+		time.AfterFunc(20*time.Millisecond, func() { canceled.Store(true); cancel() })
+		return 0, &gitConnectError{message: "stalled"}
+	})
+	if !errors.Is(err, context.Canceled) || attempts != 1 || afterCancel.Load() != 0 {
+		t.Fatalf("err=%v attempts=%d after cancel=%d; want context.Canceled and one attempt", err, attempts, afterCancel.Load())
 	}
 }
 

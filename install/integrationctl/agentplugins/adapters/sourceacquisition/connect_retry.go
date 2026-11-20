@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"math/rand/v2"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -30,6 +31,9 @@ var connectRetryPause = func() time.Duration {
 	return time.Second + rand.N(time.Second) //nolint:gosec // jitter, not security
 }
 
+// connectRetryNow is the budget clock; tests replace it.
+var connectRetryNow = time.Now
+
 // Lowercased git/curl/ssh stderr phrases of a connection that was never made
 // or stalled while receiving.
 var gitConnectMarkers = []string{
@@ -38,13 +42,20 @@ var gitConnectMarkers = []string{
 	"recv failure:",
 }
 
-// Any of these means the failure is about credentials, existence, refs or
-// trust; such a failure is never retried even when it also mentions a timeout.
+// Git's, curl's and ssh's own phrases for failures about credentials,
+// existence, refs or trust. They are matched as whole phrases, so repository
+// names (openssl/openssl, rustls) and millisecond counts never match. Such a
+// failure is never retried even when it also mentions a timeout.
 var gitNonConnectMarkers = []string{
-	"authentication", "could not read username", "could not read password", "permission denied",
-	"not found", "returned error: 4", "403", "401", "404",
-	"certificate", "ssl", "tls", "invalid", "unknown revision", "couldn't find remote ref",
+	"authentication failed", "could not read username", "could not read password",
+	"permission denied (", "repository not found", "remote: not found",
+	"the requested url returned error: 4", "returned error: 4",
+	"ssl certificate problem", "ssl: certificate", "certificate verify failed",
+	"server certificate verification failed", "unknown revision", "couldn't find remote ref",
 }
+
+// git: "fatal: repository '<url>' not found".
+var gitRepositoryNotFound = regexp.MustCompile(`fatal: repository '[^'\n]*' not found`)
 
 // isGitConnectFailure reports a failed Git read (exit 128, nothing on stdout)
 // whose stderr shows only a connect-class failure. Anything else is not
@@ -58,6 +69,9 @@ func isGitConnectFailure(code int, stdout, stderr []byte) bool {
 		if strings.Contains(text, marker) {
 			return false
 		}
+	}
+	if gitRepositoryNotFound.MatchString(text) {
+		return false
 	}
 	for _, marker := range gitConnectMarkers {
 		if strings.Contains(text, marker) {
@@ -101,14 +115,13 @@ func WithConnectRetryCounter(ctx context.Context, counter *atomic.Int32) context
 // from the first attempt; when that budget, not the caller, ends the retry,
 // the first failure is returned.
 func withGitConnectRetry[T any](ctx context.Context, attempt func(context.Context) (T, error)) (T, error) {
-	start := time.Now()
+	deadline := connectRetryNow().Add(connectRetryBudget)
 	value, err := attempt(ctx)
 	if err == nil || ctx.Err() != nil || !errors.Is(err, ErrGitConnect) {
 		return value, err
 	}
 	pause := connectRetryPause()
-	deadline := start.Add(connectRetryBudget)
-	if time.Until(deadline) < pause+connectRetryMinWindow {
+	if deadline.Sub(connectRetryNow()) < pause+connectRetryMinWindow {
 		return value, err
 	}
 	timer := time.NewTimer(pause)
@@ -122,7 +135,7 @@ func withGitConnectRetry[T any](ctx context.Context, attempt func(context.Contex
 	if counter, ok := ctx.Value(connectRetryCounterKey{}).(*atomic.Int32); ok {
 		counter.Add(1)
 	}
-	retryCtx, cancel := context.WithDeadline(ctx, deadline)
+	retryCtx, cancel := context.WithTimeout(ctx, deadline.Sub(connectRetryNow()))
 	defer cancel()
 	second, retryErr := attempt(retryCtx)
 	if retryErr != nil && ctx.Err() == nil && retryCtx.Err() != nil {
