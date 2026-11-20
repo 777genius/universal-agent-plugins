@@ -99,6 +99,11 @@ The shared bounded owner/regular-file read rejects unsafe existing leaves.
 func copilotRawEventSnapshot(path string) (bool, []byte, error) {
 	body, err := projectNativeRuntimeRead(path, 1<<20)
 	if os.IsNotExist(err) {
+		// Only an absent leaf is allowed: an absent parent means the
+		// native fixture root has disappeared, not that MCP stayed idle.
+		if parentErr := projectNativeRuntimeParents(path); parentErr != nil {
+			return false, nil, parentErr
+		}
 		return false, nil, nil
 	}
 	if err != nil {
@@ -113,6 +118,10 @@ func TestCopilotRawEventSnapshotPreservesAbsenceAndRefusesAliases(t *testing.T) 
 	exists, body, err := copilotRawEventSnapshot(path)
 	if err != nil || exists || len(body) != 0 {
 		t.Fatal("uncreated event file must remain absent", err)
+	}
+	// Losing the parent is foreign fixture drift, not an absent event leaf.
+	if _, _, err := copilotRawEventSnapshot(filepath.Join(root, "missing-parent", "events.jsonl")); !os.IsNotExist(err) {
+		t.Fatal("missing event parent was accepted as an absent leaf", err)
 	}
 	if err := os.WriteFile(path, nil, 0600); err != nil {
 		t.Fatal(err)
