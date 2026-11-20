@@ -1262,4 +1262,96 @@ class OriginalConfigReadoutContracts(unittest.TestCase):
             case.closed_readout(ordinary, original_state)
 
 
+
+class OfficialNpmFallbackContracts(unittest.TestCase):
+    """The official npm copy is bounded and independently pinned, not the CDN archive."""
+
+    def receipt(self):
+        members = [
+            {"name": "bin/devin", "kind": "file", "bytes": 213734376,
+             "executable": True, "sha256": case.BINARY},
+            {"name": "package.json", "kind": "file", "bytes": 128,
+             "executable": False, "sha256": "b" * 64},
+            {"name": "distribution", "kind": "file", "bytes": 3,
+             "executable": False, "sha256": "c" * 64},
+        ]
+        return {"url": case.NPM_SPEC["url"], "resolved_origin": "https://registry.npmjs.org",
+                "bytes": 70000000, "sha256": "a" * 64, "integrity": case.NPM_SRI,
+                "pin_verified": True, "members": members,
+                "installer_executed": False, "provenance": "official-npm-platform"}
+
+    def test_official_npm_admission_preserves_closed_member_and_binary_refusals(self):
+        case.admitted_npm_archive(self.receipt())
+        for change in ("provenance", "url", "integrity", "bytes", "archive-sha",
+                       "member-duplicate", "member-link", "member-executable",
+                       "wrong-binary", "wrong-binary-size", "missing-binary",
+                       "missing-pin", "installer-executed"):
+            receipt = copy.deepcopy(self.receipt())
+            if change == "provenance": receipt["provenance"] = "publisher"
+            elif change == "url": receipt["url"] = "https://other.invalid/archive"
+            elif change == "integrity": receipt["integrity"] = "sha512-untrusted"
+            elif change == "bytes": receipt["bytes"] = case.NPM_SPEC["max_bytes"] + 1
+            elif change == "archive-sha": receipt["sha256"] = "private"
+            elif change == "member-duplicate": receipt["members"].append(copy.deepcopy(receipt["members"][1]))
+            elif change == "member-link": receipt["members"][1]["kind"] = "link"
+            elif change == "member-executable": receipt["members"][1]["executable"] = True
+            elif change == "wrong-binary": receipt["members"][0]["sha256"] = "0" * 64
+            elif change == "wrong-binary-size": receipt["members"][0]["bytes"] -= 1
+            elif change == "missing-binary": receipt["members"].pop(0)
+            elif change == "missing-pin": receipt["pin_verified"] = False
+            else: receipt["installer_executed"] = True
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                case.admitted_npm_archive(receipt)
+
+    def test_official_npm_copy_reuses_bounded_origin_and_normalizes_only_package_root(self):
+        import devin_project_auto_install_e2e as native
+        manifest = json.dumps({
+            "name": "devin", "version": native.PACKAGE_VERSION,
+            "os": ["linux"], "cpu": ["x64"],
+            "repository": {"url": "git+https://github.com/CognitionAI/devin-cli.git"},
+        }).encode()
+        entries = [
+            {"name": "package", "kind": "directory", "bytes": 0, "executable": True},
+            {"name": "package/bin/devin", "kind": "file", "bytes": 213734376,
+             "executable": True, "sha256": case.BINARY},
+            {"name": "package/package.json", "kind": "file", "bytes": len(manifest),
+             "executable": False, "sha256": hashlib.sha256(manifest).hexdigest()},
+            {"name": "package/distribution", "kind": "file", "bytes": 3,
+             "executable": False, "sha256": hashlib.sha256(b"npm").hexdigest()},
+        ]
+        contents = {"package/bin/devin": b"inert mocked executable",
+                    "package/package.json": manifest, "package/distribution": b"npm"}
+        original = dict(url=case.NPM_SPEC["url"], resolved_origin="https://registry.npmjs.org",
+                        bytes=70000000, sha256="a" * 64,
+                        integrity=case.NPM_SRI, pin_verified=True,
+                        members=entries, installer_executed=False)
+        budget = SimpleNamespace(check=Mock())
+        with patch.object(case.shared, "acquire",
+                          return_value=(original, contents)) as fetch:
+            receipt, normalized = case.acquire_official_npm_archive(budget)
+        fetch.assert_called_once_with(case.NPM_SPEC, budget)
+        self.assertEqual([row["name"] for row in receipt["members"]],
+                         ["bin/devin", "package.json", "distribution"])
+        self.assertEqual(normalized["bin/devin"], contents["package/bin/devin"])
+        self.assertEqual(receipt["integrity"], case.NPM_SRI)
+        self.assertEqual(receipt["resolved_origin"], "https://registry.npmjs.org")
+        self.assertTrue(receipt["pin_verified"])
+        self.assertFalse(receipt["installer_executed"])
+
+    def test_rejects_changed_origin_or_sri_before_native_member_use(self):
+        for mutation in ("origin", "integrity", "pin", "size"):
+            with self.subTest(mutation=mutation):
+                receipt = self.receipt()
+                if mutation == "origin": receipt["resolved_origin"] = "https://other.invalid"
+                elif mutation == "integrity": receipt["integrity"] = "sha512-untrusted"
+                elif mutation == "pin": receipt["pin_verified"] = False
+                else: receipt["bytes"] = case.NPM_SPEC["max_bytes"] + 1
+                with (patch.object(case.shared, "acquire", return_value=(receipt, {})),
+                      patch.object(case, "strict_json",
+                                   side_effect=AssertionError("should not inspect native manifest"))):
+                    with self.assertRaisesRegex(ValueError, "origin/integrity differs"):
+                        case.acquire_official_npm_archive(SimpleNamespace(check=Mock()))
+
+
+
 if __name__ == "__main__": unittest.main()

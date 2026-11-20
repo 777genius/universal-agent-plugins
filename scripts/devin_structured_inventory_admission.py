@@ -121,6 +121,97 @@ def admitted_archive(receipt):
     require(sum(row["bytes"] for row in members) == 214280841, "expanded runtime bytes differ")
 
 
+# The official platform npm copy is a separate immutable distribution, not a
+# relaxation of the older CDN archive's exact member/size/hash admission.
+NPM_SRI = "sha512-SZhb9rrYghHvOh0PRpZT1GpNPMMo+7P9VH6t6ZNMrBmyVX3x3XflPvCv8yomx/i7vnvf64bdFR++cRRg/c8mLQ=="
+NPM_SPEC = {"url": "https://registry.npmjs.org/devin/-/devin-3000.12.57-linux-x64.tgz",
+            "integrity": NPM_SRI, "max_bytes": 96 << 20,
+            "max_expanded_bytes": 256 << 20, "format": "tar.gz",
+            "entrypoint": "bin/devin", "runtime": "native",
+            "binary_sha256": BINARY}
+
+
+def acquire_official_npm_archive(budget):
+    """Admit the immutable npm platform with a proxy-free bounded transport."""
+    from devin_project_auto_install_e2e import PACKAGE_VERSION, TARBALL_URL
+    require(PACKAGE_VERSION == VERSION + "-linux-x64" and TARBALL_URL == NPM_SPEC["url"],
+            "reviewed official npm platform/version changed")
+    # Existing research transport rejects ambient proxies, non-HTTPS origins,
+    # unsafe redirects, unbounded archives, and mismatched exact SHA-512 SRI.
+    receipt, contents = shared.acquire(NPM_SPEC, budget)
+    require(receipt.get("url") == NPM_SPEC["url"]
+            and receipt.get("resolved_origin") == "https://registry.npmjs.org"
+            and receipt.get("integrity") == NPM_SRI
+            and receipt.get("pin_verified") is True
+            and 0 < receipt.get("bytes", 0) <= NPM_SPEC["max_bytes"],
+            "official npm platform origin/integrity differs")
+    entries = receipt["members"]
+    require(3 <= len(entries) <= 512 and all(
+            row["kind"] == "directory" if row["name"] == "package"
+            else (row["kind"] in ("file", "directory")
+                  and row["name"].startswith("package/"))
+            for row in entries), "official npm platform member kind/root differs")
+    normalized, normalized_contents = [], {}
+    seen = set()
+    for row in entries:
+        if row["name"] == "package":
+            continue  # Optional ordinary tar directory header; never materialized.
+        relative = row["name"][len("package/"):]
+        require(bool(relative) and relative not in seen,
+                "official npm platform member collision")
+        seen.add(relative)
+        normalized.append(dict(row, name=relative))
+    for name, body in contents.items():
+        require(name.startswith("package/") and name[len("package/"):] in seen,
+                "official npm platform file escaped its root")
+        normalized_contents[name[len("package/"):]] = body
+    manifest_bytes = normalized_contents.get("package.json")
+    require(type(manifest_bytes) is bytes and len(manifest_bytes) <= 65536,
+            "official npm platform manifest missing/bound")
+    manifest = strict_json(manifest_bytes)
+    require(type(manifest) is dict and manifest.get("name") == "devin"
+            and manifest.get("version") == PACKAGE_VERSION
+            and manifest.get("os") == ["linux"] and manifest.get("cpu") == ["x64"]
+            and type(manifest.get("repository")) is dict
+            and manifest["repository"].get("url") == "git+https://github.com/CognitionAI/devin-cli.git"
+            and normalized_contents.get("distribution") == b"npm",
+            "official npm platform manifest/distribution differs")
+    admitted = dict(receipt, members=normalized, provenance="official-npm-platform")
+    admitted_npm_archive(admitted)
+    return admitted, normalized_contents
+
+
+def admitted_npm_archive(receipt):
+    require(type(receipt) is dict and receipt.get("provenance") == "official-npm-platform"
+            and receipt.get("url") == NPM_SPEC["url"]
+            and receipt.get("resolved_origin") == "https://registry.npmjs.org"
+            and receipt.get("integrity") == NPM_SRI and receipt.get("pin_verified") is True
+            and receipt.get("installer_executed") is False
+            and type(receipt.get("bytes")) is int and 0 < receipt["bytes"] <= NPM_SPEC["max_bytes"]
+            and type(receipt.get("sha256")) is str
+            and re.fullmatch("[0-9a-f]{64}", receipt["sha256"]),
+            "official npm platform receipt authority differs")
+    members = receipt.get("members")
+    require(type(members) is list and 3 <= len(members) <= 512
+            and all(type(row) is dict and row.get("kind") in ("file", "directory")
+                    and type(row.get("name")) is str and row["name"]
+                    and not row["name"].startswith("/") and ".." not in row["name"].split("/")
+                    and type(row.get("bytes")) is int and row["bytes"] >= 0
+                    and type(row.get("executable")) is bool for row in members),
+            "official npm platform membership/ownership differs")
+    names = [row["name"] for row in members]
+    require(len(names) == len(set(names))
+            and sum(row["bytes"] for row in members) <= NPM_SPEC["max_expanded_bytes"],
+            "official npm platform collision/expanded bytes")
+    selected = [row for row in members if row["name"] == "bin/devin"]
+    require(len(selected) == 1 and selected[0]["kind"] == "file"
+            and selected[0].get("sha256") == BINARY
+            and selected[0]["bytes"] == 213734376 and selected[0]["executable"] is True,
+            "official npm platform executable differs from independently reviewed native")
+    require([row["name"] for row in members if row["kind"] == "file" and row["executable"]]
+            == ["bin/devin"], "official npm platform unreviewed executable member")
+
+
 def snapshot(ctx):
     roots = {"home": ctx.home, "temporary": ctx.root / "tmp", **ctx.projects}
     result = shared.legacy.inventory(roots, ctx.budget)
@@ -1153,11 +1244,25 @@ def run(output, *, collector=collect, recipe="private"):
             readout_state["phase"] = "source"
             ctx.source_and_projects()
             readout_state["phase"] = "acquisition"
-            receipt, contents = acquire_publisher_archive(budget)
-            admitted_archive(receipt)
+            # A genuine CDN HTTP 403 is not a native failure or permission to
+            # trust arbitrary bytes: use only the separately SRI/binary-pinned
+            # official npm platform, and retain every native metadata gate.
+            try:
+                receipt, contents = acquire_publisher_archive(budget)
+            except ValueError as error:
+                if str(error) != ("Devin publisher acquisition failed: curl_exit=22; "
+                                  "http_status=403; process_error=False"):
+                    raise
+                receipt, contents = acquire_official_npm_archive(budget)
+            npm = receipt.get("provenance") == "official-npm-platform"
+            if npm:
+                admitted_npm_archive(receipt)
+            else:
+                admitted_archive(receipt)
             summary["acquisition"] = receipt
             readout_state["phase"] = "materialization"
-            binary, ctx.identities = shared.materialize(output / "client", SPEC, receipt, contents)
+            binary, ctx.identities = shared.materialize(
+                output / "client", NPM_SPEC if npm else SPEC, receipt, contents)
             held_cleanup[output / "client"] = root_identity(output / "client")
             ctx.argv = [str(binary)]
             summary["runtime_files"] = [{"path": str(path), "sha256": digest} for path, digest in ctx.identities.items()]

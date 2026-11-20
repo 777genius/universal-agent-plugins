@@ -13,6 +13,10 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+// AcquisitionTempRoot reports the directory acquisitions stage their files in;
+// an empty value means the system temporary directory.
+func (acquirer Acquirer) AcquisitionTempRoot() string { return acquirer.TempRoot }
+
 func (acquirer Acquirer) AcquireGitHub(ctx context.Context, repository, revision, pluginSubpath string) (domain.PackageSnapshot, error) {
 	return acquirer.acquireGitHub(ctx, repository, revision, pluginSubpath, true)
 }
