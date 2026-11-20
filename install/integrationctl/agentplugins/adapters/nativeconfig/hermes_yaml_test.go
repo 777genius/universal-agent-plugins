@@ -137,8 +137,12 @@ func TestHermesRefusesExistingWorldReadableConfig(t *testing.T) {
 	kernel := New()
 	req := Request{Paths: Paths{JSON: path}, Codec: CodecHermes, Action: ActionAdd,
 		Name: "managed", Server: Server{Type: "stdio", Command: "node"}}
-	if _, err := kernel.Apply(req); err == nil {
+	_, err := kernel.Apply(req)
+	if err == nil {
 		t.Fatal("Hermes must not write secrets into an existing 0644 config")
+	}
+	if !strings.Contains(err.Error(), "chmod 600") || !strings.Contains(err.Error(), "0644") {
+		t.Fatalf("refusal must name the file mode and its remedy: %v", err)
 	}
 	now, err := os.ReadFile(path)
 	if err != nil || !bytes.Equal(now, body) {

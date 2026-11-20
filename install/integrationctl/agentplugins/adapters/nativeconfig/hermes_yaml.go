@@ -265,12 +265,16 @@ func hermesValueNode(encoded json.RawMessage) (*yaml.Node, error) {
 // local Unix user. The mutation kernel retains existing file modes by design,
 // so writing credentials into a pre-existing 0644 file would preserve the leak.
 // Windows uses ACLs rather than meaningful POSIX permission bits.
+// The pinned Hermes installer copies its template with the default umask and
+// Hermes tightens it only when it saves config outside containers, so name the
+// file and the one-line remedy instead of changing the user's file mode.
 func requireHermesPrivateConfig(file resolvedFile, codec Codec) error {
 	if codec != CodecHermes || !file.exists || runtime.GOOS == "windows" {
 		return nil
 	}
 	if file.mode.Perm()&0o077 != 0 {
-		return fmt.Errorf("hermes config.yaml must have owner-only permissions before UAP manages MCP entries")
+		return fmt.Errorf("hermes config.yaml must have owner-only permissions before UAP manages MCP entries: %q has mode %04o; run chmod 600 %q and retry",
+			file.path, file.mode.Perm(), file.path)
 	}
 	return nil
 }
