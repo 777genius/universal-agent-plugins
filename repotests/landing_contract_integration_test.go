@@ -143,7 +143,7 @@ func TestLandingSurface_LocalesLinksAndBrandingStayAligned(t *testing.T) {
 	mustNotContain(t, ruContent, `"testimonials"`)
 	mustContain(t, ruContent, `"title": "Проверяемый установочный скрипт"`)
 	mustContain(t, ruContent, `"title": "npx · Node.js 22+"`)
-	mustContain(t, ruContent, `"invocation": "npx -y universal-agent-plugins"`)
+	mustContain(t, ruContent, `"invocation": "npx -y universal-agent-plugins@latest"`)
 	mustContain(t, ruContent, `"note": "Без постоянной установки: npx скачивает проверенный CLI и запускает команду плагина за один шаг."`)
 	mustNotContain(t, ruContent, `Public-beta обёртка`)
 	mustNotContain(t, ruContent, `"pricing"`)
