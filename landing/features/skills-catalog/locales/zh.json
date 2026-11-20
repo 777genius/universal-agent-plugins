@@ -80,7 +80,11 @@
         "documentUnavailable": "无法从发布方加载 SKILL.md。你可以直接查看其源代码。",
         "viewPublisher": "查看发布方源代码",
         "revision": "源代码修订版",
-        "rawDocument": "查看完整 SKILL.md 原文"
+        "rawDocument": "查看完整 SKILL.md 原文",
+        "remove": "删除",
+        "savedName": "查找保存的名称",
+        "removeHint": "删除以此名称保存的技能。如果你还从其他来源安装过同名技能，请用 list 命令查看保存的名称。",
+        "removeByListedName": "CLI 会为此技能选择保存的名称。请在 list 输出中此来源旁找到它，然后用该名称运行 remove。"
       },
       "scanFilterLabel": "扫描覆盖情况",
       "scanModes": {

@@ -80,7 +80,11 @@
         "documentUnavailable": "प्रकाशक से SKILL.md लोड नहीं हो सका। आप स्रोत सीधे देख सकते हैं।",
         "viewPublisher": "प्रकाशक का स्रोत देखें",
         "revision": "स्रोत संशोधन",
-        "rawDocument": "पूरा SKILL.md स्रोत देखें"
+        "rawDocument": "पूरा SKILL.md स्रोत देखें",
+        "remove": "हटाएँ",
+        "savedName": "सहेजा गया नाम खोजें",
+        "removeHint": "इस नाम से सहेजे गए Skill को हटाता है। अगर आपने किसी दूसरे स्रोत से इसी नाम का Skill इंस्टॉल किया है, तो list कमांड से सहेजे गए नाम देखें।",
+        "removeByListedName": "CLI इस Skill के लिए सहेजा गया नाम खुद चुनता है। list के आउटपुट में इस स्रोत के पास उसे खोजें, फिर उसी नाम से remove चलाएँ।"
       },
       "scanFilterLabel": "स्कैन कवरेज",
       "scanModes": {

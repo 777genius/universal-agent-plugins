@@ -10,8 +10,10 @@ import {
   skillIdentityFromId,
   skillMatchesSelection,
   skillInstallCommand,
+  skillListCommand,
   skillNeedsManualSelection,
   skillPublisherUrl,
+  skillRemoveCommand,
   skillRepositoryUrl,
 } from '~/utils/skillsCatalog';
 
@@ -105,6 +107,10 @@ const activeTab = ref<'command' | 'prompt'>('command');
 const command = computed(() =>
   skill.value ? skillInstallCommand(skill.value, chooseInTerminal.value ? undefined : targets.value, scope.value) : undefined,
 );
+const removeCommand = computed(() =>
+  skill.value ? skillRemoveCommand(skill.value, chooseInTerminal.value ? undefined : targets.value, scope.value) : undefined,
+);
+const listCommand = computed(() => skillListCommand(scope.value));
 const prompt = computed(() => {
   const agent = skill.value
     ? skillAgentCommands(skill.value, chooseInTerminal.value ? undefined : targets.value, scope.value)
@@ -278,6 +284,22 @@ usePageSeo(
                   {{ t('registryUi.skills.manualSkillSelection') }}
                 </p>
                 <NativeCliCheckbox />
+                <template v-if="activeTab === 'command'">
+                  <CommandSnippet
+                    v-if="removeCommand"
+                    :command="removeCommand"
+                    :label="t('registryUi.skills.detail.remove')"
+                    kind="remove"
+                  />
+                  <CommandSnippet
+                    v-else-if="listCommand"
+                    :command="listCommand"
+                    :label="t('registryUi.skills.detail.savedName')"
+                  />
+                  <p class="skills-detail__hint">
+                    {{ t(removeCommand ? 'registryUi.skills.detail.removeHint' : 'registryUi.skills.detail.removeByListedName') }}
+                  </p>
+                </template>
               </div>
             </template>
             <p v-else class="skills-detail__hint">
