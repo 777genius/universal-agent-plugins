@@ -73,6 +73,20 @@ Changes after `v1.2.4` land here.
 The following `agentplugins` changes are breaking. They ship in the next minor
 0.x release without a compatibility layer; each item says how to move.
 
+- **One agent that cannot be prepared no longer stops the others.** In
+  `agentplugins add <plugin> --target a,b,c`, an agent whose own preflight or
+  package preparation fails for a cause that concerns only it (permission
+  denied, read-only location, agent program missing, agent facts unavailable,
+  unsupported agent, something UAP does not own at its install location) is
+  left out; the other agents install exactly as if only they had been
+  selected. Every other cause, unclassified ones included, still stops every
+  agent with "no selected client was changed", as does a selection with VS
+  Code. How to move: automation must treat a non-zero exit with
+  `status: "external_partial_failure"` as "some agents installed" and read the
+  per-target rows. A failed row with `error.stage: "preparation"` means that
+  agent was not prepared and nothing was applied for it; `external_failed` now
+  also has this meaning. Retry it with the same command and `--target <agent>`;
+  the retry is pinned to the package already installed for its peers.
 - **`io.github.777genius.agentplugins/commands/` is now read.** Every entry in
   it except dotfiles must be a valid command; an invalid one is reported and
   not delivered. Move unrelated files elsewhere, and add the CI check from

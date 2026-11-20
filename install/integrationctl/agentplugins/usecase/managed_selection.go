@@ -104,7 +104,7 @@ func (service Service) recordedManagedMCPNames(ctx context.Context, input AddInp
 	if updating {
 		operation = "update"
 	}
-	return nil, false, fmt.Errorf("managed package was changed or is missing; refusing silent %s before previous MCP selection can be verified: %w", operation, err)
+	return nil, false, &domain.TypedError{Text: fmt.Sprintf("managed package was changed or is missing; refusing silent %s before previous MCP selection can be verified: %v", operation, err), Kind: domain.ErrManagedPackageChanged, Cause: err}
 }
 
 func readManagedSelection(ctx context.Context, stager ports.PackageStager, client domain.ClientID, scope domain.InstallScope, root, digest string) ([]string, error) {
