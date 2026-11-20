@@ -17,11 +17,12 @@ const thumbnailUrl = computed(
   () => `https://image.mux.com/${playbackId.value}/thumbnail.webp?time=1&width=1280`,
 );
 // The idle embed loads media resources without playback. Only an explicit
-// Watch demo gesture requests playback. Mux's autoplay=any silently falls back
-// to mute, so use the normal sound-first mode and keep audio enabled by default.
-// Some browsers may still block audible iframe playback.
+// Watch demo gesture requests playback, in a fresh iframe (see the template key)
+// that is created with the autoplay permission, so Chromium browsers start with
+// sound. Browsers that still refuse audible iframe autoplay fall back to muted
+// playback (autoplay=any) instead of stopping and asking for a second click.
 const playerUrl = computed(() =>
-  `https://player.mux.com/${playbackId.value}?${playing.value ? 'autoplay=true&no-muted-pref=true&' : ''}preload=auto`,
+  `https://player.mux.com/${playbackId.value}?${playing.value ? 'autoplay=any&no-muted-pref=true&' : ''}preload=auto`,
 );
 const muxOrigin = 'https://player.mux.com';
 function cancelPreload() {
@@ -144,8 +145,11 @@ onBeforeUnmount(() => {
       :class="{ 'hero-demo-video--fallback': fallbackFullscreen }"
       :aria-label="t('shell.hero.demoVideoTitle')"
     >
+      <!-- Frame permissions are fixed when its document loads. Patching the warm frame's
+           src before allow loaded playback without autoplay, so it stayed paused. -->
       <iframe
         v-if="playbackId && (playing || preloading)"
+        :key="playing ? 'playback' : 'warm'"
         ref="playerFrame"
         :src="playerUrl"
         :class="{ 'hero-demo-video__preload': !playing }"
