@@ -135,7 +135,9 @@ test('Skills catalog and detail reuse the plugin scope choice and copy the proje
   await card.getByRole('link', { name: 'frontend-design' }).click();
   const detail = page.locator('#skill-install');
   await expect(detail.locator('.install-scope').getByRole('button', { name: 'This project' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(detail.locator('.command-snippet code')).toHaveText(scopedCommand);
+  await expect(detail.locator('.command-snippet--add code')).toHaveText(scopedCommand);
+  await expect(detail.locator('.command-snippet--remove code')).toHaveText(
+    'npx universal-agent-plugins@latest remove frontend-design --scope project');
   await detail.getByRole('tab', { name: 'Prompt' }).click();
   await expect(detail.locator('.command-snippet code')).toContainText('--scope project');
   // An agent has no terminal: it previews the plan, then accepts it.
@@ -146,7 +148,7 @@ test('Skills catalog and detail reuse the plugin scope choice and copy the proje
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await detail.locator('.install-scope').getByRole('button', { name: 'This computer' }).click();
   await detail.getByRole('tab', { name: 'Command' }).click();
-  await expect(detail.locator('.command-snippet code')).toHaveText(scopedCommand.replace(' --scope project', ''));
+  await expect(detail.locator('.command-snippet--add code')).toHaveText(scopedCommand.replace(' --scope project', ''));
   await page.screenshot({ path: testInfo.outputPath('skills-install-scope-mobile.png'), fullPage: true });
 });
 
@@ -282,7 +284,7 @@ test('legacy API website publisher offers safe Install while malformed sources r
   await recovered.getByRole('link', { name: 'ui-radar', exact: true }).click();
   await expect(page).toHaveURL(/\/skills\/\?id=skills-sh/);
   await expect(page.getByRole('heading', { level: 1, name: 'ui-radar' })).toBeVisible();
-  await expect(page.locator('.skills-detail__install-body .command-snippet')).toContainText(
+  await expect(page.locator('.skills-detail__install-body .command-snippet--add')).toContainText(
     'https://uizze.com --skill ui-radar',
   );
 });
@@ -431,7 +433,7 @@ test('Website publisher Skills install with UAP and open their own detail page',
   await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'skills-prompt-tab');
   await page.getByRole('tab', { name: 'Prompt' }).press('Home');
   await expect(page.getByRole('tab', { name: 'Command' })).toHaveAttribute('aria-selected', 'true');
-  await page.locator('.skills-detail__install-body').getByRole('button', { name: 'Copy command' }).click();
+  await page.locator('.skills-detail__install-body .command-snippet--add').getByRole('button', { name: 'Copy command' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
     'npx universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar',
   );

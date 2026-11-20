@@ -80,7 +80,11 @@
         "documentUnavailable": "Não foi possível carregar SKILL.md do editor. Você pode consultar a fonte diretamente.",
         "viewPublisher": "Ver fonte do editor",
         "revision": "Revisão da fonte",
-        "rawDocument": "Ver o SKILL.md completo"
+        "rawDocument": "Ver o SKILL.md completo",
+        "remove": "Remover",
+        "savedName": "Encontrar o nome salvo",
+        "removeHint": "Remove a Skill salva com este nome. Se você instalou uma Skill com o mesmo nome de outra fonte, confira os nomes salvos com o comando list.",
+        "removeByListedName": "A CLI escolhe o nome salvo desta Skill. Encontre-o ao lado desta fonte na saída de list e execute remove com esse nome."
       },
       "scanFilterLabel": "Cobertura da análise",
       "scanModes": {

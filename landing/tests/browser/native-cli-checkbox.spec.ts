@@ -67,15 +67,15 @@ test('native CLI checkbox changes Skills, plugin install and copy commands acros
   await page.keyboard.press('Escape');
   await restoredCard.getByRole('link', { name: 'frontend-design' }).click();
   const detail = page.locator('#skill-install');
-  await expect(detail.locator('.command-snippet code')).toHaveText(nativeSkillCommand);
+  await expect(detail.locator('.command-snippet--add code')).toHaveText(nativeSkillCommand);
   await detail.getByRole('tab', { name: 'Prompt' }).click();
   await expect(detail.locator('.command-snippet code')).toContainText(nativeSkillCommand);
 
   await detail.getByRole('checkbox', { name: checkboxName }).uncheck();
   await expect(detail.locator('.command-snippet code')).toContainText(npxSkillCommand);
   await detail.getByRole('tab', { name: 'Command' }).click();
-  await expect(detail.locator('.command-snippet code')).toHaveText(npxSkillCommand);
-  await detail.getByRole('button', { name: 'Copy command' }).click();
+  await expect(detail.locator('.command-snippet--add code')).toHaveText(npxSkillCommand);
+  await detail.locator('.command-snippet--add').getByRole('button', { name: 'Copy command' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toBe(npxSkillCommand);
   expect(errors).toEqual([]);

@@ -80,7 +80,11 @@
         "documentUnavailable": "The publisher's SKILL.md could not be loaded. You can inspect its source directly.",
         "viewPublisher": "View publisher source",
         "revision": "Source revision",
-        "rawDocument": "View complete SKILL.md source"
+        "rawDocument": "View complete SKILL.md source",
+        "remove": "Remove",
+        "savedName": "Find the saved name",
+        "removeHint": "Removes the Skill saved under this name. If you installed a Skill with the same name from another source, check the saved names with the list command.",
+        "removeByListedName": "The CLI chooses the saved name for this Skill. Find it next to this source in the list, then run remove with that name."
       },
       "scanFilterLabel": "Scan coverage",
       "scanModes": {

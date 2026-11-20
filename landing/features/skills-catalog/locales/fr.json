@@ -80,7 +80,11 @@
         "documentUnavailable": "Le SKILL.md de l’éditeur n’a pas pu être chargé. Consultez directement sa source.",
         "viewPublisher": "Voir la source de l’éditeur",
         "revision": "Révision de la source",
-        "rawDocument": "Afficher le contenu source complet de SKILL.md"
+        "rawDocument": "Afficher le contenu source complet de SKILL.md",
+        "remove": "Supprimer",
+        "savedName": "Trouver le nom enregistré",
+        "removeHint": "Supprime la Skill enregistrée sous ce nom. Si vous avez installé une Skill du même nom depuis une autre source, vérifiez les noms enregistrés avec la commande list.",
+        "removeByListedName": "La CLI choisit le nom enregistré de cette Skill. Repérez-le à côté de cette source dans la sortie de list, puis lancez remove avec ce nom."
       },
       "scanFilterLabel": "Couverture de l'analyse",
       "scanModes": {

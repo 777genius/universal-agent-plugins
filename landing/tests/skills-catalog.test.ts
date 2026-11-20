@@ -15,7 +15,9 @@ import {
   SKILL_AGENT_TARGET_PLACEHOLDER,
   skillAgentCommands,
   skillInstallCommand,
+  skillListCommand,
   skillNeedsManualSelection,
+  skillRemoveCommand,
   skillRepositoryUrl,
   skillPublisherUrl,
   skillDetailRoute,
@@ -94,6 +96,20 @@ test('agent prompt commands run without a terminal: explicit target, dry-run rev
     assert.ok(!Object.values(commands!).join(' ').includes('--accept-security-risk'));
   assert.equal(skillAgentCommands(skill, []), undefined);
   assert.equal(skillAgentCommands(skill, ['codex; echo unsafe']), undefined);
+});
+
+test('Skill removal uses the name the CLI saves, and list when the page cannot know it', () => {
+  const cli = 'npx universal-agent-plugins@latest';
+  assert.equal(skillRemoveCommand(skill), `${cli} remove frontend-design`);
+  assert.equal(skillRemoveCommand(skill, ['codex', 'claude'], 'project'),
+    `${cli} remove frontend-design --target "codex,claude" --scope project`);
+  assert.equal(skillListCommand('project'), `${cli} list --scope project`);
+  // The CLI saves names outside its alias grammar as skill-<hash>, and a
+  // repository-only command lets the user pick a Skill the page cannot name.
+  for (const skillNameHint of ['2fa-helper', 'révision-2', 'Frontend Design'])
+    assert.equal(skillRemoveCommand({ ...skill, skillNameHint }), undefined, skillNameHint);
+  assert.equal(skillRemoveCommand(skill, ['codex; echo unsafe']), undefined);
+  assert.equal(skillRemoveCommand({ ...skill, availability: 'unsupported-source', source: { kind: 'external', url: 'https://example.com' } }), undefined);
 });
 
 test(
