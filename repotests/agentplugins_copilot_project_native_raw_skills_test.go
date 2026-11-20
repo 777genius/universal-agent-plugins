@@ -35,7 +35,10 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	f.preparePackage(t)
 	foreign := copilotRawForeign(t, f)
 	before := copilotRawInventories(t, f, "before", nil)
-	events := copilotRawRead(t, f.base.Events)
+	eventsExist, events, err := copilotRawEventSnapshot(f.base.Events)
+	if err != nil {
+		t.Fatal("raw initial MCP event snapshot refused", err)
+	}
 	argv := []string{f.installer, "skills", "add", nativeRawProjectSkillsSource, "--skill", copilotRawSkill, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--no-ui", "--format", "json"}
 	first := f.command(t, "raw-add", f.outside, f.env(), argv, 45*time.Second)
 	copilotRawReady(t, first.Stdout, false)
@@ -81,10 +84,60 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	if _, err := os.Lstat(binding.TargetLocator); !os.IsNotExist(err) {
 		t.Fatal("raw removed package remains", err)
 	}
-	if !bytes.Equal(events, copilotRawRead(t, f.base.Events)) {
-		t.Fatal("ordinary catalog invoked MCP probe")
+	afterEventsExist, afterEvents, err := copilotRawEventSnapshot(f.base.Events)
+	if err != nil || eventsExist != afterEventsExist || !bytes.Equal(events, afterEvents) {
+		t.Fatal("ordinary catalog mutated MCP probe events", err)
 	}
 	f.check(t)
+}
+
+
+/*
+copilotRawEventSnapshot distinguishes absent output from an empty native event
+file. This no-provider journey must not create, replace or modify events.
+The shared bounded owner/regular-file read rejects unsafe existing leaves.
+*/
+func copilotRawEventSnapshot(path string) (bool, []byte, error) {
+	body, err := projectNativeRuntimeRead(path, 1<<20)
+	if os.IsNotExist(err) {
+		return false, nil, nil
+	}
+	if err != nil {
+		return false, nil, err
+	}
+	return true, body, nil
+}
+
+func TestCopilotRawEventSnapshotPreservesAbsenceAndRefusesAliases(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "events.jsonl")
+	exists, body, err := copilotRawEventSnapshot(path)
+	if err != nil || exists || len(body) != 0 {
+		t.Fatal("uncreated event file must remain absent", err)
+	}
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	exists, body, err = copilotRawEventSnapshot(path)
+	if err != nil || !exists || len(body) != 0 {
+		t.Fatal("present empty event file must not resemble absence", err)
+	}
+	if err := os.WriteFile(path, []byte("event\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	exists, body, err = copilotRawEventSnapshot(path)
+	if err != nil || !exists || string(body) != "event\n" {
+		t.Fatal("existing event bytes must remain observable", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "foreign-events"), path); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := copilotRawEventSnapshot(path); err == nil {
+		t.Fatal("event snapshot must refuse symlinked leaf")
+	}
 }
 
 func copilotRawLogEvidence(t *testing.T, f *copilotProjectAttempt) {
