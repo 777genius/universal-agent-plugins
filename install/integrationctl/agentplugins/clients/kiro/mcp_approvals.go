@@ -115,6 +115,17 @@ func selectedKiroApprovals(envelope domain.PackageEnvelope, plan domain.Delivery
 	if err != nil {
 		return approved, err
 	}
+	extensionSelected := false
+	for _, component := range plan.Components {
+		if component.Kind == domain.ComponentExtension && component.Name == MCPApprovalNamespace &&
+			component.Support == domain.SupportNative {
+			extensionSelected = true
+			break
+		}
+	}
+	if !extensionSelected {
+		return approved, fmt.Errorf("Kiro tool approvals were not selected by the plan")
+	}
 	selected := shared.SupportedMCPNames(plan)
 	for server := range approved.Servers {
 		if !slices.Contains(selected, server) {
