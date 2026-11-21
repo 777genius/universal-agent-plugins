@@ -148,6 +148,7 @@ func cursorToolTrustFixture(t *testing.T) (domain.ActivationRequest, clients.Env
 	t.Helper()
 	request, kernel := cursorApprovalFixture(t)
 	request.Plan.InstallIntent = domain.InstallIntentAutomatic
+	request.Plan.ActivePath = request.Delivery.ActivePath
 	request.Plan.Components = append(request.Plan.Components, domain.ComponentDecision{
 		Kind: domain.ComponentExtension, Name: cursorToolApprovalNamespace, Support: domain.SupportNative,
 	})
