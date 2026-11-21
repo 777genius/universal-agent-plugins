@@ -48,10 +48,9 @@ function projectCompatible(
         (part) => !/^[A-Za-z0-9._-]+$/.test(part) || part === '.' || part === '..',
       )))) return false;
   return targets.every((client) => {
-    // Kiro's sole declared extension configures tools of an MCP server. An
-    // extension-only catalog summary cannot satisfy that native prerequisite.
-    if (client === 'kiro' && dist.components.includes('extensions') &&
-        !dist.components.includes('mcp')) return false;
+    // Kiro's native extension only approves tools of a selected MCP server.
+    // An extension-only summary cannot qualify without a portable component.
+    if (client === 'kiro' && dist.components.every(component => component === 'extensions')) return false;
     const target = dist.targets.find((candidate) => candidate.client === client);
     return Boolean(target && !target.app_binding &&
       dist.components.some((component) => projectComponentSupported(client, component)));
