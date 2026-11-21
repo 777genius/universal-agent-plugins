@@ -31,7 +31,7 @@ func preflightKiroProject(env clients.Env, request domain.ActivationRequest) err
 	if request.ActivationComplete {
 		return fmt.Errorf("kiro project native discovery cannot be established by activation attestation")
 	}
-	if !shared.OnlyNativeComponents(request.Plan.Components) {
+	if !kiroNativeComponents(request.Plan.Components) {
 		return fmt.Errorf("kiro project delivery requires supported skills and MCP servers only")
 	}
 	if err := validateKiroProjectObjects(root, request.PreviousNativeObjects); err != nil {
