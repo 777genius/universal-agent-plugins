@@ -17,6 +17,28 @@ from project_native_missing_call_runner import (
 
 
 class RealClientRunnerContractTest(unittest.TestCase):
+    def test_native_selected_inventory_logs_only_safe_status_category(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from project_native_missing_call_runner import native_selected_inventory
+
+        for native_output, expected_category in (
+            (b"foreign_server: ready\\n", "selected-server-not-listed"),
+            (b"selected_server: not loaded (needs approval)\\n",
+             "selected-server-listed-but-not-ready"),
+        ):
+            with self.subTest(expected_category), \\
+                    patch("project_native_missing_call_runner.invoke",
+                          return_value=(native_output, b"private native stderr")):
+                public = StringIO()
+                with redirect_stdout(public), self.assertRaises(ValueError):
+                    native_selected_inventory(Path("/trusted/native"), Path("/project"),
+                                              {}, Path("/private"), "selected_server",
+                                              require_ready=True)
+                self.assertEqual(public.getvalue(),
+                                 "native-inventory-diagnostic: " + expected_category + "\\n")
+                self.assertNotIn("private native stderr", public.getvalue())
+
     def test_no_auth_checkpoint_separates_written_grant_from_native_readiness(self):
         from contextlib import redirect_stdout
         from io import StringIO

@@ -190,8 +190,12 @@ def native_inventory(client, binary, folder, env, private, label, absent):
 def native_selected_inventory(binary, folder, env, private, server, *, require_ready=False):
     out, err = invoke("selected-native-mcp-list", [binary, "mcp", "list"], folder, env, private, 40)
     if server.encode() not in out + b"\n" + err:
+        # Only fixed diagnostic categories leave the isolated runner. Raw
+        # native stdout/stderr may carry secrets and must stay private.
+        print("native-inventory-diagnostic: selected-server-not-listed", flush=True)
         raise ValueError("UAP-installed selected MCP server not listed by genuine native client")
     if require_ready and (server + ": ready").encode() not in out.splitlines():
+        print("native-inventory-diagnostic: selected-server-listed-but-not-ready", flush=True)
         raise ValueError("UAP-selected Cursor MCP requires native approval or is not ready")
 
 
