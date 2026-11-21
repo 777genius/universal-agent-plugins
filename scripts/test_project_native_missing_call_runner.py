@@ -11,7 +11,8 @@ from unittest.mock import patch
 
 from project_native_missing_call_runner import (
     agent_command, digest, installation_id, installed_config, permission_fixture,
-    require_both_preflight_receipts, run_both_preflight, source_build, stage_shared_source,
+    assert_cursor_owned_tool_permission, require_both_preflight_receipts,
+    run_both_preflight, source_build, stage_shared_source,
 )
 
 
@@ -19,11 +20,22 @@ class RealClientRunnerContractTest(unittest.TestCase):
     def test_exact_named_tool_approval(self):
         with tempfile.TemporaryDirectory() as temp:
             project = Path(temp)
-            permission_fixture("cursor", project, "only_cursor")
-            permissions = json.loads((project / ".cursor" / "cli.json").read_text())["permissions"]
-            self.assertEqual(permissions["allow"], ["Mcp(only_cursor:inspect_runtime)"])
-            self.assertIn("Shell(*)", permissions["deny"])
-            self.assertIn("Read(**/*)", permissions["deny"])
+            with self.assertRaisesRegex(ValueError, "confirmed UAP add"):
+                permission_fixture("cursor", project, "only_cursor")
+            path = project / ".cursor" / "cli.json"
+            path.parent.mkdir()
+            policy = {
+                "permissions": {
+                    "allow": ["Read(DOCS.md)", "Mcp(only_cursor:inspect_runtime)"],
+                    "deny": ["Shell(*)", "Read(**/*)", "Write(**/*)"],
+                },
+            }
+            path.write_text(json.dumps(policy))
+            assert_cursor_owned_tool_permission(project, "only_cursor")
+            policy["permissions"]["allow"] = ["Mcp(*:*)"]
+            path.write_text(json.dumps(policy))
+            with self.assertRaisesRegex(ValueError, "exact UAP tool grant"):
+                assert_cursor_owned_tool_permission(project, "only_cursor")
         with tempfile.TemporaryDirectory() as temp:
             project = Path(temp)
             permission_fixture("qoder", project, "only_qoder")
