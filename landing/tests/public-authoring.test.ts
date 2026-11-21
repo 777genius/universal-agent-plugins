@@ -198,7 +198,10 @@ test('README retains the available installer and canonical client limitations', 
   assert.match(text, /\[(?:Go SDK integration guide|Go SDK)\]\(sdk\/README\.md\)/);
   assert.ok(text.includes('[SDK integration guides](https://universal-agent-plugins.com/docs/en/sdk/)'));
   assert.ok(existsSync(fileURLToPath(new URL('sdk/README.md', root))));
-  const showcase = read('landing/components/sections/BuiltWithSection.vue');
-  assert.ok(showcase.includes('https://github.com/777genius/universal-agent-plugins/blob/main/sdk/README.md'));
-  assert.ok(showcase.includes("docsLabel(t('shell.builtWith.buildWithSdk'), locale.value !== 'en')"));
+  // The homepage SDK section links the published, localized SDK guides.
+  const sdkSection = read('landing/components/registry/RegistrySdk.vue');
+  assert.ok(sdkSection.includes(':href="sdkGuideUrl"'));
+  assert.ok(sdkSection.includes(':href="sdkManagementGuideUrl"'));
+  assert.ok(sdkSection.includes('https://github.com/777genius/agent-notifications'));
+  assert.ok(sdkSection.includes('https://agent-notifications.com/'));
 });
