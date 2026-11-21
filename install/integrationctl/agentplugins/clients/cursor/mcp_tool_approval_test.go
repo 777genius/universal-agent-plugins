@@ -130,6 +130,7 @@ func TestCursorToolPermissionsMergePreservesForeignAndRefusals(t *testing.T) {
 	for _, raw := range []string{
 		"{\"permissions\":{\"deny\":[\"Mcp(audit:inspect_runtime)\"]}}",
 		"{\"permissions\":{\"ask\":[\"Mcp(*:*)\"]}}",
+		"{\"permissions\":{\"ask\":[\"Mcp\"]}}",
 		"{\"permissions\":{\"deny\":[\"*\"]}}",
 		"{\"permissions\":{\"allow\":\"all\"}}",
 		"{\"permissions\":null}",
@@ -228,5 +229,25 @@ func TestCursorToolTrustRefusesChangedOwnedServerOrDisabledPolicy(t *testing.T) 
 	config := filepath.Join(request.Plan.NativeRegistryRoot, "cli.json")
 	if _, err := os.Stat(config); !os.IsNotExist(err) {
 		t.Fatalf("changed native server created Cursor allowlist: %v", err)
+	}
+	original, err := os.ReadFile(filepath.Join(request.Delivery.ActivePath, "mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(request.Plan.NativeRegistryRoot, "mcp.json"), original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	policy := cursorMCPPolicyPath(request, "mcp-disabled.json")
+	if err := os.MkdirAll(filepath.Dir(policy), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(policy, []byte("[\"audit\"]"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := completeCursorProjectToolTrust(context.Background(), env, request, outcome); err == nil {
+		t.Fatal("explicitly disabled MCP server inherited tool approval")
+	}
+	if _, err := os.Stat(config); !os.IsNotExist(err) {
+		t.Fatalf("disabled server changed Cursor permissions: %v", err)
 	}
 }

@@ -1,7 +1,6 @@
 package cursor
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -76,8 +75,3 @@ func readCursorToolApprovalsForActivation(request domain.ActivationRequest, kern
 	return approved, nil
 }
 
-// Avoid reading a package approval into a general plugin manifest. It is used
-// only at the Cursor project projection and exact project trust boundary.
-func cursorToolApprovalJSON(approved cursorToolApprovals) ([]byte, error) {
-	return json.Marshal(map[string]any{"version": 1, "mcp_auto_approve": approved})
-}

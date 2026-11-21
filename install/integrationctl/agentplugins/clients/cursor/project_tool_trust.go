@@ -109,7 +109,8 @@ func cursorMergeToolPermissions(body []byte, approved cursorToolApprovals) ([]by
 			for _, policyRule := range append(slices.Clone(deny), ask...) {
 				// A matching exact policy or unknown MCP wildcard must remain
 				// authoritative. Never override it with a new allow entry.
-				if policyRule == rule || policyRule == "*" || strings.HasPrefix(policyRule, "Mcp(") && strings.Contains(policyRule, "*") {
+				if policyRule == rule || policyRule == "*" || policyRule == "Mcp" ||
+					strings.HasPrefix(policyRule, "Mcp(") && strings.Contains(policyRule, "*") {
 					return nil, fmt.Errorf("preserved Cursor CLI deny/ask rule conflicts with selected MCP tool")
 				}
 			}
