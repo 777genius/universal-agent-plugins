@@ -64,12 +64,15 @@ for (const width of [1440, 390, 320]) {
       (element) => element.getBoundingClientRect().top + window.scrollY,
     );
     const before = (await demo.boundingBox())!;
+    const copy = (await page.locator('.hero__copy').boundingBox())!;
     const supported = (await page.locator('.client-section').boundingBox())!;
-    expect(before.y).toBeGreaterThanOrEqual(supported.y + supported.height - 1);
-    expect(before.width).toBeGreaterThanOrEqual(Math.min(width - 32, 800) - 4);
+    // The demo is the hero's second column: beside the copy when wide, below it on phones.
+    if (width >= 1024) expect(before.x).toBeGreaterThanOrEqual(copy.x + copy.width - 1);
+    else expect(before.y).toBeGreaterThanOrEqual(copy.y + copy.height - 1);
+    expect(before.y + before.height).toBeLessThanOrEqual(supported.y + 1);
+    expect(before.width).toBeGreaterThanOrEqual(Math.min(width - 28, 500) - 4);
     expect(before.width).toBeLessThanOrEqual(800);
-    await expect(page.locator('.hero-shell .hero-demo-video')).toHaveCount(0);
-    await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+    await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
     const overlay = await button.evaluate((element) => {
       const video = element.closest('.hero-demo-video')!.getBoundingClientRect();
       const label = element.querySelector('span')!.getBoundingClientRect();
@@ -148,7 +151,7 @@ for (const width of [1440, 390]) {
     await page.evaluate(() => document.exitFullscreen());
     await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
     await expect(demo.locator('iframe')).toHaveCount(0);
-    await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+    await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
     await expect(launch).toBeVisible();
     await expect(launch).toBeFocused();
   });
@@ -188,14 +191,14 @@ test('denied fullscreen still launches a viewport-filling autoplay player on one
   })).toBe(true);
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden');
   await page.keyboard.press('Escape');
-  await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+  await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeFocused();
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
   await demo.getByRole('button', { name: 'Watch demo' }).click();
   await expect(demo).toHaveClass(/hero-demo-video--fallback/);
   await demo.getByRole('button', { name: 'Close demo' }).click();
-  await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+  await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeFocused();
 });
@@ -216,7 +219,7 @@ test('missing Fullscreen API uses an accessible fullscreen overlay', async ({ pa
   await expect.poll(() => demo.evaluate((el) => el.parentElement === document.body)).toBe(true);
   await expect(demo.locator('iframe')).toBeVisible();
   await demo.getByRole('button', { name: 'Close demo' }).click();
-  await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+  await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
   await expect(demo.locator('iframe')).toHaveCount(0);
 });
 

@@ -172,6 +172,12 @@ test('larger breathing background never changes layout or blocks the foreground'
   for (const width of [1440, 1280, 1024, 800, 390, 280]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    if (width <= 980) {
+      // Stacked hero: a ring around the video would run behind the copy and buttons.
+      await expect(field).toBeHidden();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      continue;
+    }
     // Read one viewport atomically, retaining every geometry check while avoiding
     // repeated protocol/snapshot work between these read-only measurements.
     const geometry = await field.evaluate((node: HTMLElement) => {
@@ -194,11 +200,11 @@ test('larger breathing background never changes layout or blocks the foreground'
       return { ...result, hidden };
     });
     const { windowBefore, heroBefore } = geometry;
-    expect(geometry.planeLeft).toBeCloseTo(geometry.fieldWidth * 0.5, 1);
-    expect(geometry.planeWidth).toBeCloseTo(Math.min(width <= 720 ? 492 : 720, geometry.fieldWidth * 1.5), 1);
-    expect(geometry.nodeWidth).toBe(width <= 720 ? 30 : 38);
-    expect(geometry.hubWidth).toBe(width <= 720 ? 96 : 116);
-    expect(geometry.hubImageWidth).toBe(width <= 720 ? 64 : 76);
+    expect(geometry.planeLeft).toBeCloseTo(geometry.fieldWidth * 0.58, 1);
+    expect(geometry.planeWidth).toBeCloseTo(Math.min(720, geometry.fieldWidth * 1.5), 1);
+    expect(geometry.nodeWidth).toBe(38);
+    expect(geometry.hubWidth).toBe(116);
+    expect(geometry.hubImageWidth).toBe(76);
     expect(geometry.hidden.window).toEqual(windowBefore);
     expect(geometry.hidden.hero).toEqual(heroBefore);
     const samples = await field.evaluate(async (node, times) => {
@@ -431,7 +437,7 @@ test('orbit follows scrolling with a small upward and leftward drift, then retur
   // Resize while scrolled: the anchor must still be measured in document coordinates.
   await page.mouse.wheel(0, 600);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(600);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 1024, height: 844 });
   const anchor = page.locator('.hero-agent-field-anchor');
   await expect.poll(async () => {
     const origin = (await anchor.boundingBox())!;
@@ -466,8 +472,8 @@ test('orbit progressively defocuses near the catalog and sharpens again at the h
   await page.mouse.wheel(0, -await page.evaluate(() => scrollY));
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
   await expect(field).toHaveCSS('filter', 'blur(0px)');
-  // Mobile layout has a different catalog offset; resizing must refresh it.
-  await page.setViewportSize({ width: 390, height: 844 });
+  // A narrower layout has a different catalog offset; resizing must refresh it.
+  await page.setViewportSize({ width: 1024, height: 844 });
   await page.locator('#plugins').scrollIntoViewIfNeeded();
   await expect(field).toHaveCSS('filter', 'blur(12px)');
 });

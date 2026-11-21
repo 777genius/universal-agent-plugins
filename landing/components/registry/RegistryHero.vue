@@ -264,9 +264,10 @@ function updateTargets(values: string[]) {
         </div>
       </div>
 
-      <!-- Decorative agent orbit; the install steps live beside the client grid below. -->
-      <div class="hero__visual" aria-hidden="true">
+      <!-- The demo video sits in front of the decorative agent orbit (aria-hidden itself). -->
+      <div class="hero__visual">
         <HeroAgentField />
+        <HeroDemoVideo />
       </div>
     </div>
 
@@ -346,8 +347,5 @@ function updateTargets(values: string[]) {
         </section>
       </div>
     </div>
-  </section>
-  <section class="demo-showcase" :aria-label="t('shell.hero.demoVideoTitle')">
-    <HeroDemoVideo />
   </section>
 </template>
