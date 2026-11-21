@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ func preparedKiroSavedHarness(t *testing.T) (cliFixture, string) {
 	t.Helper()
 	repo := dependencyRepo(t)
 	kiro := fixtureClient(t, domain.ClientKiro)
-	kiro.ExecutablePath = t.TempDir() + "/kiro-cli"
+	kiro.ExecutablePath = filepath.Join(t.TempDir(), "kiro-cli")
 	dependencyWrite(t, kiro.ExecutablePath, "fixture executable, never launched")
 	f, _ := newDependencyHarness(t, repo, []domain.DetectedClient{kiro}, installer.Config{Runner: &cliRunOnlyRunner{}})
 	head := exec.CommandContext(t.Context(), "git", "rev-parse", "HEAD")
