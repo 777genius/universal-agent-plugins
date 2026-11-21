@@ -218,6 +218,11 @@ func TestCursorToolPermissionsExplicitAddAndIdempotentE2E(t *testing.T) {
 			}
 		})
 	}
+	cursorAssertNativeDenyUnchanged(t, request, env, outcome, config)
+}
+
+func cursorAssertNativeDenyUnchanged(t *testing.T, request domain.ActivationRequest, env clients.Env, outcome domain.ActivationOutcome, config string) {
+	t.Helper()
 	request.ProjectTrustConsent = true
 	if err := os.WriteFile(config, []byte("{\"permissions\":{\"deny\":[\"Mcp(audit:inspect_runtime)\"]}}\n"), 0600); err != nil {
 		t.Fatal(err)
