@@ -847,14 +847,6 @@ test('the authoring frontdoor distinguishes the released installer from source a
   await expect(page.locator('#historical-v1')).toHaveCount(0);
 });
 
-test('the built-with showcase stays hidden while its product is temporarily unlisted', async ({
-  page,
-}) => {
-  await page.goto('./');
-
-  await expect(page.locator('#built-with-uap')).toHaveCount(0);
-});
-
 test('an unsupported localized route is never selected for browser-language visitors', async ({
   browser,
   baseURL,
