@@ -48,8 +48,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Check strict receipt and native runner contracts after merge
-        if: ${{ github.event_name == 'push' }}
+      - name: Check strict receipt and native runner contracts
         run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_*.py' -v
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
