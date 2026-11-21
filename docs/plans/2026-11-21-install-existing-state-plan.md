@@ -1,6 +1,6 @@
 # План: безопасный `add`, когда пакет уже существует
 
-Статус: реализация согласованного scope в PR #1087; финальная E2E-квалификация и ревью выполняются после контрольного коммита.
+Статус: согласованный scope реализован в PR #1087; результаты квалификации и оставшиеся CI-проверки фиксируются в PR для проверяемого commit.
 Дата: 2026-11-21. База исследования: `main` `5f63d48bf4461600e6bb916a6e4997f9830545e1`.
 Ветка: `docs/install-existing-state-plan-20261121`; [PR #1087](https://github.com/777genius/universal-agent-plugins/pull/1087).
 
@@ -65,7 +65,7 @@ Per-client пометки допустимы как информация о фа
 
 1. Существующий bootstrap выбирает effective scope/project root; обычные parser/intent/recovery ошибки имеют приоритет. Не сбрасывать состояние при ошибке чтения.
 2. Существующий source resolver определяет canonical identity и удержанный pin. Short name может требовать Directory; multi-package source может требовать выбора. Не обещать проверку до любого network/download и не строить второй resolver ради раннего экрана.
-3. Для новой известной canonical identity без explicit alias вызвать общий read-only ownership predicate до target picker. Explicit alias и уже сохранённый source/pin сначала проходят обычные решения resolver, чтобы ownership advice не скрывал alias/selector ошибки. Использовать текущую installer inspection/observation boundary, включая `InspectedBinding.Owner`; не собирать копию SourceKey/receipt-логики в UI. Полный `Inspect` не запускает native executable, но может хешировать деревья; не рекламировать его как бесплатный StateStore.Load. Финальную revalidation сохранить.
+3. Для новой известной canonical identity без explicit alias вызвать общий read-only ownership predicate до target picker. Explicit alias, уже сохранённый source/pin и выявленный после загрузки занятый manifest alias сначала проходят обычные решения resolver, чтобы ownership advice не скрывал известные alias/selector ошибки. Использовать текущую installer inspection/observation boundary, включая `InspectedBinding.Owner`; не собирать копию SourceKey/receipt-логики в UI. Полный `Inspect` не запускает native executable, но может хешировать деревья; не рекламировать его как бесплатный StateStore.Load. Финальную revalidation сохранить.
 4. Если root identity ещё не определена, продолжить необходимый source/target selection, затем выполнить ту же проверку до подтверждения. Конфликты полного dependency closure проверяются после разрешения графа, также до подтверждения.
 5. Ошибка одинакова по смыслу для picker, explicit `--target`, non-TTY и JSON. «До picker» — только для случая, где source identity уже известна. Не пытаться угадать выбранные targets заранее.
 
@@ -190,5 +190,7 @@ Final authority всегда остаётся в текущем kernel/mutation 
 1. Перед кодом три независимых разбора уточнили наблюдение чужого owner, приоритет ошибок и реальные E2E-границы. Принят private CLI wrapper только для раннего ownership refusal: общий typed error после apply не печатает второй JSON.
 2. Ревью реализации устранило speculative Directory lookup по ProductID, маскирование malformed intent/recovery и alias/selector ошибок, неоднозначный root alias, unsafe retry после recovery и неоднозначные public target names. Directory identity берётся только из существующей resolution/acquisition; нового feed-запроса ради advisory нет.
 3. Независимое ревью E2E усилило actual `run()` boundary и terminal assertion: проверяется точный typed отказ до дополнительных HTTP/security calls, а не произвольная prompt/EOF ошибка. Проверки user/project, чужого receipt, dependency chain и unrelated unmanaged source включены в существующий portable catalog.
+4. Полный CLI-прогон выявил порядок известных argument errors: несовместимые targets, отсутствие обязательного target и multi-target attestation проверяются прежними валидаторами до чтения environment. При неизвестной canonical identity compatibility preview не читает intent ради заведомо неприменимой ownership-проверки. Отдельные регрессии сохраняют обычный narrow retry для независимых ошибок и запрещают любой retry при pending recovery.
+5. Автоматическое ревью обнаружило конфликт уже занятого derived alias после acquisition. Preview уступает этому известному решению resolver. Directory-регрессия различает занятый alias (обычный alias refusal) и свободный alias (ранний typed ownership refusal), сохраняя manifest, lock, state и отсутствие native-вызовов.
 
 Изменение retry gate является частью partial-result scope: `RECOVERY_REQUIRED` у одного клиента подавляет повтор для всех клиентов выбранного state namespace. Исходные outcomes и инструкции recovery сохраняются. Подтверждение полноты реализации требует результатов на окончательном production source; прежние 95 PASS относятся только к исследовательскому baseline.

@@ -28,10 +28,14 @@ func compatibleSavedAddTargets(ctx context.Context, app App, opts *options, sour
 		if loaded.directorySelection != nil {
 			key = "directory:" + loaded.directorySelection.DistributionID
 		}
+		if key == "" {
+			return compatible, skipped, nil
+		}
+		alias := dependencyManifestAlias(loaded.envelope.Manifest.Name)
 		var snapshot environmentSnapshot
 		snapshot, err = snapshotEnvironmentContext(ctx, app, false)
-		if err == nil && canPreviewSavedAddOwnership(snapshot, opts.alias, key) {
-			err = checkSavedAddOwnership(ctx, app, key, dependencyManifestAlias(loaded.envelope.Manifest.Name))
+		if err == nil && canPreviewSavedAddOwnership(snapshot, opts.alias, alias, key) {
+			err = checkSavedAddOwnership(ctx, app, key, alias)
 		}
 	}
 	return compatible, skipped, err

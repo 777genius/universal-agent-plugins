@@ -22,7 +22,7 @@ func inspectSavedAddRoot(ctx context.Context, app App, opts *options, source str
 	if match := exactGitPattern.FindStringSubmatch(source); match != nil {
 		key = "github:" + strings.ToLower(match[1]) + ":" + match[3]
 	}
-	if canPreviewSavedAddOwnership(snapshot, opts.alias, key) {
+	if canPreviewSavedAddOwnership(snapshot, opts.alias, "", key) {
 		return checkSavedAddOwnership(ctx, app, key, opts.alias)
 	}
 	// Unsaved selectors need actual acquired distribution identity. Product-level
@@ -32,8 +32,11 @@ func inspectSavedAddRoot(ctx context.Context, app App, opts *options, source str
 
 // Existing alias and saved-selector decisions belong to the normal resolver.
 // Defer their ownership diagnosis rather than masking a more specific refusal.
-func canPreviewSavedAddOwnership(snapshot environmentSnapshot, alias, key string) bool {
+func canPreviewSavedAddOwnership(snapshot environmentSnapshot, alias, derivedAlias, key string) bool {
 	if alias != "" || key == "" {
+		return false
+	}
+	if previous, exists := snapshot.Requirements.Dependencies[derivedAlias]; derivedAlias != "" && exists && mustSourceKey(previous) != key {
 		return false
 	}
 	for _, pin := range snapshot.Lock.Packages {

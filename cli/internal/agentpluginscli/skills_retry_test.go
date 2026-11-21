@@ -181,7 +181,7 @@ func retryAppAndOptions(t *testing.T, offered *[]string) (App, *options) {
 	}}}
 	opts := &options{format: "human", installResult: &installOutcome{Agents: reportByAgent([]agentItem{
 		failedItem("demo", "codex", errors.New("native command failed")),
-		failedItem("demo", "gemini", installer.ErrRecoveryRequired),
+		failedItem("demo", "gemini", installer.ErrManagedSkillChanged),
 		{Alias: "demo", ClientID: "claude", Status: "completed"},
 	})}}
 	return app, opts
@@ -201,9 +201,34 @@ func TestAddRetryRerunsOnlyRetryableFailedAgentsAndKeepsUnresolvedOnesFailing(t 
 	if rerunTarget != "codex" || strings.Join(offered, ",") != "codex" {
 		t.Fatalf("only the retryable failed agent may be retried: target=%q offered=%v", rerunTarget, offered)
 	}
-	// Gemini needs recovery and was never retried: a green retry must not hide it.
+	// Gemini needs explicit repair and was never retried: a green retry must not hide it.
 	if err == nil || !strings.Contains(err.Error(), "Gemini") || len(carried) != 1 {
 		t.Fatalf("an unresolved agent must keep the command failing: err=%v carried=%v", err, carried)
+	}
+}
+
+func TestInstallRetriesBlockAllAgentsWhenRecoveryIsRequired(t *testing.T) {
+	for _, mode := range []string{"add", "converge"} {
+		t.Run(mode, func(t *testing.T) {
+			var offered []string
+			app, opts := retryAppAndOptions(t, &offered)
+			opts.installResult.Agents = reportByAgent([]agentItem{
+				failedItem("demo", "codex", errors.New("native command failed")),
+				failedItem("demo", "gemini", installer.ErrRecoveryRequired),
+			})
+			cmd, out, errOut := retryTestCommand(t)
+			before, reruns := opts.installResult, 0
+			cause := fmt.Errorf("installation stopped: %w", installer.ErrRecoveryRequired)
+			var actual error
+			if mode == "add" {
+				actual = retryFailedAgents(cmd, app, opts, cause, func(string, []string) error { reruns++; return nil })
+			} else {
+				actual = retryConverge(cmd, app, opts, cause, func() error { reruns++; return nil })
+			}
+			if !errors.Is(actual, cause) || !errors.Is(cause, actual) || len(offered) != 0 || reruns != 0 || opts.retryAttempt != 0 || opts.installResult != before || out.Len() != 0 || errOut.Len() != 0 {
+				t.Fatalf("recovery allowed another agent to retry: err=%v offered=%v reruns=%d attempt=%d", actual, offered, reruns, opts.retryAttempt)
+			}
+		})
 	}
 }
 

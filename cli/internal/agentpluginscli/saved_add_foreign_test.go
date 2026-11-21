@@ -112,18 +112,24 @@ func TestCanceledSavedRootInspectionStopsBeforeStateAccess(t *testing.T) {
 
 func TestSavedOwnershipPreviewDefersAliasAndSavedSelectorDecisions(t *testing.T) {
 	key := "github:acme/demo:"
-	snapshot := environmentSnapshot{Lock: environment.Lock{Packages: []environment.LockedPackage{{Alias: "demo", SourceKey: key}}}}
+	snapshot := environmentSnapshot{
+		Requirements: environment.Requirements{Dependencies: map[string]environment.Requirement{"claimed": {Alias: "claimed", Registry: &environment.RegistrySource{Distribution: "acme/existing", Selector: environment.Selector{Kind: environment.SelectorRelease, Value: "1"}}}}},
+		Lock:         environment.Lock{Packages: []environment.LockedPackage{{Alias: "demo", SourceKey: key}}},
+	}
 	for _, test := range []struct {
-		name, alias, key string
-		want             bool
+		name, alias, derivedAlias, key string
+		want                           bool
 	}{
 		{name: "saved selector", key: key},
 		{name: "explicit alias", alias: "chosen", key: "github:acme/other:"},
 		{name: "unknown identity"},
 		{name: "new canonical source", key: "directory:acme/other", want: true},
+		{name: "claimed derived alias", derivedAlias: "claimed", key: "directory:acme/other"},
+		{name: "unclaimed derived alias", derivedAlias: "available", key: "directory:acme/other", want: true},
+		{name: "same source derived alias", derivedAlias: "claimed", key: "directory:acme/existing", want: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if got := canPreviewSavedAddOwnership(snapshot, test.alias, test.key); got != test.want {
+			if got := canPreviewSavedAddOwnership(snapshot, test.alias, test.derivedAlias, test.key); got != test.want {
 				t.Fatalf("preview=%v want=%v; resolver decisions must retain precedence", got, test.want)
 			}
 		})
@@ -150,5 +156,36 @@ func TestMalformedIntentPrecedesSavedRootOwnershipAdvice(t *testing.T) {
 	after, readErr := os.ReadFile(manifest)
 	if readErr != nil || !bytes.Equal(before, after) || source.downloads != 0 || source.lookups != 0 {
 		t.Fatalf("refusal mutated intent or acquired source: %v", readErr)
+	}
+}
+
+func TestSavedAddInputErrorsPrecedeOwnershipInspection(t *testing.T) {
+	fixture, source := newDependencyHarness(t, t.TempDir(), nil, installer.Config{})
+	manifest, _ := fixture.app.dependencyPaths()
+	dependencyWrite(t, manifest, "schema_version = [invalid TOML")
+	before, err := os.ReadFile(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, want string
+		args       []string
+	}{
+		{name: "mixed manual target", args: []string{"--target", "chatgptweb,codex"}, want: "separately"},
+		{name: "missing target", want: "requires --target"},
+		{name: "activation attestation", args: []string{"--target", "codex,gemini", "--activation-complete"}, want: "exactly one target"},
+		{name: "authentication attestation", args: []string{"--target", "codex,gemini", "--auth-complete"}, want: "exactly one target"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := []string{"add", "github:acme/demo@" + strings.Repeat("a", 40), "--format", "json"}
+			_, _, err := fixture.execute(false, append(args, tc.args...)...)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("known argument error was hidden by environment inspection: %v", err)
+			}
+			after, readErr := os.ReadFile(manifest)
+			if readErr != nil || !bytes.Equal(before, after) || source.downloads != 0 || source.lookups != 0 {
+				t.Fatalf("argument refusal mutated intent or acquired source: %v", readErr)
+			}
+		})
 	}
 }

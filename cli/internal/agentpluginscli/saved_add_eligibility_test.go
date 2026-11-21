@@ -168,6 +168,31 @@ func TestSavedAddAutomaticTargetsDeferUnqualifiedHostWithoutProbing(t *testing.T
 	}
 }
 
+func TestSavedAddUnknownSourceDoesNotReadEnvironmentIntent(t *testing.T) {
+	fixture, preparer, source, _ := openCodePreparationCLI(t, true)
+	journey := newSavedJourney(t, t.TempDir())
+	app := journey.cli.app
+	app.Detector = fixture.app.Detector
+	app.Lifecycle.ClientPreparation = preparer
+	manifest, _ := app.dependencyPaths()
+	const malformed = "schema_version = [invalid TOML"
+	if err := os.MkdirAll(filepath.Dir(manifest), 0700); err != nil {
+		t.Fatal(err)
+	}
+	dependencyWrite(t, manifest, malformed)
+	clients, err := app.Detector.Detect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	targets, _, err := compatibleSavedAddTargets(t.Context(), app, &options{format: "human", scope: "user"}, source, clients)
+	if err != nil || len(targets) != 2 {
+		t.Fatalf("unknown source identity triggered environment inspection: targets=%v err=%v", targets, err)
+	}
+	if dependencyRead(t, manifest) != malformed || preparer.calls != 0 || preparer.probes != 0 || preparer.baselines != 0 {
+		t.Fatal("compatibility selection changed intent or qualified a native host")
+	}
+}
+
 func TestSavedAddDeferredHostCancelOrDeselectNeverProbes(t *testing.T) {
 	for _, cancelMenu := range []bool{false, true} {
 		t.Run(map[bool]string{false: "deselect", true: "cancel"}[cancelMenu], func(t *testing.T) {

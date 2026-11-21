@@ -14,15 +14,16 @@ import (
 // the selected mutation targets, without suggesting removal as a migration.
 func TestForeignBindingErrorNamesEveryUnownedClient(t *testing.T) {
 	pkg := LockedPackage{Alias: "demo", SourceKey: "git:demo"}
+	duplicate := BindingObservation{InstallationID: "inst-b", ClientID: "cursor", SourceKey: pkg.SourceKey}
 	observed := []BindingObservation{
-		{InstallationID: "inst-b", ClientID: "cursor", SourceKey: pkg.SourceKey},
+		duplicate,
 		{InstallationID: "inst-a", ClientID: "codex", SourceKey: pkg.SourceKey},
 		{InstallationID: "inst-a", ClientID: "claude", SourceKey: pkg.SourceKey},
 		{InstallationID: "inst-c", ClientID: "gemini", SourceKey: "git:other"},
 		{InstallationID: "inst-d", ClientID: "kiro", SourceKey: pkg.SourceKey, Managed: true, Alias: pkg.Alias},
 		{InstallationID: "inst-e", ClientID: "codex", SourceKey: pkg.SourceKey, OwnerEnvironmentID: "other-environment"},
+		duplicate,
 	}
-	observed = append(observed, observed[0])
 	_, err := validateDesiredBinding(pkg, "codex", BindingObservation{}, observed)
 	var foreign *ForeignBindingError
 	if !errors.As(fmt.Errorf("wrapped: %w", err), &foreign) {
