@@ -56,6 +56,7 @@ func cursorToolCLIProject(t *testing.T) (cliFixture, string, string) {
 		t.Fatal(err)
 	}
 	fixture.app.Scope, fixture.app.ProjectRoot = domain.ScopeProject, project
+	fixture.app.Lifecycle.ProjectRoot = project
 	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{})
 	source := writeCLIPlugin(t)
 	writeCLIMCP(t, source)
