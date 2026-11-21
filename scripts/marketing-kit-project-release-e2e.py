@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Actual public npm 0.1.115 + signed Marketing Kit Project lifecycle, no mocks."""
 import argparse
+from contextlib import ExitStack
 import hashlib
 import json
 import os
@@ -656,6 +657,98 @@ def run_case(cli, target, root, name, portable=None):
     return env, project, user_foreign, project_foreign, native_foreign
 
 
+def prepare_copilot_project_b_trust(env, project, root):
+    """Author one explicit native prerequisite, not UAP consent or observed UI."""
+    if (not hasattr(os, "getuid") or os.open not in os.supports_dir_fd
+            or not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY")):
+        raise AssertionError("Copilot trust fixture requires safe POSIX directory descriptors")
+    case, home, data = root / "B", root / "B/home", root / "B/data"
+    profile = home / ".copilot"
+    if (project != case / "project" or env.get("HOME") != str(home)
+            or env.get("AGENTPLUGINS_HOME") != str(data)
+            or env.get("COPILOT_HOME", str(profile)) != str(profile)
+            or root.resolve(strict=True) != root):
+        raise AssertionError("Copilot trust fixture requires canonical fresh Project B")
+    roots = (root, case, home, data, project, profile)
+
+    def identity(path):
+        item = path.lstat()
+        if (not stat.S_ISDIR(item.st_mode) or item.st_uid != os.getuid()
+                or not audit["path_inside_case"](path, root)):
+            raise AssertionError("Copilot trust fixture root is unsafe")
+        return item.st_mode, item.st_dev, item.st_ino, item.st_uid, item.st_gid
+
+    anchors = [(path, identity(path)) for path in roots]
+
+    def guard_roots():
+        if any(identity(path) != expected for path, expected in anchors):
+            raise AssertionError("Copilot trust fixture root changed")
+
+    # Neither install nor sync grants trust in published .115. Keep B's UAP
+    # state cold while explicitly authoring the documented native user choice.
+    if (any(data.iterdir()) or (project / ".uap").exists()
+            or (project / ".uap").is_symlink()):
+        raise AssertionError("Copilot trust fixture requires empty UAP state")
+    config = profile / "config.json"
+    document = {"trustedFolders": [str(project)]}
+    body = (json.dumps(document, sort_keys=True) + "\n").encode()
+    descriptors = []
+    try:
+        flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        parent = os.open(root, flags)
+        descriptors.append(parent)
+        for name, expected_path in (("B", case), ("home", home), (".copilot", profile)):
+            opened = os.fstat(parent)
+            expected = dict(anchors)[expected_path.parent]
+            if (opened.st_mode, opened.st_dev, opened.st_ino, opened.st_uid, opened.st_gid) != expected:
+                raise AssertionError("Copilot trust fixture parent changed")
+            parent = os.open(name, flags, dir_fd=parent)
+            descriptors.append(parent)
+        opened = os.fstat(parent)
+        if (opened.st_mode, opened.st_dev, opened.st_ino, opened.st_uid, opened.st_gid) != dict(anchors)[profile]:
+            raise AssertionError("Copilot trust fixture profile changed")
+        guard_roots()
+        descriptor = os.open("config.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                             0o600, dir_fd=parent)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(body)
+            stream.flush()
+            created = os.fstat(stream.fileno())
+        guard_roots()
+    except OSError as error:
+        raise AssertionError("Copilot trust fixture refused unsafe or occupied config") from error
+    finally:
+        for descriptor in reversed(descriptors):
+            os.close(descriptor)
+
+    def guard():
+        try:
+            guard_roots()
+            before = config.lstat()
+            text, status = audit["copilot_settings_read"](config, root)
+            after = config.lstat()
+            stamp = lambda item: (item.st_mode, item.st_dev, item.st_ino, item.st_uid,
+                                  item.st_gid, item.st_nlink, item.st_size, item.st_mtime_ns)
+            if (status is not None or not stat.S_ISREG(before.st_mode)
+                    or before.st_uid != os.getuid() or before.st_nlink != 1
+                    or stat.S_IMODE(before.st_mode) != 0o600 or stamp(before) != stamp(after)
+                    or audit["copilot_json_document"](text) != document):
+                raise AssertionError("Copilot trust fixture authority changed")
+            guard_roots()
+        except (OSError, ValueError, RuntimeError) as error:
+            raise AssertionError("Copilot trust fixture authority unreadable or unsafe") from error
+
+    guard()
+    return {"status": "authored-native-prerequisite", "source_profile": "B",
+            "trusted_folders": [str(project)], "config_path": str(config),
+            "config_sha256_at_creation": hashlib.sha256(body).hexdigest(),
+            "config_identity_at_creation": {"device": created.st_dev, "inode": created.st_ino,
+                "mode": stat.S_IMODE(created.st_mode), "uid": created.st_uid, "gid": created.st_gid},
+            "restore_scope": "cold-UAP-state-with-preauthorized-native-folder",
+            "uap_state_empty_before": True, "virgin_native_trust_qualified": False,
+            "ui_consent_observed": False, "product_trust_grant_claimed": False}, guard
+
+
 def pin_foreign(entries, case_root):
     """Pin unmanaged file identities and the directories containing them."""
     pinned = []
@@ -1258,14 +1351,21 @@ def native_component_residuals(target, home, case_root, stage, project_scope=Fal
 
 def check_removed_native_components(target, home, case_root, stage, project_scope=False,
                                     copilot_disabled_proof=None, claude_retirement=None,
-                                    cleanup=None, codex_profile=None):
+                                    cleanup=None, codex_profile=None, keep_claude_retirement=False,
+                                    retained_claude_retirement=None):
     leftovers = native_component_residuals(target, home, case_root, stage, project_scope)
+    if retained_claude_retirement is not None:
+        if target != "claude" or project_scope or claude_retirement is not None or cleanup is not None:
+            raise AssertionError(f"{stage}: invalid retained Project retirement checkpoint")
+        return retained_claude_retirement.verify_retained(home, case_root, leftovers,
+            lambda: native_component_residuals(target, home, case_root, stage, project_scope))
     if claude_retirement is not None:
         if (target != "claude" or project_scope or claude_retirement.home != home
                 or claude_retirement.case != case_root):
             raise AssertionError(f"{stage}: retirement proof belongs to another profile")
         return claude_retirement.finish(cleanup, leftovers,
-            lambda: native_component_residuals(target, home, case_root, stage, project_scope))
+            lambda: native_component_residuals(target, home, case_root, stage, project_scope),
+            keep_open=keep_claude_retirement)
     if codex_profile is not None:
         if target != "codex" or project_scope or codex_profile.home != home:
             raise AssertionError(f"{stage}: Codex proof belongs to another profile")
@@ -1579,7 +1679,7 @@ def main():
               "historical_policy_results": {"signed45": {
                   "status": "separate_point_in_time_audit", "required_for_current_qualification": False}}}
     try:
-        with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
+        with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location, ExitStack() as custody:
             root = Path(location)
             # The pinned npm launcher validates the SHA-256 on every cache hit.
             # Keep one private executable cache for A/B: cold restore is still
@@ -1592,13 +1692,19 @@ def main():
                                            (project_foreign_a, "unmanaged project data\n"),
                                            *native_foreign_a], root)
             foreign_files = list(foreign_a_files)
+            copilot_b_trust_guard = lambda: None
+            claude_a_retirement = None
+            def check_fixture_guards():
+                check_all_guards((lambda: check_foreign(foreign_files, root),
+                                  copilot_b_trust_guard,
+                                  lambda: claude_a_retirement.checkpoint() if claude_a_retirement else None))
             codex_profiles = {}
             def prepare_codex(e, p):
                 try:
                     if options.target == "codex":
                         codex_profiles[p] = CodexProfile(audit, root, e, p)
                 finally:
-                    check_all_guards((lambda: check_foreign(foreign_files, root),
+                    check_all_guards((lambda: check_fixture_guards(),
                                       lambda: check_codex_profiles("after-profile-preparation")))
             def check_codex_profiles(phase):
                 check_all_guards(lambda proof=proof: proof.checkpoint(phase)
@@ -1611,15 +1717,17 @@ def main():
             verify_pinned_launcher(options.cli, env, project_a)
             report["positive_policy"] = observe_production_policy(
                 options.cli, env, project_a, options.target,
-                guards=(lambda: check_foreign(foreign_files, root),))
+                guards=(lambda: check_fixture_guards(),))
             def run(e, p, label, *args, capture=None):
                 try:
                     check_codex_profiles("before-" + label)
+                    if claude_a_retirement is not None:
+                        claude_a_retirement.checkpoint()
                     report["steps"].append(execute(options.cli, e, p, options.target, label, *args,
                         **({"capture": capture} if capture is not None else {})))
                 finally:
                     # Keep every peer/foreign guard independent of a failed native proof.
-                    checks = [lambda: check_foreign(foreign_files, root),
+                    checks = [lambda: check_fixture_guards(),
                               lambda: check_codex_profiles("after-" + label)]
                     if project_before_user is not None:
                         checks.append(lambda: check_user_project_unchanged(project_a, project_before_user, label))
@@ -1663,7 +1771,7 @@ def main():
                 try:
                     return action()
                 finally:
-                    checks = [own_check, lambda: check_foreign(foreign_files, root), project_check]
+                    checks = [own_check, lambda: check_fixture_guards(), project_check]
                     checks.extend(lambda pe=pe, pp=pp, before=before, guard=guard:
                                   peer_check(pe, pp, before, guard)
                                   for pe, pp, before, guard in peers)
@@ -1676,13 +1784,16 @@ def main():
                     if failures:
                         raise failures[0]
 
-            def remove_project(e, p, label, scoped_args):
+            def remove_project(e, p, label, scoped_args, keep_retirement=False):
                 retirement = None
                 receipt = []
+                retained = False
                 if options.target == "claude":
                     listed = inventory(options.cli, e, p, options.target)
                     retirement = SignedClosureRetirement(root, Path(e["HOME"]), p,
                         listed, FIXED_SIGNED_CLOSURE, audit)
+                    if keep_retirement:
+                        custody.callback(retirement.close)
                 try:
                     run(e, p, label, "remove", "marketing-kit", *scoped_args,
                         capture=receipt.append if retirement is not None else None)
@@ -1691,13 +1802,16 @@ def main():
                     proof = check_removed_native_components(options.target, Path(e["HOME"]), root,
                         label + " native HOME", claude_retirement=retirement,
                         cleanup=receipt[0] if retirement is not None else None,
-                        codex_profile=codex_profiles.get(p))
+                        codex_profile=codex_profiles.get(p),
+                        keep_claude_retirement=keep_retirement)
                     if proof is not None:
                         report.setdefault("native_cleanup_proofs", []).append({"stage": label, **proof})
                     check_removed_native_components(options.target, p, root,
                         label + " native Project", project_scope=True)
+                    retained = keep_retirement and retirement is not None
+                    return retirement if retained else None
                 finally:
-                    if retirement is not None:
+                    if retirement is not None and not retained:
                         retirement.close()
 
             scoped = ("--scope", "project", "--project-root", str(project_a))
@@ -1745,6 +1859,14 @@ def main():
                                            *native_foreign_b], root)
             foreign_files.extend(foreign_b_files)
             prepare_codex(env_b, project_b)
+            if options.target == "copilot":
+                try:
+                    proof, copilot_b_trust_guard = prepare_copilot_project_b_trust(env_b, project_b, root)
+                    report["copilot_project_b_trust_fixture"] = proof
+                finally:
+                    check_all_guards((check_fixture_guards,
+                        lambda: check_profile_unchanged(env, project_a, native_a_before_b,
+                                                       "Copilot Project B trust fixture preparation")))
             # A new disposable B fixture cannot change an already-settled A.
             # Check before B's first CLI call to distinguish fixture drift from
             # a genuine cross-profile mutation by B's locked restore.
@@ -1752,7 +1874,7 @@ def main():
                                     "Project B fixture preparation")
             observe_production_policy(options.cli, env_b, project_b, options.target,
                 report["positive_policy"], (
-                    lambda: check_foreign(foreign_files, root),
+                    lambda: check_fixture_guards(),
                     lambda: check_profile_unchanged(env, project_a, native_a_before_b, "Project B policy"),
                 ))
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
@@ -1760,7 +1882,7 @@ def main():
             # without modifying native or durable state in cold Project B.
             negative_exit = verify_corrupt_lock_refusal(
                 options.cli, env_b, project_b, options.target, "project", (
-                    lambda: check_foreign(foreign_files, root),
+                    lambda: check_fixture_guards(),
                     lambda: check_profile_unchanged(
                         env, project_a, native_a_before_b, "corrupt Project B restore"),
                 ))
@@ -1791,11 +1913,12 @@ def main():
                 raise AssertionError("Project B remove rewrote Project A portable manifest")
             # A's remaining lifecycle and User C must not mutate the removed B profile.
             protected_b = settled_profile_snapshot(env_b, project_b)
-            remove_project(env, project_a, "remove A", scoped)
+            claude_a_retirement = remove_project(env, project_a, "remove A", scoped,
+                                                keep_retirement=options.target == "claude")
             for e in (env, env_b):
                 if (Path(e["AGENTPLUGINS_HOME"]) / "uap.toml").exists():
                     raise AssertionError("Project installation unexpectedly wrote User manifest")
-            check_foreign(foreign_files, root)
+            check_fixture_guards()
             check_profile_unchanged(env_b, project_b, protected_b, "Project final inventory")
             report["scope_results"]["project"]["status"] = "passed"
             # Check the same signed closure through a real, separate User lifecycle.
@@ -1877,14 +2000,14 @@ def main():
             user_a_native_before_c = settled_profile_snapshot(env, project_a)
             observe_production_policy(options.cli, env_c, project_c, options.target,
                 report["positive_policy"], (
-                    lambda: check_foreign(foreign_files, root),
+                    lambda: check_fixture_guards(),
                     lambda: check_profile_unchanged(env, project_a, user_a_native_before_c, "User C policy"),
                     lambda: check_profile_unchanged(env_b, project_b, protected_b, "User C policy"),
                     lambda: check_user_project_unchanged(project_c, protected_c_project, "User C policy"),
                 ))
             negative_exit = verify_corrupt_lock_refusal(
                 options.cli, env_c, project_c, options.target, "user", (
-                    lambda: check_foreign(foreign_files, root),
+                    lambda: check_fixture_guards(),
                     lambda: check_profile_unchanged(
                         env, project_a, user_a_native_before_c, "corrupt User C restore"),
                     lambda: check_profile_unchanged(
@@ -1924,7 +2047,7 @@ def main():
                 remove_c_attestation = guarded_native_attestation(
                     lambda: codex_user_native_remove_attestation(env_c, project_c),
                     (
-                        lambda: check_foreign(foreign_files, root),
+                        lambda: check_fixture_guards(),
                         lambda: check_codex_profiles("User C native uninstall"),
                         lambda: check_profile_unchanged(
                             env, project_a, user_a_native_before_c, "User C native uninstall"),
@@ -1980,7 +2103,7 @@ def main():
                 user_remove_attestation = guarded_native_attestation(
                     lambda: codex_user_native_remove_attestation(env, project_a),
                     (
-                        lambda: check_foreign(foreign_files, root),
+                        lambda: check_fixture_guards(),
                         lambda: check_codex_profiles("User A native uninstall"),
                         lambda: check_user_project_unchanged(
                             project_a, project_before_user, "User A native uninstall"),
@@ -2015,17 +2138,25 @@ def main():
                     "after": copilot_native_public_state(native_a_after),
                     "disabled_only": bool(copilot_a_disabled)}
                 report["copilot_user_a_settings_shape"] = copilot_a_shapes
-            check_removed_native_components(options.target, Path(env["HOME"]),
-                                            root, "User A remove",
-                                            copilot_disabled_proof=copilot_a_disabled,
-                                            codex_profile=codex_profiles.get(project_a))
+            retained_proof = guarded_native_attestation(
+                lambda: check_removed_native_components(options.target, Path(env["HOME"]),
+                    root, "User A remove", copilot_disabled_proof=copilot_a_disabled,
+                    codex_profile=codex_profiles.get(project_a),
+                    retained_claude_retirement=claude_a_retirement),
+                (check_fixture_guards,
+                 lambda: check_user_project_unchanged(project_a, project_before_user, "User A cleanup"),
+                 lambda: check_profile_unchanged(env_b, project_b, protected_b, "User A cleanup"),
+                 lambda: check_user_project_unchanged(project_c, protected_c_project, "User A cleanup"),
+                 lambda: check_profile_unchanged(env_c, project_c, protected_c_profile, "User A cleanup")))
+            if retained_proof is not None:
+                report.setdefault("native_cleanup_proofs", []).append({"stage": "User A remove", **retained_proof})
             for name, expected_bytes in project_files.items():
                 path = project_a / name
                 current_bytes = path.read_bytes() if path.exists() else None
                 if current_bytes != expected_bytes:
                     raise AssertionError(f"User lifecycle modified Project artifact {name}")
             # The last inventory/read assertions are outside run()'s finally.
-            check_foreign(foreign_files, root)
+            check_fixture_guards()
             check_user_project_unchanged(project_a, project_before_user, "User final inventory")
             check_profile_unchanged(env_b, project_b, protected_b, "User final inventory")
             check_user_project_unchanged(project_c, protected_c_project, "User final inventory")
@@ -2041,7 +2172,7 @@ def main():
             foreign_files.extend(pin_foreign([(foreign_e, "unmanaged user data\n"),
                 (project_foreign_e, "unmanaged project data\n"), *native_foreign_e], root))
             guards = (
-                lambda: check_foreign(foreign_files, root),
+                lambda: check_fixture_guards(),
                 lambda: check_profile_unchanged(env, project_a, protected_a, "final production policy"),
                 lambda: check_profile_unchanged(env_b, project_b, protected_b, "final production policy"),
                 lambda: check_profile_unchanged(env_c, project_c, protected_c_profile, "final production policy"),

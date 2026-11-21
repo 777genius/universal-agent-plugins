@@ -5,6 +5,7 @@ on:
     paths:
       - 'install/integrationctl/agentplugins/adapters/sourceacquisition/**'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/windows_owned_job.py'
       - 'scripts/test_codex_runtime_audit.py'

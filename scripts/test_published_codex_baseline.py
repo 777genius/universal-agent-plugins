@@ -499,6 +499,109 @@ class HistoricalOrchestrationTest(unittest.TestCase):
 
 
 class ArchivedPluginFeedTest(unittest.TestCase):
+    def test_real_plugin_orchestration_keeps_feed_provenance_without_skill_observer(self):
+        live = HistoricalModeTest().load_live()
+        fixtures = self.fixtures()
+        for index, source in enumerate(BASELINE.ARCHIVE_SOURCES):
+            with self.subTest(source=source), tempfile.TemporaryDirectory() as temporary:
+                events, observers = [], []
+                pin = fixtures["signed_release_pins"][source]
+                identifier = "00000000-0000-4000-8000-000000000001"
+                registered, native_file = False, None
+                class Observer:
+                    def __init__(self, launcher, environment, project):
+                        self.launcher, self.environment = Path(launcher), environment
+                        self.project, self.home = project, Path(environment["HOME"])
+                        self.proof = {"package": "universal-agent-plugins", "version": "0.1.95",
+                            "commit": BASELINE.COMMIT, "binary_sha256": BASELINE.DIGEST,
+                            "binary_size": BASELINE.SIZE, "launcher_sources_verified": True,
+                            "commands_verified": 0}
+                        observers.append(self)
+                    def after_command(self):
+                        self.proof["commands_verified"] += 1
+                        events.append(("observe", self.proof["commands_verified"]))
+                installed = {"installation_id": identifier, "name": source,
+                    "source": pin["repository"] + "/" + pin["path"],
+                    "directory": {"product_id": source, "recorded_distribution": pin["distribution"],
+                        "recorded_revision": pin["revision"], "recorded_release_sequence": pin["sequence"]},
+                    "clients": [{"client_id": "codex", "scope": "user",
+                        "materialization": "materialized", "activation": "active",
+                        "verification": "installation_verified", "authentication": "not_checked",
+                        "policy": "allowed", "package_revision": {
+                            "distribution_id": pin["distribution"], "resolved_revision": pin["revision"],
+                            "release_sequence": pin["sequence"], "tree_digest": pin["tree_digest"],
+                            "manifest_digest": pin["manifest_digest"]}}]}
+                def invoke(argv, environment, project, *args, **kwargs):
+                    nonlocal registered, native_file
+                    operation = argv[1]
+                    origin = environment.get("AGENTPLUGINS_DIRECTORY_ORIGIN")
+                    events.append(("command", operation))
+                    if operation == "info":
+                        if origin is None:
+                            return self.default()
+                        self.assertEqual(origin, BASELINE.ARCHIVE_ORIGIN)
+                        return self.info(source)
+                    self.assertEqual(origin, BASELINE.ARCHIVE_ORIGIN)
+                    if operation == "add":
+                        if not registered:
+                            native_file = Path(environment["HOME"]) / ".codex/plugins" / (source + ".json")
+                            native_file.parent.mkdir(parents=True)
+                            native_file.write_text(source)
+                        registered = True
+                        document = {"schema_version": 1, "command": "add", "result": "success"}
+                    elif operation == "remove":
+                        self.assertIn("--external-uninstalled", argv)
+                        self.assertFalse(native_file.exists())
+                        registered = False
+                        document = {"schema_version": 1, "command": "remove", "result": "success"}
+                    else:
+                        self.assertEqual(operation, "list")
+                        document = {"schema_version": 1, "command": "list", "result": "success",
+                            "data": {"installations": [copy.deepcopy(installed)] if registered else []}}
+                    return {"exit_code": 0, "timeout": False, "stdout_tail": "", "stderr_tail": "",
+                            "_json": document}
+                def uninstall(identity, home, case, environment, project):
+                    self.assertEqual(identity, source)
+                    self.assertEqual(native_file.read_text(), source)
+                    native_file.unlink()
+                    events.append(("native", "uninstall"))
+                    return {"completed": True, "native_plugin_absent": True, "native_marketplace_absent": True}
+                archive_globals = live.HISTORICAL_CODEX["prepare_plugin_archive"].__globals__
+                with patch.object(live, "call", side_effect=invoke), patch.object(
+                        live, "initialize_codex_plugin_profile", return_value=(None, None)), patch.object(
+                        live, "uninstall_native_codex_plugin", side_effect=uninstall), patch.dict(
+                        live.AGENT_BINARIES, {"codex": "/inert/codex"}), patch.dict(
+                        live.HISTORICAL_CODEX, {"PublishedBaseline": Observer}), patch.dict(
+                        archive_globals, {"utc_now": lambda: BASELINE.instant("2026-11-21T12:43:09Z"),
+                            "archive_cache": lambda *args: self.proof(source)}), patch.dict(
+                        live.HISTORICAL_CODEX, {"historical_add": unittest.mock.Mock(
+                            side_effect=AssertionError("raw Skill observer must not receive a plugin"))}):
+                    row = live.do_case("/inert/npm-launcher", "codex", "plugin", source, index,
+                        Path(temporary) / "run", fixtures["plugin_declared_names"],
+                        fixtures["signed_release_pins"], historical_plugin_archive=True)
+                    live.HISTORICAL_CODEX["historical_add"].assert_not_called()
+                self.assertEqual([value for kind, value in events if kind == "command"],
+                                 ["info", "info", "add", "list", "add", "list", "remove", "list"])
+                self.assertEqual([value for kind, value in events if kind == "observe"], list(range(1, 9)))
+                self.assertLess(events.index(("native", "uninstall")), events.index(("command", "remove")))
+                self.assertEqual(row["historical_npm_proof"]["commands_verified"], 8)
+                self.assertEqual(len(observers), 1)
+                self.assertIsNone(row["skill_path"])
+                self.assertIs(row["historical_add_verified"], False)
+                self.assertIs(row["historical_repeat_add_verified"], False)
+                for key in ("repeat_verified", "removal_verified", "sentinels_preserved", "listed_identity"):
+                    self.assertIs(row[key], True, key)
+                self.assertEqual(row["status"], "passed")
+                self.assertEqual(row["native_residuals"], [])
+                self.assertFalse(native_file.exists())
+                self.assertIs(row["post_remove_identity_registered"], False)
+                self.assertTrue(all(row["native_uninstall"][key] for key in (
+                    "completed", "native_plugin_absent", "native_marketplace_absent")))
+                feed = row["historical_plugin_feed"]
+                self.assertTrue(BASELINE.recorded_default_refusal(feed["current_default"]))
+                self.assertEqual(feed["archive"], self.proof(source))
+                self.assertEqual(feed["archive_info"]["exit_code"], 0)
+
     def test_plugin_mode_is_host_target_kind_count_bound_and_keeps_default_failure_on_error(self):
         live = HistoricalModeTest().load_live()
         for target, kind, count, host, machine in (

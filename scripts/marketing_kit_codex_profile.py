@@ -20,6 +20,8 @@ class CodexProfile:
             if not audit["path_inside_case"](path, root):
                 raise ValueError("Marketing Codex authority escaped the disposable case")
             self.anchors[path] = self._directory(path)
+        self.failed_phase = None
+        self.final_verified = False
         self.runtime = None
         self.system_metadata = None
         self.runtime, self.system_metadata = audit["initialize_codex_plugin_profile"](
@@ -44,13 +46,23 @@ class CodexProfile:
             self.audit["_codex_system_skill_checkpoint"](self.home, self.system_metadata)
 
     def checkpoint(self, phase):
-        self.guard()
-        self.runtime.checkpoint(phase)
-        self.guard()
+        try:
+            self.guard()
+            self.runtime.checkpoint(phase)
+            self.guard()
+        except BaseException:
+            self.failed_phase = phase
+            raise
+        if phase == "final-lifecycle":
+            self.final_verified = True
 
     def evidence(self):
         self.guard()
-        return self.runtime.evidence()
+        return {**self.runtime.evidence(),
+                "runtime_semantics_unchanged": self.final_verified and self.failed_phase is None,
+                "final_checkpoint": ("failed" if self.failed_phase is not None else
+                                     "passed" if self.final_verified else "not_run"),
+                "failed_phase": self.failed_phase}
 
     def system_files(self):
         self.guard()

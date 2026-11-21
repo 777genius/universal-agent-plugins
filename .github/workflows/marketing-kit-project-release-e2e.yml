@@ -16,6 +16,8 @@ on:
       - 'scripts/native_client_project_artifacts.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/prepare-codex-linux-sandbox.sh'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   push:
     branches: [main]
@@ -32,6 +34,8 @@ on:
       - 'scripts/native_client_project_artifacts.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/prepare-codex-linux-sandbox.sh'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   workflow_dispatch:
 
@@ -70,6 +74,10 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Install native Codex sandbox prerequisite
+        if: ${{ matrix.target == 'codex' }}
+        shell: bash
+        run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Install real released UAP and native client
         env:
           NATIVE_PACKAGE: ${{ matrix.package }}

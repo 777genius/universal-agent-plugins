@@ -908,16 +908,35 @@ img {
 }
 // As many agents per row as fit. 80px keeps the longest one-word status
 // (ru "Поддерживается", about 68px) on one line; names wrap inside the tile.
+// Wrapping flex rows center an incomplete last row. The container queries
+// pick the column count repeat(auto-fill, minmax(80px, 1fr)) would use, so
+// every tile keeps the same width.
+$client-tile-min: 80px;
+$client-tile-gap: 4px;
 .client-strip {
   margin: 0;
   padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: $client-tile-gap;
   list-style: none;
+  container-type: inline-size;
 }
 .client-strip li {
+  --client-strip-columns: 2;
   min-width: 0;
+  flex: 0 0
+    calc(
+      (100% - (var(--client-strip-columns) - 1) * #{$client-tile-gap}) / var(--client-strip-columns)
+    );
+}
+@for $columns from 3 through 14 {
+  @container (min-width: #{$columns * ($client-tile-min + $client-tile-gap) - $client-tile-gap}) {
+    .client-strip li {
+      --client-strip-columns: #{$columns};
+    }
+  }
 }
 
 .client-strip li > a {

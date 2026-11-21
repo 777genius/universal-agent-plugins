@@ -71,9 +71,69 @@ class MarketingCodexProfileContracts(unittest.TestCase):
             observer.checkpoint("after-public-add")
             proof = observer.evidence()
             self.assertEqual(proof["native_version"], "0.153.4")
-            self.assertTrue(proof["runtime_semantics_unchanged"])
+            self.assertFalse(proof["runtime_semantics_unchanged"])
+            self.assertEqual(proof["final_checkpoint"], "not_run")
+            self.assertIsNone(proof["failed_phase"])
             self.assertEqual([row["phase"] for row in proof["observations"]],
                              ["before-install", "profile-initialized", "after-public-add"])
+
+    def test_evidence_requires_actual_final_lifecycle_checkpoint(self):
+        with self.fixture() as (_, _, _, _, _, _, observer):
+            self.assertFalse(observer.evidence()["runtime_semantics_unchanged"])
+            observer.checkpoint("final-lifecycle")
+            proof = observer.evidence()
+            self.assertTrue(proof["runtime_semantics_unchanged"])
+            self.assertEqual(proof["final_checkpoint"], "passed")
+            self.assertIsNone(proof["failed_phase"])
+            self.assertEqual(proof["observations"][-1]["phase"], "final-lifecycle")
+
+    def test_real_sqlite_failure_remains_sticky_after_restoration_and_final(self):
+        with self.fixture() as (_, _, _, _, _, database, observer):
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("UPDATE owned_state SET value='changed'")
+                connection.commit()
+            with self.assertRaisesRegex(ValueError, "table contents changed"):
+                observer.checkpoint("after-public-mutation")
+            proof = observer.evidence()
+            self.assertFalse(proof["runtime_semantics_unchanged"])
+            self.assertEqual(proof["final_checkpoint"], "failed")
+            self.assertEqual(proof["failed_phase"], "after-public-mutation")
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("UPDATE owned_state SET value='unchanged'")
+                connection.commit()
+            observer.checkpoint("final-lifecycle")
+            self.assertTrue(observer.runtime.evidence()["runtime_semantics_unchanged"])
+            self.assertEqual(observer.evidence()["failed_phase"], "after-public-mutation")
+            self.assertFalse(observer.evidence()["runtime_semantics_unchanged"])
+
+    def test_checkpoint_interruption_is_reraised_and_never_positive_evidence(self):
+        with self.fixture() as (_, _, _, _, _, _, observer):
+            observer.checkpoint("final-lifecycle")
+            self.assertTrue(observer.evidence()["runtime_semantics_unchanged"])
+            with patch.object(observer.runtime, "checkpoint", side_effect=KeyboardInterrupt("inert interruption")):
+                with self.assertRaisesRegex(KeyboardInterrupt, "inert interruption"):
+                    observer.checkpoint("interrupted-after-final")
+            proof = observer.evidence()
+            self.assertFalse(proof["runtime_semantics_unchanged"])
+            self.assertEqual(proof["final_checkpoint"], "failed")
+            self.assertEqual(proof["failed_phase"], "interrupted-after-final")
+
+    def test_successful_runtime_observation_cannot_mask_outer_postguard_failure(self):
+        with self.fixture() as (_, _, _, _, _, _, observer):
+            original, calls = observer.guard, []
+            def fail_postguard():
+                original()
+                calls.append(True)
+                if len(calls) == 2:
+                    raise ValueError("inert outer postguard failure")
+            with patch.object(observer, "guard", side_effect=fail_postguard):
+                with self.assertRaisesRegex(ValueError, "inert outer postguard failure"):
+                    observer.checkpoint("postguard-failed")
+            proof = observer.evidence()
+            self.assertEqual(proof["observations"][-1]["phase"], "postguard-failed")
+            self.assertFalse(proof["runtime_semantics_unchanged"])
+            self.assertEqual(proof["final_checkpoint"], "failed")
+            self.assertEqual(proof["failed_phase"], "postguard-failed")
 
     def test_bootstrap_cannot_rebaseline_foreign_home_project_or_data_changes(self):
         for name in ("home", "project", "data"):

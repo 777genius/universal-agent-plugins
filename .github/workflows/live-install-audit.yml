@@ -6,6 +6,12 @@ on:
     paths:
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/live-install-audit.py'
+      - 'scripts/pi_project_skill_audit.py'
+      - 'scripts/test_pi_project_skill_audit.py'
+      - 'scripts/test_native_client_research.py'
+      - 'scripts/qoder_prepared_skill_audit.py'
+      - 'scripts/test_qoder_prepared_skill_audit.py'
+      - 'scripts/native_client_research.py'
       - 'scripts/published_codex_baseline.py'
       - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
@@ -79,6 +85,9 @@ jobs:
       - name: Refuse ambient native-profile and Git configuration leakage
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+          python3 -m unittest discover -s scripts -p 'test_qoder_prepared_skill_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_pi_project_skill_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py'
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_opencode_negative.py'
           python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
@@ -164,7 +173,7 @@ jobs:
           retention-days: 14
 
   real-native-cli-matrix:
-    name: All 30 ${{ matrix.kind }} / native ${{ matrix.target }}
+    name: All 30 ${{ matrix.kind }} / ${{ matrix.target == 'pi' && matrix.kind == 'skill' && 'foreign Prepared + clean native' || matrix.target == 'qoder' && matrix.kind == 'skill' && 'Prepared installation' || 'native' }} ${{ matrix.target }}
     needs: native-pilot
     runs-on: ubuntu-24.04
     timeout-minutes: 65
@@ -233,9 +242,27 @@ jobs:
           KIND: ${{ matrix.kind }}
           AUDIT_VENDOR_OUTCOME: ${{ steps.native-install.outcome }}
         run: |
-          python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
-            --target "$TARGET" --kind "$KIND" --limit 30 \
-            --report-dir "$RUNNER_TEMP/full-proof"
+          if [[ "$TARGET" == pi && "$KIND" == skill ]]; then
+            # Two independent fresh invocations: never move or remove a foreign
+            # Skill to turn an existing Prepared project into a trusted one.
+            foreign_status=0
+            python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
+              --target pi --kind skill --limit 30 --acceptance pi-foreign-prepared-skills-installation \
+              --report-dir "$RUNNER_TEMP/full-proof/pi-foreign-prepared" || foreign_status=$?
+            native_status=0
+            python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
+              --target pi --kind skill --limit 30 --acceptance pi-clean-native-skills \
+              --report-dir "$RUNNER_TEMP/full-proof/pi-clean-native" || native_status=$?
+            [[ "$foreign_status" -eq 0 && "$native_status" -eq 0 ]]
+          else
+            acceptance=native
+            if [[ "$TARGET" == qoder && "$KIND" == skill ]]; then
+              acceptance=qoder-prepared-skills-installation
+            fi
+            python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
+              --target "$TARGET" --kind "$KIND" --limit 30 --acceptance "$acceptance" \
+              --report-dir "$RUNNER_TEMP/full-proof"
+          fi
       - name: Upload all per-source installation outcomes (even on failures)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

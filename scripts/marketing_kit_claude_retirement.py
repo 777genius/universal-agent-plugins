@@ -11,15 +11,9 @@ import sys
 _CUSTODY = run_path(str(Path(__file__).with_name("claude_cache_retirement_audit.py")))
 require = _CUSTODY["require"]
 
-# Authenticated Directory snapshot 49 for the four exact signed releases below.
-# Published CLI 0.1.115 preserves required authentication as auth_pending in a
-# fresh no-login profile; cache custody never upgrades it to native readiness.
-_SIGNED_AUTHENTICATION = {
-    "777genius/marketing-kit": "auth_pending",
-    "777genius/notion": "auth_pending",
-    "777genius/hubspot-crm": "auth_pending",
-    "777genius/playwright-bridge": "not_required",
-}
+# Published CLI 0.1.115 source_evidence.go projects schema-1 Directory
+# authentication to unknown for Project; the planner persists not_checked.
+# User required/not_required policy never qualifies this Project checkpoint.
 
 
 class SignedClosureRetirement:
@@ -28,6 +22,7 @@ class SignedClosureRetirement:
     def __init__(self, case_root, home, project, public_rows, pins, audit):
         self.fds, self.owners, self.anchors = [], [], {}
         self.finished = False
+        self.retired_allowed = None
         try:
             require(sys.platform == "linux")
             self.case, self.home, self.project = map(Path, (case_root, home, project))
@@ -116,7 +111,7 @@ class SignedClosureRetirement:
                 # registry and receipt ownership below is still mandatory.
                 "activation": ("active", "prepared"), "materialization": ("materialized",),
                 "verification": ("installation_verified",),
-                "authentication": (_SIGNED_AUTHENTICATION[distribution],), "policy": ("allowed",)}
+                "authentication": ("not_checked",), "policy": ("allowed",)}
         for key, allowed in checkpoint.items():
             if binding.get(key) != clients[0].get(key) or binding.get(key) not in allowed:
                 raise ValueError(f"Claude cache retirement {alias} binding field {key} differs from checkpoint contract")
@@ -259,13 +254,42 @@ class SignedClosureRetirement:
             info = os.fstat(owner["quarantine_fd"])
             require((info.st_mode, info.st_uid) == owner["quarantine_identity"]
                     and set(_CUSTODY["entries"](owner["quarantine_fd"])) == {"retired"}
-                    and not owner["cache"].exists() and not owner["cache"].is_symlink())
+                    and not owner["cache"].exists() and not owner["cache"].is_symlink()
+                    and not owner["active"].exists() and not owner["active"].is_symlink())
         self.registries_removed()
         self.guard()
 
-    def finish(self, cleanup, residuals, rescan):
-        """Validate raw scanner findings without deleting or hiding retained bytes."""
+    def checkpoint(self):
+        """Recheck the same continuously held, successfully retired authority."""
         try:
+            require(self.retired_allowed is not None and not self.finished)
+            self.recheck()
+        except BaseException:
+            self.close()
+            raise
+
+    def verify_retained(self, home, case_root, residuals, rescan):
+        """After User removal, permit only the earlier Project's held bytes."""
+        try:
+            require(Path(home) == self.home and Path(case_root) == self.case)
+            self.checkpoint()
+            require(callable(rescan) and type(residuals) in (set, list, tuple) and bool(residuals)
+                    and set(residuals) <= self.retired_allowed)
+            for _ in range(2):
+                require(set(rescan()) == set(residuals))
+                self.checkpoint()
+            return {"status": "verified-unchanged-signed-project-cache-retirement-at-user-removal",
+                    "scope": "project", "writer_closure_claimed": False,
+                    "matched_residual_count": len(set(residuals))}
+        except BaseException:
+            self.close()
+            raise
+
+    def finish(self, cleanup, residuals, rescan, *, keep_open=False):
+        """Validate raw scanner findings without deleting or hiding retained bytes."""
+        validated = False
+        try:
+            require(type(keep_open) is bool and self.retired_allowed is None)
             self.guard()
             require(callable(rescan) and type(residuals) in (set, list, tuple) and bool(residuals)
                     and cleanup["result"] == "success" and cleanup["outcome"] == "completed"
@@ -289,7 +313,7 @@ class SignedClosureRetirement:
             self.recheck()
             require(set(rescan()) == set(residuals))
             self.recheck()
-            return {"status": "verified-signed-closure-cache-retirement-at-checkpoint",
+            proof = {"status": "verified-signed-closure-cache-retirement-at-checkpoint",
                     "scope": "project", "writer_closure_claimed": False,
                     "matched_residual_count": len(set(residuals)),
                     "members": [{"distribution": owner["distribution"], "receipt": owner["receipt"],
@@ -301,5 +325,11 @@ class SignedClosureRetirement:
                         "snapshot_equality_sha256": hashlib.sha256(json.dumps(
                             owner["before"], sort_keys=True).encode()).hexdigest(),
                         "orphaned_marker_present": owner["marker"] is not None} for owner in self.owners]}
+            # Initialize retained authority only after the complete original
+            # proof, never from a report or a later namespace rediscovery.
+            self.retired_allowed = frozenset(allowed)
+            validated = True
+            return proof
         finally:
-            self.close()
+            if not (keep_open and validated):
+                self.close()

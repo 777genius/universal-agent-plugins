@@ -20,7 +20,8 @@ permissions:
 jobs:
   terminal:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
-    timeout-minutes: 35
+    # Allow Windows build/setup overhead around the serial 15m CLI test limits.
+    timeout-minutes: ${{ matrix.os == 'windows-2025' && 50 || 35 }}
     strategy:
       fail-fast: false
       matrix:

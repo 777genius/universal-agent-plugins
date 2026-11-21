@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
       - 'scripts/codex_plugin_retention_audit.py'
       - 'scripts/test_codex_plugin_retention_audit.py'
       - 'scripts/test_live_install_audit_env.py'

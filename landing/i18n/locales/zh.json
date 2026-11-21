@@ -450,11 +450,54 @@
       "sourceDescription": "安装前可查看插件包来源，以及目录条目是否经过审核。",
       "standardDescription": "使用包含 {manifest} 的 Agent Plugins 1.0 插件包，无需另建 UAP 专用插件格式。"
     },
-    "builtWith": {
-      "title": "已使用 UAP 构建",
-      "agentNotificationsDescription": "为 AI 编程代理提供桌面通知、声音提醒和点击切换到对应窗口。",
-      "viewRepository": "在 GitHub 上查看",
-      "buildWithSdk": "使用 SDK 构建"
+    "sdk": {
+      "title": "构建通用插件",
+      "tagline": "一次创建，连接你的所有智能体。",
+      "intro": "使用 UAP SDK 和 CLI 构建插件，或将插件与 Skills 管理集成到你自己的应用中。",
+      "featuresLabel": "SDK 与 CLI 功能",
+      "features": {
+        "detect": {
+          "title": "检测已安装的智能体",
+          "description": "CLI 会找出本机上受支持的智能体，一条命令即可覆盖全部。"
+        },
+        "install": {
+          "title": "为选定的智能体安装",
+          "description": "选择具体的智能体，UAP 会准备每个智能体支持的原生格式。"
+        },
+        "cli": {
+          "title": "插件管理 CLI",
+          "description": "用一条终端命令安装、更新、修复和移除插件。"
+        },
+        "hooks": {
+          "title": "类型化钩子",
+          "description": "使用类型化的 Go 处理程序处理智能体的原生钩子事件。"
+        }
+      },
+      "apps": {
+        "eyebrow": "面向应用开发者",
+        "badge": "集成预览",
+        "title": "为你的应用添加插件管理",
+        "description": "借助 TypeScript Management SDK，桌面或 Node.js 应用可以发现智能体，并通过 UAP 引擎安装、更新或移除插件和 Skills。",
+        "guide": "TypeScript Management SDK 指南",
+        "diagramLabel": "示意图：你的应用请求 UAP Management SDK 安装 marketing-kit 插件，SDK 将其安装到 Codex、Claude Code 和 Gemini CLI。",
+        "yourApp": "你的应用",
+        "tag": "插件 + Skills",
+        "kind": "插件",
+        "install": "安装",
+        "update": "更新",
+        "remove": "移除",
+        "installing": "正在安装…",
+        "installed": "已安装",
+        "caption": "构建插件，赋能你的应用。"
+      },
+      "showcase": {
+        "eyebrow": "基于 UAP 构建",
+        "description": "跨平台智能通知。桌面提醒、提示音、点击聚焦窗口和 Webhook。",
+        "builtOn": "基于 UAP SDK 构建：类型化的智能体钩子和 UAP 安装器。",
+        "repository": "在 GitHub 上查看",
+        "stars": "{stars} 个 GitHub 星标"
+      },
+      "guides": "浏览 SDK 指南"
     },
     "faq": {
       "eyebrow": "常见问题解答",
@@ -508,7 +551,7 @@
       "notAvailableForPlugin": "不适用于该插件",
       "title": "一个插件",
       "subtitle": "适用于你的 AI 客户端",
-      "intro": "用一条命令，在受支持的 AI 客户端中安装、更新、修复和移除 Agent Plugins 1.0 软件包。可以让 CLI 检测已安装的客户端，也可以明确选择安装目标。",
+      "intro": "用一条命令，在受支持的 AI 客户端中安装、更新、修复和移除 Agent Plugins 1.0 / Agent Skills。可以让 CLI 检测已安装的客户端，也可以明确选择安装目标。",
       "github": "打开 GitHub",
       "choose": "选择客户端",
       "chooseHint": "选择一个、多个或自动检测",

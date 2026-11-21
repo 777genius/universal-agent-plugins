@@ -47,10 +47,10 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             shutil.copytree(bundle, cache)
             revision = {"distribution_id": distribution, "version": pin["package_version"],
                         **{key: pin[key] for key in ("release_sequence", "resolved_revision", "tree_digest", "manifest_digest")}}
-            # Authenticated Directory snapshot 49, exact four pinned releases:
-            # explicit required auth remains pending in published CLI 0.1.115.
-            authentication = {"marketing-kit": "auth_pending", "notion": "auth_pending",
-                              "hubspot-crm": "auth_pending", "playwright": "not_required"}[alias]
+            # Published CLI 0.1.115 projects schema-1 Directory authentication
+            # to unknown for Project, then persists not_checked for all four.
+            # User required/not_required policy is not Project authority.
+            authentication = "not_checked"
             client = {"client_id": "claude", "scope": "project", "activation": "active",
                       "materialization": "materialized", "authentication": authentication,
                       "policy": "allowed", "verification": "installation_verified", "package_revision": revision}
@@ -161,13 +161,13 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 proof = subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
                 self.assertEqual([member["binding_at_capture"] for member in proof["members"]], expected)
                 self.assertEqual([row["authentication"] for row in expected],
-                                 ["auth_pending", "auth_pending", "auth_pending", "not_required"])
+                                 ["not_checked"] * 4)
                 self.assertFalse(proof["writer_closure_claimed"])
 
-    def test_exact_signed_authentication_and_raw_public_agreement_required(self):
-        for index, wrong in ((0, "not_required"), (1, "not_required"), (2, "not_required"),
-                             (3, "auth_pending"), *((index, value) for index in range(4)
-                                 for value in ("failed", "not_checked", "authenticated", "pending", "unknown", "", None, "missing"))):
+    def test_exact_project_authentication_and_raw_public_agreement_required(self):
+        for index, wrong in ((index, value) for index in range(4)
+                             for value in ("auth_pending", "not_required", "failed", "authenticated",
+                                           "pending", "unknown", "", None, "missing")):
             for location in ("both", "raw", "public"):
                 with self.subTest(index=index, wrong=wrong, location=location), TemporaryDirectory() as directory:
                     f = self.fixture(Path(directory).resolve())
@@ -338,6 +338,114 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             self.assertEqual(raw, runner["native_component_residuals"](
                 "claude", f["home"], f["root"], "still raw"))
             self.assertEqual(subject.fds, [])
+
+    def test_project_retirement_survives_user_cycle_only_with_continuously_held_authority(self):
+        runner = runpy.run_path(str(ROOT / "scripts/marketing-kit-project-release-e2e.py"))
+        for retained in (False, True):
+            with self.subTest(retained=retained), TemporaryDirectory() as directory:
+                f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+                try:
+                    original_fds = tuple(subject.fds)
+                    self.retire(f)
+                    subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f), keep_open=retained)
+                    # Actual filesystem representation of the independent User
+                    # @skills-dir lifecycle; no native process is simulated.
+                    user = f["profile"] / "skills/marketing-kit"
+                    user.mkdir(parents=True)
+                    (user / "SKILL.md").write_text("User-owned marketing-kit fixture")
+                    if retained:
+                        subject.checkpoint()  # User files coexist; no global absence claim.
+                        self.assertTrue(set(original_fds) <= set(subject.fds))
+                    shutil.rmtree(user)
+                    with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
+                        runner["check_removed_native_components"](
+                            "claude", f["home"], f["root"], "old final User A default")
+                    if retained:
+                        proof = runner["check_removed_native_components"](
+                            "claude", f["home"], f["root"], "final User A",
+                            retained_claude_retirement=subject)
+                        self.assertEqual(proof["scope"], "project")
+                        self.assertFalse(proof["writer_closure_claimed"])
+                        self.assertEqual(proof["matched_residual_count"], len(self.scan(f)))
+                    else:
+                        self.assertEqual(subject.fds, [])
+                        with self.assertRaises(ValueError):
+                            subject.verify_retained(f["home"], f["root"], self.scan(f), lambda: self.scan(f))
+                finally:
+                    subject.close()
+
+    def test_retained_checkpoint_rejects_late_user_residue_and_retired_mutations(self):
+        changes = ("user-residue", "tree", "metadata", "marker", "quarantine", "parent",
+                   "registry", "active-resurrection", "cache-resurrection", "empty", "rescan")
+        for change in changes:
+            with self.subTest(change=change), TemporaryDirectory() as directory:
+                f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+                self.retire(f)
+                subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f), keep_open=True)
+                held = tuple(subject.fds)
+                owner = f["owners"][0]
+                if change == "user-residue":
+                    path = f["profile"] / "skills/marketing-kit/SKILL.md"
+                    path.parent.mkdir(parents=True); path.write_text("must not be allowed by Project custody")
+                elif change in ("tree", "metadata"):
+                    path = owner["moved"] / ".agentplugins-runtime/plugin.json"
+                    if change == "tree": path.write_text("changed retired bytes")
+                    else: path.chmod(0o600)
+                elif change == "marker":
+                    (owner["moved"] / ".orphaned_at").write_text("1794880808342")
+                elif change == "quarantine":
+                    (owner["moved"].parent / "extra.txt").write_text("unexpected sibling")
+                elif change == "parent":
+                    parent = owner["cache"].parent
+                    saved = parent.with_name(parent.name + "-saved")
+                    parent.rename(saved); shutil.copytree(saved, parent)
+                elif change == "registry":
+                    path = f["profile"] / "plugins/installed_plugins.json"
+                    data = json.loads(path.read_text()); data["plugins"][owner["key"]] = []
+                    path.write_text(json.dumps(data))
+                elif change == "active-resurrection":
+                    owner["active"].mkdir(parents=True)
+                elif change == "cache-resurrection":
+                    owner["cache"].mkdir()
+                raw = self.scan(f)
+                if change == "empty": raw = set()
+                rescan = (lambda: raw | {".claude/unowned"}) if change == "rescan" else lambda: self.scan(f)
+                with self.assertRaises(ValueError):
+                    subject.verify_retained(f["home"], f["root"], raw, rescan)
+                self.assertEqual(subject.fds, [])
+                for fd in held:
+                    with self.assertRaises(OSError): os.fstat(fd)
+
+    def test_retained_authority_cannot_be_unfinished_closed_reused_or_wrong_profile(self):
+        for change in ("unfinished", "closed", "wrong-home", "wrong-case", "twice", "invalid-receipt"):
+            with self.subTest(change=change), TemporaryDirectory() as directory:
+                f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+                held = tuple(subject.fds)
+                self.assertIsNone(subject.retired_allowed)
+                if change == "unfinished":
+                    with self.assertRaises(ValueError): subject.checkpoint()
+                else:
+                    self.retire(f)
+                    cleanup = copy.deepcopy(f["cleanup"])
+                    if change == "invalid-receipt": cleanup["results"][0]["outcome"] = "pending"
+                    if change == "invalid-receipt":
+                        with self.assertRaises(ValueError):
+                            subject.finish(cleanup, self.scan(f), lambda: self.scan(f), keep_open=True)
+                        self.assertIsNone(subject.retired_allowed)
+                    else:
+                        subject.finish(cleanup, self.scan(f), lambda: self.scan(f), keep_open=True)
+                        held = tuple(subject.fds)
+                        if change == "closed": subject.close()
+                        with self.assertRaises(ValueError):
+                            if change == "twice":
+                                subject.finish(cleanup, self.scan(f), lambda: self.scan(f), keep_open=True)
+                            else:
+                                subject.verify_retained(f["home"] / "wrong" if change == "wrong-home" else f["home"],
+                                    f["root"] / "wrong" if change == "wrong-case" else f["root"],
+                                    self.scan(f), lambda: self.scan(f))
+                self.assertEqual(subject.fds, [])
+                for fd in held:
+                    with self.assertRaises(OSError): os.fstat(fd)
 
     def test_execute_captures_verified_four_member_receipt_for_real_retirement(self):
         runner = runpy.run_path(str(ROOT / "scripts/marketing-kit-project-release-e2e.py"))
