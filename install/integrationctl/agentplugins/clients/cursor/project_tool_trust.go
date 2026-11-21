@@ -26,9 +26,25 @@ func completeCursorProjectToolTrust(ctx context.Context, env clients.Env, reques
 	if err := ctx.Err(); err != nil {
 		return outcome, err
 	}
-	approved, err := readCursorToolApprovalsForActivation(request, env.NativeConfig)
-	if err != nil {
-		return outcome, err
+	if env.Snapshots == nil || request.Delivery.ArtifactDigest == "" {
+		return outcome, fmt.Errorf("Cursor tool trust requires a verified immutable package digest")
+	}
+	// Read the publisher's reviewed list only from a sealed copy of the
+	// receipt-bound package, never from a mutable active-path document.
+	sealed, release, err := env.Snapshots.CaptureDirectory(ctx, request.Delivery.ActivePath)
+	if err != nil || release == nil {
+		return outcome, fmt.Errorf("Cursor tool trust package snapshot unavailable: %w", err)
+	}
+	digest, digestErr := env.Snapshots.Digest(ctx, sealed)
+	approved, approvalErr := readCursorToolApprovalsForActivation(request, env.NativeConfig, sealed)
+	closeErr := release()
+	if digestErr != nil || digest != request.Delivery.ArtifactDigest || approvalErr != nil || closeErr != nil {
+		return outcome, fmt.Errorf("Cursor reviewed tool approval package differs: %w", errors.Join(digestErr, approvalErr, closeErr, func() error {
+			if digest != request.Delivery.ArtifactDigest {
+				return fmt.Errorf("package digest mismatch")
+			}
+			return nil
+		}()))
 	}
 	project := request.Plan.TargetContext.ProjectRoot
 	if !cursorExactNativeProject(project) {
@@ -40,6 +56,13 @@ func completeCursorProjectToolTrust(ctx context.Context, env clients.Env, reques
 	}
 	names, _ := cursorSelectedMCP(request.Plan.Components)
 	verify := func() error {
+		digest, err := env.Snapshots.Digest(ctx, request.Delivery.ActivePath)
+		if err != nil {
+			return err
+		}
+		if digest != request.Delivery.ArtifactDigest {
+			return fmt.Errorf("Cursor approval package changed after review")
+		}
 		if err := cursorComponents(request.Plan.NativeRegistryRoot).Verify(cursorNativeObjects(request.Delivery.NativeObjects), false, env.NativeConfig); err != nil {
 			return err
 		}
@@ -112,12 +135,12 @@ func cursorMergeToolPermissions(body []byte, approved cursorToolApprovals) ([]by
 			for _, policyRule := range append(slices.Clone(deny), ask...) {
 				// A matching exact policy or unknown MCP wildcard must remain
 				// authoritative. Never override it with a new allow entry.
-				if policyRule == rule || policyRule == "*" || policyRule == "Mcp" ||
-					strings.HasPrefix(policyRule, "Mcp(") && strings.Contains(policyRule, "*") {
+				if strings.EqualFold(policyRule, rule) || policyRule == "*" || strings.EqualFold(policyRule, "Mcp") ||
+					strings.HasPrefix(strings.ToLower(policyRule), "mcp(") && strings.ContainsAny(policyRule, "*?[]") {
 					return nil, fmt.Errorf("preserved Cursor CLI deny/ask rule conflicts with selected MCP tool")
 				}
 			}
-			if !slices.Contains(allow, rule) {
+			if !slices.ContainsFunc(allow, func(existing string) bool { return strings.EqualFold(existing, rule) }) {
 				selected = append(selected, rule)
 			}
 		}

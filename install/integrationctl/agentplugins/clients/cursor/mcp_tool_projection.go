@@ -41,14 +41,14 @@ func verifyCursorToolApprovals(root string, envelope domain.PackageEnvelope, pla
 
 // The activation request deliberately carries no untrusted publisher manifest.
 // The selected, verified package carries the exact approved names instead.
-func readCursorToolApprovalsForActivation(request domain.ActivationRequest, kernel nativeconfig.Kernel) (cursorToolApprovals, error) {
+func readCursorToolApprovalsForActivation(request domain.ActivationRequest, kernel nativeconfig.Kernel, sealed string) (cursorToolApprovals, error) {
 	if !cursorHasToolApproval(request.Plan.Components) {
 		return nil, nil
 	}
 	if request.Plan.Scope != domain.ScopeProject || request.Delivery.ActivePath != request.Plan.ActivePath {
 		return nil, fmt.Errorf("Cursor approval package or project differs from the confirmed plan")
 	}
-	snapshot, err := kernel.ReadExactFile(filepath.Join(request.Delivery.ActivePath, cursorToolApprovalFile))
+	snapshot, err := kernel.ReadExactFile(filepath.Join(sealed, cursorToolApprovalFile))
 	if err != nil {
 		return nil, err
 	}

@@ -13,6 +13,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
 )
 
 const cursorTestApproval = "{\"version\":1,\"mcp_auto_approve\":{\"audit\":[\"inspect_runtime\"]}}"
@@ -130,6 +131,7 @@ func TestCursorToolPermissionsMergePreservesForeignAndRefusals(t *testing.T) {
 	for _, raw := range []string{
 		"{\"permissions\":{\"deny\":[\"Mcp(audit:inspect_runtime)\"]}}",
 		"{\"permissions\":{\"ask\":[\"Mcp(*:*)\"]}}",
+		"{\"permissions\":{\"deny\":[\"Mcp(audit:inspect_runtim?)\"]}}",
 		"{\"permissions\":{\"ask\":[\"Mcp\"]}}",
 		"{\"permissions\":{\"deny\":[\"*\"]}}",
 		"{\"permissions\":{\"allow\":\"all\"}}",
@@ -155,7 +157,13 @@ func cursorToolTrustFixture(t *testing.T) (domain.ActivationRequest, clients.Env
 	if err := os.WriteFile(filepath.Join(request.Delivery.ActivePath, cursorToolApprovalFile), []byte(cursorTestApproval), 0600); err != nil {
 		t.Fatal(err)
 	}
-	return request, clients.Env{NativeConfig: kernel}
+	snapshots := packagesnapshot.Builder{}
+	digest, err := snapshots.Digest(t.Context(), request.Delivery.ActivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Delivery.ArtifactDigest = digest
+	return request, clients.Env{NativeConfig: kernel, Snapshots: snapshots}
 }
 
 func TestCursorToolPermissionsExplicitAddAndIdempotentE2E(t *testing.T) {
@@ -279,5 +287,21 @@ func TestCursorToolTrustRefusesChangedOwnedServerOrDisabledPolicy(t *testing.T) 
 	}
 	if _, err := os.Stat(config); !os.IsNotExist(err) {
 		t.Fatalf("disabled server changed Cursor permissions: %v", err)
+	}
+}
+
+func TestCursorToolTrustRefusesPostReviewApprovalFileTamper(t *testing.T) {
+	request, env := cursorToolTrustFixture(t)
+	request.ProjectTrustConsent = true
+	path := filepath.Join(request.Delivery.ActivePath, cursorToolApprovalFile)
+	if err := os.WriteFile(path, []byte("{\"version\":1,\"mcp_auto_approve\":{\"audit\":[\"write_runtime\"]}}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	outcome := domain.ActivationOutcome{Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
+	if _, err := completeCursorProjectToolTrust(t.Context(), env, request, outcome); err == nil {
+		t.Fatal("mutated package granted newly injected MCP tool")
+	}
+	if _, err := os.Stat(filepath.Join(request.Plan.NativeRegistryRoot, "cli.json")); !os.IsNotExist(err) {
+		t.Fatalf("tampered package created Cursor permissions: %v", err)
 	}
 }
