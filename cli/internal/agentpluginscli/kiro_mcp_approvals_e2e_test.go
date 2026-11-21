@@ -35,7 +35,7 @@ func TestKiroPublisherMCPApprovalsFullCLI(t *testing.T) {
 	}
 	manifest["extensions"] = map[string]any{
 		"com.universal-agent-plugins.kiro-mcp-approval": map[string]any{
-			"version": 1,
+			"version":          1,
 			"mcp_auto_approve": map[string]any{"demo": []string{"read_docs"}},
 		},
 	}
