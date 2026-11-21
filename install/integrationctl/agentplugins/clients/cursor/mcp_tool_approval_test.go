@@ -217,6 +217,35 @@ func TestCursorToolPermissionsExplicitAddAndIdempotentE2E(t *testing.T) {
 	}
 }
 
+func TestCursorToolTrustRefusesSymlinkAndDifferentProject(t *testing.T) {
+	for _, test := range []string{"foreign_symlink", "other_project"} {
+		t.Run(test, func(t *testing.T) {
+			request, env := cursorToolTrustFixture(t)
+			request.ProjectTrustConsent = true
+			policy := filepath.Join(request.Plan.NativeRegistryRoot, "cli.json")
+			other := filepath.Join(t.TempDir(), "foreign.json")
+			if err := os.WriteFile(other, []byte("{\"foreign\":true}"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if test == "foreign_symlink" {
+				if err := os.Symlink(other, policy); err != nil {
+					t.Skipf("symlink creation unavailable on this platform: %v", err)
+				}
+			} else {
+				request.Plan.TargetContext.ProjectRoot = t.TempDir()
+			}
+			outcome := domain.ActivationOutcome{Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled}
+			if _, err := completeCursorProjectToolTrust(context.Background(), env, request, outcome); err == nil {
+				t.Fatal("foreign Cursor project or symlink gained MCP tool trust")
+			}
+			content, err := os.ReadFile(other)
+			if err != nil || string(content) != "{\"foreign\":true}" {
+				t.Fatalf("foreign config changed: %q %v", content, err)
+			}
+		})
+	}
+}
+
 func TestCursorToolTrustRefusesChangedOwnedServerOrDisabledPolicy(t *testing.T) {
 	request, env := cursorToolTrustFixture(t)
 	request.ProjectTrustConsent = true

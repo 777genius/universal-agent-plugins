@@ -76,6 +76,9 @@ func completeCursorProjectToolTrust(ctx context.Context, env clients.Env, reques
 }
 
 func cursorMergeToolPermissions(body []byte, approved cursorToolApprovals) ([]byte, error) {
+	if len(body) > 1<<20 {
+		return nil, fmt.Errorf("Cursor CLI permission policy exceeds the supported size")
+	}
 	document, err := shared.DecodeStrictJSONObject(body)
 	if err != nil {
 		return nil, fmt.Errorf("preserved malformed Cursor CLI permission policy: %w", err)
