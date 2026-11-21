@@ -40,7 +40,7 @@ func (*Adapter) InterpretExtension(namespace string, raw json.RawMessage) (domai
 func decodeMCPApprovals(raw json.RawMessage) (mcpApprovals, error) {
 	var value mcpApprovals
 	if len(raw) == 0 || len(raw) > 16<<10 {
-		return value, fmt.Errorf("Kiro MCP approval extension exceeds its limit")
+		return value, fmt.Errorf("kiro MCP approval extension exceeds its limit")
 	}
 	fields, err := shared.DecodeStrictJSONObject(raw)
 	if err != nil {
@@ -50,7 +50,7 @@ func decodeMCPApprovals(raw json.RawMessage) (mcpApprovals, error) {
 	// trust declaration is an exact, versioned contract: refuse aliases.
 	_, hasServers := fields["mcp_auto_approve"]
 	if len(fields) != 2 || fields["version"] != json.Number("1") || !hasServers {
-		return value, fmt.Errorf("Kiro MCP approval fields must match the exact v1 schema")
+		return value, fmt.Errorf("kiro MCP approval fields must match the exact v1 schema")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
@@ -58,7 +58,7 @@ func decodeMCPApprovals(raw json.RawMessage) (mcpApprovals, error) {
 		return value, fmt.Errorf("invalid Kiro MCP approval fields: %w", err)
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
-		return value, fmt.Errorf("Kiro MCP approval extension must contain one object")
+		return value, fmt.Errorf("kiro MCP approval extension must contain one object")
 	}
 	if value.Version != 1 || len(value.Servers) == 0 || len(value.Servers) > 32 {
 		return value, fmt.Errorf("unsupported Kiro MCP approval version or server count")
@@ -133,12 +133,12 @@ func selectedKiroApprovals(envelope domain.PackageEnvelope, plan domain.Delivery
 		}
 	}
 	if !extensionSelected {
-		return approved, fmt.Errorf("Kiro tool approvals were not selected by the plan")
+		return approved, fmt.Errorf("kiro tool approvals were not selected by the plan")
 	}
 	selected := shared.SupportedMCPNames(plan)
 	for server := range approved.Servers {
 		if !slices.Contains(selected, server) {
-			return approved, fmt.Errorf("Kiro approval references an unselected MCP server %q", server)
+			return approved, fmt.Errorf("kiro approval references an unselected MCP server %q", server)
 		}
 	}
 	return approved, nil
@@ -161,15 +161,15 @@ func applyKiroApprovals(root string, approval mcpApprovals) error {
 	}
 	servers, ok := document["mcpServers"].(map[string]any)
 	if !ok {
-		return fmt.Errorf("Kiro MCP projection has no servers")
+		return fmt.Errorf("kiro MCP projection has no servers")
 	}
 	for name, tools := range approval.Servers {
 		server, ok := servers[name].(map[string]any)
 		if !ok {
-			return fmt.Errorf("Kiro MCP projection lacks approved server %q", name)
+			return fmt.Errorf("kiro MCP projection lacks approved server %q", name)
 		}
 		if _, existing := server["autoApprove"]; existing {
-			return fmt.Errorf("Kiro MCP projection has conflicting approval for %q", name)
+			return fmt.Errorf("kiro MCP projection has conflicting approval for %q", name)
 		}
 		server["autoApprove"] = tools
 	}
