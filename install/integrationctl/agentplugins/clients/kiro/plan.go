@@ -20,10 +20,20 @@ var (
 )
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
-	if in.TargetContext.Scope == domain.ScopeProject {
-		return refineProjectPlan(in, plan)
+	approvals, err := selectedKiroApprovals(in.Envelope, *plan)
+	if err != nil {
+		return err
 	}
-	eligible := shared.OnlyNativeComponents(plan.Components)
+	if in.TargetContext.Scope == domain.ScopeProject {
+		if err := refineProjectPlan(in, plan); err != nil {
+			return err
+		}
+		if disclosure := kiroApprovalDisclosure(approvals); disclosure != "" {
+			plan.Warnings = shared.AppendUnique(plan.Warnings, disclosure)
+		}
+		return nil
+	}
+	eligible := kiroNativeComponents(plan.Components)
 	needsCLI := shared.HasSupportedMCP(plan.Components)
 	hasConfigRoot := strings.TrimSpace(in.Client.ConfigRoot) != ""
 	canActivate := hasConfigRoot && eligible && (!needsCLI || isKiroCLI(in.Client.ExecutablePath))
@@ -34,6 +44,9 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 		plan.UserActions = shared.AppendUnique(plan.UserActions, "install a current Kiro CLI and rerun add to register and verify its MCP servers")
 	} else if canActivate {
 		plan.UserActions = shared.AppendUnique(plan.UserActions, "agentplugins will install and verify the package's global Kiro skills and MCP servers automatically")
+	}
+	if disclosure := kiroApprovalDisclosure(approvals); disclosure != "" {
+		plan.Warnings = shared.AppendUnique(plan.Warnings, disclosure)
 	}
 	return nil
 }
@@ -52,7 +65,7 @@ func (*Adapter) RefinePreparation(plan *domain.DeliveryPlan) error {
 		if plan.Status == domain.PlanUnsupported {
 			return nil
 		}
-		if !shared.OnlyNativeComponents(plan.Components) {
+		if !kiroNativeComponents(plan.Components) {
 			return fmt.Errorf("kiro project preparation requires supported native components")
 		}
 		plan.Status, plan.Activation, plan.Verification = domain.PlanReady, domain.ActivationPrepared, domain.VerificationPackageValid
