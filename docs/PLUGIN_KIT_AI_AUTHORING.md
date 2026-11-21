@@ -106,9 +106,10 @@ merged with, converted into, or allowed to silently override `plugin.json`.
 Before changing anything, the CLI resolves and validates the source and
 preflights every selected client. `--dry-run` prints that same read-only plan.
 `doctor` only inspects paths and filesystem metadata; it never launches a
-discovered client executable, and neither does a `--dry-run`. Non-dry-run
-lifecycle resolution may explicitly run a bounded `--version` probe when an
-exact client version is needed for signed Directory evidence. That probe
+discovered client executable. Lifecycle resolution, and the `--dry-run` preview
+of it, may explicitly run a bounded `--version` probe when an exact client
+version is needed for signed Directory evidence, so a preview answers like the
+real operation. That probe
 receives an empty stdin and credential-free environment and runs outside the
 caller's working directory. If it cannot obtain a matching version,
 version-bound evidence remains unavailable rather than being inferred.

@@ -154,20 +154,21 @@ func TestProjectDevinEmptyVersionSelectedLifecycle(t *testing.T) {
 				f.run(t, f.a, args...)
 				detector.assertCalls(t, before, 0)
 			}
-			// A dry run of a direct local source runs the same targeted version
-			// probe as the real operation. A saved source does not probe in a
-			// dry run yet, so its preview and the real operation can differ.
-			dryRunProbes := 1
+			// A dry run runs the same targeted version probe as the real
+			// operation: one probe when something would change. A saved source
+			// that is already up to date has nothing to update, so its update
+			// preview probes nothing, like the real update.
+			dryRunProbes := map[string]int{"update": 1, "repair": 1}
 			if saved {
-				dryRunProbes = 0
+				dryRunProbes["update"] = 0
 			}
 			for _, args := range [][]string{{"update", selector, "--target", "windsurf", "--dry-run"}, {"repair", installation.InstallationID, "--target", "windsurf", "--dry-run"}} {
 				before, snapshot := len(detector.targeted), securityFixtureTree(t, f.a)
 				_, err := f.execute(f.a, args...)
-				if err != nil && !strings.Contains(err.Error(), "explicitly selected primary") {
+				if err != nil && (saved || !strings.Contains(err.Error(), "explicitly selected primary")) {
 					t.Fatal(err)
 				}
-				detector.assertCalls(t, before, dryRunProbes)
+				detector.assertCalls(t, before, dryRunProbes[args[0]])
 				if !reflect.DeepEqual(snapshot, securityFixtureTree(t, f.a)) {
 					t.Fatal("Devin dry-run changed project authority")
 				}
