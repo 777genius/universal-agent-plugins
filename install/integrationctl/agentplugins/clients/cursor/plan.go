@@ -37,14 +37,24 @@ func (*Adapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *doma
 		return nil
 	}
 	if in.TargetContext.Scope == domain.ScopeProject {
+		approved, err := selectedCursorToolApprovals(in.Envelope, *plan)
+		if err != nil {
+			return err
+		}
 		shared.QualifyRawSkillInstallationAuthentication(in.Envelope, plan)
 		shared.PromoteNativeReady(plan, plan.NativeRegistryRoot, shared.OnlyNativeComponents(plan.Components))
 		plan.Activation = domain.ActivationPrepared
 		if names, _ := cursorSelectedMCP(plan.Components); in.Intent == domain.InstallIntentAutomatic && len(names) > 0 {
 			plan.Warnings = shared.AppendUnique(plan.Warnings, fmt.Sprintf("Installation may approve the selected Cursor MCP servers %s for project %q. Existing disablement is preserved; these approvals remain after removal.", strings.Join(names, ", "), in.TargetContext.ProjectRoot))
 		}
+		if disclosure := cursorToolApprovalDisclosure(approved); disclosure != "" {
+			plan.Warnings = shared.AppendUnique(plan.Warnings, disclosure)
+		}
 		plan.UserActions = shared.AppendUnique(plan.UserActions, "project skill directories and MCP entries can be configured automatically; discovery, enablement, approval and policy require observation in Cursor")
 		return nil
+	}
+	if _, declared := in.Envelope.Manifest.Extensions[cursorToolApprovalNamespace]; declared {
+		return fmt.Errorf("Cursor scoped MCP tool permissions require project scope")
 	}
 	plan.Status = domain.PlanManualActivationRequired
 	// PackageMode describes the retained manifest/layout contract. Readiness

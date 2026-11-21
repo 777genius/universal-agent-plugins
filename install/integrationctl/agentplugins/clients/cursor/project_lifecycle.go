@@ -77,6 +77,9 @@ func (adapter *Adapter) activateProject(ctx context.Context, env clients.Env, re
 	if err == nil && outcome.Verification == domain.VerificationInstalled {
 		outcome, err = completeCursorProjectMCP(ctx, env, request, outcome)
 	}
+	if err == nil {
+		outcome, err = completeCursorProjectToolTrust(ctx, env, request, outcome)
+	}
 	return outcome, err
 }
 
