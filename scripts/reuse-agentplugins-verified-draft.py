@@ -30,7 +30,7 @@ NEW_CLIENT_GATES = (
 # Exact job names the producer workflow emits. A unit test derives them from
 # agentplugins-release.yml so the workflow and this verifier cannot drift.
 REQUIRED_SUCCESS_JOBS = (
-    "validate", "build", "stage-draft",
+    "validate", "build", "sign-macos", "stage-draft",
     "platform-proof / Verify release and pack exact npm tarball",
     *(f"platform-proof / native runtime E2E ({target})" for target in TARGETS),
     "platform-proof / Aggregate all six native platform proofs", "verified-draft",

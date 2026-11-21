@@ -143,9 +143,40 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, releaseWorkflow, "expected_commit: ${{ needs.validate.outputs.commit }}")
 	mustContain(t, releaseWorkflow, `refs/heads/main|"refs/tags/${TAG}")`)
 	mustContain(t, releaseWorkflow, `git merge-base --is-ancestor "${head_commit}" refs/remotes/origin/main`)
-	mustContain(t, releaseDraftJob, "needs: [validate, qualify-go, qualify-npm, build]")
+	mustContain(t, releaseDraftJob, "needs: [validate, qualify-go, qualify-npm, build, sign-macos]")
 	for _, name := range []string{"qualify-go", "qualify-npm", "build"} {
 		mustContain(t, yamlJob(t, releaseWorkflow, name), "needs: validate")
+	}
+	signJob := yamlJob(t, releaseWorkflow, "sign-macos")
+	for _, want := range []string{
+		"needs: [validate, build]",
+		"if: ${{ inputs.publish_release != true }}",
+		"environment: macos-signing",
+		"runs-on: macos-15",
+		"bash scripts/sign-agentplugins-macos.sh",
+		"name: agentplugins-darwin-signed",
+		"name: macos-notarization-evidence-${{ github.run_attempt }}",
+	} {
+		mustContain(t, signJob, want)
+	}
+	mustNotContain(t, signJob, ": write")
+	mustContain(t, releaseDraftJob, "SIGNED_DARWIN_ARM64_SHA256: ${{ needs.sign-macos.outputs.darwin_arm64_sha256 }}")
+	mustAppearBefore(t, releaseDraftJob, "macOS asset is not the exact signed and notarized sign-macos output", "actions/attest@")
+	signingScript := readRepoFile(t, root, "scripts", "sign-agentplugins-macos.sh")
+	for _, want := range []string{
+		"set +x",
+		"codesign --force --options runtime --timestamp",
+		"codesign --verify --strict --verbose=2",
+		"xcrun notarytool submit",
+		"--wait --timeout",
+		"com.apple.quarantine",
+		"security delete-keychain",
+		"trap cleanup EXIT",
+	} {
+		mustContain(t, signingScript, want)
+	}
+	for _, want := range []string{"macos-signing", "APPLE_API_KEY_BASE64", "cannot be stapled", "Windows binaries stay unsigned", "spctl -a -vv -t install"} {
+		mustContain(t, runbook, want)
 	}
 	mustContain(t, draftReceiptJob, `--npm-tarball-file "${NPM_TARBALL_FILE}"`)
 	mustContain(t, reuseJob, `gh run watch "${QUALIFIED_RUN_ID}"`)
