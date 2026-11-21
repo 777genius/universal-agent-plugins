@@ -359,7 +359,7 @@
         "nextStep": "安装后操作"
       },
       "scrollHint": "横向滚动以查看所有列。",
-      "note": "自动：UAP 安装受支持的组件。引导：按智能体提示完成操作。已准备：激活准备好的文件。手动：在应用中完成设置。经确认后，UAP 会完成受支持的原生设置，并提示剩余的信任、登录或重新加载步骤。可用性取决于插件及智能体版本。 基准版本：原生 CLI 0.1.114。npm 单独发布，可能有所延迟。支持某个代理并不保证每个插件和安装范围都有兼容的已签名目录版本。",
+      "note": "自动：UAP 安装受支持的组件。引导：按智能体提示完成操作。已准备：激活准备好的文件。手动：在应用中完成设置。经确认后，UAP 会完成受支持的原生设置，并提示剩余的信任、登录或重新加载步骤。可用性取决于插件及智能体版本。 基准版本：原生 CLI 0.1.115。npm 单独发布，可能有所延迟。支持某个代理并不保证每个插件和安装范围都有兼容的已签名目录版本。",
       "details": "查看兼容性详情",
       "capabilities": {
         "pluginsSkillsMcp": "插件、技能、MCP",
@@ -903,7 +903,7 @@
       },
       "cursor": {
         "note": "原生 Agent Plugin 软件包",
-        "status": "支持",
+        "status": "已由 CLI 准备",
         "intro": "将 Agent Plugins 1.0 安装到 Cursor 项目中，无需逐个手动转换插件。CLI 会在修改文件前规划原生软件包。",
         "delivery": "CLI 按所选范围准备 Cursor 支持的插件、 Skill 和 MCP 组件。add 默认使用用户范围；通过 add 安装到项目时需要显式选择项目范围。",
         "activation": "按提示重新加载 Cursor，然后确认插件已被发现。"
@@ -958,11 +958,11 @@
         "activation": "重新加载 Cline 并完成提供商认证。项目 MCP 需要明确选择的受管会话及其 CLINE_MCP_SETTINGS_PATH；普通启动不会选择该配置。"
       },
       "windsurf": {
-        "note": "软件包已准备；需要手动激活",
-        "status": "由 CLI 准备",
-        "intro": "用一条 CLI 命令为 Windsurf 准备 Agent Plugins 1.0，然后明确完成客户端要求的激活步骤。",
+        "note": "托管 Skills 与 MCP 配置",
+        "status": "支持",
+        "intro": "用一条 CLI 命令为 Windsurf / Devin 安装 Agent Plugins 1.0 的 Skills 和 MCP 服务器。",
         "delivery": "CLI 可在用户和项目范围内为 Devin 3000.11.205 或 3000.12.57 写入其拥有的 Skills 和 MCP 配置。准备不代表发现、信任、登录或实际执行已验证。",
-        "activation": "按照准备后打印的确切手动激活路径进行操作。"
+        "activation": "在所选项目中打开或重启 Devin，并检查访问权限。UAP 会通过 Devin CLI 检查已安装的 Skills；请在 Devin 中验证 MCP 服务器。"
       },
       "grok": {
         "note": "原生 Skills 与 MCP 插件；CLI 验证",

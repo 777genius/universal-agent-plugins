@@ -255,28 +255,78 @@ class KiroPreparedLifecycleTest(unittest.TestCase):
         for field, value in (("scope", "project"), ("install_intent", "automatic"),
                              ("materialization", "absent"), ("activation", "active"),
                              ("authentication", "authenticated"), ("policy", "blocked"),
-                             ("verification", None), ("client_id", "grok")):
+                             ("verification", None), ("client_id", "grok"),
+                             ("install_intent", None)):
             with self.subTest(field=field):
                 changed = copy.deepcopy(node)
                 changed["clients"][0][field] = value
                 self.assertEqual(matches(changed), [])
-        for fault in ("duplicate", "source", "revision", "tree", "sequence"):
+        for fault in ("duplicate", "duplicate-active", "source", "revision", "tree", "sequence"):
             changed = copy.deepcopy(node)
-            if fault == "duplicate":
+            if fault in ("duplicate", "duplicate-active"):
                 changed["clients"].append(copy.deepcopy(changed["clients"][0]))
+                if fault == "duplicate-active":
+                    changed["clients"][-1].update(activation="active", verification="installation_verified")
             elif fault == "source":
                 changed["source"] = "unrelated/repository/entry"
             else:
                 key = {"revision": "resolved_revision", "tree": "tree_digest", "sequence": "release_sequence"}[fault]
                 changed["clients"][0]["package_revision"][key] = "wrong"
             self.assertEqual(matches(changed), [], fault)
-        changed = copy.deepcopy(node)
-        changed["clients"][0]["client_id"] = "grok"
-        self.assertEqual(matches(changed, "grok"), [])
+        self.assertEqual(matches(node, "grok"), [])
+        native = copy.deepcopy(node)
+        native["clients"][0].update(activation="active", verification="installation_verified")
+        self.assertEqual(matches(native), [native])
+
+    def test_generic_signed_prepared_bindings_keep_their_own_client_contract(self):
+        audit = load_audit()
+        for target in ("cursor", "grok"):
+            for intent in ("prepare", "automatic"):
+                with self.subTest(target=target, intent=intent):
+                    node, pins = self.fixture(audit)
+                    node["clients"][0].update(client_id=target, install_intent=intent)
+                    matches = audit.matching_installations(
+                        {"data": {"installations": [node]}}, "atlassian", target,
+                        "plugin", "atlassian", pins)
+                    self.assertEqual(matches, [node])
+                    self.assertIsNone(audit.kiro_prepared_user_client(node["clients"]))
+                    with TemporaryDirectory() as directory:
+                        present, calls = False, []
+
+                        def call(argv, env, cwd, timeout, **kwargs):
+                            nonlocal present
+                            calls.append(argv[1])
+                            owned = Path(env["HOME"]) / f".{target}/skills/fixture/SKILL.md"
+                            if argv[1] == "add":
+                                owned.parent.mkdir(parents=True, exist_ok=True)
+                                owned.write_text("---\nname: fixture\n---\nowned bytes\n")
+                                present = True
+                                data = {"actions": [{"component_support": [
+                                    {"kind": "skill", "name": "fixture", "support": "prepared"}]}]}
+                            elif argv[1] == "remove":
+                                owned.unlink()
+                                present = False
+                                data = {}
+                            else:
+                                data = {"installations": [copy.deepcopy(node)] if present else []}
+                            return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                                    "timeout": False, "_json": {"schema_version": 1, "command": argv[1],
+                                    "result": "success", "data": data}}
+
+                        with patch.object(audit, "call", side_effect=call):
+                            result = audit.do_case("inert-uap", target, "plugin", "atlassian", 0,
+                                                   Path(directory) / "run", {}, pins)
+                        self.assertEqual(calls, ["add", "list", "add", "list", "remove", "list"])
+                        self.assertEqual(result["status"], "prepared-lifecycle-passed")
+                        self.assertFalse(result["kiro_prepared_lifecycle_verified"])
+                        self.assertTrue(result["prepared_binding"])
+                        self.assertTrue(result["repeat_verified"])
+                        self.assertTrue(result["removal_verified"])
 
     def test_actual_case_continues_six_public_calls_without_native_credit(self):
         for fault in (None, "source", "duplicate", "repeat-active", "repeat-revision",
-                      "repeat-native", "foreign", "remove"):
+                      "repeat-intent", "repeat-auth", "repeat-duplicate", "repeat-id",
+                      "repeat-source", "repeat-native", "foreign", "remove"):
             with self.subTest(fault=fault), TemporaryDirectory() as directory:
                 audit = load_audit()
                 node, pins = self.fixture(audit)
@@ -304,6 +354,16 @@ class KiroPreparedLifecycleTest(unittest.TestCase):
                             node["clients"][0].update(activation="active", verification="installation_verified")
                         elif fault == "repeat-revision":
                             node["clients"][0]["package_revision"]["tree_digest"] = "sha256:" + "0" * 64
+                        elif fault == "repeat-intent":
+                            node["clients"][0]["install_intent"] = "automatic"
+                        elif fault == "repeat-auth":
+                            node["clients"][0]["authentication"] = "authenticated"
+                        elif fault == "repeat-duplicate":
+                            node["clients"].append(copy.deepcopy(node["clients"][0]))
+                        elif fault == "repeat-id":
+                            node["installation_id"] = "replacement-id"
+                        elif fault == "repeat-source":
+                            node["source"] = "unrelated/repository/entry"
                         elif fault == "repeat-native":
                             owned.write_text("changed during repeat\n")
                         elif fault == "foreign":

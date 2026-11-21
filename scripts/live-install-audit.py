@@ -1726,6 +1726,10 @@ def matching_installations(response, identity, target, kind, item, signed_releas
         clients = node.get("clients", [])
         if not isinstance(clients, list):
             continue
+        if target == "kiro" and kind == "plugin" and sum(
+                isinstance(client, dict) and client.get("client_id") == target
+                for client in clients) != 1:
+            continue
         prepared_kiro = (kiro_prepared_user_client(clients)
                          if target == "kiro" and kind == "plugin" else None)
         verified_clients = [
@@ -1736,7 +1740,7 @@ def matching_installations(response, identity, target, kind, item, signed_releas
               client.get("verification") == "package_validated" and
               (client.get("activation") == "manual_activation_required" or
                (isinstance(item, str) and item in signed_release_pins
-                and prepared_package_binding(client, target)))))
+                and target != "kiro" and prepared_package_binding(client, target)))))
         ]
         if not verified_clients:
             continue
@@ -2916,6 +2920,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
             and len(repeat_matches) == 1
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
+            and (not kiro_prepared or (
+                kiro_prepared_user_client(repeat_matches[0].get("clients")) is not None
+                and repeat_matches[0].get("source") == matching[0].get("source")))
             and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
             and gemini_repeat_observed
             and (not grok_prepared or repeat_project_unchanged)

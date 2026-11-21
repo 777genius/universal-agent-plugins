@@ -1545,7 +1545,11 @@ os._exit(0)
         def observe(child):
             result = original_observe(child)
             if result and not reaped:
-                reaped.append(os.waitpid(child.pid, 0))
+                pid, status = os.waitpid(child.pid, 0)
+                reaped.append((pid, status))
+                # Settle Popen bookkeeping only after collection and its refusal
+                # assertions; the collector must still see lost wait authority.
+                self.addCleanup(setattr, child, "returncode", os.waitstatus_to_exitcode(status))
             return result
 
         with mock.patch.object(trace_case, "observe_unreaped", side_effect=observe), \

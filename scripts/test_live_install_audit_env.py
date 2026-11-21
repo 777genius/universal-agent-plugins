@@ -8664,7 +8664,8 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
         revision = {"distribution_id": pin["distribution"], "resolved_revision": pin["revision"],
                     "release_sequence": 1, "tree_digest": pin["tree_digest"],
                     "manifest_digest": pin["manifest_digest"]}
-        binding = {"client_id": target, "scope": "user", "materialization": "materialized",
+        binding = {"client_id": target, "scope": "user", "install_intent": "prepare",
+                   "materialization": "materialized",
                    "activation": "prepared", "verification": "package_validated",
                    "policy": "allowed", "authentication": "not_checked", "package_revision": revision}
         row = {"name": "atlassian", "installation_id": "same-prepared-installation",
@@ -8736,7 +8737,8 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 self.assertNotEqual(row["status"], "passed")
                 self.assertFalse(audit.expected_negative_coverage(row))
                 if mode == "clean":
-                    self.assertEqual(row["status"], "prepared-lifecycle-passed")
+                    self.assertEqual(row["status"], "incomplete-native-proof")
+                    self.assertTrue(row["kiro_prepared_lifecycle_verified"])
                     self.assertTrue(row["repeat_verified"])
                     self.assertTrue(row["removal_verified"])
                     self.assertTrue(row["sentinels_preserved"])
@@ -8744,6 +8746,11 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                     self.assertEqual(row["public_target_states"]["after-add"]["states"][0]["activation"], "prepared")
                 else:
                     self.assertNotEqual(row["status"], "prepared-lifecycle-passed")
+                    self.assertFalse(row["kiro_prepared_lifecycle_verified"])
+                    failed_gate = {"repeat-drift": "repeat_verified",
+                                   "remove-residue": "removal_verified",
+                                   "foreign-change": "sentinels_preserved"}[mode]
+                    self.assertFalse(row[failed_gate])
 
     def test_prepared_only_opencode_config_is_not_native_pass(self):
         # Real published 0.1.102 can write opencode.json while all components

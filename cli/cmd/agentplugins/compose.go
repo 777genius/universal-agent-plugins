@@ -185,13 +185,17 @@ func newAgentpluginsLifecycle(home, dataRoot string, v2Store statev2.Store, path
 	}
 }
 
-func assembleAgentpluginsApp(home, dataRoot, cacheRoot string, v2Store statev2.Store, mutationLock processlock.Lock, lifecycle usecase.Service, directoryClient *directoryv1.Client, discoveryClient *discoveryv1.Client, securityClient *securityv1.Client, packageLoader loader.Loader, clientRegistry *clients.Registry, planner clientplanner.Planner) agentpluginscli.App {
+func newScopedSourceAcquirer(dataRoot, cacheRoot string) lazySourceAcquirer {
 	// Project acquisition uses a private os.MkdirTemp workspace outside the
 	// persistent User cache. User scope retains its existing cache-local root.
 	sourceTempRoot := cacheRoot
 	if dataRoot != cacheRoot {
 		sourceTempRoot = ""
 	}
+	return lazySourceAcquirer{dataRoot: cacheRoot, acquirer: sourceacquisition.Acquirer{TempRoot: sourceTempRoot}}
+}
+
+func assembleAgentpluginsApp(home, dataRoot, cacheRoot string, v2Store statev2.Store, mutationLock processlock.Lock, lifecycle usecase.Service, directoryClient *directoryv1.Client, discoveryClient *discoveryv1.Client, securityClient *securityv1.Client, packageLoader loader.Loader, clientRegistry *clients.Registry, planner clientplanner.Planner) agentpluginscli.App {
 	detector := clientdetect.NewOS(home)
 	detector.Registry = clientRegistry
 	legacyStatePath := filepath.Join(home, ".plugin-kit-ai", "state.json")
@@ -227,7 +231,7 @@ func assembleAgentpluginsApp(home, dataRoot, cacheRoot string, v2Store statev2.S
 			return commitDependencyDirectoryPreview(directoryClient, preview)
 		},
 		DiscoveryClient:     discoveryClient,
-		SourceAcquirer:      lazySourceAcquirer{dataRoot: cacheRoot, acquirer: sourceacquisition.Acquirer{TempRoot: sourceTempRoot}},
+		SourceAcquirer:      newScopedSourceAcquirer(dataRoot, cacheRoot),
 		PackageLoader:       packageLoader,
 		NativePackageLoader: loader.OpenAILoader{Loader: packageLoader},
 		SecurityIndex:       securityClient,

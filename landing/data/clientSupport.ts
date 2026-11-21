@@ -62,7 +62,7 @@ const publishedClientSupportRows: ClientSupport[] = [
     name: 'Cursor',
     user: 'Plugins, Skills, MCP',
     project: 'Skills, MCP',
-    setup: 'Automatic',
+    setup: 'Prepared',
     nextStep: 'Reload Cursor; enable plugins or MCP servers if requested.',
   },
   {
@@ -102,7 +102,7 @@ const publishedClientSupportRows: ClientSupport[] = [
     name: 'Windsurf / Devin',
     user: 'Skills, MCP',
     project: 'Skills, MCP',
-    setup: 'Guided',
+    setup: 'Automatic',
     nextStep: 'Open or restart Devin in the selected project; review access.',
   },
   {
@@ -117,8 +117,8 @@ const publishedClientSupportRows: ClientSupport[] = [
     id: 'cline',
     name: 'Cline',
     user: 'Skills, MCP',
-    project: 'Skills, MCP',
-    setup: 'Guided',
+    project: 'Skills, MCP (prepared)',
+    setup: 'Automatic',
     nextStep: 'Select the project MCP settings path and reload Cline.',
   },
   {
@@ -135,7 +135,7 @@ const publishedClientSupportRows: ClientSupport[] = [
     name: 'Grok Build',
     user: 'Skills, MCP',
     project: 'Skills, MCP (prepared)',
-    setup: 'Guided',
+    setup: 'Automatic',
     nextStep:
       'Open the selected project in Grok, review trust, and follow any remaining enablement or reload steps; verify Skills and MCP.',
   },
@@ -144,7 +144,7 @@ const publishedClientSupportRows: ClientSupport[] = [
     name: 'Hermes Agent',
     user: 'Skills, MCP',
     project: 'Skills, MCP (prepared)',
-    setup: 'Guided',
+    setup: 'Automatic',
     nextStep:
       'Restart Hermes and trust the project; Project MCP requires a verified standalone Hermes bundle and an explicitly confirmed UAP project session.',
   },
