@@ -144,7 +144,7 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 	sort.SliceStable(skipped, func(i, j int) bool { return targetOrder(skipped[i].Client) < targetOrder(skipped[j].Client) })
 	request := prompt.TargetSelectionRequest{}
 	for _, c := range detected {
-		request.Choices = append(request.Choices, prompt.TargetChoice{ID: c.ClientID, Label: prompt.SafeText(c.DisplayName)})
+		request.Choices = append(request.Choices, targetChoiceFor(c))
 		request.DefaultIDs = append(request.DefaultIDs, c.ClientID)
 	}
 	for _, c := range skipped {
@@ -152,7 +152,7 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 		if definition, ok := domain.ClientDefinitionFor(c.Client); ok {
 			label = definition.DisplayName
 		}
-		request.SkippedLabels = append(request.SkippedLabels, prompt.SafeText(label+": "+c.Reason))
+		request.Skipped = append(request.Skipped, prompt.SkippedTarget{ID: c.Client, Label: label, Target: publicCLITargetName(c.Client), Kind: c.Kind, Reason: c.Reason})
 	}
 	if len(detected) > 0 {
 		if err := prompt.ValidateRequest(request); err != nil {
@@ -161,7 +161,7 @@ func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.Detected
 	}
 	personalPreparationChoice := len(detected) == 1 && requiresPersonalMapping(detected[0].ClientID) && strings.Contains(detected[0].DisplayName, "prepare personal marketplace")
 	if len(detected) <= 1 && !personalPreparationChoice {
-		if notice := prompt.SkippedClientsNotice(request.SkippedLabels); notice != "" {
+		if notice := prompt.SkippedClientsNotice(request.Skipped); notice != "" {
 			if _, err := fmt.Fprint(reviewWriter(cmd, app), notice); err != nil {
 				return nil, nil, err
 			}

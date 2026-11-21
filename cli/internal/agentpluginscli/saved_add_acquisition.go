@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
@@ -95,11 +96,11 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 		for _, client := range clients {
 			switch {
 			case client.DetectionError != nil:
-				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "client configuration could not be inspected safely; correct it and retry"})
+				skipped = append(skipped, targetSkip{Client: client.ClientID, Kind: prompt.SkipManual, Reason: reasonConfigurationUnreadable})
 			case client.Status != domain.DetectionDetected:
-				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "client is not detected; install or configure it before selecting it"})
+				skipped = append(skipped, targetSkip{Client: client.ClientID, Kind: prompt.SkipNotDetected})
 			case !supportsDependencyTarget(app, string(client.ClientID)):
-				skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "use --no-save"})
+				skipped = append(skipped, targetSkip{Client: client.ClientID, Kind: prompt.SkipNotSaveable})
 			default:
 				eligible = append(eligible, client)
 			}

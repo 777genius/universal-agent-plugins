@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -23,7 +24,35 @@ func compatibleSavedAddTargets(ctx context.Context, app App, source string, dete
 	if loaded != nil && loaded.cleanup != nil {
 		defer func() { _ = loaded.cleanup() }()
 	}
-	return compatible, skipped, err
+	if err != nil {
+		return nil, nil, err
+	}
+	compatible, skipped = offerSavedHostedPreparation(app, detected, compatible, skipped)
+	return compatible, skipped, nil
+}
+
+// offerSavedHostedPreparation keeps a client whose automatic host check failed
+// in the choices when the saved installation itself falls back to file-only
+// preparation. That fallback exists only for a fresh User-scope install on a
+// client that allows hosted preparation (installer.previewHostedPackage), so no
+// other scope or client is offered. Selection still runs the same preflight and
+// confirmation before anything is written.
+func offerSavedHostedPreparation(app App, detected, compatible []domain.DetectedClient, skipped []targetSkip) ([]domain.DetectedClient, []targetSkip) {
+	if app.scope() != domain.ScopeUser {
+		return compatible, skipped
+	}
+	byID := detectedClientMap(detected)
+	kept := skipped[:0]
+	for _, skip := range skipped {
+		client, ok := byID[skip.Client]
+		if !ok || skip.Kind != prompt.SkipManual || !allowsHostedPrepare(skip.Client) {
+			kept = append(kept, skip)
+			continue
+		}
+		client.DisplayName += preparedOnlySuffix
+		compatible = append(compatible, client)
+	}
+	return compatible, kept
 }
 
 // compatibleTargetsDeferringHostQualification offers detected clients whose

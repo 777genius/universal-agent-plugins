@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
@@ -26,7 +27,7 @@ func (app App) compatibleLoadedTargets(ctx context.Context, loaded loadedPackage
 	if session == nil {
 		skipped := make([]targetSkip, 0, len(detected))
 		for _, client := range detected {
-			skipped = append(skipped, targetSkip{client.ClientID, "package planning is not configured"})
+			skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: "package planning is not configured"})
 		}
 		return nil, skipped
 	}
@@ -96,14 +97,14 @@ func (session *loadedTargetSession) classify(client domain.DetectedClient) (doma
 	}
 	candidate := cloneLoadedPackage(session.loaded)
 	if err := prepareLoadedPackageForClient(&candidate, client.ClientID); err != nil {
-		return client, &targetSkip{client.ClientID, "package binding preparation failed; ask the package publisher to check its client mapping"}, false
+		return client, &targetSkip{Client: client.ClientID, Reason: "package binding preparation failed; ask the package publisher to check its client mapping"}, false
 	}
 	plan, err := session.app.Planner.Plan(session.ctx, domain.PlanRequest{ProjectRoot: session.app.ProjectRoot,
 		Envelope: candidate.envelope, Client: client, Scope: session.app.scope(), PhysicalArtifactID: session.physicalID,
 		Detected: session.clientMap,
 	})
 	if err != nil || plan.Status == domain.PlanUnsupported {
-		return client, &targetSkip{client.ClientID, unsupportedLoadedReason(err, plan)}, false
+		return client, &targetSkip{Client: client.ClientID, Reason: unsupportedLoadedReason(err, plan)}, false
 	}
 	if skip := session.applyPrepareIntent(&plan, &client); skip != nil {
 		return client, skip, false
@@ -132,13 +133,13 @@ func (session *loadedTargetSession) applyPrepareIntent(plan *domain.DeliveryPlan
 		return nil
 	}
 	if err := clientplanner.ApplyInstallIntent(session.app.ClientRegistry, plan, domain.InstallIntentPrepare); err != nil {
-		return &targetSkip{client.ClientID, "persisted preparation cannot serve this package"}
+		return &targetSkip{Client: client.ClientID, Reason: "persisted preparation cannot serve this package"}
 	}
 	if requiresPersonalMapping(client.ClientID) {
 		client.DisplayName += " (prepare personal marketplace; install and verify tools in ChatGPT)"
 		return nil
 	}
-	client.DisplayName += " (prepare only; manual verification)"
+	client.DisplayName += preparedOnlySuffix
 	return nil
 }
 
@@ -163,9 +164,11 @@ func (session *loadedTargetSession) preflightFailure(client domain.DetectedClien
 		}
 	}
 	if allowsHostedPrepare(client.ClientID) {
-		reason = "this CLI cannot automatically check MCP connections in your " + domain.ClientDisplayName(client.ClientID) + " setup. Nothing was installed in " + domain.ClientDisplayName(client.ClientID) + ". Use another listed client, or connect the server in " + domain.ClientDisplayName(client.ClientID) + ": https://kiro.dev/docs/mcp/"
+		name := domain.ClientDisplayName(client.ClientID)
+		reason = "this CLI cannot check MCP connections in your " + name + " setup automatically; connect the server in " + name + " yourself (https://kiro.dev/docs/mcp/) or choose another client"
+		return client, &targetSkip{Client: client.ClientID, Kind: prompt.SkipManual, Reason: reason}, false
 	}
-	return client, &targetSkip{client.ClientID, reason}, false
+	return client, &targetSkip{Client: client.ClientID, Reason: reason}, false
 }
 
 func (session *loadedTargetSession) tryHostedPrepare(client domain.DetectedClient, plan domain.DeliveryPlan) (domain.DetectedClient, bool) {
@@ -177,6 +180,6 @@ func (session *loadedTargetSession) tryHostedPrepare(client domain.DetectedClien
 		return client, false
 	}
 	session.intents[0][client.ClientID] = domain.InstallIntentPrepare
-	client.DisplayName += " (prepare only; manual verification)"
+	client.DisplayName += preparedOnlySuffix
 	return client, true
 }
