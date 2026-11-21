@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -109,11 +108,7 @@ func TestKiroExactMCPApprovalDisposableLifecycle(t *testing.T) {
   "unrelated": 9007199254740993,
   "mcpServers": {"foreign": {"url": "https://foreign.test", "autoApprove": ["*"]}}
 }`)
-	original, err := os.ReadFile(config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var previous []domain.NativeObjectOwnership
+		var previous []domain.NativeObjectOwnership
 	for _, trial := range []struct {
 		name string
 		list []string
@@ -180,9 +175,6 @@ func TestKiroExactMCPApprovalDisposableLifecycle(t *testing.T) {
 	if !reflect.DeepEqual(servers["foreign"].(map[string]any)["autoApprove"], []any{"*"}) {
 		t.Fatal("unrelated tool consent was changed")
 	}
-	if len(original) == 0 {
-		t.Fatal("invalid fixture")
-	}
 	if _, err := os.Stat(filepath.Join(root, "settings", "permissions.yaml")); !os.IsNotExist(err) {
 		t.Fatalf("Kiro global workspace/tool permissions were unexpectedly created: %v", err)
 	}
@@ -238,8 +230,5 @@ func TestKiroProjectApprovalDoesNotForgeWorkspaceTrust(t *testing.T) {
 	}
 	if got := kiroApprovalDisclosure(mcpApprovals{Servers: map[string][]string{"docs": {"read_docs"}}}); !strings.Contains(got, "workspace trust") {
 		t.Fatalf("Kiro trust limit hidden: %s", got)
-	}
-	if err := shared.WriteJSON(filepath.Join(stage, "mcp-original.json"), map[string]any{"untouched": true}); err != nil {
-		t.Fatal(err)
 	}
 }
