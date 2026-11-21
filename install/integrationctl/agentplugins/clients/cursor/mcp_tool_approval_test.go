@@ -198,6 +198,23 @@ func TestCursorToolPermissionsMergePreservesForeignAndRefusals(t *testing.T) {
 	if err != nil || !bytes.Equal(repeated, merged) {
 		t.Fatalf("repeated approval changed bytes: %v", err)
 	}
+	// Cursor MCP permission identifiers are exact/case-sensitive. A foreign
+	// differently-cased allow token cannot satisfy the publisher's named grant.
+	caseChanged, err := cursorMergeToolPermissions([]byte(`{"permissions":{"allow":["Mcp(AUDIT:inspect_runtime)"]}}`), approved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var caseDocument struct {
+		Permissions struct {
+			Allow []string `json:"allow"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(caseChanged, &caseDocument); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(caseDocument.Permissions.Allow, []string{"Mcp(AUDIT:inspect_runtime)", "Mcp(audit:inspect_runtime)"}) {
+		t.Fatalf("exact Cursor MCP grant missing or foreign allow changed: %s", caseChanged)
+	}
 	for _, raw := range []string{
 		"{\"permissions\":{\"deny\":[\"Mcp(audit:inspect_runtime)\"]}}",
 		"{\"permissions\":{\"ask\":[\"Mcp(*:*)\"]}}",
