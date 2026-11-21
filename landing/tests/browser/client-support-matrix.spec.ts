@@ -109,7 +109,7 @@ const nativeClientCases = (['hermes', 'antigravity'] as const).flatMap((client) 
 );
 
 for (const { client, locale, theme, width } of nativeClientCases) {
-  test(`${client} ${locale} ${theme} route copies an immutable source command at ${width}px`, async ({ page, context }, testInfo) => {
+  test(`${client} ${locale} ${theme} route copies an eligible install command at ${width}px`, async ({ page, context }, testInfo) => {
     const t = wording(locale);
     const direction = locale === 'ar' ? 'rtl' : 'ltr';
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
