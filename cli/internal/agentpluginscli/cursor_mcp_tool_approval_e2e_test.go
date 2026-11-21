@@ -130,9 +130,13 @@ func configureCursorProjectCLI(t *testing.T, f *cliFixture, project string) {
 func cursorAssertCLIState(t *testing.T, fixture cliFixture, output string) {
 	t.Helper()
 	state, err := fixture.store.Load()
-	if err != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 ||
-		state.Installations[0].Clients[0].Activation != domain.ActivationPrepared {
-		t.Fatalf("Cursor project claimed native readiness or lost state: %+v (%v), output=%s", state, err, output)
+	if err != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+		t.Fatalf("Cursor project lost its exact installation state: %+v (%v), output=%s", state, err, output)
+	}
+	for _, client := range state.Installations[0].Clients {
+		if client.Activation != domain.ActivationPrepared {
+			t.Fatalf("Cursor project claimed unverified native readiness: %+v, output=%s", client, output)
+		}
 	}
 }
 
