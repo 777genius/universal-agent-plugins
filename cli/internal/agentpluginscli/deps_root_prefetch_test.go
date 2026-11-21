@@ -201,7 +201,7 @@ func mixedRootsJourney(t *testing.T) (App, environment.Requirements, *rootFetchS
 	return j.cli.app, requirements, source
 }
 
-func resolveMixedRoots(t *testing.T, ctx context.Context, app App, requirements environment.Requirements, previous []byte, serial bool) ([]byte, error) {
+func resolveMixedRoots(ctx context.Context, t *testing.T, app App, requirements environment.Requirements, previous []byte, serial bool) ([]byte, error) {
 	t.Helper()
 	preview, cleanup, err := dependencyPreviewApp(app, &options{})
 	if err != nil {
@@ -236,13 +236,13 @@ func resolveMixedRoots(t *testing.T, ctx context.Context, app App, requirements 
 
 func TestGitRootPrefetchProducesTheSerialLockWithOneReadPerRoot(t *testing.T) {
 	app, requirements, source := mixedRootsJourney(t)
-	serial, err := resolveMixedRoots(t, t.Context(), app, requirements, nil, true)
+	serial, err := resolveMixedRoots(t.Context(), t, app, requirements, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	serialReads := source.sortedReads()
 	source.reads, source.overlap = nil, true
-	parallel, err := resolveMixedRoots(t, t.Context(), app, requirements, nil, false)
+	parallel, err := resolveMixedRoots(t.Context(), t, app, requirements, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,12 +258,12 @@ func TestGitRootPrefetchProducesTheSerialLockWithOneReadPerRoot(t *testing.T) {
 	// Roots pinned by the previous lock are not prefetched: the pinned
 	// resolution reads exactly what the serial one reads.
 	source.reads, source.overlap = nil, false
-	if _, err := resolveMixedRoots(t, t.Context(), app, requirements, parallel, true); err != nil {
+	if _, err := resolveMixedRoots(t.Context(), t, app, requirements, parallel, true); err != nil {
 		t.Fatal(err)
 	}
 	pinnedReads := source.sortedReads()
 	source.reads = nil
-	again, err := resolveMixedRoots(t, t.Context(), app, requirements, parallel, false)
+	again, err := resolveMixedRoots(t.Context(), t, app, requirements, parallel, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +277,7 @@ func TestGitRootPrefetchProducesTheSerialLockWithOneReadPerRoot(t *testing.T) {
 // resolveDependencySyncCandidate; that path must use the same prefetch.
 func TestGitRootPrefetchServesInstallAndSyncResolution(t *testing.T) {
 	app, requirements, source := mixedRootsJourney(t)
-	serial, err := resolveMixedRoots(t, t.Context(), app, requirements, nil, true)
+	serial, err := resolveMixedRoots(t.Context(), t, app, requirements, nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -313,14 +313,14 @@ func TestGitRootPrefetchFailingSourceReturnsTheSerialError(t *testing.T) {
 		t.Run(failing, func(t *testing.T) {
 			app, requirements, source := mixedRootsJourney(t)
 			source.fail = failing
-			_, serialErr := resolveMixedRoots(t, t.Context(), app, requirements, nil, true)
+			_, serialErr := resolveMixedRoots(t.Context(), t, app, requirements, nil, true)
 			if serialErr == nil {
 				t.Fatal("expected the failing source to fail serial resolution")
 			}
 			serialReads, serialFailing := source.sortedReads(), source.readsOf(failing)
 			source.reset()
 			source.overlap = true
-			_, parallelErr := resolveMixedRoots(t, t.Context(), app, requirements, nil, false)
+			_, parallelErr := resolveMixedRoots(t.Context(), t, app, requirements, nil, false)
 			if parallelErr == nil || parallelErr.Error() != serialErr.Error() {
 				t.Fatalf("prefetched error = %v, want the serial error %v", parallelErr, serialErr)
 			}
@@ -352,7 +352,7 @@ func TestGitRootPrefetchFailingSourceReturnsTheSerialError(t *testing.T) {
 func TestGitRootPrefetchCanceledRootStopsAfterItsRef(t *testing.T) {
 	app, requirements, source := mixedRootsJourney(t)
 	source.fail, source.holdRefs = "ref acme/skills//skills/alpha", true // first root in solver order
-	if _, err := resolveMixedRoots(t, t.Context(), app, requirements, nil, false); err == nil {
+	if _, err := resolveMixedRoots(t.Context(), t, app, requirements, nil, false); err == nil {
 		t.Fatal("expected the failing source to fail resolution")
 	}
 	source.mu.Lock()
@@ -374,7 +374,7 @@ func TestGitRootPrefetchCancellationLeavesNoAcquisitions(t *testing.T) {
 			cancel()
 		}
 	}
-	if _, err := resolveMixedRoots(t, ctx, app, requirements, nil, false); err == nil {
+	if _, err := resolveMixedRoots(ctx, t, app, requirements, nil, false); err == nil {
 		t.Fatal("expected cancellation to abort resolution")
 	}
 	assertEmptyDir(t, source.tempRoot)
