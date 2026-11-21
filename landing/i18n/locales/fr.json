@@ -359,7 +359,7 @@
         "nextStep": "Après l’installation"
       },
       "scrollHint": "Faites défiler le tableau horizontalement pour voir toutes les colonnes.",
-      "note": "Automatique : UAP installe les composants pris en charge. Guidée : suivez les instructions de l’agent. Préparée : activez les fichiers préparés. Manuelle : terminez la configuration dans l’application. Après confirmation, UAP termine la configuration native prise en charge et indique les étapes de confiance, connexion ou rechargement restantes. La disponibilité dépend du plugin et de la version de l’agent. Référence : CLI natif 0.1.114. La publication sur npm est indépendante et peut être décalée. La prise en charge d’un agent ne garantit pas une version signée du catalogue compatible avec chaque plugin et chaque portée.",
+      "note": "Automatique : UAP installe les composants pris en charge. Guidée : suivez les instructions de l’agent. Préparée : activez les fichiers préparés. Manuelle : terminez la configuration dans l’application. Après confirmation, UAP termine la configuration native prise en charge et indique les étapes de confiance, connexion ou rechargement restantes. La disponibilité dépend du plugin et de la version de l’agent. Référence : CLI natif 0.1.115. La publication sur npm est indépendante et peut être décalée. La prise en charge d’un agent ne garantit pas une version signée du catalogue compatible avec chaque plugin et chaque portée.",
       "details": "Voir les détails de compatibilité",
       "capabilities": {
         "pluginsSkillsMcp": "Plugins, compétences, MCP",
@@ -903,7 +903,7 @@
       },
       "cursor": {
         "note": "Paquet Agent Plugin natif",
-        "status": "Pris en charge",
+        "status": "Préparé par CLI",
         "intro": "Installez Agent Plugins 1.0 dans les projets Cursor sans traduire chaque plugin à la main. La CLI planifie le paquet natif avant de modifier les fichiers.",
         "delivery": "La CLI prépare les composants de plugin, skills et MCP pris en charge par Cursor pour la portée choisie. La commande add utilise la portée utilisateur par défaut ; choisissez explicitement la portée projet pour add.",
         "activation": "Rechargez Cursor lorsque cela vous est demandé, puis vérifiez que le plugin est détecté."
@@ -958,11 +958,11 @@
         "activation": "Rechargez Cline et authentifiez-vous auprès du fournisseur. Le MCP projet exige la session gérée explicitement choisie et son CLINE_MCP_SETTINGS_PATH ; un démarrage ordinaire ne sélectionne pas cette configuration."
       },
       "windsurf": {
-        "note": "Paquet préparé ; activation manuelle requise",
-        "status": "Préparé par CLI",
-        "intro": "Préparez Agent Plugins 1.0 pour Windsurf avec une commande CLI, puis terminez explicitement l'étape d'activation spécifique au client.",
+        "note": "Skills et configuration MCP gérées",
+        "status": "Pris en charge",
+        "intro": "Installez les Skills et serveurs MCP Agent Plugins 1.0 pour Windsurf / Devin avec une seule commande CLI.",
         "delivery": "Le CLI écrit ses Skills et la configuration MCP pour Devin 3000.11.205 ou 3000.12.57 dans les portées utilisateur et projet. La préparation ne prouve ni découverte, ni confiance, ni connexion, ni exécution réelle.",
-        "activation": "Suivez le chemin d’activation manuel exact imprimé après la préparation."
+        "activation": "Ouvrez ou redémarrez Devin dans le projet sélectionné et vérifiez les accès. UAP contrôle les Skills installés avec la CLI Devin ; vérifiez les serveurs MCP dans Devin."
       },
       "grok": {
         "note": "Plugin natif de Skills et MCP ; vérification par CLI",

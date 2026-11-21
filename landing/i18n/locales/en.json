@@ -376,7 +376,7 @@
         "nextStep": "What you do after installing"
       },
       "scrollHint": "Scroll sideways to see every column.",
-      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. After confirmation, UAP completes supported native setup and reports remaining trust, sign-in or reload steps. Availability depends on the plugin and client version. Baseline: native CLI 0.1.114. npm publication is separate and may lag. Agent support does not guarantee a compatible signed catalog release for every plugin and scope.",
+      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. After confirmation, UAP completes supported native setup and reports remaining trust, sign-in or reload steps. Availability depends on the plugin and client version. Baseline: native CLI 0.1.115. npm publication is separate and may lag. Agent support does not guarantee a compatible signed catalog release for every plugin and scope.",
       "details": "Check compatibility details",
       "capabilities": {
         "pluginsSkillsMcp": "Plugins, Skills, MCP",
@@ -920,7 +920,7 @@
       },
       "cursor": {
         "note": "Native Agent Plugin package",
-        "status": "Supported",
+        "status": "Prepared by CLI",
         "intro": "Install Agent Plugins 1.0 into Cursor projects without translating each plugin by hand. The CLI plans the native package before changing files.",
         "delivery": "The CLI prepares supported Cursor plugin, skill and MCP components for the selected scope. The add command defaults to user scope; select project scope explicitly for add.",
         "activation": "Reload Cursor when requested, then verify that the plugin is discovered."
@@ -975,11 +975,11 @@
         "activation": "Reload Cline and complete provider authentication. Project MCP requires the explicitly selected managed session and its CLINE_MCP_SETTINGS_PATH; ordinary startup does not select that configuration."
       },
       "windsurf": {
-        "note": "Prepared package; manual activation required",
-        "status": "Prepared by CLI",
-        "intro": "Prepare Agent Plugins 1.0 for Windsurf with one CLI command, then finish the client-specific activation step explicitly.",
+        "note": "Managed skills and MCP configuration",
+        "status": "Supported",
+        "intro": "Install Agent Plugins 1.0 Skills and MCP servers for Windsurf / Devin with one CLI command.",
         "delivery": "The CLI writes owned Skills and MCP configuration for Devin versions 3000.11.205 or 3000.12.57 in User and Project scope. Preparation does not prove discovery, trust, sign-in, or live execution.",
-        "activation": "Follow the exact manual activation path printed after preparation."
+        "activation": "Open or restart Devin in the selected project and review access. UAP checks installed Skills with the Devin CLI; verify MCP servers in Devin."
       },
       "grok": {
         "note": "Native skills and MCP plugin; CLI verification",

@@ -359,7 +359,7 @@
         "nextStep": "Después de instalar"
       },
       "scrollHint": "Desplázate horizontalmente para ver todas las columnas.",
-      "note": "Automática: UAP instala los componentes compatibles. Guiada: sigue las indicaciones del agente. Preparada: activa los archivos preparados. Manual: termina la configuración en la aplicación. Tras la confirmación, UAP completa la configuración nativa compatible e indica los pasos de confianza, inicio de sesión o recarga pendientes. La disponibilidad depende del complemento y de la versión del agente. Referencia: CLI nativo 0.1.114. La publicación en npm es independiente y puede demorarse. Admitir un agente no garantiza una versión firmada del catálogo compatible con cada plugin y ámbito.",
+      "note": "Automática: UAP instala los componentes compatibles. Guiada: sigue las indicaciones del agente. Preparada: activa los archivos preparados. Manual: termina la configuración en la aplicación. Tras la confirmación, UAP completa la configuración nativa compatible e indica los pasos de confianza, inicio de sesión o recarga pendientes. La disponibilidad depende del complemento y de la versión del agente. Referencia: CLI nativo 0.1.115. La publicación en npm es independiente y puede demorarse. Admitir un agente no garantiza una versión firmada del catálogo compatible con cada plugin y ámbito.",
       "details": "Ver detalles de compatibilidad",
       "capabilities": {
         "pluginsSkillsMcp": "Complementos, habilidades, MCP",
@@ -903,7 +903,7 @@
       },
       "cursor": {
         "note": "Paquete de complemento de agente nativo",
-        "status": "Compatible",
+        "status": "Preparado por CLI",
         "intro": "Instala Agent Plugins 1.0 en proyectos de Cursor sin traducir cada complemento a mano. La CLI planifica el paquete nativo antes de cambiar los archivos.",
         "delivery": "La CLI prepara los componentes de plugin, skills y MCP compatibles con Cursor en el ámbito elegido. El comando add usa el ámbito de usuario por defecto; el ámbito de proyecto debe elegirse explícitamente para add.",
         "activation": "Recarga Cursor cuando se solicite y comprueba que se detecte el plugin."
@@ -958,11 +958,11 @@
         "activation": "Recarga Cline y autentícate con el proveedor. El MCP de proyecto requiere la sesión gestionada elegida explícitamente y su CLINE_MCP_SETTINGS_PATH; el inicio normal no selecciona esa configuración."
       },
       "windsurf": {
-        "note": "Paquete preparado; Se requiere activación manual",
-        "status": "Preparado por CLI",
-        "intro": "Prepara Agent Plugins 1.0 para Windsurf con un comando de la CLI y después completa el paso de activación específico del cliente.",
+        "note": "Skills y configuración MCP gestionadas",
+        "status": "Compatible",
+        "intro": "Instala Skills y servidores MCP de Agent Plugins 1.0 para Windsurf / Devin con un solo comando de la CLI.",
         "delivery": "La CLI escribe sus Skills y la configuración MCP para Devin 3000.11.205 o 3000.12.57 en los ámbitos de usuario y de proyecto. La preparación no prueba descubrimiento, confianza, inicio de sesión ni ejecución real.",
-        "activation": "Sigue la ruta de activación manual exacta impresa después de la preparación."
+        "activation": "Abre o reinicia Devin en el proyecto seleccionado y revisa el acceso. UAP comprueba los Skills instalados con la CLI de Devin; verifica los servidores MCP en Devin."
       },
       "grok": {
         "note": "Plugin nativo de Skills y MCP; verificación mediante CLI",

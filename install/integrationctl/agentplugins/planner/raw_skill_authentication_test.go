@@ -20,6 +20,8 @@ func TestRawSkillInstallationAuthenticationRequiresAdapterOptIn(t *testing.T) {
 		{domain.ClientOpenCode, domain.AuthenticationNotRequired, domain.AuthenticationNotRequired},
 		{domain.ClientCursor, domain.AuthenticationNotChecked, domain.AuthenticationNotRequired},
 		{domain.ClientGemini, domain.AuthenticationNotChecked, domain.AuthenticationNotRequired},
+		// Grok Project Skills qualify after native observation, not at planning.
+		{domain.ClientGrok, domain.AuthenticationNotRequired, domain.AuthenticationNotChecked},
 	} {
 		for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
 			t.Run(string(adapter.id)+"/"+string(scope), func(t *testing.T) {
@@ -29,7 +31,11 @@ func TestRawSkillInstallationAuthenticationRequiresAdapterOptIn(t *testing.T) {
 					project = root
 				}
 				planner := testPlanner(Planner{ProjectRoot: project, ManagedRoot: filepath.Join(root, ".uap", "managed")})
-				client := detectedClient(adapter.id, filepath.Join(root, "profile"))
+				profile := filepath.Join(root, "profile")
+				if adapter.id == domain.ClientGrok {
+					profile = filepath.Join(root, "home", ".grok") // Grok Project admits only an ordinary ~/.grok.
+				}
+				client := detectedClient(adapter.id, profile)
 				client.ExecutablePath = filepath.Join(root, "native-client")
 				if adapter.id == domain.ClientOpenCode {
 					client.OpenCodeHost = contracttest.OpenCodeV1Host{}

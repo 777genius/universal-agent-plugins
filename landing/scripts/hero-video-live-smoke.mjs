@@ -85,7 +85,7 @@ async function run() {
           await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
         } else await demo.getByRole('button', { name: 'Close demo' }).click();
         await expect(demo.locator('iframe')).toHaveCount(0);
-        await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+        await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
         await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
         await shot('restored-poster'); expect(entry.page_errors).toEqual([]); entry.status = 'passed';
       } catch (error) {
