@@ -374,9 +374,10 @@ img {
 .hero__plugin-count {
   font-variant-numeric: tabular-nums;
 }
-.hero__install {
+// Anchor box for the fixed agent orbit (HeroAgentField measures it).
+.hero__visual {
   position: relative;
-  isolation: isolate;
+  min-height: 300px;
 }
 
 .demo-showcase {
@@ -883,23 +884,43 @@ img {
 }
 
 .client-section {
-  padding-block: 17px 15px;
-  background: color-mix(in srgb, var(--surface-solid) 48%, transparent);
+  padding-block: clamp(28px, 4vw, 44px);
+  // Dense enough that the hero orbit behind it never reads as extra agent tiles.
+  background: color-mix(in srgb, var(--surface-solid) 86%, transparent);
+}
+// Install steps first, then the agents; the columns stack below 981px. The
+// install column is slightly wider so the one-line command fits in every locale.
+.client-section__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(28px, 4vw, 56px);
+}
+.hero-quick-start {
+  position: relative;
+  min-width: 0;
+}
+.client-section__agents {
+  min-width: 0;
   text-align: center;
 }
-.client-section__inner > p:first-child {
-  margin-bottom: 10px;
+// Outranks the generic .registry-surface h2 size: this heading is an eyebrow label.
+.client-section .client-section__title {
+  margin: 0 0 10px;
   color: var(--subtle);
   font-size: 0.62rem;
   font-weight: 750;
+  line-height: 1.4;
   letter-spacing: 0.15em;
   text-transform: uppercase;
 }
+// As many agents per row as fit. 80px keeps the longest one-word status
+// (ru "Поддерживается", about 68px) on one line; names wrap inside the tile.
 .client-strip {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(var(--client-strip-columns, 13), minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
   gap: 4px;
   list-style: none;
 }
@@ -957,12 +978,14 @@ img {
   color: var(--subtle);
   font-size: 0.48rem;
   font-weight: 750;
+  overflow-wrap: anywhere;
 }
 .client-section__note {
   max-width: 820px;
   margin: 9px auto 0;
   color: var(--subtle);
   font-size: 0.62rem;
+  text-wrap: balance;
 }
 
 .how {
@@ -3164,12 +3187,17 @@ img {
   .hero__actions {
     justify-content: center;
   }
-  .hero__demo {
+  .hero__visual {
     width: min(100%, 610px);
+    min-height: 240px;
     margin: 0 auto;
   }
-  .client-strip {
-    grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  .client-section__inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hero-quick-start {
+    width: min(100%, 610px);
+    margin-inline: auto;
   }
   .plugin-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3244,6 +3272,9 @@ img {
   .hero h1 {
     font-size: clamp(2.2rem, 11vw, 3.2rem);
   }
+  .hero__visual {
+    min-height: 220px;
+  }
   .hero__actions {
     display: grid;
   }
@@ -3280,15 +3311,6 @@ img {
   }
   .hero-targets__grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .client-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .client-strip li {
-    grid-column: auto;
-  }
-  .client-strip li:last-child {
-    grid-column: 2;
   }
   .client-strip li > a {
     min-height: 66px;
