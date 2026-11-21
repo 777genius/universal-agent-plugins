@@ -25,8 +25,8 @@ xattr -w com.apple.quarantine "0081;$(printf '%x' "$(date +%s)");agentplugins-si
 xattr -p com.apple.quarantine "$work/agentplugins" > /dev/null
 spctl --status || true
 for attempt in 1 2 3 4 5; do
-  observed="$(env -i HOME="$work/home" PATH=/usr/bin:/bin "$work/agentplugins" version 2>&1)" || true
-  if [[ "$observed" == "agentplugins $version" ]]; then
+  if observed="$(env -i HOME="$work/home" PATH=/usr/bin:/bin "$work/agentplugins" version 2>&1)" &&
+    [[ "$observed" == "agentplugins $version" ]]; then
     echo "Quarantined signed binary ran: $observed"
     exit 0
   fi

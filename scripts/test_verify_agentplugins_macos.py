@@ -33,6 +33,18 @@ class VerifySignedMacOSTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(marker.exists())
             marker.unlink()
+            arm.write_text('#!/bin/sh\necho "agentplugins 1.2.3"\nexit 1\n')
+            env["SIGNED_DARWIN_ARM64_SHA256"] = hashlib.sha256(arm.read_bytes()).hexdigest()
+            self.assertNotEqual(subprocess.run(cmd, env=env, capture_output=True).returncode, 0,
+                                "a failed binary must not pass by printing the expected version")
+            attempts = root / "first-attempt"
+            arm.write_text(f'#!/bin/sh\nif [ ! -e "{attempts}" ]; then '
+                           f'touch "{attempts}"; echo "agentplugins 1.2.3"; exit 1; fi\n'
+                           'echo "agentplugins 1.2.3"\n')
+            env["SIGNED_DARWIN_ARM64_SHA256"] = hashlib.sha256(arm.read_bytes()).hexdigest()
+            result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(attempts.exists(), "a failed attempt must be retried")
             intel.write_text("tampered")
             result = subprocess.run(cmd, env=env, capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
