@@ -1,6 +1,7 @@
 package environment
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -84,6 +85,14 @@ func (e *ForeignBindingError) Error() string {
 		identity = e.SourceKey
 	}
 	return fmt.Sprintf("foreign: %s has bindings outside this environment in %s %s", identity, noun, strings.Join(installations, ", "))
+}
+
+func withForeignRoot(err error, requirements Requirements, lock Lock) error {
+	var foreign *ForeignBindingError
+	if errors.As(err, &foreign) {
+		foreign.RootAlias = uniqueForeignRoot(requirements, lock, foreign.Alias)
+	}
+	return err
 }
 
 // uniqueForeignRoot reports a declared dependency ancestor only when one root

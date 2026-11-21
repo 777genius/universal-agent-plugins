@@ -160,11 +160,7 @@ func (coordinator Coordinator) prepareSync(requirements Requirements, lock Lock,
 		byAliasTarget[item.Alias+"\x00"+item.ClientID] = item
 	}
 	if err := appendDesiredBindings(&plan, lock, observed, byAliasTarget, selected, attestation, targets); err != nil {
-		var foreign *ForeignBindingError
-		if errors.As(err, &foreign) {
-			foreign.RootAlias = uniqueForeignRoot(requirements, lock, foreign.Alias)
-		}
-		return PreparedSync{}, err
+		return PreparedSync{}, withForeignRoot(err, requirements, lock)
 	}
 
 	for key, current := range byAliasTarget {

@@ -55,10 +55,7 @@ func ObserveForEnvironment(view installer.Inspection, environmentID string) ([]B
 	live := map[string]bool{}
 	for _, installation := range view.Installations {
 		for _, binding := range installation.Bindings {
-			current := BindingObservation{SourceKey: installation.SourceKey, InstallationID: installation.InstallationID, ClientID: binding.ClientID, BindingID: binding.BindingID, PackageDigest: binding.TreeDigest, Revision: binding.Revision}
-			if binding.Owner != nil {
-				current.OwnerEnvironmentID = binding.Owner.EnvironmentID
-			}
+			current := BindingObservation{OwnerEnvironmentID: observedOwnerEnvironmentID(binding.Owner), SourceKey: installation.SourceKey, InstallationID: installation.InstallationID, ClientID: binding.ClientID, BindingID: binding.BindingID, PackageDigest: binding.TreeDigest, Revision: binding.Revision}
 			for _, receipt := range view.EnvironmentReceipts {
 				if receipt.InstallationID != installation.InstallationID || receipt.ClientBindingID != binding.BindingID {
 					continue
@@ -86,6 +83,13 @@ func ObserveForEnvironment(view installer.Inspection, environmentID string) ([]B
 		}
 	}
 	return out, nil
+}
+
+func observedOwnerEnvironmentID(owner *domain.EnvironmentReceipt) string {
+	if owner == nil {
+		return ""
+	}
+	return owner.EnvironmentID
 }
 
 func authenticationFacts(authentication string) []string {
