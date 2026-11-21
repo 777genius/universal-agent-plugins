@@ -2465,16 +2465,86 @@ def audit_client_id(target, kind):
     return "codex" if (target, kind) == ("chatgpt", "plugin") else target
 
 
+def initialize_codex_plugin_profile(binary, case_root, home, project, data, env, assert_case_unchanged):
+    """Reuse the strict pinned native bootstrap without exempting profile paths."""
+    # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
+    # Author these fixture objects before protecting every byte and identity.
+    assert_case_unchanged()
+    profile = home / ".codex"
+    for directory in (profile / "tmp", profile / "tmp/arg0"):
+        directory.mkdir(mode=0o700)
+    with (profile / "installation_id").open("xb") as stream:
+        if os.name != "nt":
+            os.fchmod(stream.fileno(), 0o644)
+        stream.write(str(uuid.uuid4()).encode("ascii"))
+    protected_home = scoped_snapshot((home,))
+    protected_delivery = scoped_snapshot((project, data))
+    codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
+        binary, case_root, home, project, env)
+    codex_plugin_sqlite.guard()
+    assert_case_unchanged()
+    bundle_files, bundle_directories, bundle_metadata = (
+        CODEX_RUNTIME_AUDIT["plugin_initialization"](home / ".codex"))
+    system_root = home / ".codex/skills/.system"
+    codex_system_metadata = {
+        path: fact for path, fact in bundle_metadata.items()
+        if path == system_root.parent or path.is_relative_to(system_root)}
+    initialized_home = scoped_snapshot((home,))
+    # Admit only exact artifacts validated by the bounded Codex initialization
+    # proofs. Every other old or newly created key is protected.
+    initializer = codex_plugin_sqlite
+    sqlite_root = home / ".local/state/codex-sqlite"
+    config_path = home / ".codex/config.toml"
+    if initializer.runtime != sqlite_root or initializer.config != config_path:
+        raise ValueError("Codex preinstall initialization changed protected fixture authority")
+    owned_files = {
+        config_path: hashlib.sha256(
+            CODEX_RUNTIME_AUDIT["_sqlite_config"](initializer.pin)).hexdigest(),
+        **{sqlite_root / name: fact["sha256"] for name, fact in
+           initializer.observations[0]["runtime_files_fully_read"].items()},
+        **bundle_files,
+    }
+    expected_home = dict(protected_home)
+    owned_directories = (home / ".local", home / ".local/state", sqlite_root,
+                         *bundle_directories)
+    for path in (*owned_directories, *owned_files):
+        directory = path in owned_directories
+        relative = path.relative_to(home)
+        metadata_key = "metadata:0:" + relative.as_posix()
+        metadata = initialized_home.get(metadata_key)
+        if (not isinstance(metadata, tuple) or not metadata
+                or not (stat.S_ISDIR(metadata[0]) if directory
+                        else stat.S_ISREG(metadata[0]))
+                or (path in bundle_metadata and metadata != bundle_metadata[path])):
+            raise ValueError("Codex preinstall initialization changed protected fixture authority")
+        entries = {metadata_key: metadata}
+        if directory:
+            entries["directory:0:" + relative.as_posix()] = "present"
+        else:
+            entries[home.name + "/" + str(relative)] = owned_files[path]
+        for key, value in entries.items():
+            if key not in protected_home:
+                expected_home[key] = value
+    initializer.guard()
+    if (initialized_home != expected_home
+            or scoped_snapshot((project, data)) != protected_delivery):
+        raise ValueError("Codex preinstall initialization changed protected fixture authority")
+    return codex_plugin_sqlite, codex_system_metadata
+
+
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-            signed_release_pins=None, *, client_version=None, historical_baseline=False):
+            signed_release_pins=None, *, client_version=None, historical_baseline=False,
+            historical_plugin_archive=False):
     with ExitStack() as audits:
         return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                         signed_release_pins, audits, client_version,
-                        **({"historical_baseline": True} if historical_baseline else {}))
+                        **({"historical_baseline": True} if historical_baseline else {}),
+                        **({"historical_plugin_archive": True} if historical_plugin_archive else {}))
 
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-             signed_release_pins, audits, client_version, *, historical_baseline=False):
+             signed_release_pins, audits, client_version, *, historical_baseline=False,
+             historical_plugin_archive=False):
     native_target = audit_client_id(target, kind)
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
@@ -2560,7 +2630,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     codex_add_ready = False
     codex_repeat_ready = False
     historical_observer = (HISTORICAL_CODEX["PublishedBaseline"](cli, env, project)
-                           if historical_baseline else None)
+                           if historical_baseline or historical_plugin_archive else None)
+    historical_plugin_feed = None
     historical_add_verified = historical_repeat_add_verified = False
     historical_repeat_lifecycle_verified = False
     def assert_case_unchanged():
@@ -2604,6 +2675,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_plugin_sqlite.checkpoint("after-public-command")
         return outcome
 
+    if historical_plugin_archive:
+        if (target, kind, index, item) not in (("codex", "plugin", 0, "atlassian"),
+                                              ("codex", "plugin", 1, "context7")):
+            raise ValueError("historical archive requires the two pinned Codex plugins")
+        historical_plugin_feed = HISTORICAL_CODEX["prepare_plugin_archive"](
+            historical_observer, audited_call, item, signed_release_pins[item])
     if gemini_skill_case:
         # The pinned native list initializes a model context even without a model call.
         # Its optional tree includes transient UAP package snapshots; discovery is unchanged.
@@ -2625,67 +2702,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             home / ".codex")
         _codex_system_skill_checkpoint(home, codex_system_metadata)
     if native_target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
-        # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
-        # Author these fixture objects before protecting every byte and identity.
+        codex_plugin_sqlite, codex_system_metadata = initialize_codex_plugin_profile(
+            AGENT_BINARIES["codex"], case_root, home, project, data, env, assert_case_unchanged)
         assert_case_unchanged()
-        profile = home / ".codex"
-        for directory in (profile / "tmp", profile / "tmp/arg0"):
-            directory.mkdir(mode=0o700)
-        with (profile / "installation_id").open("xb") as stream:
-            if os.name != "nt":
-                os.fchmod(stream.fileno(), 0o644)
-            stream.write(str(uuid.uuid4()).encode("ascii"))
-        protected_home = scoped_snapshot((home,))
-        protected_delivery = scoped_snapshot((project, data))
-        codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
-            AGENT_BINARIES["codex"], case_root, home, project, env)
-        assert_case_unchanged()
-        bundle_files, bundle_directories, bundle_metadata = (
-            CODEX_RUNTIME_AUDIT["plugin_initialization"](home / ".codex"))
-        system_root = home / ".codex/skills/.system"
-        codex_system_metadata = {
-            path: fact for path, fact in bundle_metadata.items()
-            if path == system_root.parent or path.is_relative_to(system_root)}
-        initialized_home = scoped_snapshot((home,))
-        # Admit only exact artifacts validated by the bounded Codex initialization
-        # proofs. Every other old or newly created key is protected.
-        initializer = codex_plugin_sqlite
-        sqlite_root = home / ".local/state/codex-sqlite"
-        config_path = home / ".codex/config.toml"
-        if initializer.runtime != sqlite_root or initializer.config != config_path:
-            raise ValueError("Codex preinstall initialization changed protected fixture authority")
-        owned_files = {
-            config_path: hashlib.sha256(
-                CODEX_RUNTIME_AUDIT["_sqlite_config"](initializer.pin)).hexdigest(),
-            **{sqlite_root / name: fact["sha256"] for name, fact in
-               initializer.observations[0]["runtime_files_fully_read"].items()},
-            **bundle_files,
-        }
-        expected_home = dict(protected_home)
-        owned_directories = (home / ".local", home / ".local/state", sqlite_root,
-                             *bundle_directories)
-        for path in (*owned_directories, *owned_files):
-            directory = path in owned_directories
-            relative = path.relative_to(home)
-            metadata_key = "metadata:0:" + relative.as_posix()
-            metadata = initialized_home.get(metadata_key)
-            if (not isinstance(metadata, tuple) or not metadata
-                    or not (stat.S_ISDIR(metadata[0]) if directory
-                            else stat.S_ISREG(metadata[0]))
-                    or (path in bundle_metadata and metadata != bundle_metadata[path])):
-                raise ValueError("Codex preinstall initialization changed protected fixture authority")
-            entries = {metadata_key: metadata}
-            if directory:
-                entries["directory:0:" + relative.as_posix()] = "present"
-            else:
-                entries[home.name + "/" + str(relative)] = owned_files[path]
-            for key, value in entries.items():
-                if key not in protected_home:
-                    expected_home[key] = value
-        initializer.guard()
-        if (initialized_home != expected_home
-                or scoped_snapshot((project, data)) != protected_delivery):
-            raise ValueError("Codex preinstall initialization changed protected fixture authority")
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
                      if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)
@@ -3352,6 +3371,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 "historical_repeat_add_verified": historical_repeat_add_verified,
                 "historical_repeat_lifecycle_verified": historical_repeat_lifecycle_verified}
                if historical_observer is not None else {}),
+            **({"historical_plugin_feed": historical_plugin_feed}
+               if historical_plugin_feed is not None else {}),
             "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
             "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
             "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
@@ -3400,8 +3421,9 @@ def expected_negative_coverage(row, cli_version=None):
         if (row.get("status") == "prepared-lifecycle-passed"
                 and row.get("prepared_components_only") is True):
             return True
-        # Only these immutable sources in the verified 0.1.95 / 0.1.101 / 0.1.102
-        # catalog have a clean lifecycle but no attributable native component.
+        # Only these immutable sources in the verified 0.1.95 / 0.1.101 /
+        # 0.1.102 / 0.1.115 catalog have a clean lifecycle but no attributable
+        # native component. Their partial support remains explicitly unqualified.
         # An unknown or newly unqualified source must still fail this audit.
         non_native_direct_sources = {
             "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d",
@@ -3410,7 +3432,7 @@ def expected_negative_coverage(row, cli_version=None):
             "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
         }
         if (row.get("status") == "package-installed-native-unqualified"
-                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101", "agentplugins 0.1.102")
+                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101", "agentplugins 0.1.102", "agentplugins 0.1.115")
                 and row.get("prepared_components_only") is False
                 and native_files == []
                 and row.get("source") in non_native_direct_sources):
@@ -3813,7 +3835,7 @@ def prepared_project_skill_summary(report, fixtures, acceptance):
             or report.get("client_version") != {
                 "status": "reported", "value": version, "exit_code": 0}
             or report.get("cli_version") != {
-                "status": "reported", "value": "agentplugins 0.1.95", "exit_code": 0}
+                "status": "reported", "value": "agentplugins 0.1.115", "exit_code": 0}
             or report.get("fixture_count") != 30 or report.get("cases_attempted") != 30
             or report.get("source_selection_complete") is not True
             or report.get("full_coverage") is not True
@@ -4195,13 +4217,17 @@ def main():
                    "cursor-prepared-installation", "grok-prepared-skills-installation",
                    "cursor-prepared-skills-installation", "kiro-prepared-skills-installation",
                    "windsurf-prepared-installation", "vscode-user-manual-preparation",
-                    HISTORICAL_CODEX["ACCEPTANCE"]),
+                    HISTORICAL_CODEX["ACCEPTANCE"], HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"]),
                    default="native")
     args = p.parse_args()
     historical_baseline = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
+    historical_plugin_archive = args.acceptance == HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"]
     if historical_baseline and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
             "codex", "skill", "linux", "x86_64", 2):
         p.error("Historical npm observation requires exactly two Codex Skills on Linux x86_64")
+    if historical_plugin_archive and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
+            "codex", "plugin", "linux", "x86_64", 2):
+        p.error("Historical archive observation requires exactly two Codex plugins on Linux x86_64")
     if (args.acceptance == "kiro-prepared-installation"
             and (args.target, args.kind, sys.platform, args.limit)
             != ("kiro", "plugin", "darwin", 30)):
@@ -4243,9 +4269,9 @@ def main():
               "fixture_count": len(cases), "cases_attempted": 0,
               "source_selection_complete": args.limit == 30,
               "full_coverage": False, "results": []}
-    if historical_baseline:
+    if historical_baseline or historical_plugin_archive:
         report["acceptance"] = args.acceptance
-        report.update(HISTORICAL_CODEX["summary"](report, doc))
+        report.update(HISTORICAL_CODEX["plugin_summary" if historical_plugin_archive else "summary"](report, doc))
     report_file = report_dir / f"{args.target}-{args.kind}.json"
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
@@ -4309,7 +4335,8 @@ def main():
                                  **({"client_version": report.get("client_version")}
                                     if (args.target, args.kind) in (("gemini", "skill"), ("kimi", "skill"))
                                     or args.target == "opencode" else {}),
-                                 **({"historical_baseline": True} if historical_baseline else {}))
+                                 **({"historical_baseline": True} if historical_baseline else {}),
+                                 **({"historical_plugin_archive": True} if historical_plugin_archive else {}))
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "source": item if args.kind == "plugin" else item["source"],
@@ -4317,6 +4344,8 @@ def main():
                                        if args.kind == "plugin" else item["name"]),
                           "status": "harness-error", "error": repr(e),
                           "error_traceback": bounded_error_traceback(e)}
+                if historical_plugin_archive and isinstance(e, HISTORICAL_CODEX["ArchiveUnavailable"]):
+                    result["historical_plugin_feed"] = e.observation
             report["results"].append(result)
             report["cases_attempted"] += 1
             save()
@@ -4371,6 +4400,15 @@ def main():
               f'requirements refusals={report["requirements_refusals_observed"]}; '
               'native activation and uninstall remain unqualified')
         return 0 if report["manual_preparation_observation_complete"] else 1
+    if historical_plugin_archive:
+        report.update(HISTORICAL_CODEX["plugin_summary"](report, doc))
+        save()
+        print(f'Historical signed sequence-48 plugin lifecycles: '
+              f'{report["archived_plugin_lifecycles_observed"]}/2; '
+              f'current default refusals observed={report["current_default_refusals_observed"]}/2 '
+              '(NONPASS; no current production compatibility claim); default native PASS=0; '
+              'archive native PASS count unchanged')
+        return 0 if report["historical_plugin_observation_complete"] else 1
     if historical_baseline:
         report.update(HISTORICAL_CODEX["summary"](report, doc))
         save()

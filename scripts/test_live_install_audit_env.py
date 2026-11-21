@@ -2269,7 +2269,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
     def _exercise_marketing_kit_scope_report(self, target, *, cleanup_failure=False,
                                               boundary_error=False, grants=7, native_error=None, native_peer_mutation=False,
                                               final_policy_error=False, final_peer_mutation=None,
-                                              native_root_redirect=None):
+                                              native_root_redirect=None, project_remove_error=None,
+                                              codex_checkpoint_error=None, codex_constructor_error=None):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2278,11 +2279,14 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                               "marketing-kit-project-release-e2e.py"))
         main = runner["main"]
         installed, phases = {}, []
+        codex_profiles, retirements = [], []
+        codex_failures = []
         outside_roots = []
         original_open = Path.open
         original_profile = runner["profile_snapshot"]
         original_foreign = runner["check_foreign"]
         original_project = runner["check_user_project_unchanged"]
+        original_peer = runner["check_profile_unchanged"]
         original_guard = runner["audit"]["copilot_native_roots_guard"]
 
         def checked_open(path, *args, **kwargs):
@@ -2301,12 +2305,21 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         def foreign(*args):
             if outside_roots:
                 phases.append("guard-foreign-after-redirect")
+            if codex_failures:
+                phases.append("guard-foreign-after-codex-failure")
             return original_foreign(*args)
 
         def project_check(project, *args):
             if outside_roots:
                 phases.append("project-read-after-redirect:" + project.parent.name)
+            if codex_failures:
+                phases.append("guard-project:" + project.parent.name + ":" + args[-1])
             return original_project(project, *args)
+
+        def peer_check(env, project, before, stage):
+            if codex_failures:
+                phases.append("guard-peer:" + project.parent.name + ":" + stage)
+            return original_peer(env, project, before, stage)
 
         def make_guard(home, env, project):
             captured = original_guard(home, env, project)
@@ -2328,7 +2341,70 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 if exc_type is None and cleanup_failure:
                     raise OSError("disposable cleanup failed")
 
-        def execute(_cli, env, project, _target, label, *args):
+        class FakeCodexProfile:
+            # This fixture checks orchestration; native custody is exercised
+            # independently with real filesystem and descriptor controls.
+            def __init__(self, audit, root, env, project):
+                self.home, self.project, self.checkpoints = Path(env["HOME"]), project, []
+                if project.parent.name == codex_constructor_error:
+                    codex_failures.append("constructor")
+                    phases.append("codex-constructor-refused:" + project.parent.name)
+                    raise AssertionError("injected Codex profile constructor failure")
+                codex_profiles.append(self)
+
+            def checkpoint(self, phase):
+                self.checkpoints.append(phase)
+                refusing = (codex_checkpoint_error is not None and self.project.parent.name == "A"
+                            and phase in ("before-" + codex_checkpoint_error,
+                                          "after-" + codex_checkpoint_error))
+                if refusing:
+                    codex_failures.append("checkpoint")
+                if codex_failures:
+                    phases.append("codex-checkpoint:" + self.project.parent.name + ":" + phase)
+                if refusing:
+                    raise AssertionError("injected Codex checkpoint failure")
+
+            def guard(self):
+                pass
+
+            def system_files(self):
+                return {}
+
+            def evidence(self):
+                return {"status": "orchestration-fixture", "checkpoints": len(self.checkpoints)}
+
+        class FakeRetirement:
+            def __init__(self, root, home, project, public, pins, audit):
+                self.case, self.home, self.project = root, home, project
+                self.public, self.closed = dict(public), False
+                self.finished = False
+                self.assertions = self_test
+                self.assertions.assertEqual(set(public), runner["EXPECTED"])
+                self.assertions.assertEqual(pins, runner["FIXED_SIGNED_CLOSURE"])
+                phases.append("claude-capture:" + project.parent.name)
+                retirements.append(self)
+
+            def finish(self, cleanup, residuals, rescan):
+                self.assertions.assertFalse(self.closed)
+                self.assertions.assertEqual(cleanup["scope"], "project")
+                self.assertions.assertEqual(cleanup["result"], "success")
+                self.assertions.assertEqual(cleanup["outcome"], "completed")
+                self.assertions.assertEqual({row["installation_id"] for row in cleanup["results"]}, set(self.public.values()))
+                self.assertions.assertEqual(len(cleanup["actions"]), 4)
+                self.assertions.assertEqual(set(residuals), set(rescan()))
+                phases.append("claude-finish:" + self.project.parent.name)
+                self.finished = True
+                self.close()
+                return {"status": "orchestration-fixture", "writer_closure_claimed": False}
+
+            def close(self):
+                if not self.closed:
+                    phases.append("claude-close:" + self.project.parent.name)
+                self.closed = True
+
+        self_test = self
+
+        def execute(_cli, env, project, _target, label, *args, capture=None):
             phases.append(label)
             scope = args[args.index("--scope") + 1]
             key = (env["AGENTPLUGINS_HOME"], scope)
@@ -2340,6 +2416,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 installed[key] = {name: f"{scope}:{project.parent.name}:{name}"
                                   for name in runner["EXPECTED"]}
             elif args[0] == "remove":
+                if label == project_remove_error:
+                    raise AssertionError("injected Project removal failure")
+                if capture is not None:
+                    prior = installed[key]
+                    actions = [{"alias": alias, "action": "remove", "client_id": _target,
+                                "installation_id": prior[distribution]}
+                               for alias, distribution in runner["REQUIRED_DISTRIBUTIONS"].items()]
+                    capture({"result": "success", "outcome": "completed", "scope": scope,
+                             "actions": actions, "results": [
+                                 {"operation": "remove", "client_id": _target,
+                                  "installation_id": row["installation_id"], "outcome": "completed"}
+                                 for row in actions]})
                 installed[key] = {}
             return {"stage": label, "exit_code": 0, "result": "passed"}
 
@@ -2403,8 +2491,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
                     "execute": execute, "verify_pinned_launcher": lambda *_: None,
+                    "CodexProfile": FakeCodexProfile, "SignedClosureRetirement": FakeRetirement,
                     "profile_snapshot": profile, "check_foreign": foreign,
                     "check_user_project_unchanged": project_check,
+                    "check_profile_unchanged": peer_check,
                     "inventory": inventory, "identities": lambda items, *_: items,
                     "lock_ids": lambda *_, **__: {"directory:" + name for name in runner["EXPECTED"]},
                     "settled_profile_snapshot": lambda e, p, **kwargs: (
@@ -2426,7 +2516,52 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                                "--report", str(report_path)]), \
                     patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
                 code = main()
+            if target == "codex":
+                self.assertEqual(len(codex_profiles),
+                                 ("A", "B", "C").index(codex_constructor_error)
+                                 if codex_constructor_error is not None else 3)
+                self.assertTrue(all(profile.checkpoints for profile in codex_profiles))
+            if target == "claude":
+                self.assertTrue(retirements)
+                self.assertTrue(all(retirement.closed for retirement in retirements))
+                self.assertTrue(all(retirement.finished for retirement in retirements)
+                                if project_remove_error is None else not retirements[-1].finished)
             return code, json.loads(report_path.read_text()), phases
+
+    def test_marketing_kit_claude_project_remove_failure_closes_captured_custody(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "claude", project_remove_error="remove B")
+        self.assertEqual(code, 1)
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertIn("injected Project removal failure", report["failure"])
+        self.assertIn("claude-capture:B", phases)
+        self.assertIn("claude-close:B", phases)
+        self.assertNotIn("claude-finish:B", phases)
+
+    def test_marketing_kit_codex_preoperation_failure_runs_every_available_guard(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "codex", codex_checkpoint_error="User remove")
+        self.assertEqual(code, 1)
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertIn("injected Codex checkpoint failure", report["failure"])
+        self.assertNotIn("User remove", phases, "pre-operation refusal must prevent public execute")
+        after = phases[phases.index("codex-checkpoint:A:before-User remove"):]
+        for expected in (
+                "guard-foreign-after-codex-failure",
+                "codex-checkpoint:B:before-User remove", "codex-checkpoint:C:before-User remove",
+                "codex-checkpoint:A:after-User remove", "codex-checkpoint:B:after-User remove",
+                "codex-checkpoint:C:after-User remove", "guard-project:A:User remove",
+                "guard-peer:B:User remove", "guard-project:C:User remove", "guard-peer:C:User remove"):
+            self.assertIn(expected, after)
+
+    def test_marketing_kit_codex_constructor_failure_still_checks_foreign_state(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "codex", codex_constructor_error="A")
+        self.assertEqual(code, 1)
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertIn("injected Codex profile constructor failure", report["failure"])
+        self.assertEqual(phases, ["codex-constructor-refused:A", "guard-foreign-after-codex-failure"])
+        self.assertEqual(report["steps"], [], "constructor refusal must prevent public execute")
 
     def test_marketing_kit_all_six_require_complete_positive_user_and_project_phases(self):
         for target in ("codex", "cursor", "claude", "gemini", "opencode", "copilot"):
@@ -11408,7 +11543,7 @@ class PreparedProjectSkillEvidenceContracts(unittest.TestCase):
                 for phase, active in (("after-add", True), ("repeat-add", True),
                                       ("after-remove", False))}
             rows.append(row)
-        cli_version = {"status": "reported", "value": "agentplugins 0.1.95", "exit_code": 0}
+        cli_version = {"status": "reported", "value": "agentplugins 0.1.115", "exit_code": 0}
         client_version = {"status": "reported", "value": version, "exit_code": 0}
         report = {"target": target, "kind": "skill", "platform": host, "architecture": arch,
                   "canonical_client_id": target, "client_version": client_version,
@@ -11416,6 +11551,34 @@ class PreparedProjectSkillEvidenceContracts(unittest.TestCase):
                   "source_selection_complete": True, "full_coverage": True,
                   "passed": 0, "verified_negative_coverage": 0, "results": rows}
         return audit, doc, report
+
+    def test_requires_exact_workflow_source_cli_version(self):
+        import copy
+        for target in ("cursor", "kiro"):
+            audit, fixtures, report = self.fixture(target)
+            mode = target + "-prepared-skills-installation"
+            with self.subTest(target=target, version=report["cli_version"]):
+                self.assertTrue(audit.prepared_project_skill_summary(
+                    report, fixtures, mode)["installation_acceptance_passed"])
+            for invalid in (
+                    {"value": "agentplugins 0.1.95"},
+                    {"value": "agentplugins 0.1.114"},
+                    {"value": "agentplugins 0.1.116"},
+                    {"value": "agentplugins 0.1.115-dev"},
+                    {"value": "agentplugins 0.1.115+build"},
+                    {"value": "agentplugins 0.1.1151"},
+                    {"value": "other-launcher 0.1.115"},
+                    {"value": "agentplugins 0.1.115\nagentplugins 0.1.115"},
+                    {"value": ""}, {"status": "not-probed"}, {"exit_code": 1}):
+                with self.subTest(target=target, invalid=invalid):
+                    changed = copy.deepcopy(report)
+                    changed["cli_version"].update(invalid)
+                    self.assertEqual(audit.prepared_project_skill_summary(
+                        changed, fixtures, mode), {
+                            "installation_passed": 0,
+                            "installation_prepared_lifecycle_passed": 0,
+                            "installation_verified_negative_coverage": 0,
+                            "installation_acceptance_passed": False})
 
     def test_source_bound_prepared_only_and_strict_rejection(self):
         import copy
