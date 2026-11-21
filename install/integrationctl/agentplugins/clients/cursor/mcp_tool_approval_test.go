@@ -305,3 +305,21 @@ func TestCursorToolTrustRefusesPostReviewApprovalFileTamper(t *testing.T) {
 		t.Fatalf("tampered package created Cursor permissions: %v", err)
 	}
 }
+
+// The generic native-component predicate intentionally rejects extensions.
+// Cursor must remove only its own qualified extension before invoking it,
+// otherwise its confirmed Project installer silently degrades to Manual.
+func TestCursorScopedApprovalDoesNotDisableAutomaticProjectLifecycle(t *testing.T) {
+	request, env := cursorToolTrustFixture(t)
+	request.Plan.ClientID = domain.ClientCursor
+	request.Client.ClientID = domain.ClientCursor
+	request.Plan.InstallIntent = domain.InstallIntentAutomatic
+	request.Plan.TargetContext.Scope = domain.ScopeProject
+	if !New().AutomaticallyActivates(env, request) {
+		t.Fatal("Cursor qualified approval extension disabled automatic native installation")
+	}
+	request.Plan.Components = request.Plan.Components[1:]
+	if New().AutomaticallyActivates(env, request) {
+		t.Fatal("Cursor extension without a native MCP/Skill bypassed component admission")
+	}
+}

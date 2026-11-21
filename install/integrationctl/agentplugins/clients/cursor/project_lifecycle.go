@@ -16,7 +16,7 @@ var (
 )
 
 func (*Adapter) AutomaticallyActivates(_ clients.Env, request domain.ActivationRequest) bool {
-	return request.Plan.Scope == domain.ScopeProject && request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components)
+	return request.Plan.Scope == domain.ScopeProject && request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(cursorNativeInstallComponents(request.Plan.Components))
 }
 
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, _ string) bool {
