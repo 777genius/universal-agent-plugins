@@ -43,6 +43,13 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 	}); err != nil {
 		return nil, err
 	}
+	approvals, err := selectedKiroApprovals(in.Envelope, in.Plan)
+	if err != nil {
+		return nil, err
+	}
+	if err := applyKiroApprovals(in.StagingPath, approvals); err != nil {
+		return nil, err
+	}
 	if in.Plan.Scope == domain.ScopeProject {
 		if err := projectKiroStdio(in); err != nil {
 			return nil, err
