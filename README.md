@@ -1,22 +1,4 @@
-<img width="2172" height="724" alt="Universal Agent Plugins — 1,500+ plugins, supporting Agent Plugins 1.0 and the Agent Skills standard" src="assets/readme-banner.svg" />
-
-<p align="center">
-    <img src="landing/public/client-icons/openai.svg" width="32" height="32" alt="Codex and ChatGPT" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/cursor.svg" width="32" height="32" alt="Cursor" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/github-copilot.svg" width="32" height="32" alt="GitHub Copilot CLI" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/kiro.svg" width="32" height="32" alt="Kiro" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/claude.svg" width="32" height="32" alt="Claude Code" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/gemini.svg" width="32" height="32" alt="Gemini CLI" />&nbsp;&nbsp;
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="32" height="32" alt="OpenCode" /></picture>&nbsp;&nbsp;
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="32" height="32" alt="Cline" /></picture>&nbsp;&nbsp;
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="32" height="32" alt="Windsurf" /></picture>&nbsp;&nbsp;
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="32" height="32" alt="Grok Build" /></picture>&nbsp;&nbsp;
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="32" height="32" alt="Kimi Code" /></picture>&nbsp;&nbsp;
-    <img src="landing/public/client-icons/qoder.svg" width="32" height="32" alt="Qoder" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/hermes.webp" width="32" height="32" alt="Hermes Agent" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/antigravity.svg" width="32" height="32" alt="Google Antigravity" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/pi.svg" width="32" height="32" alt="Pi" />
-</p>
+<img width="2172" height="948" alt="Universal Agent Plugins — 1,500+ plugins, supporting Codex, ChatGPT, Cursor, Copilot, Kiro, Claude, Gemini, OpenCode, Cline, Windsurf, Grok, Kimi, Qoder, Hermes, Antigravity and Pi" src="assets/readme-banner.svg" />
 
 [![Required](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml)
 [![Codecov](https://codecov.io/gh/777genius/universal-agent-plugins/graph/badge.svg)](https://codecov.io/gh/777genius/universal-agent-plugins)
