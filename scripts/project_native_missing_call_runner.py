@@ -289,7 +289,7 @@ def preflight_checkpoint(enabled, label):
         if label not in {
             "source-built", "disposable-git-ready", "pinned-vendor-ready",
             "before-install-negative-ok", "uap-installed", "managed-wrapper-verified",
-            "selected-native-listed", "uap-removed", "after-remove-negative-ok",
+            "cursor-owned-tool-permission-ok", "selected-native-listed", "uap-removed", "after-remove-negative-ok",
             "pin-and-foreign-state-verified",
         }:
             raise ValueError("unregistered preflight checkpoint")
@@ -414,6 +414,7 @@ def run(client, output, expected, *, preflight_only=False, prepared_source=None)
             raise ValueError("Project B changed after Project A install")
         if client == "cursor":
             assert_cursor_owned_tool_permission(project_a, server)
+            preflight_checkpoint(preflight_only, "cursor-owned-tool-permission-ok")
         else:
             permission_fixture(client, project_a, server)
         # This is the positive no-manual-step oracle. Never call native

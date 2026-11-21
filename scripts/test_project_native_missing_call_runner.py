@@ -12,11 +12,20 @@ from unittest.mock import patch
 from project_native_missing_call_runner import (
     agent_command, digest, installation_id, installed_config, permission_fixture,
     assert_cursor_owned_tool_permission, require_both_preflight_receipts,
-    run_both_preflight, source_build, stage_shared_source,
+    run_both_preflight, source_build, stage_shared_source, preflight_checkpoint,
 )
 
 
 class RealClientRunnerContractTest(unittest.TestCase):
+    def test_no_auth_checkpoint_separates_written_grant_from_native_readiness(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            preflight_checkpoint(True, "cursor-owned-tool-permission-ok")
+        self.assertEqual(stdout.getvalue(),
+                         "credential-free-preflight-stage: cursor-owned-tool-permission-ok\\n".replace("\\n", "\n"))
+
     def test_cursor_native_preflight_never_forges_server_enable(self):
         source = (Path(__file__).parent / "project_native_missing_call_runner.py").read_text()
         self.assertNotIn('invoke("cursor-enable-one"', source)

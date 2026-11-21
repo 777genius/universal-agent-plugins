@@ -25,7 +25,7 @@ func projectCursorToolApprovals(root string, envelope domain.PackageEnvelope, pl
 	if len(body) > 16<<10 {
 		return fmt.Errorf("Cursor MCP tool approval projection exceeds decoder limit")
 	}
-	return atomicfile.Write(filepath.Join(root, cursorToolApprovalFile), append(body, '\n'), 0o644)
+	return atomicfile.Write(filepath.Join(root, cursorToolApprovalFile), body, 0o644)
 }
 
 func verifyCursorToolApprovals(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
