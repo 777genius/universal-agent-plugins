@@ -23,12 +23,12 @@ func (*Adapter) AutomaticallyActivates(_ clients.Env, request domain.ActivationR
 
 func automaticallyActivates(request domain.ActivationRequest) bool {
 	if request.Plan.Scope == domain.ScopeProject {
-		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && shared.OnlyNativeComponents(request.Plan.Components)
+		return request.Plan.InstallIntent == domain.InstallIntentAutomatic && kiroNativeComponents(request.Plan.Components)
 	}
 	if request.Plan.InstallIntent != domain.InstallIntentAutomatic {
 		return false
 	}
-	if strings.TrimSpace(request.Client.ConfigRoot) == "" || !shared.OnlyNativeComponents(request.Plan.Components) {
+	if strings.TrimSpace(request.Client.ConfigRoot) == "" || !kiroNativeComponents(request.Plan.Components) {
 		return false
 	}
 	return !shared.HasSupportedMCP(request.Plan.Components) ||
@@ -40,7 +40,7 @@ func automaticallyActivates(request domain.ActivationRequest) bool {
 // that does not look like Kiro cannot prove Kiro state.
 func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryPlan, backendExecutable string) bool {
 	if plan.Scope == domain.ScopeProject {
-		return shared.OnlyNativeComponents(plan.Components)
+		return kiroNativeComponents(plan.Components)
 	}
 	if strings.TrimSpace(backendExecutable) == "" {
 		return false
@@ -66,7 +66,7 @@ func (*Adapter) PreflightActivation(env clients.Env, request domain.ActivationRe
 		return preflightKiroProject(env, request)
 	}
 	if request.Plan.InstallIntent == domain.InstallIntentPrepare {
-		if request.Plan.Scope != domain.ScopeUser || strings.TrimSpace(request.Client.ConfigRoot) == "" || !shared.OnlyNativeComponents(request.Plan.Components) {
+		if request.Plan.Scope != domain.ScopeUser || strings.TrimSpace(request.Client.ConfigRoot) == "" || !kiroNativeComponents(request.Plan.Components) {
 			return kiroErrorf("Kiro preparation requires native configuration and supported components")
 		}
 		return nil
