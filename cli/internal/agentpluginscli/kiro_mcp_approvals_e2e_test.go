@@ -88,7 +88,9 @@ func TestKiroPublisherMCPApprovalsFullCLI(t *testing.T) {
 	if err != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
 		t.Fatalf("unexpected persisted installation: %+v, %v", state, err)
 	}
-	if state.Installations[0].Clients[0].InstallIntent != domain.InstallIntentPrepare {
-		t.Fatal("Kiro installation lost prepared runtime boundary")
+	for _, binding := range state.Installations[0].Clients {
+		if binding.InstallIntent != domain.InstallIntentPrepare {
+			t.Fatal("Kiro installation lost prepared runtime boundary")
+		}
 	}
 }
