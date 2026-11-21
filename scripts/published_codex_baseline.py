@@ -297,6 +297,12 @@ EXPIRED_DIAGNOSTIC = re.compile(
     r"expires_at=2026-10-30T20:03:50Z now=(20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ)\n")
 
 
+def exact_true_phases(value, phases):
+    """Trust only an exact JSON object with literal true at every required phase."""
+    return (type(value) is dict and set(value) == set(phases)
+            and all(value[phase] is True for phase in phases))
+
+
 def expired_plugin_refusals(report, doc):
     """Attest two untouched cases and the genuine immutable old binary, never native PASS."""
     if (report.get("acceptance") != EXPIRED_PLUGIN_ACCEPTANCE
@@ -340,11 +346,10 @@ def expired_plugin_refusals(report, doc):
                 or row.get("matched_installation_ids") != []
                 or row.get("native_residuals") != []
                 or row.get("lock_written") is not False
-                or row.get("historical_scope_lock_absence") != {
-                    "before-add": True, "after-add": True,
-                    "after-list": True, "final": True}
-                or row.get("historical_native_unchanged") != {
-                    "after-add": True, "after-list": True, "final": True}
+                or not exact_true_phases(row.get("historical_scope_lock_absence"),
+                                         ("before-add", "after-add", "after-list", "final"))
+                or not exact_true_phases(row.get("historical_native_unchanged"),
+                                         ("after-add", "after-list", "final"))
                 or row.get("listed_identity") is not False
                 or row.get("sentinels_preserved") is not True
                 or row.get("post_remove_identity_registered") is not False):

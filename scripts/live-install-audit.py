@@ -2313,6 +2313,11 @@ def scoped_lock_files_absent(root):
             and all(not os.path.lexists(root / name) for name in ("uap.toml", "uap.lock")))
 
 
+def historical_plugin_lock_files_absent(user_root, project_root):
+    """An expired user-scope install must not create locks in either isolated root."""
+    return scoped_lock_files_absent(user_root) and scoped_lock_files_absent(project_root)
+
+
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
              signed_release_pins, audits, client_version, *, historical_baseline=False):
     native_target = audit_client_id(target, kind)
@@ -2542,11 +2547,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     file_capture = (sys.platform == "win32" and kind == "plugin" and item == "firebase")
     capture_option = {"capture_files": True} if file_capture else {}
     historical_scope_locks = (
-        {"before-add": scoped_lock_files_absent(data)}
+        {"before-add": historical_plugin_lock_files_absent(data, project)}
         if historical_baseline and kind == "plugin" else None)
     output = audited_call([cli, *args], env, project, add_timeout, **capture_option)
     if historical_scope_locks is not None:
-        historical_scope_locks["after-add"] = scoped_lock_files_absent(data)
+        historical_scope_locks["after-add"] = historical_plugin_lock_files_absent(data, project)
     added_json = output.pop("_json", None)
     native_components = (native_components_from_add(added_json)
                          if kind == "plugin" else ())
@@ -2575,7 +2580,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                    env, project, 30))
     listed_json = listed.pop("_json", None) if listed else None
     if historical_scope_locks is not None:
-        historical_scope_locks["after-list"] = scoped_lock_files_absent(data)
+        historical_scope_locks["after-list"] = historical_plugin_lock_files_absent(data, project)
     if historical_native_unchanged is not None:
         historical_native_unchanged["after-list"] = snapshot(native_roots) == before
     matching = matching_installations(listed_json, identity, native_target, kind, item,
@@ -3044,7 +3049,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if status == "passed" and skill_public_ready is not None and not all(skill_public_ready.values()):
         status = "incomplete-native-proof"
     if historical_scope_locks is not None:
-        historical_scope_locks["final"] = scoped_lock_files_absent(data)
+        historical_scope_locks["final"] = historical_plugin_lock_files_absent(data, project)
     if historical_native_unchanged is not None:
         historical_native_unchanged["final"] = snapshot(native_roots) == before
     return {"kind": kind, "index": index, "identity": identity, "target": target,

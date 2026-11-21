@@ -336,6 +336,30 @@ class HistoricalModeTest(unittest.TestCase):
                 (user / "uap.lock").unlink()
             self.assertTrue(live.scoped_lock_files_absent(user))
 
+    def test_expired_plugin_lock_guard_checks_both_isolated_roots(self):
+        live = self.load_live()
+        with tempfile.TemporaryDirectory() as temp:
+            user, project = Path(temp) / "uap-data", Path(temp) / "project"
+            user.mkdir()
+            project.mkdir()
+            self.assertTrue(live.historical_plugin_lock_files_absent(user, project))
+            for root in (user, project):
+                for name in ("uap.toml", "uap.lock"):
+                    with self.subTest(root=root.name, file=name):
+                        path = root / name
+                        path.write_text("unexpected")
+                        self.assertFalse(live.historical_plugin_lock_files_absent(user, project))
+                        path.unlink()
+                        path.mkdir()
+                        self.assertFalse(live.historical_plugin_lock_files_absent(user, project))
+                        path.rmdir()
+                        if os.name != "nt":
+                            path.symlink_to(user if root == project else project,
+                                            target_is_directory=True)
+                            self.assertFalse(live.historical_plugin_lock_files_absent(user, project))
+                            path.unlink()
+            self.assertTrue(live.historical_plugin_lock_files_absent(user, project))
+
     def test_historical_native_snapshot_detects_deletion_and_list_side_effects(self):
         live = self.load_live()
         with tempfile.TemporaryDirectory() as temp:
@@ -629,6 +653,27 @@ class TestExpiredPublishedPluginRefusal(unittest.TestCase):
         mutated = copy.deepcopy(candidate)
         mutated["results"].pop()
         self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+
+    def test_phase_evidence_rejects_truthy_numbers_and_wrong_keys(self):
+        doc = {"plugin_aliases": ["atlassian", "context7"]}
+        candidate = self.report()
+        for field, phases in (
+                ("historical_scope_lock_absence", ("before-add", "after-add", "after-list", "final")),
+                ("historical_native_unchanged", ("after-add", "after-list", "final"))):
+            for phase in phases:
+                for invalid in (1, 1.0, "true", None):
+                    with self.subTest(field=field, phase=phase, invalid=invalid):
+                        mutated = copy.deepcopy(candidate)
+                        mutated["results"][0][field][phase] = invalid
+                        self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+            for mutation in ("extra", "missing"):
+                mutated = copy.deepcopy(candidate)
+                if mutation == "extra":
+                    mutated["results"][0][field]["unrecognized"] = True
+                else:
+                    mutated["results"][0][field].pop(phases[0])
+                self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc),
+                                 (field, mutation))
 
 if __name__ == "__main__":
     unittest.main()
