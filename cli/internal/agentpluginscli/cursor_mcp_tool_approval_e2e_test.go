@@ -7,11 +7,16 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/processlock"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"
 )
 
 // Public add exercises manifest loader -> planner -> staged native projection ->
@@ -52,24 +57,16 @@ func TestCursorPublisherToolApprovalFullCLI(t *testing.T) {
 func cursorToolCLIProject(t *testing.T) (cliFixture, string, string) {
 	t.Helper()
 	client := fixtureClient(t, domain.ClientCursor)
-	project, err := filepath.EvalSymlinks(t.TempDir())
+	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Keep the full CLI fixture's state, managed paths, transaction journal
-	// and source cache within the same disposable selected Project root.
-	fixture := newCLIFixtureAt(t, []domain.DetectedClient{client}, project)
-	fixture.app.Scope, fixture.app.ProjectRoot = domain.ScopeProject, project
-	fixture.app.Lifecycle.ProjectRoot = project
-	// ResolveTarget uses Planner.ProjectRoot, independently of the App and
-	// Service roots. Keep all three planner/target interfaces on one exact
-	// Project-scoped instance, as production composition does.
-	scoped := plannertest.NewPlanner(clientplanner.Planner{
-		ProjectRoot: project, ManagedRoot: fixture.app.ManagedRoot,
-	})
-	fixture.app.Planner, fixture.app.Targets = scoped, scoped
-	fixture.app.Lifecycle.Planner, fixture.app.Lifecycle.Targets = scoped, scoped
-	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{})
+	project := filepath.Join(root, "project")
+	if err := os.MkdirAll(project, 0700); err != nil {
+		t.Fatal(err)
+	}
+	fixture := newCLIFixtureAt(t, []domain.DetectedClient{client}, root)
+	configureCursorProjectCLI(t, &fixture, project)
 	source := writeCLIPlugin(t)
 	writeCLIMCP(t, source)
 	path := filepath.Join(source, "plugin.json")
@@ -94,6 +91,40 @@ func cursorToolCLIProject(t *testing.T) (cliFixture, string, string) {
 		t.Fatal(err)
 	}
 	return fixture, project, source
+}
+
+func configureCursorProjectCLI(t *testing.T, f *cliFixture, project string) {
+	t.Helper()
+	// Match the existing production Project composition: all durable state,
+	// ownership, data and transaction journals belong to this exact .uap.
+	stateRoot := filepath.Join(project, ".uap")
+	f.store = statev2.Store{Path: filepath.Join(stateRoot, "state-v2.json"), ProjectRoot: project}
+	f.app.Scope, f.app.ProjectRoot, f.app.ManagedRoot, f.app.StateStore =
+		domain.ScopeProject, project, filepath.Join(stateRoot, "managed"), f.store
+	f.app.EnvironmentLockPath = filepath.Join(stateRoot, "environment.lock")
+	f.app.EnvironmentStoreRoot, f.app.DependenciesRoot = filepath.Join(stateRoot, "store"), project
+	scoped := plannertest.NewPlanner(clientplanner.Planner{
+		ProjectRoot: project, ManagedRoot: f.app.ManagedRoot,
+	})
+	f.app.Planner, f.app.Targets = scoped, scoped
+	f.app.Lifecycle.ProjectRoot, f.app.Lifecycle.StateStore = project, f.store
+	f.app.Lifecycle.Planner, f.app.Lifecycle.Targets = scoped, scoped
+	runner := &refusingClientRunner{}
+	f.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: runner})
+	f.app.Lifecycle.Lock = processlock.Lock{Path: filepath.Join(stateRoot, "mutation.lock")}
+	f.app.Lifecycle.Kernel = transaction.Kernel{
+		StateStore: f.store, Directory: dirswap.Manager{JournalDir: filepath.Join(stateRoot, "operations")},
+	}
+	f.app.Lifecycle.PluginData = providers.PluginDataManager{Base: filepath.Join(stateRoot, "plugin-data")}
+	var err error
+	f.app.Installer, err = installer.New(installer.Config{
+		ProjectRoot: project, StateRoot: stateRoot, Registry: f.app.ClientRegistry,
+		Runner: runner, TrustedLocalPackages: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.app.Lifecycle.CheckNamespace = f.app.Installer.CheckProjectNamespace
 }
 
 func cursorAssertCLIState(t *testing.T, fixture cliFixture, output string) {
