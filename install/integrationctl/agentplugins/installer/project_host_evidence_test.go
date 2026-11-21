@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/copilot"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/gemini"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -108,5 +109,45 @@ func TestProjectHostEvidenceAllowsAbsentGenericProfileOnlyInProject(t *testing.T
 	req.ClientID = "gemini"
 	if _, err := engine.detectedClient(req); !errors.Is(err, ErrInvalidRequest) {
 		t.Fatalf("stricter profile resolver bypassed: %v", err)
+	}
+}
+
+func TestProjectSelectedClientSurfacesAreOwnedAndNotJSON(t *testing.T) {
+	registry, err := clients.NewRegistry(copilot.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := filepath.Join(base, "project")
+	if err := os.MkdirAll(project, 0700); err != nil {
+		t.Fatal(err)
+	}
+	engine, err := newTestEngine(t, Config{Registry: registry, ProjectRoot: project, StateRoot: filepath.Join(project, ".uap")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := Request{Scope: domain.ScopeProject, ProjectRoot: project, ClientID: "copilot", Operation: OpInstall,
+		ClientConfigRoot: filepath.Join(base, "copilot"), ClientExecutable: filepath.Join(base, "copilot"),
+		ClientSurfaces: []domain.ClientSurface{{ID: "copilot_cli", Detected: true, Evidence: "selected-host-only"}}}
+	copied := clonePrepareRequest(request)
+	request.ClientSurfaces[0].ID = "mutated-caller"
+	client, err := engine.detectedClient(copied)
+	if err != nil || len(client.Surfaces) != 1 || client.Surfaces[0].ID != "copilot_cli" || !client.Surfaces[0].Detected {
+		t.Fatalf("selected operational surface lost across installer boundary: %+v %v", client, err)
+	}
+	client.Surfaces[0].ID = "mutated-result"
+	if copied.ClientSurfaces[0].ID != "copilot_cli" {
+		t.Fatal("detected surface aliases the copied request")
+	}
+	body, err := json.Marshal(copied)
+	if err != nil || strings.Contains(string(body), "ClientSurfaces") || strings.Contains(string(body), "selected-host-only") {
+		t.Fatalf("private host surface leaked into public request JSON: %s %v", body, err)
+	}
+	var injected Request
+	if err := json.Unmarshal([]byte(`{"ClientSurfaces":[{"id":"copilot_cli","detected":true}]}`), &injected); err != nil || len(injected.ClientSurfaces) != 0 {
+		t.Fatalf("JSON injected operational host surface: %+v %v", injected, err)
 	}
 }

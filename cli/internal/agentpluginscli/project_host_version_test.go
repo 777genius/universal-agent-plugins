@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"errors"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -15,10 +16,14 @@ import (
 type versionBoundaryCodex struct {
 	*codex.Adapter
 	observed *string
+	surfaces *[]domain.ClientSurface
 }
 
 func (adapter *versionBoundaryCodex) CheckPlanPrecondition(in clients.PlanInput, _ *domain.DeliveryPlan) error {
 	*adapter.observed = in.Client.Version
+	if adapter.surfaces != nil {
+		*adapter.surfaces = append([]domain.ClientSurface(nil), in.Client.Surfaces...)
+	}
 	return errors.New("inert host-version boundary reached")
 }
 
@@ -28,9 +33,11 @@ func TestProjectHostVersionCrossesExistingNoSaveFacadeBoundary(t *testing.T) {
 	client := fixtureClient(t, domain.ClientCodex)
 	client.ExecutablePath = filepath.Join(t.TempDir(), "codex")
 	client.Version = "selected-host-version"
+	client.Surfaces = []domain.ClientSurface{{ID: "selected-cli", Detected: true, Evidence: "selected-host-only"}}
 	f := newCLIFixture(t, []domain.DetectedClient{client})
 	observed := ""
-	registry, err := clients.NewRegistry(&versionBoundaryCodex{Adapter: codex.New(), observed: &observed})
+	var surfaces []domain.ClientSurface
+	registry, err := clients.NewRegistry(&versionBoundaryCodex{Adapter: codex.New(), observed: &observed, surfaces: &surfaces})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +48,7 @@ func TestProjectHostVersionCrossesExistingNoSaveFacadeBoundary(t *testing.T) {
 	f.app.Installer = engine
 	f.app.Lifecycle.Planner = nil
 	_, _, err = f.execute(false, "add", writeCLIPlugin(t), "--no-save", "--target", "codex", "--format", "json")
-	if err == nil || !strings.Contains(err.Error(), "inert host-version boundary reached") || observed != client.Version {
+	if err == nil || !strings.Contains(err.Error(), "inert host-version boundary reached") || observed != client.Version || !reflect.DeepEqual(surfaces, client.Surfaces) {
 		t.Fatalf("selected host evidence=%q,%v", observed, err)
 	}
 }

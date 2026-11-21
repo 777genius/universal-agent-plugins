@@ -89,6 +89,7 @@ func clonePrepareRequest(req Request) Request {
 	copied := req
 	copied.RequiredComponents = append([]string(nil), req.RequiredComponents...)
 	copied.ExecutableFiles = slices.Clone(req.ExecutableFiles)
+	copied.ClientSurfaces = slices.Clone(req.ClientSurfaces)
 	copied.Targets = append([]ClientTarget(nil), req.Targets...)
 	copied.KnownTargets = append([]TargetFacts(nil), req.KnownTargets...)
 	if req.Assessment != nil {

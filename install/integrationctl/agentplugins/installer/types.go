@@ -69,7 +69,8 @@ type Request struct {
 	ClientNativeConfigRoot string `json:"-"`
 	// ClientVersion is host-observed evidence for the selected executable.
 	// It is operational input, never portable package or diagnostic metadata.
-	ClientVersion      string `json:"-"`
+	ClientVersion      string                 `json:"-"`
+	ClientSurfaces     []domain.ClientSurface `json:"-"`
 	InstallationID     string
 	OperationID        string
 	Selector           string
