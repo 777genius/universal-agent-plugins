@@ -111,7 +111,7 @@ func TestKiroExactMCPApprovalDisposableLifecycle(t *testing.T) {
   "unrelated": 9007199254740993,
   "mcpServers": {"foreign": {"url": "https://foreign.test", "autoApprove": ["*"]}}
 }`)
-		var previous []domain.NativeObjectOwnership
+	var previous []domain.NativeObjectOwnership
 	for _, trial := range []struct {
 		name string
 		list []string
