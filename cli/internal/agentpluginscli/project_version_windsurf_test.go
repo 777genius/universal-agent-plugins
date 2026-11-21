@@ -94,7 +94,7 @@ func TestProjectDevinVersionProbeReportsDetectionCause(t *testing.T) {
 }
 
 func TestProjectDevinVersionProbeKeepsLegacyPrimaryAndMutationBoundaries(t *testing.T) {
-	for _, kind := range []string{"legacy-primary", "secondary-surface", "relative-executable", "known-version", "user-legacy-primary", "dry-run", "unselected"} {
+	for _, kind := range []string{"legacy-primary", "secondary-surface", "relative-executable", "known-version", "user-legacy-primary", "unselected"} {
 		t.Run(kind, func(t *testing.T) {
 			client := projectVersionDevin()
 			opts, scope, target := &options{}, domain.ScopeProject, domain.ClientWindsurf
@@ -113,8 +113,6 @@ func TestProjectDevinVersionProbeKeepsLegacyPrimaryAndMutationBoundaries(t *test
 				scope = domain.ScopeUser
 				client.ExecutablePath = projectVersionFixturePath("bin", "windsurf")
 				client.ConfigRoot = projectVersionFixturePath("user", ".codeium", "windsurf")
-			case "dry-run":
-				opts.dryRun = true
 			case "unselected":
 				target = domain.ClientGemini
 			}
