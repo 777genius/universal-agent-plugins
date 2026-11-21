@@ -50,11 +50,13 @@ func TestCursorPublisherToolApprovalFullCLI(t *testing.T) {
 func cursorToolCLIProject(t *testing.T) (cliFixture, string, string) {
 	t.Helper()
 	client := fixtureClient(t, domain.ClientCursor)
-	fixture := newCLIFixture(t, []domain.DetectedClient{client})
 	project, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Keep the full CLI fixture's state, managed paths, transaction journal
+	// and source cache within the same disposable selected Project root.
+	fixture := newCLIFixtureAt(t, []domain.DetectedClient{client}, project)
 	fixture.app.Scope, fixture.app.ProjectRoot = domain.ScopeProject, project
 	fixture.app.Lifecycle.ProjectRoot = project
 	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{})
