@@ -494,7 +494,8 @@
         "eyebrow": "Creado con UAP",
         "description": "Notificaciones inteligentes multiplataforma. Alertas de escritorio, sonidos, clic para enfocar y webhooks.",
         "builtOn": "Creado sobre el SDK de UAP: hooks de agente tipados y el instalador de UAP.",
-        "repository": "Ver en GitHub"
+        "repository": "Ver en GitHub",
+        "stars": "{stars} estrellas en GitHub"
       },
       "guides": "Explora las guías del SDK"
     },

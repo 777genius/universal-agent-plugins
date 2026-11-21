@@ -511,7 +511,8 @@
         "eyebrow": "Built with UAP",
         "description": "Cross-platform smart notifications. Desktop alerts, sounds, click-to-focus, and webhooks.",
         "builtOn": "Built on the UAP SDK: typed agent hooks and the UAP installer.",
-        "repository": "View on GitHub"
+        "repository": "View on GitHub",
+        "stars": "{stars} GitHub stars"
       },
       "guides": "Explore the SDK guides"
     },

@@ -50,6 +50,10 @@ test('SDK section follows the FAQ with the film scenes, real links and localized
     'href',
     'https://github.com/777genius/agent-notifications',
   );
+  // Static, owner-approved figure next to the links; no GitHub API request.
+  await expect(section.locator('.registry-sdk__stars')).toHaveText(
+    t('shell.sdk.showcase.stars', { stars: '800+' }),
+  );
   await expect(section.locator('.registry-sdk__footer a')).toHaveAttribute(
     'href',
     docsLink('en', 'sdk/'),
@@ -114,6 +118,9 @@ for (const { width, locale } of [
     const section = await openSdk(page, locale === 'en' ? './' : `./${locale}/`);
     const t = wording(locale);
     await expect(section.locator('h2')).toHaveText(t('shell.sdk.title'));
+    await expect(section.locator('.registry-sdk__stars')).toHaveText(
+      t('shell.sdk.showcase.stars', { stars: '800+' }),
+    );
     await expect(section.locator('.registry-sdk__footer a')).toHaveAttribute(
       'href',
       docsLink(locale, 'sdk/'),
