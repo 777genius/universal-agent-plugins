@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	clientplanner "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/planner"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/plannertest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
@@ -59,6 +61,14 @@ func cursorToolCLIProject(t *testing.T) (cliFixture, string, string) {
 	fixture := newCLIFixtureAt(t, []domain.DetectedClient{client}, project)
 	fixture.app.Scope, fixture.app.ProjectRoot = domain.ScopeProject, project
 	fixture.app.Lifecycle.ProjectRoot = project
+	// ResolveTarget uses Planner.ProjectRoot, independently of the App and
+	// Service roots. Keep all three planner/target interfaces on one exact
+	// Project-scoped instance, as production composition does.
+	scoped := plannertest.NewPlanner(clientplanner.Planner{
+		ProjectRoot: project, ManagedRoot: fixture.app.ManagedRoot,
+	})
+	fixture.app.Planner, fixture.app.Targets = scoped, scoped
+	fixture.app.Lifecycle.Planner, fixture.app.Lifecycle.Targets = scoped, scoped
 	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{})
 	source := writeCLIPlugin(t)
 	writeCLIMCP(t, source)
