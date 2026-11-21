@@ -494,7 +494,8 @@
         "eyebrow": "UAP से बना",
         "description": "क्रॉस-प्लेटफ़ॉर्म स्मार्ट सूचनाएँ। डेस्कटॉप अलर्ट, ध्वनियाँ, क्लिक करके फ़ोकस और वेबहुक।",
         "builtOn": "UAP SDK पर बना: टाइप्ड एजेंट हुक और UAP इंस्टॉलर।",
-        "repository": "GitHub पर देखें"
+        "repository": "GitHub पर देखें",
+        "stars": "GitHub पर {stars} स्टार"
       },
       "guides": "SDK गाइड देखें"
     },

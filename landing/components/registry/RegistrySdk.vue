@@ -35,6 +35,9 @@ const fanRoutes = ['M0 90C28 90 28 30 56 30', 'M0 90H56', 'M0 90C28 90 28 150 56
 const showcase = {
   website: 'https://agent-notifications.com/',
   repository: 'https://github.com/777genius/agent-notifications',
+  // Owner-approved static figure, rounded down from the repository's stars
+  // (835 on 2026-11-21). The page makes no GitHub API request.
+  stars: '800+',
 };
 
 // Loops run only while the section is on screen and motion is allowed. Without
@@ -388,6 +391,16 @@ onBeforeUnmount(() => observer?.disconnect());
         <a :href="showcase.repository" target="_blank" rel="noopener noreferrer">
           {{ t('shell.sdk.showcase.repository') }} <span aria-hidden="true">↗</span>
         </a>
+        <p class="registry-sdk__stars">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="m12 2 3 6 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1Z" />
+          </svg>
+          <i18n-t keypath="shell.sdk.showcase.stars" tag="span">
+            <template #stars
+              ><bdi dir="ltr">{{ showcase.stars }}</bdi></template
+            >
+          </i18n-t>
+        </p>
       </div>
     </article>
 
@@ -1061,6 +1074,27 @@ $ease: cubic-bezier(0.2, 0.75, 0.2, 1);
   display: grid;
   justify-items: start;
   gap: 10px;
+}
+
+// The film's star line, as a plain meta row beside the links.
+.registry-sdk__stars {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 0.875rem;
+  font-weight: 700;
+
+  svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    fill: color-mix(in srgb, #d99a3a 30%, transparent);
+    stroke: #d99a3a;
+    stroke-width: 1.6;
+    stroke-linejoin: round;
+  }
 }
 
 .registry-sdk__footer {

@@ -494,7 +494,8 @@
         "eyebrow": "基于 UAP 构建",
         "description": "跨平台智能通知。桌面提醒、提示音、点击聚焦窗口和 Webhook。",
         "builtOn": "基于 UAP SDK 构建：类型化的智能体钩子和 UAP 安装器。",
-        "repository": "在 GitHub 上查看"
+        "repository": "在 GitHub 上查看",
+        "stars": "{stars} 个 GitHub 星标"
       },
       "guides": "浏览 SDK 指南"
     },

@@ -76,6 +76,17 @@ test('supported-agent FAQ stays in sync with the 16 public clients across all lo
   }
 });
 
+test('SDK showcase star line keeps GitHub and the static figure untranslated', () => {
+  for (const locale of publishedLocales) {
+    const localized = JSON.parse(read(`i18n/locales/${locale}.json`)) as {
+      shell: { sdk: { showcase: { stars: string } } };
+    };
+    const stars = localized.shell.sdk.showcase.stars;
+    assert.ok(stars.includes('GitHub') && stars.includes('{stars}'), `stars for ${locale}`);
+  }
+  assert.ok(read('components/registry/RegistrySdk.vue').includes("stars: '800+'"));
+});
+
 test('hero intro names both supported standards untranslated in every locale', () => {
   for (const locale of publishedLocales) {
     const localized = JSON.parse(read(`i18n/locales/${locale}.json`)) as {
