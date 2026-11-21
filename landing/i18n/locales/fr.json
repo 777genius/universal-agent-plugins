@@ -450,11 +450,53 @@
       "sourceDescription": "Consultez l'origine du paquet et son statut de vérification dans le catalogue avant l'installation.",
       "standardDescription": "Utilisez un paquet Agent Plugins 1.0 avec {manifest}, sans format de plugin spécifique à UAP."
     },
-    "builtWith": {
-      "title": "Déjà créé avec UAP",
-      "agentNotificationsDescription": "Notifications de bureau, sons et accès à la fenêtre en un clic pour les agents de programmation IA.",
-      "viewRepository": "Voir sur GitHub",
-      "buildWithSdk": "Créez avec le SDK"
+    "sdk": {
+      "title": "Créez des plugins universels",
+      "tagline": "Créez une fois. Connectez vos agents.",
+      "intro": "Créez des plugins avec le SDK et la CLI UAP, ou intégrez la gestion des plugins et des Skills à votre propre application.",
+      "featuresLabel": "Fonctionnalités du SDK et de la CLI",
+      "features": {
+        "detect": {
+          "title": "Détecter les agents installés",
+          "description": "La CLI repère les agents compatibles sur la machine : une seule commande les atteint tous."
+        },
+        "install": {
+          "title": "Installer pour les agents choisis",
+          "description": "Choisissez des agents précis, et UAP prépare le format natif que chacun prend en charge."
+        },
+        "cli": {
+          "title": "CLI de gestion des plugins",
+          "description": "Installez, mettez à jour, réparez et supprimez des plugins en une commande de terminal."
+        },
+        "hooks": {
+          "title": "Hooks typés",
+          "description": "Traitez les événements de hooks natifs des agents avec des gestionnaires Go typés."
+        }
+      },
+      "apps": {
+        "eyebrow": "Pour les créateurs d’applications",
+        "badge": "Aperçu d’intégration",
+        "title": "Ajoutez la gestion des plugins à votre application",
+        "description": "Le TypeScript Management SDK permet à une application de bureau ou Node.js de découvrir les agents et d’installer, de mettre à jour ou de supprimer des plugins et des Skills via le moteur UAP.",
+        "guide": "Guide du TypeScript Management SDK",
+        "diagramLabel": "Illustration : votre application demande au UAP Management SDK d’installer le plugin marketing-kit, et le SDK l’installe pour Codex, Claude Code et Gemini CLI.",
+        "yourApp": "Votre application",
+        "tag": "Plugins et Skills",
+        "kind": "Plugin",
+        "install": "Installer",
+        "update": "Mettre à jour",
+        "remove": "Supprimer",
+        "installing": "Installation…",
+        "installed": "Installé",
+        "caption": "Créez des plugins. Donnez plus de pouvoir à votre application."
+      },
+      "showcase": {
+        "eyebrow": "Conçu avec UAP",
+        "description": "Notifications intelligentes multiplateformes. Alertes de bureau, sons, clic pour mettre au premier plan et webhooks.",
+        "builtOn": "Construit sur le SDK UAP : hooks d’agent typés et installateur UAP.",
+        "repository": "Voir sur GitHub"
+      },
+      "guides": "Découvrir les guides du SDK"
     },
     "faq": {
       "eyebrow": "FAQ",

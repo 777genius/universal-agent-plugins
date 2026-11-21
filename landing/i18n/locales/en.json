@@ -467,11 +467,53 @@
       "sourceDescription": "See where packages come from and whether a catalog listing has been reviewed before you install.",
       "standardDescription": "Use an Agent Plugins 1.0 {manifest} package—no separate UAP-specific plugin format."
     },
-    "builtWith": {
-      "title": "Already built with UAP",
-      "agentNotificationsDescription": "Desktop notifications, sounds, and click-to-focus for AI coding agents.",
-      "viewRepository": "View on GitHub",
-      "buildWithSdk": "Build with the SDK"
+    "sdk": {
+      "title": "Build universal plugins",
+      "tagline": "Create once. Connect your agents.",
+      "intro": "Build plugins with the UAP SDK and CLI, or bring plugin and Skill management into your own app.",
+      "featuresLabel": "SDK and CLI capabilities",
+      "features": {
+        "detect": {
+          "title": "Detect installed agents",
+          "description": "The CLI finds the supported agents on a machine, so one command reaches all of them."
+        },
+        "install": {
+          "title": "Install for selected agents",
+          "description": "Pick exact agents, and UAP prepares the native format each one supports."
+        },
+        "cli": {
+          "title": "Plugin management CLI",
+          "description": "Install, update, repair, and remove plugins with one terminal command."
+        },
+        "hooks": {
+          "title": "Typed hooks",
+          "description": "Handle native agent hook events with typed Go handlers."
+        }
+      },
+      "apps": {
+        "eyebrow": "For app builders",
+        "badge": "Integration preview",
+        "title": "Add plugin management to your app",
+        "description": "The TypeScript Management SDK lets a desktop or Node.js app discover agents and install, update, or remove plugins and Skills through the UAP engine.",
+        "guide": "TypeScript Management SDK guide",
+        "diagramLabel": "Illustration: your app asks the UAP Management SDK to install the marketing-kit plugin, and the SDK installs it for Codex, Claude Code, and Gemini CLI.",
+        "yourApp": "Your app",
+        "tag": "Plugins + Skills",
+        "kind": "Plugin",
+        "install": "Install",
+        "update": "Update",
+        "remove": "Remove",
+        "installing": "Installing…",
+        "installed": "Installed",
+        "caption": "Build plugins. Power your app."
+      },
+      "showcase": {
+        "eyebrow": "Built with UAP",
+        "description": "Cross-platform smart notifications. Desktop alerts, sounds, click-to-focus, and webhooks.",
+        "builtOn": "Built on the UAP SDK: typed agent hooks and the UAP installer.",
+        "repository": "View on GitHub"
+      },
+      "guides": "Explore the SDK guides"
     },
     "faq": {
       "eyebrow": "FAQ",
