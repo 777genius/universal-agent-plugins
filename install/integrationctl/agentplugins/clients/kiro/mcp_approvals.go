@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"unicode"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -82,11 +81,14 @@ func decodeMCPApprovals(raw json.RawMessage) (mcpApprovals, error) {
 // Kiro's wildcard is intentionally excluded: a package update may expose new
 // tools, and a reviewed source cannot authorize their future unknown behavior.
 func validKiroApprovalName(value string) bool {
-	if value == "" || len(value) > 128 || strings.TrimSpace(value) != value {
+	if value == "" || len(value) > 128 {
 		return false
 	}
+	// Trust previews must not permit invisible, bidirectional or markup-like
+	// names to impersonate a different tool. Native Kiro tool names are ASCII.
 	for _, r := range value {
-		if unicode.IsControl(r) || r == '*' || r == '?' || r == '[' || r == ']' || r == '/' || r == '\\' {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') &&
+			(r < '0' || r > '9') && r != '_' && r != '-' && r != '.' {
 			return false
 		}
 	}
