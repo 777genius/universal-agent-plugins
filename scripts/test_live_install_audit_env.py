@@ -9,12 +9,15 @@ import sqlite3
 import subprocess
 import sys
 import textwrap
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from runpy import run_path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
+
+COPILOT_TRUST_FIXTURE_SUPPORTED = (hasattr(os, "getuid") and os.open in os.supports_dir_fd
+                                   and hasattr(os, "O_NOFOLLOW") and hasattr(os, "O_DIRECTORY"))
 
 
 def load_audit():
@@ -2263,15 +2266,20 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
     def _exercise_marketing_kit_scope_report(self, target, *, cleanup_failure=False,
                                               boundary_error=False, grants=7, native_error=None, native_peer_mutation=False,
                                               final_policy_error=False, final_peer_mutation=None,
-                                              native_root_redirect=None):
+                                              native_root_redirect=None, project_remove_error=None,
+                                              require_copilot_trust=False, copilot_trust_mutation=None,
+                                              copilot_fixture_failure=None, claude_retained_scan_error=False):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
 
+        if target == "copilot" and not COPILOT_TRUST_FIXTURE_SUPPORTED:
+            self.skipTest("Marketing Copilot orchestration uses its Ubuntu POSIX trust fixture")
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         main = runner["main"]
         installed, phases = {}, []
+        retirements = []
         sqlite_profiles = {}
 
         # This orchestration fixture already substitutes every public/native
@@ -2289,7 +2297,20 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         original_profile = runner["profile_snapshot"]
         original_foreign = runner["check_foreign"]
         original_project = runner["check_user_project_unchanged"]
+        original_peer = runner["check_profile_unchanged"]
         original_guard = runner["audit"]["copilot_native_roots_guard"]
+        original_trust = runner.get("prepare_copilot_project_b_trust")
+        trust_failures = []
+
+        def prepare_trust(env, project, root):
+            proof, guard = original_trust(env, project, root)
+            if copilot_fixture_failure:
+                trust_failures.append(copilot_fixture_failure)
+                if copilot_fixture_failure == "trust":
+                    (Path(env["HOME"]) / ".copilot/config.json").write_text('{"trustedFolders": []}')
+                else:
+                    (root / "A/home/foreign-user-do-not-change.txt").write_text("foreign mutation")
+            return proof, guard
 
         def checked_open(path, *args, **kwargs):
             mode = kwargs.get("mode", args[0] if args else "r")
@@ -2305,6 +2326,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             return original_profile(env, project)
 
         def foreign(*args):
+            if trust_failures:
+                phases.append("guard-foreign-after-trust-failure")
             if outside_roots:
                 phases.append("guard-foreign-after-redirect")
             return original_foreign(*args)
@@ -2313,6 +2336,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             if outside_roots:
                 phases.append("project-read-after-redirect:" + project.parent.name)
             return original_project(project, *args)
+
+        def peer_check(env, project, before, stage):
+            if trust_failures:
+                phases.append("guard-peer-after-trust-failure:" + project.parent.name)
+            return original_peer(env, project, before, stage)
 
         def make_guard(home, env, project):
             captured = original_guard(home, env, project)
@@ -2330,15 +2358,78 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 return self.inner.__enter__()
 
             def __exit__(self, exc_type, exc, traceback):
+                if retirements:
+                    self_test.assertTrue(all(retirement.closed for retirement in retirements),
+                                         "custody descriptors must close before disposable tree cleanup")
+                    phases.append("claude-closed-before-disposal")
                 self.inner.__exit__(exc_type, exc, traceback)
                 if exc_type is None and cleanup_failure:
                     raise OSError("disposable cleanup failed")
 
-        def execute(_cli, env, project, _target, label, *args, checkpoint=None):
+        class FakeRetirement:
+            def __init__(self, root, home, project, public, pins, audit):
+                self.case, self.home, self.project = root, home, project
+                self.public, self.closed = dict(public), False
+                self.finished = False
+                self.assertions = self_test
+                self.assertions.assertEqual(set(public), runner["EXPECTED"])
+                self.assertions.assertEqual(pins, runner["FIXED_SIGNED_CLOSURE"])
+                phases.append("claude-capture:" + project.parent.name)
+                retirements.append(self)
+
+            def finish(self, cleanup, residuals, rescan, *, keep_open=False):
+                self.assertions.assertFalse(self.closed)
+                self.assertions.assertEqual(cleanup["scope"], "project")
+                self.assertions.assertEqual(cleanup["result"], "success")
+                self.assertions.assertEqual(cleanup["outcome"], "completed")
+                self.assertions.assertEqual({row["installation_id"] for row in cleanup["results"]}, set(self.public.values()))
+                self.assertions.assertEqual(len(cleanup["actions"]), 4)
+                self.assertions.assertEqual(set(residuals), set(rescan()))
+                phases.append("claude-finish:" + self.project.parent.name)
+                self.finished = True
+                self.assertions.assertEqual(keep_open, self.project.parent.name == "A")
+                if not keep_open:
+                    self.close()
+                return {"status": "orchestration-fixture", "writer_closure_claimed": False}
+
+            def checkpoint(self):
+                self.assertions.assertTrue(self.finished)
+                self.assertions.assertFalse(self.closed)
+
+            def verify_retained(self, home, case_root, residuals, rescan):
+                self.checkpoint()
+                self.assertions.assertEqual((home, case_root), (self.home, self.case))
+                self.assertions.assertEqual(self.project.parent.name, "A")
+                phases.append("claude-retained-user-A")
+                if claude_retained_scan_error:
+                    raise AssertionError("injected retained raw scan failure")
+                self.assertions.assertEqual(set(residuals), set(rescan()))
+                return {"status": "orchestration-retained-fixture", "writer_closure_claimed": False}
+
+            def close(self):
+                if not self.closed:
+                    phases.append("claude-close:" + self.project.parent.name)
+                self.closed = True
+
+        self_test = self
+
+        def execute(_cli, env, project, _target, label, *args, checkpoint=None, capture=None):
             phases.append(label)
             scope = args[args.index("--scope") + 1]
             key = (env["AGENTPLUGINS_HOME"], scope)
             portable = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
+            if require_copilot_trust:
+                config = Path(env["HOME"]) / ".copilot/config.json"
+                if label == "cold locked restore":
+                    if not config.exists():
+                        raise AssertionError("Copilot selected Project B has no remembered trust")
+                    self.assertEqual(json.loads(config.read_text()), {"trustedFolders": [str(project)]})
+                    self.assertNotIn(key, installed)
+                    self.assertEqual(list(Path(env["AGENTPLUGINS_HOME"]).iterdir()), [])
+                elif project.parent.name in ("A", "C") and args[0] == "add":
+                    self.assertFalse(config.exists(), "fixture must not preauthorize A or User C")
+            if label == copilot_trust_mutation:
+                (Path(env["HOME"]) / ".copilot/config.json").write_text('{"trustedFolders": []}')
             if args[0] in ("add", "install"):
                 for name in ("uap.toml", "uap.lock"):
                     if not (portable / name).exists():
@@ -2346,11 +2437,24 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 installed[key] = {name: f"{scope}:{project.parent.name}:{name}"
                                   for name in runner["EXPECTED"]}
             elif args[0] == "remove":
+                if label == project_remove_error:
+                    raise AssertionError("injected Project removal failure")
+                if capture is not None:
+                    prior = installed[key]
+                    actions = [{"alias": alias, "action": "remove", "client_id": _target,
+                                "installation_id": prior[distribution]}
+                               for alias, distribution in runner["REQUIRED_DISTRIBUTIONS"].items()]
+                    capture({"result": "success", "outcome": "completed", "scope": scope,
+                             "actions": actions, "results": [
+                                 {"operation": "remove", "client_id": _target,
+                                  "installation_id": row["installation_id"], "outcome": "completed"}
+                                 for row in actions]})
                 installed[key] = {}
             return {"stage": label, "exit_code": 0, "result": "passed"}
 
         def boundary(_cli, env, project, expected, _guards):
             self.assertEqual(project.parent.name, "E")
+            self.assertFalse((Path(env["HOME"]) / ".copilot/config.json").exists())
             self.assertNotIn("AGENTPLUGINS_DIRECTORY_ORIGIN", env)
             self.assertFalse((Path(env["AGENTPLUGINS_HOME"]) / "uap.lock").exists())
             kind = runner["current_vscode_boundary_kind"](expected)
@@ -2364,6 +2468,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
         def observe(_cli, env, _project, _target, expected=None, guards=()):
             self.assertNotIn("AGENTPLUGINS_DIRECTORY_ORIGIN", env)
+            if require_copilot_trust and _project.parent.name == "B":
+                self.assertEqual(json.loads((Path(env["HOME"]) / ".copilot/config.json").read_text()),
+                                 {"trustedFolders": [str(_project)]})
+                self.assertEqual(list(Path(env["AGENTPLUGINS_HOME"]).iterdir()), [])
+                phases.append("preauthorized-trust:B")
             # Actual released info selects retained removed installation records
             # first; those records have no catalog snapshot_sequence/digest.
             if any(key[0] == env["AGENTPLUGINS_HOME"] for key in installed):
@@ -2410,8 +2519,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             with patch.dict(main.__globals__, {
                     "execute": execute, "verify_pinned_launcher": lambda *_: None,
                     "MarketingCodexSQLiteProfiles": lambda _: sqlite_orchestration,
+                    "SignedClosureRetirement": FakeRetirement,
+                    "prepare_copilot_project_b_trust": prepare_trust,
                     "profile_snapshot": profile, "check_foreign": foreign,
                     "check_user_project_unchanged": project_check,
+                    "check_profile_unchanged": peer_check,
                     "inventory": inventory, "identities": lambda items, *_: items,
                     "lock_ids": lambda *_, **__: {"directory:" + name for name in runner["EXPECTED"]},
                     "settled_profile_snapshot": lambda e, p, **kwargs: (
@@ -2433,7 +2545,253 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                                "--report", str(report_path)]), \
                     patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
                 code = main()
+            if target == "claude":
+                self.assertTrue(retirements)
+                self.assertTrue(all(retirement.closed for retirement in retirements))
+                self.assertTrue(all(retirement.finished for retirement in retirements)
+                                if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
             return code, json.loads(report_path.read_text()), phases
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_project_b_prepares_native_trust_before_locked_restore(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "copilot", require_copilot_trust=True)
+        self.assertEqual(code, 0, report.get("failure"))
+        proof = report["copilot_project_b_trust_fixture"]
+        self.assertEqual(proof["status"], "authored-native-prerequisite")
+        self.assertEqual(proof["source_profile"], "B")
+        self.assertEqual(proof["restore_scope"], "cold-UAP-state-with-preauthorized-native-folder")
+        self.assertFalse(proof["ui_consent_observed"])
+        self.assertFalse(proof["product_trust_grant_claimed"])
+        self.assertFalse(proof["virgin_native_trust_qualified"])
+        self.assertLess(phases.index("preauthorized-trust:B"), phases.index("cold locked restore"))
+        self.assertIn("remove B", phases)
+
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_b_trust_mutation_fails_after_restore_or_removal(self):
+        for stage in ("cold locked restore", "remove B"):
+            with self.subTest(stage=stage):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", require_copilot_trust=True, copilot_trust_mutation=stage)
+                self.assertEqual(code, 1)
+                self.assertIn("Copilot trust fixture authority changed", report["failure"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertIn(stage, phases)
+
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_b_setup_failure_runs_foreign_and_A_guards(self):
+        for failure in ("trust", "foreign"):
+            with self.subTest(failure=failure):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_fixture_failure=failure)
+                self.assertEqual(code, 1)
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertIn("guard-foreign-after-trust-failure", phases)
+                self.assertIn("guard-peer-after-trust-failure:A", phases)
+                self.assertNotIn("catalog:B", phases)
+
+
+    def test_marketing_kit_claude_project_remove_failure_closes_captured_custody(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "claude", project_remove_error="remove B")
+        self.assertEqual(code, 1)
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertIn("injected Project removal failure", report["failure"])
+        self.assertIn("claude-capture:B", phases)
+        self.assertIn("claude-close:B", phases)
+        self.assertNotIn("claude-finish:B", phases)
+
+
+    def test_marketing_kit_claude_retains_only_A_through_user_and_closes_before_cleanup(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report("claude")
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertLess(phases.index("claude-close:B"), phases.index("claude-capture:A"))
+        self.assertLess(phases.index("User remove"), phases.index("claude-retained-user-A"))
+        self.assertLess(phases.index("claude-retained-user-A"), phases.index("claude-close:A"))
+        self.assertLess(phases.index("claude-close:A"), phases.index("claude-closed-before-disposal"))
+
+
+    def test_marketing_kit_claude_retained_failure_paths_close_before_cleanup(self):
+        for changes in ({"project_remove_error": "User remove"}, {"claude_retained_scan_error": True},
+                        {"final_policy_error": True}, {"cleanup_failure": True}):
+            with self.subTest(changes=changes):
+                code, report, phases = self._exercise_marketing_kit_scope_report("claude", **changes)
+                self.assertEqual(code, 1)
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertLess(phases.index("claude-close:A"), phases.index("claude-closed-before-disposal"))
+
+
+    def test_marketing_kit_copilot_b_trust_refuses_unsupported_host_before_uid_or_IO(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        with patch.object(os, "supports_dir_fd", set()), \
+                patch.object(os, "getuid", side_effect=AssertionError("UID accessed"), create=True), \
+                patch.object(os, "open", side_effect=AssertionError("filesystem accessed")):
+            with self.assertRaisesRegex(AssertionError, "safe POSIX directory descriptors"):
+                runner["prepare_copilot_project_b_trust"]({}, Path("unused-project"), Path("unused-root"))
+
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_b_trust_authors_only_exact_native_prerequisite(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            cases = {name: runner["run_case"]("unused", "copilot", root, name)
+                     for name in ("A", "B", "C", "E")}
+            peers = {name: runner["profile_snapshot"](value[0], value[1])
+                     for name, value in cases.items() if name != "B"}
+            env, project, *_ = cases["B"]
+            for name in ("uap.toml", "uap.lock"):
+                (project / name).write_text("unchanged portable agreement")
+            proof, guard = runner["prepare_copilot_project_b_trust"](env, project, root)
+            path = Path(env["HOME"]) / ".copilot/config.json"
+            expected = {"trustedFolders": [str(project)]}
+            self.assertEqual(json.loads(path.read_text()), expected)
+            self.assertEqual(proof["trusted_folders"], [str(project)])
+            self.assertEqual(proof["config_sha256_at_creation"], hashlib.sha256(path.read_bytes()).hexdigest())
+            self.assertEqual(proof["config_identity_at_creation"]["inode"], path.lstat().st_ino)
+            self.assertTrue(proof["uap_state_empty_before"])
+            self.assertEqual(list(Path(env["AGENTPLUGINS_HOME"]).iterdir()), [])
+            for name in ("uap.toml", "uap.lock"):
+                self.assertEqual((project / name).read_text(), "unchanged portable agreement")
+            for name, snapshot in peers.items():
+                self.assertEqual(runner["profile_snapshot"](*cases[name][:2]), snapshot)
+            # A safe native atomic rewrite of the same authority is permitted;
+            # the receipt's original inode/digest are explicitly creation-time.
+            replacement = path.with_suffix(".new")
+            replacement.write_text(json.dumps(expected, indent=2))
+            replacement.chmod(0o600)
+            replacement.replace(path)
+            guard()
+
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_b_trust_refuses_other_profiles_and_warm_state(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        for name in ("A", "C", "E", "B"):
+            with self.subTest(name=name), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                env, project, *_ = runner["run_case"]("unused", "copilot", root, name)
+                if name == "B":
+                    (Path(env["AGENTPLUGINS_HOME"]) / "state-v2.json").write_text("existing receipt")
+                before = runner["profile_snapshot"](env, project)
+                with self.assertRaisesRegex(AssertionError, "canonical fresh Project B|empty UAP state"):
+                    runner["prepare_copilot_project_b_trust"](env, project, root)
+                self.assertEqual(runner["profile_snapshot"](env, project), before)
+
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_b_trust_refuses_preexisting_config(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        for kind in ("file", "empty", "directory", "symlink", "hardlink"):
+            with self.subTest(kind=kind), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                env, project, *_ = runner["run_case"]("unused", "copilot", root, "B")
+                path = Path(env["HOME"]) / ".copilot/config.json"
+                foreign = root / "foreign.json"
+                foreign.write_text('{"trustedFolders":["/foreign"],"allowedTools":["shell"]}')
+                if kind == "directory":
+                    path.mkdir()
+                elif kind == "symlink":
+                    path.symlink_to(foreign)
+                elif kind == "hardlink":
+                    os.link(foreign, path)
+                else:
+                    path.write_text("" if kind == "empty" else foreign.read_text())
+                before = runner["profile_snapshot"](env, project)
+                with self.assertRaisesRegex(AssertionError, "unsafe or occupied config"):
+                    runner["prepare_copilot_project_b_trust"](env, project, root)
+                self.assertEqual(runner["profile_snapshot"](env, project), before)
+                self.assertEqual(json.loads(foreign.read_text())["trustedFolders"], ["/foreign"])
+
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_b_trust_refuses_preexisting_project_receipts(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        for kind in ("state", "dangling-symlink"):
+            with self.subTest(kind=kind), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                env, project, *_ = runner["run_case"]("unused", "copilot", root, "B")
+                state = project / ".uap"
+                if kind == "state":
+                    state.mkdir()
+                    (state / "state-v2.json").write_text("preplanted receipt")
+                else:
+                    state.symlink_to(root / "missing", target_is_directory=True)
+                before = runner["profile_snapshot"](env, project)
+                with self.assertRaisesRegex(AssertionError, "empty UAP state"):
+                    runner["prepare_copilot_project_b_trust"](env, project, root)
+                self.assertEqual(runner["profile_snapshot"](env, project), before)
+
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_b_trust_rejects_changed_config_authority(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        changes = ("missing", "symlink", "hardlink", "mode", "ancestor-folder", "second-folder",
+                   "tool-grant", "auth", "duplicate-key")
+        for change in changes:
+            with self.subTest(change=change), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                env, project, *_ = runner["run_case"]("unused", "copilot", root, "B")
+                _, guard = runner["prepare_copilot_project_b_trust"](env, project, root)
+                path = Path(env["HOME"]) / ".copilot/config.json"
+                if change == "missing":
+                    path.unlink()
+                elif change == "symlink":
+                    saved = path.with_suffix(".saved")
+                    path.rename(saved)
+                    path.symlink_to(saved)
+                elif change == "hardlink":
+                    os.link(path, path.with_suffix(".linked"))
+                elif change == "mode":
+                    path.chmod(0o644)
+                elif change == "duplicate-key":
+                    path.write_text('{"trustedFolders":[],"trustedFolders":' + json.dumps([str(project)]) + '}')
+                else:
+                    document = {"trustedFolders": [str(project)]}
+                    if change == "ancestor-folder":
+                        document["trustedFolders"] = [str(root)]
+                    elif change == "second-folder":
+                        document["trustedFolders"].append(str(project.parent))
+                    else:
+                        document["allowedTools" if change == "tool-grant" else "auth"] = ["unexpected"]
+                    path.write_text(json.dumps(document))
+                with self.assertRaisesRegex(AssertionError, "Copilot trust fixture authority"):
+                    guard()
+
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_b_trust_refuses_redirected_or_replaced_roots(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        for when in ("before", "after"):
+            for relative in ("B", "B/home", "B/home/.copilot", "B/project", "B/data"):
+                with self.subTest(when=when, relative=relative), TemporaryDirectory() as temporary:
+                    root = Path(temporary).resolve()
+                    env, project, *_ = runner["run_case"]("unused", "copilot", root, "B")
+                    if when == "after":
+                        _, guard = runner["prepare_copilot_project_b_trust"](env, project, root)
+                    path = root / relative
+                    saved = path.with_name(path.name + "-saved")
+                    path.rename(saved)
+                    if when == "before":
+                        path.symlink_to(saved, target_is_directory=True)
+                    else:
+                        import shutil
+                        shutil.copytree(saved, path)
+                    with self.assertRaisesRegex(AssertionError, "Copilot trust fixture root"):
+                        if when == "before":
+                            runner["prepare_copilot_project_b_trust"](env, project, root)
+                        else:
+                            guard()
+
 
     def test_marketing_kit_all_six_require_complete_positive_user_and_project_phases(self):
         for target in ("codex", "cursor", "claude", "gemini", "opencode", "copilot"):
@@ -10177,14 +10535,15 @@ class MarketingKitCodexSQLiteTest(unittest.TestCase):
         observer_type = self.runtime['CodexPluginSQLiteAudit']
         with patch.dict(observer_type.__init__.__globals__, {'_exchange': self.discover}), \
                 patch.dict(self.runner['prepare_codex_sqlite'].__globals__, {
-                    'invoke': version_probe or (lambda *args: {'exit_code': 0, 'timeout': False,
-                                            'stdout_tail': 'codex-cli 0.153.4\n'})}):
+                    'invoke': version_probe or (lambda *args, **kwargs: {'exit_code': 0, 'timeout': False,
+                                            'stdout_full': 'codex-cli 0.153.4\n'})}):
             return self.runner['prepare_codex_sqlite'](sys.executable, self.env, self.project)
 
     def test_marketing_kit_version_probe_uses_removed_separate_native_profile(self):
         profiles = []
 
-        def probe(argv, env, project, timeout):
+        def probe(argv, env, project, timeout, *, capture_full=False):
+            self.assertTrue(capture_full)
             self.assertEqual(argv, [sys.executable, '--version'])
             self.assertEqual(project, self.project)
             self.assertEqual(env['HOME'], str(self.home))
@@ -10196,7 +10555,7 @@ class MarketingKitCodexSQLiteTest(unittest.TestCase):
             # lifecycle tmp/arg0 parents. They belong only to this profile.
             (version_home / 'tmp/arg0/native-version-helper').mkdir(parents=True)
             profiles.append(version_home)
-            return {'exit_code': 0, 'timeout': False, 'stdout_tail': 'codex-cli 0.153.4\n'}
+            return {'exit_code': 0, 'timeout': False, 'stdout_full': 'codex-cli 0.153.4\n'}
 
         observer = self.prepare(probe)
         self.assertEqual(len(profiles), 1)
@@ -10206,14 +10565,21 @@ class MarketingKitCodexSQLiteTest(unittest.TestCase):
 
     def test_marketing_kit_version_probe_still_refuses_wrong_version_or_lifecycle_writes(self):
         original = self.foreign.read_bytes()
-        for mutation in ('wrong-version', 'timeout', 'exit', 'foreign-write', 'new-home-file', 'project-write', 'data-write', 'raised-invoke'):
+        for mutation in (
+            'wrong-version', 'hidden-banner', 'timeout', 'exit', 'foreign-write',
+            'new-home-file', 'project-write', 'data-write', 'raised-invoke',
+        ):
             with self.subTest(mutation=mutation):
                 version_profiles = []
-                def probe(*args):
+                def probe(*args, **kwargs):
+                    self.assertIs(kwargs.get('capture_full'), True)
                     version_profiles.append(Path(args[1]['CODEX_HOME']))
-                    result = {'exit_code': 0, 'timeout': False, 'stdout_tail': 'codex-cli 0.153.4\n'}
+                    result = {'exit_code': 0, 'timeout': False, 'stdout_full': 'codex-cli 0.153.4\n'}
                     if mutation == 'wrong-version':
-                        result['stdout_tail'] = 'codex-cli 0.153.4-dev\n'
+                        result['stdout_full'] = 'codex-cli 0.153.4-dev\n'
+                    elif mutation == 'hidden-banner':
+                        result['stdout_tail'] = 'codex-cli 0.153.4\n'
+                        result['stdout_full'] = 'unsafe banner\n' + ' ' * 1900 + result['stdout_tail']
                     elif mutation == 'timeout':
                         result['timeout'] = True
                     elif mutation == 'exit':
@@ -10334,6 +10700,40 @@ class MarketingKitCodexSQLiteTest(unittest.TestCase):
             profiles.prepare('E', self.env, self.project)
         self.assertEqual(set(profiles.evidence()), {'A'})
 
+
+    def test_marketing_kit_snapshot_file_keys_match_windows_and_posix(self):
+        key = self.runner['codex_snapshot_file_key']
+        self.assertEqual(key(PurePosixPath('/test/home'), PurePosixPath('/test/home/.codex/config.toml')),
+                         'home/.codex/config.toml')
+        self.assertEqual(key(PureWindowsPath('C:/test/home'), PureWindowsPath('C:/test/home/.codex/config.toml')),
+                         r'home/.codex\config.toml')
+
+    def test_marketing_kit_profile_evidence_distinguishes_failure_from_unrun_final(self):
+        profiles = self.runner['MarketingCodexSQLiteProfiles']('codex')
+        observer = self.prepare()
+        profiles.profiles['A'] = observer
+        initial = profiles.evidence()['A']
+        self.assertFalse(initial['runtime_semantics_unchanged'])
+        self.assertEqual(initial['final_checkpoint'], 'not_run')
+        self.assertIsNone(initial['failed_phase'])
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute("UPDATE fixture_rows SET value='changed'")
+            connection.commit()
+        with self.assertRaisesRegex(ValueError, 'table contents changed'):
+            profiles.checkpoint('after-public-mutation-add')
+        failed = profiles.evidence()['A']
+        self.assertFalse(failed['runtime_semantics_unchanged'])
+        self.assertEqual(failed['final_checkpoint'], 'failed')
+        self.assertEqual(failed['failed_phase'], 'after-public-mutation-add')
+
+    def test_marketing_kit_profile_evidence_pass_requires_final_checkpoint(self):
+        profiles = self.runner['MarketingCodexSQLiteProfiles']('codex')
+        profiles.profiles['A'] = self.prepare()
+        profiles.checkpoint('final-qualification')
+        recorded = profiles.evidence()['A']
+        self.assertTrue(recorded['runtime_semantics_unchanged'])
+        self.assertEqual(recorded['final_checkpoint'], 'passed')
+        self.assertIsNone(recorded['failed_phase'])
 
 if __name__ == "__main__":
     unittest.main()

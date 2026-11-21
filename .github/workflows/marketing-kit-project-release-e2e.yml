@@ -9,6 +9,11 @@ on:
       - 'scripts/marketing-kit-published-launcher-abort.js'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/codex_runtime_audit.py'
+      - 'scripts/marketing_kit_claude_retirement.py'
+      - 'scripts/test_marketing_kit_claude_retirement.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/native_client_project_artifacts.py'
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   push:
@@ -19,6 +24,11 @@ on:
       - 'scripts/marketing-kit-published-launcher-abort.js'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/codex_runtime_audit.py'
+      - 'scripts/marketing_kit_claude_retirement.py'
+      - 'scripts/test_marketing_kit_claude_retirement.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/native_client_project_artifacts.py'
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   workflow_dispatch:
@@ -213,6 +223,7 @@ jobs:
           # Preserve preflight failures even when no lifecycle report is written.
           mkdir -p "$RUNNER_TEMP/marketing-kit-project"
           set -o pipefail
+          python3 -m unittest discover -s scripts -p test_marketing_kit_claude_retirement.py -v 2>&1 | tee "$RUNNER_TEMP/marketing-kit-project/claude-retirement-regressions.log"
           python3 -m unittest scripts/test_live_install_audit_env.py -k marketing_kit_ 2>&1 | tee "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)"             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures

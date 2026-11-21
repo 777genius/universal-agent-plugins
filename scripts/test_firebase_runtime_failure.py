@@ -10,8 +10,54 @@ from unittest.mock import patch
 
 
 class FirebaseRuntimeFailureTest(unittest.TestCase):
+    def test_npm_terminal_and_timing_records(self):
+        parse = run_path(str(Path(__file__).with_name("firebase_runtime_failure.py")))["_npm_log_facts"]
+        # npm CLI 11.19.1 log-file/format/timers and exit-handler record shapes.
+        for ending, code in ((b"\n", 0), (b"\r\n", 1), (b"\n", -2147483648),
+                             (b"\r\n", 4294967295)):
+            with self.subTest(ending=ending, code=code):
+                body = ending.join((b"0 verbose cli PRIVATE https://token@secret.invalid",
+                    b"1 timing npm-ci:rm Completed in 2ms",
+                    b"2 timing reify:unpack Completed in 1000ms",
+                    b"3 timing build:link Completed in 10ms",
+                    b"4 timing reify:build Completed in 12ms",
+                    b"5 timing reify:save Completed in 1ms",
+                    b"6 timing reify Completed in 1020ms",
+                    b"7 timing npm Completed in 1040ms",
+                    b"8 verbose exit " + str(code).encode(),
+                    b"9 info ok" if code == 0 else b"9 verbose code " + str(code).encode(), b""))
+                self.assertEqual(parse(body), {
+                    "terminal_exit_observed": True, "terminal_exit_code": code,
+                    "terminal_exit_conflicting": False,
+                    "timing_completed": ["npm", "npm-ci:rm", "reify", "reify:unpack",
+                                         "reify:build", "build:link", "reify:save"]})
+
+    def test_npm_unknown_injected_and_incomplete_records_do_not_escape(self):
+        parse = run_path(str(Path(__file__).with_name("firebase_runtime_failure.py")))["_npm_log_facts"]
+        body = b"\n".join((
+            b"0 error PRIVATE https://token@secret.invalid",
+            b"1 error 2 verbose exit 0", b"3 info ok", b"4 verbose code 0",
+            b"5 verbose exit 0 PRIVATE", b"6 verbose exit 4294967296",
+            b"7 verbose exit -2147483649", b"8 verbose exit +0",
+            b"9 verbose exit 00", b"10 verbose exit " + b"9" * 100000,
+            b"11 timing PRIVATE Completed in 1ms",
+            b"12 timing reify:node_modules/PRIVATE Completed in 1ms",
+            b"13 timing reify Completed in 1ms PRIVATE",
+            b"14 timing reify Completed in -1ms",
+            b"15 timing reify Completed in " + b"9" * 100000 + b"ms",
+            b"16 timing reify Completed in 1ms\x00",
+            b"17 verbose exit 0\x0b18 verbose exit 0",
+            b"19 verbose exit \xff", b"20 verbose exit 0"))
+        self.assertEqual(parse(body), {
+            "terminal_exit_observed": False, "terminal_exit_code": None,
+            "terminal_exit_conflicting": False, "timing_completed": []})
+        # Conflicting recognized records must not silently choose one exit code.
+        self.assertEqual(parse(b"0 verbose exit 0\n1 verbose exit 1\n2 verbose exit 1\n"), {
+            "terminal_exit_observed": True, "terminal_exit_code": None,
+            "terminal_exit_conflicting": True, "timing_completed": []})
+
     def test_owned_stage_facts_and_all_or_refusal(self):
-        self.check_owned_stage_facts((None, "link", "foreign", "large", "unknown", "extra-log",
+        self.check_owned_stage_facts((None, "log-facts", "log-replacement", "link", "foreign", "large", "unknown", "extra-log",
                          "missing-owner", "owner-state", "owner-digest", "owner-id", "owner-shape", "data-extra",
                          "parent-link", "parent-replacement", "large-log", "package", "lock", "source-shape",
                          "source-staging", "stage-data", "stage-root", "stage-manifest",
@@ -85,7 +131,12 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                 elif mutation == "extra-log":
                     (logs / "foreign-secret").write_bytes(b"private")
                 elif mutation == "large-log":
-                    (logs / "2026-11-17T22_00_00_000Z-debug-0.log").write_bytes(b"x" * ((1 << 20) + 1))
+                    (logs / "2026-11-17T22_00_00_000Z-debug-0.log").write_bytes(
+                        b"0 verbose exit 0\n" + b"x" * ((1 << 20) + 1 - 17))
+                elif mutation == "log-facts":
+                    (logs / "2026-11-17T22_00_00_000Z-debug-0.log").write_bytes(
+                        b"PRIVATE https://token@secret.invalid\n" + b"x" * 65536 + b"\n"
+                        b"1 timing reify:unpack Completed in 1200ms\n2 verbose exit 1\n3 verbose code 1\n")
                 elif mutation == "package":
                     (stage / "package.json").write_bytes(b'{"dependencies":{"unrelated":"1.0.0"}}')
                 elif mutation == "lock":
@@ -127,6 +178,9 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                     if mutation == "parent-replacement" and path == lock:
                         stage.rename(stage.with_name(stage.name + "-old"))
                         stage.mkdir()
+                    elif mutation == "log-replacement" and path.parent == logs:
+                        path.rename(path.with_suffix(".old"))
+                        path.write_bytes(b"0 verbose exit 0\n")
                     return fd
                 collect_case = case
                 if mutation in ("stage-short-case", "stage-short-case-link"):
@@ -149,11 +203,13 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                 with patch.dict(files, {"open_member": replacing_open}):
                     result = collect(collect_case)
                 self.assertIs(result["qualified"], False)
+                if result["status"] == "observed-unqualified":
+                    self.assertIs(result["writer_closure_claimed"], False)
                 self.assertNotIn("PRIVATE", json.dumps(result))
                 self.assertNotIn("secret.invalid", json.dumps(result))
                 self.assertNotIn(str(case), json.dumps(result))
                 self.assertEqual(foreign.read_bytes(), b"foreign untouched")
-                if mutation in (None, "large-log", "source-staging", "stage-short-case"):
+                if mutation in (None, "log-facts", "large-log", "source-staging", "stage-short-case"):
                     self.assertEqual(result["status"], "observed-unqualified")
                     self.assertEqual(result["facts"][0]["staging"][0]["package_sha256"],
                                      hashlib.sha256(package).hexdigest())
@@ -163,6 +219,12 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                     if mutation == "large-log":
                         self.assertEqual(result["facts"][0]["npm_logs"]["latest"], {
                             "present": True, "bytes": (1 << 20) + 1, "uninspected_large": True})
+                    else:
+                        self.assertEqual(result["facts"][0]["npm_logs"]["latest"]["npm_facts"], {
+                            "terminal_exit_observed": mutation == "log-facts",
+                            "terminal_exit_code": 1 if mutation == "log-facts" else None,
+                            "terminal_exit_conflicting": False,
+                            "timing_completed": ["reify:unpack"] if mutation == "log-facts" else []})
                     self.assertFalse(result["facts"][0]["staging"][0]["entrypoint"]["present"])
                     self.assertEqual(result["source"][0]["package"]["sha256"], hashlib.sha256(package).hexdigest())
                     self.assertEqual(result["source"][0]["location"], "staging" if staged_source else "active")
