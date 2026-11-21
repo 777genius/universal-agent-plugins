@@ -27,8 +27,7 @@ func compatibleSavedAddTargets(ctx context.Context, app App, source string, dete
 	if err != nil {
 		return nil, nil, err
 	}
-	compatible, skipped = offerSavedHostedPreparation(app, detected, compatible, skipped)
-	return compatible, skipped, nil
+	return offerSavedHostedPreparation(ctx, preview, loaded, detected, compatible, skipped)
 }
 
 // offerSavedHostedPreparation keeps a client whose automatic host check failed
@@ -37,10 +36,21 @@ func compatibleSavedAddTargets(ctx context.Context, app App, source string, dete
 // client that allows hosted preparation (installer.previewHostedPackage), so no
 // other scope or client is offered. Selection still runs the same preflight and
 // confirmation before anything is written.
-func offerSavedHostedPreparation(app App, detected, compatible []domain.DetectedClient, skipped []targetSkip) ([]domain.DetectedClient, []targetSkip) {
-	if app.scope() != domain.ScopeUser {
-		return compatible, skipped
+func offerSavedHostedPreparation(ctx context.Context, app App, loaded *loadedPackage, detected, compatible []domain.DetectedClient, skipped []targetSkip) ([]domain.DetectedClient, []targetSkip, error) {
+	if app.scope() != domain.ScopeUser || loaded == nil {
+		return compatible, skipped, nil
 	}
+	intents, fresh, err := savedHostedPreparationIntents(app, *loaded)
+	if err != nil {
+		return nil, nil, err
+	}
+	session := newLoadedTargetSession(ctx, app, *loaded, detected)
+	if session == nil {
+		return compatible, skipped, nil
+	}
+	session.intents = []map[domain.ClientID]domain.InstallIntent{intents}
+	session.disableHostedPrepareFallback = !fresh
+	session.savedHostedPrepare = true
 	byID := detectedClientMap(detected)
 	kept := skipped[:0]
 	for _, skip := range skipped {
@@ -49,10 +59,14 @@ func offerSavedHostedPreparation(app App, detected, compatible []domain.Detected
 			kept = append(kept, skip)
 			continue
 		}
-		client.DisplayName += preparedOnlySuffix
-		compatible = append(compatible, client)
+		classified, _, accepted := session.classify(client)
+		if !accepted {
+			kept = append(kept, skip)
+			continue
+		}
+		compatible = append(compatible, classified)
 	}
-	return compatible, kept
+	return compatible, kept, nil
 }
 
 // compatibleTargetsDeferringHostQualification offers detected clients whose

@@ -11,13 +11,15 @@ import (
 )
 
 type loadedTargetSession struct {
-	app         App
-	ctx         context.Context
-	loaded      loadedPackage
-	clientMap   map[domain.ClientID]domain.DetectedClient
-	physicalID  string
-	intents     []map[domain.ClientID]domain.InstallIntent
-	preflighter interface {
+	app                          App
+	ctx                          context.Context
+	loaded                       loadedPackage
+	clientMap                    map[domain.ClientID]domain.DetectedClient
+	physicalID                   string
+	intents                      []map[domain.ClientID]domain.InstallIntent
+	disableHostedPrepareFallback bool
+	savedHostedPrepare           bool
+	preflighter                  interface {
 		PreflightActivation(domain.ActivationRequest) error
 	}
 }
@@ -158,7 +160,7 @@ func (session *loadedTargetSession) preflight(client domain.DetectedClient, plan
 
 func (session *loadedTargetSession) preflightFailure(client domain.DetectedClient, plan domain.DeliveryPlan) (domain.DetectedClient, *targetSkip, bool) {
 	reason := "automatic activation/verification preflight failed; resolve this client's verification prerequisites before retrying --target " + string(client.ClientID)
-	if allowsHostedPrepare(client.ClientID) && len(session.intents) > 0 && session.intents[0] != nil {
+	if !session.disableHostedPrepareFallback && allowsHostedPrepare(client.ClientID) && len(session.intents) > 0 && session.intents[0] != nil {
 		if prepared, ok := session.tryHostedPrepare(client, plan); ok {
 			return prepared, nil, true
 		}
@@ -172,6 +174,10 @@ func (session *loadedTargetSession) preflightFailure(client domain.DetectedClien
 }
 
 func (session *loadedTargetSession) tryHostedPrepare(client domain.DetectedClient, plan domain.DeliveryPlan) (domain.DetectedClient, bool) {
+	if session.savedHostedPrepare && (plan.Status != domain.PlanReady || plan.InstallIntent != domain.InstallIntentAutomatic ||
+		!plan.SelectedDelivery.IsZero() || plan.Scope != domain.ScopeUser || plan.TargetContext.ProjectRoot != "" || plan.TargetContext.Scope == domain.ScopeProject) {
+		return client, false
+	}
 	if prepareErr := clientplanner.ApplyInstallIntent(session.app.ClientRegistry, &plan, domain.InstallIntentPrepare); prepareErr != nil {
 		return client, false
 	}

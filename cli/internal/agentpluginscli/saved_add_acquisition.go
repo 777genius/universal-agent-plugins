@@ -87,7 +87,9 @@ func rejectKnownOwnedAdd(app App, source string) error {
 func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID) ([]domain.ClientID, error) {
 	var err error
 	if len(targets) == 0 && app.Terminal && opts.format == "human" {
+		stop := startCommandActivity(cmd, app, opts, "Finding installed agents")
 		clients, e := app.Detector.Detect(cmd.Context())
+		stop()
 		if e != nil {
 			return nil, e
 		}
@@ -107,7 +109,9 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 		}
 		if len(eligible) > 0 {
 			var incompatible []targetSkip
-			eligible, incompatible, err = compatibleSavedAddTargets(cmd.Context(), app, source, eligible)
+			stop = startCommandActivity(cmd, app, opts, "Checking plugin compatibility")
+			eligible, incompatible, err = compatibleSavedAddTargets(cmd.Context(), stopPluginActivityOnWrite(app, stop), source, eligible)
+			stop()
 			if err != nil {
 				return nil, err
 			}

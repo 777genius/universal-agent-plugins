@@ -39,11 +39,15 @@ func TestSavedAddNamesTheClientAndCommandForAnUnmanagedInstallation(t *testing.T
 		t.Fatalf("typed cause lost: %v", err)
 	}
 	command := "agentplugins remove " + id + " --target codex"
-	for _, want := range []string{"already installed outside your dependency list", "Codex", "installation " + id, command, "plugin data is kept", "any step to finish in the client"} {
+	for _, want := range []string{"already installed outside your dependency list", "Codex", "installation " + id, command, "plugin data is kept", "any step to finish in the client", "add with --no-save", "does not migrate"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("message lacks %q:\n%s", want, err)
 		}
 	}
+	if strings.Contains(err.Error(), "then run this command again") {
+		t.Fatal("message promises that disconnecting bindings migrates ownership")
+	}
+	dependencyRun(t, f, "add", source, "--target", "codex", "--no-save", "--yes", "--format", "json")
 
 	// Codex removal needs a manual uninstall step; the command itself says so and
 	// names --external-uninstalled, which this fixture (no real Codex) passes.

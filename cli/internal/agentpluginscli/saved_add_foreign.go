@@ -53,7 +53,7 @@ func explainForeignBinding(app App, err error) error {
 		fmt.Fprintf(&b, "\n  %s (installation %s)", strings.Join(names, ", "), id)
 		commands = append(commands, fmt.Sprintf("  agentplugins remove %s --target %s%s", id, strings.Join(targets, ","), scope))
 	}
-	b.WriteString("\nRemove it first (the command lists any step to finish in the client), then run this command again; plugin data is kept:\n")
+	b.WriteString("\nTo manage it separately from your dependency list, use add with --no-save.\nRemoving bindings does not migrate the installation into your dependency list.\nTo disconnect these agents, plugin data is kept (the command lists any step to finish in the client):\n")
 	b.WriteString(strings.Join(commands, "\n"))
 	return unmanagedBindingError{cause: foreign, message: b.String()}
 }

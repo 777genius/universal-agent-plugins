@@ -71,6 +71,9 @@ func TestSavedAddOffersAndPreparesKiroWhenItsConnectionCannotBeChecked(t *testin
 		binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationPackageValid {
 		t.Fatalf("Kiro binding is not an honest prepared binding: %+v", binding)
 	}
+	if choice := targetChoiceFor(preparedOnlyClient(t, app, source)); choice.Note != preparedOnlyNote {
+		t.Fatalf("existing preparation was not restored in the picker: %+v", choice)
+	}
 	before, err := os.ReadFile(f.store.Path)
 	if err != nil {
 		t.Fatal(err)
@@ -91,6 +94,33 @@ func TestSavedAddOffersAndPreparesKiroWhenItsConnectionCannotBeChecked(t *testin
 	}
 }
 
+func TestSavedKiroDoesNotOfferFreshPreparationForExistingAutomaticInstallation(t *testing.T) {
+	f, source := preparedKiroSavedHarness(t)
+	dependencyRun(t, f, "add", source, "--target", "kiro", "--yes", "--format", "json")
+	state, err := f.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Model a previously automatic installation whose host can no longer verify
+	// MCP. The installer must not silently change its recorded intent.
+	for key, binding := range state.Installations[0].Clients {
+		binding.InstallIntent = domain.InstallIntentAutomatic
+		state.Installations[0].Clients[key] = binding
+	}
+	state.Installations[0].InstallPreferences = nil
+	if err := f.store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	clients, err := f.app.Detector.Detect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	compatible, skipped, err := compatibleSavedAddTargets(t.Context(), f.app, source, clients)
+	if err != nil || len(compatible) != 0 || len(skipped) != 1 {
+		t.Fatalf("existing automatic installation offered as fresh preparation: compatible=%v skipped=%v err=%v", compatible, skipped, err)
+	}
+}
+
 func preparedOnlyClient(t *testing.T, app App, source string) domain.DetectedClient {
 	t.Helper()
 	clients, err := app.Detector.Detect(t.Context())
@@ -102,4 +132,17 @@ func preparedOnlyClient(t *testing.T, app App, source string) domain.DetectedCli
 		t.Fatalf("compatible=%v skipped=%v err=%v", compatible, skipped, err)
 	}
 	return compatible[0]
+}
+
+func TestSavedKiroDoesNotOfferPreparationWhenPreparationPreflightFails(t *testing.T) {
+	f, source := preparedKiroSavedHarness(t)
+	f.app.Lifecycle.Activator = deniedEligibilityActivator{}
+	clients, err := f.app.Detector.Detect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	compatible, skipped, err := compatibleSavedAddTargets(t.Context(), f.app, source, clients)
+	if err != nil || len(compatible) != 0 || len(skipped) != 1 {
+		t.Fatalf("failed preparation was offered: compatible=%v skipped=%v err=%v", compatible, skipped, err)
+	}
 }
