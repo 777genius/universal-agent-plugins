@@ -126,12 +126,14 @@ func (isolation *groupIsolation) leaveOut(failed map[domain.ClientID]bool, resul
 	return keep
 }
 
-// enabled reports whether agents may be left out. VS Code shares its physical
-// delivery with Copilot and is frozen, so a selection with it keeps the
-// whole-selection behavior.
+// enabled keeps the frozen native-backed sibling out of partial group retries.
+// The shared User backend is the conservative freeze authority even when Project
+// registries are independent: a prepared VS Code sibling must never become
+// splittable just because its Project backend family differs from Copilot's.
+// Native ownership remains declarative; the generic CLI does not name clients.
 func (isolation *groupIsolation) enabled() bool {
 	for _, client := range isolation.selected {
-		if client.ClientID == domain.ClientVSCode {
+		if owner, ok := nativePackageSibling(client.ClientID, domain.ScopeUser); ok && owner != client.ClientID {
 			return false
 		}
 	}

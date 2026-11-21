@@ -38,7 +38,7 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 			return domain.DetectedClient{}, fmt.Errorf("%w: invalid client profile: %w", ErrInvalidRequest, err)
 		}
 	}
-	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, NativeConfigRoot: req.ClientNativeConfigRoot, ExecutablePath: req.ClientExecutable, Version: req.ClientVersion}, nil
+	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, NativeConfigRoot: req.ClientNativeConfigRoot, ExecutablePath: req.ClientExecutable, Version: req.ClientVersion, Surfaces: append([]domain.ClientSurface(nil), req.ClientSurfaces...)}, nil
 }
 
 func missingRequired(envelope domain.PackageEnvelope, required []string) []string {
