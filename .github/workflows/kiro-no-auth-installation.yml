@@ -166,6 +166,7 @@ jobs:
                                     'TestKiroExactMCPApprovalDisposableLifecycle/repeat',
                                     'TestKiroExactMCPApprovalDisposableLifecycle/update',
                                     'TestKiroExactMCPApprovalDisposableLifecycle/repair',
+                                    'TestKiroExactMCPApprovalDisposableLifecycle/narrow',
                                     'TestKiroProjectApprovalDoesNotForgeWorkspaceTrust',
                                     'TestKiroActiveApprovedToolsRefuseStaleReprojection',
                                     'TestKiroUserEditedAutoApprovalBlocksRemoval']}

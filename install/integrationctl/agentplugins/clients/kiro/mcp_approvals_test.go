@@ -156,6 +156,7 @@ func TestKiroExactMCPApprovalDisposableLifecycle(t *testing.T) {
 		{"repeat", []string{"read_docs"}},
 		{"update", []string{"read_docs", "get_library"}},
 		{"repair", []string{"read_docs", "get_library"}},
+		{"narrow", []string{"read_docs"}},
 	} {
 		t.Run(trial.name, func(t *testing.T) {
 			stage := filepath.Join(t.TempDir(), "stage")
