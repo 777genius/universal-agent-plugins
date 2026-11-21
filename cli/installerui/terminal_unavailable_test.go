@@ -68,7 +68,7 @@ func TestUnavailableBlockSitsBelowListWithoutCheckboxes(t *testing.T) {
 func TestUnavailableBlockWrapsWithoutBreakingWords(t *testing.T) {
 	const width = 40
 	rows := viewRows(t, unavailableFixture(), width, 24)
-	var text []string
+	text := make([]string, 0, len(rows))
 	for _, row := range rows {
 		if len([]rune(strings.TrimRight(row, " "))) > width {
 			t.Fatalf("row wider than the terminal: %q", row)

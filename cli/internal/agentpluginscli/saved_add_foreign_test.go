@@ -63,7 +63,7 @@ func TestSavedAddNamesTheClientAndCommandForAnUnmanagedInstallation(t *testing.T
 
 func TestExplainForeignBindingLeavesOtherErrorsAlone(t *testing.T) {
 	other := errors.New("drift: demo/codex")
-	if got := explainForeignBinding(App{}, other); got != other {
+	if got := explainForeignBinding(App{}, other); !errors.Is(got, other) {
 		t.Fatalf("unrelated error rewritten: %v", got)
 	}
 	if explainForeignBinding(App{}, nil) != nil {
