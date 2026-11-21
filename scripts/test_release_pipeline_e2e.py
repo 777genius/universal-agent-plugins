@@ -144,10 +144,11 @@ class ReleasePipelineE2E(unittest.TestCase):
         self.add(prefix + '/actions/runs/42', self.run)
         # The release's full Required gate is an exact main-push workflow,
         # independent of individual merged-PR check-runs.
-        self.required_push_endpoint = (prefix + '/actions/runs?head_sha=' + self.commit
+        self.required_push_endpoint = (prefix + '/actions/workflows/ci.yml/runs?head_sha=' + self.commit
                                       + '&event=push&per_page=100')
-        self.required_push = {'name': 'Required', 'event': 'push', 'head_branch': 'main',
-                              'head_sha': self.commit, 'status': 'completed', 'conclusion': 'success'}
+        self.required_push = {'name': 'Required', 'path': '.github/workflows/ci.yml',
+                              'event': 'push', 'head_branch': 'main', 'head_sha': self.commit,
+                              'status': 'completed', 'conclusion': 'success'}
         self.add(self.required_push_endpoint, [{'workflow_runs': [self.required_push]}],
                  ['--paginate', '--slurp'])
         self.add(prefix + '/actions/workflows/7', {'id': 7, 'path': WORKFLOW})
@@ -393,10 +394,15 @@ pathlib.Path(os.environ['PUBLISH_HASH']).write_text(hashlib.sha256(pathlib.Path(
         # A merged-PR success cannot rescue a failed, cancelled or missing
         # full Required main-push run on the immutable tagged commit.
         self.add(merge_endpoint, [{'check_runs': success}], ['--paginate', '--slurp'])
-        for state in ('missing', 'failure', 'cancelled', 'queued'):
+        for state in ('missing', 'failure', 'cancelled', 'queued', 'shadow'):
             with self.subTest(main_required=state):
                 if state == 'missing':
                     observed = []
+                elif state == 'shadow':
+                    # A same-name successful foreign workflow is not ci.yml.
+                    observed = [{**self.required_push,
+                                 'path': '.github/workflows/shadow-required.yml'},
+                                {**self.required_push, 'conclusion': 'failure'}]
                 else:
                     change = ({'status': 'queued', 'conclusion': None} if state == 'queued'
                               else {'conclusion': state})

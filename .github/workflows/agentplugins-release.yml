@@ -112,11 +112,14 @@ jobs:
           # Individual checks on a merged PR head can be reused, but an
           # incomplete or failed full Required main-push run on the frozen
           # tagged commit must never become release publication authority.
+          # Scope the REST request to the real ci.yml workflow identity;
+          # another workflow named "Required" is never trusted as evidence.
           required_runs="$(gh api --paginate --slurp \
-            "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${COMMIT}&event=push&per_page=100")"
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${COMMIT}&event=push&per_page=100")"
           if ! jq -e --arg sha "${COMMIT}" '
             any(.[]?.workflow_runs[]?;
-              .name == "Required" and .event == "push"
+              .name == "Required" and .path == ".github/workflows/ci.yml"
+              and .event == "push"
               and .head_branch == "main" and .head_sha == $sha
               and .status == "completed" and .conclusion == "success")' \
             <<<"${required_runs}" >/dev/null; then

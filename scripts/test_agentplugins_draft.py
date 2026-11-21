@@ -310,9 +310,10 @@ class ProducerPermissionTests(unittest.TestCase):
         # PR-head test checks alone are insufficient for source-bound release:
         # full Required includes lint and multi-platform SDK checks.
         self.assertIn("      actions: read\n", validate.split("    outputs:", 1)[0])
-        self.assertIn("actions/runs?head_sha=${COMMIT}&event=push&per_page=100", validate)
+        self.assertIn("actions/workflows/ci.yml/runs?head_sha=${COMMIT}&event=push&per_page=100", validate)
         self.assertIn('if ! jq -e --arg sha "${COMMIT}"', validate)
-        self.assertIn('.name == "Required" and .event == "push"', validate)
+        self.assertIn('.name == "Required" and .path == ".github/workflows/ci.yml"', validate)
+        self.assertIn('and .event == "push"', validate)
         self.assertIn('.head_branch == "main" and .head_sha == $sha', validate)
         self.assertIn('.status == "completed" and .conclusion == "success"', validate)
         self.assertIn("frozen commit lacks successful full Required main-push workflow", validate)
@@ -325,8 +326,9 @@ class ProducerPermissionTests(unittest.TestCase):
         predicate = re.search(r"(?s)any\(\.\[\]\?\.workflow_runs\[\]\?;.*?success\"\)", validate)
         self.assertIsNotNone(predicate)
         sha = "a" * 40
-        valid = dict(name="Required", event="push", head_branch="main",
-                     head_sha=sha, status="completed", conclusion="success")
+        valid = dict(name="Required", path=".github/workflows/ci.yml",
+                     event="push", head_branch="main", head_sha=sha,
+                     status="completed", conclusion="success")
         def accepts(rows):
             completed = subprocess.run(
                 ["jq", "-e", "--arg", "sha", sha, predicate.group()],
@@ -337,10 +339,15 @@ class ProducerPermissionTests(unittest.TestCase):
         for update in ({"conclusion": "failure"}, {"conclusion": "cancelled"},
                        {"status": "queued", "conclusion": None},
                        {"event": "pull_request"}, {"head_branch": "feature"},
-                       {"head_sha": "b" * 40}, {"name": "Core fast"}):
+                       {"head_sha": "b" * 40}, {"name": "Core fast"},
+                       {"path": ".github/workflows/shadow-required.yml"}):
             with self.subTest(update=update):
                 self.assertFalse(accepts([{**valid, **update}]))
         self.assertFalse(accepts([]))
+        # A same-name successful shadow run must not rescue a failed ci.yml.
+        shadow = {**valid, "path": ".github/workflows/shadow-required.yml"}
+        failed = {**valid, "conclusion": "failure"}
+        self.assertFalse(accepts([shadow, failed]))
 
     def test_producer_trust_and_promotion_defaults_remain_fail_closed(self):
         self.assertRegex(self.workflow, r"publish_release:\n(?:        .*\n)*?        type: boolean\n        default: false\n")
