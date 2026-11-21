@@ -176,6 +176,32 @@ func applyKiroApprovals(root string, approval mcpApprovals) error {
 	return shared.WriteJSON(path, document)
 }
 
+// Reconstructing exact native ownership from an unchanged active package must
+// not silently accept a stale projection that omitted the publisher's approved
+// tools. A caller can re-stage the confirmed source, but never forge a receipt.
+func verifyKiroActiveApprovals(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {
+	approved, err := selectedKiroApprovals(envelope, plan)
+	if err != nil {
+		return err
+	}
+	for name, tools := range approved.Servers {
+		server, err := projectedKiroMCPServer(root, name)
+		if err != nil {
+			return fmt.Errorf("%w: read native Kiro approval for %q: %v", domain.ErrProjectionRefreshRequired, name, err)
+		}
+		actual, ok := server["autoApprove"].([]any)
+		if !ok || len(actual) != len(tools) {
+			return fmt.Errorf("%w: native Kiro approved tools changed for %q", domain.ErrProjectionRefreshRequired, name)
+		}
+		for index, tool := range tools {
+			if actual[index] != tool {
+				return fmt.Errorf("%w: native Kiro approved tool changed for %q", domain.ErrProjectionRefreshRequired, name)
+			}
+		}
+	}
+	return nil
+}
+
 func kiroApprovalDisclosure(approved mcpApprovals) string {
 	if len(approved.Servers) == 0 {
 		return ""
