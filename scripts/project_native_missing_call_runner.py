@@ -267,6 +267,17 @@ def permission_fixture(client, project, server):
         })
 
 
+def assert_cursor_owned_tool_permission(project, server):
+    """Require the actual UAP-installed grant without synthesizing it."""
+    document = json.loads((project / ".cursor" / "cli.json").read_bytes())
+    policy = document.get("permissions")
+    expected = ["Read(DOCS.md)", "Mcp(" + server + ":inspect_runtime)"]
+    if (not isinstance(policy, dict) or policy.get("allow") != expected
+            or policy.get("deny") != ["Shell(*)", "Read(**/*)", "Write(**/*)"]
+            or "mcpAllowlist" in document):
+        raise ValueError("Cursor exact UAP tool grant or foreign policy differs")
+
+
 def agent_command(client, binary, prompt):
     if client == "cursor":
         return [binary, "-p", prompt, "--output-format", "json"]
@@ -343,11 +354,19 @@ def run(client, output, expected, *, preflight_only=False, prepared_source=None)
         events = work / "events.jsonl"
         project_a, project_b, outside = (work / name for name in ("a", "b", "outside"))
         source = work / "source"
-        emit(source / "plugin.json", {
+        manifest = {
             "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
             "name": "uap-native-mcp-call", "version": "1.0.0",
             "description": "Isolated authorized MCP call proof",
-        })
+        }
+        if client == "cursor":
+            # Native Cursor proof must exercise UAP's own exact tool grant.
+            manifest["extensions"] = {
+                "com.universal-agent-plugins.cursor-mcp-approval": {
+                    "version": 1, "mcp_auto_approve": {server: ["inspect_runtime"]},
+                },
+            }
+        emit(source / "plugin.json", manifest)
         emit(source / "mcp.json", {
             "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
             "mcpServers": {server: {
@@ -366,16 +385,27 @@ def run(client, output, expected, *, preflight_only=False, prepared_source=None)
             a_config, b_config = project_a / ".mcp.json", project_b / ".mcp.json"
         emit(a_config, foreign)
         emit(b_config, foreign)
+        if client == "cursor":
+            # Do not pregrant MCP tools: UAP must add exactly the reviewed rule.
+            emit(project_a / ".cursor" / "cli.json", {
+                "permissions": {
+                    "allow": ["Read(DOCS.md)"],
+                    "deny": ["Shell(*)", "Read(**/*)", "Write(**/*)"],
+                },
+            })
         emit(work / "home" / "foreign-user-control", b"foreign-user-do-not-touch\n")
         before_b = b_config.read_bytes()
         native_inventory(client, binary, project_b, env, private, "empty-b", server)
         native_inventory(client, binary, outside, env, private, "empty-outside", server)
 
         preflight_checkpoint(preflight_only, "before-install-negative-ok")
-        stdout, _ = invoke("uap-add-a", [
+        add_argv = [
             installer, "add", source, "--no-save", "--scope", "project",
             "--project-root", project_a, "--target", client, "--format", "json",
-        ], project_a, env, private, 80)
+        ]
+        if client == "cursor":
+            add_argv.append("--yes")  # Explicit project tool-trust confirmation.
+        stdout, _ = invoke("uap-add-a", add_argv, project_a, env, private, 80)
         result = json.loads(stdout)
         if result.get("command") != "add" or result.get("result") != "success":
             raise ValueError("UAP add returned no success receipt")
@@ -385,7 +415,10 @@ def run(client, output, expected, *, preflight_only=False, prepared_source=None)
         preflight_checkpoint(preflight_only, "managed-wrapper-verified")
         if b_config.read_bytes() != before_b:
             raise ValueError("Project B changed after Project A install")
-        permission_fixture(client, project_a, server)
+        if client == "cursor":
+            assert_cursor_owned_tool_permission(project_a, server)
+        else:
+            permission_fixture(client, project_a, server)
         if client == "cursor":
             invoke("cursor-enable-one", [binary, "mcp", "enable", server], project_a, env, private, 40)
         native_selected_inventory(binary, project_a, env, private, server)
@@ -405,6 +438,8 @@ def run(client, output, expected, *, preflight_only=False, prepared_source=None)
                 raise ValueError("foreign Project A config changed on removal")
             native_inventory(client, binary, project_a, env, private,
                              "preflight-removed-a", server)
+            if client == "cursor":
+                assert_cursor_owned_tool_permission(project_a, server)
             native_inventory(client, binary, project_b, env, private,
                              "preflight-empty-b", server)
             preflight_checkpoint(preflight_only, "after-remove-negative-ok")
@@ -481,6 +516,8 @@ def run(client, output, expected, *, preflight_only=False, prepared_source=None)
         if after.get("mcpServers") != foreign["mcpServers"]:
             raise ValueError("foreign Project A MCP changed on removal")
         native_inventory(client, binary, project_a, env, private, "removed-a", server)
+        if client == "cursor":
+            assert_cursor_owned_tool_permission(project_a, server)
         invoke("native-removed-negative", agent_command(client, binary, no_call),
                project_a, session_env, private, 120)
         require_unchanged_after_negative(before_negative, events.read_bytes())
