@@ -67,6 +67,11 @@ func TestKiroNamedMCPApprovalSchemaFailClosed(t *testing.T) {
 			}
 		})
 	}
+	for _, name := range []string{"read docs", "read\u202e", "read\u200b", "read\nwrite", "<script>", "read/tools", "write*"} {
+		if validKiroApprovalName(name) {
+			t.Fatalf("unsafe tool disclosure or pattern allowed: %q", name)
+		}
+	}
 	approved, err := decodeMCPApprovals(json.RawMessage(valid))
 	if err != nil || !reflect.DeepEqual(approved.Servers[kiroApprovalTestServer], []string{"read_docs", "get-library.id"}) {
 		t.Fatalf("valid exact approval: %+v %v", approved, err)
