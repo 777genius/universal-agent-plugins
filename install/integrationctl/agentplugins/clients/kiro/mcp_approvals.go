@@ -187,7 +187,7 @@ func verifyKiroActiveApprovals(root string, envelope domain.PackageEnvelope, pla
 	for name, tools := range approved.Servers {
 		server, err := projectedKiroMCPServer(root, name)
 		if err != nil {
-			return fmt.Errorf("%w: read native Kiro approval for %q: %v", domain.ErrProjectionRefreshRequired, name, err)
+			return fmt.Errorf("%w: read native Kiro approval for %q: %w", domain.ErrProjectionRefreshRequired, name, err)
 		}
 		actual, ok := server["autoApprove"].([]any)
 		if !ok || len(actual) != len(tools) {
