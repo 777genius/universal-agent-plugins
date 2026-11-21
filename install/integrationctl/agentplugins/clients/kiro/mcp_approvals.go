@@ -43,8 +43,15 @@ func decodeMCPApprovals(raw json.RawMessage) (mcpApprovals, error) {
 	if len(raw) == 0 || len(raw) > 16<<10 {
 		return value, fmt.Errorf("Kiro MCP approval extension exceeds its limit")
 	}
-	if _, err := shared.DecodeStrictJSONObject(raw); err != nil {
+	fields, err := shared.DecodeStrictJSONObject(raw)
+	if err != nil {
 		return value, fmt.Errorf("invalid Kiro MCP approval object: %w", err)
+	}
+	// encoding/json accepts field names case-insensitively by default. Kiro's
+	// trust declaration is an exact, versioned contract: refuse aliases.
+	_, hasServers := fields["mcp_auto_approve"]
+	if len(fields) != 2 || fields["version"] != json.Number("1") || !hasServers {
+		return value, fmt.Errorf("Kiro MCP approval fields must match the exact v1 schema")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
