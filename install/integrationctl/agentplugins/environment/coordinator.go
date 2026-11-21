@@ -287,7 +287,7 @@ func validateDesiredBinding(pkg LockedPackage, target string, current BindingObs
 	}
 	for _, existing := range observed {
 		if !existing.Managed && existing.SourceKey == pkg.SourceKey {
-			return current, fmt.Errorf("foreign: %s has an unmanaged binding in installation %s; remove it before adding the dependency", pkg.Alias, existing.InstallationID)
+			return current, foreignBindingError(pkg, observed)
 		}
 		if existing.Managed && existing.Alias == pkg.Alias && existing.SourceKey != pkg.SourceKey {
 			return current, ErrSourceChange
