@@ -55,7 +55,16 @@ func completeCursorProjectToolTrust(ctx context.Context, env clients.Env, reques
 	}
 	var effect *shared.NativeEffectError
 	if errors.As(err, &effect) {
-		outcome.NativeEffect = effect.Effect
+		// An unchanged tool-permission rollback cannot erase an earlier
+		// committed project MCP mutation. Uncertain always dominates.
+		switch effect.Effect {
+		case domain.NativeEffectUncertain:
+			outcome.NativeEffect = domain.NativeEffectUncertain
+		case domain.NativeEffectCommitted:
+			if outcome.NativeEffect != domain.NativeEffectUncertain {
+				outcome.NativeEffect = domain.NativeEffectCommitted
+			}
+		}
 	}
 	if err != nil {
 		return outcome, err

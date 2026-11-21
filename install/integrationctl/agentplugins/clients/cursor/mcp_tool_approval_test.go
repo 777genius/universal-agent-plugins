@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/packagesnapshot"
@@ -368,5 +369,45 @@ func TestCursorNativeMCPOnlyReadinessIgnoresReviewedApprovalExtension(t *testing
 	names, onlyMCP = cursorSelectedMCP(components)
 	if len(names) != 0 || onlyMCP {
 		t.Fatalf("extension unexpectedly declared a native MCP server: %v %v", names, onlyMCP)
+	}
+}
+
+func TestCursorToolPermissionRollbackPreservesEarlierNativeEffect(t *testing.T) {
+	for _, effect := range []domain.NativeEffectState{
+		domain.NativeEffectUnchanged, domain.NativeEffectCommitted, domain.NativeEffectUncertain,
+	} {
+		t.Run(string(effect), func(t *testing.T) {
+			request, env := cursorToolTrustFixture(t)
+			request.ProjectTrustConsent = true
+			path := filepath.Join(request.Plan.NativeRegistryRoot, "cli.json")
+			original := []byte("{\"permissions\":{}}\n")
+			if err := os.WriteFile(path, original, 0600); err != nil {
+				t.Fatal(err)
+			}
+			fault := errors.New("permission write failed after becoming visible")
+			files := &cursorApprovalFaultFiles{path: path, effect: effect, fault: fault}
+			env.NativeConfig = nativeconfig.NewWithFileIO(files)
+			prior := domain.ActivationOutcome{
+				Policy: domain.PolicyAllowed, Verification: domain.VerificationInstalled,
+				NativeEffect: domain.NativeEffectCommitted, NativeObjects: request.Delivery.NativeObjects,
+			}
+			got, err := completeCursorProjectToolTrust(t.Context(), env, request, prior)
+			if !errors.Is(err, fault) || files.writes != 2 {
+				t.Fatalf("failed native permission transaction lost effect evidence: %+v %v", got, err)
+			}
+			want := domain.NativeEffectCommitted
+			if effect == domain.NativeEffectUncertain {
+				want = domain.NativeEffectUncertain
+			}
+			if got.NativeEffect != want || !reflect.DeepEqual(got.NativeObjects, prior.NativeObjects) {
+				t.Fatalf("earlier owned project MCP commitment was lost: %+v, want %s", got, want)
+			}
+			if effect == domain.NativeEffectUnchanged {
+				body, readErr := os.ReadFile(path)
+				if readErr != nil || !bytes.Equal(body, original) {
+					t.Fatalf("rollback incorrectly rewrote foreign original: %q %v", body, readErr)
+				}
+			}
+		})
 	}
 }
