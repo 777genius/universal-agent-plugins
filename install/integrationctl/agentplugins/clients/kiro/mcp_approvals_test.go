@@ -44,22 +44,22 @@ func testKiroApprovalPlan(root, active string, scope domain.InstallScope) domain
 func TestKiroNamedMCPApprovalSchemaFailClosed(t *testing.T) {
 	valid := `{"version":1,"mcp_auto_approve":{"docs":["read_docs","get-library.id"]}}`
 	for name, raw := range map[string]string{
-		"empty":              "",
-		"root":               "[]",
+		"empty":               "",
+		"root":                "[]",
 		"unsupported-version": `{"version":2,"mcp_auto_approve":{"docs":["read"]}}`,
-		"empty-list":         `{"version":1,"mcp_auto_approve":{"docs":[]}}`,
-		"wildcard":           `{"version":1,"mcp_auto_approve":{"docs":["*"]}}`,
-		"embedded-wildcard":  `{"version":1,"mcp_auto_approve":{"docs":["read*"]}}`,
-		"path":               `{"version":1,"mcp_auto_approve":{"docs":["../secret"]}}`,
-		"duplicate-tool":     `{"version":1,"mcp_auto_approve":{"docs":["read","read"]}}`,
-		"duplicate-server":   `{"version":1,"mcp_auto_approve":{"docs":["read"],"docs":["write"]}}`,
-		"unknown-field":      `{"version":1,"mcp_auto_approve":{"docs":["read"]},"all_tools":true}`,
-		"field-alias":        `{"Version":1,"mcp_auto_approve":{"docs":["read"]}}`,
-		"field-alias-server": `{"version":1,"MCP_AUTO_APPROVE":{"docs":["read"]}}`,
+		"empty-list":          `{"version":1,"mcp_auto_approve":{"docs":[]}}`,
+		"wildcard":            `{"version":1,"mcp_auto_approve":{"docs":["*"]}}`,
+		"embedded-wildcard":   `{"version":1,"mcp_auto_approve":{"docs":["read*"]}}`,
+		"path":                `{"version":1,"mcp_auto_approve":{"docs":["../secret"]}}`,
+		"duplicate-tool":      `{"version":1,"mcp_auto_approve":{"docs":["read","read"]}}`,
+		"duplicate-server":    `{"version":1,"mcp_auto_approve":{"docs":["read"],"docs":["write"]}}`,
+		"unknown-field":       `{"version":1,"mcp_auto_approve":{"docs":["read"]},"all_tools":true}`,
+		"field-alias":         `{"Version":1,"mcp_auto_approve":{"docs":["read"]}}`,
+		"field-alias-server":  `{"version":1,"MCP_AUTO_APPROVE":{"docs":["read"]}}`,
 		"noncanonical-number": `{"version":1.0,"mcp_auto_approve":{"docs":["read"]}}`,
-		"wrong-shape":        `{"version":1,"mcp_auto_approve":{"docs":"read"}}`,
-		"null":               `{"version":1,"mcp_auto_approve":null}`,
-		"trailing-content":   valid + " {}",
+		"wrong-shape":         `{"version":1,"mcp_auto_approve":{"docs":"read"}}`,
+		"null":                `{"version":1,"mcp_auto_approve":null}`,
+		"trailing-content":    valid + " {}",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := decodeMCPApprovals(json.RawMessage(raw)); err == nil {
