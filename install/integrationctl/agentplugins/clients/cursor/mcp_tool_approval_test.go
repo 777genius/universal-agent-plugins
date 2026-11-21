@@ -418,7 +418,7 @@ func TestCursorScopedApprovalDoesNotDisableAutomaticProjectLifecycle(t *testing.
 
 func TestCursorServerApprovalVersionRetainsOnlyNativeQualifiedPins(t *testing.T) {
 	for _, row := range []struct {
-		version string
+		version   string
 		qualified bool
 	}{
 		{"2026.09.18-9a7762b", true},
