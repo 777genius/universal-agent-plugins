@@ -46,10 +46,10 @@ func (p terminalRenderer) selectMany(ctx context.Context, req MultiSelectRequest
 func newSelectionForm(req MultiSelectRequest, theme terminaltheme.Theme) (*[]string, *huh.MultiSelect[string], *selectionLayout, *huh.Form) {
 	ids := append([]string(nil), req.Defaults...)
 	choices := make([]huh.Option[string], len(req.Options))
-	labelWidths := make([]int, len(req.Options))
+	labels := make([]string, len(req.Options))
 	for i, option := range req.Options {
 		label := annotatedLabel(option.Label, req.Annotations[option.ID], theme)
-		labelWidths[i] = ansi.StringWidth(label)
+		labels[i] = label
 		if req.Filterable {
 			// Huh toggles by display key, so clipped labels need unique keys.
 			label = fmt.Sprintf("%d. %s", i+1, label)
@@ -66,20 +66,25 @@ func newSelectionForm(req MultiSelectRequest, theme terminaltheme.Theme) (*[]str
 	}
 	field := huh.NewMultiSelect[string]().Title(req.Title).Options(choices...).Value(&ids).Filterable(req.Filterable).Validate(validateField)
 	layout := &selectionLayout{field: field, ids: &ids, validate: validate, title: req.Title, count: len(choices), filterable: req.Filterable,
-		heading: req.UnavailableHeading, unavailable: req.Unavailable, theme: theme, attempted: &attempted, labelWidths: labelWidths}
-	if req.Filterable {
-		// Clip the rendered option, not its key: Huh uses full option keys for
-		// filtering and selection identity, so truncating keys can select twins.
-		field.WithTheme(huh.ThemeFunc(func(dark bool) *huh.Styles {
-			styles := semanticHuhTheme(dark)
-			for _, style := range []*huh.FieldStyles{&styles.Focused, &styles.Blurred} {
-				columns := max(1, layout.width-style.Base.GetHorizontalFrameSize()-lipgloss.Width(style.MultiSelectSelector.String())-lipgloss.Width(style.SelectedPrefix.String()))
+		heading: req.UnavailableHeading, unavailable: req.Unavailable, theme: theme, attempted: &attempted, labels: labels}
+	// Clip searchable options; wrap ordinary labels before Huh computes
+	// viewport offsets, so continuation rows stay visible.
+	// Clip the rendered option, not its key: Huh uses full option keys for
+	// filtering and selection identity, so truncating keys can select twins.
+	field.WithTheme(huh.ThemeFunc(func(dark bool) *huh.Styles {
+		styles := semanticHuhTheme(dark)
+		for _, style := range []*huh.FieldStyles{&styles.Focused, &styles.Blurred} {
+			columns := max(1, layout.width-style.Base.GetHorizontalFrameSize()-lipgloss.Width(style.MultiSelectSelector.String())-lipgloss.Width(style.SelectedPrefix.String()))
+			if req.Filterable {
 				style.SelectedOption = style.SelectedOption.MaxWidth(columns).MaxHeight(1)
 				style.UnselectedOption = style.UnselectedOption.MaxWidth(columns).MaxHeight(1)
+			} else {
+				style.SelectedOption = style.SelectedOption.Width(columns)
+				style.UnselectedOption = style.UnselectedOption.Width(columns)
 			}
-			return styles
-		}))
-	}
+		}
+		return styles
+	}))
 	form := huh.NewForm(huh.NewGroup(field).WithShowHelp(false).WithShowErrors(false)).WithLayout(layout)
 	layout.form = form
 	return &ids, field, layout, form
@@ -138,7 +143,7 @@ type selectionLayout struct {
 	unavailable []Unavailable
 	theme       terminaltheme.Theme
 	notes       []string
-	labelWidths []int
+	labels      []string
 }
 
 // selectionOptionPrefix covers the border, cursor and checkbox before a label.
@@ -185,8 +190,8 @@ func (l *selectionLayout) resize(w, h int) error {
 func (l *selectionLayout) optionRows(width int) int {
 	columns := max(1, width-selectionOptionPrefix)
 	rows := 0
-	for _, w := range l.labelWidths {
-		rows += max(1, (w+columns-1)/columns)
+	for _, label := range l.labels {
+		rows += lipgloss.Height(lipgloss.NewStyle().Width(columns).Render(label))
 	}
 	return rows
 }

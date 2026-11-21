@@ -13,11 +13,11 @@ import (
 // Automatic selection uses disposable package acquisition and shared host
 // admission. The authoritative saved operation resolves and revalidates its pin
 // after selection; no native executable runs while presenting choices.
-func compatibleSavedAddTargets(ctx context.Context, app App, source string, detected []domain.DetectedClient) ([]domain.DetectedClient, []targetSkip, error) {
+func compatibleSavedAddTargets(ctx context.Context, app App, source string, detected []domain.DetectedClient) ([]domain.DetectedClient, []targetSkip, map[domain.ClientID]prompt.TargetChoice, error) {
 	app.dependencySnapshots = nil
 	preview, cleanup, err := dependencyPreviewApp(app, &options{dryRun: true})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer cleanup()
 	compatible, skipped, loaded, err := compatibleTargetsDeferringHostQualification(ctx, preview, source, detected)
@@ -25,9 +25,14 @@ func compatibleSavedAddTargets(ctx context.Context, app App, source string, dete
 		defer func() { _ = loaded.cleanup() }()
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return offerSavedHostedPreparation(ctx, preview, loaded, detected, compatible, skipped)
+	annotations, err := inspectSavedAddSelection(ctx, app, source, loaded)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	compatible, skipped, err = offerSavedHostedPreparation(ctx, preview, loaded, detected, compatible, skipped)
+	return compatible, skipped, annotations, err
 }
 
 // offerSavedHostedPreparation keeps a client whose automatic host check failed

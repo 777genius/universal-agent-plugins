@@ -137,14 +137,14 @@ func confirmPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *o
 	return promptYesNoDefault(cmd.Context(), cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), question, true)
 }
 
-func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.DetectedClient, skipped []targetSkip, allClients []domain.DetectedClient) ([]domain.ClientID, []domain.DetectedClient, error) {
+func promptTargetChoices(cmd *cobra.Command, app App, detected []domain.DetectedClient, skipped []targetSkip, allClients []domain.DetectedClient, annotations ...map[domain.ClientID]prompt.TargetChoice) ([]domain.ClientID, []domain.DetectedClient, error) {
 	detected = append([]domain.DetectedClient(nil), detected...)
 	skipped = append([]targetSkip(nil), skipped...)
 	sort.SliceStable(detected, func(i, j int) bool { return targetOrder(detected[i].ClientID) < targetOrder(detected[j].ClientID) })
 	sort.SliceStable(skipped, func(i, j int) bool { return targetOrder(skipped[i].Client) < targetOrder(skipped[j].Client) })
 	request := prompt.TargetSelectionRequest{}
 	for _, c := range detected {
-		request.Choices = append(request.Choices, targetChoiceFor(c))
+		request.Choices = append(request.Choices, targetChoiceFor(c, annotations...))
 		request.DefaultIDs = append(request.DefaultIDs, c.ClientID)
 	}
 	for _, c := range skipped {

@@ -285,10 +285,10 @@ func validateDesiredBinding(pkg LockedPackage, target string, current BindingObs
 	if current.Pending {
 		return current, installer.ErrRecoveryRequired
 	}
+	if err := CheckSourceOwnership(pkg, observed); err != nil {
+		return current, err
+	}
 	for _, existing := range observed {
-		if !existing.Managed && existing.SourceKey == pkg.SourceKey {
-			return current, foreignBindingError(pkg, observed)
-		}
 		if existing.Managed && existing.Alias == pkg.Alias && existing.SourceKey != pkg.SourceKey {
 			return current, ErrSourceChange
 		}

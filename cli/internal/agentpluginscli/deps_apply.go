@@ -218,9 +218,8 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 	}
 	applied, applyErr := applyPreparedDependencies(cmd.Context(), app, &request, adapter, checked)
 	stop()
-	results := applied.Results()
 	app.finishInstall(opts, cmd.CommandPath(), outcomeAgentItems(applied.Outcomes))
-	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
+	if renderErr := renderDependencyAppliedResults(cmd, opts, prepared, applied, applyErr); renderErr != nil && applyErr == nil {
 		return renderErr
 	}
 	if applyErr != nil {

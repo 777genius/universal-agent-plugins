@@ -155,6 +155,9 @@ func (session *loadedTargetSession) preflight(client domain.DetectedClient, plan
 	if err == nil {
 		return client, nil, true
 	}
+	if errors.Is(err, domain.ErrForeignNativeIdentity) {
+		return client, &targetSkip{Client: client.ClientID, Reason: "an existing native entry is not owned by this installation; it will not be overwritten. Inspect it in the client before retrying --target " + publicCLITargetName(client.ClientID)}, false
+	}
 	return session.preflightFailure(client, plan)
 }
 

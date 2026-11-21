@@ -22,13 +22,7 @@ func acquireSavedAdd(ctx context.Context, app App, opts *options, source string,
 	defer func() { _ = loaded.cleanup() }()
 	alias := opts.alias
 	if alias == "" {
-		alias = strings.ReplaceAll(strings.ToLower(loaded.envelope.Manifest.Name), ".", "-")
-		if alias == "" || alias[0] < 'a' || alias[0] > 'z' {
-			alias = "plugin-" + alias
-		}
-		if len(alias) > 64 {
-			alias = alias[:64]
-		}
+		alias = dependencyManifestAlias(loaded.envelope.Manifest.Name)
 	}
 	if loaded.directorySelection != nil {
 		if loaded.directory == nil {
@@ -86,6 +80,7 @@ func rejectKnownOwnedAdd(app App, source string) error {
 
 func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID) ([]domain.ClientID, error) {
 	var err error
+	var annotations map[domain.ClientID]prompt.TargetChoice
 	if len(targets) == 0 && app.Terminal && opts.format == "human" {
 		stop := startCommandActivity(cmd, app, opts, "Finding installed agents")
 		clients, e := app.Detector.Detect(cmd.Context())
@@ -110,7 +105,7 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 		if len(eligible) > 0 {
 			var incompatible []targetSkip
 			stop = startCommandActivity(cmd, app, opts, "Checking plugin compatibility")
-			eligible, incompatible, err = compatibleSavedAddTargets(cmd.Context(), stopPluginActivityOnWrite(app, stop), source, eligible)
+			eligible, incompatible, annotations, err = compatibleSavedAddTargets(cmd.Context(), stopPluginActivityOnWrite(app, stop), source, eligible)
 			stop()
 			if err != nil {
 				return nil, err
@@ -122,7 +117,7 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 				return nil, err
 			}
 		}
-		targets, _, err = promptTargetChoices(cmd, app, eligible, skipped, clients)
+		targets, _, err = promptTargetChoices(cmd, app, eligible, skipped, clients, annotations)
 		if err != nil {
 			return nil, err
 		}

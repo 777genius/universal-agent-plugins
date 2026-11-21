@@ -21,6 +21,18 @@ type ForeignBindingError struct {
 	Bindings []ForeignBinding
 }
 
+// CheckSourceOwnership is a read-only preview of the same installation-wide
+// ownership rule used by sync. Hosts may call it before offering targets; the
+// authoritative mutation still revalidates ownership under its lock.
+func CheckSourceOwnership(pkg LockedPackage, observed []BindingObservation) error {
+	for _, binding := range observed {
+		if !binding.Managed && binding.SourceKey == pkg.SourceKey {
+			return foreignBindingError(pkg, observed)
+		}
+	}
+	return nil
+}
+
 func (e *ForeignBindingError) Error() string {
 	installations := make([]string, 0, len(e.Bindings))
 	seen := map[string]bool{}
