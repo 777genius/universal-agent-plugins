@@ -51,7 +51,7 @@ const allClientLandingPages: ClientLandingPage[] = [
     name: 'Cursor',
     icon: 'cursor.svg',
     note: 'Native Agent Plugin package',
-    status: 'Supported',
+    status: 'Prepared by CLI',
     intro:
       'Install Agent Plugins 1.0 into Cursor projects without translating each plugin by hand. The CLI plans the native package before changing files.',
     delivery:
@@ -162,13 +162,13 @@ const allClientLandingPages: ClientLandingPage[] = [
     slug: 'windsurf',
     name: 'Windsurf',
     icon: 'windsurf.svg',
-    note: 'Prepared package; manual activation required',
-    status: 'Prepared by CLI',
-    intro:
-      'Prepare Agent Plugins 1.0 for Windsurf with one CLI command, then finish the client-specific activation step explicitly.',
+    note: 'Managed skills and MCP configuration',
+    status: 'Supported',
+    intro: 'Install Agent Plugins 1.0 Skills and MCP servers for Windsurf / Devin with one CLI command.',
     delivery:
       'The CLI writes owned Skills and MCP configuration for Devin versions 3000.11.205 or 3000.12.57 in User and Project scope. Preparation does not prove discovery, trust, sign-in, or live execution.',
-    activation: 'Follow the exact manual activation path printed after preparation.',
+    activation:
+      'Open or restart Devin in the selected project and review access. UAP checks installed Skills with the Devin CLI; verify MCP servers in Devin.',
   },
   {
     id: 'grok',
