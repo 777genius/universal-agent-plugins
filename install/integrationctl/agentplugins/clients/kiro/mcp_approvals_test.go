@@ -103,6 +103,36 @@ func TestKiroApprovalPreviewAndNoUnselectedPrivilege(t *testing.T) {
 	}
 }
 
+func TestKiroExactApprovalPreservesNativeVerifierAndAutomaticActivation(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".kiro")
+	client := domain.DetectedClient{ClientID: domain.ClientKiro, ConfigRoot: root, ExecutablePath: "/fixture/kiro-cli"}
+	plan := testKiroApprovalPlan(root, filepath.Join(t.TempDir(), "active"), domain.ScopeUser)
+	plan.InstallIntent = domain.InstallIntentAutomatic
+	adapter := New()
+	request := domain.ActivationRequest{Client: client, Plan: plan, BackendExecutable: client.ExecutablePath}
+	if !adapter.VerifierAvailable(client, plan, client.ExecutablePath) ||
+		!adapter.AutomaticallyActivates(clients.Env{}, request) {
+		t.Fatal("a selected, exact Kiro approval must not disable native verification or installation")
+	}
+
+	// The exact Kiro authorization extension is the only added component;
+	// unknown extensions must not gain another client's verification privilege.
+	plan.Components = append(plan.Components, domain.ComponentDecision{
+		Kind: domain.ComponentExtension, Name: "com.example.foreign", Support: domain.SupportNative,
+	})
+	request.Plan = plan
+	if adapter.VerifierAvailable(client, plan, client.ExecutablePath) ||
+		adapter.AutomaticallyActivates(clients.Env{}, request) {
+		t.Fatal("Kiro accepted automatic verification for a foreign extension")
+	}
+	plan.Components = []domain.ComponentDecision{{
+		Kind: domain.ComponentExtension, Name: MCPApprovalNamespace, Support: domain.SupportNative,
+	}}
+	if adapter.VerifierAvailable(client, plan, client.ExecutablePath) {
+		t.Fatal("Kiro approval extension alone must not qualify as installed native components")
+	}
+}
+
 func TestKiroExactMCPApprovalDisposableLifecycle(t *testing.T) {
 	root := filepath.Join(t.TempDir(), ".kiro")
 	config := filepath.Join(root, "settings", "mcp.json")
