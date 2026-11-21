@@ -12,7 +12,7 @@ import (
 // Automatic selection uses disposable package acquisition and shared host
 // admission. The authoritative saved operation resolves and revalidates its pin
 // after selection; no native executable runs while presenting choices.
-func compatibleSavedAddTargets(ctx context.Context, app App, source string, detected []domain.DetectedClient) ([]domain.DetectedClient, []targetSkip, error) {
+func compatibleSavedAddTargets(ctx context.Context, app App, opts *options, source string, detected []domain.DetectedClient) ([]domain.DetectedClient, []targetSkip, error) {
 	app.dependencySnapshots = nil
 	preview, cleanup, err := dependencyPreviewApp(app, &options{dryRun: true})
 	if err != nil {
@@ -22,6 +22,17 @@ func compatibleSavedAddTargets(ctx context.Context, app App, source string, dete
 	compatible, skipped, loaded, err := compatibleTargetsDeferringHostQualification(ctx, preview, source, detected)
 	if loaded != nil && loaded.cleanup != nil {
 		defer func() { _ = loaded.cleanup() }()
+	}
+	if err == nil && loaded != nil && app.Installer != nil && opts.alias == "" {
+		key := savedDirectSourceKey(source)
+		if loaded.directorySelection != nil {
+			key = "directory:" + loaded.directorySelection.DistributionID
+		}
+		var snapshot environmentSnapshot
+		snapshot, err = snapshotEnvironmentContext(ctx, app, false)
+		if err == nil && canPreviewSavedAddOwnership(snapshot, opts.alias, key) {
+			err = checkSavedAddOwnership(ctx, app, key, dependencyManifestAlias(loaded.envelope.Manifest.Name))
+		}
 	}
 	return compatible, skipped, err
 }

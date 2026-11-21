@@ -1,11 +1,11 @@
 # План: безопасный `add`, когда пакет уже существует
 
-Статус: отдельный Draft-план; production-реализация этим PR не доставляется.
+Статус: реализация согласованного scope в PR #1087; финальная E2E-квалификация и ревью выполняются после контрольного коммита.
 Дата: 2026-11-21. База исследования: `main` `5f63d48bf4461600e6bb916a6e4997f9830545e1`.
 Ветка: `docs/install-existing-state-plan-20261121`; [Draft PR #1087](https://github.com/777genius/universal-agent-plugins/pull/1087).
 
 Этот документ заменяет набор вариантов из [v4 на fa5afb631](https://github.com/777genius/universal-agent-plugins/blob/fa5afb631452841e901096c19754dcd24abdd0ef/docs/plans/DRAFT-2026-11-21-install-existing-state-design.md).
-Исторический файл и реализация в [#1086](https://github.com/777genius/universal-agent-plugins/pull/1086) не переносятся коммитами: новая ветка содержит только план и проверяемые исследования. Новый путь избегает add/add-конфликта при последующем merge #1086.
+Первый этап этой ветки изолировал план и исследования от [#1086](https://github.com/777genius/universal-agent-plugins/pull/1086). Следующим сообщением пользователь разрешил реализацию, дополнительные круги ревью и E2E в том же worktree. Новый путь документа избегает add/add-конфликта при последующем merge #1086; его Kiro/picker-изменения сюда не переносятся. Общий `ForeignBindingError`/`CheckSourceOwnership` сохраняет предложенные там имена и расширяет факты владения.
 
 ## 1. Решение и границы
 
@@ -65,7 +65,7 @@ Per-client пометки допустимы как информация о фа
 
 1. Существующий bootstrap выбирает effective scope/project root; обычные parser/intent/recovery ошибки имеют приоритет. Не сбрасывать состояние при ошибке чтения.
 2. Существующий source resolver определяет canonical identity и удержанный pin. Short name может требовать Directory; multi-package source может требовать выбора. Не обещать проверку до любого network/download и не строить второй resolver ради раннего экрана.
-3. Когда identity корня уже известна, вызвать общий read-only ownership predicate до target picker. Использовать текущую installer inspection/observation boundary, включая `InspectedBinding.Owner`; не собирать копию SourceKey/receipt-логики в UI. Полный `Inspect` не запускает native executable, но может хешировать деревья; не рекламировать его как бесплатный StateStore.Load. Повторно использовать snapshot в пределах preview, а финальную revalidation сохранить.
+3. Для новой известной canonical identity без explicit alias вызвать общий read-only ownership predicate до target picker. Explicit alias и уже сохранённый source/pin сначала проходят обычные решения resolver, чтобы ownership advice не скрывал alias/selector ошибки. Использовать текущую installer inspection/observation boundary, включая `InspectedBinding.Owner`; не собирать копию SourceKey/receipt-логики в UI. Полный `Inspect` не запускает native executable, но может хешировать деревья; не рекламировать его как бесплатный StateStore.Load. Финальную revalidation сохранить.
 4. Если root identity ещё не определена, продолжить необходимый source/target selection, затем выполнить ту же проверку до подтверждения. Конфликты полного dependency closure проверяются после разрешения графа, также до подтверждения.
 5. Ошибка одинакова по смыслу для picker, explicit `--target`, non-TTY и JSON. «До picker» — только для случая, где source identity уже известна. Не пытаться угадать выбранные targets заранее.
 
@@ -76,6 +76,8 @@ Per-client пометки допустимы как информация о фа
 Human output отвечает на четыре вопроса: какой пакет/зависимость конфликтует, кто уже держит binding, почему текущий режим недопустим, что реально можно сделать дальше.
 
 Для unreceipted установки без обязательных dependencies допустим совет о самостоятельном повторе `add --no-save`, только если существующие source/scope/owner проверки разрешают этот путь. Это отдельная явная команда пользователя. При другом receipt, dependencies, несовместимом alias или неопределённости такой совет отсутствует.
+
+Выбранная минимальная реализация показывает безопасный `info` для конкретной installation и scope либо точную текстовую инструкцию, если аргумент нельзя переносимо представить. Она не строит no-save/remove-команды по неполным preview facts.
 
 - Не предлагать auto-adopt, remove+add или `--purge-data` как миграцию.
 - `--yes` подтверждает выбранную saved-операцию, не меняет её режим.
@@ -180,3 +182,11 @@ Final authority всегда остаётся в текущем kernel/mutation 
 - Круг 3: финальный UX/architecture review закрыл замечания; проверены границы diff и воспроизводимость. Replay: 43 top-level tests, 95 PASS с учётом вложенных subtests, 0 FAIL, 0 SKIP. Уточнён assertion сохранения unrelated installation и guard полноты research cases.
 
 Доказательства и ограничения: [evidence/2026-11-21-install-existing-state/README.md](evidence/2026-11-21-install-existing-state/README.md). Включены точный main, версия Go, команды, исходники disposable spikes, RUN/PASS/FAIL/SKIP и ожидаемые отказы. Исследование текущего поведения не означает, что будущая функциональность уже реализована или прошла native E2E.
+
+## 11. Дополнительные круги реализации
+
+1. Перед кодом три независимых разбора уточнили наблюдение чужого owner, приоритет ошибок и реальные E2E-границы. Принят private CLI wrapper только для раннего ownership refusal: общий typed error после apply не печатает второй JSON.
+2. Ревью реализации устранило speculative Directory lookup по ProductID, маскирование malformed intent/recovery и alias/selector ошибок, неоднозначный root alias, unsafe retry после recovery и неоднозначные public target names. Directory identity берётся только из существующей resolution/acquisition; нового feed-запроса ради advisory нет.
+3. Независимое ревью E2E усилило actual `run()` boundary и terminal assertion: проверяется точный typed отказ до дополнительных HTTP/security calls, а не произвольная prompt/EOF ошибка. Проверки user/project, чужого receipt, dependency chain и unrelated unmanaged source включены в существующий portable catalog.
+
+Изменение retry gate является частью partial-result scope: `RECOVERY_REQUIRED` у одного клиента подавляет повтор для всех клиентов выбранного state namespace. Исходные outcomes и инструкции recovery сохраняются. Подтверждение полноты реализации требует результатов на окончательном production source; прежние 95 PASS относятся только к исследовательскому baseline.

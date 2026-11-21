@@ -106,7 +106,7 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 		}
 		if len(eligible) > 0 {
 			var incompatible []targetSkip
-			eligible, incompatible, err = compatibleSavedAddTargets(cmd.Context(), app, source, eligible)
+			eligible, incompatible, err = compatibleSavedAddTargets(cmd.Context(), app, opts, source, eligible)
 			if err != nil {
 				return nil, err
 			}

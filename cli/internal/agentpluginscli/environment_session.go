@@ -95,6 +95,9 @@ func snapshotEnvironmentContext(ctx context.Context, app App, verifyPrevious ...
 func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation, targets []string) error {
 	request, err := prepareSavedSync(cmd, app, opts, snapshot, requirements, locked, manifest, aliases, attest, targets)
 	if err != nil {
+		if opts.environmentOutput != nil {
+			return earlyForeignBinding(app, err)
+		}
 		return err
 	}
 	if opts.dryRun {
@@ -125,11 +128,11 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	if err != nil {
 		return request, err
 	}
-	if err := renderSavedTargetNotice(cmd, opts, locked, aliases, targets); err != nil {
-		return request, err
-	}
 	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncForTargets(requirements, locked, observed, aliases, attest, targets)
 	if err != nil {
+		return request, err
+	}
+	if err := renderSavedTargetNotice(cmd, opts, locked, aliases, targets); err != nil {
 		return request, err
 	}
 	prepared.Bindings, err = reviewedSavedAddActions(cmd, app, opts, targets, prepared.Bindings)

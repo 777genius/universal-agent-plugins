@@ -46,6 +46,9 @@ func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, ac
 			return true, err
 		}
 	}
+	if err := inspectSavedAddRoot(cmd.Context(), app, opts, source); err != nil {
+		return true, err
+	}
 	targets, err = savedAddTargets(cmd, app, opts, source, targets)
 	if err != nil {
 		return true, err

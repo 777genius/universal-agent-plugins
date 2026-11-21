@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -45,8 +48,28 @@ func TestRecoveryRequiredIsNeverOfferedForRetry(t *testing.T) {
 		failedItem("pdf", "gemini", errors.New("native command failed")),
 	})
 	retryable := retryableAgents(reports)
-	if len(retryable) != 1 || retryable[0].ClientID != "gemini" {
-		t.Fatalf("an agent that needs recovery must not be retried blindly: %+v", retryable)
+	if len(retryable) != 0 {
+		t.Fatalf("recovery must block retries throughout the selected namespace: %+v", retryable)
+	}
+}
+
+func TestRecoveryAttentionKeepsPerAgentFactsWithoutRetryTargets(t *testing.T) {
+	reports := reportByAgent([]agentItem{
+		failedItem("pdf", "codex", fs.ErrPermission),
+		failedItem("pdf", "claude", installer.ErrRecoveryRequired),
+	})
+	var out bytes.Buffer
+	if err := renderAgentAttention(&out, reports, "", retryHintFor(&cobra.Command{Use: "add"}, reports)); err != nil {
+		t.Fatal(err)
+	}
+	text := out.String()
+	for _, want := range []string{"Codex", "Claude", "permission", "recovery", "agentplugins doctor"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("lost per-agent fact %q: %s", want, text)
+		}
+	}
+	if strings.Contains(text, "--target") || strings.Contains(text, "To retry only") {
+		t.Fatalf("recovery permits a misleading ordinary retry: %s", text)
 	}
 }
 
