@@ -336,6 +336,8 @@ def run(client, output, expected, *, preflight_only=False, prepared_source=None)
         preflight_checkpoint(preflight_only, "source-built")
         env = isolated_env(work)
         if client == "cursor":
+            # UAP detects HOME/.cursor and its native observer uses that same
+            # profile. Direct pinned inventory must not switch to XDG/cursor.
             profile = str(work / "home" / ".cursor")
             env["CURSOR_CONFIG_DIR"] = profile
             env["CURSOR_DATA_DIR"] = profile

@@ -53,6 +53,9 @@ class RealClientRunnerContractTest(unittest.TestCase):
         source = (Path(__file__).parent / "project_native_missing_call_runner.py").read_text()
         self.assertNotIn('invoke("cursor-enable-one"', source)
         self.assertIn('require_ready=client == "cursor"', source)
+        self.assertIn('profile = str(work / "home" / ".cursor")', source)
+        self.assertIn('env["CURSOR_CONFIG_DIR"] = profile', source)
+        self.assertIn('env["CURSOR_DATA_DIR"] = profile', source)
 
     def test_exact_named_tool_approval(self):
         with tempfile.TemporaryDirectory() as temp:
