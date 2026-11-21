@@ -2268,7 +2268,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                               final_policy_error=False, final_peer_mutation=None,
                                               native_root_redirect=None, project_remove_error=None,
                                               require_copilot_trust=False, copilot_trust_mutation=None,
-                                              copilot_fixture_failure=None, claude_retained_scan_error=False):
+                                              copilot_fixture_failure=None, claude_retained_scan_error=False,
+                                              temporary_root_alias=False):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2352,17 +2353,35 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
         class CheckedCleanup:
             def __init__(self, **kwargs):
+                self.parent = TemporaryDirectory() if temporary_root_alias else None
+                if self.parent is not None:
+                    parent = Path(self.parent.name).resolve(strict=True)
+                    owned = parent / "owned"
+                    owned.mkdir()
+                    self.alias_parent = parent / "alias"
+                    self.alias_parent.symlink_to(owned, target_is_directory=True)
+                    kwargs["dir"] = owned
                 self.inner = TemporaryDirectory(**kwargs)
 
             def __enter__(self):
-                return self.inner.__enter__()
+                location = self.inner.__enter__()
+                if self.parent is not None:
+                    alias = self.alias_parent / Path(location).name
+                    self_test.assertNotEqual(alias, alias.resolve(strict=True))
+                    phases.append("aliased-temporary-root")
+                    return str(alias)
+                return location
 
             def __exit__(self, exc_type, exc, traceback):
                 if retirements:
                     self_test.assertTrue(all(retirement.closed for retirement in retirements),
                                          "custody descriptors must close before disposable tree cleanup")
                     phases.append("claude-closed-before-disposal")
-                self.inner.__exit__(exc_type, exc, traceback)
+                try:
+                    self.inner.__exit__(exc_type, exc, traceback)
+                finally:
+                    if self.parent is not None:
+                        self.parent.cleanup()
                 if exc_type is None and cleanup_failure:
                     raise OSError("disposable cleanup failed")
 
@@ -2551,6 +2570,22 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.assertTrue(all(retirement.finished for retirement in retirements)
                                 if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
             return code, json.loads(report_path.read_text()), phases
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_owned_temporary_parent_alias_keeps_full_lifecycle(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "copilot", require_copilot_trust=True, temporary_root_alias=True)
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertTrue(report["two_scope_lifecycle_qualified"])
+        self.assertEqual(report["scope_results"]["project"]["status"], "passed")
+        self.assertEqual(report["scope_results"]["user"]["status"], "passed")
+        self.assertEqual(report["copilot_project_b_trust_fixture"]["status"],
+                         "authored-native-prerequisite")
+        for phase in ("aliased-temporary-root", "preauthorized-trust:B", "cold locked restore",
+                      "remove B", "remove A", "User cold locked restore C", "User remove C",
+                      "User remove", "catalog:E"):
+            self.assertIn(phase, phases)
+
 
     @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
     def test_marketing_kit_copilot_project_b_prepares_native_trust_before_locked_restore(self):
@@ -9089,7 +9124,7 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
 
 
 class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
-    def run_case(self, mutation=None, system=False, kind="plugin"):
+    def run_case(self, mutation=None, system=False, kind="plugin", historical=False):
         import sqlite3
         from contextlib import closing
         audit = load_audit()
@@ -9171,10 +9206,32 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                             skills.append({"name": name, "path": str(path), "enabled": True,
                                            "scope": "repo", "pluginId": None})
                 return {"data": [{"cwd": str(project), "errors": [], "skills": skills}]}
-            def perform(argv, environment, cwd, timeout=105):
+            class HistoricalObserver:
+                def __init__(self, launcher, environment, project):
+                    self.environment, self.project = environment, project
+                    self.launcher, self.commands, self.proof = launcher, 0, None
+                def after_command(self):
+                    self.commands += 1
+                    self.proof = {"commands_verified": self.commands}
+            def prepare_archive(observer, invoke, selected_source, pin):
+                self.assertEqual(selected_source, source)
+                self.assertEqual(pin, {"integration": "selected-fixture"})
+                self.assertFalse((profile / "config.toml").exists())
+                for _ in range(2):
+                    output = invoke([observer.launcher, "info", source], observer.environment,
+                                    observer.project, 80, capture_full=True)
+                    self.assertEqual(output["stdout_full"], "complete info fixture")
+                    self.assertEqual(output["stderr_full"], "")
+                return {"integration": "archive prepared before native bootstrap"}
+            def perform(argv, environment, cwd, timeout=105, **options):
                 commands.append(list(argv))
                 self.assertNotIn("--disable", argv)
                 command = argv[1]
+                if historical:
+                    self.assertIs(options.get("capture_full"), True)
+                    if command == "info":
+                        return {"exit_code": 0, "timeout": False, "stdout_tail": "info fixture", "stderr_tail": "",
+                                "stdout_full": "complete info fixture", "stderr_full": "", "_json": {"result": "success"}}
                 config = profile / "config.toml"
                 self.assertNotIn("features", audit.tomllib.loads(config.read_text()))
                 if command == "skills":
@@ -9220,6 +9277,7 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                     if mutation == "profile-wal":
                         (profile / "state_5.sqlite-wal").write_bytes(b"x" * ((1 << 20) + 1))
                 return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                        **({"stdout_full": "private complete receipt", "stderr_full": ""} if historical else {}),
                         "timeout": False, "_json": {"data": {"installations":
                             matched if registered[0] else []}}}
             def uninstall(*args):
@@ -9250,13 +9308,16 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                   patch.object(audit, "locked_skill_is_pinned", return_value=True),
                   patch.object(audit, "matches_pinned_skill_bytes", return_value=True),
                   patch.object(audit, "uninstall_native_codex_plugin", side_effect=uninstall),
+                  patch.dict(audit.HISTORICAL_CODEX, {"PublishedBaseline": HistoricalObserver,
+                      "prepare_plugin_archive": prepare_archive} if historical else {}),
                   patch.dict(os.environ, {"HOME": str(ambient), "USERPROFILE": str(ambient)})):
                 try:
                     item = {"name": identity, "repo": "example/skills", "folder": identity,
                             "source": source, "skill_md_git_blob_sha1": "b" * 40}
                     return audit.do_case("/inert/uap", "codex", kind,
                                          item if kind == "skill" else source, 0, root,
-                                         {source: identity}), commands
+                                         {source: identity}, {source: {"integration": "selected-fixture"}},
+                                         **({"historical_plugins": True} if historical else {})), commands
                 finally:
                     if mutation and mutation.startswith("prebaseline-"):
                         self.assertEqual(commands, [])
@@ -9294,6 +9355,23 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaisesRegex(
                     ValueError, "changed protected fixture authority"):
                 self.run_case(mutation)
+
+    def test_historical_archive_keeps_eight_public_probes_and_native_sqlite_checkpoints(self):
+        row, commands = self.run_case(historical=True)
+        self.assertEqual([argv[1] for argv in commands],
+                         ["info", "info", "add", "list", "add", "list", "native-uninstall", "remove", "list"])
+        self.assertEqual(row["historical_npm_proof"], {"commands_verified": 8})
+        self.assertEqual(row["historical_plugin_feed"], {"integration": "archive prepared before native bootstrap"})
+        self.assertEqual(row["historical_archive_status"], "passed")
+        self.assertEqual(row["status"], "historical-archive-lifecycle-observed")
+        self.assertEqual([item["phase"] for item in row["codex_plugin_sqlite_proof"]["observations"]],
+                         ["before-install"] + ["after-public-command"] * 4
+                         + ["after-native-uninstall"] + ["after-public-command"] * 2)
+        for phase in ("install", "list", "repeat_add", "repeat_list", "cleanup", "post_remove_list"):
+            self.assertTrue({"stdout_full", "stderr_full", "_json"}.isdisjoint(row[phase]), phase)
+        row, _ = self.run_case("profile-wal", historical=True)
+        self.assertEqual(row["status"], "cleanup-failed")
+        self.assertEqual(row["historical_archive_status"], "cleanup-failed")
 
 
     def test_pinned_system_github_literal_is_retained_only_with_complete_unchanged_proof(self):

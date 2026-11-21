@@ -28,6 +28,8 @@ CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_a
 GEMINI_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/gemini_runtime_audit.py"))
 OPENCODE_BOOTSTRAP_AUDIT = run_path(str(ROOT / "scripts/opencode_bootstrap_audit.py"))
 NATIVE_ARTIFACTS = run_path(str(ROOT / "scripts/native_client_project_artifacts.py"))
+PREPARED_INSTALLATION = run_path(str(ROOT / "scripts/prepared_installation_audit.py"))
+WINDSURF_INSTALLATION = run_path(str(ROOT / "scripts/windsurf_installation_audit.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -351,7 +353,9 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
                                timeout=timeout, check=False)
             stdout, stderr = p.stdout, p.stderr
         try:
-            parsed_json = json.loads(stdout)
+            parsed_json = (json.loads(stdout, object_pairs_hook=_unique_json_object,
+                                      parse_constant=_invalid_json_constant)
+                           if capture_full else json.loads(stdout))
         except ValueError:
             parsed_json = None
         if (capture_files and not capture_full and p.returncode == 0
@@ -1698,7 +1702,36 @@ def _unique_json_object(pairs):
     return result
 
 
-def grok_prepared_skill_installations(list_json, item, skill_path, project, add_result, *, repeated=False):
+def _invalid_json_constant(_value):
+    raise ValueError("non-finite JSON constant")
+
+
+def cursor_preparation_source_matches(response, identity, kind, item, signed_release_pins):
+    """Reuse immutable source matching for every Cursor Marketing dependency."""
+    if kind != "plugin" or item != "marketing-kit":
+        return matching_installations(response, identity, "cursor", kind, item, signed_release_pins)
+    pins = dict(signed_release_pins or {})
+    verified = []
+    for alias, distribution in MARKETING_KIT_DISTRIBUTIONS.items():
+        release = MARKETING_KIT_SIGNED_CLOSURE[distribution]
+        pins[alias] = {"repository": release["repository"], "path": release["package_path"],
+                       "distribution": distribution, "revision": release["resolved_revision"],
+                       "sequence": release["release_sequence"], "tree_digest": release["tree_digest"],
+                       "manifest_digest": release["manifest_digest"]}
+        matches = matching_installations(response, alias, "cursor", "plugin", alias, pins)
+        if len(matches) != 1:
+            return []
+        selected = [client for client in matches[0].get("clients", [])
+                    if type(client) is dict and client.get("client_id") == "cursor"]
+        if (len(selected) != 1 or type(selected[0].get("package_revision")) is not dict
+                or type(selected[0]["package_revision"].get("release_sequence")) is not int):
+            return []
+        verified.extend(matches)
+    return verified
+
+
+def grok_prepared_skill_installations(list_json, item, skill_path, project, add_result, *, repeated=False,
+                                     full_receipt=Ellipsis):
     """Qualify exact Grok project Skill preparation without claiming native activation."""
     if (not isinstance(list_json, dict) or not isinstance(item, dict)
             or not isinstance(skill_path, str) or not isinstance(add_result, dict)):
@@ -1723,7 +1756,8 @@ def grok_prepared_skill_installations(list_json, item, skill_path, project, add_
             or not bundle.resolve().is_relative_to(project.resolve())):
         return []
     try:
-        receipt = json.loads(add_result.get("stdout_tail", ""), object_pairs_hook=_unique_json_object)
+        receipt = (json.loads(add_result.get("stdout_tail", ""), object_pairs_hook=_unique_json_object)
+                   if full_receipt is Ellipsis else full_receipt)
         if (not isinstance(receipt, dict) or receipt.get("status") != "succeeded"
                 or not isinstance(receipt.get("items"), list) or len(receipt["items"]) != 1):
             return []
@@ -2300,15 +2334,28 @@ def audit_client_id(target, kind):
 
 
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-            signed_release_pins=None, *, client_version=None, historical_baseline=False):
+            signed_release_pins=None, *, client_version=None, historical_baseline=False,
+            historical_plugins=False, installation_audit=None, installation_fixtures=None):
     with ExitStack() as audits:
         return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                         signed_release_pins, audits, client_version,
-                        **({"historical_baseline": True} if historical_baseline else {}))
+                        **({"historical_baseline": True} if historical_baseline else {}),
+                        **({"historical_plugins": True} if historical_plugins else {}),
+                        **({"installation_audit": installation_audit,
+                            "installation_fixtures": installation_fixtures} if installation_audit else {}))
 
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-             signed_release_pins, audits, client_version, *, historical_baseline=False):
+             signed_release_pins, audits, client_version, *, historical_baseline=False,
+             historical_plugins=False, installation_audit=None, installation_fixtures=None):
+    if historical_plugins and ((target, kind) != ("codex", "plugin") or historical_baseline):
+        raise ValueError("historical archived feed requires its distinct Codex plugin lane")
+    installation_routes = dict(PREPARED_INSTALLATION["ROUTES"])
+    installation_routes[WINDSURF_INSTALLATION["ACCEPTANCE"]] = ("windsurf", "plugin")
+    if installation_audit and installation_routes.get(installation_audit) != (target, kind):
+        raise ValueError("installation audit does not match selected client and scope")
+    if installation_audit == WINDSURF_INSTALLATION["ACCEPTANCE"] and type(installation_fixtures) is not dict:
+        raise ValueError("Windsurf installation requires the validated complete fixture set")
     native_target = audit_client_id(target, kind)
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
@@ -2373,6 +2420,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if native_target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     env = isolated_client_env(home, case_root, data)
+    windsurf_installation = None
+    if installation_audit == WINDSURF_INSTALLATION["ACCEPTANCE"]:
+        windsurf_installation = WINDSURF_INSTALLATION["WindsurfInstallationAudit"](
+            cli, env, project, case_root, globals())
+        native_roots = list(windsurf_installation.native_roots)
     codex_skill_case = target == "codex" and kind == "skill"
     codex_runtime = None
     gemini_runtime = None
@@ -2388,7 +2440,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     codex_add_ready = False
     codex_repeat_ready = False
     historical_observer = (HISTORICAL_CODEX["PublishedBaseline"](cli, env, project)
-                           if historical_baseline else None)
+                           if historical_baseline or historical_plugins else None)
+    historical_plugin_feed = None
     historical_add_verified = historical_repeat_add_verified = False
     historical_repeat_lifecycle_verified = False
     def assert_case_unchanged():
@@ -2416,11 +2469,18 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 codex_runtime.guard()
             if codex_plugin_sqlite is not None:
                 codex_plugin_sqlite.guard()
+            if windsurf_installation is not None:
+                windsurf_installation.guard()
         except (OSError, RuntimeError) as error:
             raise ValueError("audit case root became unavailable") from error
 
     def audited_call(*args, **kwargs):
         assert_case_unchanged()
+        requested_full = kwargs.get("capture_full", False)
+        if installation_audit or historical_plugins:
+            # Explicit installation qualification needs complete, bounded and
+            # unambiguous public receipts; preserve the existing call deadline.
+            kwargs["capture_full"] = True
         outcome = call(*args, **kwargs)
         assert_case_unchanged()
         if historical_observer is not None:
@@ -2428,7 +2488,19 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             assert_case_unchanged()
         if codex_plugin_sqlite is not None:
             codex_plugin_sqlite.checkpoint("after-public-command")
+        if windsurf_installation is not None:
+            windsurf_installation.observe(list(args[0]), outcome)
+        if (installation_audit or historical_plugins) and not requested_full:
+            outcome.pop("stdout_full", None)
+            outcome.pop("stderr_full", None)
         return outcome
+
+    if historical_plugins:
+        # Observe the unchanged npm CLI's real default-feed refusal first.
+        # The explicit archive is authenticated by that same pinned CLI before
+        # the ordinary strict native lifecycle and its SQLite checkpoints run.
+        historical_plugin_feed = HISTORICAL_CODEX["prepare_plugin_archive"](
+            historical_observer, audited_call, item, (signed_release_pins or {})[item])
 
     if gemini_skill_case:
         # The pinned native list initializes a model context even without a model call.
@@ -2558,7 +2630,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     matching = matching_installations(listed_json, identity, native_target, kind, item,
                                      signed_release_pins)
     grok_prepared = (grok_prepared_skill_installations(
-        listed_json, item, skill_path, project, output)
+        listed_json, item, skill_path, project, output,
+        **({"full_receipt": added_json} if installation_audit else {}))
         if target == "grok" and kind == "skill" and not matching
         and listed["exit_code"] == 0 else [])
     if grok_prepared:
@@ -2620,7 +2693,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if codex_runtime is not None and installed:
         codex_runtime.checkpoint("installed", True)
         codex_add_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](added_json, matching, identity)
-        if historical_observer is not None:
+        if historical_baseline:
             historical_add_verified = HISTORICAL_CODEX["historical_add"](
                 added_json, matching, item, project / skill_path)
     # BUG-016: a single successful add/remove cannot attest idempotence.
@@ -2628,6 +2701,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # keep native, managed and foreign state inside the same disposable case.
     repeat_add = None
     repeat_add_json = None
+    repeat_matches = []
     repeat_list = None
     repeat_list_json = None
     repeat_identity_ids = []
@@ -2685,7 +2759,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                                       interval=(repeat_list_started, repeat_list_finished))
         repeat_list_json = repeat_list.pop("_json", None)
         repeat_matches = (grok_prepared_skill_installations(
-            repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
+            repeat_list_json, item, skill_path, project, repeat_add, repeated=True,
+            **({"full_receipt": repeat_add_json} if installation_audit else {}))
             if grok_prepared else matching_installations(
                 repeat_list_json, identity, native_target, kind, item, signed_release_pins))
         repeat_identity_ids = sorted(
@@ -2729,7 +2804,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         repeat_verified = bool(historical_repeat_lifecycle_verified
                                and (not codex_skill_case or codex_repeat_ready)
                                and (gemini_runtime is None or gemini_repeat_valid))
-        if historical_observer is not None:
+        if historical_baseline:
             historical_repeat_add_verified = HISTORICAL_CODEX["historical_add"](
                 repeat_add_json, repeat_matches, item, project / skill_path, repeated=True)
     # BUG-039: independent native ID+version proof before UAP removes it.
@@ -3021,7 +3096,20 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if kind == "skill" else None)
     if status == "passed" and skill_public_ready is not None and not all(skill_public_ready.values()):
         status = "incomplete-native-proof"
-    return {"kind": kind, "index": index, "identity": identity, "target": target,
+    historical_archive_status = status
+    if historical_plugins and status == "passed":
+        status = "historical-archive-lifecycle-observed"
+    row = {"kind": kind, "index": index, "identity": identity, "target": target,
+            **({target + "_preparation_envelopes": PREPARED_INSTALLATION["observe"](
+                kind, identity, {"install": added_json, "list": listed_json,
+                                 "repeat_add": repeat_add_json, "repeat_list": repeat_list_json,
+                                 "cleanup": cleanup_json, "post_remove_list": post_list_json},
+                matching if target == "grok" else
+                    cursor_preparation_source_matches(listed_json, identity, kind, item, signed_release_pins),
+                repeat_matches if target == "grok" else
+                    cursor_preparation_source_matches(repeat_list_json, identity, kind, item, signed_release_pins),
+                target=target, **({"skill_fixture": item} if target == "grok" else {}))}
+               if installation_audit in PREPARED_INSTALLATION["ACCEPTANCES"] else {}),
             **({"canonical_client_id": native_target} if target == "chatgpt" else {}),
             "source": item if kind == "plugin" else item["source"],
             "status": status, "install": output, "list": listed,
@@ -3084,11 +3172,15 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "qoder_native_after_remove": qoder_native_after_remove,
             "copilot_native_after_repeat": copilot_native_before_remove,
             "copilot_native_after_remove": copilot_native_after_remove,
-            **({"historical_npm_proof": historical_observer.proof,
-                "historical_add_verified": historical_add_verified,
+            **({"historical_npm_proof": historical_observer.proof}
+               if historical_observer is not None else {}),
+            **({"historical_add_verified": historical_add_verified,
                 "historical_repeat_add_verified": historical_repeat_add_verified,
                 "historical_repeat_lifecycle_verified": historical_repeat_lifecycle_verified}
-               if historical_observer is not None else {}),
+               if historical_baseline else {}),
+            **({"historical_plugin_feed": historical_plugin_feed,
+                "historical_archive_status": historical_archive_status}
+               if historical_plugins else {}),
             "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
             "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
             "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
@@ -3100,6 +3192,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "post_list_schema_valid": post_list_schema_valid,
             "post_remove_identity_registered": post_remove_identity_registered,
             "sentinels_preserved": sentinels_preserved}
+    if windsurf_installation is not None:
+        row["windsurf_installation_audit"] = windsurf_installation.finish(
+            row, item, index, installation_fixtures)
+    return row
 
 
 def expected_negative_coverage(row, cli_version=None):
@@ -3217,13 +3313,28 @@ def main():
     p.add_argument("--target", required=True)
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--report-dir", required=True)
-    p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"]),
+    p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"],
+                                         HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"],
+                                         *PREPARED_INSTALLATION["ACCEPTANCES"],
+                                         WINDSURF_INSTALLATION["ACCEPTANCE"]),
                    default="native")
     args = p.parse_args()
     historical_baseline = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
     if historical_baseline and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
             "codex", "skill", "linux", "x86_64", 2):
         p.error("Historical npm observation requires exactly two Codex Skills on Linux x86_64")
+    historical_plugins = args.acceptance == HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"]
+    if historical_plugins and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
+            "codex", "plugin", "linux", "x86_64", 2):
+        p.error("Historical archived feed requires exactly two Codex plugins on Linux x86_64")
+    prepared_installation = args.acceptance in PREPARED_INSTALLATION["ACCEPTANCES"]
+    if prepared_installation and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
+            *PREPARED_INSTALLATION["ROUTES"][args.acceptance], "linux", "x86_64", 30):
+        p.error("Preparation requires its exact pinned Linux x86_64 complete installation lane")
+    windsurf_installation = args.acceptance == WINDSURF_INSTALLATION["ACCEPTANCE"]
+    if windsurf_installation and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
+            "windsurf", "plugin", "linux", "x86_64", 30):
+        p.error("Windsurf Global installation requires the complete pinned Linux x86_64 plugin lane")
     doc = json.loads(FIXTURES.read_text())
     validate_fixtures(doc)
     if args.target not in doc["targets"] or not 1 <= args.limit <= 30:
@@ -3250,6 +3361,15 @@ def main():
     if historical_baseline:
         report["acceptance"] = args.acceptance
         report.update(HISTORICAL_CODEX["summary"](report, doc))
+    if historical_plugins:
+        report["acceptance"] = args.acceptance
+        report.update(HISTORICAL_CODEX["plugin_summary"](report, doc))
+    if prepared_installation:
+        report["acceptance"] = args.acceptance
+        report.update(PREPARED_INSTALLATION["summary"](report, doc, args.acceptance))
+    if windsurf_installation:
+        report["acceptance"] = args.acceptance
+        report.update(WINDSURF_INSTALLATION["summary"](report, doc, fixture_sha256=report["fixture_sha256"]))
     report_file = report_dir / f"{args.target}-{args.kind}.json"
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
@@ -3313,7 +3433,11 @@ def main():
                                  **({"client_version": report.get("client_version")}
                                     if (args.target, args.kind) in (("gemini", "skill"), ("kimi", "skill"))
                                     or args.target == "opencode" else {}),
-                                 **({"historical_baseline": True} if historical_baseline else {}))
+                                 **({"historical_baseline": True} if historical_baseline else {}),
+                                 **({"historical_plugins": True} if historical_plugins else {}),
+                                 **({"installation_audit": args.acceptance} if prepared_installation else {}),
+                                 **({"installation_audit": args.acceptance, "installation_fixtures": doc}
+                                    if windsurf_installation else {}))
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "source": item if args.kind == "plugin" else item["source"],
@@ -3321,6 +3445,8 @@ def main():
                                        if args.kind == "plugin" else item["name"]),
                           "status": "harness-error", "error": repr(e),
                           "error_traceback": bounded_error_traceback(e)}
+                if historical_plugins and isinstance(e, HISTORICAL_CODEX["ArchiveUnavailable"]):
+                    result["historical_plugin_feed"] = e.observation
             report["results"].append(result)
             report["cases_attempted"] += 1
             save()
@@ -3351,6 +3477,26 @@ def main():
         print(f'Historical npm lifecycle observations: {report["historical_lifecycle_observed"]}/2; '
               'modern public readiness remains unavailable; native PASS count unchanged')
         return 0 if report["historical_observation_complete"] else 1
+    if historical_plugins:
+        report.update(HISTORICAL_CODEX["plugin_summary"](report, doc))
+        save()
+        print(f'Historical archived plugin lifecycles: {report["archived_plugin_lifecycles_observed"]}/2; '
+              f'current default-feed refusals={report["current_default_refusals_observed"]}; '
+              'current native PASS count remains zero')
+        return 0 if report["historical_plugin_observation_complete"] else 1
+    if prepared_installation:
+        report.update(PREPARED_INSTALLATION["summary"](report, doc, args.acceptance))
+        save()
+        print(f'{args.target} prepared installation: {report["installation_passed"]}/30; '
+              'native discovery, activation and authenticated execution remain unqualified')
+        return 0 if report["installation_acceptance_passed"] else 1
+    if windsurf_installation:
+        report.update(WINDSURF_INSTALLATION["summary"](report, doc, fixture_sha256=report["fixture_sha256"]))
+        save()
+        print(f'Windsurf Global installation: {report["installation_passed"]}/30 installed; '
+              f'exact refusals={report["installation_verified_negative_coverage"]}; '
+              'native runtime, authentication, model and MCP qualification remain false')
+        return 0 if report["installation_acceptance_passed"] else 1
     return 0 if (report["cases_attempted"] == args.limit
                  and passed + len(accepted_negatives) == args.limit) else 1
 

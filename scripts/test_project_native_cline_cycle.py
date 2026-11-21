@@ -224,6 +224,32 @@ def raw_skills_fixture(rows, states):
 
 
 class CompleteCycleTests(unittest.TestCase):
+    def test_before_ready_diagnostics_preserve_the_strict_success_envelope(self):
+        for mutation in (None, "missing-proof", "needs-action"):
+            bodies, source = qualified_fixture()
+            summary = runtime.strict_json(bodies["runtime-attempt.json"])
+            record = summary["raw_skill_cycle"]
+            summary["raw_skill_add_before_ready"] = {
+                "state": record["proofs"]["add"]["state"],
+                "native": record["repeat_before"]["native"],
+                "managed": record["repeat_before"]["managed"], "qualified": False}
+            if mutation == "missing-proof":
+                summary.pop("raw_skill_cycle")
+            elif mutation == "needs-action":
+                command = next(row for row in record["commands"] if row["stage"] == "add")
+                document = runtime.strict_json(runtime.cline_cycle_stream(command["stdout"]))
+                document["readiness"] = "needs_action"
+                command["stdout"] = stream(raw(document))
+            bodies["runtime-attempt.json"] = raw(summary)
+            with self.subTest(mutation=mutation):
+                if mutation is None:
+                    observed = runtime.cline_members(bodies, source)
+                    self.assertTrue(observed["runtime_attempt_complete"])
+                    self.assertFalse(observed["raw_skill_add_before_ready"]["qualified"])
+                else:
+                    with self.assertRaises(ValueError):
+                        runtime.cline_members(bodies, source)
+
     def test_raw_project_skills_are_required_with_exact_repeat_and_native_scope(self):
         for kind in ("absent", "missing-repeat", "prepared", "repeat-status", "repeat-argv", "repeat-state", "repeat-lock", "source-pin", "native-path", "foreign-inventory", "metadata", "resource", "probe", "cleanup", "removal", "public-stderr"):
             bodies, source = qualified_fixture()

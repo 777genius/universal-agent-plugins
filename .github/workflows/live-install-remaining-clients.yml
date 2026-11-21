@@ -6,6 +6,12 @@ on:
     paths:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
+      - 'scripts/published_codex_baseline.py'
+      - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/devin_project_auto_install_e2e.py'
@@ -60,6 +66,8 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
           python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_prepared_installation_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_windsurf_installation_audit.py'
       - name: Acquire actual public vendor client where a headless Linux build exists
         id: vendor-install
         # Preserve a complete explicit client-unavailable record even when a
@@ -335,9 +343,25 @@ jobs:
           if [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == plugin ]]; then
             [[ "$(command -v docker)" == "$AUDIT_DOCKER_EXECUTABLE" ]]
           fi
+          # Cursor's public states preserve pending Skill discovery and manual
+          # User activation. Qualify full installation separately; the genuine
+          # Project MCP native workflow retains its independent native gates.
+          audit_acceptance=native
+          if [[ "$AUDIT_TARGET" == cursor ]]; then
+            if [[ "$AUDIT_KIND" == skill ]]; then
+              audit_acceptance=cursor-prepared-skills-installation
+            else
+              audit_acceptance=cursor-prepared-installation
+            fi
+          elif [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then
+            audit_acceptance=windsurf-global-installation
+          elif [[ "$AUDIT_TARGET" == grok && "$AUDIT_KIND" == skill ]]; then
+            audit_acceptance=grok-prepared-skills-installation
+          fi
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \
             --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \
+            --acceptance "$audit_acceptance" \
             --report-dir "$RUNNER_TEMP/live-audit-report"
       - name: Preserve exact per-case evidence, even if vendor install or CLI fails
         if: always()

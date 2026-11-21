@@ -10,6 +10,8 @@ on:
       - 'scripts/project_native_service.py'
       - 'scripts/project_native_collectors/**'
       - 'scripts/test_project_native_runtime.py'
+      - 'scripts/project_native_cline_cycle.py'
+      - 'scripts/test_project_native_cline_cycle.py'
       - 'scripts/project_native_grok_cycle.py'
       - 'scripts/test_project_native_grok_cycle.py'
       - 'scripts/project_native_gemini_*.py'
@@ -19,6 +21,8 @@ on:
       - 'repotests/agentplugins_*project_native_*test.go'
       - 'repotests/agentplugins_copilot_project_trust_native_test.go'
       - 'repotests/agentplugins_copilot_cycle_*test.go'
+      - 'repotests/agentplugins_cline_cycle_*test.go'
+      - 'install/integrationctl/agentplugins/clients/cline/**'
       - 'repotests/agentplugins_gemini_cycle_*test.go'
       - 'install/integrationctl/agentplugins/clients/gemini/**'
       - 'install/integrationctl/agentplugins/clients/copilot/**'
@@ -55,7 +59,9 @@ jobs:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Verify inert envelope and selection contracts
-        run: python3 -m unittest discover -s scripts -p 'test_project_native_runtime.py'
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_project_native_runtime.py'
+          python3 -m unittest discover -s scripts -p 'test_project_native_cline_cycle.py'
       - name: Select implemented native tests without vendor authentication by default
         id: selection
         env:

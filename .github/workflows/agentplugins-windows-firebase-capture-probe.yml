@@ -5,6 +5,12 @@ on:
     paths:
       - '.github/workflows/agentplugins-windows-firebase-capture-probe.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
+      - 'scripts/published_codex_baseline.py'
+      - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/firebase_runtime_failure.py'
       - 'scripts/test_firebase_runtime_failure.py'

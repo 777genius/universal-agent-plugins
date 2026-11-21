@@ -7,6 +7,13 @@ on:
       - 'install/integrationctl/agentplugins/clients/kimi/**'
       - 'install/integrationctl/agentplugins/providers/project_kimi_*'
       - 'cli/cmd/agentplugins/project_kimi_*'
+      - 'scripts/live-install-audit.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
+      - 'scripts/published_codex_baseline.py'
+      - 'scripts/test_published_codex_baseline.py'
       - '.github/workflows/kimi-stable-project-native-e2e.yml'
   workflow_dispatch:
 

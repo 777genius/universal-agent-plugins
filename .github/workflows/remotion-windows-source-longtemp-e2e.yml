@@ -5,6 +5,12 @@ on:
     paths:
       - 'install/integrationctl/agentplugins/adapters/sourceacquisition/**'
       - 'scripts/live-install-audit.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
+      - 'scripts/published_codex_baseline.py'
+      - 'scripts/test_published_codex_baseline.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/test_codex_runtime_audit.py'
       - 'scripts/remotion_windows_long_temp_e2e.py'

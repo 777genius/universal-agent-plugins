@@ -6,6 +6,10 @@ on:
     paths:
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/live-install-audit.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
       - 'scripts/published_codex_baseline.py'
       - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
@@ -104,7 +108,7 @@ jobs:
 
 
   published-cli-smoke:
-    name: Published npm 0.1.95 / Codex CLI parity
+    name: Published npm 0.1.95 / historical Codex lifecycle
     needs: native-pilot
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -129,15 +133,16 @@ jobs:
           npm install --global universal-agent-plugins@0.1.95 @openai/codex@0.153.4
           agentplugins version
           codex --version
-      - name: Real published-package smoke (two sources per kind)
+      - name: Observe default refusal and archived plugin / Skills lifecycles
         env:
           AUDIT_VENDOR_OUTCOME: ${{ steps.published-install.outcome }}
         run: |
           mkdir -p "$RUNNER_TEMP/published-proof"
           result=0
           for kind in plugin skill; do
-            # Keep this immutable release's lifecycle distinct from current Ready.
-            acceptance=native
+            # Record the real expired default feed separately; the immutable
+            # archive retains the original CLI's signature and expiry checks.
+            acceptance=published-0.1.95-codex-plugins-archived-feed
             if [ "$kind" = skill ]; then acceptance=published-0.1.95-codex-skills; fi
             python3 scripts/live-install-audit.py --cli "$(command -v agentplugins)" \
               --target codex --kind "$kind" --limit 2 --acceptance "$acceptance" \

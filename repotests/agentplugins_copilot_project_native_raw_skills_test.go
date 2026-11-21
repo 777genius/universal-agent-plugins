@@ -35,7 +35,11 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	f.preparePackage(t)
 	foreign := copilotRawForeign(t, f)
 	before := copilotRawInventories(t, f, "before", nil)
-	events := copilotRawRead(t, f.base.Events)
+	// Ordinary catalogs must not start the MCP probe, so its append-only
+	// journal must remain absent rather than exist as an empty fixture file.
+	if err := copilotCycleAbsent(f.base.Events); err != nil {
+		t.Fatal("ordinary catalog invoked MCP probe", err)
+	}
 	argv := []string{f.installer, "skills", "add", nativeRawProjectSkillsSource, "--skill", copilotRawSkill, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--no-ui", "--format", "json"}
 	first := f.command(t, "raw-add", f.outside, f.env(), argv, 45*time.Second)
 	copilotRawReady(t, first.Stdout, false)
@@ -81,8 +85,8 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	if _, err := os.Lstat(binding.TargetLocator); !os.IsNotExist(err) {
 		t.Fatal("raw removed package remains", err)
 	}
-	if !bytes.Equal(events, copilotRawRead(t, f.base.Events)) {
-		t.Fatal("ordinary catalog invoked MCP probe")
+	if err := copilotCycleAbsent(f.base.Events); err != nil {
+		t.Fatal("ordinary catalog invoked MCP probe", err)
 	}
 	f.check(t)
 }

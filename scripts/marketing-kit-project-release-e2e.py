@@ -1799,7 +1799,9 @@ def main():
     codex_sqlite = MarketingCodexSQLiteProfiles(options.target)
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location, ExitStack() as custody:
-            root = Path(location)
+            # Canonicalize this newly owned root before deriving fixture paths;
+            # macOS temporary parents may use /var for canonical /private/var.
+            root = Path(location).resolve(strict=True)
             # The pinned npm launcher validates the SHA-256 on every cache hit.
             # Keep one private executable cache for A/B: cold restore is still
             # independent in lock, receipts, clients and native HOME/profile.

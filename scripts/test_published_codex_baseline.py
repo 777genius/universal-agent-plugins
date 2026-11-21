@@ -498,5 +498,310 @@ class HistoricalOrchestrationTest(unittest.TestCase):
                              ["before-install", "installed", "repeat-installed", "removed"])
 
 
+class HistoricalPluginArchiveTest(unittest.TestCase):
+    def fixtures(self):
+        return json.loads((Path(__file__).resolve().parents[1] / "tests/live-install/fixtures.json").read_text())
+
+    def observer(self, root):
+        from types import SimpleNamespace
+        root = root.resolve()
+        for name in ("home", "uap-data", "project"):
+            (root / name).mkdir()
+        return SimpleNamespace(home=root / "home", project=root / "project",
+            launcher=Path("/actual-npm/bin/agentplugins.js"),
+            environment={"HOME": str(root / "home"), "AGENTPLUGINS_HOME": str(root / "uap-data")})
+
+    def refusal(self):
+        error = ("agentplugins: load signed Directory: directory snapshot is expired: "
+                 "expires_at=2026-10-30T20:03:50Z now=2026-11-21T23:16:22Z\n")
+        return {"exit_code": 1, "timeout": False, "stdout_tail": "", "stdout_full": "",
+                "stderr_tail": error, "stderr_full": error}
+
+    def info(self, source):
+        pin = self.fixtures()["signed_release_pins"][source]
+        value = {"exit_code": 0, "timeout": False, "stdout_tail": "bounded output", "stderr_tail": "", "stderr_full": "",
+            "_json": {"schema_version": 1, "command": "info", "result": "success", "data": {
+                "snapshot_sequence": 48, "snapshot_digest": "sha256:" + BASELINE.ARCHIVE_DIGEST,
+                "selected_distribution": pin["distribution"], "selected_release": {
+                    key: pin[field] for key, field in (("repository", "repository"), ("package_path", "path"),
+                        ("resolved_revision", "revision"), ("release_sequence", "sequence"),
+                        ("tree_digest", "tree_digest"), ("manifest_digest", "manifest_digest"))}}}}
+        value["stdout_full"] = json.dumps(value["_json"])
+        return value
+
+    def proof(self, source):
+        return {"scope": "immutable-official-historical-feed", "origin": BASELINE.ARCHIVE_ORIGIN,
+                "ledger_commit": BASELINE.ARCHIVE_COMMIT, "sequence": 48, "key_id": BASELINE.ARCHIVE_KEY,
+                "snapshot_sha256": BASELINE.ARCHIVE_DIGEST, "envelope_sha256": BASELINE.ARCHIVE_ENVELOPE_DIGEST,
+                "generated_at": BASELINE.ARCHIVE_GENERATED, "expires_at": BASELINE.ARCHIVE_EXPIRES,
+                "original_cli_trust_unchanged": True, "release_pin": self.fixtures()["signed_release_pins"][source]}
+
+    def feed(self, source):
+        return {"current_default": {"status": "current-default-compatibility-failed",
+                    "origin": BASELINE.DEFAULT_ORIGIN, "compatibility_passed": False, "native_passed": False,
+                    "complete_output_verified": True,
+                    "started_at": "2026-11-21T23:16:21+00:00", "ended_at": "2026-11-21T23:16:23+00:00",
+                    "observation": self.refusal()},
+                "archive": self.proof(source),
+                "archive_info": {**BASELINE.bounded_command(self.info(source)), "complete_output_verified": True}}
+
+    def report(self):
+        rows = []
+        for index, source in enumerate(BASELINE.ARCHIVE_SOURCES):
+            row = {"index": index, "source": source, "identity": source, "kind": "plugin", "target": "codex",
+                   "status": "historical-archive-lifecycle-observed", "historical_archive_status": "passed",
+                   "historical_plugin_feed": self.feed(source),
+                   "historical_npm_proof": {"package": "universal-agent-plugins", "version": "0.1.95",
+                       "commit": BASELINE.COMMIT, "binary_sha256": BASELINE.DIGEST, "binary_size": BASELINE.SIZE,
+                       "launcher_sources_verified": True, "commands_verified": 8},
+                   "matched_installation_ids": ["id-" + source], "repeat_installation_ids": ["id-" + source],
+                   "native_residuals": [], "native_uninstall": {"completed": True, "native_plugin_absent": True,
+                       "native_marketplace_absent": True},
+                   "codex_plugin_sqlite_proof": {"native_version": "0.153.4", "runtime_semantics_unchanged": True,
+                       "observations": [{"phase": "after-public-command", "runtime_files_fully_read": {}}]}}
+            for key in ("repeat_verified", "repeat_native_unchanged", "repeat_lock_unchanged", "removal_verified",
+                        "sentinels_preserved", "listed_identity", "post_list_schema_valid"):
+                row[key] = True
+            for key in ("failed_install_registered", "failed_install_residue", "post_remove_identity_registered"):
+                row[key] = False
+            for phase in ("install", "list", "repeat_add", "repeat_list", "cleanup", "post_remove_list"):
+                row[phase] = {"exit_code": 0, "timeout": False}
+            rows.append(row)
+        return {"acceptance": BASELINE.PLUGIN_ACCEPTANCE, "target": "codex", "kind": "plugin",
+                "platform": "linux", "architecture": "x86_64", "cases_attempted": 2, "passed": 0,
+                "verified_negative_coverage": 0, "full_coverage": False, "source_selection_complete": False,
+                "cli_version": {"status": "reported", "value": "agentplugins 0.1.95", "exit_code": 0},
+                "client_version": {"status": "reported", "value": "codex-cli 0.153.4", "exit_code": 0}, "results": rows}
+
+    def test_default_failure_is_observed_before_exact_archive_selection(self):
+        now = BASELINE.instant("2026-11-21T23:16:22Z")
+        for source in BASELINE.ARCHIVE_SOURCES:
+            with self.subTest(source=source), tempfile.TemporaryDirectory() as temporary:
+                observer = self.observer(Path(temporary)); calls = []
+                def invoke(argv, environment, project, timeout, *, capture_full=False):
+                    self.assertEqual(argv, [str(observer.launcher), "info", source, "--target", "codex", "--format", "json"])
+                    self.assertEqual(project, observer.project)
+                    self.assertEqual(timeout, 80)
+                    self.assertTrue(capture_full)
+                    calls.append(dict(environment))
+                    return self.refusal() if len(calls) == 1 else self.info(source)
+                with patch.object(BASELINE, "utc_now", return_value=now), patch.object(
+                        BASELINE, "archive_cache", return_value=self.proof(source)):
+                    feed = BASELINE.prepare_plugin_archive(observer, invoke, source,
+                        self.fixtures()["signed_release_pins"][source])
+                self.assertNotIn("AGENTPLUGINS_DIRECTORY_ORIGIN", calls[0])
+                self.assertEqual(calls[1]["AGENTPLUGINS_DIRECTORY_ORIGIN"], BASELINE.ARCHIVE_ORIGIN)
+                self.assertTrue(BASELINE.recorded_default_refusal(feed["current_default"]))
+                self.assertFalse(feed["current_default"]["compatibility_passed"])
+                self.assertEqual(observer.plugin_archive, (source, self.fixtures()["signed_release_pins"][source]))
+
+    def test_unexpected_default_and_archive_outcomes_preserve_failure_evidence(self):
+        now = BASELINE.instant("2026-11-21T23:16:22Z")
+        for mutation in ("default-success", "default-timeout", "default-text", "default-time",
+                         "default-leading-stderr", "default-leading-stdout", "default-truncated-capture",
+                         "archive-exit", "archive-json", "archive-scope", "archive-sequence", "archive-pin",
+                         "archive-stderr-prefix", "archive-missing-full"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                observer = self.observer(Path(temporary)); default, archived = self.refusal(), self.info("atlassian")
+                if mutation == "default-success": default["exit_code"] = 0
+                elif mutation == "default-timeout": default["timeout"] = True
+                elif mutation == "default-text": default["stderr_full"] = default["stderr_tail"] = "another error"
+                elif mutation == "default-time":
+                    default["stderr_full"] = default["stderr_tail"] = default["stderr_tail"].replace("23:16:22", "23:17:22")
+                elif mutation == "default-leading-stderr": default["stderr_full"] = "hidden prefix\n" + " " * 2000 + default["stderr_tail"]
+                elif mutation == "default-leading-stdout": default["stdout_full"] = "hidden prefix\n" + " " * 2000
+                elif mutation == "default-truncated-capture": default.pop("stderr_full")
+                elif mutation == "archive-exit": archived["exit_code"] = 1
+                elif mutation == "archive-json": archived["_json"] = None
+                elif mutation == "archive-scope": archived["_json"]["command"] = "list"
+                elif mutation == "archive-sequence": archived["_json"]["data"]["snapshot_sequence"] = True
+                elif mutation == "archive-stderr-prefix": archived["stderr_full"] = "hidden prefix\n" + " " * 2000
+                elif mutation == "archive-missing-full": archived.pop("stdout_full")
+                else: archived["_json"]["data"]["selected_release"]["resolved_revision"] = "f" * 40
+                with patch.object(BASELINE, "utc_now", return_value=now), patch.object(
+                        BASELINE, "archive_cache") as cache:
+                    responses = iter((default, archived))
+                    with self.assertRaises(BASELINE.ArchiveUnavailable) as failure:
+                        BASELINE.prepare_plugin_archive(observer, lambda *args, **kwargs: next(responses), "atlassian",
+                            self.fixtures()["signed_release_pins"]["atlassian"])
+                cache.assert_not_called()
+                self.assertIs(failure.exception.observation, observer.plugin_feed)
+                self.assertNotIn("archive", observer.plugin_feed)
+                self.assertFalse(hasattr(observer, "plugin_archive"))
+                if mutation.startswith("default-"):
+                    observation = observer.plugin_feed["current_default"]["observation"]
+                    self.assertNotIn("stdout_full", observation)
+                    self.assertNotIn("stderr_full", observation)
+                    self.assertNotIn("complete_output_verified", observer.plugin_feed["current_default"])
+                if mutation.startswith("archive-"):
+                    self.assertNotIn("stdout_full", observer.plugin_feed["archive_info"])
+                    self.assertNotIn("stderr_full", observer.plugin_feed["archive_info"])
+                    self.assertNotIn("complete_output_verified", observer.plugin_feed["archive_info"])
+
+    def test_cache_requires_exact_bounded_private_unmodified_original_bytes(self):
+        import base64
+        import hashlib
+        now = BASELINE.instant("2026-11-21T23:16:22Z")
+        pin = self.fixtures()["signed_release_pins"]["atlassian"]
+        snapshot = {"sequence": 48, "generated_at": BASELINE.ARCHIVE_GENERATED,
+            "expires_at": BASELINE.ARCHIVE_EXPIRES, "distributions": [{"id": pin["distribution"], "status": "active",
+                "releases": [{"sequence": pin["sequence"], "package_source": {"repository": pin["repository"],
+                    "path": pin["path"], "revision": pin["revision"]}, "tree_digest": pin["tree_digest"],
+                    "manifest_digest": pin["manifest_digest"]}]}]}
+        raw = json.dumps(snapshot).encode(); digest = hashlib.sha256(raw).hexdigest()
+        envelope = json.dumps({"sequence": 48, "key_id": BASELINE.ARCHIVE_KEY,
+                              "snapshot_digest": "sha256:" + digest}).encode()
+        for mutation in ("none", "bytes", "symlink", "hardlink", "mode", "parent", "expired", "wrong-pin", "duplicate", "during-read"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                observer = self.observer(Path(temporary))
+                observer.environment["AGENTPLUGINS_DIRECTORY_ORIGIN"] = BASELINE.ARCHIVE_ORIGIN
+                cache = Path(observer.environment["AGENTPLUGINS_HOME"]) / "directory-v1-cache.json"
+                record = {"schema_version": 1, "sequence": 48, "snapshot": base64.b64encode(raw).decode(),
+                          "envelope": base64.b64encode(envelope).decode()}
+                cache.write_text(json.dumps(record)); cache.chmod(0o600)
+                selected = copy.deepcopy(pin)
+                if mutation == "bytes": cache.write_text(json.dumps({**record, "snapshot": "Zg=="}))
+                elif mutation in ("symlink", "hardlink"):
+                    target = observer.project / "foreign"; cache.rename(target)
+                    if mutation == "symlink": cache.symlink_to(target)
+                    else: os.link(target, cache)
+                elif mutation == "mode": cache.chmod(0o644)
+                elif mutation == "parent":
+                    saved = cache.parent.with_name("saved-data"); cache.parent.rename(saved); cache.parent.symlink_to(saved, target_is_directory=True)
+                elif mutation == "wrong-pin": selected["tree_digest"] = "sha256:" + "f" * 64
+                elif mutation == "duplicate": cache.write_text(json.dumps(record)[:-1] + ',"sequence":48}')
+                clock = BASELINE.instant(BASELINE.ARCHIVE_EXPIRES) if mutation == "expired" else now
+                original_read = BASELINE.regular_bytes
+                def read(*args, **kwargs):
+                    body = original_read(*args, **kwargs)
+                    if mutation == "during-read": cache.chmod(0o644)
+                    return body
+                with patch.object(BASELINE, "ARCHIVE_DIGEST", digest), patch.object(BASELINE, "ARCHIVE_ENVELOPE_DIGEST",
+                        hashlib.sha256(envelope).hexdigest()), patch.object(BASELINE, "utc_now", return_value=clock), \
+                        patch.object(BASELINE, "regular_bytes", side_effect=read):
+                    if mutation == "none":
+                        proof = BASELINE.archive_cache(observer, "atlassian", selected)
+                        self.assertEqual(proof["release_pin"], pin)
+                    else:
+                        with self.assertRaises((ValueError, OSError)):
+                            BASELINE.archive_cache(observer, "atlassian", selected)
+
+    def test_original_binary_checkpoint_also_rechecks_the_archive_each_time(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); home = root / "home"; home.mkdir()
+            binary = home / "cache/binary"; binary.parent.mkdir(); binary.write_bytes(b"pinned")
+            observer = object.__new__(BASELINE.PublishedBaseline)
+            observer.home, observer.binary = home, binary
+            observer.home_identity = BASELINE.directory_chain(home, home)
+            observer.metadata, observer.commands = {"binary": str(binary)}, 0
+            observer.plugin_archive = "atlassian", self.fixtures()["signed_release_pins"]["atlassian"]
+            observer.plugin_feed = self.feed("atlassian")
+            with patch.object(observer, "read_metadata", return_value=observer.metadata), \
+                    patch.object(BASELINE, "SIZE", 6), patch.object(BASELINE, "DIGEST", hashlib.sha256(b"pinned").hexdigest()), \
+                    patch.object(BASELINE, "archive_cache") as cache:
+                observer.after_command()
+                cache.assert_called_once_with(observer, *observer.plugin_archive)
+                cache.side_effect = ValueError("archive changed after another original command")
+                with self.assertRaises(BASELINE.ArchiveUnavailable) as failure:
+                    observer.after_command()
+                self.assertIs(failure.exception.observation, observer.plugin_feed)
+                self.assertEqual(cache.call_count, 2)
+
+    def test_archive_summary_keeps_native_zero_and_all_lifecycle_guards(self):
+        now = BASELINE.instant("2026-11-21T23:16:22Z")
+        with patch.object(BASELINE, "utc_now", return_value=now):
+            report = self.report(); original = copy.deepcopy(report)
+            summary = BASELINE.plugin_summary(report, self.fixtures())
+            self.assertTrue(summary["historical_plugin_observation_complete"])
+            self.assertEqual(summary["archived_plugin_lifecycles_observed"], 2)
+            self.assertFalse(summary["current_default_compatibility_passed"])
+            self.assertEqual(summary["current_default_native_passed"], 0)
+            self.assertEqual(report, original)
+            mutations = [lambda r: r.update(passed=2), lambda r: r.update(passed=False),
+                lambda r: r.update(cases_attempted=True), lambda r: r.update(kind="skill"),
+                lambda r: r.update(acceptance="native"), lambda r: r["cli_version"].update(exit_code=False),
+                lambda r: r["results"][0].update(source="foreign"),
+                lambda r: r["results"][0].update(status="passed"),
+                lambda r: r["results"][0].update(historical_archive_status="cleanup-failed"),
+                lambda r: r["results"][0]["historical_npm_proof"].update(commands_verified=6),
+                lambda r: r["results"][0]["historical_plugin_feed"]["archive"].update(sequence=True),
+                lambda r: r["results"][0]["historical_plugin_feed"]["current_default"].pop("complete_output_verified"),
+                lambda r: r["results"][0]["historical_plugin_feed"]["current_default"]["observation"].update(stderr_full="hidden prefix"),
+                lambda r: r["results"][0]["historical_plugin_feed"]["archive_info"].pop("complete_output_verified"),
+                lambda r: r["results"][0]["historical_plugin_feed"]["archive"]["release_pin"].update(revision="f" * 40),
+                lambda r: r["results"][0].update(native_residuals=["unexpected"]),
+                lambda r: r["results"][0]["native_uninstall"].update(native_plugin_absent=False),
+                lambda r: r["results"][0]["codex_plugin_sqlite_proof"].update(runtime_semantics_unchanged=False)]
+            for key in ("repeat_verified", "repeat_native_unchanged", "repeat_lock_unchanged", "removal_verified",
+                        "sentinels_preserved", "listed_identity", "post_list_schema_valid"):
+                mutations.append(lambda r, key=key: r["results"][0].update({key: False}))
+            for phase in ("install", "list", "repeat_add", "repeat_list", "cleanup", "post_remove_list"):
+                mutations.append(lambda r, phase=phase: r["results"][0][phase].update(timeout=True))
+            for index, mutate in enumerate(mutations):
+                with self.subTest(mutation=index):
+                    report = self.report(); mutate(report)
+                    self.assertFalse(BASELINE.plugin_summary(report, self.fixtures())["historical_plugin_observation_complete"])
+
+    def test_main_requires_explicit_archive_mode_and_preserves_default_failure(self):
+        for acceptance, mutation in ((BASELINE.PLUGIN_ACCEPTANCE, None), ("native", None),
+                                     (BASELINE.PLUGIN_ACCEPTANCE, "unavailable")):
+            with self.subTest(acceptance=acceptance, mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                live = HistoricalModeTest().load_live()
+                cli = Path(temporary) / "launcher"
+                cli.write_text("inert integration fixture")
+                sample = self.report()
+                def version(argv, *args):
+                    return sample["cli_version"] if argv[0] == str(cli) else sample["client_version"]
+                def case(*args, **kwargs):
+                    self.assertEqual(kwargs, {"historical_plugins": True}
+                                     if acceptance == BASELINE.PLUGIN_ACCEPTANCE else {})
+                    if mutation:
+                        raise live.HISTORICAL_CODEX["ArchiveUnavailable"](self.feed(args[3]))
+                    return copy.deepcopy(sample["results"][args[4]])
+                summary_globals = live.HISTORICAL_CODEX["plugin_summary"].__globals__
+                with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                        patch.dict(live.AGENT_BINARIES, {"codex": "/inert/codex"}), \
+                        patch("sys.argv", ["audit", "--cli", str(cli), "--target", "codex", "--kind", "plugin",
+                            "--limit", "2", "--report-dir", temporary, "--acceptance", acceptance]), \
+                        patch.object(live, "version_evidence", side_effect=version), \
+                        patch.object(live, "do_case", side_effect=case) as observed, \
+                        patch.object(live.sys, "platform", "linux"), \
+                        patch.object(live.platform, "machine", return_value="x86_64"), \
+                        patch.dict(summary_globals, {"utc_now": lambda: BASELINE.instant("2026-11-21T23:16:22Z")}), \
+                        patch("builtins.print"):
+                    self.assertEqual(live.main(), 0 if acceptance == BASELINE.PLUGIN_ACCEPTANCE and not mutation else 1)
+                    self.assertEqual(observed.call_count, 2)
+                report = json.loads((Path(temporary) / "codex-plugin.json").read_text())
+                self.assertEqual(report["passed"], 0)
+                self.assertFalse(report["full_coverage"])
+                if acceptance == BASELINE.PLUGIN_ACCEPTANCE:
+                    self.assertFalse(report["current_default_compatibility_passed"])
+                    self.assertEqual(report["current_default_refusals_observed"], 2)
+                    self.assertIs(report["historical_plugin_observation_complete"], mutation is None)
+                else:
+                    self.assertNotIn("historical_plugin_observation_complete", report)
+                if mutation:
+                    self.assertEqual([row["status"] for row in report["results"]], ["harness-error"] * 2)
+                    self.assertTrue(all("historical_plugin_feed" in row for row in report["results"]))
+
+    def test_archive_mode_rejects_wrong_client_scope_count_or_host_before_execution(self):
+        live = HistoricalModeTest().load_live()
+        for target, kind, count, system, machine in (
+                ("cursor", "plugin", 2, "linux", "x86_64"), ("codex", "skill", 2, "linux", "x86_64"),
+                ("codex", "plugin", 30, "linux", "x86_64"), ("codex", "plugin", 2, "win32", "x86_64"),
+                ("codex", "plugin", 2, "linux", "aarch64")):
+            with self.subTest(case=(target, kind, count, system, machine)), \
+                    patch("sys.argv", ["audit", "--cli", "/inert", "--target", target, "--kind", kind,
+                        "--limit", str(count), "--report-dir", "/inert", "--acceptance", BASELINE.PLUGIN_ACCEPTANCE]), \
+                    patch.object(live.sys, "platform", system), \
+                    patch.object(live.platform, "machine", return_value=machine), \
+                    patch.object(live, "do_case") as observed, patch("sys.stderr"):
+                with self.assertRaises(SystemExit) as rejected:
+                    live.main()
+                self.assertEqual(rejected.exception.code, 2)
+                observed.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

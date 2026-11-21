@@ -50,13 +50,14 @@ func clineProjectRawSkills(t *testing.T, c *clineProjectCycle) {
 	delete(f.trees, filepath.Dir(native))
 	add := []string{f.installer, "skills", "add", nativeRawProjectSkillsSource, "--skill", clineRawSkill, "--target", "cline", "--scope", "project", "--project-root", r.Project, "--yes", "--no-ui", "--format", "json"}
 	first := c.rawCommand(t, record, "add", f.outside, add)
+	c.rawBeforeReady(t, record, "add", native)
 	if err := clineRawReady(first.Stdout, false); err != nil {
 		t.Fatal(err)
 	}
 	i, binding := c.rawProof(t, record, "add", old.Installations[0], "", native)
-	c.rawInventories(t, record, "add", map[string]string{filepath.Join(native, "SKILL.md"): string(clineRawRead(t, filepath.Join(native, "SKILL.md")))})
 	stable := c.rawSnapshot(t, root, native, binding.TargetLocator)
 	repeated := c.rawCommand(t, record, "repeat", f.outside, add)
+	c.rawBeforeReady(t, record, "repeat", native)
 	if err := clineRawReady(repeated.Stdout, true); err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +67,6 @@ func clineProjectRawSkills(t *testing.T, c *clineProjectCycle) {
 	if !reflect.DeepEqual(i, replay) || !reflect.DeepEqual(binding, replayBinding) || !reflect.DeepEqual(stable, after) {
 		t.Fatal("raw Cline repeat changed IID, binding, state, lock or owned payload")
 	}
-	c.rawInventories(t, record, "repeat", map[string]string{filepath.Join(native, "SKILL.md"): string(clineRawRead(t, filepath.Join(native, "SKILL.md")))})
 	for _, name := range []string{"state-v2.json", "uap.toml", "uap.lock"} {
 		path := filepath.Join(root, name)
 		if name == "state-v2.json" {
@@ -96,6 +96,23 @@ func clineProjectRawSkills(t *testing.T, c *clineProjectCycle) {
 	c.rawIdle(t)
 	record["probe_after"] = c.stream(t, finalEvents)
 	f.check(t)
+}
+
+// Preserve the observed owned state and the already-required fresh catalogs
+// before a Ready assertion can stop the attempt. These observations do not
+// qualify Prepared: the original Ready and exact Active binding gates follow.
+func (c *clineProjectCycle) rawBeforeReady(t *testing.T, record map[string]any, stage, native string) {
+	t.Helper()
+	statePath := c.statePath(c.recipes["a"])
+	state := clineRawRead(t, statePath)
+	tree := clineRawTree(t, filepath.Dir(native))
+	managedRoot := filepath.Join(c.recipes["a"].Project, ".uap", "managed", "clients", "cline")
+	managed := clineRawTree(t, managedRoot)
+	c.f.evidence["raw_skill_"+stage+"_before_ready"] = map[string]any{"state": c.stream(t, state), "native": tree, "managed": managed, "qualified": false}
+	c.rawInventories(t, record, stage, map[string]string{filepath.Join(native, "SKILL.md"): string(clineRawRead(t, filepath.Join(native, "SKILL.md")))})
+	if !bytes.Equal(state, clineRawRead(t, statePath)) || !reflect.DeepEqual(tree, clineRawTree(t, filepath.Dir(native))) || !reflect.DeepEqual(managed, clineRawTree(t, managedRoot)) {
+		t.Fatal("raw Cline ordinary catalog changed the observed installation")
+	}
 }
 
 func (c *clineProjectCycle) rawIdle(t *testing.T) {
