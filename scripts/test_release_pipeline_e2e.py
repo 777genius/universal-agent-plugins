@@ -117,7 +117,7 @@ class ReleasePipelineE2E(unittest.TestCase):
         packed = self.run_command(['npm', 'pack', '--ignore-scripts', '--json'], cwd=self.package)
         self.tarball_file = json.loads(packed.stdout)[0]['filename']
         self.tarball = (self.package / self.tarball_file).read_bytes()
-        names = ['validate', 'build', 'stage-draft', 'platform-proof / Verify release and pack exact npm tarball',
+        names = ['validate', 'build', 'sign-macos', 'stage-draft', 'platform-proof / Verify release and pack exact npm tarball',
                  *(f'platform-proof / native runtime E2E ({target})' for target in TARGETS),
                  'platform-proof / Aggregate all six native platform proofs',
                  'hermes-native-proof / Aggregate hermes release-native proofs',
@@ -306,6 +306,29 @@ pathlib.Path(os.environ['PUBLISH_HASH']).write_text(hashlib.sha256(pathlib.Path(
                     self.assertNotEqual(result.returncode, 0)
                     self.assertEqual(result.stdout, b'')
                     self.assertIn('missing or wrong qualification job: ' + name, result.stderr.decode())
+
+    def test_promotion_and_npm_refuse_missing_or_failed_macos_signing(self):
+        self.qualify()
+        original = copy.deepcopy(self.jobs)
+        output = self.root / 'unsigned-output'
+        output.mkdir(mode=0o700)
+        for failure in ('missing', 'failure', 'skipped', 'cancelled'):
+            with self.subTest(failure=failure):
+                self.jobs[:] = copy.deepcopy(original)
+                job = next(job for job in self.jobs if job['name'] == 'sign-macos')
+                if failure == 'missing':
+                    self.jobs.remove(job)
+                else:
+                    job['conclusion'] = failure
+                result = self.helper('reuse-agentplugins-verified-draft.py',
+                                     ['--require-hermes-antigravity'], check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, b'')
+                self.assertIn('missing or wrong qualification job: sign-macos', result.stderr.decode())
+                self.release['draft'] = False
+                self.reject_reuse(output, 'missing or wrong qualification job: sign-macos')
+                self.release['draft'] = True
+        self.jobs[:] = original
 
     def reject_reuse(self, output, reason):
         result = self.helper('reuse-agentplugins-npm-artifact.py', ['--output-dir', str(output)], check=False)

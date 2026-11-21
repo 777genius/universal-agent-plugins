@@ -13,6 +13,8 @@ on:
       - 'scripts/*agentplugins*npm_artifact.py'
       - 'scripts/reuse-agentplugins-npm-artifact.py'
       - 'scripts/test_release_pipeline_e2e.py'
+      - 'scripts/sign-agentplugins-macos.sh'
+      - 'scripts/test_sign_agentplugins_macos.py'
       - 'repotests/agentplugins_release_contract_test.go'
       - 'docs/agentplugins-release.md'
   workflow_dispatch:
@@ -47,5 +49,6 @@ jobs:
           python3 -B -m unittest discover -s scripts -p 'test_*agentplugins*draft.py'
           python3 -B -m unittest discover -s scripts -p 'test_reuse_agentplugins_npm_artifact.py'
           python3 -B -m unittest discover -s scripts -p 'test_release_pipeline_e2e.py'
+          python3 -B -m unittest discover -s scripts -p 'test_sign_agentplugins_macos.py'
       - name: Check release workflow gate contracts
         run: go test -count=1 ./repotests -run '^TestAgentpluginsReleaseContractsStayFailClosed$'
