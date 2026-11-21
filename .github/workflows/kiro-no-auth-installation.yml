@@ -85,14 +85,14 @@ jobs:
         shell: bash
         working-directory: install/integrationctl/agentplugins
         run: go test -json -count=1 -timeout=180s ./installer -run '^Test(ProjectKiroPublicSDKStdioDataRepairRestartAndRemove|FacadeHostedPreparation(PinsIntentAndSnapshot|PreservesAutomaticAndOtherFailures|RefusesAppearingRetainedInstallation|PreservesRecordedModesAndOwnership|EligibilityDoesNotBroadenScopeOrConsent|RejectsRetainedStateAtMutationLock))$' | tee "$RUNNER_TEMP/kiro-composed-sdk.log"
-      - name: Run public CLI manifest-to-native tool approvals lifecycle
+      - name: Verify public Kiro CLI publisher approval install and repair
         shell: bash
         working-directory: cli
         run: go test -json -count=1 -timeout=180s ./internal/agentpluginscli -run '^TestKiroPublisherMCPApprovalsFullCLI$' | tee "$RUNNER_TEMP/kiro-composed-cli-trust.log"
-      - name: Run Kiro exact approval, project safety and native ownership lifecycle
+      - name: Verify Kiro exact MCP approval and ownership lifecycles
         shell: bash
         working-directory: install/integrationctl/agentplugins
-        run: go test -json -count=1 -timeout=180s ./clients/kiro -run '^TestKiro(NamedMCPApprovalSchemaFailClosed|ApprovalPreviewAndNoUnselectedPrivilege|ExactMCPApprovalDisposableLifecycle|ProjectApprovalDoesNotForgeWorkspaceTrust|UserEditedAutoApprovalBlocksRemoval) | tee "$RUNNER_TEMP/kiro-composed-sdk-trust.log"
+        run: go test -json -count=1 -timeout=180s ./clients/kiro -run '^TestKiro(NamedMCPApprovalSchemaFailClosed|ApprovalPreviewAndNoUnselectedPrivilege|ExactApprovalPreservesNativeVerifierAndAutomaticActivation|ExactMCPApprovalDisposableLifecycle|ProjectApprovalDoesNotForgeWorkspaceTrust|UserEditedAutoApprovalBlocksRemoval)$' | tee "$RUNNER_TEMP/kiro-composed-sdk-trust.log"
       - name: Admit actual named cases and unchanged source
         if: ${{ always() }}
         shell: bash
@@ -160,6 +160,7 @@ jobs:
                                     'TestKiroNamedMCPApprovalSchemaFailClosed/null',
                                     'TestKiroNamedMCPApprovalSchemaFailClosed/trailing-content',
                                     'TestKiroApprovalPreviewAndNoUnselectedPrivilege',
+                                    'TestKiroExactApprovalPreservesNativeVerifierAndAutomaticActivation',
                                     'TestKiroExactMCPApprovalDisposableLifecycle',
                                     'TestKiroExactMCPApprovalDisposableLifecycle/install',
                                     'TestKiroExactMCPApprovalDisposableLifecycle/repeat',
@@ -187,136 +188,7 @@ jobs:
           receipt = {'source_before': before, 'source_after': after, 'logs': receipts,
                      'qualification': 'UAP composed installation only; inert discovery/security/helper seams; no native Kiro loading'}
           (root / 'kiro-composed-admission.json').write_text(json.dumps(receipt, sort_keys=True, indent=2) + '\n')
-          print('PASS: exact CLI Git/ZIP, SDK and Kiro scoped approval RUN/PASS cases on the immutable source')
-          PYTHON
-      - name: Preserve actual lifecycle logs and source admission
-        if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
-        with:
-          name: kiro-no-auth-uap-${{ matrix.os }}
-          path: |
-            ${{ runner.temp }}/kiro-composed-*.log
-            ${{ runner.temp }}/kiro-composed-source-before.json
-            ${{ runner.temp }}/kiro-composed-admission.json
-          if-no-files-found: error
-          retention-days: 14
-  native:
-    name: Pinned Kiro no-auth observations
-    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      - name: Test finite no-auth routes and preservation contracts
-        run: python3 -m unittest discover -s scripts -p 'test_project_native_kiro_no_auth.py' -v
-      - name: Capture real pinned help validation and expected auth refusals
-        env:
-          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
-        run: python3 scripts/project_native_kiro_no_auth.py --output "$RUNNER_TEMP/kiro-no-auth-native"
-      - name: Preserve original bounded native evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
-        with:
-          name: kiro-no-auth-native-linux-amd64
-          path: ${{ runner.temp }}/kiro-no-auth-native/upload/research.zip
-          if-no-files-found: error
-          retention-days: 14
-  acceptance:
-    name: Kiro no-auth acceptance
-    needs: [lifecycle, native]
-    if: ${{ always() && (github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Require actual completed lifecycle and native contracts
-        env:
-          LIFECYCLE: ${{ needs.lifecycle.result }}
-          NATIVE: ${{ needs.native.result }}
-        run: |
-          test "$LIFECYCLE" = success
-          test "$NATIVE" = success
-          echo 'PASS: declared no-auth UAP installation and separately admitted native observations only; no authentication, model, native MCP or loaded-client lifecycle qualification.'
- | tee "$RUNNER_TEMP/kiro-composed-sdk-trust.log"
-      - name: Admit actual named cases and unchanged source
-        if: ${{ always() }}
-        shell: bash
-        run: |
-          python3 - <<'PYTHON'
-          import hashlib, json, os, subprocess
-          from pathlib import Path
-          root = Path(os.environ['RUNNER_TEMP'])
-          before = json.loads((root / 'kiro-composed-source-before.json').read_text())
-          def git(*args):
-              return subprocess.check_output(['git', *args], text=True).strip()
-          after = {'commit': git('rev-parse', 'HEAD'), 'tree': git('rev-parse', 'HEAD^{tree}'),
-                   'status': git('status', '--porcelain', '--untracked-files=normal')}
-          if before != after or after['status'] or after['commit'] != os.environ['EXPECTED_COMMIT']:
-              raise SystemExit('source changed during lifecycle')
-          cli = 'TestProjectKiroComposedSourceLifecycle'
-          continuity = 'TestKiroContinuityRejectsDetachedAuthority'
-          required = {'cli': [cli, cli + '/git', cli + '/git/user', cli + '/zip', cli + '/zip/user',
-                             continuity, continuity + '/unchanged', continuity + '/appended-receipt',
-                             continuity + '/source', continuity + '/installation', continuity + '/binding',
-                             continuity + '/data', continuity + '/receipt-history',
-                             'TestKiroUserArchivePreservesAuthoredBytesWithAutocrlf',
-                             'TestKiroUserArchivePreservesAuthoredSkillWithAutocrlf'],
-                      'sdk': ['TestProjectKiroPublicSDKStdioDataRepairRestartAndRemove',
-                              'TestFacadeHostedPreparationPinsIntentAndSnapshot',
-                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures',
-                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/available',
-                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/wrapped-preflight',
-                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/second-check-available',
-                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/canceled',
-                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/invalid-source',
-                              'TestFacadeHostedPreparationPreservesAutomaticAndOtherFailures/project',
-                              'TestFacadeHostedPreparationRefusesAppearingRetainedInstallation',
-                              'TestFacadeHostedPreparationRefusesAppearingRetainedInstallation/retry',
-                              'TestFacadeHostedPreparationRefusesAppearingRetainedInstallation/apply',
-                              'TestFacadeHostedPreparationPreservesRecordedModesAndOwnership',
-                              'TestFacadeHostedPreparationPreservesRecordedModesAndOwnership/recorded-automatic',
-                              'TestFacadeHostedPreparationPreservesRecordedModesAndOwnership/retained-preference',
-                              'TestFacadeHostedPreparationPreservesRecordedModesAndOwnership/owned-drift',
-                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent',
-                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/supported',
-                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/unsupported',
-                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/project',
-                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/personal-mapping',
-                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/attested',
-                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/update',
-                              'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/recorded',
-                              'TestFacadeHostedPreparationRejectsRetainedStateAtMutationLock'],
-                      'cli-trust': ['TestKiroPublisherMCPApprovalsFullCLI'],
-                      'sdk-trust': ['TestKiroApprovalPreviewAndNoUnselectedPrivilege',
-                                    'TestKiroExactMCPApprovalDisposableLifecycle',
-                                    'TestKiroExactMCPApprovalDisposableLifecycle/install',
-                                    'TestKiroExactMCPApprovalDisposableLifecycle/repeat',
-                                    'TestKiroExactMCPApprovalDisposableLifecycle/update',
-                                    'TestKiroExactMCPApprovalDisposableLifecycle/repair',
-                                    'TestKiroProjectApprovalDoesNotForgeWorkspaceTrust',
-                                    'TestKiroUserEditedAutoApprovalBlocksRemoval']}
-          receipts = []
-          for label, tests in required.items():
-              path = root / ('kiro-composed-' + label + '.log')
-              if path.stat().st_size > 8 * 1024 * 1024:
-                  raise SystemExit('unbounded Go JSON log')
-              body = path.read_bytes()
-              rows = [json.loads(line) for line in body.splitlines()]
-              if not rows or any(row.get('Action') in ('fail', 'skip') for row in rows):
-                  raise SystemExit('failed, skipped or empty lifecycle')
-              packages = {row.get('Package') for row in rows}
-              if len(packages) != 1 or not all(packages) or sum(row.get('Action') == 'pass' and 'Test' not in row for row in rows) != 1:
-                  raise SystemExit('exact passing package required')
-              observed = {row['Test'] for row in rows if row.get('Action') in ('run', 'pass') and 'Test' in row}
-              if observed != set(tests) or any([row['Action'] for row in rows if row.get('Test') == test and row.get('Action') in ('run', 'pass')] != ['run', 'pass'] for test in tests):
-                  raise SystemExit('exact named RUN/PASS cases required')
-              receipts.append({'log': path.name, 'bytes': len(body), 'sha256': hashlib.sha256(body).hexdigest(),
-                               'package': next(iter(packages)), 'tests': tests})
-          receipt = {'source_before': before, 'source_after': after, 'logs': receipts,
-                     'qualification': 'UAP composed installation only; inert discovery/security/helper seams; no native Kiro loading'}
-          (root / 'kiro-composed-admission.json').write_text(json.dumps(receipt, sort_keys=True, indent=2) + '\n')
-          print('PASS: exact CLI Git/ZIP, SDK and Kiro scoped approval RUN/PASS cases on the immutable source')
+          print('PASS: exact Kiro CLI+SDK approval cases and Git/ZIP lifecycle RUN/PASS on unchanged source')
           PYTHON
       - name: Preserve actual lifecycle logs and source admission
         if: ${{ always() }}
