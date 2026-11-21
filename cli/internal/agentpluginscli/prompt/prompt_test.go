@@ -55,7 +55,7 @@ func TestSkippedClientsNoticeSanitizesDeduplicatesAndGroups(t *testing.T) {
 	want := "Not available for automatic install:\n" +
 		"  Kiro: connect the server in Kiro yourself\n" +
 		"  ChatGPT, Visual Studio Code: cannot be recorded in the dependency list; install it separately with --no-save\n" +
-		"  Pi: no compatible release of this package; check one with --target pi\n" +
+		"  Pi: the catalog has no compatible release of this package; check one with --target pi\n" +
 		"  Hermes Agent, Google Antigravity: not found on this computer; install or configure it first\n"
 	if got != want {
 		t.Fatalf("notice = %q, want %q", got, want)
@@ -70,7 +70,7 @@ func TestGroupSkippedUsesGenericTargetForSeveralClients(t *testing.T) {
 		{ID: "pi", Label: "Pi", Kind: SkipNoRelease},
 		{ID: "cline", Label: "Cline", Kind: SkipNoRelease},
 	})
-	if len(groups) != 1 || len(groups[0].Names) != 2 || groups[0].Detail != "no compatible release of this package; check one with --target <name>" {
+	if len(groups) != 1 || len(groups[0].Names) != 2 || groups[0].Detail != "the catalog has no compatible release of this package; check one with --target <name>" {
 		t.Fatalf("groups = %+v", groups)
 	}
 }

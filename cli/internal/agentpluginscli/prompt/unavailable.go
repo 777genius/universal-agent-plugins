@@ -33,7 +33,7 @@ const TargetPlaceholder = "{target}"
 const (
 	reasonNotDetected  = "not found on this computer; install or configure it first"
 	reasonNotSaveable  = "cannot be recorded in the dependency list; install it separately with --no-save"
-	reasonNoRelease    = "no compatible release of this package; check one with --target " + TargetPlaceholder
+	reasonNoRelease    = "the catalog has no compatible release of this package; check one with --target " + TargetPlaceholder
 	unnamedTargetLabel = "<name>"
 )
 

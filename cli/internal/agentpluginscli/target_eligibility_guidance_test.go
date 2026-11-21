@@ -86,7 +86,7 @@ func TestDirectoryZeroChoicesExplainReleaseSelection(t *testing.T) {
 	rollout := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCursor}, []domain.ClientID{domain.ClientCursor})
 	rollout.cli.app.Detector = staticDetector{clients: []domain.DetectedClient{fixtureClient(t, domain.ClientCodex)}}
 	stdout, _, err := rollout.cli.executeInput(true, "\n", "add", "--no-save", "rollout-demo", "--dry-run")
-	if err == nil || !strings.Contains(stdout, "OpenAI Codex: the catalog has no compatible release") || !strings.Contains(stdout, "--target codex") || strings.Contains(stdout, "verification preflight failed") {
+	if err == nil || !strings.Contains(stdout, "OpenAI Codex: the catalog has no compatible release of this package") || !strings.Contains(stdout, "--target codex") || strings.Contains(stdout, "verification preflight failed") {
 		t.Fatalf("output=%q err=%v", stdout, err)
 	}
 	if rollout.acquirer.verifiedCalls != 0 {
