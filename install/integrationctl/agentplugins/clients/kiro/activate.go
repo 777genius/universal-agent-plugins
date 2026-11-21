@@ -45,18 +45,10 @@ func (*Adapter) VerifierAvailable(_ domain.DetectedClient, plan domain.DeliveryP
 	if strings.TrimSpace(backendExecutable) == "" {
 		return false
 	}
-	if !strings.Contains(strings.ToLower(backendExecutable), "kiro") || len(plan.Components) == 0 {
+	if !strings.Contains(strings.ToLower(backendExecutable), "kiro") {
 		return false
 	}
-	for _, component := range plan.Components {
-		if component.Support == domain.SupportUnsupported {
-			continue
-		}
-		if component.Kind != domain.ComponentSkill && component.Kind != domain.ComponentMCPServer {
-			return false
-		}
-	}
-	return true
+	return kiroNativeComponents(plan.Components)
 }
 
 // PreflightActivation rejects a prepare request that cannot own native objects,
