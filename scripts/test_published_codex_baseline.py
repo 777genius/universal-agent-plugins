@@ -336,6 +336,27 @@ class HistoricalModeTest(unittest.TestCase):
                 (user / "uap.lock").unlink()
             self.assertTrue(live.scoped_lock_files_absent(user))
 
+    def test_historical_native_snapshot_detects_deletion_and_list_side_effects(self):
+        live = self.load_live()
+        with tempfile.TemporaryDirectory() as temp:
+            profile = Path(temp) / ".codex"
+            system = profile / "skills/.system/imagegen/LICENSE.txt"
+            system.parent.mkdir(parents=True)
+            system.write_bytes(b"pinned system file")
+            before = live.snapshot([profile])
+            self.assertTrue(before)
+            self.assertEqual(before, live.snapshot([profile]))  # read-only list
+            system.unlink()
+            deleted = live.snapshot([profile])
+            self.assertNotEqual(before, deleted)
+            self.assertTrue(set(before.items()) ^ set(deleted.items()))
+            system.write_bytes(b"pinned system file")
+            self.assertEqual(before, live.snapshot([profile]))
+            unexpected = profile / "plugins/unexpected/plugin.json"
+            unexpected.parent.mkdir(parents=True)
+            unexpected.write_text('{"foreign":true}')
+            self.assertNotEqual(before, live.snapshot([profile]))  # mutated list
+
     def test_source_version_string_cannot_qualify_historical_mode_or_native_ready(self):
         live = self.load_live()
         with tempfile.TemporaryDirectory() as temporary:
@@ -543,6 +564,8 @@ class TestExpiredPublishedPluginRefusal(unittest.TestCase):
                "historical_scope_lock_absence": {
                    "before-add": True, "after-add": True,
                    "after-list": True, "final": True},
+               "historical_native_unchanged": {
+                   "after-add": True, "after-list": True, "final": True},
                "listed_identity": False, "sentinels_preserved": True,
                "post_remove_identity_registered": False,
                "public_target_states": {
@@ -580,6 +603,13 @@ class TestExpiredPublishedPluginRefusal(unittest.TestCase):
             self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc), phase)
         mutated = copy.deepcopy(candidate)
         mutated["results"][0].pop("historical_scope_lock_absence")
+        self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+        for phase in ("after-add", "after-list", "final"):
+            mutated = copy.deepcopy(candidate)
+            mutated["results"][0]["historical_native_unchanged"][phase] = False
+            self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc), phase)
+        mutated = copy.deepcopy(candidate)
+        mutated["results"][0].pop("historical_native_unchanged")
         self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
         for bad in ("agentplugins: success\n", "directory snapshot is expired\n",
                     candidate["results"][0]["install"]["stderr_tail"].replace(

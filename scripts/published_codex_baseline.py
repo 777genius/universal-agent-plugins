@@ -343,6 +343,8 @@ def expired_plugin_refusals(report, doc):
                 or row.get("historical_scope_lock_absence") != {
                     "before-add": True, "after-add": True,
                     "after-list": True, "final": True}
+                or row.get("historical_native_unchanged") != {
+                    "after-add": True, "after-list": True, "final": True}
                 or row.get("listed_identity") is not False
                 or row.get("sentinels_preserved") is not True
                 or row.get("post_remove_identity_registered") is not False):

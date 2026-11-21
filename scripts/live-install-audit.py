@@ -2554,7 +2554,14 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                                 if kind == "plugin" else False)
     copilot_after_add = (copilot_settings_sanitized_shape(home, case_root, identity)
                          if copilot_before is not None else None)
-    changed = set(snapshot(native_roots).items()) - set(before.items())
+    after_add_native = snapshot(native_roots)
+    # Historic refused installs must not conceal removed baseline files.
+    historical_native_unchanged = (
+        {"after-add": after_add_native == before}
+        if historical_baseline and kind == "plugin" else None)
+    changed = (set(after_add_native.items()) ^ set(before.items())
+               if historical_native_unchanged is not None
+               else set(after_add_native.items()) - set(before.items()))
     native_attribution = attributable_native_changes(
         native_roots, changed, identity, native_target, native_components)
     skill_path = skill_file_present(project, target, identity) if kind == "skill" else None
@@ -2569,6 +2576,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     listed_json = listed.pop("_json", None) if listed else None
     if historical_scope_locks is not None:
         historical_scope_locks["after-list"] = scoped_lock_files_absent(data)
+    if historical_native_unchanged is not None:
+        historical_native_unchanged["after-list"] = snapshot(native_roots) == before
     matching = matching_installations(listed_json, identity, native_target, kind, item,
                                      signed_release_pins)
     grok_prepared = (grok_prepared_skill_installations(
@@ -3036,6 +3045,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         status = "incomplete-native-proof"
     if historical_scope_locks is not None:
         historical_scope_locks["final"] = scoped_lock_files_absent(data)
+    if historical_native_unchanged is not None:
+        historical_native_unchanged["final"] = snapshot(native_roots) == before
     return {"kind": kind, "index": index, "identity": identity, "target": target,
             **({"canonical_client_id": native_target} if target == "chatgpt" else {}),
             "source": item if kind == "plugin" else item["source"],
@@ -3101,6 +3112,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "copilot_native_after_remove": copilot_native_after_remove,
             **({"historical_scope_lock_absence": historical_scope_locks}
                if historical_scope_locks is not None else {}),
+            **({"historical_native_unchanged": historical_native_unchanged}
+               if historical_native_unchanged is not None else {}),
             **({"historical_npm_proof": historical_observer.proof,
                 "historical_add_verified": historical_add_verified,
                 "historical_repeat_add_verified": historical_repeat_add_verified,
