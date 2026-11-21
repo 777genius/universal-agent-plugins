@@ -23,6 +23,9 @@ func (*Adapter) ProjectActiveNative(_ context.Context, root string, envelope dom
 			return nil, err
 		}
 	}
+	if err := verifyKiroActiveApprovals(root, envelope, plan); err != nil {
+		return nil, err
+	}
 	return BuildNativeObjects(root, envelope, plan)
 }
 
