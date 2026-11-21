@@ -92,7 +92,7 @@ jobs:
       - name: Run Kiro exact approval, project safety and native ownership lifecycle
         shell: bash
         working-directory: install/integrationctl/agentplugins
-        run: go test -json -count=1 -timeout=180s ./clients/kiro -run '^TestKiro(ApprovalPreviewAndNoUnselectedPrivilege|ExactMCPApprovalDisposableLifecycle|ProjectApprovalDoesNotForgeWorkspaceTrust)$' | tee "$RUNNER_TEMP/kiro-composed-sdk-trust.log"
+        run: go test -json -count=1 -timeout=180s ./clients/kiro -run '^TestKiro(ApprovalPreviewAndNoUnselectedPrivilege|ExactMCPApprovalDisposableLifecycle|ProjectApprovalDoesNotForgeWorkspaceTrust|UserEditedAutoApprovalBlocksRemoval)$' | tee "$RUNNER_TEMP/kiro-composed-sdk-trust.log"
       - name: Admit actual named cases and unchanged source
         if: ${{ always() }}
         shell: bash
@@ -148,7 +148,8 @@ jobs:
                                     'TestKiroExactMCPApprovalDisposableLifecycle/repeat',
                                     'TestKiroExactMCPApprovalDisposableLifecycle/update',
                                     'TestKiroExactMCPApprovalDisposableLifecycle/repair',
-                                    'TestKiroProjectApprovalDoesNotForgeWorkspaceTrust']}
+                                    'TestKiroProjectApprovalDoesNotForgeWorkspaceTrust',
+                                    'TestKiroUserEditedAutoApprovalBlocksRemoval']}
           receipts = []
           for label, tests in required.items():
               path = root / ('kiro-composed-' + label + '.log')
