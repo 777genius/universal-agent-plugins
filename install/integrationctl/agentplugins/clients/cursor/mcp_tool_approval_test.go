@@ -340,3 +340,21 @@ func TestCursorServerApprovalVersionRetainsOnlyNativeQualifiedPins(t *testing.T)
 		}
 	}
 }
+
+func TestCursorNativeMCPOnlyReadinessIgnoresReviewedApprovalExtension(t *testing.T) {
+	components := cursorApprovalPlan().Components
+	names, onlyMCP := cursorSelectedMCP(components)
+	if !onlyMCP || !reflect.DeepEqual(names, []string{"audit"}) {
+		t.Fatalf("qualified exact approval downgraded MCP-only native proof: %v %v", names, onlyMCP)
+	}
+	components = append(components, domain.ComponentDecision{Kind: domain.ComponentSkill, Name: "notes", Support: domain.SupportNative})
+	names, onlyMCP = cursorSelectedMCP(components)
+	if onlyMCP || !reflect.DeepEqual(names, []string{"audit"}) {
+		t.Fatalf("skill readiness was inferred from a verified MCP: %v %v", names, onlyMCP)
+	}
+	components = components[1:2]
+	names, onlyMCP = cursorSelectedMCP(components)
+	if len(names) != 0 || !onlyMCP {
+		t.Fatalf("extension unexpectedly declared a native MCP server: %v %v", names, onlyMCP)
+	}
+}
