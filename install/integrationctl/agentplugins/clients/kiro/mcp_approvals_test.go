@@ -183,6 +183,51 @@ func TestKiroExactMCPApprovalDisposableLifecycle(t *testing.T) {
 	}
 }
 
+// A previously confirmed tool allowlist belongs to the user's live config
+// after installation. An out-of-band edit must not be overwritten by remove.
+func TestKiroUserEditedAutoApprovalBlocksRemoval(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".kiro")
+	stage := filepath.Join(t.TempDir(), "stage")
+	if err := os.MkdirAll(stage, 0700); err != nil {
+		t.Fatal(err)
+	}
+	envelope := testKiroApprovedEnvelope(`{"version":1,"mcp_auto_approve":{"docs":["read_docs"]}}`)
+	plan := testKiroApprovalPlan(root, filepath.Join(t.TempDir(), "active"), domain.ScopeUser)
+	objects, err := New().Project(context.Background(), clients.ProjectionInput{StagingPath: stage, Plan: plan, Envelope: envelope})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyKiroNativeMutation(root, stage, nil, objects); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(root, "settings", "mcp.json")
+	body, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(body, &document); err != nil {
+		t.Fatal(err)
+	}
+	servers := document["mcpServers"].(map[string]any)
+	server := servers["docs"].(map[string]any)
+	server["autoApprove"] = []string{"read_docs", "sensitive_write"}
+	edited, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config, edited, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyKiroNativeMutation(root, "", objects, nil); err == nil {
+		t.Fatal("remove replaced user-modified Kiro approval without consent")
+	}
+	after, err := os.ReadFile(config)
+	if err != nil || string(after) != string(edited) {
+		t.Fatalf("changed owned approval was not preserved: %v, %s", err, after)
+	}
+}
+
 func stringsToAny(values []string) []any {
 	items := make([]any, len(values))
 	for i, value := range values {
