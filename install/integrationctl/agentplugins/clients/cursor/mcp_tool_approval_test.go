@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -113,6 +114,68 @@ func TestCursorPublisherApprovalsRequireSelectedNativeMCPAndProject(t *testing.T
 	}
 	if err := verifyCursorToolApprovals(path, envelope, plan); !errors.Is(err, domain.ErrProjectionRefreshRequired) {
 		t.Fatalf("changed projection was accepted: %v", err)
+	}
+}
+
+
+func TestCursorAdmittedMaximumApprovalProjectionRoundTrip(t *testing.T) {
+	envelope := cursorApprovalEnvelope()
+	plan := cursorApprovalPlan()
+	envelope.MCP.Servers = make(map[string]domain.MCPServer)
+	plan.Components = plan.Components[1:]
+	declared := make(cursorToolApprovals)
+	for i := range 32 {
+		server := fmt.Sprintf("s%02d", i)
+		tools := make([]string, 64)
+		for j := range tools {
+			tools[j] = fmt.Sprintf("t%02d", j)
+		}
+		declared[server] = tools
+		envelope.MCP.Servers[server] = domain.MCPServer{Name: server}
+		plan.Components = append(plan.Components, domain.ComponentDecision{
+			Kind: domain.ComponentMCPServer, Name: server, Support: domain.SupportNative,
+		})
+	}
+	raw, err := json.Marshal(map[string]any{"version": 1, "mcp_auto_approve": declared})
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope.Manifest.Extensions[cursorToolApprovalNamespace] = raw
+	if _, err := selectedCursorToolApprovals(envelope, plan); err != nil {
+		t.Fatalf("admitted maximum declaration was refused: %v", err)
+	}
+	root := t.TempDir()
+	if err := projectCursorToolApprovals(root, envelope, plan); err != nil {
+		t.Fatalf("maximum declaration could not be projected: %v", err)
+	}
+	if err := verifyCursorToolApprovals(root, envelope, plan); err != nil {
+		t.Fatalf("projected maximum declaration was unreadable: %v", err)
+	}
+	projected, err := os.ReadFile(filepath.Join(root, cursorToolApprovalFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := decodeCursorToolApprovals(projected)
+	if err != nil || !reflect.DeepEqual(decoded, declared) {
+		t.Fatalf("projected maximum declaration changed or exceeded limits: %v", err)
+	}
+}
+
+func TestCursorToolPermissionsRefuseOverflowWithoutChangingPolicy(t *testing.T) {
+	allow := make([]string, 4096)
+	for i := range allow {
+		allow[i] = fmt.Sprintf("Read(doc%04d)", i)
+	}
+	original, err := json.Marshal(map[string]any{
+		"foreign": true, "permissions": map[string]any{"allow": allow},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next, err := cursorMergeToolPermissions(original, cursorToolApprovals{
+		"audit": {"inspect_runtime"},
+	}); err == nil || next != nil {
+		t.Fatalf("overflowing a valid policy was accepted: %v", err)
 	}
 }
 

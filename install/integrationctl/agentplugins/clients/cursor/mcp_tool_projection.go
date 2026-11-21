@@ -1,12 +1,13 @@
 package cursor
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"reflect"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -15,9 +16,16 @@ func projectCursorToolApprovals(root string, envelope domain.PackageEnvelope, pl
 	if err != nil || len(approved) == 0 {
 		return err
 	}
-	return shared.WriteJSON(filepath.Join(root, cursorToolApprovalFile), map[string]any{
-		"version": 1, "mcp_auto_approve": approved,
-	})
+	// The admission decoder bounds compact JSON to 16 KiB. Indented output
+	// may exceed that limit and become unreadable by verification/activation.
+	body, err := json.Marshal(map[string]any{"version": 1, "mcp_auto_approve": approved})
+	if err != nil {
+		return err
+	}
+	if len(body) > 16<<10 {
+		return fmt.Errorf("Cursor MCP tool approval projection exceeds decoder limit")
+	}
+	return atomicfile.Write(filepath.Join(root, cursorToolApprovalFile), append(body, '\n'), 0o644)
 }
 
 func verifyCursorToolApprovals(root string, envelope domain.PackageEnvelope, plan domain.DeliveryPlan) error {

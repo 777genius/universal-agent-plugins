@@ -128,6 +128,9 @@ func cursorMergeToolPermissions(body []byte, approved cursorToolApprovals) ([]by
 			changed = true
 		}
 	}
+	if len(allow) > 4096 {
+		return nil, fmt.Errorf("Cursor CLI allow permission count would exceed reader limit")
+	}
 	if !changed {
 		return body, nil
 	}
@@ -136,6 +139,9 @@ func cursorMergeToolPermissions(body []byte, approved cursorToolApprovals) ([]by
 	next, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return nil, err
+	}
+	if len(next)+1 > 1<<20 {
+		return nil, fmt.Errorf("Cursor CLI permission policy would exceed reader limit")
 	}
 	return append(next, '\n'), nil
 }
