@@ -189,7 +189,7 @@ func TestKiroSkillsWithoutMCPApprovalFullCLI(t *testing.T) {
 		}
 		wantKinds := map[string]string{
 			"package:kiro:" + binding.PhysicalArtifact: "managed_package_directory",
-			"kiro-skill:docs": "kiro_global_skill_directory",
+			"kiro-skill:docs":                          "kiro_global_skill_directory",
 		}
 		if len(binding.NativeObjects) != len(wantKinds) || !reflect.DeepEqual(ownedKinds, wantKinds) {
 			t.Fatalf("Skills-only Kiro installation gained foreign or MCP ownership: %+v", binding.NativeObjects)

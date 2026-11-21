@@ -8,6 +8,9 @@ import { clientIds } from '../data/clientIds.generated.ts';
 // SYNC: README.md "Supported clients" and landing/data/clientSupport.ts.
 // Component: landing/components/registry/RegistryClientSupport.vue (before FAQ).
 const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
+const first = '<!-- AGENT_SUPPORT_MATRIX_START -->';
+const last = '<!-- AGENT_SUPPORT_MATRIX_END -->';
+const table = readme.split(first)[1]?.split(last)[0] ?? '';
 const dark = new Set(['opencode', 'cline', 'windsurf', 'grok', 'kimi']);
 function image(id: string, icon: string) {
   const img = `<img src="landing/public/client-icons/${icon}" width="24" height="24" alt="" align="middle">`;
@@ -16,8 +19,6 @@ function image(id: string, icon: string) {
     : img;
 }
 test('README and landing support rows, setup actions and logos are in sync', () => {
-  const first = '<!-- AGENT_SUPPORT_MATRIX_START -->';
-  const last = '<!-- AGENT_SUPPORT_MATRIX_END -->';
   assert.equal(readme.split(first).length, 2);
   assert.equal(readme.split(last).length, 2);
   const publicIds = clientIds.filter((id) => !hiddenPublicClientIds.has(id));
@@ -26,7 +27,6 @@ test('README and landing support rows, setup actions and logos are in sync', () 
   assert.ok(!clientSupportRows.some((r) => r.id === 'vscode'));
   assert.ok(!clientLandingById.has('vscode'));
 
-  const table = readme.split(first)[1]!.split(last)[0]!;
   const expected = clientSupportRows.map((r) => {
     for (const capability of [r.user, r.project])
       assert.ok(capability in clientSupportCapabilityKeys, `Missing translation mapping: ${capability}`);
@@ -79,7 +79,7 @@ test('Hermes logo is a valid WebP and README uses it consistently', () => {
   const bytes = readFileSync(new URL(`../public/client-icons/${icon}`, import.meta.url));
   assert.equal(bytes.toString('ascii', 0, 4), 'RIFF');
   assert.equal(bytes.toString('ascii', 8, 12), 'WEBP');
-  assert.equal(readme.split('landing/public/client-icons/hermes.webp').length - 1, 2);
+  assert.equal(table.split('landing/public/client-icons/hermes.webp').length - 1, 1);
   assert.ok(!readme.includes('hermes.svg'));
   assert.ok(!readme.includes('The static website initially shows'));
 });
