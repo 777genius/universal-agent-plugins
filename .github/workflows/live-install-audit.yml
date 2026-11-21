@@ -138,7 +138,9 @@ jobs:
           result=0
           for kind in plugin skill; do
             # Keep this immutable release's lifecycle distinct from current Ready.
-            acceptance=native
+            # The immutable 0.1.95 signed Directory expired on 2026-10-30.
+            # Require a proven no-mutation historical refusal, not native PASS.
+            acceptance=published-0.1.95-codex-plugins-expired-directory
             if [ "$kind" = skill ]; then acceptance=published-0.1.95-codex-skills; fi
             python3 scripts/live-install-audit.py --cli "$(command -v agentplugins)" \
               --target codex --kind "$kind" --limit 2 --acceptance "$acceptance" \

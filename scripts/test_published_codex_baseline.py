@@ -498,5 +498,74 @@ class HistoricalOrchestrationTest(unittest.TestCase):
                              ["before-install", "installed", "repeat-installed", "removed"])
 
 
+
+class TestExpiredPublishedPluginRefusal(unittest.TestCase):
+    def report(self):
+        expiry = ("agentplugins: load signed Directory: directory snapshot is expired: "
+                  "expires_at=2026-10-30T20:03:50Z now=2026-11-21T16:19:54Z\n")
+        row = {"target": "codex", "kind": "plugin", "index": 0,
+               "source": "atlassian", "status": "install-failed",
+               "install": {"exit_code": 1, "stdout_tail": "",
+                           "stderr_tail": expiry, "timeout": False},
+               "list": {"exit_code": 0, "stderr_tail": "", "timeout": False},
+               "historical_npm_proof": {
+                   "package": "universal-agent-plugins", "version": "0.1.95",
+                   "commit": BASELINE.COMMIT, "binary_sha256": BASELINE.DIGEST,
+                   "binary_size": BASELINE.SIZE, "launcher_sources_verified": True,
+                   "commands_verified": 2},
+               "failed_install_registered": False, "failed_install_residue": False,
+               "native_file_delta": 0, "native_identity_files": [],
+               "native_component_candidates": [], "matched_installation_ids": [],
+               "native_residuals": [], "lock_written": False,
+               "listed_identity": False, "sentinels_preserved": True,
+               "post_remove_identity_registered": False,
+               "public_target_states": {
+                   "after-add": {"status": "observed", "selected_installations": 0,
+                                 "selected_bindings": 0, "invalid_rows": 0,
+                                 "states": [], "truncated": False},
+                   "repeat-add": {"status": "unobserved"},
+                   "after-remove": {"status": "unobserved"}}}
+        second = copy.deepcopy(row)
+        second.update(index=1, source="context7")
+        return {"acceptance": BASELINE.EXPIRED_PLUGIN_ACCEPTANCE, "target": "codex",
+                "kind": "plugin", "platform": "linux", "architecture": "x86_64",
+                "cases_attempted": 2, "passed": 0, "verified_negative_coverage": 0,
+                "cli_version": {"status": "reported", "value": "agentplugins 0.1.95",
+                                "exit_code": 0},
+                "client_version": {"status": "reported", "value": "codex-cli 0.153.4",
+                                   "exit_code": 0},
+                "results": [row, second]}
+
+    def test_only_genuine_untouched_expired_baseline_is_a_historical_negative(self):
+        doc = {"plugin_aliases": ["atlassian", "context7"]}
+        candidate = self.report()
+        self.assertTrue(BASELINE.expired_plugin_refusals(candidate, doc))
+        for key, value in (
+                ("status", "passed"), ("failed_install_residue", True),
+                ("failed_install_registered", True), ("native_file_delta", 1),
+                ("sentinels_preserved", False), ("matched_installation_ids", ["foreign"]),
+                ("native_identity_files", ["foreign"]), ("lock_written", True)):
+            mutated = copy.deepcopy(candidate)
+            mutated["results"][0][key] = value
+            self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc), key)
+        for bad in ("agentplugins: success\n", "directory snapshot is expired\n",
+                    candidate["results"][0]["install"]["stderr_tail"].replace(
+                        "2026-10-30T20:03:50Z", "2026-11-20T20:03:50Z")):
+            mutated = copy.deepcopy(candidate)
+            mutated["results"][0]["install"]["stderr_tail"] = bad
+            self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+        for key, value in (
+                ("binary_sha256", "0" * 64), ("launcher_sources_verified", False),
+                ("commands_verified", 0), ("version", "0.1.115")):
+            mutated = copy.deepcopy(candidate)
+            mutated["results"][0]["historical_npm_proof"][key] = value
+            self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc), key)
+        mutated = copy.deepcopy(candidate)
+        mutated["cli_version"]["value"] = "agentplugins 0.1.115"
+        self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+        mutated = copy.deepcopy(candidate)
+        mutated["results"].pop()
+        self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+
 if __name__ == "__main__":
     unittest.main()

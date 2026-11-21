@@ -3217,13 +3217,15 @@ def main():
     p.add_argument("--target", required=True)
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--report-dir", required=True)
-    p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"]),
-                   default="native")
+    p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"],
+                    HISTORICAL_CODEX["EXPIRED_PLUGIN_ACCEPTANCE"]), default="native")
     args = p.parse_args()
-    historical_baseline = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
+    historical_skills = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
+    historical_plugins = args.acceptance == HISTORICAL_CODEX["EXPIRED_PLUGIN_ACCEPTANCE"]
+    historical_baseline = historical_skills or historical_plugins
     if historical_baseline and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
-            "codex", "skill", "linux", "x86_64", 2):
-        p.error("Historical npm observation requires exactly two Codex Skills on Linux x86_64")
+            "codex", "plugin" if historical_plugins else "skill", "linux", "x86_64", 2):
+        p.error("Historical npm observation requires exactly two Codex cases on Linux x86_64")
     doc = json.loads(FIXTURES.read_text())
     validate_fixtures(doc)
     if args.target not in doc["targets"] or not 1 <= args.limit <= 30:
@@ -3249,6 +3251,7 @@ def main():
               "full_coverage": False, "results": []}
     if historical_baseline:
         report["acceptance"] = args.acceptance
+    if historical_skills:
         report.update(HISTORICAL_CODEX["summary"](report, doc))
     report_file = report_dir / f"{args.target}-{args.kind}.json"
     def save():
@@ -3345,7 +3348,15 @@ def main():
     save()
     print(f'{args.target} {args.kind}: {passed}/{args.limit} native PASS; '
           f'verified_negative={len(accepted_negatives)}; attempted={report["cases_attempted"]}')
-    if historical_baseline:
+    if historical_plugins:
+        report["historical_expired_directory_refusal_verified"] = (
+            HISTORICAL_CODEX["expired_plugin_refusals"](report, doc))
+        save()
+        print('Historical npm expired signed Directory refusals: '
+              f'{2 if report["historical_expired_directory_refusal_verified"] else 0}/2; '
+              'native PASS remains 0')
+        return 0 if report["historical_expired_directory_refusal_verified"] else 1
+    if historical_skills:
         report.update(HISTORICAL_CODEX["summary"](report, doc))
         save()
         print(f'Historical npm lifecycle observations: {report["historical_lifecycle_observed"]}/2; '
