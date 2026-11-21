@@ -359,13 +359,12 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 		"verified-draft":           {"validate", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof"},
 		"reuse-verified-draft":     {"validate"},
 		"promote-release":          {"validate", "reuse-verified-draft"},
-		// Dispatched once every proof passed, beside verified-draft. The
-		// promotion run then waits in the tag-keyed concurrency group and
-		// authenticates the completed qualification run and its receipt.
-		"dispatch-promotion": {"validate", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof"},
+		// Auto-promotion must wait for verified-draft to complete successfully;
+		// tag-keyed concurrency and reuse verification remain defense in depth.
+		"dispatch-promotion": {"validate", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof", "verified-draft"},
 	}
 	expectedPermissions := map[string]map[string]string{
-		"validate":                 {"checks": "read", "contents": "read", "pull-requests": "read"},
+		"validate":                 {"actions": "read", "checks": "read", "contents": "read", "pull-requests": "read"},
 		"build":                    {"contents": "read"},
 		"qualify-go":               {"contents": "read"},
 		"qualify-npm":              {"contents": "read"},

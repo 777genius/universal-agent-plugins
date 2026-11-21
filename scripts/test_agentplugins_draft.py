@@ -305,6 +305,50 @@ class ProducerPermissionTests(unittest.TestCase):
         self.assertNotRegex(commands[0], r"[;`]|&&|\|\||\$\(")
         self.assertIn('--source "${GITHUB_WORKSPACE}"', commands[0])
 
+    def test_release_validates_exact_required_main_push_workflow(self):
+        validate = self.job("validate")
+        # PR-head test checks alone are insufficient for source-bound release:
+        # full Required includes lint and multi-platform SDK checks.
+        self.assertIn("      actions: read\n", validate.split("    outputs:", 1)[0])
+        self.assertIn("actions/workflows/ci.yml/runs?head_sha=${COMMIT}&event=push&per_page=100", validate)
+        self.assertIn('if ! jq -e --arg sha "${COMMIT}"', validate)
+        self.assertIn('.name == "Required" and .path == ".github/workflows/ci.yml"', validate)
+        self.assertIn('and .event == "push"', validate)
+        self.assertIn('.head_branch == "main" and .head_sha == $sha', validate)
+        self.assertIn('.status == "completed" and .conclusion == "success"', validate)
+        self.assertIn("frozen commit lacks successful full Required main-push workflow", validate)
+        self.assertLess(validate.index("required_runs="),
+                        validate.index("require_check dependency-review"))
+        # Test the exact jq predicate used by the producer on fake GitHub
+        # paginated API responses, without making a network request.
+        if shutil.which("jq") is None:
+            self.skipTest("jq not installed on this host")
+        predicate = re.search(r"(?s)any\(\.\[\]\?\.workflow_runs\[\]\?;.*?success\"\)", validate)
+        self.assertIsNotNone(predicate)
+        sha = "a" * 40
+        valid = dict(name="Required", path=".github/workflows/ci.yml",
+                     event="push", head_branch="main", head_sha=sha,
+                     status="completed", conclusion="success")
+        def accepts(rows):
+            completed = subprocess.run(
+                ["jq", "-e", "--arg", "sha", sha, predicate.group()],
+                input=json.dumps([{"workflow_runs": rows}]),
+                text=True, capture_output=True, check=False)
+            return completed.returncode == 0
+        self.assertTrue(accepts([valid]))
+        for update in ({"conclusion": "failure"}, {"conclusion": "cancelled"},
+                       {"status": "queued", "conclusion": None},
+                       {"event": "pull_request"}, {"head_branch": "feature"},
+                       {"head_sha": "b" * 40}, {"name": "Core fast"},
+                       {"path": ".github/workflows/shadow-required.yml"}):
+            with self.subTest(update=update):
+                self.assertFalse(accepts([{**valid, **update}]))
+        self.assertFalse(accepts([]))
+        # A same-name successful shadow run must not rescue a failed ci.yml.
+        shadow = {**valid, "path": ".github/workflows/shadow-required.yml"}
+        failed = {**valid, "conclusion": "failure"}
+        self.assertFalse(accepts([shadow, failed]))
+
     def test_producer_trust_and_promotion_defaults_remain_fail_closed(self):
         self.assertRegex(self.workflow, r"publish_release:\n(?:        .*\n)*?        type: boolean\n        default: false\n")
         validate = self.job("validate")
@@ -317,12 +361,12 @@ class ProducerPermissionTests(unittest.TestCase):
             self.assertIn(guard, validate)
         self.assertIn("needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof]",
                       self.job("verified-draft"))
-        # Promotion is dispatched once every proof passed, in parallel with
-        # verified-draft; the tag-keyed concurrency group holds it until the
-        # qualification run completes, and reuse authenticates that run.
+        # Auto-promotion must not dispatch until verified-draft succeeds.
+        # Tag-keyed concurrency and later reuse checks remain defense in depth,
+        # not substitutes for positive qualification before dispatch.
         dispatch = self.job("dispatch-promotion")
         self.assertIn("if: ${{ inputs.publish_release != true && inputs.auto_publish == true }}", dispatch)
-        self.assertIn("needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof]\n",
+        self.assertIn("needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof, verified-draft]\n",
                       dispatch)
         self.assertIn("    permissions:\n      actions: write\n    steps:", dispatch)
         self.assertIn("concurrency:\n  group: agentplugins-release-${{ inputs.tag }}\n  cancel-in-progress: false\n",
