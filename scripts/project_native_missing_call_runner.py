@@ -335,6 +335,10 @@ def run(client, output, expected, *, preflight_only=False, prepared_source=None)
             installer, probe = stage_shared_source(work, prepared_source)
         preflight_checkpoint(preflight_only, "source-built")
         env = isolated_env(work)
+        if client == "cursor":
+            profile = str(work / "home" / ".cursor")
+            env["CURSOR_CONFIG_DIR"] = profile
+            env["CURSOR_DATA_DIR"] = profile
         for project in ("a", "b", "outside"):
             invoke("git-" + project, ["/usr/bin/git", "init", "--quiet", "--initial-branch=main"],
                    work / project, env, private)
