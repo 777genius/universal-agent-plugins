@@ -2307,6 +2307,12 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                         **({"historical_baseline": True} if historical_baseline else {}))
 
 
+def scoped_lock_files_absent(root):
+    """Absence requires both names missing; symlink and partial locks are residue."""
+    return (root.is_dir() and not root.is_symlink()
+            and all(not os.path.lexists(root / name) for name in ("uap.toml", "uap.lock")))
+
+
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
              signed_release_pins, audits, client_version, *, historical_baseline=False):
     native_target = audit_client_id(target, kind)
@@ -2535,7 +2541,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # inherited Windows Firebase child pipe handles masking parent exit.
     file_capture = (sys.platform == "win32" and kind == "plugin" and item == "firebase")
     capture_option = {"capture_files": True} if file_capture else {}
+    historical_scope_locks = (
+        {"before-add": scoped_lock_files_absent(data)}
+        if historical_baseline and kind == "plugin" else None)
     output = audited_call([cli, *args], env, project, add_timeout, **capture_option)
+    if historical_scope_locks is not None:
+        historical_scope_locks["after-add"] = scoped_lock_files_absent(data)
     added_json = output.pop("_json", None)
     native_components = (native_components_from_add(added_json)
                          if kind == "plugin" else ())
@@ -2547,14 +2558,17 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     native_attribution = attributable_native_changes(
         native_roots, changed, identity, native_target, native_components)
     skill_path = skill_file_present(project, target, identity) if kind == "skill" else None
-    locked = (project / "uap.toml").is_file() and (project / "uap.lock").is_file()
-    lock_contains = locked and identity in (project / "uap.lock").read_text(encoding="utf-8")
+    lock_root = project if kind == "skill" else data
+    locked = (lock_root / "uap.toml").is_file() and (lock_root / "uap.lock").is_file()
+    lock_contains = locked and identity in (lock_root / "uap.lock").read_text(encoding="utf-8")
     lock_pinned = bool(kind == "skill" and locked and locked_skill_is_pinned(project, item, target))
     skill_bytes_match = (kind == "skill" and matches_pinned_skill_bytes(
         project, skill_path, item["skill_md_git_blob_sha1"]))
     listed = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                    env, project, 30))
     listed_json = listed.pop("_json", None) if listed else None
+    if historical_scope_locks is not None:
+        historical_scope_locks["after-list"] = scoped_lock_files_absent(data)
     matching = matching_installations(listed_json, identity, native_target, kind, item,
                                      signed_release_pins)
     grok_prepared = (grok_prepared_skill_installations(
@@ -2651,7 +2665,6 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                                  if codex_runtime is not None else None)
         before_repeat_project = (snapshot([project / root for root in project_skill_roots])
                                  if grok_prepared else None)
-        lock_root = project if kind == "skill" else data
         lock_paths = (lock_root / "uap.toml", lock_root / "uap.lock")
         def lock_state():
             return tuple(
@@ -3021,6 +3034,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if kind == "skill" else None)
     if status == "passed" and skill_public_ready is not None and not all(skill_public_ready.values()):
         status = "incomplete-native-proof"
+    if historical_scope_locks is not None:
+        historical_scope_locks["final"] = scoped_lock_files_absent(data)
     return {"kind": kind, "index": index, "identity": identity, "target": target,
             **({"canonical_client_id": native_target} if target == "chatgpt" else {}),
             "source": item if kind == "plugin" else item["source"],
@@ -3084,6 +3099,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "qoder_native_after_remove": qoder_native_after_remove,
             "copilot_native_after_repeat": copilot_native_before_remove,
             "copilot_native_after_remove": copilot_native_after_remove,
+            **({"historical_scope_lock_absence": historical_scope_locks}
+               if historical_scope_locks is not None else {}),
             **({"historical_npm_proof": historical_observer.proof,
                 "historical_add_verified": historical_add_verified,
                 "historical_repeat_add_verified": historical_repeat_add_verified,
