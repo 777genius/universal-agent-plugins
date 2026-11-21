@@ -82,4 +82,3 @@ func readCursorToolApprovalsForActivation(request domain.ActivationRequest, kern
 	}
 	return approved, nil
 }
-
