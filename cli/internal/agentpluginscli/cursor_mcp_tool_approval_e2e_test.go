@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -54,15 +53,27 @@ func TestCursorPublisherToolApprovalFullCLI(t *testing.T) {
 	nativePath := filepath.Join(project, ".cursor", "mcp.json")
 	argv := []string{"add", source, "--target", "cursor", "--scope", "project",
 		"--project-root", project, "--yes", "--format", "json"}
+	var firstPreference []byte
 	for _, label := range []string{"first", "repeat"} {
 		out, stderr, err := fixture.execute(false, argv...)
 		if err != nil {
 			t.Fatalf("%s Cursor project add: %v; stdout=%s stderr=%s", label, err, out, stderr)
 		}
-		if !strings.Contains(out, "prepared") {
-			t.Fatalf("%s claimed native editor/session readiness without evidence: %s", label, out)
+		state, loadErr := fixture.store.Load()
+		if loadErr != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 ||
+			state.Installations[0].Clients[0].Activation != domain.ActivationPrepared {
+			t.Fatalf("%s Cursor project add claimed native readiness or lost state: %+v (%v), output=%s", label, state, loadErr, out)
 		}
 		requireCursorNamedToolPreference(t, configPath)
+		current, err := os.ReadFile(configPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if firstPreference == nil {
+			firstPreference = current
+		} else if !reflect.DeepEqual(current, firstPreference) {
+			t.Fatal("repeating a Cursor project add rewrote exact existing permissions")
+		}
 		var mcp map[string]any
 		body, err := os.ReadFile(nativePath)
 		if err != nil || json.Unmarshal(body, &mcp) != nil {
@@ -83,6 +94,9 @@ func TestCursorPublisherToolApprovalFullCLI(t *testing.T) {
 	}
 	requireCursorNamedToolPreference(t, configPath)
 	after, err := os.ReadFile(nativePath)
+	if os.IsNotExist(err) {
+		return // the last owned MCP entry may remove its empty native document
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
