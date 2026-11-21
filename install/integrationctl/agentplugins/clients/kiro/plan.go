@@ -15,9 +15,27 @@ import (
 const PrepareAction = "After preparation, open or restart Kiro, review the MCP servers and complete authentication in Kiro on first connection when prompted, then verify their tools in Kiro. Runtime connections have not been verified."
 
 var (
+	_ clients.PlanQualifier      = (*Adapter)(nil)
 	_ clients.PlanRefiner        = (*Adapter)(nil)
 	_ clients.PreparationRefiner = (*Adapter)(nil)
 )
+
+// QualifyPlan keeps a portable Skill installable when its package also declares
+// Kiro MCP approvals but no MCP server is selected. Unsupported grants are
+// stripped by the existing stager; no unrelated component is changed.
+func (*Adapter) QualifyPlan(_ clients.PlanInput, plan *domain.DeliveryPlan) error {
+	if shared.HasSupportedMCP(plan.Components) {
+		return nil
+	}
+	for index := range plan.Components {
+		component := &plan.Components[index]
+		if component.Kind == domain.ComponentExtension && component.Name == MCPApprovalNamespace &&
+			component.Support != domain.SupportUnsupported {
+			component.Support, component.Reason = domain.SupportUnsupported, "kiro_mcp_approval_requires_selected_mcp"
+		}
+	}
+	return nil
+}
 
 func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain.DeliveryPlan) error {
 	approvals, err := selectedKiroApprovals(in.Envelope, *plan)

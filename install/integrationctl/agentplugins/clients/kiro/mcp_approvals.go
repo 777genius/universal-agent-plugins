@@ -116,6 +116,11 @@ func kiroNativeComponents(components []domain.ComponentDecision) bool {
 }
 
 func selectedKiroApprovals(envelope domain.PackageEnvelope, plan domain.DeliveryPlan) (mcpApprovals, error) {
+	// An unselected MCP cannot receive tool consent. Keep independent Skills
+	// deliverable, while retaining strict validation when MCP is selected.
+	if !shared.HasSupportedMCP(plan.Components) {
+		return mcpApprovals{}, nil
+	}
 	raw, exists := envelope.Manifest.Extensions[MCPApprovalNamespace]
 	if !exists {
 		return mcpApprovals{}, nil

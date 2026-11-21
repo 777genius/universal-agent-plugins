@@ -88,11 +88,11 @@ jobs:
       - name: Verify public Kiro CLI publisher approval install and repair
         shell: bash
         working-directory: cli
-        run: go test -json -count=1 -timeout=180s ./internal/agentpluginscli -run '^TestKiroPublisherMCPApprovalsFullCLI$' | tee "$RUNNER_TEMP/kiro-composed-cli-trust.log"
+        run: go test -json -count=1 -timeout=180s ./internal/agentpluginscli -run '^TestKiro(PublisherMCPApprovalsFullCLI|SkillsWithoutMCPApprovalFullCLI)$' | tee "$RUNNER_TEMP/kiro-composed-cli-trust.log"
       - name: Verify Kiro exact MCP approval and ownership lifecycles
         shell: bash
         working-directory: install/integrationctl/agentplugins
-        run: go test -json -count=1 -timeout=180s ./clients/kiro -run '^TestKiro(NamedMCPApprovalSchemaFailClosed|ApprovalPreviewAndNoUnselectedPrivilege|ExactApprovalPreservesNativeVerifierAndAutomaticActivation|ExactMCPApprovalDisposableLifecycle|ProjectApprovalDoesNotForgeWorkspaceTrust|ActiveApprovedToolsRefuseStaleReprojection|UserEditedAutoApprovalBlocksRemoval)$' | tee "$RUNNER_TEMP/kiro-composed-sdk-trust.log"
+        run: go test -json -count=1 -timeout=180s ./clients/kiro -run '^TestKiro(NamedMCPApprovalSchemaFailClosed|ApprovalWithoutSelectedMCPKeepsSkills|ApprovalPreviewAndNoUnselectedPrivilege|ExactApprovalPreservesNativeVerifierAndAutomaticActivation|ExactMCPApprovalDisposableLifecycle|ProjectApprovalDoesNotForgeWorkspaceTrust|ActiveApprovedToolsRefuseStaleReprojection|UserEditedAutoApprovalBlocksRemoval)$' | tee "$RUNNER_TEMP/kiro-composed-sdk-trust.log"
       - name: Admit actual named cases and unchanged source
         if: ${{ always() }}
         shell: bash
@@ -141,8 +141,10 @@ jobs:
                               'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/update',
                               'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/recorded',
                               'TestFacadeHostedPreparationRejectsRetainedStateAtMutationLock'],
-                      'cli-trust': ['TestKiroPublisherMCPApprovalsFullCLI'],
+                      'cli-trust': ['TestKiroPublisherMCPApprovalsFullCLI',
+                                    'TestKiroSkillsWithoutMCPApprovalFullCLI'],
                       'sdk-trust': ['TestKiroNamedMCPApprovalSchemaFailClosed',
+                                    'TestKiroApprovalWithoutSelectedMCPKeepsSkills',
                                     'TestKiroNamedMCPApprovalSchemaFailClosed/empty',
                                     'TestKiroNamedMCPApprovalSchemaFailClosed/root',
                                     'TestKiroNamedMCPApprovalSchemaFailClosed/unsupported-version',

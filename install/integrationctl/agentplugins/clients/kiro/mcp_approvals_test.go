@@ -85,6 +85,37 @@ func TestKiroNamedMCPApprovalSchemaFailClosed(t *testing.T) {
 	}
 }
 
+func TestKiroApprovalWithoutSelectedMCPKeepsSkills(t *testing.T) {
+	envelope := testKiroApprovedEnvelope(`{"version":1,"mcp_auto_approve":{"docs":["read_docs"]}}`)
+	for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
+		plan := testKiroApprovalPlan("", "", scope)
+		plan.Components = []domain.ComponentDecision{
+			{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative},
+			{Kind: domain.ComponentExtension, Name: MCPApprovalNamespace, Support: domain.SupportNative},
+		}
+		if err := New().QualifyPlan(clients.PlanInput{}, &plan); err != nil {
+			t.Fatal(err)
+		}
+		if plan.Components[1].Support != domain.SupportUnsupported ||
+			plan.Components[1].Reason != "kiro_mcp_approval_requires_selected_mcp" ||
+			!kiroNativeComponents(plan.Components) {
+			t.Fatalf("Kiro %s must keep Skills but drop unselected MCP grants: %+v", scope, plan.Components)
+		}
+		grants, err := selectedKiroApprovals(envelope, plan)
+		if err != nil || len(grants.Servers) != 0 {
+			t.Fatalf("unselected %s MCP unexpectedly granted tools: %+v, %v", scope, grants, err)
+		}
+	}
+	extensionOnly := domain.DeliveryPlan{Components: []domain.ComponentDecision{
+		{Kind: domain.ComponentExtension, Name: MCPApprovalNamespace, Support: domain.SupportNative},
+	}}
+	if err := New().QualifyPlan(clients.PlanInput{}, &extensionOnly); err != nil ||
+		extensionOnly.Components[0].Support != domain.SupportUnsupported ||
+		kiroNativeComponents(extensionOnly.Components) {
+		t.Fatalf("Kiro extension-only without MCP must remain unsupported: %+v, %v", extensionOnly, err)
+	}
+}
+
 func TestKiroApprovalPreviewAndNoUnselectedPrivilege(t *testing.T) {
 	approved := testKiroApprovedEnvelope(`{"version":1,"mcp_auto_approve":{"docs":["read_docs"]}}`)
 	root := filepath.Join(t.TempDir(), ".kiro")
