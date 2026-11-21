@@ -1,5 +1,6 @@
 import { publishedLocales, localeMetadata } from '../../data/i18n';
 import { clientLandingPages } from '../../data/clients';
+import { SOCIAL_PREVIEW_PATH } from '../../utils/seo';
 import { expect as baseExpect, test } from '@playwright/test';
 
 // Allow the page's async hydration and smooth anchors to settle on busy CI hosts.
@@ -435,15 +436,15 @@ test('homepage publishes canonical social metadata and complete product schema',
   );
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
     'content',
-    'https://777genius.github.io/universal-agent-plugins/og-image.png?v=20261106',
+    `https://777genius.github.io/universal-agent-plugins/${SOCIAL_PREVIEW_PATH}`,
   );
   await expect(page.locator('meta[property="og:image:secure_url"]')).toHaveAttribute(
     'content',
-    'https://777genius.github.io/universal-agent-plugins/og-image.png?v=20261106',
+    `https://777genius.github.io/universal-agent-plugins/${SOCIAL_PREVIEW_PATH}`,
   );
   await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute('content', '1200');
   await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute('content', '630');
-  const card = await page.request.get('og-image.png?v=20261106');
+  const card = await page.request.get(SOCIAL_PREVIEW_PATH);
   expect(card.status()).toBe(200);
   const bytes = await card.body();
   expect(bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))).toBe(true);
@@ -452,8 +453,7 @@ test('homepage publishes canonical social metadata and complete product schema',
   const source = await page.request.get('og-image.svg');
   expect(source.status()).toBe(200);
   const art = await source.text();
-  expect(art).toContain('Claude Code');
-  expect(art).toContain('Copilot CLI');
+  for (const client of clientLandingPages) expect(art).toContain(client.name);
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
     'content',
     'summary_large_image',

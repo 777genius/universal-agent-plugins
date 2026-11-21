@@ -374,18 +374,10 @@ img {
 .hero__plugin-count {
   font-variant-numeric: tabular-nums;
 }
-// Anchor box for the fixed agent orbit (HeroAgentField measures it).
+// The demo video's box; HeroAgentField measures it to centre the orbit behind it.
 .hero__visual {
   position: relative;
-  min-height: 300px;
-}
-
-.demo-showcase {
-  // Do not trap the fixed fullscreen fallback beneath the sticky header.
-  position: relative;
-  width: min(calc(100% - 32px), 1600px);
-  margin: 0 auto;
-  padding: clamp(16px, 2.4vw, 36px) 0 clamp(40px, 5vw, 84px);
+  min-width: 0;
 }
 .hero-demo-video {
   width: 100%;
@@ -3189,7 +3181,6 @@ img {
   }
   .hero__visual {
     width: min(100%, 610px);
-    min-height: 240px;
     margin: 0 auto;
   }
   .client-section__inner {
@@ -3271,9 +3262,6 @@ img {
   }
   .hero h1 {
     font-size: clamp(2.2rem, 11vw, 3.2rem);
-  }
-  .hero__visual {
-    min-height: 220px;
   }
   .hero__actions {
     display: grid;
