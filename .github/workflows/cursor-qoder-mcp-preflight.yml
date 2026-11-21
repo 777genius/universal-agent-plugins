@@ -4,6 +4,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
+      - 'install/integrationctl/agentplugins/clients/cursor/**'
       - 'scripts/project_native_missing_call_runner.py'
       - 'scripts/project_native_missing_call_proof.py'
       - 'scripts/test_project_native_missing_call_runner.py'
@@ -12,6 +13,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'install/integrationctl/agentplugins/clients/cursor/**'
       - 'scripts/project_native_missing_call_runner.py'
       - 'scripts/project_native_missing_call_proof.py'
       - 'scripts/test_project_native_missing_call_runner.py'
@@ -46,13 +48,14 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
-      - name: Check strict receipt and native runner contracts after merge
-        if: ${{ github.event_name == 'push' }}
+      - name: Check strict receipt and native runner contracts
         run: python3 -m unittest discover -s scripts -p 'test_project_native_missing_call_*.py' -v
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: '1.26.11'
           cache: false
+      - name: Cursor scoped tool trust, refusal and ownership contracts
+        run: go test -count=1 ./install/integrationctl/agentplugins/clients/cursor -run 'TestCursor(ScopedToolApproval|PublisherApprovals|ToolPermissions|ToolTrust)' -v
       - name: Both genuine pinned native CLIs with one source build, isolated A/B and removal
         env:
           RUNNER_TEMP: ${{ runner.temp }}

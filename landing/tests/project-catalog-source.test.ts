@@ -64,8 +64,8 @@ test('revoked, unsigned, malformed and unsupported sources still refuse Project'
   const unsigned = reviewed(); delete unsigned.trust_state; variants.push(unsigned);
   const untrusted = reviewed(); untrusted.installable = false; variants.push(untrusted);
   const badCommit = reviewed(); badCommit.distributions[0]!.releases[0]!.source.revision = 'wrong'; variants.push(badCommit);
-  // Project admits partial components; only an entirely unsupported package is refused.
-  const extension = reviewed(); extension.distributions[0]!.releases[0]!.components = ['extensions']; variants.push(extension);
+  // A package without components cannot be installed by any Project target.
+  const empty = reviewed(); empty.distributions[0]!.releases[0]!.components = []; variants.push(empty);
   const revoked = reviewed(); revoked.distributions[0]!.releases[0]!.release_status = 'revoked'; variants.push(revoked);
   const unsafe = reviewed(); unsafe.distributions[0]!.releases[0]!.source.path = '../escape'; variants.push(unsafe);
   for (const item of variants) {
@@ -75,6 +75,21 @@ test('revoked, unsigned, malformed and unsupported sources still refuse Project'
   }
   assert.equal(projectCatalogSelection(reviewed(), ['chatgpt']).resolution.distribution, undefined);
   assert.equal(projectCatalogSelection(reviewed(), []).resolution.distribution, undefined);
+});
+
+test('extensions-only Project selection refuses Codex but admits signed Cursor and automatic selection', () => {
+  const plugin = reviewed();
+  plugin.distributions[0]!.releases[0]!.components = ['extensions'];
+  const original = structuredClone(plugin.distributions);
+  assert.equal(projectCatalogSelection(plugin, ['codex']).resolution.distribution, undefined);
+  assert.throws(() => projectCatalogCommands(plugin, ['codex']), /No eligible/);
+  assert.ok(projectCatalogSelection(plugin, ['cursor']).resolution.distribution);
+  assert.ok(projectCatalogAutomaticSelection(plugin)?.resolution.distribution);
+  assert.equal(projectCatalogCommands(plugin, ['cursor']).add,
+    'npx -y universal-agent-plugins@latest add gitlab --target cursor --scope project');
+  assert.equal(projectCatalogCommands(plugin).add,
+    'npx -y universal-agent-plugins@latest add gitlab --scope project');
+  assert.deepEqual(plugin.distributions, original, 'Selection must preserve signed target evidence');
 });
 
 test('extra unsupported sibling does not revoke signed-v1 Project selection', () => {

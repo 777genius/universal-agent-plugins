@@ -1,14 +1,16 @@
 """Prevent the live acceptance harness from touching ambient client profiles."""
 import importlib.util
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone, timedelta
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
+from runpy import run_path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
@@ -2270,6 +2272,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                               "marketing-kit-project-release-e2e.py"))
         main = runner["main"]
         installed, phases = {}, []
+        sqlite_profiles = {}
+
+        # This orchestration fixture already substitutes every public/native
+        # lifecycle. Real SQLite custody has separate real-database regressions.
+        def prepare_sqlite(name, _env, _project):
+            if target == "codex":
+                self.assertIn(name, ("A", "B", "C"))
+                sqlite_profiles[name] = {"runtime_semantics_unchanged": True}
+
+        sqlite_orchestration = SimpleNamespace(
+            prepare=prepare_sqlite, checkpoint=lambda *_: None,
+            call=lambda _phase, action: action(), evidence=lambda: dict(sqlite_profiles))
         outside_roots = []
         original_open = Path.open
         original_profile = runner["profile_snapshot"]
@@ -2320,7 +2334,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 if exc_type is None and cleanup_failure:
                     raise OSError("disposable cleanup failed")
 
-        def execute(_cli, env, project, _target, label, *args):
+        def execute(_cli, env, project, _target, label, *args, checkpoint=None):
             phases.append(label)
             scope = args[args.index("--scope") + 1]
             key = (env["AGENTPLUGINS_HOME"], scope)
@@ -2395,6 +2409,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
                     "execute": execute, "verify_pinned_launcher": lambda *_: None,
+                    "MarketingCodexSQLiteProfiles": lambda _: sqlite_orchestration,
                     "profile_snapshot": profile, "check_foreign": foreign,
                     "check_user_project_unchanged": project_check,
                     "inventory": inventory, "identities": lambda items, *_: items,
@@ -2428,6 +2443,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.assertEqual(report["status"], "passed")
                 self.assertEqual(report["qualification_scope"], "user_and_project")
                 self.assertTrue(report["two_scope_lifecycle_qualified"])
+                if target == "codex":
+                    self.assertEqual(set(report["codex_sqlite_profiles"]), {"A", "B", "C"})
                 self.assertEqual(report["positive_policy"]["source_mode"], "production_default")
                 self.assertEqual(report["positive_policy"]["snapshot_sequence"], 46)
                 self.assertEqual([phase for phase in phases if phase.startswith("catalog:")],
@@ -3218,7 +3235,7 @@ module.exports = {
                 package = npm_root / "universal-agent-plugins"
                 (package / "lib").mkdir(parents=True)
                 (package / "package.json").write_text(
-                    json.dumps({"version": "0.1.104"}), encoding="utf-8")
+                    json.dumps({"version": "0.1.115"}), encoding="utf-8")
                 (package / "lib/bootstrap.js").write_text(
                     bootstrap.replace("__STRANDED_PHASE__", json.dumps(phase)),
                     encoding="utf-8")
@@ -3238,20 +3255,20 @@ module.exports = {
                                  "failed watchdog must run trusted cache cleanup")
 
     def test_marketing_kit_requires_exact_published_cli_version(self):
-        # The substring "0.1.104" alone also matches prereleases and 0.1.1041.
+        # The substring "0.1.115" alone also matches prereleases and 0.1.1151.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         require = runner["require_exact_published_version"]
         valid = {"exit_code": 0, "timeout": False,
-                 "stdout_tail": "agentplugins 0.1.104\n"}
+                 "stdout_tail": "agentplugins 0.1.115\n"}
         require(valid)
-        for version in ("agentplugins 0.1.104-dev",
-                        "agentplugins 0.1.1041",
-                        "agentplugins 0.1.103",
-                        "other-launcher 0.1.104",
-                        "agentplugins 0.1.104\nagentplugins 0.1.104",
+        for version in ("agentplugins 0.1.115-dev",
+                        "agentplugins 0.1.1151",
+                        "agentplugins 0.1.114",
+                        "other-launcher 0.1.115",
+                        "agentplugins 0.1.115\nagentplugins 0.1.115",
                         ""):
             with self.subTest(version=version):
                 with self.assertRaisesRegex(AssertionError, "not exact published"):
@@ -3274,7 +3291,7 @@ module.exports = {
         failed = {"exit_code": 1, "timeout": False, "stdout_tail": ""}
         timed_out = {"exit_code": None, "timeout": True, "stdout_tail": ""}
         valid = {"exit_code": 0, "timeout": False,
-                 "stdout_tail": "agentplugins 0.1.104\n"}
+                 "stdout_tail": "agentplugins 0.1.115\n"}
         probe, pause = Mock(side_effect=[failed, timed_out, valid]), Mock()
         with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
             verify("agentplugins", {}, Path("."))
@@ -3288,7 +3305,7 @@ module.exports = {
         self.assertEqual(probe.call_count, 3)
         self.assertEqual([item.args for item in pause.call_args_list], [(5,), (10,)])
 
-        probe, pause = Mock(return_value={**valid, "stdout_tail": "agentplugins 0.1.104-dev"}), Mock()
+        probe, pause = Mock(return_value={**valid, "stdout_tail": "agentplugins 0.1.115-dev"}), Mock()
         with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
             with self.assertRaisesRegex(AssertionError, "not exact published"):
                 verify("agentplugins", {}, Path("."))
@@ -10130,6 +10147,192 @@ class LiveAuditNativeVersionRoutingTests(unittest.TestCase):
                                  {"client_version": native_version} if forwarded else {})
                 report = json.loads((Path(temporary) / f"{target}-{kind}.json").read_text())
                 self.assertEqual(report["client_version"], native_version)
+
+
+class MarketingKitCodexSQLiteTest(unittest.TestCase):
+    def setUp(self):
+        self.runner = run_path(str(Path(__file__).with_name('marketing-kit-project-release-e2e.py')))
+        self.runtime = self.runner['audit']['CODEX_RUNTIME_AUDIT']
+        temporary = TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.env, self.project, self.foreign, _, _ = self.runner['run_case'](
+            'unused-cli', 'codex', self.root, 'A')
+        self.home = Path(self.env['HOME'])
+        self.database = self.home / '.local/state/codex-sqlite/state_5.sqlite'
+        self.bootstrap_mutation = None
+
+    async def discover(self, binary, project, profile, environment, **kwargs):
+        self.assertEqual(kwargs, {'sqlite_baseline': True})
+        self.assertEqual(environment['CODEX_HOME'], str(self.home / '.codex'))
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute('CREATE TABLE fixture_rows (value TEXT)')
+            connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+            connection.commit()
+        if self.bootstrap_mutation:
+            self.bootstrap_mutation()
+        return {'data': [{'cwd': str(project), 'errors': [], 'skills': []}]}
+
+    def prepare(self, version_probe=None):
+        observer_type = self.runtime['CodexPluginSQLiteAudit']
+        with patch.dict(observer_type.__init__.__globals__, {'_exchange': self.discover}), \
+                patch.dict(self.runner['prepare_codex_sqlite'].__globals__, {
+                    'invoke': version_probe or (lambda *args: {'exit_code': 0, 'timeout': False,
+                                            'stdout_tail': 'codex-cli 0.153.4\n'})}):
+            return self.runner['prepare_codex_sqlite'](sys.executable, self.env, self.project)
+
+    def test_marketing_kit_version_probe_uses_removed_separate_native_profile(self):
+        profiles = []
+
+        def probe(argv, env, project, timeout):
+            self.assertEqual(argv, [sys.executable, '--version'])
+            self.assertEqual(project, self.project)
+            self.assertEqual(env['HOME'], str(self.home))
+            version_home = Path(env['CODEX_HOME'])
+            self.assertEqual(version_home.parent, self.project.parent)
+            self.assertNotEqual(version_home, self.home / '.codex')
+            self.assertTrue(version_home.is_dir())
+            # Real pinned --version creates arg0 files even with existing
+            # lifecycle tmp/arg0 parents. They belong only to this profile.
+            (version_home / 'tmp/arg0/native-version-helper').mkdir(parents=True)
+            profiles.append(version_home)
+            return {'exit_code': 0, 'timeout': False, 'stdout_tail': 'codex-cli 0.153.4\n'}
+
+        observer = self.prepare(probe)
+        self.assertEqual(len(profiles), 1)
+        self.assertFalse(profiles[0].exists())
+        self.assertEqual(list((self.home / '.codex/tmp/arg0').iterdir()), [])
+        observer.checkpoint('after-isolated-version')
+
+    def test_marketing_kit_version_probe_still_refuses_wrong_version_or_lifecycle_writes(self):
+        original = self.foreign.read_bytes()
+        for mutation in ('wrong-version', 'timeout', 'exit', 'foreign-write', 'new-home-file', 'project-write', 'data-write', 'raised-invoke'):
+            with self.subTest(mutation=mutation):
+                version_profiles = []
+                def probe(*args):
+                    version_profiles.append(Path(args[1]['CODEX_HOME']))
+                    result = {'exit_code': 0, 'timeout': False, 'stdout_tail': 'codex-cli 0.153.4\n'}
+                    if mutation == 'wrong-version':
+                        result['stdout_tail'] = 'codex-cli 0.153.4-dev\n'
+                    elif mutation == 'timeout':
+                        result['timeout'] = True
+                    elif mutation == 'exit':
+                        result['exit_code'] = 1
+                    elif mutation == 'foreign-write':
+                        self.foreign.write_text('changed by metadata probe')
+                    elif mutation == 'project-write':
+                        (self.project / 'unexpected-version-write').write_text('forbidden')
+                    elif mutation == 'data-write':
+                        (Path(self.env['AGENTPLUGINS_HOME']) / 'unexpected-version-write').write_text('forbidden')
+                    elif mutation == 'raised-invoke':
+                        raise RuntimeError('native version invocation failed')
+                    else:
+                        (self.home / 'unexpected-version-write').write_text('forbidden')
+                    return result
+                expected = RuntimeError if mutation == 'raised-invoke' else AssertionError
+                diagnostic = 'native version invocation failed' if mutation == 'raised-invoke' else 'unchanged native 0.153.4 version probe'
+                with self.assertRaisesRegex(expected, diagnostic):
+                    self.prepare(probe)
+                self.assertEqual(len(version_profiles), 1)
+                self.assertFalse(version_profiles[0].exists())
+                self.foreign.write_bytes(original)
+                for root in (self.home, self.project, Path(self.env['AGENTPLUGINS_HOME'])):
+                    (root / 'unexpected-version-write').unlink(missing_ok=True)
+                self.assertFalse((self.home / '.codex/config.toml').exists())
+                self.assertFalse((self.home / '.codex/installation_id').exists())
+
+    def test_marketing_kit_large_wal_requires_audited_separate_root_and_native_absence(self):
+        observer = self.prepare()
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute('PRAGMA journal_mode=WAL')
+            connection.execute('PRAGMA wal_autocheckpoint=0')
+            for _ in range(300):
+                connection.execute("UPDATE fixture_rows SET value='temporary'")
+                connection.execute("UPDATE fixture_rows SET value='stable'")
+                connection.commit()
+            wal = Path(str(self.database) + '-wal')
+            self.assertGreater(wal.stat().st_size, 1 << 20)
+            observer.checkpoint('after-remove')
+            self.runner['check_removed_native_components']('codex', self.home, self.root, 'audited-remove')
+            evidence = observer.evidence()
+            self.assertTrue(evidence['runtime_semantics_unchanged'])
+            self.assertGreater(evidence['observations'][-1]['runtime_files_fully_read']['state_5.sqlite-wal']['bytes'], 1 << 20)
+            # The same bytes under the raw native authority still fail closed.
+            (self.home / '.codex/state_5.sqlite-wal').write_bytes(wal.read_bytes())
+            with self.assertRaisesRegex(AssertionError, 'unscanned-too-large'):
+                self.runner['check_removed_native_components']('codex', self.home, self.root, 'unowned-wal')
+
+    def test_marketing_kit_runtime_schema_or_row_change_refuses(self):
+        observer = self.prepare()
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute("UPDATE fixture_rows SET value='changed'")
+            connection.commit()
+            with self.assertRaisesRegex(ValueError, 'table contents changed'):
+                observer.checkpoint('changed-row')
+            connection.execute("UPDATE fixture_rows SET value='stable'")
+            connection.execute('CREATE TABLE unexpected (value TEXT)')
+            connection.commit()
+            with self.assertRaisesRegex(ValueError, 'schema changed'):
+                observer.checkpoint('changed-schema')
+
+    def test_marketing_kit_runtime_config_and_root_replacement_refuse(self):
+        observer = self.prepare()
+        original = observer.config.read_bytes()
+        observer.config.write_text('sqlite_home = "/foreign"\n')
+        with self.assertRaisesRegex(ValueError, 'config authority changed'):
+            observer.checkpoint('changed-config')
+        observer.config.write_bytes(original)
+        observer.runtime.rename(observer.runtime.with_name('held-runtime'))
+        observer.runtime.mkdir()
+        with self.assertRaisesRegex(ValueError, 'authority root changed'):
+            observer.checkpoint('replaced-root')
+
+    def test_marketing_kit_native_bootstrap_cannot_mutate_foreign_or_add_config(self):
+        self.bootstrap_mutation = lambda: self.foreign.write_text('changed')
+        with self.assertRaisesRegex(AssertionError, 'bootstrap changed protected'):
+            self.prepare()
+
+    def test_marketing_kit_native_bootstrap_cannot_add_extra_config_keys(self):
+        def mutate():
+            with (self.home / '.codex/config.toml').open('a') as stream:
+                stream.write('unexpected = true\n')
+        self.bootstrap_mutation = mutate
+        with self.assertRaisesRegex(ValueError, 'preinstall changed the authored config'):
+            self.prepare()
+
+    def test_marketing_kit_mutating_command_checkpoint_precedes_inventory_even_on_failure(self):
+        observer = self.prepare()
+        execute = self.runner['execute']
+        inventory = Mock()
+
+        def changed_runtime(*_args):
+            with closing(sqlite3.connect(self.database)) as connection:
+                connection.execute("UPDATE fixture_rows SET value='changed'")
+                connection.commit()
+            return {'exit_code': 0}
+
+        with patch.dict(execute.__globals__, {'invoke': changed_runtime, 'inventory': inventory}):
+            with self.assertRaisesRegex(ValueError, 'table contents changed'):
+                execute('cli', self.env, self.project, 'codex', 'add',
+                        'add', 'marketing-kit', '--scope', 'user', checkpoint=observer.checkpoint)
+        inventory.assert_not_called()
+        phases = []
+        with patch.dict(execute.__globals__, {'invoke': Mock(side_effect=RuntimeError('command failed'))}):
+            with self.assertRaisesRegex(RuntimeError, 'command failed'):
+                execute('cli', self.env, self.project, 'codex', 'failed-add',
+                        'add', 'marketing-kit', '--scope', 'user', checkpoint=phases.append)
+        self.assertEqual(phases, ['after-public-mutation-failed-add'])
+
+    def test_marketing_kit_profile_calls_check_failed_commands_and_exclude_E(self):
+        profiles = self.runner['MarketingCodexSQLiteProfiles']('codex')
+        observer = self.prepare()
+        profiles.profiles['A'] = observer
+        with self.assertRaisesRegex(RuntimeError, 'command failed'):
+            profiles.call('failed-command', lambda: (_ for _ in ()).throw(RuntimeError('command failed')))
+        self.assertEqual(observer.observations[-1]['phase'], 'after-failed-command')
+        with self.assertRaisesRegex(AssertionError, 'fresh lifecycle profile'):
+            profiles.prepare('E', self.env, self.project)
+        self.assertEqual(set(profiles.evidence()), {'A'})
 
 
 if __name__ == "__main__":

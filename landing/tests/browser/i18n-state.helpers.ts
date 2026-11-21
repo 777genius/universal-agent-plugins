@@ -149,7 +149,7 @@ export async function projections(page: Page, index: RegistryIndex) {
 }
 
 // Read the built artifact independently of the production command formatter.
-export async function pinnedContext7Example(page: Page, client: ClientID) {
+export async function context7InstallExample(page: Page, client: ClientID) {
   const response = await page.request.get(`./api/registry/client/${client}`);
   expect(response.status()).toBe(200);
   const index = await response.json() as RegistryIndex;
@@ -161,7 +161,29 @@ export async function pinnedContext7Example(page: Page, client: ClientID) {
   expect(release?.selectable).toBe(true);
   expect(release?.release_status).toBe('active');
   expect(release?.manifest_name).toBe('context7');
+  expect(plugin?.installable).toBe(true);
+  expect(release?.meets_minimum_capabilities).toBe(true);
+  const signed = plugin!.distributions.filter((item) => item.status === 'active')
+    .flatMap((item) => item.releases.map((candidate) => ({ distribution: item, release: candidate })))
+    .find(({ distribution: item, release: candidate }) => candidate.release_status === 'active' &&
+      candidate.selectable && candidate.meets_minimum_capabilities &&
+      !candidate.blocking_clients.includes(client) &&
+      (item.kind !== 'upstream' || candidate.materialized_clients.includes(client)) &&
+      candidate.targets.some((target) => target.client === client && target.scopes.includes('user') &&
+        target.canonical_closure?.eligible !== false));
+  if (signed) {
+    return { command: `npx -y universal-agent-plugins@latest add context7 --target ${client}`, selector: undefined };
+  }
+  // A missing signed target may use only the reviewed immutable portable source.
+  for (const candidate of plugin!.distributions.flatMap((item) => item.releases)) {
+    expect(candidate.blocking_clients).not.toContain(client);
+    expect(candidate.targets.some((item) => item.client === client || item.canonical_closure !== undefined)).toBe(false);
+  }
+  expect(release!.components.length).toBeGreaterThan(0);
+  expect(release!.components.every((item) => ['skills', 'mcp'].includes(item))).toBe(true);
   const source = release!.source;
+  expect(source.manifest_sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
+  expect(source.tree_sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
   expect(source.repository).toBe('upstash/context7');
   expect(source.revision).toMatch(/^[0-9a-f]{40}$/);
   expect(source.path).toBe('plugins/agent-plugins/context7');
