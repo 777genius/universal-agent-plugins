@@ -117,7 +117,7 @@ class ReleasePipelineE2E(unittest.TestCase):
         packed = self.run_command(['npm', 'pack', '--ignore-scripts', '--json'], cwd=self.package)
         self.tarball_file = json.loads(packed.stdout)[0]['filename']
         self.tarball = (self.package / self.tarball_file).read_bytes()
-        names = ['validate', 'build', 'sign-macos', 'stage-draft', 'platform-proof / Verify release and pack exact npm tarball',
+        names = ['validate', 'build', 'sign-macos', 'verify-macos', 'stage-draft', 'platform-proof / Verify release and pack exact npm tarball',
                  *(f'platform-proof / native runtime E2E ({target})' for target in TARGETS),
                  'platform-proof / Aggregate all six native platform proofs',
                  'hermes-native-proof / Aggregate hermes release-native proofs',

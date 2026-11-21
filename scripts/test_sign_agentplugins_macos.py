@@ -198,22 +198,19 @@ class SignAgentpluginsMacOSTests(unittest.TestCase):
                          "com.777genius.agentplugins", "--sign", IDENTITY_HASH, "--keychain", state["keychain"]):
                 self.assertIn(flag, argv)
         self.assertIn(state["keychain"], [call[-1] for call in state["calls"] if call[1] == "delete-keychain"])
-        self.assertTrue(any(path.endswith("/downloaded/agentplugins") for path in state["quarantined"]))
         summary = json.loads((self.evidence / "signing-summary.json").read_text())
         self.assertEqual(summary["identity"], IDENTITY)
         self.assertEqual(summary["notary_submission_id"], SUBMISSION)
         for name in ("notary-submission.json", "notary-log.json", "codesign-darwin_amd64.txt",
-                     "codesign-darwin_arm64.txt", "gatekeeper-darwin_arm64.txt"):
+                     "codesign-darwin_arm64.txt"):
             self.assertTrue((self.evidence / name).is_file(), name)
         self.assert_cleaned(state)
 
     def test_every_unverified_outcome_fails_closed_and_cleans_up(self):
         for mode in ("adhoc", "no-runtime", "no-timestamp", "wrong-team", "wrong-identifier",
-                     "two-identities", "invalid", "wrong-cdhash", "gatekeeper-block"):
+                     "two-identities", "invalid", "wrong-cdhash"):
             with self.subTest(mode=mode):
                 self.setUp()
-                if mode == "gatekeeper-block":
-                    self.block.write_text("")
                 result, state = self.run_script(mode)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(self.outputs.read_text(), "")

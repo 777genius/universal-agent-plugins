@@ -163,21 +163,21 @@ jobs re-signs, so `stage-draft` refuses the existing draft; an owner then
 verifies it was never public, deletes only that draft (not the tag) and
 qualifies again. Promotion requires an unexpired receipt artifact from
 the exact successful draft-only run attempt. A failed native proof intentionally
-leaves that exact draft non-public. Fix the proof defect and rerun the same tag
-to qualify it. If draft
+leaves that exact draft non-public. Fix the proof defect and follow the signed
+draft rerun procedure above. If draft
 creation itself was interrupted and left an incomplete or non-matching draft,
 an owner must verify that it was never public, delete only that draft release
 (not the tag), and rerun. Never edit or replace assets in place.
 Every dispatch still requires the exact frozen tag/workflow-source gate and
 proves that the candidate remains an ancestor of current `main`. Only descendant
 movement of `main` is allowed; candidate bytes and required checks never float.
-A workflow-dispatch ref of current `main` still has to equal the candidate SHA.
+Dispatch qualification from the exact tag, as required by the signing environment.
 
 Go and source npm qualification run in parallel with the binary build. One
 `build` job embeds the Skills picker bundle once and cross-compiles all six
 binaries sequentially, then refuses unless exactly six were produced.
 `sign-macos` signs and notarizes the two macOS binaries after `build`. Draft
-staging requires all three lanes and `sign-macos`. Go compilation/dependency caching is
+staging requires all three lanes, `sign-macos` and `verify-macos`. Go compilation/dependency caching is
 allowed, while `-count=1` forces the release's Go tests to execute. Staged npm
 contract tests, all six native platform proofs and both three-platform
 Hermes/Antigravity release-native aggregates remain mandatory. Publication
@@ -216,20 +216,17 @@ and before `stage-draft`, in the `macos-signing` environment. It runs
 - notarizes one zip with both binaries through `xcrun notarytool submit --wait`
   (30-minute wait limit, 45-minute job limit), requires `Accepted`, and requires
   that the notary log ticket covers each binary's CDHash;
-- runs a quarantined copy of the native arm64 binary (`version`) with an empty
-  environment. It must print the release version. This proves the hardened
-  runtime does not break the CLI; it is also a Gatekeeper check only when the
-  runner has assessments enabled, which `gatekeeper-status.txt` records. The
-  notarization proof is the `Accepted` status and the CDHash binding;
 - uploads `agentplugins-darwin-signed` for staging and the
   `macos-notarization-evidence-<attempt>` artifact (90 days): the notary
-  submission and log, `codesign -dv` output, informational `spctl` output and
+  submission and log, `codesign -dv` output and
   `signing-summary.json` with the CDHash and SHA-256 of each binary.
 
-`spctl` output is evidence only, not a release condition. Promotion and npm
-publication also authenticate that `sign-macos` succeeded, with every step, in
-the qualification run. A missing, failed, skipped or cancelled `sign-macos`
-leaves `stage-draft` and every later mutating job unreachable.
+A separate `verify-macos` job without signing secrets verifies both SHA-256
+outputs and runs a quarantined copy of the native arm64 binary with an empty
+environment. Its log records `spctl --status`; the run is a Gatekeeper check
+only when assessments are enabled. Promotion and npm publication authenticate
+that both `sign-macos` and `verify-macos` succeeded in the qualification run.
+Either job failing, being skipped or cancelled blocks staging and promotion.
 
 ### Setup
 
@@ -239,8 +236,10 @@ The `macos-signing` environment holds exactly six secrets: `APPLE_CERTIFICATE`
 App Store Connect `.p8` key), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`. Its
 deployment policy allows only the `agentplugins-v*` tag pattern, so dispatch
 with `--ref <exact-tag>`; a run from `main` cannot reach the secrets and fails
-closed at `sign-macos`. No other job references these secrets, and the workflow
-has no `pull_request` trigger. Rotate the secrets before the certificate
+closed at `sign-macos`. The active release-tag ruleset restricts creation, update and deletion of
+`agentplugins-v*` tags to administrators. Anyone able to create such a tag can
+run a modified workflow with access to these secrets; the validation job alone
+is not a boundary against that actor. Rotate the secrets before the certificate
 expires; an expired or revoked certificate fails `sign-macos` and blocks the
 release until it is replaced.
 
@@ -250,11 +249,10 @@ Notarization means Apple scanned these exact binaries and issued a ticket keyed
 by their CDHash. A bare Mach-O cannot be stapled (`stapler` accepts only app
 bundles, disk images and installer packages), so the ticket stays with Apple.
 When a quarantined file runs, for example a browser download from the release
-page, Gatekeeper fetches the ticket online and allows it without a warning.
+page, Gatekeeper can fetch the ticket online to assess it.
 Offline, a first launch of a quarantined download can still be blocked. Downloads
 by `install.sh`, `curl`, the npm launcher or Homebrew are not quarantined, so
-Gatekeeper does not assess them; the kernel still enforces the valid Developer
-ID signature. Windows binaries stay unsigned (there is no Authenticode
+Gatekeeper does not assess them. Windows binaries stay unsigned (there is no Authenticode
 certificate) and, like the Linux binaries, are covered by checksums and GitHub
 artifact attestations only.
 
@@ -283,14 +281,14 @@ Before the first signed release, a maintainer runs the same script locally on
 macOS with Xcode command-line tools:
 
 1. Build the two binaries:
-   `mkdir -p "$TMPDIR/uap-sign/bin" && cd cli && for arch in amd64 arm64; do GOOS=darwin GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=0.0.0" -o "$TMPDIR/uap-sign/bin/agentplugins_0.0.0_darwin_$arch" ./cmd/agentplugins; done`
+   `mkdir -p "$TMPDIR/uap-sign/bin" && (cd cli && for arch in amd64 arm64; do GOOS=darwin GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=0.0.0" -o "$TMPDIR/uap-sign/bin/agentplugins_0.0.0_darwin_$arch" ./cmd/agentplugins; done)`
 2. Load the six secret values into the current shell only (for example with
-   `read -rs`), never into shell history or files.
+   `read -rs` followed by `export`), never into shell history or files.
 3. Run `bash scripts/sign-agentplugins-macos.sh agentplugins-v0.0.0 "$TMPDIR/uap-sign/bin" "$TMPDIR/uap-sign/evidence"`.
 
-It must end with `darwin_amd64_sha256=` and `darwin_arm64_sha256=` lines.
+Its output must include `darwin_amd64_sha256=` and `darwin_arm64_sha256=` lines.
 This exercises the `.p12` import, the identity, signing, the notary API key,
-the CDHash binding and the quarantined run exactly as CI does, and submits the
+the CDHash binding, and submits the
 test binaries to Apple. The script temporarily adds the throwaway keychain to
 the user keychain search list and restores it on exit. If it is killed, check
 `security list-keychains -d user` and delete the leftover

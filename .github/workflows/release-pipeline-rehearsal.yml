@@ -15,6 +15,9 @@ on:
       - 'scripts/test_release_pipeline_e2e.py'
       - 'scripts/sign-agentplugins-macos.sh'
       - 'scripts/test_sign_agentplugins_macos.py'
+      - 'scripts/verify-agentplugins-macos.sh'
+      - 'scripts/test_verify_agentplugins_macos.py'
+      - 'scripts/test_macos_staging_binding.py'
       - 'repotests/agentplugins_release_contract_test.go'
       - 'docs/agentplugins-release.md'
   workflow_dispatch:
@@ -50,5 +53,10 @@ jobs:
           python3 -B -m unittest discover -s scripts -p 'test_reuse_agentplugins_npm_artifact.py'
           python3 -B -m unittest discover -s scripts -p 'test_release_pipeline_e2e.py'
           python3 -B -m unittest discover -s scripts -p 'test_sign_agentplugins_macos.py'
+          python3 -B -m unittest discover -s scripts -p 'test_verify_agentplugins_macos.py'
+          python3 -B -m unittest discover -s scripts -p 'test_macos_staging_binding.py'
       - name: Check release workflow gate contracts
         run: go test -count=1 ./repotests -run '^TestAgentpluginsReleaseContractsStayFailClosed$'
+      - name: Check release graph and signing boundary
+        working-directory: cli
+        run: go test -count=1 ./cmd/agentplugins -run 'Release|NPM|Npm|PlatformProof'

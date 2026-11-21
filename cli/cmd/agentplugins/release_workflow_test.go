@@ -251,6 +251,7 @@ type releaseWorkflow struct {
 
 type releaseJob struct {
 	If          string            `yaml:"if"`
+	Continue    bool              `yaml:"continue-on-error"`
 	Uses        string            `yaml:"uses"`
 	RunsOn      any               `yaml:"runs-on"`
 	Needs       any               `yaml:"needs"`
@@ -330,7 +331,7 @@ func TestCurrentReleaseGraphsAndConcurrency(t *testing.T) {
 	if !reflect.DeepEqual(releaseNeeds(release.Jobs["build"].Needs), []string{"validate"}) {
 		t.Fatal("build must depend on validate")
 	}
-	if !reflect.DeepEqual(releaseNeeds(release.Jobs["stage-draft"].Needs), []string{"validate", "qualify-go", "qualify-npm", "build", "sign-macos"}) {
+	if !reflect.DeepEqual(releaseNeeds(release.Jobs["stage-draft"].Needs), []string{"validate", "qualify-go", "qualify-npm", "build", "sign-macos", "verify-macos"}) {
 		t.Fatal("stage-draft must require validate, both qualifications, all builds and macOS signing")
 	}
 	if release.Concurrency.Group != "agentplugins-release-${{ inputs.tag }}" || release.Concurrency.Cancel {
@@ -353,7 +354,8 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 		"qualify-go":               {"validate"},
 		"qualify-npm":              {"validate"},
 		"sign-macos":               {"validate", "build"},
-		"stage-draft":              {"validate", "qualify-go", "qualify-npm", "build", "sign-macos"},
+		"verify-macos":             {"validate", "sign-macos"},
+		"stage-draft":              {"validate", "qualify-go", "qualify-npm", "build", "sign-macos", "verify-macos"},
 		"platform-proof":           {"validate", "stage-draft"},
 		"hermes-native-proof":      {"validate", "stage-draft"},
 		"antigravity-native-proof": {"validate", "stage-draft"},
@@ -371,6 +373,7 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 		"qualify-go":               {"contents": "read"},
 		"qualify-npm":              {"contents": "read"},
 		"sign-macos":               {"contents": "read"},
+		"verify-macos":             {"contents": "read"},
 		"stage-draft":              {"contents": "write", "id-token": "write", "attestations": "write", "artifact-metadata": "write"},
 		"platform-proof":           {"contents": "read", "attestations": "read"},
 		"hermes-native-proof":      {"contents": "read"},
@@ -386,6 +389,7 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 		"qualify-go":               "${{ inputs.publish_release != true }}",
 		"qualify-npm":              "${{ inputs.publish_release != true }}",
 		"sign-macos":               "${{ inputs.publish_release != true }}",
+		"verify-macos":             "${{ inputs.publish_release != true }}",
 		"stage-draft":              "${{ inputs.publish_release != true }}",
 		"platform-proof":           "${{ inputs.publish_release != true }}",
 		"hermes-native-proof":      "${{ inputs.publish_release != true }}",
@@ -405,6 +409,9 @@ func validateNativeReleaseBoundary(workflow releaseWorkflow) error {
 		}
 		if job.If != expectedConditions[name] {
 			return fmt.Errorf("%s two-mode reachability condition", name)
+		}
+		if job.Continue {
+			return fmt.Errorf("%s job must not suppress failure", name)
 		}
 		for _, step := range job.Steps {
 			if step.Continue || strings.Contains(step.If, "always()") || strings.Contains(step.If, "failure()") || strings.Contains(step.If, "cancelled()") {
@@ -486,6 +493,21 @@ func validateMacOSSigningBoundary(workflow releaseWorkflow) error {
 	if sign.Environment != "macos-signing" || sign.RunsOn != "macos-15" || sign.Uses != "" {
 		return fmt.Errorf("sign-macos protected hosted runner")
 	}
+	verify := workflow.Jobs["verify-macos"]
+	if verify.Environment != nil || verify.RunsOn != "macos-15" || verify.Uses != "" {
+		return fmt.Errorf("verify-macos must use a separate runner without the signing environment")
+	}
+	verifiedRun := false
+	for _, step := range verify.Steps {
+		if strings.Contains(step.Run, "bash scripts/verify-agentplugins-macos.sh") &&
+			step.Env["SIGNED_DARWIN_AMD64_SHA256"] == "${{ needs.sign-macos.outputs.darwin_amd64_sha256 }}" &&
+			step.Env["SIGNED_DARWIN_ARM64_SHA256"] == "${{ needs.sign-macos.outputs.darwin_arm64_sha256 }}" {
+			verifiedRun = true
+		}
+	}
+	if !verifiedRun {
+		return fmt.Errorf("verify-macos must run against the exact signing outputs")
+	}
 	secretNames := []string{"APPLE_CERTIFICATE", "APPLE_CERTIFICATE_PASSWORD", "APPLE_TEAM_ID", "APPLE_API_KEY_BASE64", "APPLE_API_KEY_ID", "APPLE_API_ISSUER"}
 	signStep := false
 	for name, job := range workflow.Jobs {
@@ -505,6 +527,9 @@ func validateMacOSSigningBoundary(workflow releaseWorkflow) error {
 				values = append(values, fmt.Sprint(value))
 			}
 			if name == "sign-macos" && step.ID == "sign" {
+				if step.If != "" {
+					return fmt.Errorf("signing step must not be skipped")
+				}
 				for _, secret := range secretNames {
 					if step.Env[secret] != "${{ secrets."+secret+" }}" {
 						return fmt.Errorf("sign-macos must bind %s from the protected environment", secret)
@@ -546,6 +571,9 @@ func validateMacOSSigningBoundary(workflow releaseWorkflow) error {
 	}
 	if _, ok := artifactSteps("sign-macos", "upload")["agentplugins-darwin-signed"]; !ok {
 		return fmt.Errorf("sign-macos signed artifact")
+	}
+	if !reflect.DeepEqual(artifactSteps("verify-macos", "download"), map[string]string{"agentplugins-darwin-signed": "${{ runner.temp }}/agentplugins-darwin<nil>"}) {
+		return fmt.Errorf("verify-macos signed artifact")
 	}
 	staged := artifactSteps("stage-draft", "download")
 	if len(staged) != 2 || staged["agentplugins-binaries"] != "${{ runner.temp }}/agentplugins-assets<nil>" || staged["agentplugins-darwin-signed"] != "${{ runner.temp }}/agentplugins-assets<nil>" {
@@ -640,7 +668,13 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 			}
 			w.Jobs["stage-draft"] = job
 		},
-		"sign-macos missing": func(w *releaseWorkflow) { delete(w.Jobs, "sign-macos") },
+		"sign-macos missing":   func(w *releaseWorkflow) { delete(w.Jobs, "sign-macos") },
+		"verify-macos missing": func(w *releaseWorkflow) { delete(w.Jobs, "verify-macos") },
+		"verify-macos receives signing environment": func(w *releaseWorkflow) {
+			job := w.Jobs["verify-macos"]
+			job.Environment = "macos-signing"
+			w.Jobs["verify-macos"] = job
+		},
 		"stage without macOS signing": func(w *releaseWorkflow) {
 			job := w.Jobs["stage-draft"]
 			job.Needs = []any{"validate", "qualify-go", "qualify-npm", "build"}
@@ -810,7 +844,7 @@ func TestNativeReleaseFailureReachabilityAndMutationControls(t *testing.T) {
 func assertNativeReleaseReachability(t *testing.T, workflow releaseWorkflow) {
 	t.Helper()
 	statusNames := releaseActionStatuses(t)
-	for _, name := range []string{"qualify-go", "qualify-npm", "build", "sign-macos", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof", "verified-draft", "reuse-verified-draft", "promote-release"} {
+	for _, name := range []string{"qualify-go", "qualify-npm", "build", "sign-macos", "verify-macos", "stage-draft", "platform-proof", "hermes-native-proof", "antigravity-native-proof", "verified-draft", "reuse-verified-draft", "promote-release"} {
 		job := workflow.Jobs[name]
 		promotion := name == "reuse-verified-draft" || name == "promote-release"
 		results := map[string]string{}

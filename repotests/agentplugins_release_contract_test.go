@@ -143,7 +143,7 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 	mustContain(t, releaseWorkflow, "expected_commit: ${{ needs.validate.outputs.commit }}")
 	mustContain(t, releaseWorkflow, `refs/heads/main|"refs/tags/${TAG}")`)
 	mustContain(t, releaseWorkflow, `git merge-base --is-ancestor "${head_commit}" refs/remotes/origin/main`)
-	mustContain(t, releaseDraftJob, "needs: [validate, qualify-go, qualify-npm, build, sign-macos]")
+	mustContain(t, releaseDraftJob, "needs: [validate, qualify-go, qualify-npm, build, sign-macos, verify-macos]")
 	for _, name := range []string{"qualify-go", "qualify-npm", "build"} {
 		mustContain(t, yamlJob(t, releaseWorkflow, name), "needs: validate")
 	}
@@ -169,7 +169,6 @@ func TestAgentpluginsReleaseContractsStayFailClosed(t *testing.T) {
 		"codesign --verify --strict --verbose=2",
 		"xcrun notarytool submit",
 		"--wait --timeout",
-		"com.apple.quarantine",
 		"security delete-keychain",
 		"trap cleanup EXIT",
 	} {

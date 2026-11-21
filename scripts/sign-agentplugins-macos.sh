@@ -20,7 +20,6 @@ umask 077
 readonly EXPECTED_TEAM_ID=86399583GS
 readonly SIGNING_IDENTIFIER=com.777genius.agentplugins
 readonly NOTARY_WAIT_TIMEOUT=30m
-readonly GATEKEEPER_ATTEMPTS=5
 readonly TARGETS="darwin_amd64 darwin_arm64"
 
 fail() {
@@ -212,42 +211,7 @@ for target, cdhash in (("darwin_amd64", amd64), ("darwin_arm64", arm64)):
 PY
   fail "notary log does not bind both signed binaries"
 
-# 4. A quarantined copy, like a browser download, must pass Gatekeeper and run
-# with hardened runtime. Only the host architecture can run here; the other
-# binary is covered by its notarized CDHash and by platform-proof. The ticket
-# can take a moment to become visible, so only this run is retried. It runs
-# without the job environment, so no secret reaches the binary.
-case "$(uname -m)" in
-  arm64) native=darwin_arm64 ;;
-  x86_64) native=darwin_amd64 ;;
-  *) fail "unsupported signing host architecture: $(uname -m)" ;;
-esac
-mkdir "${work}/home" "${work}/downloaded"
-downloaded="${work}/downloaded/agentplugins"
-cp "${binary_dir}/agentplugins_${version}_${native}" "${downloaded}"
-xattr -w com.apple.quarantine "0081;$(printf '%x' "$(date +%s)");agentplugins-signing;" "${downloaded}"
-xattr -p com.apple.quarantine "${downloaded}" > /dev/null
-for ((attempt = 1; ; attempt++)); do
-  observed="$(env -i HOME="${work}/home" PATH=/usr/bin:/bin "${downloaded}" version 2>&1)" || true
-  if [[ "${observed}" == "agentplugins ${version}" ]]; then
-    echo "Quarantined ${native} binary passed Gatekeeper and reported: ${observed}"
-    break
-  fi
-  printf '%s\n' "${observed}" >&2
-  [[ "${attempt}" -lt "${GATEKEEPER_ATTEMPTS}" ]] ||
-    fail "quarantined ${native} binary did not run as 'agentplugins ${version}'"
-  echo "macOS signing: quarantined ${native} binary did not run yet (attempt ${attempt}/${GATEKEEPER_ATTEMPTS})" >&2
-  sleep $((attempt * 30))
-done
-# Recorded for review only: spctl is informational, not a release condition.
-# The status shows whether the run above was a real Gatekeeper assessment.
-spctl --status > "${evidence_dir}/gatekeeper-status.txt" 2>&1 || true
-for target in ${TARGETS}; do
-  spctl --assess --type install --verbose=2 "${binary_dir}/agentplugins_${version}_${target}" \
-    > "${evidence_dir}/gatekeeper-${target}.txt" 2>&1 || true
-done
-
-# 5. Bind the exact signed bytes for staging, which hashes and attests them.
+# 4. Bind the exact signed bytes for staging, which hashes and attests them.
 sha_darwin_amd64="$(shasum -a 256 "${binary_dir}/agentplugins_${version}_darwin_amd64" | cut -d ' ' -f 1)"
 sha_darwin_arm64="$(shasum -a 256 "${binary_dir}/agentplugins_${version}_darwin_arm64" | cut -d ' ' -f 1)"
 python3 - "${evidence_dir}/signing-summary.json" "${tag}" "${identity_name}" "${APPLE_TEAM_ID}" \
@@ -284,4 +248,4 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo "- agentplugins_${version}_darwin_arm64: sha256 ${sha_darwin_arm64}, CDHash ${cdhash_darwin_arm64}"
   } >> "${GITHUB_STEP_SUMMARY}"
 fi
-echo "Signed, notarized and Gatekeeper-accepted: agentplugins ${version} darwin amd64 and arm64"
+echo "Signed and notarized: agentplugins ${version} darwin amd64 and arm64"
