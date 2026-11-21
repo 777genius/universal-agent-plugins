@@ -525,7 +525,7 @@
       "notAvailableForPlugin": "Not available for this plugin",
       "title": "One plugin",
       "subtitle": "All your agents",
-      "intro": "Install, update, repair, and remove Agent Plugins 1.0 across supported AI agents with one command. Let the CLI detect installed agents, or choose exactly where the plugin goes.",
+      "intro": "Install, update, repair, and remove Agent Plugins 1.0 / Agent Skills across supported AI agents with one command. Let the CLI detect installed agents, or choose exactly where to install.",
       "github": "Open GitHub",
       "choose": "Choose agents",
       "chooseHint": "One, many, or auto-detect",

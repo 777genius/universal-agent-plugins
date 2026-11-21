@@ -508,7 +508,7 @@
       "notAvailableForPlugin": "Non disponible pour ce plugin",
       "title": "Un plugin",
       "subtitle": "Tous vos agents",
-      "intro": "Installez, mettez à jour, réparez et supprimez des paquets Agent Plugins 1.0 sur les agents IA compatibles avec une seule commande. Laissez la CLI détecter les agents installés ou choisissez les destinations.",
+      "intro": "Installez, mettez à jour, réparez et supprimez des Agent Plugins 1.0 / Agent Skills sur les agents IA compatibles avec une seule commande. Laissez la CLI détecter les agents installés ou choisissez les destinations.",
       "github": "Ouvrez GitHub",
       "choose": "Choisissez des agents",
       "chooseHint": "Un, plusieurs ou détection automatique",

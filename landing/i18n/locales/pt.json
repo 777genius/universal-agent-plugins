@@ -371,7 +371,7 @@
       "notAvailableForPlugin": "Não disponível para este plugin",
       "title": "Um plugin",
       "subtitle": "Todos os seus agentes",
-      "intro": "Instale, atualize, repare e remova Agent Plugins 1.0 entre agentes de IA compatíveis com um comando. Deixe a CLI detectar agentes instalados ou escolha exatamente para onde o plugin vai.",
+      "intro": "Instale, atualize, repare e remova Agent Plugins 1.0 / Agent Skills entre agentes de IA compatíveis com um comando. Deixe a CLI detectar agentes instalados ou escolha exatamente onde instalar.",
       "github": "Abrir GitHub",
       "choose": "Escolher agentes",
       "chooseHint": "Um, vários ou autodetectar",

@@ -508,7 +508,7 @@
       "notAvailableForPlugin": "No disponible para este complemento",
       "title": "Un complemento",
       "subtitle": "Todos tus agentes",
-      "intro": "Instala, actualiza, repara y elimina paquetes Agent Plugins 1.0 en los agentes de IA compatibles con un solo comando. Deja que la CLI detecte los agentes instalados o elige los destinos.",
+      "intro": "Instala, actualiza, repara y elimina Agent Plugins 1.0 / Agent Skills en los agentes de IA compatibles con un solo comando. Deja que la CLI detecte los agentes instalados o elige los destinos.",
       "github": "Abrir GitHub",
       "choose": "Elige agentes",
       "chooseHint": "Uno, muchos o detección automática",

@@ -508,7 +508,7 @@
       "notAvailableForPlugin": "不适用于该插件",
       "title": "一个插件",
       "subtitle": "适用于你的 AI 客户端",
-      "intro": "用一条命令，在受支持的 AI 客户端中安装、更新、修复和移除 Agent Plugins 1.0 软件包。可以让 CLI 检测已安装的客户端，也可以明确选择安装目标。",
+      "intro": "用一条命令，在受支持的 AI 客户端中安装、更新、修复和移除 Agent Plugins 1.0 / Agent Skills。可以让 CLI 检测已安装的客户端，也可以明确选择安装目标。",
       "github": "打开 GitHub",
       "choose": "选择客户端",
       "chooseHint": "选择一个、多个或自动检测",
