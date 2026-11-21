@@ -47,8 +47,12 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             shutil.copytree(bundle, cache)
             revision = {"distribution_id": distribution, "version": pin["package_version"],
                         **{key: pin[key] for key in ("release_sequence", "resolved_revision", "tree_digest", "manifest_digest")}}
+            # Authenticated Directory snapshot 49, exact four pinned releases:
+            # explicit required auth remains pending in published CLI 0.1.115.
+            authentication = {"marketing-kit": "auth_pending", "notion": "auth_pending",
+                              "hubspot-crm": "auth_pending", "playwright": "not_required"}[alias]
             client = {"client_id": "claude", "scope": "project", "activation": "active",
-                      "materialization": "materialized", "authentication": "not_required",
+                      "materialization": "materialized", "authentication": authentication,
                       "policy": "allowed", "verification": "installation_verified", "package_revision": revision}
             public = {"installation_id": installation_id, "name": alias,
                       "source": pin["repository"] + "/" + pin["package_path"], "clients": [copy.deepcopy(client)],
@@ -139,6 +143,57 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 self.assertEqual(residuals, self.scan(f))
                 self.assertEqual(subject.fds, [])
                 self.assertTrue(all(owner["moved"].is_dir() for owner in f["owners"]))
+
+    def test_installed_active_or_prepared_preserves_exact_readiness_without_auth_promotion(self):
+        for activation in ("active", "prepared"):
+            with self.subTest(activation=activation), TemporaryDirectory() as directory:
+                f = self.fixture(Path(directory).resolve())
+                state = json.loads(f["state"].read_text())
+                expected = []
+                for record, public in zip(state["installations"], f["public"]):
+                    binding = next(iter(record["clients"].values()))
+                    binding["activation"] = public["clients"][0]["activation"] = activation
+                    expected.append({key: binding[key] for key in ("client_id", "scope", "activation",
+                        "materialization", "verification", "authentication", "policy")})
+                f["state"].write_text(json.dumps(state))
+                subject = self.capture(f)
+                self.retire(f)
+                proof = subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
+                self.assertEqual([member["binding_at_capture"] for member in proof["members"]], expected)
+                self.assertEqual([row["authentication"] for row in expected],
+                                 ["auth_pending", "auth_pending", "auth_pending", "not_required"])
+                self.assertFalse(proof["writer_closure_claimed"])
+
+    def test_exact_signed_authentication_and_raw_public_agreement_required(self):
+        for index, wrong in ((0, "not_required"), (1, "not_required"), (2, "not_required"),
+                             (3, "auth_pending"), *((index, value) for index in range(4)
+                                 for value in ("failed", "not_checked", "authenticated", "pending", "unknown", "", None, "missing"))):
+            for location in ("both", "raw", "public"):
+                with self.subTest(index=index, wrong=wrong, location=location), TemporaryDirectory() as directory:
+                    f = self.fixture(Path(directory).resolve())
+                    state = json.loads(f["state"].read_text())
+                    binding = next(iter(state["installations"][index]["clients"].values()))
+                    for label, row in (("raw", binding), ("public", f["public"][index]["clients"][0])):
+                        if location not in ("both", label): continue
+                        if wrong == "missing": row.pop("authentication")
+                        else: row["authentication"] = wrong
+                    f["state"].write_text(json.dumps(state))
+                    with self.assertRaisesRegex(ValueError, "authentication"):
+                        self.capture(f)
+
+    def test_other_readiness_fields_still_fail_closed(self):
+        for key, values in {"activation": ("failed", "manual_activation_required", "not_required", "degraded", "unknown", ""),
+                            "materialization": ("absent",), "verification": ("failed", "package_validated", "runtime_verified"),
+                            "policy": ("blocked",), "scope": ("user",), "client_id": ("codex",)}.items():
+            for value in values:
+                with self.subTest(key=key, value=value), TemporaryDirectory() as directory:
+                    f = self.fixture(Path(directory).resolve())
+                    state = json.loads(f["state"].read_text())
+                    binding = next(iter(state["installations"][0]["clients"].values()))
+                    binding[key] = f["public"][0]["clients"][0][key] = value
+                    f["state"].write_text(json.dumps(state))
+                    with self.assertRaisesRegex(ValueError, key):
+                        self.capture(f)
 
     def test_signed_state_public_receipt_namespace_and_bundle_mutations_refused(self):
         for mutation in ("source", "digest", "public", "scope", "receipt", "namespace", "bundle", "hardlink", "symlink"):

@@ -11,6 +11,16 @@ import sys
 _CUSTODY = run_path(str(Path(__file__).with_name("claude_cache_retirement_audit.py")))
 require = _CUSTODY["require"]
 
+# Authenticated Directory snapshot 49 for the four exact signed releases below.
+# Published CLI 0.1.115 preserves required authentication as auth_pending in a
+# fresh no-login profile; cache custody never upgrades it to native readiness.
+_SIGNED_AUTHENTICATION = {
+    "777genius/marketing-kit": "auth_pending",
+    "777genius/notion": "auth_pending",
+    "777genius/hubspot-crm": "auth_pending",
+    "777genius/playwright-bridge": "not_required",
+}
+
 
 class SignedClosureRetirement:
     """Hold all four owned caches continuously across one Project removal."""
@@ -100,10 +110,17 @@ class SignedClosureRetirement:
                 and type(record["clients"]) is dict and len(record["clients"]) == 1)
         binding_id, binding = next(iter(record["clients"].items()))
         require(type(binding_id) is str and bool(binding_id) and binding["client_binding_id"] == binding_id)
-        for key, expected in {"client_id": "claude", "scope": "project", "activation": "active",
-                "materialization": "materialized", "verification": "installation_verified",
-                "authentication": "not_required", "policy": "allowed"}.items():
-            require(binding[key] == clients[0][key] == expected)
+        checkpoint = {"client_id": ("claude",), "scope": ("project",),
+                # Installed but unready MCPs and untrusted/suppressed plugins
+                # can remain prepared in the published adapter. Exact cache,
+                # registry and receipt ownership below is still mandatory.
+                "activation": ("active", "prepared"), "materialization": ("materialized",),
+                "verification": ("installation_verified",),
+                "authentication": (_SIGNED_AUTHENTICATION[distribution],), "policy": ("allowed",)}
+        for key, allowed in checkpoint.items():
+            if binding.get(key) != clients[0].get(key) or binding.get(key) not in allowed:
+                raise ValueError(f"Claude cache retirement {alias} binding field {key} differs from checkpoint contract")
+        readiness = {key: binding[key] for key in checkpoint}
         for revision in (binding["package_revision"], clients[0]["package_revision"]):
             require(type(revision["release_sequence"]) is int
                     and revision["distribution_id"] == distribution
@@ -156,7 +173,7 @@ class SignedClosureRetirement:
                 "binding_id": binding_id, "physical": physical, "active": active, "market": market,
                 "key": key, "cache": cache, "parent": parent, "parent_fd": parent_fd, "cache_fd": cache_fd,
                 "before": before, "siblings": _CUSTODY["entries"](parent_fd), "files": files, "bytes": size,
-                "signed_release": dict(pin),
+                "signed_release": dict(pin), "binding_at_capture": readiness,
                 "receipt": {key: receipt[key] for key in ("object_id", "source_relative", "managed_digest")}}
 
     def guard(self):
@@ -276,6 +293,7 @@ class SignedClosureRetirement:
                     "scope": "project", "writer_closure_claimed": False,
                     "matched_residual_count": len(set(residuals)),
                     "members": [{"distribution": owner["distribution"], "receipt": owner["receipt"],
+                        "binding_at_capture": owner["binding_at_capture"],
                         "signed_release": owner["signed_release"],
                         "file_count": owner["files"], "bytes": owner["bytes"],
                         "original": owner["cache"].relative_to(self.case).as_posix(),
