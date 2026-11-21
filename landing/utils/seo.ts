@@ -4,7 +4,7 @@ import { expandLocalizedRoutes, normalizeAppBase, localizedPath } from './locali
 
 const DEFAULT_DESCRIPTION_LIMIT = 160;
 // Version the crawler URL when social art changes; keep the PNG filename stable.
-export const SOCIAL_PREVIEW_PATH = 'og-image.png?v=20261106';
+export const SOCIAL_PREVIEW_PATH = 'og-image.png?v=20261121';
 
 export function canonicalPath(path: string): string {
   const normalized = `/${path.split(/[?#]/, 1)[0]}`.replace(/\/{2,}/g, '/').replace(/\/+$/, '');

@@ -7,7 +7,7 @@ import { checkPagesArtifact } from '../../scripts/check-pages-artifact.mjs';
 import { productRoutes } from '../../data/routes.ts';
 import { publishedLocales, candidateLocales } from '../../data/i18n.ts';
 import { expandLocalizedRoutes } from '../../utils/localizedRoutes.ts';
-import { pageRouteSeo } from '../../utils/seo.ts';
+import { pageRouteSeo, SOCIAL_PREVIEW_PATH } from '../../utils/seo.ts';
 import { clientLandingPages } from '../../data/clients.ts';
 import { parseDirectoryData } from '../../utils/registry.ts';
 import { projectRegistry } from '../../utils/registryProjection.ts';
@@ -87,7 +87,7 @@ test('final artifact gate rejects missing, altered, draft and mis-scoped output 
             '@id': `${siteUrl}#software`,
             url: siteUrl,
             publisher: { '@id': `${siteUrl}#organization` },
-            screenshot: `${siteUrl}og-image.png?v=20261106`,
+            screenshot: `${siteUrl}${SOCIAL_PREVIEW_PATH}`,
           });
           if (route.family === 'home')
             graph.push({ '@type': 'FAQPage', '@id': `${canonical}#faq` });
