@@ -309,8 +309,10 @@ jobs:
           printf 'executable=%s\n' "$audit_docker" | tee "$RUNNER_TEMP/vendor-proof/docker-cli.txt"
           "$audit_docker" --version | tee -a "$RUNNER_TEMP/vendor-proof/docker-cli.txt"
           printf 'executable=%s\n' "$audit_docker" >> "$GITHUB_OUTPUT"
+      # Current source-bound 30-case matrix must satisfy signed Directory
+      # eligibility (minimum CLI 0.1.108); npm 0.1.95 historical parity is separate.
       - name: Build CLI under test (not the already-published binary)
-        run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
+        run: go build -trimpath -ldflags='-X main.version=0.1.115' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Run real acquisitions and report every source and outcome
         env:
           AUDIT_KIND: ${{ matrix.kind }}

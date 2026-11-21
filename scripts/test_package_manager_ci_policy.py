@@ -206,7 +206,7 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertNotIn("universal-agent-plugins", native)
         build = steps["Build exact current-source CLI for Windows"]
         self.assertIn("if: ${{ !cancelled() }}", build)
-        self.assertIn("go build -trimpath -ldflags='-X main.version=0.1.95'", build)
+        self.assertIn("go build -trimpath -ldflags='-X main.version=0.1.115'", build)
         source = steps["Genuine current-source Firebase add, repeat, native attribution and remove"]
         self.assertIn("if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}", source)
         self.assertIn("AUDIT_VENDOR_OUTCOME: ${{ steps.native-bootstrap.outcome }}", source)
@@ -218,6 +218,18 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         artifact = steps["Preserve current-source Firebase evidence on failure"]
         self.assertIn("if: always()", artifact)
         self.assertIn("source-firebase-claude.json", artifact)
+
+    def test_source_live_audits_use_eligible_cli_identity(self):
+        # Both source-built matrices must meet the signed Directory policy;
+        # immutable old published npm checks are intentionally separate.
+        for workflow in ("live-install-audit.yml", "live-install-remaining-clients.yml"):
+            body = (WORKFLOW.parent / workflow).read_text(encoding="utf-8")
+            builds = re.findall(
+                r"go build -trimpath -ldflags='-X main\.version=([^']+)' -o ",
+                body)
+            with self.subTest(workflow=workflow):
+                self.assertTrue(builds, "no source CLI build checked")
+                self.assertEqual(set(builds), {"0.1.115"})
 
     def test_firebase_legacy_control_requires_manual_execution_and_native_proof(self):
         body = (WORKFLOW.parent / "agentplugins-windows-firebase-capture-probe.yml").read_text()
