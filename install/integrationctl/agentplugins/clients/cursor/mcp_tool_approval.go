@@ -121,6 +121,9 @@ func selectedCursorToolApprovals(envelope domain.PackageEnvelope, plan domain.De
 		if !slices.Contains(nativeServers, server) {
 			return nil, fmt.Errorf("Cursor approval references unselected MCP server %q", server)
 		}
+		if _, exists := envelope.MCP.Servers[server]; !exists {
+			return nil, fmt.Errorf("Cursor approval references a server absent from the reviewed package %q", server)
+		}
 	}
 	return approved, nil
 }

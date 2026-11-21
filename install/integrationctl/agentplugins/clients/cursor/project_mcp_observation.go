@@ -94,7 +94,7 @@ func cursorSelectedMCP(components []domain.ComponentDecision) ([]string, bool) {
 		}
 		names = append(names, component.Name)
 	}
-	return names, allMCP
+	return names, allMCP && len(names) > 0
 }
 
 func runCursorInventory(ctx context.Context, env clients.Env, request domain.ActivationRequest, args ...string) (legacyports.CommandResult, error) {

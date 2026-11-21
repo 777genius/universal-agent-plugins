@@ -55,7 +55,9 @@ func TestCursorScopedToolApprovalSchemaAndNameControls(t *testing.T) {
 func cursorApprovalEnvelope() domain.PackageEnvelope {
 	return domain.PackageEnvelope{Manifest: domain.PluginManifest{
 		Extensions: map[string]json.RawMessage{cursorToolApprovalNamespace: json.RawMessage(cursorTestApproval)},
-	}}
+	}, MCP: domain.MCPComponent{Servers: map[string]domain.MCPServer{
+		"audit": {Name: "audit", Type: "stdio", Decoded: map[string]any{"command": "node"}},
+	}}}
 }
 
 func cursorApprovalPlan() domain.DeliveryPlan {
@@ -77,6 +79,11 @@ func TestCursorPublisherApprovalsRequireSelectedNativeMCPAndProject(t *testing.T
 	}
 	if !strings.Contains(cursorToolApprovalDisclosure(approved), "Mcp(audit:inspect_runtime)") {
 		t.Fatal("plan must disclose the exact newly trusted tool")
+	}
+	withoutSource := cursorApprovalEnvelope()
+	withoutSource.MCP.Servers = nil
+	if _, err := selectedCursorToolApprovals(withoutSource, plan); err == nil {
+		t.Fatal("selected plan cannot authorize a server missing from reviewed package")
 	}
 	for _, alter := range []func(*domain.DeliveryPlan){
 		func(p *domain.DeliveryPlan) { p.Scope = domain.ScopeUser },
@@ -354,7 +361,7 @@ func TestCursorNativeMCPOnlyReadinessIgnoresReviewedApprovalExtension(t *testing
 	}
 	components = components[1:2]
 	names, onlyMCP = cursorSelectedMCP(components)
-	if len(names) != 0 || !onlyMCP {
+	if len(names) != 0 || onlyMCP {
 		t.Fatalf("extension unexpectedly declared a native MCP server: %v %v", names, onlyMCP)
 	}
 }
