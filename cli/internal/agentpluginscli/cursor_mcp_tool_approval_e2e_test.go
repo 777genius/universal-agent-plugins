@@ -12,10 +12,43 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
-// Exercises the public add command: manifest loader -> planner -> staged
-// Cursor projection -> owned native config -> exact project tool preference.
-// Native account login, Editor workspace trust and model calls are not faked.
+// Public add exercises manifest loader -> planner -> staged native projection ->
+// native config ownership -> exact project preference, without vendor auth.
 func TestCursorPublisherToolApprovalFullCLI(t *testing.T) {
+	fixture, project, source := cursorToolCLIProject(t)
+	config := filepath.Join(project, ".cursor", "cli.json")
+	native := filepath.Join(project, ".cursor", "mcp.json")
+	args := []string{"add", source, "--target", "cursor", "--scope", "project",
+		"--project-root", project, "--yes", "--format", "json"}
+	var previous []byte
+	for _, phase := range []string{"first", "repeat"} {
+		out, stderr, err := fixture.execute(false, args...)
+		if err != nil {
+			t.Fatalf("%s Cursor add failed: %v; stdout=%s stderr=%s", phase, err, out, stderr)
+		}
+		cursorAssertCLIState(t, fixture, out)
+		requireCursorNamedToolPreference(t, config)
+		cursorAssertInstalledMCP(t, native)
+		current, err := os.ReadFile(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if previous != nil && !reflect.DeepEqual(previous, current) {
+			t.Fatal("repeat Cursor add rewrote existing native permission bytes")
+		}
+		previous = current
+	}
+	out, stderr, err := fixture.execute(false, "remove", "demo", "--target", "cursor",
+		"--scope", "project", "--project-root", project, "--yes", "--format", "json")
+	if err != nil {
+		t.Fatalf("Cursor remove failed: %v; stdout=%s stderr=%s", err, out, stderr)
+	}
+	requireCursorNamedToolPreference(t, config)
+	cursorAssertRemovedMCP(t, native)
+}
+
+func cursorToolCLIProject(t *testing.T) (cliFixture, string, string) {
+	t.Helper()
 	client := fixtureClient(t, domain.ClientCursor)
 	fixture := newCLIFixture(t, []domain.DetectedClient{client})
 	project, err := filepath.EvalSymlinks(t.TempDir())
@@ -26,8 +59,8 @@ func TestCursorPublisherToolApprovalFullCLI(t *testing.T) {
 	fixture.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{})
 	source := writeCLIPlugin(t)
 	writeCLIMCP(t, source)
-	manifestPath := filepath.Join(source, "plugin.json")
-	body, err := os.ReadFile(manifestPath)
+	path := filepath.Join(source, "plugin.json")
+	body, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,75 +70,59 @@ func TestCursorPublisherToolApprovalFullCLI(t *testing.T) {
 	}
 	manifest["extensions"] = map[string]any{
 		"com.universal-agent-plugins.cursor-mcp-approval": map[string]any{
-			"version": 1,
-			"mcp_auto_approve": map[string]any{"demo": []string{"inspect_runtime"}},
+			"version": 1, "mcp_auto_approve": map[string]any{"demo": []string{"inspect_runtime"}},
 		},
 	}
 	updated, err := json.Marshal(manifest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(manifestPath, updated, 0600); err != nil {
+	if err := os.WriteFile(path, updated, 0600); err != nil {
 		t.Fatal(err)
 	}
+	return fixture, project, source
+}
 
-	configPath := filepath.Join(project, ".cursor", "cli.json")
-	nativePath := filepath.Join(project, ".cursor", "mcp.json")
-	argv := []string{"add", source, "--target", "cursor", "--scope", "project",
-		"--project-root", project, "--yes", "--format", "json"}
-	var firstPreference []byte
-	for _, label := range []string{"first", "repeat"} {
-		out, stderr, err := fixture.execute(false, argv...)
-		if err != nil {
-			t.Fatalf("%s Cursor project add: %v; stdout=%s stderr=%s", label, err, out, stderr)
-		}
-		state, loadErr := fixture.store.Load()
-		if loadErr != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 ||
-			state.Installations[0].Clients[0].Activation != domain.ActivationPrepared {
-			t.Fatalf("%s Cursor project add claimed native readiness or lost state: %+v (%v), output=%s", label, state, loadErr, out)
-		}
-		requireCursorNamedToolPreference(t, configPath)
-		current, err := os.ReadFile(configPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if firstPreference == nil {
-			firstPreference = current
-		} else if !reflect.DeepEqual(current, firstPreference) {
-			t.Fatal("repeating a Cursor project add rewrote exact existing permissions")
-		}
-		var mcp map[string]any
-		body, err := os.ReadFile(nativePath)
-		if err != nil || json.Unmarshal(body, &mcp) != nil {
-			t.Fatalf("%s native MCP configuration missing: %v", label, err)
-		}
-		servers, ok := mcp["mcpServers"].(map[string]any)
-		if !ok || servers["demo"] == nil {
-			t.Fatalf("%s selected MCP server missing from Cursor: %s", label, body)
-		}
+func cursorAssertCLIState(t *testing.T, fixture cliFixture, output string) {
+	t.Helper()
+	state, err := fixture.store.Load()
+	if err != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 ||
+		state.Installations[0].Clients[0].Activation != domain.ActivationPrepared {
+		t.Fatalf("Cursor project claimed native readiness or lost state: %+v (%v), output=%s", state, err, output)
 	}
+}
 
-	// Removal retracts the exact owned server, not durable user consent or
-	// any foreign preference in the Cursor CLI project policy.
-	out, stderr, err := fixture.execute(false, "remove", "demo", "--target", "cursor",
-		"--scope", "project", "--project-root", project, "--yes", "--format", "json")
+func cursorAssertInstalledMCP(t *testing.T, path string) {
+	t.Helper()
+	body, err := os.ReadFile(path)
 	if err != nil {
-		t.Fatalf("Cursor owned project remove: %v; stdout=%s stderr=%s", err, out, stderr)
+		t.Fatal(err)
 	}
-	requireCursorNamedToolPreference(t, configPath)
-	after, err := os.ReadFile(nativePath)
+	var document map[string]any
+	if err := json.Unmarshal(body, &document); err != nil {
+		t.Fatal(err)
+	}
+	servers, ok := document["mcpServers"].(map[string]any)
+	if !ok || servers["demo"] == nil {
+		t.Fatalf("Cursor project lost selected MCP server: %s", body)
+	}
+}
+
+func cursorAssertRemovedMCP(t *testing.T, path string) {
+	t.Helper()
+	body, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return // the last owned MCP entry may remove its empty native document
+		return // removing the last owned MCP member may remove the whole document
 	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	var mcp map[string]any
-	if err := json.Unmarshal(after, &mcp); err != nil {
+	var document map[string]any
+	if err := json.Unmarshal(body, &document); err != nil {
 		t.Fatal(err)
 	}
-	if entries, ok := mcp["mcpServers"].(map[string]any); ok && entries["demo"] != nil {
-		t.Fatalf("removed Cursor MCP server was left active: %s", after)
+	if servers, ok := document["mcpServers"].(map[string]any); ok && servers["demo"] != nil {
+		t.Fatalf("Cursor remove retained the owned MCP server: %s", body)
 	}
 }
 
@@ -119,11 +136,11 @@ func requireCursorNamedToolPreference(t *testing.T, path string) {
 	if err := json.Unmarshal(body, &document); err != nil {
 		t.Fatal(err)
 	}
-	permissions, ok := document["permissions"].(map[string]any)
-	if !ok || !reflect.DeepEqual(permissions["allow"], []any{"Mcp(demo:inspect_runtime)"}) {
-		t.Fatalf("Cursor exact MCP tool approval absent or too broad: %s", body)
+	policy, ok := document["permissions"].(map[string]any)
+	if !ok || !reflect.DeepEqual(policy["allow"], []any{"Mcp(demo:inspect_runtime)"}) {
+		t.Fatalf("Cursor exact tool approval missing or broadened: %s", body)
 	}
 	if _, exists := document["mcpAllowlist"]; exists {
-		t.Fatal("Cursor CLI project grant unexpectedly rewrote Editor permissions")
+		t.Fatal("Cursor CLI grant unexpectedly modified Editor permissions")
 	}
 }
