@@ -37,6 +37,17 @@ permissions editor when no longer wanted. Later update, repair, dependency
 sync and read-only verification do not regrant a revoked permission. Only
 another explicit, confirmed installation can authorize it again.
 
+The server fingerprint approval is proven for exactly two Cursor Agent
+versions: `2026.09.18-9a7762b` (original pinned native spike) and
+`2026.10.22-27dcf5f` (independently audited full genuine native MCP
+lifecycle in [PR #521](https://github.com/777genius/universal-agent-plugins/pull/521),
+[run 41046185239](https://github.com/777genius/universal-agent-plugins/actions/runs/41046185239)).
+The latter tested the publisher-pinned CLI and exact approval-store
+fingerprints across A/B installations and server version updates, not an LLM
+tool call. UAP never calls `mcp enable` itself because that command can
+override user disablement. The current E2E requires native `mcp list`
+to report `ready` **without** running that manual command.
+
 The native server's independent fingerprint approval is still version-gated;
 unsupported client versions, login requirements, Editor admin policy and
 unknown project trust do not become Active by installing permission files.
