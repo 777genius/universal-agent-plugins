@@ -73,7 +73,7 @@ func (*Adapter) RefinePreparation(plan *domain.DeliveryPlan) error {
 		return nil
 	}
 
-	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !shared.OnlyNativeComponents(plan.Components) {
+	if strings.TrimSpace(plan.NativeRegistryRoot) == "" || !kiroNativeComponents(plan.Components) {
 		return fmt.Errorf("a Kiro preparation requires a native config root and supported skills or MCP servers")
 	}
 	plan.Status = domain.PlanReady
