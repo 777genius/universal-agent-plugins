@@ -533,7 +533,7 @@ jobs:
               provision()
           KIRO_DOCKER
       - name: Build CLI under test (not the already-published binary)
-        run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
+        run: go build -trimpath -ldflags='-X main.version=0.1.115' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Run real acquisitions and report every source and outcome
         env:
           AUDIT_KIND: ${{ matrix.kind }}
