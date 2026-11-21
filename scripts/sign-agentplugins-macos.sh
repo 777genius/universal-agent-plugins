@@ -57,6 +57,9 @@ done
 mkdir -p "${evidence_dir}"
 
 work="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/agentplugins-macos-signing.XXXXXX")"
+# The CLI refuses a HOME with symlinks or doubled slashes (macOS TMPDIR ends in a slash
+# and /var is a symlink), so use the canonical physical path from here on.
+work="$(cd "${work}" && pwd -P)"
 keychain="${work}/signing.keychain-db"
 keychain_created=false
 original_keychains=()
