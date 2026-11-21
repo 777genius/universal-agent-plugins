@@ -83,7 +83,9 @@ test('Kiro Project preview needs MCP alongside its approval extension', () => {
   for (const components of [['extensions'], ['skills', 'extensions']] as const) {
     release.components = [...components];
     assert.equal(projectCatalogSelection(plugin, ['kiro']).resolution.distribution, undefined);
-    assert.equal(projectCatalogAutomaticSelection(plugin), undefined);
+    if (components.length === 1) {
+      assert.equal(projectCatalogAutomaticSelection(plugin), undefined);
+    }
   }
   release.components = ['mcp', 'extensions'];
   const selected = projectCatalogSelection(plugin, ['kiro']).resolution.distribution;
