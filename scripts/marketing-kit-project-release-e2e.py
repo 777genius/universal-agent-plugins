@@ -1530,7 +1530,11 @@ def prepare_codex_sqlite(binary, env, project):
     """Admit only exact authored pins and the existing native bootstrap proof."""
     home, case = Path(env["HOME"]), project.parent
     protected = scoped_snapshot((home, project, Path(env["AGENTPLUGINS_HOME"])))
-    version = invoke([binary, "--version"], env, project, 30)
+    # Even --version creates native arg0 helpers. Keep that
+    # version probe in its own disposable profile, outside the child TMPDIR, while
+    # requiring zero changes to the lifecycle HOME/project/data authorities.
+    with tempfile.TemporaryDirectory(prefix="codex-version-", dir=case) as version_home:
+        version = invoke([binary, "--version"], {**env, "CODEX_HOME": version_home}, project, 30)
     if (version.get("exit_code") != 0 or version.get("timeout")
             or version.get("stdout_tail", "").strip() != "codex-cli 0.153.4"
             or scoped_snapshot((home, project, Path(env["AGENTPLUGINS_HOME"]))) != protected):

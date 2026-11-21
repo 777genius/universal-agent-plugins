@@ -10173,13 +10173,73 @@ class MarketingKitCodexSQLiteTest(unittest.TestCase):
             self.bootstrap_mutation()
         return {'data': [{'cwd': str(project), 'errors': [], 'skills': []}]}
 
-    def prepare(self):
+    def prepare(self, version_probe=None):
         observer_type = self.runtime['CodexPluginSQLiteAudit']
         with patch.dict(observer_type.__init__.__globals__, {'_exchange': self.discover}), \
                 patch.dict(self.runner['prepare_codex_sqlite'].__globals__, {
-                    'invoke': lambda *args: {'exit_code': 0, 'timeout': False,
-                                            'stdout_tail': 'codex-cli 0.153.4\n'}}):
+                    'invoke': version_probe or (lambda *args: {'exit_code': 0, 'timeout': False,
+                                            'stdout_tail': 'codex-cli 0.153.4\n'})}):
             return self.runner['prepare_codex_sqlite'](sys.executable, self.env, self.project)
+
+    def test_marketing_kit_version_probe_uses_removed_separate_native_profile(self):
+        profiles = []
+
+        def probe(argv, env, project, timeout):
+            self.assertEqual(argv, [sys.executable, '--version'])
+            self.assertEqual(project, self.project)
+            self.assertEqual(env['HOME'], str(self.home))
+            version_home = Path(env['CODEX_HOME'])
+            self.assertEqual(version_home.parent, self.project.parent)
+            self.assertNotEqual(version_home, self.home / '.codex')
+            self.assertTrue(version_home.is_dir())
+            # Real pinned --version creates arg0 files even with existing
+            # lifecycle tmp/arg0 parents. They belong only to this profile.
+            (version_home / 'tmp/arg0/native-version-helper').mkdir(parents=True)
+            profiles.append(version_home)
+            return {'exit_code': 0, 'timeout': False, 'stdout_tail': 'codex-cli 0.153.4\n'}
+
+        observer = self.prepare(probe)
+        self.assertEqual(len(profiles), 1)
+        self.assertFalse(profiles[0].exists())
+        self.assertEqual(list((self.home / '.codex/tmp/arg0').iterdir()), [])
+        observer.checkpoint('after-isolated-version')
+
+    def test_marketing_kit_version_probe_still_refuses_wrong_version_or_lifecycle_writes(self):
+        original = self.foreign.read_bytes()
+        for mutation in ('wrong-version', 'timeout', 'exit', 'foreign-write', 'new-home-file', 'project-write', 'data-write', 'raised-invoke'):
+            with self.subTest(mutation=mutation):
+                version_profiles = []
+                def probe(*args):
+                    version_profiles.append(Path(args[1]['CODEX_HOME']))
+                    result = {'exit_code': 0, 'timeout': False, 'stdout_tail': 'codex-cli 0.153.4\n'}
+                    if mutation == 'wrong-version':
+                        result['stdout_tail'] = 'codex-cli 0.153.4-dev\n'
+                    elif mutation == 'timeout':
+                        result['timeout'] = True
+                    elif mutation == 'exit':
+                        result['exit_code'] = 1
+                    elif mutation == 'foreign-write':
+                        self.foreign.write_text('changed by metadata probe')
+                    elif mutation == 'project-write':
+                        (self.project / 'unexpected-version-write').write_text('forbidden')
+                    elif mutation == 'data-write':
+                        (Path(self.env['AGENTPLUGINS_HOME']) / 'unexpected-version-write').write_text('forbidden')
+                    elif mutation == 'raised-invoke':
+                        raise RuntimeError('native version invocation failed')
+                    else:
+                        (self.home / 'unexpected-version-write').write_text('forbidden')
+                    return result
+                expected = RuntimeError if mutation == 'raised-invoke' else AssertionError
+                diagnostic = 'native version invocation failed' if mutation == 'raised-invoke' else 'unchanged native 0.153.4 version probe'
+                with self.assertRaisesRegex(expected, diagnostic):
+                    self.prepare(probe)
+                self.assertEqual(len(version_profiles), 1)
+                self.assertFalse(version_profiles[0].exists())
+                self.foreign.write_bytes(original)
+                for root in (self.home, self.project, Path(self.env['AGENTPLUGINS_HOME'])):
+                    (root / 'unexpected-version-write').unlink(missing_ok=True)
+                self.assertFalse((self.home / '.codex/config.toml').exists())
+                self.assertFalse((self.home / '.codex/installation_id').exists())
 
     def test_marketing_kit_large_wal_requires_audited_separate_root_and_native_absence(self):
         observer = self.prepare()
