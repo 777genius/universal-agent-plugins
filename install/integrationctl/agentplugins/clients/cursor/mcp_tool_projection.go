@@ -23,7 +23,7 @@ func projectCursorToolApprovals(root string, envelope domain.PackageEnvelope, pl
 		return err
 	}
 	if len(body) > 16<<10 {
-		return fmt.Errorf("Cursor MCP tool approval projection exceeds decoder limit")
+		return fmt.Errorf("cursor MCP tool approval projection exceeds decoder limit")
 	}
 	return atomicfile.Write(filepath.Join(root, cursorToolApprovalFile), body, 0o644)
 }
@@ -54,14 +54,14 @@ func readCursorToolApprovalsForActivation(request domain.ActivationRequest, kern
 		return nil, nil
 	}
 	if request.Plan.Scope != domain.ScopeProject || request.Delivery.ActivePath != request.Plan.ActivePath {
-		return nil, fmt.Errorf("Cursor approval package or project differs from the confirmed plan")
+		return nil, fmt.Errorf("cursor approval package or project differs from the confirmed plan")
 	}
 	snapshot, err := kernel.ReadExactFile(filepath.Join(sealed, cursorToolApprovalFile))
 	if err != nil {
 		return nil, err
 	}
 	if !snapshot.Exists {
-		return nil, fmt.Errorf("Cursor selected MCP tool approval projection is missing")
+		return nil, fmt.Errorf("cursor selected MCP tool approval projection is missing")
 	}
 	approved, err := decodeCursorToolApprovals(snapshot.Body)
 	if err != nil {
@@ -77,7 +77,7 @@ func readCursorToolApprovalsForActivation(request domain.ActivationRequest, kern
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("Cursor selected approval server is not in the plan")
+			return nil, fmt.Errorf("cursor selected approval server is not in the plan")
 		}
 	}
 	return approved, nil

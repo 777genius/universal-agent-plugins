@@ -34,7 +34,7 @@ func (*Adapter) InterpretExtension(namespace string, raw json.RawMessage) (domai
 // permissions or invisible tool names may reach the native CLI config.
 func decodeCursorToolApprovals(raw []byte) (cursorToolApprovals, error) {
 	if len(raw) == 0 || len(raw) > 16<<10 {
-		return nil, fmt.Errorf("Cursor MCP tool approval extension has invalid size")
+		return nil, fmt.Errorf("cursor MCP tool approval extension has invalid size")
 	}
 	document, err := shared.DecodeStrictJSONObject(raw)
 	if err != nil {
@@ -42,7 +42,7 @@ func decodeCursorToolApprovals(raw []byte) (cursorToolApprovals, error) {
 	}
 	servers, ok := document["mcp_auto_approve"].(map[string]any)
 	if len(document) != 2 || document["version"] != json.Number("1") || !ok || len(servers) == 0 || len(servers) > 32 {
-		return nil, fmt.Errorf("Cursor MCP tool approval requires exact version 1 and selected servers")
+		return nil, fmt.Errorf("cursor MCP tool approval requires exact version 1 and selected servers")
 	}
 	approved := make(cursorToolApprovals, len(servers))
 	for server, rawTools := range servers {
@@ -102,27 +102,27 @@ func selectedCursorToolApprovals(envelope domain.PackageEnvelope, plan domain.De
 	selected := cursorHasToolApproval(plan.Components)
 	if !declared {
 		if selected {
-			return nil, fmt.Errorf("Cursor selected tool approval is absent from the package")
+			return nil, fmt.Errorf("cursor selected tool approval is absent from the package")
 		}
 		return nil, nil
 	}
 	if plan.Scope != domain.ScopeProject || plan.TargetContext.Scope != domain.ScopeProject {
-		return nil, fmt.Errorf("Cursor MCP tool auto-approval requires an explicit project scope")
+		return nil, fmt.Errorf("cursor MCP tool auto-approval requires an explicit project scope")
 	}
 	approved, err := decodeCursorToolApprovals(raw)
 	if err != nil {
 		return nil, err
 	}
 	if !selected {
-		return nil, fmt.Errorf("Cursor MCP tool approval extension was not selected")
+		return nil, fmt.Errorf("cursor MCP tool approval extension was not selected")
 	}
 	nativeServers := shared.SupportedMCPNames(plan)
 	for server := range approved {
 		if !slices.Contains(nativeServers, server) {
-			return nil, fmt.Errorf("Cursor approval references unselected MCP server %q", server)
+			return nil, fmt.Errorf("cursor approval references unselected MCP server %q", server)
 		}
 		if _, exists := envelope.MCP.Servers[server]; !exists {
-			return nil, fmt.Errorf("Cursor approval references a server absent from the reviewed package %q", server)
+			return nil, fmt.Errorf("cursor approval references a server absent from the reviewed package %q", server)
 		}
 	}
 	return approved, nil

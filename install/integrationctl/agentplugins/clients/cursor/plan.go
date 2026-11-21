@@ -54,7 +54,7 @@ func (*Adapter) RefinePlan(ctx context.Context, in clients.PlanInput, plan *doma
 		return nil
 	}
 	if _, declared := in.Envelope.Manifest.Extensions[cursorToolApprovalNamespace]; declared {
-		return fmt.Errorf("Cursor scoped MCP tool permissions require project scope")
+		return fmt.Errorf("cursor scoped MCP tool permissions require project scope")
 	}
 	plan.Status = domain.PlanManualActivationRequired
 	// PackageMode describes the retained manifest/layout contract. Readiness

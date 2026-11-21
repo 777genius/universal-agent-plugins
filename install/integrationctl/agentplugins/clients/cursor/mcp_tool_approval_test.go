@@ -93,10 +93,10 @@ func TestCursorPublisherApprovalsRequireSelectedNativeMCPAndProject(t *testing.T
 		func(p *domain.DeliveryPlan) { p.Components = p.Components[:1] },
 		func(p *domain.DeliveryPlan) { p.Components[0].Support = domain.SupportUnsupported },
 	} {
-		copy := cursorApprovalPlan()
-		alter(&copy)
-		if _, err := selectedCursorToolApprovals(envelope, copy); err == nil {
-			t.Fatalf("unselected permission was admitted: %+v", copy)
+		alteredPlan := cursorApprovalPlan()
+		alter(&alteredPlan)
+		if _, err := selectedCursorToolApprovals(envelope, alteredPlan); err == nil {
+			t.Fatalf("unselected permission was admitted: %+v", alteredPlan)
 		}
 	}
 	path := filepath.Join(t.TempDir(), "managed")
@@ -116,7 +116,6 @@ func TestCursorPublisherApprovalsRequireSelectedNativeMCPAndProject(t *testing.T
 		t.Fatalf("changed projection was accepted: %v", err)
 	}
 }
-
 
 func TestCursorAdmittedMaximumApprovalProjectionRoundTrip(t *testing.T) {
 	envelope := cursorApprovalEnvelope()

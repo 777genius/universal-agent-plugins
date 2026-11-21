@@ -18,10 +18,7 @@ import (
 // This grants only reviewed, exact Cursor Agent tool permissions. It is not
 // workspace trust, does not call native tools, and never edits Editor policy.
 func completeCursorProjectToolTrust(ctx context.Context, env clients.Env, request domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
-	if !cursorHasToolApproval(request.Plan.Components) || request.VerifyOnly ||
-		!request.ProjectTrustConsent || request.Plan.InstallIntent != domain.InstallIntentAutomatic ||
-		outcome.Policy != domain.PolicyAllowed || outcome.Verification != domain.VerificationInstalled ||
-		outcome.NativeEffect == domain.NativeEffectUncertain {
+	if !cursorToolTrustEligible(request, outcome) {
 		return outcome, nil
 	}
 	if err := ctx.Err(); err != nil {
@@ -29,7 +26,7 @@ func completeCursorProjectToolTrust(ctx context.Context, env clients.Env, reques
 	}
 	project := request.Plan.TargetContext.ProjectRoot
 	if !cursorExactNativeProject(project) {
-		return outcome, fmt.Errorf("Cursor CLI tool permissions require the exact selected Git project root")
+		return outcome, fmt.Errorf("cursor CLI tool permissions require the exact selected Git project root")
 	}
 	path := filepath.Join(request.Plan.NativeRegistryRoot, "cli.json")
 	if err := pathpolicy.RequireContainedChild(project, path); err != nil {
@@ -76,23 +73,30 @@ func completeCursorProjectToolTrust(ctx context.Context, env clients.Env, reques
 	return outcome, nil
 }
 
+func cursorToolTrustEligible(request domain.ActivationRequest, outcome domain.ActivationOutcome) bool {
+	return cursorHasToolApproval(request.Plan.Components) && !request.VerifyOnly &&
+		request.ProjectTrustConsent && request.Plan.InstallIntent == domain.InstallIntentAutomatic &&
+		outcome.Policy == domain.PolicyAllowed && outcome.Verification == domain.VerificationInstalled &&
+		outcome.NativeEffect != domain.NativeEffectUncertain
+}
+
 func cursorSealedToolApprovals(ctx context.Context, env clients.Env, request domain.ActivationRequest) (cursorToolApprovals, error) {
 	if env.Snapshots == nil || request.Delivery.ArtifactDigest == "" {
-		return nil, fmt.Errorf("Cursor tool trust requires a verified immutable package digest")
+		return nil, fmt.Errorf("cursor tool trust requires a verified immutable package digest")
 	}
 	sealed, release, err := env.Snapshots.CaptureDirectory(ctx, request.Delivery.ActivePath)
 	if err != nil {
 		return nil, err
 	}
 	if release == nil {
-		return nil, fmt.Errorf("Cursor approval snapshot has no cleanup ownership")
+		return nil, fmt.Errorf("cursor approval snapshot has no cleanup ownership")
 	}
 	digest, digestErr := env.Snapshots.Digest(ctx, sealed)
 	approved, approvalErr := readCursorToolApprovalsForActivation(request, env.NativeConfig, sealed)
 	closeErr := release()
 	if digestErr != nil || digest != request.Delivery.ArtifactDigest || approvalErr != nil || closeErr != nil {
 		if digest != request.Delivery.ArtifactDigest {
-			digestErr = errors.Join(digestErr, fmt.Errorf("Cursor package digest differs from reviewed source"))
+			digestErr = errors.Join(digestErr, fmt.Errorf("cursor package digest differs from reviewed source"))
 		}
 		return nil, errors.Join(digestErr, approvalErr, closeErr)
 	}
@@ -105,7 +109,7 @@ func cursorValidateToolTrustSource(ctx context.Context, env clients.Env, request
 		return err
 	}
 	if digest != request.Delivery.ArtifactDigest {
-		return fmt.Errorf("Cursor approval package changed after review")
+		return fmt.Errorf("cursor approval package changed after review")
 	}
 	if err := cursorComponents(request.Plan.NativeRegistryRoot).Verify(cursorNativeObjects(request.Delivery.NativeObjects), false, env.NativeConfig); err != nil {
 		return err
@@ -114,61 +118,66 @@ func cursorValidateToolTrustSource(ctx context.Context, env clients.Env, request
 }
 
 func cursorMergeToolPermissions(body []byte, approved cursorToolApprovals) ([]byte, error) {
-	document, policy, allow, deny, ask, err := cursorReadToolPolicies(body)
+	parsed, err := cursorReadToolPolicies(body)
 	if err != nil {
 		return nil, err
 	}
 	changed := false
 	for _, rule := range cursorRequestedToolRules(approved) {
-		if cursorConflictsWithDeniedTool(rule, deny, ask) {
+		if cursorConflictsWithDeniedTool(rule, parsed.deny, parsed.ask) {
 			return nil, fmt.Errorf("preserved Cursor CLI deny/ask rule conflicts with selected MCP tool")
 		}
-		if !slices.ContainsFunc(allow, func(existing string) bool { return strings.EqualFold(existing, rule) }) {
-			allow = append(allow, rule)
+		if !slices.ContainsFunc(parsed.allow, func(existing string) bool { return strings.EqualFold(existing, rule) }) {
+			parsed.allow = append(parsed.allow, rule)
 			changed = true
 		}
 	}
-	if len(allow) > 4096 {
-		return nil, fmt.Errorf("Cursor CLI allow permission count would exceed reader limit")
+	if len(parsed.allow) > 4096 {
+		return nil, fmt.Errorf("cursor CLI allow permission count would exceed reader limit")
 	}
 	if !changed {
 		return body, nil
 	}
-	policy["allow"] = allow
-	document["permissions"] = policy
-	next, err := json.MarshalIndent(document, "", "  ")
+	parsed.policy["allow"] = parsed.allow
+	parsed.document["permissions"] = parsed.policy
+	next, err := json.MarshalIndent(parsed.document, "", "  ")
 	if err != nil {
 		return nil, err
 	}
 	if len(next)+1 > 1<<20 {
-		return nil, fmt.Errorf("Cursor CLI permission policy would exceed reader limit")
+		return nil, fmt.Errorf("cursor CLI permission policy would exceed reader limit")
 	}
 	return append(next, '\n'), nil
 }
 
-func cursorReadToolPolicies(body []byte) (map[string]any, map[string]any, []string, []string, []string, error) {
+type cursorToolPolicies struct {
+	document, policy map[string]any
+	allow, deny, ask []string
+}
+
+func cursorReadToolPolicies(body []byte) (cursorToolPolicies, error) {
 	if len(body) > 1<<20 {
-		return nil, nil, nil, nil, nil, fmt.Errorf("Cursor CLI permission policy exceeds the supported size")
+		return cursorToolPolicies{}, fmt.Errorf("cursor CLI permission policy exceeds the supported size")
 	}
 	document, err := shared.DecodeStrictJSONObject(body)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("preserved malformed Cursor CLI permission policy: %w", err)
+		return cursorToolPolicies{}, fmt.Errorf("preserved malformed Cursor CLI permission policy: %w", err)
 	}
 	policy := map[string]any{}
 	if existing, found := document["permissions"]; found {
 		var ok bool
 		policy, ok = existing.(map[string]any)
 		if !ok {
-			return nil, nil, nil, nil, nil, fmt.Errorf("preserved malformed Cursor CLI permissions")
+			return cursorToolPolicies{}, fmt.Errorf("preserved malformed Cursor CLI permissions")
 		}
 	}
 	allow, allowErr := cursorExistingToolRules(policy, "allow")
 	deny, denyErr := cursorExistingToolRules(policy, "deny")
 	ask, askErr := cursorExistingToolRules(policy, "ask")
 	if err := errors.Join(allowErr, denyErr, askErr); err != nil {
-		return nil, nil, nil, nil, nil, err
+		return cursorToolPolicies{}, err
 	}
-	return document, policy, allow, deny, ask, nil
+	return cursorToolPolicies{document: document, policy: policy, allow: allow, deny: deny, ask: ask}, nil
 }
 
 func cursorRequestedToolRules(approved cursorToolApprovals) []string {
