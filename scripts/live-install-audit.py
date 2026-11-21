@@ -2184,6 +2184,14 @@ def copilot_settings_read(path, case_root):
             os.close(descriptor)
 
 
+def kimi_log_evidence_eligible(target, kind, platform, version):
+    """Only pinned native Kimi Skills versions may enter strict log-append proof."""
+    return (target == "kimi" and kind == "skill" and platform == "linux"
+            and isinstance(version, dict) and version.get("status") == "reported"
+            and version.get("value") in ("2.3.2", "2.5.2")
+            and type(version.get("exit_code")) is int and version["exit_code"] == 0)
+
+
 def kimi_log_fact(facts, reason, changed=None):
     """Fixed diagnostic enums/counts only; never change the proof decision."""
     if isinstance(facts, dict):
@@ -2829,10 +2837,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_project_unchanged = None
     repeat_verified = False
     kimi_repeat_log_proof = None
-    kimi_log_case = (target == "kimi" and kind == "skill" and sys.platform == "linux"
-                     and isinstance(client_version, dict) and client_version.get("status") == "reported"
-                     and client_version.get("value") == "2.5.2"
-                     and type(client_version.get("exit_code")) is int and client_version["exit_code"] == 0)
+    kimi_log_case = kimi_log_evidence_eligible(target, kind, sys.platform, client_version)
     kimi_repeat_log_facts = ({"captures": {phase: {} for phase in ("before", "after-add", "post-list")},
                               "append": {"reason": "not-reached"}} if kimi_log_case else None)
     if installed:
