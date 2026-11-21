@@ -151,9 +151,11 @@ class Lifecycle:
                            "description: Retained foreign Skill in a disposable profile.\n"
                            "---\nDo not change this foreign Skill.\n", encoding="utf-8")
         shutil.copyfile(foreign, self.root / "foreign-skill.md")
-        self.config.write_text("model: offline-native-smoke\nmcp_servers:\n"
-                               "  foreign:\n    command: echo\n    args: [foreign]\n",
-                               encoding="utf-8")
+        # Seed an exact LF fixture on every host: Windows text writes translate
+        # these author-controlled newlines to CRLF, invalidating the strict
+        # native MCP preimage check without changing any product behavior.
+        self.config.write_bytes(b"model: offline-native-smoke\nmcp_servers:\n"
+                                b"  foreign:\n    command: echo\n    args: [foreign]\n")
         # Keep the umask-derived mode Hermes' own installer leaves (0644).
         self.capture([*self.hermes, "--version"], "native-version.txt")
         self.native_home = self.resolved_home("native")
