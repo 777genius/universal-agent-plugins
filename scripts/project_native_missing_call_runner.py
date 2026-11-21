@@ -250,12 +250,7 @@ def installed_config(client, project, name, nonce, events, installer, probe):
 
 def permission_fixture(client, project, server):
     if client == "cursor":
-        emit(project / ".cursor" / "cli.json", {
-            "permissions": {
-                "allow": ["Mcp(" + server + ":inspect_runtime)"],
-                "deny": ["Shell(*)", "Read(**/*)", "Write(**/*)"],
-            },
-        })
+        raise ValueError("Cursor tool permission must come from confirmed UAP add")
     else:
         emit(project / ".qoder" / "settings.json", {
             "mcp": {"enableAllProjectMcpServers": False,
