@@ -3226,7 +3226,7 @@ module.exports = {
                 package = npm_root / "universal-agent-plugins"
                 (package / "lib").mkdir(parents=True)
                 (package / "package.json").write_text(
-                    json.dumps({"version": "0.1.104"}), encoding="utf-8")
+                    json.dumps({"version": "0.1.115"}), encoding="utf-8")
                 (package / "lib/bootstrap.js").write_text(
                     bootstrap.replace("__STRANDED_PHASE__", json.dumps(phase)),
                     encoding="utf-8")
@@ -3246,20 +3246,20 @@ module.exports = {
                                  "failed watchdog must run trusted cache cleanup")
 
     def test_marketing_kit_requires_exact_published_cli_version(self):
-        # The substring "0.1.104" alone also matches prereleases and 0.1.1041.
+        # The substring "0.1.115" alone also matches prereleases and 0.1.1151.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         require = runner["require_exact_published_version"]
         valid = {"exit_code": 0, "timeout": False,
-                 "stdout_tail": "agentplugins 0.1.104\n"}
+                 "stdout_tail": "agentplugins 0.1.115\n"}
         require(valid)
-        for version in ("agentplugins 0.1.104-dev",
-                        "agentplugins 0.1.1041",
+        for version in ("agentplugins 0.1.115-dev",
+                        "agentplugins 0.1.1151",
                         "agentplugins 0.1.103",
-                        "other-launcher 0.1.104",
-                        "agentplugins 0.1.104\nagentplugins 0.1.104",
+                        "other-launcher 0.1.115",
+                        "agentplugins 0.1.115\nagentplugins 0.1.115",
                         ""):
             with self.subTest(version=version):
                 with self.assertRaisesRegex(AssertionError, "not exact published"):
@@ -3282,7 +3282,7 @@ module.exports = {
         failed = {"exit_code": 1, "timeout": False, "stdout_tail": ""}
         timed_out = {"exit_code": None, "timeout": True, "stdout_tail": ""}
         valid = {"exit_code": 0, "timeout": False,
-                 "stdout_tail": "agentplugins 0.1.104\n"}
+                 "stdout_tail": "agentplugins 0.1.115\n"}
         probe, pause = Mock(side_effect=[failed, timed_out, valid]), Mock()
         with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
             verify("agentplugins", {}, Path("."))
@@ -3296,7 +3296,7 @@ module.exports = {
         self.assertEqual(probe.call_count, 3)
         self.assertEqual([item.args for item in pause.call_args_list], [(5,), (10,)])
 
-        probe, pause = Mock(return_value={**valid, "stdout_tail": "agentplugins 0.1.104-dev"}), Mock()
+        probe, pause = Mock(return_value={**valid, "stdout_tail": "agentplugins 0.1.115-dev"}), Mock()
         with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
             with self.assertRaisesRegex(AssertionError, "not exact published"):
                 verify("agentplugins", {}, Path("."))
