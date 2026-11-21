@@ -225,12 +225,13 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   await expect(page.locator('.hero-demo-video')).toBeVisible();
   await expect(page.locator('.hero-demo-video button')).toHaveAccessibleName('Watch demo');
   const preview = (await page.locator('.hero-demo-video').boundingBox())!;
+  const copy = (await page.locator('.hero__copy').boundingBox())!;
   const supported = (await page.locator('.client-section').boundingBox())!;
-  const install = (await page.locator('.hero__window').boundingBox())!;
-  expect(preview.width).toBeCloseTo(800, 0);
-  expect(preview.y - (supported.y + supported.height)).toBeGreaterThanOrEqual(15);
-  expect(install.y + install.height).toBeLessThan(preview.y);
-  await expect(page.locator('.hero-shell .hero-demo-video')).toHaveCount(0);
+  // The video is the hero's right column, above the install steps and agents.
+  expect(preview.width).toBeGreaterThanOrEqual(500);
+  expect(preview.x).toBeGreaterThanOrEqual(copy.x + copy.width);
+  expect(preview.y + preview.height).toBeLessThanOrEqual(supported.y);
+  await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
   // After seven seconds the hidden warm-up frame is intentional. It must not
   // become an active, focusable or autoplay-enabled player without a gesture.
   const muxFrames = page.locator('iframe[src*="player.mux.com"]');
