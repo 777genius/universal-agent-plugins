@@ -93,6 +93,7 @@ func TestKiroPublisherMCPApprovalsFullCLI(t *testing.T) {
 			t.Fatal("Kiro installation lost prepared runtime boundary")
 		}
 	}
+	installationID := state.Installations[0].InstallationID
 	// Uninstall must revoke the granted tool consent through the public CLI,
 	// not only through a direct native-config adapter call.
 	stdout, stderr, err := fixture.execute(false, "remove", "demo", "--target", "kiro", "--format", "json")
@@ -113,7 +114,12 @@ func TestKiroPublisherMCPApprovalsFullCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, err = fixture.store.Load()
-	if err != nil || len(state.Installations) != 0 {
-		t.Fatalf("remove retained saved Kiro installation: %+v, %v", state, err)
+	if err != nil || len(state.Installations) != 1 {
+		t.Fatalf("remove lost retained-data installation: %+v, %v", state, err)
+	}
+	retained := state.Installations[0]
+	if retained.InstallationID != installationID || len(retained.Clients) != 0 ||
+		!retained.DataRetained || len(retained.DataReceipts) == 0 {
+		t.Fatalf("remove failed Kiro retained-data contract: %+v", retained)
 	}
 }
