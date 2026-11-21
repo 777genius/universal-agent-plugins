@@ -323,3 +323,20 @@ func TestCursorScopedApprovalDoesNotDisableAutomaticProjectLifecycle(t *testing.
 		t.Fatal("Cursor extension without a native MCP/Skill bypassed component admission")
 	}
 }
+
+func TestCursorServerApprovalVersionRetainsOnlyNativeQualifiedPins(t *testing.T) {
+	for _, row := range []struct {
+		version string
+		qualified bool
+	}{
+		{"2026.09.18-9a7762b", true},
+		{"2026.10.22-27dcf5f", true},
+		{"2026.10.22-27dcf5f-extra", false},
+		{"2026.10.23-unknown", false},
+		{"", false},
+	} {
+		if cursorQualifiedApprovalVersion(row.version) != row.qualified {
+			t.Fatalf("unexpected native approval admission for %q", row.version)
+		}
+	}
+}

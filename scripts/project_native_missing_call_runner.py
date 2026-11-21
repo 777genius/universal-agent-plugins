@@ -187,10 +187,12 @@ def native_inventory(client, binary, folder, env, private, label, absent):
         raise ValueError("unexpected project MCP source in " + label)
 
 
-def native_selected_inventory(binary, folder, env, private, server):
+def native_selected_inventory(binary, folder, env, private, server, *, require_ready=False):
     out, err = invoke("selected-native-mcp-list", [binary, "mcp", "list"], folder, env, private, 40)
     if server.encode() not in out + b"\n" + err:
         raise ValueError("UAP-installed selected MCP server not listed by genuine native client")
+    if require_ready and (server + ": ready").encode() not in out.splitlines():
+        raise ValueError("UAP-selected Cursor MCP requires native approval or is not ready")
 
 
 def installed_config(client, project, name, nonce, events, installer, probe):
@@ -414,9 +416,11 @@ def run(client, output, expected, *, preflight_only=False, prepared_source=None)
             assert_cursor_owned_tool_permission(project_a, server)
         else:
             permission_fixture(client, project_a, server)
-        if client == "cursor":
-            invoke("cursor-enable-one", [binary, "mcp", "enable", server], project_a, env, private, 40)
-        native_selected_inventory(binary, project_a, env, private, server)
+        # This is the positive no-manual-step oracle. Never call native
+        # 'mcp enable': that could conceal a missing UAP fingerprint approval
+        # and may clear an explicitly disabled server.
+        native_selected_inventory(binary, project_a, env, private, server,
+                                  require_ready=client == "cursor")
 
         preflight_checkpoint(preflight_only, "selected-native-listed")
         if preflight_only:

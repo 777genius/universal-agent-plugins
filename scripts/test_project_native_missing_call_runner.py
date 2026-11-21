@@ -17,6 +17,11 @@ from project_native_missing_call_runner import (
 
 
 class RealClientRunnerContractTest(unittest.TestCase):
+    def test_cursor_native_preflight_never_forges_server_enable(self):
+        source = (Path(__file__).parent / "project_native_missing_call_runner.py").read_text()
+        self.assertNotIn('invoke("cursor-enable-one"', source)
+        self.assertIn('require_ready=client == "cursor"', source)
+
     def test_exact_named_tool_approval(self):
         with tempfile.TemporaryDirectory() as temp:
             project = Path(temp)
