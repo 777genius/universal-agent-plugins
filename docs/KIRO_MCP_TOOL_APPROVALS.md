@@ -30,7 +30,7 @@ On update/repair, the approval is regenerated from the exact selected and verifi
 
 ## What this does **not** automate
 
-**Workspace trust remains a separate Kiro-native decision.** Kiro CLI V3 does not load project Skills or MCP servers in an untrusted workspace, even with an `autoApprove` list. Kiro's documented `--trust-workspace` only skips the prompt for **one CLI invocation**, and does not persist a trust decision or grant IDE trust. There is no documented persistent, headless workspace-trust grant to use for later sessions. UAP does not synthesize the private workspace-roots hash or edit `workspaceTrusted`, grant global all-tools access, obtain credentials, or claim native tool execution without actual authenticated evidence.
+**Workspace trust remains a separate Kiro-native decision.** Gated interactive Kiro CLI V3 sessions do not load project Skills or MCP servers until the workspace is trusted, even with an `autoApprove` list. Kiro's `--no-interactive` launches and older V1/V2 sessions are not gated and can load workspace configuration without asking; this does not grant persistent workspace trust. Kiro's documented `--trust-workspace` only skips the prompt for **one CLI invocation**, and does not persist a trust decision or grant IDE trust. There is no documented persistent, headless workspace-trust grant to use for later sessions. UAP does not synthesize the private workspace-roots hash or edit `workspaceTrusted`, grant global all-tools access, obtain credentials, or claim native tool execution without actual authenticated evidence.
 
 Security references: https://kiro.dev/docs/permissions/ and https://kiro.dev/docs/mcp/configuration/ and https://kiro.dev/docs/mcp/security/.
 
