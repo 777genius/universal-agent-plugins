@@ -57,8 +57,7 @@ func withProjectManagedStdio(definition ClientDefinition) ClientDefinition {
 }
 
 // Clients with confirmed native effects reuse these capabilities and enable
-// receipt-bound effect tracking. Grok's prepared-only Project adapter must not
-// accidentally acquire that lifecycle policy from a metadata-only correction.
+// receipt-bound effect tracking independently of their activation state.
 func withProjectComponents(definition ClientDefinition, skills, mcp SupportLevel) ClientDefinition {
 	definition = withProjectComponentSupport(definition, skills, mcp)
 	definition.ProjectPolicy.TracksNativeEffects = true

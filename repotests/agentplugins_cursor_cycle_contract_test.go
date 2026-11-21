@@ -154,6 +154,15 @@ func TestCursorCycleRemovalRequiresExactDeactivation(t *testing.T) {
 	}
 }
 
+// The original 88416 Cursor command recorded a 79-byte resolving-only stderr
+// with exit 0, mutated=false and no_change=true at repeat-add-a.
+func TestCursorCycleRepeatAddUsesMeasuredNoChangeProgress(t *testing.T) {
+	const measured = "Resolving and validating one Agent Plugin package for every selected target...\n"
+	if got := cursorCycleProgress("repeat-add-a"); got != measured {
+		t.Fatalf("unchanged Cursor add progress differs: got %q, want %q", got, measured)
+	}
+}
+
 func TestCursorCyclePublicOutcomeRequiresMeasuredStageShape(t *testing.T) {
 	r := &cursorCycleRecipe{Installation: domain.Installation{InstallationID: "held-installation"}, Data: domain.DataReceipt{PhysicalBackend: "held-physical"}}
 	for _, stage := range []string{"add-a", "repeat-add-a", "unchanged-update-a", "intact-repair-a", "update-a", "missing-repair-a"} {

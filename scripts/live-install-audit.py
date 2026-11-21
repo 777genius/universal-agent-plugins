@@ -17,6 +17,7 @@ import tomllib
 import traceback
 import uuid
 from runpy import run_path
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from urllib.parse import urlsplit, urlunsplit
 
@@ -81,7 +82,8 @@ NATIVE_ROOTS = {
     "vscode": [".vscode", ".config/Code"], "kiro": [".kiro"],
     "claude": [".claude"], "gemini": [".gemini"],
     "opencode": [".config/opencode", ".opencode"], "cline": [".cline"],
-    "windsurf": [".windsurf", ".devin"], "grok": [".grok"],
+    "windsurf": [".windsurf", ".devin", ".codeium", ".config/devin"],
+    "grok": [".grok"],
     "kimi": [".kimi-code", ".kimi"], "qoder": [".qoder"],
     "pi": [".pi"],
 }
@@ -325,7 +327,9 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
                                stderr=stderr_file, stdin=subprocess.DEVNULL,
                                timeout=timeout, check=False)
                 except subprocess.TimeoutExpired:
-                    if capture_full or sys.platform != "win32":
+                    # A timed-out command is never qualifying, but its bounded
+                    # private-file tails are useful on Linux and Windows alike.
+                    if capture_full:
                         raise
                     stdout_file.seek(0)
                     stderr_file.seek(0)
@@ -376,12 +380,14 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
 
 
 def install_case_timeout(target, kind, item):
-    # The frozen Firebase Windows runtime can finish durable registration
-    # while a cold native runtime setup still holds the original add process.
-    # Stay bounded: a timeout or any surviving registration still FAILS E2E.
+    # A cold Claude/Firebase npm runtime is allowed 10 minutes by
+    # providers.runLockedNPM. The native Windows add must not be killed after
+    # only 180 seconds while that bounded preparation is still permitted.
+    # Keep other clients' historical budgets, and never accept a timeout,
+    # leftover registration, or an unverified repeat/remove as success.
     if (sys.platform == "win32" and kind == "plugin"
             and item == "firebase"):
-        return 180
+        return 660 if target == "claude" else 180
     return 105
 
 
@@ -515,9 +521,17 @@ def failed_case_diagnostics(row):
     """Expose existing failed-case evidence in logs; never change qualification."""
     keys = ("codex_public_add_ready", "codex_public_repeat_ready", "public_skill_ready",
             "repeat_native_unchanged", "repeat_native_runtime_only", "repeat_native_changes",
-            "repeat_native_phases", "repeat_verified", "kimi_repeat_log_facts",
+            "repeat_native_phases", "gemini_repeat_evidence", "repeat_verified", "kimi_repeat_log_facts",
             "removal_verified", "sentinels_preserved", "public_target_states")
     evidence = {key: row[key] for key in keys if row.get(key) is not None}
+    gates = row.get("codex_removal_gates")
+    if row.get("target") == "codex" and row.get("kind") == "plugin" and type(gates) is dict:
+        fields = ("cleanup_succeeded", "post_list_succeeded", "post_list_schema_valid",
+                  "original_ids_absent", "kit_closure_empty_required", "post_list_empty",
+                  "identity_absent", "native_residuals_absent", "retention_verified",
+                  "native_uninstall_completed")
+        evidence["codex_removal_gates"] = {
+            name: gates.get(name) if type(gates.get(name)) is bool else None for name in fields}
     for key in ("error", "error_traceback"):
         if key in row:
             evidence[key] = str(row[key])[:8192]
@@ -1355,6 +1369,104 @@ def native_identity_residuals(native_roots, identity, observed_paths, target,
     return sorted(set(leftover))
 
 
+
+def codex_residual_file_metadata(root, relative, wal=False):
+    """Bounded structural metadata only; never registration or ownership proof."""
+    descriptors = []
+    try:
+        parts = Path(relative).parts
+        if len(relative.encode("utf-8")) > 2048 or len(parts) > 16:
+            return {"metadata_status": "outside-bounds"}
+        if not hasattr(os, "O_NOFOLLOW") or not path_inside_case(root, root.parent):
+            return {"metadata_status": "unsafe-path"}
+        directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        descriptors.append(os.open(root, directory_flags))
+        parts = Path(relative).parts
+        if not parts or any(part in ("..", ".") for part in parts) or Path(relative).is_absolute():
+            return {"metadata_status": "unsafe-path"}
+        for part in parts[:-1]:
+            descriptors.append(os.open(part, directory_flags, dir_fd=descriptors[-1]))
+        parent = descriptors[-1]
+        before = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
+        result = {"metadata_status": "observed", "size_bytes": before.st_size,
+                  "device": before.st_dev, "inode": before.st_ino,
+                  "mode": stat.S_IMODE(before.st_mode),
+                  "ordinary_file": stat.S_ISREG(before.st_mode)}
+        if wal and stat.S_ISREG(before.st_mode):
+            descriptors.append(os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+                                       dir_fd=parent))
+            opened = os.fstat(descriptors[-1])
+            signature = lambda value: (value.st_dev, value.st_ino, value.st_mode,
+                                       value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+            if signature(before) != signature(opened):
+                return {"metadata_status": "unstable"}
+            header = os.read(descriptors[-1], 32)
+            after = os.fstat(descriptors[-1])
+            named = os.stat(parts[-1], dir_fd=parent, follow_symlinks=False)
+            if (signature(opened) != signature(after) or signature(after) != signature(named)
+                    or not path_inside_case(root, root.parent)
+                    or any((os.fstat(fd).st_dev, os.fstat(fd).st_ino) !=
+                            (os.stat(root.joinpath(*parts[:index]), follow_symlinks=False).st_dev,
+                             os.stat(root.joinpath(*parts[:index]), follow_symlinks=False).st_ino)
+                           for index, fd in enumerate(descriptors[:-1]))):
+                return {"metadata_status": "unstable"}
+            magic = int.from_bytes(header[:4], "big")
+            result["wal_header_status"] = ("short-header" if len(header) != 32 else
+                "recognized-magic" if magic in (0x377f0682, 0x377f0683) else "unrecognized-magic")
+            if len(header) == 32 and magic in (0x377f0682, 0x377f0683):
+                result["wal_format_version"] = int.from_bytes(header[4:8], "big")
+                result["wal_page_size"] = int.from_bytes(header[8:12], "big")
+        return result
+    except (OSError, ValueError, RuntimeError):
+        return {"metadata_status": "unavailable"}
+    finally:
+        for descriptor in reversed(descriptors):
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
+def codex_residual_diagnostics(native_roots, residuals):
+    """Describe unresolved residue without influencing the scanner or verdict."""
+    try:
+        counts, groups = {}, {}
+        for index, residual in enumerate(residuals):
+            path, separator, reason = residual.partition(": ")
+            relative = path.removeprefix(".codex/")
+            category = ("wal" if re.fullmatch(r"state_[0-9]+\.sqlite-wal", relative) else
+                "catalog" if re.match(r"^\.tmp/plugins(?:-clone-[A-Za-z0-9]+)?/", relative) else
+                "plugin-data" if re.match(r"^plugins/data/agent-plugins/[0-9a-f]{64}/", relative) else "other")
+            reason = reason if separator and reason in ("symlink", "non-regular", "unscanned-too-large",
+                "unreadable", "unreadable-walk") else "identity-match"
+            key = category + ":" + reason
+            counts[key] = counts.get(key, 0) + 1
+            groups.setdefault(category, []).append((index, relative, reason))
+        selected = []
+        # Include each class before filling the bounded representative sample.
+        while len(selected) < 16 and any(groups.values()):
+            for category, entries in groups.items():
+                if entries and len(selected) < 16:
+                    selected.append((category, *entries.pop(0)))
+        result = {"total": len(residuals), "omitted": len(residuals) - len(selected),
+                  "counts": counts, "entries": []}
+        root = next((root for root in native_roots if root.name == ".codex"), None)
+        for category, index, relative, reason in selected:
+            entry = {"residual_index": index, "class": category, "reason": reason}
+            if category == "plugin-data":
+                entry["data_reference_status"] = "not-supplied-to-diagnostic"
+            if root is not None and category != "other":
+                entry.update(codex_residual_file_metadata(root, relative, category == "wal"))
+            result["entries"].append(entry)
+        while len(json.dumps(result, indent=2).encode("utf-8")) > 8192:
+            result["entries"].pop()
+            result["omitted"] += 1
+        return result
+    except Exception:
+        # Diagnostic failure must never replace the original negative result.
+        return {"diagnostic_status": "unavailable"}
+
+
 def path_inside_case(path, case_root):
     """Reject intermediate symlinks as well as escaping or unreadable roots."""
     try:
@@ -1614,15 +1726,21 @@ def matching_installations(response, identity, target, kind, item, signed_releas
         clients = node.get("clients", [])
         if not isinstance(clients, list):
             continue
+        if target == "kiro" and kind == "plugin" and sum(
+                isinstance(client, dict) and client.get("client_id") == target
+                for client in clients) != 1:
+            continue
+        prepared_kiro = (kiro_prepared_user_client(clients)
+                         if target == "kiro" and kind == "plugin" else None)
         verified_clients = [
             client for client in clients
             if isinstance(client, dict) and client.get("client_id") == target and
-            (client.get("verification") == "installation_verified" or
+            (client is prepared_kiro or client.get("verification") == "installation_verified" or
              (kind == "plugin" and client.get("materialization") == "materialized" and
               client.get("verification") == "package_validated" and
               (client.get("activation") == "manual_activation_required" or
                (isinstance(item, str) and item in signed_release_pins
-                and prepared_package_binding(client, target)))))
+                and target != "kiro" and prepared_package_binding(client, target)))))
         ]
         if not verified_clients:
             continue
@@ -2066,6 +2184,14 @@ def copilot_settings_read(path, case_root):
             os.close(descriptor)
 
 
+def kimi_log_evidence_eligible(target, kind, platform, version):
+    """Only pinned native Kimi Skills versions may enter strict log-append proof."""
+    return (target == "kimi" and kind == "skill" and platform == "linux"
+            and isinstance(version, dict) and version.get("status") == "reported"
+            and version.get("value") in ("2.3.2", "2.5.2")
+            and type(version.get("exit_code")) is int and version["exit_code"] == 0)
+
+
 def kimi_log_fact(facts, reason, changed=None):
     """Fixed diagnostic enums/counts only; never change the proof decision."""
     if isinstance(facts, dict):
@@ -2294,21 +2420,131 @@ def initialize_project_skill_git_root(project, env, case_root):
         raise RuntimeError("genuine isolated project Git init failed")
 
 
+def windsurf_plugin_profile(home, case_root):
+    """Author one Cascade channel and the real local Devin User profile."""
+    roots = (home / ".codeium/windsurf", home / ".config/devin")
+    preserved = []
+    for root in roots:
+        for directory in (root.parent, root):
+            if not path_inside_case(directory, case_root):
+                raise ValueError("Windsurf fixture root is redirected")
+            directory.mkdir(exist_ok=True)
+            if directory.is_symlink() or not directory.is_dir():
+                raise ValueError("Windsurf fixture root is not ordinary")
+        sentinel = root / "foreign-neighbor.txt"
+        body = "unmanaged native neighbor must survive\n"
+        with sentinel.open("x", encoding="utf-8") as stream:
+            stream.write(body)
+        preserved.append((sentinel, body))
+    config = roots[1] / "config.json"
+    body = '{"read_config_from":{"cloud":false}}\n'
+    with config.open("x", encoding="utf-8") as stream:
+        stream.write(body)
+    return preserved
+
+
+def windsurf_local_policy_preserved(home, case_root):
+    """Retain cloud:false; permit only Devin's already-qualified version migration."""
+    config = home / ".config/devin/config.json"
+    try:
+        if (not path_inside_case(config, case_root) or config.is_symlink()
+                or not config.is_file() or config.stat().st_size > 256):
+            return False
+        value = json.loads(config.read_text(encoding="utf-8"), object_pairs_hook=_unique_json_object)
+        original = {"read_config_from": {"cloud": False}}
+        migrated = {**original, "version": 1}
+        return (type(value) is dict and value.get("read_config_from") == original["read_config_from"]
+                and value["read_config_from"]["cloud"] is False
+                and (value == original or (value == migrated and type(value["version"]) is int)))
+    except (OSError, UnicodeError, ValueError, TypeError):
+        return False
+
+
 def audit_client_id(target, kind):
-    """Public Desktop arguments persist as the canonical local Codex client."""
+    """Keep the public Desktop argv while observing its canonical User backend."""
     return "codex" if (target, kind) == ("chatgpt", "plugin") else target
 
 
+def initialize_codex_plugin_profile(binary, case_root, home, project, data, env, assert_case_unchanged):
+    """Reuse the strict pinned native bootstrap without exempting profile paths."""
+    # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
+    # Author these fixture objects before protecting every byte and identity.
+    assert_case_unchanged()
+    profile = home / ".codex"
+    for directory in (profile / "tmp", profile / "tmp/arg0"):
+        directory.mkdir(mode=0o700)
+    with (profile / "installation_id").open("xb") as stream:
+        if os.name != "nt":
+            os.fchmod(stream.fileno(), 0o644)
+        stream.write(str(uuid.uuid4()).encode("ascii"))
+    protected_home = scoped_snapshot((home,))
+    protected_delivery = scoped_snapshot((project, data))
+    codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
+        binary, case_root, home, project, env)
+    codex_plugin_sqlite.guard()
+    assert_case_unchanged()
+    bundle_files, bundle_directories, bundle_metadata = (
+        CODEX_RUNTIME_AUDIT["plugin_initialization"](home / ".codex"))
+    system_root = home / ".codex/skills/.system"
+    codex_system_metadata = {
+        path: fact for path, fact in bundle_metadata.items()
+        if path == system_root.parent or path.is_relative_to(system_root)}
+    initialized_home = scoped_snapshot((home,))
+    # Admit only exact artifacts validated by the bounded Codex initialization
+    # proofs. Every other old or newly created key is protected.
+    initializer = codex_plugin_sqlite
+    sqlite_root = home / ".local/state/codex-sqlite"
+    config_path = home / ".codex/config.toml"
+    if initializer.runtime != sqlite_root or initializer.config != config_path:
+        raise ValueError("Codex preinstall initialization changed protected fixture authority")
+    owned_files = {
+        config_path: hashlib.sha256(
+            CODEX_RUNTIME_AUDIT["_sqlite_config"](initializer.pin)).hexdigest(),
+        **{sqlite_root / name: fact["sha256"] for name, fact in
+           initializer.observations[0]["runtime_files_fully_read"].items()},
+        **bundle_files,
+    }
+    expected_home = dict(protected_home)
+    owned_directories = (home / ".local", home / ".local/state", sqlite_root,
+                         *bundle_directories)
+    for path in (*owned_directories, *owned_files):
+        directory = path in owned_directories
+        relative = path.relative_to(home)
+        metadata_key = "metadata:0:" + relative.as_posix()
+        metadata = initialized_home.get(metadata_key)
+        if (not isinstance(metadata, tuple) or not metadata
+                or not (stat.S_ISDIR(metadata[0]) if directory
+                        else stat.S_ISREG(metadata[0]))
+                or (path in bundle_metadata and metadata != bundle_metadata[path])):
+            raise ValueError("Codex preinstall initialization changed protected fixture authority")
+        entries = {metadata_key: metadata}
+        if directory:
+            entries["directory:0:" + relative.as_posix()] = "present"
+        else:
+            entries[home.name + "/" + str(relative)] = owned_files[path]
+        for key, value in entries.items():
+            if key not in protected_home:
+                expected_home[key] = value
+    initializer.guard()
+    if (initialized_home != expected_home
+            or scoped_snapshot((project, data)) != protected_delivery):
+        raise ValueError("Codex preinstall initialization changed protected fixture authority")
+    return codex_plugin_sqlite, codex_system_metadata
+
+
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-            signed_release_pins=None, *, client_version=None, historical_baseline=False):
+            signed_release_pins=None, *, client_version=None, historical_baseline=False,
+            historical_plugin_archive=False):
     with ExitStack() as audits:
         return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                         signed_release_pins, audits, client_version,
-                        **({"historical_baseline": True} if historical_baseline else {}))
+                        **({"historical_baseline": True} if historical_baseline else {}),
+                        **({"historical_plugin_archive": True} if historical_plugin_archive else {}))
 
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-             signed_release_pins, audits, client_version, *, historical_baseline=False):
+             signed_release_pins, audits, client_version, *, historical_baseline=False,
+             historical_plugin_archive=False):
     native_target = audit_client_id(target, kind)
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
@@ -2324,7 +2560,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     canonical_runroot = runroot.resolve(strict=True)
     if case_root.is_symlink():
         raise ValueError("audit case root is redirected")
-    case_root.mkdir(exist_ok=True)
+    if target == "claude" and kind == "skill" and sys.platform == "win32":
+        CLAUDE_RETIREMENT_AUDIT["_WINDOWS"]["fresh_case"](case_root)
+    else:
+        case_root.mkdir(exist_ok=True)
     if (runroot.is_symlink() or case_root.is_symlink() or not case_root.is_dir()
             or case_root.resolve(strict=True).parent != canonical_runroot):
         raise ValueError("audit case root escaped disposable run root")
@@ -2334,7 +2573,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if (path.is_symlink() or
                 not path.parent.resolve().is_relative_to(canonical_case)):
             raise ValueError("nested audit directory escapes disposable case")
-        path.mkdir(parents=True, exist_ok=True)
+        path.mkdir(parents=True, exist_ok=True, mode=0o700 if path == data else 0o777)
         if path.is_symlink() or not path.resolve().is_relative_to(canonical_case):
             raise ValueError("nested audit directory escapes disposable case")
     native_roots = [home / v for v in NATIVE_ROOTS[native_target]]
@@ -2372,6 +2611,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # only an empty isolated profile and is never counted as agent detection.
     if native_target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
+    windsurf_fixture = (windsurf_plugin_profile(home, case_root)
+                        if target == "windsurf" and kind == "plugin" else [])
+    windsurf_commands = []
     env = isolated_client_env(home, case_root, data)
     codex_skill_case = target == "codex" and kind == "skill"
     codex_runtime = None
@@ -2388,7 +2630,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     codex_add_ready = False
     codex_repeat_ready = False
     historical_observer = (HISTORICAL_CODEX["PublishedBaseline"](cli, env, project)
-                           if historical_baseline else None)
+                           if historical_baseline or historical_plugin_archive else None)
+    historical_plugin_feed = None
     historical_add_verified = historical_repeat_add_verified = False
     historical_repeat_lifecycle_verified = False
     def assert_case_unchanged():
@@ -2421,6 +2664,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
 
     def audited_call(*args, **kwargs):
         assert_case_unchanged()
+        if windsurf_fixture:
+            windsurf_commands.append(list(args[0]))
         outcome = call(*args, **kwargs)
         assert_case_unchanged()
         if historical_observer is not None:
@@ -2430,6 +2675,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_plugin_sqlite.checkpoint("after-public-command")
         return outcome
 
+    if historical_plugin_archive:
+        if (target, kind, index, item) not in (("codex", "plugin", 0, "atlassian"),
+                                              ("codex", "plugin", 1, "context7")):
+            raise ValueError("historical archive requires the two pinned Codex plugins")
+        historical_plugin_feed = HISTORICAL_CODEX["prepare_plugin_archive"](
+            historical_observer, audited_call, item, signed_release_pins[item])
     if gemini_skill_case:
         # The pinned native list initializes a model context even without a model call.
         # Its optional tree includes transient UAP package snapshots; discovery is unchanged.
@@ -2451,70 +2702,18 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             home / ".codex")
         _codex_system_skill_checkpoint(home, codex_system_metadata)
     if native_target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
-        # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
-        # Author these fixture objects before protecting every byte and identity.
+        codex_plugin_sqlite, codex_system_metadata = initialize_codex_plugin_profile(
+            AGENT_BINARIES["codex"], case_root, home, project, data, env, assert_case_unchanged)
         assert_case_unchanged()
-        profile = home / ".codex"
-        for directory in (profile / "tmp", profile / "tmp/arg0"):
-            directory.mkdir(mode=0o700)
-        with (profile / "installation_id").open("xb") as stream:
-            if os.name != "nt":
-                os.fchmod(stream.fileno(), 0o644)
-            stream.write(str(uuid.uuid4()).encode("ascii"))
-        protected_home = scoped_snapshot((home,))
-        protected_delivery = scoped_snapshot((project, data))
-        codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
-            AGENT_BINARIES["codex"], case_root, home, project, env)
-        assert_case_unchanged()
-        bundle_files, bundle_directories, bundle_metadata = (
-            CODEX_RUNTIME_AUDIT["plugin_initialization"](home / ".codex"))
-        system_root = home / ".codex/skills/.system"
-        codex_system_metadata = {
-            path: fact for path, fact in bundle_metadata.items()
-            if path == system_root.parent or path.is_relative_to(system_root)}
-        initialized_home = scoped_snapshot((home,))
-        # Admit only exact artifacts validated by the bounded Codex initialization
-        # proofs. Every other old or newly created key is protected.
-        initializer = codex_plugin_sqlite
-        sqlite_root = home / ".local/state/codex-sqlite"
-        config_path = home / ".codex/config.toml"
-        if initializer.runtime != sqlite_root or initializer.config != config_path:
-            raise ValueError("Codex preinstall initialization changed protected fixture authority")
-        owned_files = {
-            config_path: hashlib.sha256(
-                CODEX_RUNTIME_AUDIT["_sqlite_config"](initializer.pin)).hexdigest(),
-            **{sqlite_root / name: fact["sha256"] for name, fact in
-               initializer.observations[0]["runtime_files_fully_read"].items()},
-            **bundle_files,
-        }
-        expected_home = dict(protected_home)
-        owned_directories = (home / ".local", home / ".local/state", sqlite_root,
-                             *bundle_directories)
-        for path in (*owned_directories, *owned_files):
-            directory = path in owned_directories
-            relative = path.relative_to(home)
-            metadata_key = "metadata:0:" + relative.as_posix()
-            metadata = initialized_home.get(metadata_key)
-            if (not isinstance(metadata, tuple) or not metadata
-                    or not (stat.S_ISDIR(metadata[0]) if directory
-                            else stat.S_ISREG(metadata[0]))
-                    or (path in bundle_metadata and metadata != bundle_metadata[path])):
-                raise ValueError("Codex preinstall initialization changed protected fixture authority")
-            entries = {metadata_key: metadata}
-            if directory:
-                entries["directory:0:" + relative.as_posix()] = "present"
-            else:
-                entries[home.name + "/" + str(relative)] = owned_files[path]
-            for key, value in entries.items():
-                if key not in protected_home:
-                    expected_home[key] = value
-        initializer.guard()
-        if (initialized_home != expected_home
-                or scoped_snapshot((project, data)) != protected_delivery):
-            raise ValueError("Codex preinstall initialization changed protected fixture authority")
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
                      if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)
+    # Preserve the existing VS Code manual-only observation contract. These
+    # values are inert for every other client, including the active E2E matrix.
+    vscode_user = target == "vscode" and kind == "plugin"
+    vscode_roots = (runroot, case_root, home, data, project)
+    vscode_native_before = scoped_snapshot(native_roots) if vscode_user else None
+    vscode_roots_before = vscode_root_identities(vscode_roots) if vscode_user else None
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)
         args = ["add", item, "--target", target, "--scope", "user", "--format", "json"]
@@ -2555,8 +2754,22 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     listed = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                    env, project, 30))
     listed_json = listed.pop("_json", None) if listed else None
+    vscode_native_after = scoped_snapshot(native_roots) if vscode_user else None
+    vscode_roots_after = vscode_root_identities(vscode_roots) if vscode_user else None
     matching = matching_installations(listed_json, identity, native_target, kind, item,
                                      signed_release_pins)
+    vscode_original = (vscode_manual_binding(listed_json, identity, item, signed_release_pins)
+                       if vscode_user else None)
+    vscode_repeat = None
+    vscode_user_refusal = None
+    if vscode_user and type(index) is int and index == 13 and item == "marketing-kit":
+        vscode_user_refusal = {
+            "schema_version": 1, "add_argv": [cli, *args],
+            "list_argv": [cli, "list", "--target", target, *scope, "--format", "json"],
+            "list_document": listed_json, "native_unchanged": vscode_native_before == vscode_native_after,
+            "roots_unchanged": vscode_roots_before == vscode_roots_after,
+            "source_pin_kind": "expected-fixture",
+            "expected_source_pin": (signed_release_pins or {}).get(item)}
     grok_prepared = (grok_prepared_skill_installations(
         listed_json, item, skill_path, project, output)
         if target == "grok" and kind == "skill" and not matching
@@ -2568,12 +2781,14 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if kind == "plugin" and isinstance(item, str) and not item.startswith("github:")
         else [])
     listed_identity = len(matching) == 1
+    kiro_prepared = bool(target == "kiro" and kind == "plugin" and listed_identity
+                         and kiro_prepared_user_client(matching[0].get("clients")) is not None)
     failed_install_registered = has_target_registration(listed_json, identity, native_target) if (
         output["exit_code"] != 0) else False
     failed_install_residue = bool(output["exit_code"] != 0 and (
         failed_install_registered or native_attribution or skill_path))
     prepared_binding = bool(listed_identity and (
-        grok_prepared or (kind == "plugin" and any(
+        grok_prepared or kiro_prepared or (kind == "plugin" and any(
             (client.get("client_id") == native_target and client.get("verification") == "package_validated"
              and client.get("activation") == "manual_activation_required")
             or prepared_package_binding(client, native_target)
@@ -2635,17 +2850,18 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_native_runtime_only = False
     repeat_native_changes = None
     repeat_native_phases = None
+    gemini_repeat_evidence = None
+    gemini_repeat_observed = True
     repeat_lock_unchanged = None
     repeat_project_unchanged = None
     repeat_verified = False
     kimi_repeat_log_proof = None
-    kimi_log_case = (target == "kimi" and kind == "skill" and sys.platform == "linux"
-                     and isinstance(client_version, dict) and client_version.get("status") == "reported"
-                     and client_version.get("value") == "2.5.2"
-                     and type(client_version.get("exit_code")) is int and client_version["exit_code"] == 0)
+    kimi_log_case = kimi_log_evidence_eligible(target, kind, sys.platform, client_version)
     kimi_repeat_log_facts = ({"captures": {phase: {} for phase in ("before", "after-add", "post-list")},
                               "append": {"reason": "not-reached"}} if kimi_log_case else None)
     if installed:
+        gemini_repeat_phases = target == "gemini" and kind == "skill"
+        capture_repeat_phases = codex_runtime is not None or gemini_repeat_phases
         before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
                                  if codex_runtime is not None else None)
@@ -2669,7 +2885,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         kimi_log_after = (kimi_repeat_log_capture(home, project, case_root,
                             kimi_repeat_log_facts["captures"]["after-add"]) if kimi_log_case else None)
         after_repeat_add = (snapshot(native_roots, include_directories=gemini_runtime is not None)
-                            if codex_runtime is not None or gemini_runtime is not None else None)
+                            if capture_repeat_phases else None)
         if gemini_runtime is not None:
             gemini_runtime.checkpoint("after-public-repeat-add", after_repeat_add,
                                       interval=(repeat_add_started, repeat_add_finished))
@@ -2679,11 +2895,13 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                            env, project, 30)
         repeat_list_finished = datetime.now(timezone.utc)
         after_repeat_list = (snapshot(native_roots, include_directories=gemini_runtime is not None)
-                             if codex_runtime is not None or gemini_runtime is not None else None)
+                             if capture_repeat_phases else None)
         if gemini_runtime is not None:
             gemini_runtime.checkpoint("after-public-repeat-list", after_repeat_list,
                                       interval=(repeat_list_started, repeat_list_finished))
         repeat_list_json = repeat_list.pop("_json", None)
+        if vscode_user:
+            vscode_repeat = vscode_manual_binding(repeat_list_json, identity, item, signed_release_pins)
         repeat_matches = (grok_prepared_skill_installations(
             repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
             if grok_prepared else matching_installations(
@@ -2699,9 +2917,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                             kimi_repeat_log_facts["captures"]["post-list"]) if kimi_log_case else None)
         gemini_repeat_valid = (gemini_runtime.finish(after_repeat_native)
                               if gemini_runtime is not None else False)
-        if codex_runtime is not None or gemini_runtime is not None:
+        if capture_repeat_phases:
             repeat_native_phases = repeat_native_phase_evidence(
                 before_repeat_native, after_repeat_add, after_repeat_list, after_repeat_native)
+            if gemini_repeat_phases:
+                # Only public-operation phases occurred; no native checkpoint was invoked.
+                repeat_native_phases = repeat_native_phases[:2]
         repeat_native_unchanged = after_repeat_native == before_repeat_native
         if not repeat_native_unchanged:
             repeat_native_changes = snapshot_change_evidence(
@@ -2723,7 +2944,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
             and len(repeat_matches) == 1
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
+            and (not kiro_prepared or (
+                kiro_prepared_user_client(repeat_matches[0].get("clients")) is not None
+                and repeat_matches[0].get("source") == matching[0].get("source")))
             and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
+            and gemini_repeat_observed
             and (not grok_prepared or repeat_project_unchanged)
         )
         repeat_verified = bool(historical_repeat_lifecycle_verified
@@ -2772,6 +2997,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     cleanup = None
     cleanup_json = None
     native_uninstall = None
+    vscode_user_manual = None
     if installed:
         # Codex explicitly requires external uninstall before UAP can settle a
         # user-scope plugin removal. We execute and verify the real native
@@ -2785,10 +3011,53 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         attestation = (["--external-uninstalled"] if
                        native_uninstall and native_uninstall["completed"] else [])
         # Grok project Skills have generated bundle names; never select by raw alias.
-        selector = matching[0]["installation_id"] if grok_prepared else identity
+        selector = matching[0]["installation_id"] if grok_prepared or kiro_prepared else identity
+        protected = None
+        if (vscode_original is not None and vscode_repeat == vscode_original and repeat_verified):
+            protected = scoped_snapshot((home, data, project))
+            vscode_user_manual = {
+                "schema_version": 1, "original_binding": vscode_original, "repeat_binding": vscode_repeat,
+                "post_refusal_binding": None, "post_refusal_list": None,
+                "remove_argv": [cli, "remove", selector, "--target", target, *scope, *attestation, "--format", "json"],
+                "list_argv": [cli, "list", "--target", target, *scope, "--format", "json"],
+                "native_unchanged": vscode_native_before == vscode_native_after == scoped_snapshot(native_roots),
+                "roots_unchanged": vscode_roots_before == vscode_roots_after == vscode_root_identities(vscode_roots),
+                "protected_before_sha256": vscode_snapshot_digest(protected),
+                "protected_after_list_sha256": None, "protected_after_list": False}
         cleanup = audited_call([cli, "remove", selector, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup_json = cleanup.pop("_json", None)
+        if vscode_user_manual is not None:
+            # Manual-only observation: a refusal is not a native uninstall.
+            # Read back the exact binding only after the public refusal and all
+            # protected bytes/root identities remain unchanged.
+            proof = vscode_user_manual
+            proof["refusal_document"] = cleanup_json
+            proof["refusal_observed"] = bool(
+                vscode_command_complete(cleanup, 1)
+                and cleanup.get("stderr_tail") == VSCODE_MANUAL_REMOVE_STDERR
+                and vscode_manual_remove_refusal(cleanup_json, vscode_original))
+            after_refusal = scoped_snapshot((home, data, project))
+            proof["protected_after_refusal"] = after_refusal == protected
+            proof["protected_after_refusal_sha256"] = vscode_snapshot_digest(after_refusal)
+            proof["native_unchanged"] = (proof["native_unchanged"]
+                and scoped_snapshot(native_roots) == vscode_native_before)
+            proof["roots_unchanged"] = (proof["roots_unchanged"]
+                and vscode_root_identities(vscode_roots) == vscode_roots_before)
+            if (proof["refusal_observed"] and proof["protected_after_refusal"]
+                    and proof["native_unchanged"] and proof["roots_unchanged"]):
+                observed = audited_call(proof["list_argv"], env, project, 30)
+                observed_json = observed.pop("_json", None)
+                proof["post_refusal_list"] = observed
+                proof["post_refusal_binding"] = vscode_manual_binding(
+                    observed_json, identity, item, signed_release_pins)
+                after_list = scoped_snapshot((home, data, project))
+                proof["protected_after_list"] = after_list == protected
+                proof["protected_after_list_sha256"] = vscode_snapshot_digest(after_list)
+                proof["native_unchanged"] = (proof["native_unchanged"]
+                    and scoped_snapshot(native_roots) == vscode_native_before)
+                proof["roots_unchanged"] = (proof["roots_unchanged"]
+                    and vscode_root_identities(vscode_roots) == vscode_roots_before)
     qoder_native_after_remove = None
     if target == "qoder" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
         qoder_native_after_remove = qoder_native_plugin_state(
@@ -2800,6 +3069,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         and preserved_regular_text(native_foreign, "unmanaged native neighbor must survive\n", case_root)
         and preserved_regular_text(
             project_foreign, "---\nname: foreign-neighbor\ndescription: unrelated\n---\n", case_root)
+        and all(preserved_regular_text(path, body, case_root) for path, body in windsurf_fixture)
+        and (not windsurf_fixture or windsurf_local_policy_preserved(home, case_root))
     )
     post_list = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
@@ -2951,6 +3222,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     installed = installed and (not codex_skill_case or codex_add_ready)
     if installed and removal_verified and sentinels_preserved and not repeat_verified:
         status = "repeat-add-unqualified"
+    elif kiro_prepared and installed and removal_verified and sentinels_preserved and repeat_verified:
+        status = "incomplete-native-proof"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
         status = ("prepared-lifecycle-passed" if (
                        kind == "plugin" and prepared_components_only)
@@ -3022,7 +3295,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if status == "passed" and skill_public_ready is not None and not all(skill_public_ready.values()):
         status = "incomplete-native-proof"
     return {"kind": kind, "index": index, "identity": identity, "target": target,
-            **({"canonical_client_id": native_target} if target == "chatgpt" else {}),
+            "canonical_client_id": native_target,
+            "windsurf_public_commands": windsurf_commands if windsurf_fixture else None,
+            "windsurf_native_image_unchanged": (snapshot(native_roots) == before
+                                                 if windsurf_fixture else None),
+            "windsurf_expected_release_pin": ((signed_release_pins or {}).get(item)
+                                                if windsurf_fixture else None),
             "source": item if kind == "plugin" else item["source"],
             "status": status, "install": output, "list": listed,
             "native_file_delta": len(changed),
@@ -3033,6 +3311,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "lock_written": bool(locked), "lock_contains_identity": bool(lock_contains),
             "lock_exact_source_pinned": lock_pinned, "skill_bytes_match": bool(skill_bytes_match),
             "listed_identity": listed_identity, "prepared_binding": prepared_binding,
+            "kiro_prepared_lifecycle_verified": bool(kiro_prepared and installed and repeat_verified
+                                                     and removal_verified and sentinels_preserved),
             "signed_release_observation": signed_observation,
             "public_target_states": {
                 "after-add": public_target_state_observation(
@@ -3056,6 +3336,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "kimi_repeat_log_facts": kimi_repeat_log_facts,
             "repeat_native_changes": repeat_native_changes,
             "repeat_native_phases": repeat_native_phases,
+            **({"gemini_repeat_evidence": gemini_repeat_evidence}
+               if gemini_repeat_evidence is not None else {}),
             "repeat_lock_unchanged": repeat_lock_unchanged,
             "repeat_project_unchanged": repeat_project_unchanged,
             "repeat_verified": repeat_verified,
@@ -3089,6 +3371,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 "historical_repeat_add_verified": historical_repeat_add_verified,
                 "historical_repeat_lifecycle_verified": historical_repeat_lifecycle_verified}
                if historical_observer is not None else {}),
+            **({"historical_plugin_feed": historical_plugin_feed}
+               if historical_plugin_feed is not None else {}),
             "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
             "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
             "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
@@ -3097,6 +3381,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             **({"codex_plugin_sqlite_proof": codex_plugin_sqlite.evidence()}
                if codex_plugin_sqlite is not None else {}),
             "copilot_disabled_setting_retained": copilot_disabled_setting_retained,
+            "vscode_user_manual": vscode_user_manual, "vscode_user_refusal": vscode_user_refusal,
             "post_list_schema_valid": post_list_schema_valid,
             "post_remove_identity_registered": post_remove_identity_registered,
             "sentinels_preserved": sentinels_preserved}
@@ -3136,8 +3421,9 @@ def expected_negative_coverage(row, cli_version=None):
         if (row.get("status") == "prepared-lifecycle-passed"
                 and row.get("prepared_components_only") is True):
             return True
-        # Only these immutable sources in the verified 0.1.95 / 0.1.101 / 0.1.102
-        # catalog have a clean lifecycle but no attributable native component.
+        # Only these immutable sources in the verified 0.1.95 / 0.1.101 /
+        # 0.1.102 / 0.1.115 catalog have a clean lifecycle but no attributable
+        # native component. Their partial support remains explicitly unqualified.
         # An unknown or newly unqualified source must still fail this audit.
         non_native_direct_sources = {
             "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d",
@@ -3146,7 +3432,7 @@ def expected_negative_coverage(row, cli_version=None):
             "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
         }
         if (row.get("status") == "package-installed-native-unqualified"
-                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101", "agentplugins 0.1.102")
+                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101", "agentplugins 0.1.102", "agentplugins 0.1.115")
                 and row.get("prepared_components_only") is False
                 and native_files == []
                 and row.get("source") in non_native_direct_sources):
@@ -3179,6 +3465,684 @@ def expected_negative_coverage(row, cli_version=None):
                         in diagnostic))
 
 
+def windsurf_source_negative(row, fixtures):
+    """One frozen unsupported source with complete unchanged native images."""
+    release = MARKETING_KIT_SIGNED_CLOSURE["777genius/marketing-kit"]
+    expected = {"distribution": "777genius/marketing-kit", "repository": release["repository"],
+                "path": release["package_path"], "revision": release["resolved_revision"],
+                "sequence": release["release_sequence"], "tree_digest": release["tree_digest"],
+                "manifest_digest": release["manifest_digest"]}
+    install, listed, commands = row.get("install"), row.get("list"), row.get("windsurf_public_commands")
+    if (type(install) is not dict or type(listed) is not dict or type(commands) is not list
+            or len(commands) != 2 or any(type(command) is not list for command in commands)
+            or not commands[0] or not commands[1] or type(commands[0][0]) is not str
+            or not Path(commands[0][0]).is_absolute() or commands[0][0] != commands[1][0]):
+        return False
+    return bool(
+        (row.get("target"), row.get("kind"), row.get("index"), row.get("source"), row.get("identity"))
+        == ("windsurf", "plugin", 13, "marketing-kit", "marketing-kit")
+        and type(row.get("index")) is int
+        and fixtures["signed_release_pins"].get("marketing-kit") == expected
+        and row.get("windsurf_expected_release_pin") == expected
+        and type(row["windsurf_expected_release_pin"].get("sequence")) is int
+        and row.get("windsurf_native_image_unchanged") is True
+        and row.get("status") == "documented-or-source-unsupported"
+        and type(row.get("native_file_delta")) is int and row["native_file_delta"] == 0
+        and row.get("native_identity_files") == [] and row.get("native_residuals") == []
+        and row.get("sentinels_preserved") is True
+        and all(row.get(key) is False for key in (
+            "listed_identity", "failed_install_registered", "failed_install_residue",
+            "post_remove_identity_registered"))
+        and all(key in row and row[key] is None
+                for key in ("repeat_add", "repeat_list", "cleanup", "post_remove_list"))
+        and commands[0][1:] == ["add", "marketing-kit", "--target", "windsurf", "--scope", "user", "--format", "json"]
+        and commands[1][1:] == ["list", "--target", "windsurf", "--scope", "user", "--format", "json"]
+        and type(install.get("exit_code")) is int and install["exit_code"] == 1
+        and install.get("timeout") is False and install.get("stdout_tail") == ""
+        and install.get("stderr_tail") == (
+            'agentplugins: no eligible directory release for "marketing-kit": '
+            '777genius/marketing-kit: release does not support complete target set; missing windsurf\n')
+        and type(listed.get("exit_code")) is int and listed["exit_code"] == 0
+        and listed.get("timeout") is False and listed.get("stderr_tail") == ""
+        and listed.get("stdout_tail") == (
+            '{"schema_version":1,"command":"list","result":"success",'
+            '"data":{"installations":[]}}\n'))
+
+
+WINDSURF_COMPONENT_REFUSALS = {
+    23: ("github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d", "itential-builder"),
+    24: ("github:GoogleCloudPlatform/google-cloud-storage-plugin@b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b", "google-cloud-storage"),
+    27: ("github:cometchat/cometchat-skills@8652f1ea41d12e5058123db1e4e6babef9c918f1", "cometchat-skills"),
+    28: ("github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e", "uizze-ui-slop"),
+}
+
+
+def windsurf_component_negative(row, fixtures):
+    """Four pinned public component refusals, never an alias-only waiver."""
+    index = row.get("index")
+    selected = WINDSURF_COMPONENT_REFUSALS.get(index) if type(index) is int else None
+    if selected is None:
+        return False
+    source, identity = selected
+    install, listed, commands = row.get("install"), row.get("list"), row.get("windsurf_public_commands")
+    if (type(install) is not dict or type(listed) is not dict or type(commands) is not list
+            or len(commands) != 2 or any(type(command) is not list for command in commands)
+            or not commands[0] or not commands[1] or type(commands[0][0]) is not str
+            or not Path(commands[0][0]).is_absolute() or commands[0][0] != commands[1][0]):
+        return False
+    return bool(
+        (row.get("target"), row.get("canonical_client_id"), row.get("kind"),
+         row.get("source"), row.get("identity"), row.get("status"))
+        == ("windsurf", "windsurf", "plugin", source, identity, "install-failed")
+        and fixtures["plugin_aliases"][index] == source
+        and fixtures["plugin_declared_names"].get(source) == identity
+        and row.get("windsurf_native_image_unchanged") is True
+        and type(row.get("native_file_delta")) is int and row["native_file_delta"] == 0
+        and all(row.get(key) == [] for key in (
+            "native_identity_files", "native_component_candidates", "native_residuals",
+            "post_removal_leftovers", "matched_installation_ids", "repeat_installation_ids"))
+        and row.get("sentinels_preserved") is True
+        and all(row.get(key) is False for key in (
+            "listed_identity", "failed_install_registered", "failed_install_residue",
+            "post_remove_identity_registered", "lock_written", "lock_contains_identity",
+            "lock_exact_source_pinned", "repeat_verified", "removal_verified"))
+        and all(key in row and row[key] is None for key in (
+            "repeat_add", "repeat_list", "cleanup", "post_remove_list",
+            "native_uninstall", "windsurf_expected_release_pin"))
+        and commands[0][1:] == ["add", source, "--target", "windsurf", "--scope", "user", "--format", "json"]
+        and commands[1][1:] == ["list", "--target", "windsurf", "--scope", "user", "--format", "json"]
+        and type(install.get("exit_code")) is int and install["exit_code"] == 1
+        and install.get("timeout") is False and install.get("stdout_tail") == ""
+        and install.get("stderr_tail") == (
+            f"agentplugins: preflight {identity}/windsurf: "
+            "devin Global supports only selected Skills and MCP components\n")
+        and type(listed.get("exit_code")) is int and listed["exit_code"] == 0
+        and listed.get("timeout") is False and listed.get("stderr_tail") == ""
+        and listed.get("stdout_tail") == (
+            '{"schema_version":1,"command":"list","result":"success",'
+            '"data":{"installations":[]}}\n'))
+
+
+def windsurf_prepared_readout(row, fixtures, cli):
+    """Join installed/Prepared Global receipts to the six actual public calls."""
+    source, identity = row.get("source"), row.get("identity")
+    scope = ["--target", "windsurf", "--scope", "user", "--format", "json"]
+    expected = [[cli, "add", source, *scope], [cli, "list", *scope],
+                [cli, "add", source, *scope], [cli, "list", *scope],
+                [cli, "remove", identity, *scope], [cli, "list", *scope]]
+    if row.get("windsurf_public_commands") != expected:
+        return False
+    # Add/remove tails can be truncated. Their complete captures already feed
+    # prepared_components_only/repeat_verified/removal_verified in do_case.
+    # Reparse only the complete bounded list readouts retained by this lane.
+    phases = ("list", "repeat_list", "post_remove_list")
+    try:
+        documents = []
+        for phase in phases:
+            body = row[phase]["stdout_tail"]
+            if type(body) is not str or not 0 < len(body) <= 1024 * 1024:
+                return False
+            document = copilot_json_document(body)
+            if (type(document) is not dict or type(document.get("schema_version")) is not int
+                    or document["schema_version"] != 1 or document.get("result") != "success"):
+                return False
+            documents.append(document)
+        if vscode_list_entries(documents[2]) != []:
+            return False
+        for document in (documents[0], documents[1]):
+            entries = vscode_list_entries(document)
+            matches = matching_installations(document, identity, "windsurf", "plugin", source,
+                                             fixtures["signed_release_pins"])
+            if entries is None or len(entries) != 1 or matches != entries:
+                return False
+            clients = entries[0].get("clients")
+            expected_client = {"client_id": "windsurf", "scope": "user",
+                               "materialization": "materialized", "activation": "prepared",
+                               "authentication": "not_checked", "policy": "allowed",
+                               "verification": "installation_verified"}
+            if (type(clients) is not list or len(clients) != 1 or type(clients[0]) is not dict
+                    or any(clients[0].get(key) != value for key, value in expected_client.items())
+                    or [entries[0].get("installation_id")] != row.get("matched_installation_ids")):
+                return False
+    except (KeyError, TypeError, ValueError, RecursionError):
+        return False
+    return True
+
+
+def kiro_prepared_user_client(clients):
+    """Select one observed Prepared User binding, never native activation."""
+    if not isinstance(clients, list):
+        return None
+    selected = [client for client in clients if isinstance(client, dict)
+                and client.get("client_id") == "kiro"]
+    expected = {"scope": "user", "install_intent": "prepare", "materialization": "materialized",
+                "activation": "prepared", "authentication": "not_checked", "policy": "allowed",
+                "verification": "package_validated"}
+    if len(selected) != 1 or any(selected[0].get(key) != value for key, value in expected.items()):
+        return None
+    return selected[0]
+
+
+def kiro_prepared_installation_negative(row, fixtures):
+    """One measured unsupported fixture; never native qualification."""
+    release = MARKETING_KIT_SIGNED_CLOSURE["777genius/marketing-kit"]
+    expected_pin = {"distribution": "777genius/marketing-kit",
+                    "repository": release["repository"], "path": release["package_path"],
+                    "revision": release["resolved_revision"],
+                    "sequence": release["release_sequence"],
+                    "tree_digest": release["tree_digest"],
+                    "manifest_digest": release["manifest_digest"]}
+    install, listed = row.get("install"), row.get("list")
+    if not isinstance(install, dict) or not isinstance(listed, dict):
+        return False
+    pin = fixtures["signed_release_pins"].get("marketing-kit")
+    return bool(
+        type(pin) is dict and type(pin.get("sequence")) is int and pin == expected_pin
+        and row.get("index") == 13 and row.get("source") == "marketing-kit"
+        and row.get("identity") == "marketing-kit"
+        and row.get("status") == "documented-or-source-unsupported"
+        and type(row.get("native_file_delta")) is int and row["native_file_delta"] == 0
+        and row.get("native_identity_files") == [] and row.get("native_residuals") == []
+        and all(row.get(key) is False for key in (
+            "listed_identity", "failed_install_registered", "failed_install_residue",
+            "post_remove_identity_registered"))
+        and row.get("sentinels_preserved") is True
+        and type(install.get("exit_code")) is int and install["exit_code"] == 1
+        and install.get("timeout") is False and install.get("stdout_tail") == ""
+        and install.get("stderr_tail") == (
+            'agentplugins: no eligible directory release for "marketing-kit": '
+            '777genius/marketing-kit: release does not support complete target set; missing kiro\n')
+        and type(listed.get("exit_code")) is int and listed["exit_code"] == 0
+        and listed.get("timeout") is False and listed.get("stderr_tail") == ""
+        and listed.get("stdout_tail") == (
+            '{"schema_version":1,"command":"list","result":"success",'
+            '"data":{"installations":[]}}\n'))
+
+
+def kiro_prepared_installation_summary(report, fixtures):
+    """Count installation coverage separately from the unchanged native gate."""
+    result = {"installation_passed": 0, "installation_prepared_lifecycle_passed": 0,
+              "installation_verified_negative_coverage": 0,
+              "installation_acceptance_passed": False}
+    rows, sources = report.get("results"), fixtures["plugin_aliases"]
+    version = report.get("client_version")
+    if ((report.get("target"), report.get("kind"), report.get("platform"))
+            != ("kiro", "plugin", "darwin")
+            or type(version) is not dict or type(version.get("exit_code")) is not int
+            or version != {
+                "status": "reported", "value": "kiro-cli 3.0.0", "exit_code": 0}
+            or report.get("fixture_count") != 30 or report.get("cases_attempted") != 30
+            or report.get("source_selection_complete") is not True
+            or report.get("full_coverage") is not True
+            or type(rows) is not list or len(rows) != 30 or len(sources) != 30):
+        return result
+    for index, row in enumerate(rows):
+        if (type(row) is not dict or type(row.get("index")) is not int or row["index"] != index
+                or row.get("source") != sources[index]
+                or row.get("identity") != fixtures["plugin_declared_names"].get(
+                    sources[index], sources[index])
+                or (row.get("target"), row.get("kind")) != ("kiro", "plugin")):
+            return result
+        lifecycle = all(row.get(key) is True for key in (
+            "repeat_verified", "removal_verified", "sentinels_preserved")) and all(
+                row.get(key) is False for key in (
+                    "failed_install_registered", "failed_install_residue")) and all(
+                        isinstance(row.get(label), dict)
+                        and type(row[label].get("exit_code")) is int
+                        and row[label]["exit_code"] == 0
+                        and row[label].get("timeout") is False
+                        for label in ("install", "list"))
+        prepared = (row.get("status") == "incomplete-native-proof"
+                    and row.get("kiro_prepared_lifecycle_verified") is True)
+        native = (row.get("status") == "passed"
+                  and row.get("kiro_prepared_lifecycle_verified") is False)
+        if lifecycle and (prepared or native):
+            result["installation_passed"] += 1
+            result["installation_prepared_lifecycle_passed"] += int(prepared)
+        elif kiro_prepared_installation_negative(row, fixtures):
+            result["installation_verified_negative_coverage"] += 1
+    result["installation_acceptance_passed"] = (
+        result["installation_passed"] + result["installation_verified_negative_coverage"] == 30)
+    return result
+
+
+def prepared_installation_summary(report, fixtures, acceptance):
+    """Complete installation lanes, separately from native qualification."""
+    routes = {"cursor-prepared-installation": ("cursor", "plugin"),
+              "grok-prepared-skills-installation": ("grok", "skill"),
+              "windsurf-prepared-installation": ("windsurf", "plugin")}
+    result = {"installation_passed": 0, "installation_prepared_lifecycle_passed": 0,
+              "installation_verified_negative_coverage": 0,
+              "installation_acceptance_passed": False}
+    route = routes.get(acceptance)
+    if route is None:
+        return result
+    target, kind = route
+    rows = report.get("results")
+    sources = fixtures["plugin_aliases"] if kind == "plugin" else fixtures["skills"]
+    version = report.get("client_version")
+    if ((report.get("target"), report.get("kind"), report.get("platform"))
+            != (target, kind, "linux")
+            or type(version) is not dict or version.get("status") != "reported"
+            or type(version.get("exit_code")) is not int or version["exit_code"] != 0
+            or type(version.get("value")) is not str or not version["value"]
+            or type(report.get("fixture_count")) is not int or report["fixture_count"] != 30
+            or type(report.get("cases_attempted")) is not int or report["cases_attempted"] != 30
+            or report.get("source_selection_complete") is not True
+            or report.get("full_coverage") is not True
+            or type(rows) is not list or len(rows) != 30 or len(sources) != 30):
+        return result
+    if target == "windsurf" and (
+            report.get("architecture") != "x86_64" or report.get("canonical_client_id") != target
+            or version["value"] != "devin 3000.12.57 (96542e930752)"
+            or type(report.get("cli")) is not str or not Path(report["cli"]).is_absolute()):
+        return result
+    for index, (row, item) in enumerate(zip(rows, sources)):
+        source = item if kind == "plugin" else item["source"]
+        identity = (fixtures["plugin_declared_names"].get(item, item)
+                    if kind == "plugin" else item["name"])
+        if (type(row) is not dict or type(row.get("index")) is not int or row["index"] != index
+                or (row.get("target"), row.get("kind")) != route
+                or row.get("source") != source or row.get("identity") != identity):
+            return result
+        if target == "windsurf":
+            commands = row.get("windsurf_public_commands")
+            if (type(commands) is not list or not commands or type(commands[0]) is not list
+                    or not commands[0] or commands[0][0] != report["cli"]):
+                return result
+            if windsurf_source_negative(row, fixtures) or windsurf_component_negative(row, fixtures):
+                result["installation_verified_negative_coverage"] += 1
+                continue
+        prepared_key = "prepared_components_only" if target == "windsurf" else "prepared_binding"
+        if (row.get("status") != "prepared-lifecycle-passed"
+                or row.get(prepared_key) is not True
+                or any(row.get(key) is not True for key in (
+                    "listed_identity", "repeat_verified",
+                    "repeat_native_unchanged", "repeat_lock_unchanged",
+                    "removal_verified", "post_list_schema_valid", "sentinels_preserved"))
+                or any(row.get(key) is not False for key in (
+                    "failed_install_registered", "failed_install_residue",
+                    "post_remove_identity_registered"))
+                or row.get("native_residuals") != []):
+            return result
+        commands = (row.get(key) for key in (
+            "install", "list", "repeat_add", "repeat_list", "cleanup", "post_remove_list"))
+        if any(type(command) is not dict or type(command.get("exit_code")) is not int
+               or command["exit_code"] != 0 or command.get("timeout") is not False
+               for command in commands):
+            return result
+        ids = row.get("matched_installation_ids")
+        if (type(ids) is not list or len(ids) != 1 or type(ids[0]) is not str or not ids[0]
+                or row.get("repeat_installation_ids") != ids):
+            return result
+        if target == "windsurf" and (
+                row.get("post_removal_leftovers") != []
+                or not windsurf_prepared_readout(row, fixtures, report["cli"])):
+            return result
+        if kind == "skill":
+            if (any(row.get(key) is not True for key in (
+                    "lock_written", "lock_contains_identity", "lock_exact_source_pinned",
+                    "skill_bytes_match", "repeat_project_unchanged"))
+                    or type(row.get("skill_path")) is not str
+                    or not re.fullmatch(
+                        r"\.grok/plugins/skill-[a-f0-9]{45}-[a-f0-9]{12}/skills/"
+                        + re.escape(identity) + r"/SKILL\.md", row["skill_path"])
+                    or "post_removal_skill" not in row or row["post_removal_skill"] is not None
+                    or row.get("post_removal_leftovers") != []
+                    or row.get("post_skill_tree_delta") != []
+                    or row.get("post_lock_pinned") is not False):
+                return result
+        elif not source.startswith("github:"):
+            pin = fixtures["signed_release_pins"].get(source)
+            if type(pin) is not dict:
+                return result
+            expected = {"source": pin["repository"].strip("/") + "/" + pin["path"].strip("/"),
+                        "recorded_distribution": pin["distribution"],
+                        "recorded_revision": pin["revision"],
+                        "recorded_release_sequence": pin["sequence"],
+                        "resolved_revision": pin["revision"], "release_sequence": pin["sequence"],
+                        "tree_digest": pin["tree_digest"], "manifest_digest": pin["manifest_digest"]}
+            if row.get("signed_release_observation") != [expected]:
+                return result
+        result["installation_passed"] += 1
+        result["installation_prepared_lifecycle_passed"] += 1
+    expected = (25, 5) if target == "windsurf" else (30, 0)
+    result["installation_acceptance_passed"] = (
+        result["installation_passed"], result["installation_verified_negative_coverage"]) == expected
+    return result
+
+
+
+def prepared_project_skill_summary(report, fixtures, acceptance):
+    """Qualify exact owned Project Skill preparation, never native readiness."""
+    routes = {
+        "cursor-prepared-skills-installation": (
+            "cursor", "linux", "x86_64", "2026.10.22-27dcf5f", "not_required"),
+        "kiro-prepared-skills-installation": (
+            "kiro", "darwin", "arm64", "kiro-cli 3.0.0", "not_checked"),
+    }
+    result = {"installation_passed": 0, "installation_prepared_lifecycle_passed": 0,
+              "installation_verified_negative_coverage": 0,
+              "installation_acceptance_passed": False}
+    route = routes.get(acceptance)
+    if route is None:
+        return result
+    target, host, arch, version, authentication = route
+    rows, sources = report.get("results"), fixtures.get("skills")
+    if ((report.get("target"), report.get("kind"), report.get("platform"),
+         report.get("architecture"), report.get("canonical_client_id")) !=
+            (target, "skill", host, arch, target)
+            or report.get("client_version") != {
+                "status": "reported", "value": version, "exit_code": 0}
+            or report.get("cli_version") != {
+                "status": "reported", "value": "agentplugins 0.1.115", "exit_code": 0}
+            or report.get("fixture_count") != 30 or report.get("cases_attempted") != 30
+            or report.get("source_selection_complete") is not True
+            or report.get("full_coverage") is not True
+            or report.get("passed") != 0 or report.get("verified_negative_coverage") != 0
+            or type(rows) is not list or len(rows) != 30
+            or type(sources) is not list or len(sources) != 30):
+        return result
+    expected = {"materialization": "materialized", "activation": "prepared",
+                "authentication": authentication, "policy": "allowed",
+                "verification": "installation_verified"}
+    for index, (row, item) in enumerate(zip(rows, sources)):
+        if (type(row) is not dict or type(item) is not dict
+                or type(row.get("index")) is not int or row["index"] != index
+                or (row.get("kind"), row.get("target")) != ("skill", target)
+                or row.get("source") != item.get("source")
+                or row.get("identity") != item.get("name")
+                or row.get("skill_path") != f'.{target}/skills/{item.get("name")}/SKILL.md'
+                or row.get("status") != "incomplete-native-proof"
+                or row.get("public_skill_ready") != {"after-add": False, "repeat-add": False}
+                or row.get("prepared_binding") is not False
+                or row.get("prepared_components_only") is not False
+                or row.get("repeat_native_runtime_only") is not False
+                or type(row.get("native_file_delta")) is not int or row["native_file_delta"] != 0
+                or row.get("native_identity_files") != []
+                or row.get("native_component_candidates") != []
+                or row.get("native_residuals") != []
+                or row.get("signed_release_observation") != []
+                or row.get("post_removal_leftovers") != []
+                or row.get("post_skill_tree_delta") != []
+                or "post_removal_skill" not in row or row["post_removal_skill"] is not None
+                or row.get("post_lock_pinned") is not False
+                or row.get("repeat_project_unchanged") is not None
+                or any(row.get(key) is not True for key in (
+                    "lock_written", "lock_contains_identity", "lock_exact_source_pinned",
+                    "skill_bytes_match", "listed_identity", "repeat_verified",
+                    "repeat_native_unchanged", "repeat_lock_unchanged",
+                    "removal_verified", "post_list_schema_valid", "sentinels_preserved"))
+                or any(row.get(key) is not False for key in (
+                    "failed_install_registered", "failed_install_residue",
+                    "post_remove_identity_registered"))):
+            return result
+        ids = row.get("matched_installation_ids")
+        if (type(ids) is not list or len(ids) != 1
+                or type(ids[0]) is not str or not ids[0]
+                or row.get("repeat_installation_ids") != ids):
+            return result
+        for phase in ("after-add", "repeat-add", "after-remove"):
+            active = phase != "after-remove"
+            expected_state = {"status": "observed",
+                              "selected_installations": int(active),
+                              "selected_bindings": int(active),
+                              "invalid_rows": 0,
+                              "states": [expected] if active else [],
+                              "truncated": False}
+            if (type(row.get("public_target_states")) is not dict
+                    or row["public_target_states"].get(phase) != expected_state):
+                return result
+        if any(type(row.get(phase)) is not dict
+               or type(row[phase].get("exit_code")) is not int
+               or row[phase]["exit_code"] != 0 or row[phase].get("timeout") is not False
+               for phase in ("install", "list", "repeat_add", "repeat_list",
+                             "cleanup", "post_remove_list")):
+            return result
+        result["installation_passed"] += 1
+        result["installation_prepared_lifecycle_passed"] += 1
+    result["installation_acceptance_passed"] = result["installation_passed"] == 30
+    return result
+
+VSCODE_MANUAL_REMOVE_STDERR = (
+    "agentplugins: removal requires a manual client step for [vscode]; "
+    "complete the displayed uninstall step, then rerun with "
+    "--external-uninstalled; no target was changed\n")
+VSCODE_REQUIREMENTS_STDERR = (
+    "Resolving and validating one Agent Plugin package for every selected target...\n"
+    "agentplugins: package marketing-kit declares UAP requirements; use a managed "
+    "saved add/install workflow instead of --no-save or local/manual installation\n")
+
+
+def vscode_command_complete(record, code):
+    return (type(record) is dict and type(record.get("exit_code")) is int
+            and record["exit_code"] == code and record.get("timeout") is False
+            and record.get("error") is None)
+
+
+def vscode_list_entries(document):
+    if (type(document) is not dict or set(document) != {"schema_version", "command", "result", "data"}
+            or type(document["schema_version"]) is not int or document["schema_version"] != 1
+            or document["command"] != "list" or document["result"] != "success"
+            or type(document["data"]) is not dict or set(document["data"]) != {"installations"}
+            or type(document["data"]["installations"]) is not list):
+        return None
+    return document["data"]["installations"]
+
+
+def vscode_manual_binding(document, identity, source, pins):
+    entries = vscode_list_entries(document)
+    if entries is None or len(entries) != 1:
+        return None
+    matches = matching_installations(document, identity, "vscode", "plugin", source, pins)
+    if len(matches) != 1 or matches != entries:
+        return None
+    binding = matches[0]
+    uid = binding.get("installation_id")
+    clients = binding.get("clients")
+    expected = {"client_id": "vscode", "scope": "user", "materialization": "materialized",
+                "activation": "manual_activation_required", "verification": "package_validated",
+                "policy": "allowed",
+                "affected_surfaces": ["copilot", "vscode"]}
+    if (type(uid) is not str or re.fullmatch(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", uid) is None
+            or type(clients) is not list or len(clients) != 1 or type(clients[0]) is not dict
+            or any(clients[0].get(key) != value for key, value in expected.items())
+            or clients[0].get("authentication") not in ("not_checked", "auth_pending", "not_required")):
+        return None
+    return binding
+
+
+def vscode_manual_remove_refusal(document, binding):
+    """Recognize the unchanged public preview refusal, never an uninstall."""
+    try:
+        if (type(document) is not dict or set(document) != {"schema_version", "command", "result", "data"}
+                or type(document["schema_version"]) is not int or document["schema_version"] != 1
+                or document["command"] != "remove" or document["result"] != "failure"):
+            return False
+        data = document["data"]
+        if (type(data) is not dict or set(data) - set(
+                "operation_id batch status succeeded failed plugin plugin_data_preserved data_retained "
+                "retained_data retained_data_action dry_run targets".split())
+                or data["status"] != "manual_step_required" or data["batch"] is not True
+                or data["dry_run"] is not False or data["plugin"] != binding["name"]
+                or data["plugin_data_preserved"] is not True or data["data_retained"] is not False
+                or data.get("retained_data", []) != [] or data.get("retained_data_action", "") != ""
+                or type(data["failed"]) is not int or data["failed"] != 1
+                or type(data["succeeded"]) is not int or data["succeeded"] != 0
+                or type(data["targets"]) is not list or len(data["targets"]) != 1):
+            return False
+        target = data["targets"][0]
+        if (type(target) is not dict or set(target) != {"target", "status", "output"}
+                or target["target"] != "vscode" or target["status"] != "blocked"):
+            return False
+        output = target["output"]
+        if (type(output) is not dict or set(output) - set(
+                "operation_id plugin version source revision tree_digest manifest_digest directory "
+                "next_action dry_run result".split())
+                or output["dry_run"] is not True or output["plugin"] != binding["name"]
+                or output["source"] != binding["source"]
+                or output.get("version", "") != binding.get("version", "")
+                or type(data["operation_id"]) is not str
+                or re.fullmatch(r"[A-Za-z0-9-]{1,128}", data["operation_id"]) is None
+                or output["operation_id"] != data["operation_id"]):
+            return False
+        result = output["result"]
+        if (type(result) is not dict or set(result) - set(
+                "installation_id plugin client_id requires_confirmation mutated deactivation "
+                "affected_surfaces group_phase".split())
+                or result["installation_id"] != binding["installation_id"]
+                or result["plugin"] != binding["name"] or result["client_id"] != "vscode"
+                or result["requires_confirmation"] is not False or result["mutated"] is not False):
+            return False
+        deactivation = result["deactivation"]
+        return (type(deactivation) is dict and not set(deactivation) - {
+                    "activation", "artifact_removal_allowed", "external_removal_complete", "user_actions"}
+                and deactivation["activation"] == "manual_activation_required"
+                and deactivation["artifact_removal_allowed"] is False
+                and deactivation["external_removal_complete"] is False)
+    except (KeyError, TypeError):
+        return False
+
+
+def vscode_snapshot_digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def vscode_root_identities(roots):
+    identities = []
+    for path in roots:
+        info = path.lstat()
+        if not stat.S_ISDIR(info.st_mode):
+            raise ValueError("VS User observation root is not an original directory")
+        identities.append((info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid))
+    return identities
+
+
+def vscode_user_manual_positive(row, fixtures, cli):
+    """One preserved Manual binding and refused remove; activation remains unknown."""
+    try:
+        index = row["index"]
+        if (type(index) is not int or not 0 <= index < 30 or index == 13
+                or (row["target"], row["kind"]) != ("vscode", "plugin")
+                or row["source"] != fixtures["plugin_aliases"][index]
+                or row["identity"] != fixtures["plugin_declared_names"].get(row["source"], row["source"])
+                or row["status"] != "external-native-uninstall-required"
+                or any(row.get(key) is not True for key in (
+                    "prepared_binding", "listed_identity", "repeat_verified", "repeat_native_unchanged",
+                    "repeat_lock_unchanged", "sentinels_preserved"))
+                or any(row.get(key) is not False for key in (
+                    "removal_verified", "failed_install_registered", "failed_install_residue",
+                    "post_remove_identity_registered"))
+                or row["native_uninstall"] is not None or row["post_remove_list"] is not None
+                or type(row["native_file_delta"]) is not int or row["native_file_delta"] != 0
+                or row["native_identity_files"] != [] or row["native_residuals"] != []
+                or any(not vscode_command_complete(row.get(key), 0) for key in (
+                    "install", "list", "repeat_add", "repeat_list"))):
+            return False
+        proof = row["vscode_user_manual"]
+        if (type(proof) is not dict or type(proof.get("schema_version")) is not int or proof["schema_version"] != 1
+                or any(proof.get(key) is not True for key in (
+                    "refusal_observed", "protected_after_refusal", "protected_after_list",
+                    "native_unchanged", "roots_unchanged"))):
+            return False
+        original = proof["original_binding"]
+        if original != proof["repeat_binding"] or original != proof["post_refusal_binding"]:
+            return False
+        document = {"schema_version": 1, "command": "list", "result": "success",
+                    "data": {"installations": [original]}}
+        if vscode_manual_binding(document, row["identity"], row["source"],
+                                 fixtures["signed_release_pins"]) != original:
+            return False
+        uid = original["installation_id"]
+        if row["matched_installation_ids"] != [uid] or row["repeat_installation_ids"] != [uid]:
+            return False
+        digest = proof["protected_before_sha256"]
+        return (type(digest) is str and re.fullmatch(r"[0-9a-f]{64}", digest) is not None
+                and proof["protected_after_refusal_sha256"] == digest
+                and proof["protected_after_list_sha256"] == digest
+                and proof["remove_argv"] == [cli, "remove", row["identity"], "--target", "vscode",
+                                              "--scope", "user", "--format", "json"]
+                and proof["list_argv"] == [cli, "list", "--target", "vscode", "--scope", "user", "--format", "json"]
+                and vscode_command_complete(row["cleanup"], 1)
+                and row["cleanup"]["stderr_tail"] == VSCODE_MANUAL_REMOVE_STDERR
+                and vscode_manual_remove_refusal(proof["refusal_document"], original)
+                and vscode_command_complete(proof["post_refusal_list"], 0))
+    except (KeyError, TypeError, IndexError):
+        return False
+
+
+def vscode_user_requirements_refusal(row, fixtures, cli):
+    """Exact pre-apply policy observation; acquisition cache is not installation."""
+    try:
+        release = MARKETING_KIT_SIGNED_CLOSURE["777genius/marketing-kit"]
+        expected_pin = {"distribution": "777genius/marketing-kit", "repository": release["repository"],
+                        "path": release["package_path"], "revision": release["resolved_revision"],
+                        "sequence": release["release_sequence"], "tree_digest": release["tree_digest"],
+                        "manifest_digest": release["manifest_digest"]}
+        proof, installed, listed = row["vscode_user_refusal"], row["install"], row["list"]
+        return bool(
+            type(row["index"]) is int and row["index"] == 13
+            and fixtures["plugin_aliases"][13] == row["source"] == row["identity"] == "marketing-kit"
+            and (row["target"], row["kind"], row["status"]) == ("vscode", "plugin", "install-failed")
+            and fixtures["signed_release_pins"]["marketing-kit"] == expected_pin
+            and type(proof) is dict and type(proof["schema_version"]) is int and proof["schema_version"] == 1
+            and proof["native_unchanged"] is True and proof["roots_unchanged"] is True
+            and proof["expected_source_pin"] == expected_pin and proof["source_pin_kind"] == "expected-fixture"
+            and proof["add_argv"] == [cli, "add", "marketing-kit", "--target", "vscode", "--scope",
+                                         "user", "--format", "json", "--no-save"]
+            and proof["list_argv"] == [cli, "list", "--target", "vscode", "--scope", "user", "--format", "json"]
+            and vscode_list_entries(proof["list_document"]) == []
+            and vscode_command_complete(installed, 1) and installed["stdout_tail"] == ""
+            and installed["stderr_tail"] == VSCODE_REQUIREMENTS_STDERR
+            and vscode_command_complete(listed, 0) and listed["stderr_tail"] == ""
+            and type(row["native_file_delta"]) is int and row["native_file_delta"] == 0
+            and row["native_identity_files"] == [] and row["native_residuals"] == []
+            and row["sentinels_preserved"] is True
+            and all(row.get(key) is False for key in (
+                "listed_identity", "failed_install_registered", "failed_install_residue",
+                "post_remove_identity_registered", "removal_verified"))
+            and all(key in row and row[key] is None
+                    for key in ("repeat_add", "repeat_list", "cleanup", "post_remove_list")))
+    except (KeyError, TypeError, IndexError):
+        return False
+
+
+def vscode_user_manual_summary(report, fixtures):
+    result = {"manual_preparations_observed": 0, "manual_refusals_preserved": 0,
+              "requirements_refusals_observed": 0, "manual_preparation_observation_complete": False,
+              "native_activation_qualified": False, "native_uninstall_qualified": False, "uninstall_incomplete": True}
+    rows, sources, version = report.get("results"), fixtures["plugin_aliases"], report.get("client_version")
+    if ((report.get("target"), report.get("kind"), report.get("platform"), report.get("architecture"))
+            != ("vscode", "plugin", "linux", "x86_64")
+            or type(version) is not dict or version.get("status") != "reported"
+            or type(version.get("exit_code")) is not int or version["exit_code"] != 0
+            or type(version.get("value")) is not str
+            or re.fullmatch(r"1\.144\.0\n[0-9a-f]{40}\nx64", version["value"]) is None
+            or report.get("fixture_sha256") != hashlib.sha256(FIXTURES.read_bytes()).hexdigest()
+            or any(type(report.get(key)) is not int or report[key] != 0 for key in (
+                "passed", "prepared_lifecycle_passed", "verified_negative_coverage"))
+            or any(type(report.get(key)) is not int or report[key] != 30
+                   for key in ("fixture_count", "cases_attempted"))
+            or report.get("source_selection_complete") is not True or report.get("full_coverage") is not True
+            or type(rows) is not list or len(rows) != 30 or len(sources) != 30
+            or type(report.get("cli")) is not str):
+        return result
+    for index, row in enumerate(rows):
+        if (type(row) is not dict or type(row.get("index")) is not int or row["index"] != index
+                or row.get("source") != sources[index]):
+            return result
+        if vscode_user_manual_positive(row, fixtures, report["cli"]):
+            result["manual_preparations_observed"] += 1
+            result["manual_refusals_preserved"] += 1
+        elif vscode_user_requirements_refusal(row, fixtures, report["cli"]):
+            result["requirements_refusals_observed"] += 1
+    result["manual_preparation_observation_complete"] = (
+        result["manual_preparations_observed"] == result["manual_refusals_preserved"] == 29
+        and result["requirements_refusals_observed"] == 1)
+    return result
+
+
 def unexecuted_source_rows(selected, kind, target, status, declared_names):
     """Record exact fixture slots on a refused bootstrap, never native PASS."""
     if status not in ("client-unavailable", "documented-unsupported"):
@@ -3196,11 +4160,22 @@ def vendor_bootstrap_attested():
 
 
 def published_audit_temp_parent():
-    """Keep GitHub Windows deep fixtures inside the real short runner scratch.
+    """Choose an ordinary physical parent before allocating disposable roots.
+
+    Darwin system temporary paths may use the /var -> /private/var alias.
+    Keep GitHub Windows deep fixtures inside the real short runner scratch.
 
     The published 0.1.101 CLI has a separately documented long-path bug.
     This qualifies an ordinary bounded Windows project, not MAX_PATH support.
     """
+    if sys.platform == "darwin":
+        # Resolve the system temporary *parent* before allocating owned roots.
+        # macOS may spell that parent through /var -> /private/var; downstream
+        # ordinary-directory identity guards continue to require physical paths.
+        parent = Path(tempfile.gettempdir()).resolve(strict=True)
+        if parent.is_symlink() or not parent.is_dir():
+            raise RuntimeError("macOS physical temporary parent is unavailable")
+        return str(parent)
     if sys.platform != "win32" or os.environ.get("GITHUB_ACTIONS") != "true":
         return None
     candidate = os.environ.get("RUNNER_TEMP", "")
@@ -3210,6 +4185,27 @@ def published_audit_temp_parent():
     return str(parent)
 
 
+def case_observation(result):
+    """Project already retained lifecycle facts without granting native authority."""
+    row = result if type(result) is dict else {}
+    fields = ("kiro_prepared_lifecycle_verified", "repeat_verified", "removal_verified",
+              "sentinels_preserved", "failed_install_registered", "failed_install_residue")
+    observation = {name: row.get(name) if type(row.get(name)) is bool else None for name in fields}
+    labels = ("install", "list")
+    if (row.get("target") == "codex" and row.get("kind") == "plugin"
+            and row.get("status") != "passed"):
+        labels += ("cleanup", "post_remove_list")
+    for label in labels:
+        command = row.get(label)
+        command = command if type(command) is dict else {}
+        code, timeout = command.get("exit_code"), command.get("timeout")
+        observation[label] = {
+            "exit_code": code if type(code) is int and -(2**31) <= code < 2**32 else None,
+            "timeout": timeout if type(timeout) is bool else None,
+        }
+    return observation
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--cli", required=True)
@@ -3217,13 +4213,39 @@ def main():
     p.add_argument("--target", required=True)
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--report-dir", required=True)
-    p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"]),
+    p.add_argument("--acceptance", choices=("native", "kiro-prepared-installation",
+                   "cursor-prepared-installation", "grok-prepared-skills-installation",
+                   "cursor-prepared-skills-installation", "kiro-prepared-skills-installation",
+                   "windsurf-prepared-installation", "vscode-user-manual-preparation",
+                    HISTORICAL_CODEX["ACCEPTANCE"], HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"]),
                    default="native")
     args = p.parse_args()
     historical_baseline = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
+    historical_plugin_archive = args.acceptance == HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"]
     if historical_baseline and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
             "codex", "skill", "linux", "x86_64", 2):
         p.error("Historical npm observation requires exactly two Codex Skills on Linux x86_64")
+    if historical_plugin_archive and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
+            "codex", "plugin", "linux", "x86_64", 2):
+        p.error("Historical archive observation requires exactly two Codex plugins on Linux x86_64")
+    if (args.acceptance == "kiro-prepared-installation"
+            and (args.target, args.kind, sys.platform, args.limit)
+            != ("kiro", "plugin", "darwin", 30)):
+        p.error("Prepared installation acceptance requires the complete Kiro plugin Darwin lane")
+    prepared_routes = {"cursor-prepared-installation": ("cursor", "plugin", "linux", 30),
+                       "grok-prepared-skills-installation": ("grok", "skill", "linux", 30),
+                       "cursor-prepared-skills-installation": ("cursor", "skill", "linux", 30),
+                       "kiro-prepared-skills-installation": ("kiro", "skill", "darwin", 30),
+                       "windsurf-prepared-installation": ("windsurf", "plugin", "linux", 30)}
+    if (args.acceptance in prepared_routes
+            and (args.target, args.kind, sys.platform, args.limit) != prepared_routes[args.acceptance]):
+        p.error("Prepared installation acceptance requires its complete target, kind and host lane")
+    if args.acceptance == "windsurf-prepared-installation" and platform.machine() != "x86_64":
+        p.error("Windsurf installation acceptance requires the pinned Linux x86_64 lane")
+    if (args.acceptance == "vscode-user-manual-preparation"
+            and (args.target, args.kind, sys.platform, platform.machine(), args.limit)
+            != ("vscode", "plugin", "linux", "x86_64", 30)):
+        p.error("Manual preparation observation requires the complete VS Code User plugin Linux lane")
     doc = json.loads(FIXTURES.read_text())
     validate_fixtures(doc)
     if args.target not in doc["targets"] or not 1 <= args.limit <= 30:
@@ -3247,15 +4269,14 @@ def main():
               "fixture_count": len(cases), "cases_attempted": 0,
               "source_selection_complete": args.limit == 30,
               "full_coverage": False, "results": []}
-    if historical_baseline:
+    if historical_baseline or historical_plugin_archive:
         report["acceptance"] = args.acceptance
-        report.update(HISTORICAL_CODEX["summary"](report, doc))
+        report.update(HISTORICAL_CODEX["plugin_summary" if historical_plugin_archive else "summary"](report, doc))
     report_file = report_dir / f"{args.target}-{args.kind}.json"
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     native_target = audit_client_id(args.target, args.kind)
-    if args.target == "chatgpt":
-        report["canonical_client_id"] = native_target
+    report["canonical_client_id"] = native_target
     eligible_binaries = EXECUTABLE.get(native_target, ())
     if not vendor_bootstrap_attested():
         report["blocker"] = "Vendor bootstrap was not verified; no native-client PASS is permitted"
@@ -3287,7 +4308,8 @@ def main():
     # preview paths for deep immutable Skills (tracked separately in PR #780).
     # This does not convert a refused installation into native PASS.
     temp_parent = published_audit_temp_parent()
-    report["temp_parent_kind"] = ("github-windows-runner" if temp_parent else "python-default")
+    report["temp_parent_kind"] = ("physical-python-default" if sys.platform == "darwin"
+                                  else "github-windows-runner" if temp_parent else "python-default")
     # Resolve only the selected parent before creating any owned case; strict
     # profile/foreign-path checks still reject redirected existing directories.
     physical_parent = Path(temp_parent or tempfile.gettempdir()).resolve(strict=True)
@@ -3313,7 +4335,8 @@ def main():
                                  **({"client_version": report.get("client_version")}
                                     if (args.target, args.kind) in (("gemini", "skill"), ("kimi", "skill"))
                                     or args.target == "opencode" else {}),
-                                 **({"historical_baseline": True} if historical_baseline else {}))
+                                 **({"historical_baseline": True} if historical_baseline else {}),
+                                 **({"historical_plugin_archive": True} if historical_plugin_archive else {}))
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "source": item if args.kind == "plugin" else item["source"],
@@ -3321,6 +4344,8 @@ def main():
                                        if args.kind == "plugin" else item["name"]),
                           "status": "harness-error", "error": repr(e),
                           "error_traceback": bounded_error_traceback(e)}
+                if historical_plugin_archive and isinstance(e, HISTORICAL_CODEX["ArchiveUnavailable"]):
+                    result["historical_plugin_feed"] = e.observation
             report["results"].append(result)
             report["cases_attempted"] += 1
             save()
@@ -3331,20 +4356,59 @@ def main():
             if result["status"] == "incomplete-native-proof" and args.kind == "plugin":
                 line["observed_signed_release"] = result.get("signed_release_observation", [])
                 line["expected_signed_release"] = doc["signed_release_pins"].get(item)
+            line["observation"] = case_observation(result)
             print(json.dumps(line), flush=True)
     passed = sum(r["status"] == "passed" for r in report["results"])
     report["passed"] = passed
     report["prepared_lifecycle_passed"] = sum(
-        r["status"] == "prepared-lifecycle-passed" for r in report["results"])
+        r["status"] == "prepared-lifecycle-passed" or r.get("kiro_prepared_lifecycle_verified") is True
+        for r in report["results"])
     accepted_negatives = [
         r for r in report["results"]
-        if expected_negative_coverage(r, report["cli_version"].get("value"))
+        if (expected_negative_coverage(r, report["cli_version"].get("value"))
+            or (sys.platform == "linux" and windsurf_source_negative(r, doc)))
     ]
     report["verified_negative_coverage"] = len(accepted_negatives)
     report["full_coverage"] = args.limit == 30 and report["cases_attempted"] == 30
     save()
     print(f'{args.target} {args.kind}: {passed}/{args.limit} native PASS; '
           f'verified_negative={len(accepted_negatives)}; attempted={report["cases_attempted"]}')
+    if args.acceptance == "kiro-prepared-installation":
+        report.update(kiro_prepared_installation_summary(report, doc))
+        save()
+        print(f'Kiro Prepared installation: {report["installation_passed"]}/30 installed; '
+              f'prepared={report["installation_prepared_lifecycle_passed"]}; '
+              f'verified_negative={report["installation_verified_negative_coverage"]}; '
+              'native activation remains unqualified')
+        return 0 if report["installation_acceptance_passed"] else 1
+    if args.acceptance in prepared_routes:
+        summary = (prepared_project_skill_summary
+                   if args.acceptance in ("cursor-prepared-skills-installation",
+                                          "kiro-prepared-skills-installation")
+                   else prepared_installation_summary)
+        report.update(summary(report, doc, args.acceptance))
+        save()
+        print(f'{args.target} Prepared installation: {report["installation_passed"]}/30 installed; '
+              f'verified refusals={report["installation_verified_negative_coverage"]}; '
+              'native activation remains unqualified')
+        return 0 if report["installation_acceptance_passed"] else 1
+    if args.acceptance == "vscode-user-manual-preparation":
+        report.update(vscode_user_manual_summary(report, doc))
+        save()
+        print(f'VS Code User manual preparation: {report["manual_preparations_observed"]}/29 observed; '
+              f'refused removes preserved={report["manual_refusals_preserved"]}; '
+              f'requirements refusals={report["requirements_refusals_observed"]}; '
+              'native activation and uninstall remain unqualified')
+        return 0 if report["manual_preparation_observation_complete"] else 1
+    if historical_plugin_archive:
+        report.update(HISTORICAL_CODEX["plugin_summary"](report, doc))
+        save()
+        print(f'Historical signed sequence-48 plugin lifecycles: '
+              f'{report["archived_plugin_lifecycles_observed"]}/2; '
+              f'current default refusals observed={report["current_default_refusals_observed"]}/2 '
+              '(NONPASS; no current production compatibility claim); default native PASS=0; '
+              'archive native PASS count unchanged')
+        return 0 if report["historical_plugin_observation_complete"] else 1
     if historical_baseline:
         report.update(HISTORICAL_CODEX["summary"](report, doc))
         save()

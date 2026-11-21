@@ -9,15 +9,20 @@ on:
       - 'scripts/published_codex_baseline.py'
       - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_live_install_audit_components.py'
+      - 'scripts/test_live_install_audit_opencode_negative.py'
       - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/codex_runtime_audit.py'
-      - 'scripts/claude_cache_retirement_audit.py'
-      - 'scripts/gemini_runtime_audit.py'
+      - 'scripts/codex_plugin_retention_audit.py'
       - 'scripts/gemini_windows_custody.py'
       - 'scripts/test_gemini_windows_runtime_audit.py'
-      - 'scripts/test_codex_runtime_audit.py'
       - 'scripts/opencode_bootstrap_audit.py'
       - 'scripts/test_opencode_bootstrap_audit.py'
+      - 'scripts/test_codex_plugin_retention_audit.py'
+      - 'scripts/gemini_runtime_audit.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/windows_owned_job.py'
+      - 'scripts/test_codex_runtime_audit.py'
       - 'tests/live-install/fixtures.json'
       - 'install/integrationctl/agentplugins/adapters/securityscan/scanner*.go'
       - '.github/workflows/live-install-audit.yml'
@@ -70,18 +75,21 @@ jobs:
           codex --version
       # The Go source defaults to 0.1.0-development; signed directory policies
       # require an ordinary release-semver CLI. This is still the PR source
-      # binary, NOT the published agentplugins-v0.1.95 release.
+      # binary, NOT a published release binary; historical 0.1.95 stays separate.
       - name: Refuse ambient native-profile and Git configuration leakage
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py'
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_opencode_negative.py'
           python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
           python3 -m unittest discover -s scripts -p 'test_gemini_windows_runtime_audit.py'
-          python3 -m unittest discover -s scripts -p 'test_codex_runtime_audit.py'
           python3 -m unittest discover -s scripts -p 'test_opencode_bootstrap_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_codex_runtime_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_codex_plugin_retention_audit.py'
       - name: Verify exact empty-stderr LintAI exit diagnostic
         run: go test ./install/integrationctl/agentplugins/adapters/securityscan -run '^TestCommandScannerIncludesNonzeroExitWhenStderrIsEmpty$' -count=1
       - name: Build actual PR CLI with current eligible directory version policy
-        run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
+        run: go build -trimpath -ldflags='-X main.version=0.1.115' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Run isolated real source install and remove; preserve per-case proof
         env:
           AUDIT_VENDOR_OUTCOME: ${{ steps.native-install-pilot.outcome }}
@@ -104,7 +112,7 @@ jobs:
 
 
   published-cli-smoke:
-    name: Published npm 0.1.95 / Codex CLI parity
+    name: Historical npm 0.1.95 / Codex lifecycle and default refusal
     needs: native-pilot
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -137,7 +145,9 @@ jobs:
           result=0
           for kind in plugin skill; do
             # Keep this immutable release's lifecycle distinct from current Ready.
-            acceptance=native
+            # Observe the default feed refusal separately; only the plugin
+            # lifecycle uses the unexpired, original-key official sequence 48.
+            acceptance=published-0.1.95-codex-plugins-archived-feed
             if [ "$kind" = skill ]; then acceptance=published-0.1.95-codex-skills; fi
             python3 scripts/live-install-audit.py --cli "$(command -v agentplugins)" \
               --target codex --kind "$kind" --limit 2 --acceptance "$acceptance" \
@@ -215,7 +225,7 @@ jobs:
           timeout 25s "$binary" --version
       - name: Build PR source CLI with current signed Registry eligibility version
         if: ${{ !cancelled() }} # BUG-010: retain negative evidence after native bootstrap failure
-        run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
+        run: go build -trimpath -ldflags='-X main.version=0.1.115' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Attempt all 30 independent pinned sources in isolated profiles
         if: ${{ !cancelled() }} # Missing client produces explicit non-PASS source rows
         env:

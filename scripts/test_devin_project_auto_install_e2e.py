@@ -89,16 +89,52 @@ class DevinProjectAutoInstallContracts(unittest.TestCase):
                     with self.assertRaises(RuntimeError):
                         subject.npm_archive()
 
-    def test_native_skill_inventory_requires_exact_name_and_closed_shape(self):
-        valid = json.dumps([{"name": subject.SKILL}, {"name": "foreign"}])
-        self.assertTrue(subject.available_skill(valid, subject.SKILL))
-        self.assertFalse(subject.available_skill(valid, subject.SKILL + "-foreign"))
-        self.assertTrue(subject.available_skill(json.dumps({"skills": [{"name": subject.SKILL}]}), subject.SKILL))
+    def test_native_skill_inventory_requires_exact_source_and_closed_shape(self):
+        project = Path("/tmp/project-a")
+        def row(**changed):
+            result = {"name":subject.SKILL, "description":"Inert Project installation proof",
+                      "triggers":["model", "user"], "provider":"Devin",
+                      "base_dir":str(project / ".devin" / "skills" / subject.SKILL),
+                      "display_name":subject.SKILL, "warnings":[], "errors":[]}
+            result.update(changed)
+            return result
+
+        original = row()
+        self.assertTrue(subject.available_skill(
+            json.dumps([original, {"name": "foreign"}]), subject.SKILL, project))
+        self.assertTrue(subject.available_skill(
+            json.dumps({"skills": [original]}), subject.SKILL, project))
+        self.assertTrue(subject.available_skill(
+            json.dumps([row(name=f"{project}:{subject.SKILL}")]), subject.SKILL, project))
+        self.assertFalse(subject.available_skill("[]", subject.SKILL, project))
+        self.assertFalse(subject.available_skill(
+            json.dumps([{"name": "foreign"}]), subject.SKILL, project))
+
+        missing = row()
+        missing.pop("base_dir")
+        for label, bad in (
+            ("foreign-provider", [row(provider="Builtin")]),
+            ("foreign-source", [row(base_dir="/tmp/foreign/skills/" + subject.SKILL)]),
+            ("unrelated-scope", [row(name="/tmp/project-b:" + subject.SKILL)]),
+            ("inconsistent-name", [row(name="not-owned")]),
+            ("inconsistent-display", [row(display_name="not-owned")]),
+            ("warnings", [row(warnings=["not loaded"])]),
+            ("errors", [row(errors=["broken"])]),
+            ("unknown-schema", [row(extra="unexpected")]),
+            ("missing-source", [missing]),
+            ("bad-triggers", [row(triggers="user")]),
+            ("duplicate-display", [row(), row(name=f"{project}:{subject.SKILL}")]),
+            ("nonobject-row", [row(), "foreign"]),
+            ("bare-name", [{"name": subject.SKILL}]),
+        ):
+            with self.subTest(label=label):
+                with self.assertRaises(RuntimeError):
+                    subject.available_skill(json.dumps(bad), subject.SKILL, project)
         for inventory in ('{}', 'null', '"'+subject.SKILL+'"',
                           '{"skills":"'+subject.SKILL+'"}', '{broken'):
             with self.subTest(inventory=inventory):
                 with self.assertRaises((RuntimeError, ValueError)):
-                    subject.available_skill(inventory, subject.SKILL)
+                    subject.available_skill(inventory, subject.SKILL, project)
 
     def test_all_native_commands_use_bounded_supervised_capture(self):
         with patch.object(subject, "run_probe", return_value=(

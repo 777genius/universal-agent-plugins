@@ -1,0 +1,2439 @@
+"""Inert real-file/consumer contracts; never vendor or model execution."""
+import base64
+from contextlib import contextmanager
+import copy
+import hashlib
+import io
+import json
+import os
+from pathlib import Path
+import tempfile
+import shutil
+from types import SimpleNamespace
+import unittest
+from unittest import mock
+
+import devin_global_lifecycle_admission as case
+import devin_bwrap_policy_setup as policy_setup
+
+
+class GlobalLifecycleContracts(unittest.TestCase):
+    def context(self, root):
+        return SimpleNamespace(root=root, original_output_identity=case.base.root_identity(root),
+                               budget=SimpleNamespace(check=lambda: 10), argv=[str(root / "no-native")], summary={})
+
+
+    def build_receipt(self):
+        value = {"schema_version": 1, "source_commit": "a" * 40, "source_tree": "b" * 40,
+                 "environment": case.private_go.ENVIRONMENT, "commands": [], "streams": {}}
+        for role, path in (("go", "/owned/build-toolchain/go/bin/go"), ("installer", "/owned/agentplugins")):
+            value[role] = dict(path=path, bytes=8, sha256="c" * 64, uid=os.getuid(), gid=os.getgid(), mode=0o755)
+        value["go"].update(bytes=case.private_go.GO_BYTES, sha256=case.private_go.GO_SHA256)
+        value["toolchain"] = dict(schema_version=1, url=case.private_go.URL, archive_bytes=case.private_go.ARCHIVE_BYTES,
+            archive_sha256=case.private_go.ARCHIVE_SHA256, catalog_sha256=case.private_go.CATALOG_SHA256,
+            members=case.private_go.MEMBERS, directories=case.private_go.DIRECTORIES, payload_bytes=case.private_go.PAYLOAD,
+            root="/owned/build-toolchain", original_root=[1, 2, case.stat.S_IFDIR | 0o700, os.getuid(), os.getgid()],
+            verifications=6, cleanup_proved=True)
+        for label, args in (("build-go-version", ["version"]),
+                            ("build-uap", ["build", "-o", "/owned/agentplugins", "./cli/cmd/agentplugins"])):
+            row = dict(probe=label, argv=[value["go"]["path"], *args], cwd=str(case.base.shared.SOURCE),
+                       exit=0, error=None, elapsed_seconds=0.01)
+            for kind in ("stdout", "stderr"):
+                body = b"go version go1.26.11 linux/amd64\n" if (label, kind) == ("build-go-version", "stdout") else b""
+                name = label + "." + kind + ".log"
+                row.update({kind + "_file": name, kind + "_bytes": len(body), kind + "_sha256": case.sha(body)})
+                value["streams"][name] = base64.b64encode(body).decode()
+            value["commands"].append(row)
+        return value
+
+    def selected_private_compiler(self, go):
+        """Only replace artifact selection in the existing pin/build contracts."""
+        @contextmanager
+        def selected(ctx):
+            receipt = self.build_receipt()["toolchain"]
+            path = go.parents[2]
+            receipt.update(root=str(path), cleanup_proved=False, verifications=1)
+            def verify(): receipt["verifications"] += 1
+            ctx.global_build_cleanup_proved = False
+            try:
+                yield SimpleNamespace(go=go, path=path, receipt=receipt, verify=verify)
+            finally:
+                verify()
+                receipt["cleanup_proved"] = True
+                ctx.global_build_cleanup_proved = True
+        return selected
+
+    def completed_summary(self):
+        first = ("source-commit", "source-tree", "source-clean", "git-init-a", "git-init-b", "git-init-c") + case.base.METADATA_PROBES
+        tail = ("uap-add", *case.NATIVE[:4], *case.ORIGINAL_CONFIG_NATIVE, "uap-doctor-installed", "uap-repair", *case.NATIVE[4:8],
+                "uap-doctor-repaired", "uap-remove", *case.NATIVE[8:], "source-final-clean")
+        value = {"commands": [{"probe": name, "exit": 0, "error": None} for name in first + tail],
+                "command_effects": [dict(label=name, changes={}, outer_changes={}) for name in case.base.METADATA_PROBES + tail[:-1]],
+                "global_lifecycle_capture_complete": True, "metadata_capture_complete": True, "ordinary_metadata_capture_complete": True,
+                "metadata_recipe": "ordinary-global", "metadata_route": case.ordinary.OrdinaryEffects.metadata_route,
+                "native_json_schema": case.base.METADATA_SCHEMA, "exact_source_admission": case.base.METADATA_SCHEMA,
+                "admission_qualified": False, "qualification": dict.fromkeys(case.base.shared.QUALIFICATION_CASES, False),
+                "native_global_steps": list(case.ALL_NATIVE), "public_global_steps": list(case.PUBLIC),
+                "probe_methods": dict.fromkeys(("a", "b", "user", "local", "legacy"), []),
+                "accepted_connections": dict.fromkeys(("a", "b", "user", "local", "legacy"), 0),
+                "source_commit": "a" * 40, "source_tree": "b" * 40, "global_build_receipt": self.build_receipt()}
+        value["global_public_joins"], value["global_state_history"] = [], []
+        for index, label in enumerate(case.PUBLIC):
+            group = "group-" + str(0 if index < 2 else 2 if index < 4 else 4)
+            item = dict(installation_id="12345678-1234-4234-8234-123456789abc", operation_group_id=group)
+            value["global_state_history"].append(dict(schema_version=5, installations=[item]))
+            value["global_public_joins"].append(dict(label=label, response_sha256="d" * 64, state_sha256="e" * 64, **item))
+            next(row for row in value["commands"] if row["probe"] == label)["stdout_sha256"] = "d" * 64
+            if not label.startswith("uap-doctor"):
+                next(row for row in value["command_effects"] if row["label"] == label)["changes"]["home/uap-state/state-v2.json"] = {
+                    "before": None, "after": {"sha256": "e" * 64}}
+        return value
+
+    def public_data(self, item, binding, verb):
+        outcome = dict(installation_id=item["installation_id"], requires_confirmation=False,
+                       mutated=True, group_phase="external_completed")
+        if verb == "remove":
+            outcome.update(plugin=case.NAME, client_id="windsurf", affected_surfaces=["windsurf"],
+                           deactivation=dict(activation="not_required", artifact_removal_allowed=True, external_removal_complete=True))
+        else:
+            components = [dict(kind="skill", name=case.SKILL, support="prepared")]
+            components += [dict(kind="mcp_server", name=name, support="prepared") for name in case.SERVERS]
+            outcome.update(plan=dict(client_id="windsurf", scope="user", physical_artifact_id=binding["physical_artifact_id"],
+                                activation="prepared", verification="package_validated", components=components),
+                           activation=dict(activation="prepared", authentication="not_checked", policy="allowed", verification="installation_verified"))
+        output = dict(operation_id=item["operation_group_id"], plugin=case.NAME, version="1.0.0", dry_run=False,
+                      source="direct local source" if verb == "add" else "local", tree_digest=item["source"]["tree_digest"],
+                      manifest_digest=item["package"]["manifest_digest"], result=outcome)
+        data = dict(batch=True, succeeded=1, failed=0, operation_id=item["operation_group_id"], plugin=case.NAME, dry_run=False, status="completed",
+                    targets=[dict(target="windsurf", status="external_completed", output=output)])
+        if verb == "add": data.update({key: output[key] for key in ("version", "source", "tree_digest", "manifest_digest")})
+        if verb == "remove":
+            receipt = item["data_receipts"][binding["data_receipt_id"]]
+            data.update(status="data_retained", data_retained=True, plugin_data_preserved=True,
+                        retained_data=[{key: receipt[key] for key in ("data_receipt_id", "physical_backend_id", "scope", "state")}])
+        return data
+
+    def command_record(self, label, arguments, cwd, stdout, stderr=b""):
+        row = dict(probe=label, argv=arguments, cwd=str(cwd), exit=0, error=None)
+        for kind, body in (("stdout", stdout), ("stderr", stderr)):
+            row.update({kind + "_file": label + "." + kind + ".log", kind + "_bytes": len(body), kind + "_sha256": case.sha(body)})
+        return row
+
+    def removal_state(self, value, binding):
+        retained = copy.deepcopy(value)
+        retained["installations"][0].update(clients={}, data_retained=True, operation_group_id="group-remove")
+        retained["transaction_receipts"] = [dict(operation_id="group-remove-001", operation_group_id="group-remove",
+            phase="committed", mutation_type="directory_remove", sequence=len(binding["receipts"]) + 1,
+            client_binding_id=binding["client_binding_id"], active_path=binding["target_locator"],
+            before_digest=binding["receipts"][-1]["after_digest"])]
+        return retained
+
+    @contextmanager
+    def installed_state(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            ctx = case.base.shared.Context(root, {}, SimpleNamespace(check=lambda: 10))
+            ctx.original_output_identity, ctx.argv = case.base.root_identity(root), [str(root / "no-vendor")]
+            probes = {name: SimpleNamespace(url="http://127.0.0.1:1234/mcp", accepted_connections=[],
+                      methods=lambda: [], call_records=lambda: ([], 0)) for name in ("a", "b", "user", "local", "legacy")}
+            source = case.author_source(ctx, probes)
+            expected, _, _ = case.base.fixture(ctx, {name: probe.url for name, probe in probes.items()}, "n" * 64)
+            journey = object.__new__(case.Journey)
+            journey.ctx, journey.home, journey.source = ctx, ctx.home / "uap-state", source
+            journey.profile, journey.probes, journey.expected = Path(expected["user"]["root"]), probes, expected
+            journey.source_bodies, journey.source_sha = ctx.global_source_bodies, case.source_digest(ctx.global_source_bodies)
+            journey.identifier = journey.binding = journey.installation_basis = journey.binding_basis = journey.data_authority = None
+            journey.data_receipt, journey.package_members, journey.removed = None, set(), False
+            journey.public_labels, journey.native_labels, journey.state_history, journey.log_births = [], [], [], {}
+            identifier = "12345678-1234-4234-8234-123456789abc"
+            physical, active, data = journey.identity_paths(identifier)
+            binding_id = "client_" + case.sha("\0".join((identifier, "windsurf", "user", str(active))).encode())[:24]
+            data_id = "data_" + case.sha("\0".join((identifier, physical, "user")).encode())[:24]
+            marker = dict(data_receipt_id=data_id, physical_backend_id=physical, scope="user", locator=str(data),
+                          ownership_digest="sha256:" + case.sha(("agentplugins-plugin-data-v1\0" + data_id + "\0" + str(data)).encode()), state="owned")
+            def write(path, body, mode=0o644):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(body); path.chmod(mode)
+            projected = {case.SERVERS[0]: dict(type="stdio", command=str(active / case.NS / "agentplugins"),
+                            args=["--internal-stdio-v1", str(active), str(data), str(active), "plugin", "--", "python3", str(active / "inert.py")],
+                            env={"PLUGIN_ROOT": str(active), "PLUGIN_DATA": str(data)}),
+                         case.SERVERS[1]: dict(type="streamable-http", url=probes["user"].url)}
+            for name, body in journey.source_bodies.items():
+                write(active / name, json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                                                "mcpServers": projected}).encode() if name == "mcp.json" else body)
+            helper = b"inert-cli"
+            journey.cli_pin = (len(helper), case.sha(helper))
+            write(active / case.NS / "agentplugins", helper, 0o700)
+            write(active / case.NS / "metadata.json", json.dumps(dict(protocol=1, sha256=case.sha(helper), cliVersion="0.1.0-development")).encode(), 0o600)
+            entries = copy.deepcopy(expected["user"]["mcp"])
+            for name in case.SERVERS:
+                entries[name] = dict(projected[name]); entries[name].pop("type")
+            entries[case.SERVERS[1]]["transport"] = "http"
+            write(journey.profile / "mcp_config.json", json.dumps({"mcpServers": entries}).encode())
+            skill = journey.source_bodies["skills/" + case.SKILL + "/SKILL.md"]
+            write(journey.profile / "skills" / case.SKILL / "SKILL.md", skill)
+            write(data / ".agentplugins-data-owner.json", json.dumps(marker).encode(), 0o600)
+            write(journey.home / "mutation.lock", b'{"pid":1,"acquired_at":"2026-11-13T00:00:00Z"}', 0o600)
+            manifest = "sha256:" + case.sha(journey.source_bodies["plugin.json"])
+            journey.security = dict(schema_version=1, subject=dict(tree_digest=journey.source_sha, manifest_digest=manifest),
+                                    scanner=dict(id="lintai", version="0.1.3"), policy=case.POLICY,
+                                    outcome="no_blocking_findings", counts=dict(blocking=0, warnings=0, total=0),
+                                    scanned_files=4, report_digest="sha256:" + "e" * 64)
+            journey.assessment_path = case.security_role(journey.security)
+            write(journey.home / journey.assessment_path, json.dumps(journey.security).encode(), 0o600)
+            inventory = case.base.metadata_inventory(root, ctx.budget)
+            _, digest = case.capture_package(ctx, active, inventory, journey.cli_pin)
+            objects = [dict(object_id="package:windsurf:" + physical, kind="managed_package_directory",
+                            logical_name=case.NAME, path=str(active), managed_digest=digest, protection_class="managed"),
+                       dict(object_id="devin_global_skill_directory:" + case.SKILL, kind="devin_global_skill_directory",
+                            logical_name=case.SKILL, path=str(journey.profile / "skills" / case.SKILL), source_relative="skills/" + case.SKILL,
+                            managed_digest="sha256:" + case.sha(b"f\0SKILL.md\0-\0" + skill + b"\0"), protection_class="managed")]
+            objects += [dict(object_id="devin_global_mcp_server:" + name, kind="devin_global_mcp_server", logical_name=name,
+                             path=str(journey.profile / "mcp_config.json"), managed_digest=case.entry_digest(name, entries[name]),
+                             protection_class="managed") for name in case.SERVERS]
+            binding = dict(client_binding_id=binding_id, client_id="windsurf", scope="user", physical_artifact_id=physical,
+                           target_locator=str(active), native_profile_root=str(journey.profile), data_receipt_id=data_id,
+                           materialization="materialized", activation="prepared", authentication="not_checked", policy="allowed",
+                           verification="installation_verified", package_revision=dict(version="1.0.0", tree_digest=journey.source_sha, manifest_digest=manifest),
+                           native_objects=objects, receipts=[dict(operation_id="group-install-001", operation_group_id="group-install", phase="committed", sequence=1,
+                           mutation_type="directory_swap",
+                           client_binding_id=binding_id, active_path=str(active), after_digest=digest)])
+            item = dict(installation_id=identifier, declared_name=case.NAME, operation_group_id="group-install", clients={binding_id: binding}, data_receipts={data_id: marker},
+                        source=dict(source_binding_id="src_" + case.sha((str(source) + "\0\0").encode())[:24],
+                                    requested_source=str(source), canonical_source=str(source), resolved_revision="", tree_digest=journey.source_sha),
+                        package=dict(loader_kind="agent_plugins", format_id="agent-plugins/1.0.0",
+                                     schema_uri="https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", declared_name=case.NAME,
+                                     version="1.0.0", manifest_digest=manifest,
+                                     inventory=dict(mcp_present=True, mcp_enabled=True, mcp_servers=sorted(case.SERVERS), skills=[case.SKILL])))
+            value = dict(schema_version=5, installations=[item])
+            path = journey.home / "state-v2.json"
+            write(path, json.dumps(value).encode(), 0o600)
+            inventory = case.base.metadata_inventory(root, ctx.budget)
+            journey.state(inventory, identifier=identifier)
+            journey.verified_inventory = inventory
+            journey.authorities = {part.relative_to(root).as_posix(): case.base.root_identity(part)
+                                   for part in (journey.home, journey.profile, source)}
+            journey.effects = SimpleNamespace(baseline=inventory, config_path="home/config/devin/config.json", verify=mock.Mock())
+            yield journey, value, path, active, data
+
+    def test_large_role_streaming_hash_does_not_widen_ordinary_limit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); ctx = self.context(root)
+            path = root / "large"; path.write_bytes(b"x" * ((1 << 20) + 1))
+            path.chmod(0o700)
+            inventory = case.base.metadata_inventory(root, ctx.budget)
+            expected = hashlib.sha256(path.read_bytes()).hexdigest()
+            with self.assertRaisesRegex(ValueError, "ordinary file authority"):
+                case.regular(ctx, "large", inventory)
+            self.assertEqual(case.regular(ctx, "large", inventory, large=(path.stat().st_size, expected)), expected)
+            with self.assertRaisesRegex(ValueError, "large role differs"):
+                case.regular(ctx, "large", inventory, large=(path.stat().st_size, "0" * 64))
+            original = case.base.os.read
+            sizes = []
+            def read(fd, amount):
+                sizes.append(amount); return original(fd, amount)
+            with mock.patch.object(case.base.os, "read", side_effect=read):
+                case.regular(ctx, "large", inventory, large=(path.stat().st_size, expected))
+            self.assertLessEqual(max(sizes), 65536)
+            with mock.patch.object(os, "read", side_effect=AssertionError("wrong-sized role read bytes")):
+                with self.assertRaisesRegex(ValueError, "large role metadata"):
+                    case.regular(ctx, "large", inventory, large=(path.stat().st_size + 1, expected))
+            path.chmod(0o755)
+            with mock.patch.object(os, "read", side_effect=AssertionError("wrong-mode role read bytes")):
+                with self.assertRaisesRegex(ValueError, "large role metadata"):
+                    case.regular(ctx, "large", case.base.metadata_inventory(root, ctx.budget), large=(path.stat().st_size, expected))
+
+    def test_large_role_alias_owner_and_identity_refuse_before_read(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); ctx = self.context(root)
+            path = root / "member"; path.write_bytes(b"owned")
+            inventory = case.base.metadata_inventory(root, ctx.budget)
+            for change in ("owner", "links", "inode"):
+                value = copy.deepcopy(inventory)
+                if change in ("owner", "links"):
+                    row = list(value["member"]); row[4 if change == "owner" else 3] += 1; value["member"] = tuple(row)
+                else:
+                    other = root / "other"; other.write_bytes(b"foreign"); other.replace(path)
+                with mock.patch.object(os, "read", side_effect=AssertionError("foreign bytes read")):
+                    with self.assertRaises(ValueError): case.regular(ctx, "member", value, large=(5, case.sha(b"owned")))
+
+    def test_public_consumer_uses_real_argv_and_aborts_failed_command_without_adoption(self):
+        journey = object.__new__(case.Journey)
+        journey.installer, journey.home = Path("/owned/agentplugins"), Path("/owned/home/uap-state")
+        journey.cli_pin = (12, '0' * 64)
+        journey.ctx = SimpleNamespace(env={"HOME": "/original", "XDG_CONFIG_HOME": "/original/config", "PATH": "/usr/bin"},
+                                     argv=["/owned/client/bin/devin"], projects={"user": Path("/owned/outside")}, budget=object())
+        journey.frame = mock.Mock(return_value=({}, {}))
+        journey.state = mock.Mock(side_effect=AssertionError("failed command adopted state"))
+        journey.ctx.command = mock.Mock(return_value=({"exit": 1}, b"{}", b"native refusal"))
+        with mock.patch.object(case, 'installer_pin', return_value=journey.cli_pin):
+            with self.assertRaisesRegex(ValueError, "public Global lifecycle refused"):
+                journey.public("uap-add", ["add", "/owned/source", "--no-save"])
+        args = journey.ctx.command.call_args.args
+        self.assertEqual(args[1], ["/owned/agentplugins", "add", "/owned/source", "--no-save", "--yes",
+                                   "--target", "windsurf", "--scope", "user", "--format", "json"])
+        self.assertEqual(args[3]["HOME"], "/original")
+        self.assertEqual(args[3]["XDG_CONFIG_HOME"], "/original/config")
+        self.assertEqual(args[3]["PATH"], "/owned/client/bin:/usr/bin")
+        journey.state.assert_not_called()
+
+    def test_native_fence_rejects_user_foreign_and_prior_log_changes(self):
+        journey = object.__new__(case.Journey)
+        journey.effects = mock.Mock(); journey.effects.baseline = {}; journey.effects.config_path = "config"
+        journey.log_births = {}
+        for name in ("home/config/devin/mcp_config.json", "home/uap-state/state-v2.json",
+                     "project-b/foreign", "home/data/devin/cli/logs/devin_20261113-180000_12.log"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                journey.verify_native_delta({name: (1,)}, {name: (2,)}, {name: {"sha256": "before"}},
+                                            {name: {"sha256": "after"}}, "mcp-installed-a")
+        journey.effects.verify.assert_not_called()
+
+    def test_exact_sequence_completes_only_research_with_false_qualifications(self):
+        value = self.completed_summary()
+        case.completion(value)
+        for change in ("missing", "error", "qualification", "bool", "effects", "schema", "source", "endpoint", "ordinary"):
+            wrong = copy.deepcopy(value)
+            if change == "missing": wrong["commands"].pop()
+            elif change == "error": wrong["commands"][0]["error"] = "timeout"
+            elif change == "qualification": wrong["qualification"]["mcp-tools-call"] = True
+            elif change == "bool": wrong["commands"][8]["exit"] = False
+            elif change == "effects": wrong["command_effects"].pop(13)
+            elif change == "schema": wrong["native_json_schema"] = "unreviewed"
+            elif change == "source": wrong["source_tree"] = "d" * 40
+            elif change == "endpoint": wrong["accepted_connections"]["a"] = False
+            else: wrong["ordinary_metadata_capture_complete"] = False
+            with self.subTest(change=change), self.assertRaises(ValueError): case.completion(wrong)
+
+    def test_actual_owned_skill_quarantine_preserves_inode_bytes_and_refuses_existing_target(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); ctx = self.context(root)
+            ctx.private, ctx.summary = root / "private", {}
+            ctx.private.mkdir()
+            profile = root / "home/config/devin"
+            selected = profile / "skills" / case.SKILL
+            selected.mkdir(parents=True)
+            body = b"---\nname: owned\n---\nprivate source\n"
+            (selected / "SKILL.md").write_bytes(body)
+            original = case.base.root_identity(selected)
+            case.quarantine_skill(ctx, profile, body)
+            moved = ctx.private / "deliberately-quarantined-skill"
+            self.assertEqual(case.base.root_identity(moved), original)
+            self.assertEqual((moved / "SKILL.md").read_bytes(), body)
+            selected.mkdir(); (selected / "SKILL.md").write_bytes(body)
+            with self.assertRaisesRegex(ValueError, "quarantine preexists"):
+                case.quarantine_skill(ctx, profile, body)
+            self.assertEqual((moved / "SKILL.md").read_bytes(), body)
+
+    def test_closed_uap_home_refuses_unknown_member_before_reading_it(self):
+        with self.installed_state() as (journey, _value, _path, _active, _data):
+            journey.closed_home(journey.verified_inventory)
+            unknown = journey.home / "unknown-private-token"
+            unknown.write_bytes(b"foreign sentinel")
+            with mock.patch.object(os, "read", side_effect=AssertionError("any body was read")) as read:
+                with self.assertRaisesRegex(ValueError, "unknown UAP state member"):
+                    journey.frame()
+                read.assert_not_called()
+            self.assertEqual(unknown.read_bytes(), b"foreign sentinel")
+
+    def test_uap_membership_refusal_reports_only_first_reason_and_member_hash_before_read(self):
+        for variant in ("unexpected-file", "missing-required", "unexpected-directory", "file-before-missing"):
+            with self.subTest(variant=variant), self.installed_state() as (journey, _value, path, _active, data):
+                original_state = path.read_bytes()
+                marker = data / ".agentplugins-data-owner.json"
+                reason = variant
+                selected = marker
+                prefix = "Global unknown UAP state member"
+                if variant in ("unexpected-file", "file-before-missing"):
+                    selected = journey.home / "a-private-unknown"
+                    selected.write_bytes(b"PRIVATE unmeasured body")
+                    (journey.home / "z-private-unknown").write_bytes(b"PRIVATE second unmeasured body")
+                    reason = "unexpected-file"
+                if variant in ("missing-required", "file-before-missing"):
+                    marker.unlink()
+                elif variant == "unexpected-directory":
+                    selected = journey.home / "private-unknown-directory"
+                    selected.mkdir()
+                    prefix = "Global unknown UAP directory"
+                expected = hashlib.sha256(b"relative-state-member-v1\0" +
+                    selected.relative_to(journey.home).as_posix().encode()).hexdigest()
+                with (mock.patch.object(os, "read", side_effect=AssertionError("membership refusal read a body")) as read,
+                      mock.patch.object(journey, "read", side_effect=AssertionError("membership refusal read state")) as state_read,
+                      self.assertRaisesRegex(ValueError, prefix) as caught):
+                    journey.frame()
+                read.assert_not_called()
+                state_read.assert_not_called()
+                message = str(caught.exception)
+                self.assertTrue(message.startswith(prefix + "; "))
+                self.assertLessEqual(len(message.encode("ascii")), 256)
+                self.assertEqual(json.loads(message.split("; ", 1)[1]),
+                                 dict(reason=reason, member_sha256=expected))
+                self.assertNotIn(str(journey.home), message)
+                self.assertNotIn(selected.name, message)
+                self.assertNotIn("PRIVATE", message)
+                self.assertEqual(path.read_bytes(), original_state)
+                self.assertEqual(journey.public_labels, [])
+                self.assertEqual(journey.native_labels, [])
+
+    def test_native_skill_extra_member_is_refused_before_any_postpublic_read(self):
+        with self.installed_state() as (journey, _value, _path, _active, _data):
+            unknown = journey.profile / "skills" / case.SKILL / "foreign-private-token"
+            unknown.write_bytes(b"foreign sentinel")
+            inventory = case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget)
+            with mock.patch.object(os, "read", side_effect=AssertionError("any postpublic body was read")) as read:
+                with self.assertRaisesRegex(ValueError, "Global native Skill closed membership"):
+                    journey.state(inventory)
+                read.assert_not_called()
+            self.assertEqual(unknown.read_bytes(), b"foreign sentinel")
+
+    def test_native_skill_metadata_and_removal_refuse_before_reads(self):
+        for change in ("directory", "mode", "size", "removed"):
+            with self.subTest(change=change), self.installed_state() as (journey, _value, _path, active, _data):
+                selected = journey.profile / "skills" / case.SKILL
+                if change == "directory": (selected / "unknown").mkdir()
+                elif change == "mode": (selected / "SKILL.md").chmod(0o600)
+                elif change == "size": (selected / "SKILL.md").write_bytes(b"wrong size")
+                elif change == "removed": shutil.rmtree(active)
+                inventory = case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget)
+                with mock.patch.object(os, "read", side_effect=AssertionError("postpublic body read")) as read:
+                    with self.assertRaisesRegex(ValueError, "Global native Skill"):
+                        journey.state(inventory, removed=change == "removed")
+                    read.assert_not_called()
+
+    def test_declared_skill_quarantine_allows_frame_but_not_repaired_state(self):
+        with self.installed_state() as (journey, _value, _path, _active, _data):
+            journey.quarantine()
+            journey.frame()
+            with mock.patch.object(os, "read", side_effect=AssertionError("repaired body read")) as read:
+                with self.assertRaisesRegex(ValueError, "Global native Skill closed membership"):
+                    journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
+                read.assert_not_called()
+
+    def test_aggregate_budget_is_admitted_before_first_body(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); ctx = self.context(root)
+            for index in range(17):
+                with (root / str(index)).open("wb") as output: output.truncate(1 << 20)
+            with mock.patch.object(os, "read", side_effect=AssertionError("over-budget body read")) as read:
+                with self.assertRaisesRegex(ValueError, "Global ordinary aggregate"):
+                    case.capture(ctx, (1, "0" * 64))
+                read.assert_not_called()
+            (root / "16").unlink()
+            _, frame = case.capture(ctx, (1, "0" * 64))
+            self.assertEqual(sum(len(row["identity"]) == 9 for row in frame.values()), 16)
+
+    def test_scan_cache_role_is_exact_subject_policy_and_typed_counts(self):
+        value = {"schema_version": 1, "subject": {"tree_digest": "sha256:" + "a" * 64,
+                 "manifest_digest": "sha256:" + "b" * 64}, "scanner": {"id": "lintai", "version": "0.1.3"},
+                 "policy": case.POLICY, "counts": {"blocking": 0, "warnings": 0, "total": 0},
+                 "outcome": "no_blocking_findings", "scanned_files": 4, "report_digest": "sha256:" + "c" * 64}
+        path = case.security_role(value)
+        self.assertRegex(path, r"^security/assessments/[0-9a-f]{64}\.json$")
+        changed = copy.deepcopy(value); changed["subject"]["tree_digest"] = "sha256:" + "d" * 64
+        self.assertNotEqual(case.security_role(changed), path)
+        for field in ("schema_version", "blocking", "scanner", "extra"):
+            wrong = copy.deepcopy(value)
+            if field == "schema_version": wrong[field] = True
+            elif field == "blocking": wrong["counts"][field] = False
+            elif field == "scanner": wrong[field]["version"] = "0.1.2"
+            else: wrong["extra"] = "unbound"
+            with self.assertRaises(ValueError): case.security_role(wrong)
+
+    def test_actual_native_consumer_checks_selected_user_source_before_next_command(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            ctx = case.base.shared.Context(root, {}, SimpleNamespace(check=lambda: 10))
+            ctx.original_output_identity = case.base.root_identity(root)
+            ctx.argv = [str(root / "no-vendor")]
+            probes = {name: SimpleNamespace(url='http://127.0.0.1:1234/mcp', accepted_connections=[],
+                       methods=lambda: [], call_records=lambda: ([], 0)) for name in ('a', 'b', 'user', 'local', 'legacy')}
+            expected, _, _ = case.base.fixture(ctx, {name: probe.url for name, probe in probes.items()}, "n" * 64)
+            profile = Path(expected['user']['root'])
+            entries = dict(expected['user']['mcp'])
+            entries.update({case.SERVERS[0]: {'command': 'python3', 'args': []},
+                            case.SERVERS[1]: {'url': probes['user'].url}})
+            (profile / 'mcp_config.json').write_text(json.dumps({'mcpServers': entries}))
+            wanted = {name: (entry, profile / 'mcp_config.json') for name, entry in entries.items()}
+            wanted.update({name: (entry, Path(expected['a']['root']) / 'mcp_config.json') for name, entry in expected['a']['mcp'].items()})
+            wanted['same-name'] = ({'url': expected['local']['url'], 'disabled': True}, Path(expected['local']['path']))
+            wanted['legacy-foreign'] = ({'url': expected['legacy_url'], 'disabled': True}, ctx.home / '.codeium/windsurf/mcp_config.json')
+            rows = [dict(name=name, enabled=not entry.get('disabled', False), disabled_reason='disabled' if entry.get('disabled') else None,
+                         transport='stdio' if 'command' in entry else 'http', command=entry.get('command'),
+                         args=entry.get('args', []), url=entry.get('url'), disabled_tools=entry.get('disabledTools', []), source=str(source))
+                    for name, (entry, source) in wanted.items()]
+            for wrong in (False, True):
+                journey = object.__new__(case.Journey)
+                journey.ctx, journey.probes, journey.expected, journey.profile = ctx, probes, expected, profile
+                journey.cli_pin, journey.helper, journey.nonce = (1, '0' * 64), None, "n" * 64
+                journey.authorities = {profile.relative_to(root).as_posix(): case.base.root_identity(profile)}
+                journey.log_births, journey.native_labels = {}, []
+                journey.frame = lambda inventory=None: case.capture(ctx, journey.cli_pin, authorities=journey.authorities, inventory=inventory)
+                journey.effects = SimpleNamespace(baseline=case.base.metadata_inventory(root, ctx.budget),
+                                                   config_path='home/config/devin/config.json', verify=mock.Mock())
+                emitted = copy.deepcopy(rows)
+                if wrong:
+                    next(row for row in emitted if row['name'] == case.SERVERS[0])['source'] = str(ctx.projects['b'] / '.devin/mcp_config.json')
+                ctx.probe = mock.Mock(side_effect=[({'exit': 0}, json.dumps(emitted).encode(), b''), StopIteration('second command reached')])
+                with self.assertRaises(ValueError if wrong else StopIteration):
+                    journey.native('installed')
+                self.assertEqual(ctx.probe.call_count, 1 if wrong else 2)
+                self.assertEqual(journey.native_labels, [] if wrong else ['mcp-installed-a'])
+                self.assertNotIn('global_lifecycle_capture_complete', ctx.summary)
+
+    def test_global_recipe_reaches_host_guard_without_fixture_io(self):
+        with mock.patch.object(case.base.shared.native, 'require_hosted', side_effect=RuntimeError('host gate')) as gate:
+            with mock.patch.object(Path, 'mkdir', side_effect=AssertionError('fixture created')):
+                with self.assertRaisesRegex(RuntimeError, 'host gate'):
+                    case.base.run(Path('/unused'), collector=lambda *args: None, recipe='ordinary-global')
+        gate.assert_called_once()
+
+    def test_execute_forwards_removed_state_to_public_consumer(self):
+        journey = object.__new__(case.Journey)
+        journey.source, journey.identifier = Path('/source'), 'installed-id'
+        journey.ctx = SimpleNamespace(summary={})
+        journey.log_births, journey.state_history = {}, []
+        journey.public_labels, journey.native_labels = [], []
+        journey.source_bodies = {'skills/' + case.SKILL + '/SKILL.md': b'inert'}
+        journey.profile = Path('/profile')
+        calls = []
+        def public(label, argv, **kwargs):
+            calls.append((label, kwargs)); journey.public_labels.append(label)
+        def native(phase, *, original_config=False):
+            if original_config:
+                journey.native_labels.extend(case.ORIGINAL_CONFIG_NATIVE)
+                return
+            journey.native_labels.extend(kind + '-' + phase + '-' + scope
+                                         for scope in ('a', 'b') for kind in ('mcp', 'skills'))
+        journey.public, journey.native = public, native
+        with mock.patch.object(journey, "quarantine"):
+            journey.execute()
+        self.assertEqual(calls[-1], ('uap-remove', {'removed': True}))
+
+    def test_native_replacement_refuses_before_any_post_command_body(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); ctx = self.context(root)
+            path = root / 'user-config'; path.write_bytes(b'original')
+            before = case.base.metadata_inventory(root, ctx.budget)
+            journey = object.__new__(case.Journey)
+            journey.ctx, journey.native_labels = ctx, []
+            journey.frame = mock.Mock(return_value=(before, {}))
+            def probe(*args, **kwargs):
+                other = root / 'private'; other.write_bytes(b'foreign secret')
+                other.replace(path)
+                return {'exit': 0}, b'[]', b''
+            ctx.probe = probe
+            with mock.patch.object(os, 'read', side_effect=AssertionError('foreign body read')):
+                with self.assertRaisesRegex(ValueError, 'nonauxiliary authority'):
+                    journey.native('installed')
+            journey.frame.assert_called_once_with()
+
+    def test_original_uap_root_replacement_refuses_before_body_capture(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); ctx = self.context(root)
+            state = root / "home/uap-state"; state.mkdir(parents=True)
+            original = case.base.root_identity(state)
+            state.rename(root / "moved-state")
+            state.mkdir(); (state / "foreign").write_bytes(b"foreign private body")
+            with mock.patch.object(os, 'read', side_effect=AssertionError('foreign bytes read')):
+                with self.assertRaisesRegex(ValueError, 'original directory authority changed'):
+                    case.capture(ctx, (1, '0' * 64), authorities={'home/uap-state': original})
+
+    def test_successful_public_command_rejoins_original_roots_before_state_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); ctx = self.context(root)
+            state = root / 'home/uap-state'; state.mkdir(parents=True)
+            (state / 'state-v2.json').write_text('{"schema_version":5,"installations":[]}')
+            journey = object.__new__(case.Journey)
+            journey.ctx, journey.home, journey.installer = ctx, state, root / 'agentplugins'
+            journey.identifier = 'owned-id'
+            journey.cli_pin = (1, '0' * 64)
+            journey.authorities = {'home/uap-state': case.base.root_identity(state)}
+            before = case.base.metadata_inventory(root, ctx.budget)
+            journey.frame = mock.Mock(return_value=(before, {}))
+            ctx.env, ctx.projects = {'PATH': '/usr/bin'}, {'user': root}
+            def command(label, arguments, cwd, *_args):
+                state.rename(root / 'retained-original-state')
+                state.mkdir()
+                (state / 'state-v2.json').write_bytes(b'foreign private state')
+                out = b'{"schema_version":1,"command":"doctor","result":"success","data":{}}'
+                return self.command_record(label, arguments, cwd, out), out, b''
+            ctx.command = command
+            with mock.patch.object(case, 'installer_pin', return_value=journey.cli_pin):
+                with mock.patch.object(os, 'read', side_effect=AssertionError('foreign state bytes read')):
+                    with self.assertRaisesRegex(ValueError, 'original directory authority changed'):
+                        journey.public('uap-doctor-installed', ['doctor', 'owned-id'])
+
+    def test_successful_public_source_leaf_swap_refuses_before_any_body(self):
+        for label, operation in (("uap-repair", "repair"), ("uap-doctor-installed", "doctor")):
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); ctx = self.context(root)
+                state = root / "home/uap-state"; state.mkdir(parents=True)
+                source = root / "component-source"; source.mkdir()
+                member = source / "plugin.json"; member.write_bytes(b"original source")
+                journey = object.__new__(case.Journey)
+                journey.ctx, journey.home, journey.profile, journey.installer = ctx, state, root / "profile", root / "agentplugins"
+                journey.identifier = "owned-id"
+                journey.cli_pin = (1, "0" * 64)
+                journey.authorities = {path.relative_to(root).as_posix(): case.base.root_identity(path) for path in (state, source)}
+                before = case.base.metadata_inventory(root, ctx.budget)
+                journey.frame = mock.Mock(return_value=(before, {}))
+                journey.state = lambda inventory, **kwargs: case.regular(ctx, "component-source/plugin.json", inventory)
+                ctx.env, ctx.projects = {"PATH": "/usr/bin"}, {"user": root}
+                def command(label, arguments, cwd, *_args):
+                    replacement = root / "replacement"; replacement.write_bytes(b"foreign private source")
+                    replacement.replace(member)
+                    out = json.dumps(dict(schema_version=1, command=operation, result="success", data={})).encode()
+                    return self.command_record(label, arguments, cwd, out), out, b""
+                ctx.command = command
+                with mock.patch.object(case, "installer_pin", return_value=journey.cli_pin):
+                    with mock.patch.object(os, "read", side_effect=AssertionError("foreign source bytes read")) as read:
+                        with self.assertRaisesRegex(ValueError, "public Global changed foreign file"):
+                            journey.public(label, [operation, "owned-id"])
+                        read.assert_not_called()
+
+
+
+    def test_package_digest_uses_independent_literal_framing_and_default_reader(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); ctx = self.context(root)
+            active = root / "package"; (active / "lib").mkdir(parents=True)
+            for name, body, mode in (("a", b"A", 0o644), ("lib/b", b"BC", 0o644), ("run", b"#!", 0o700)):
+                path = active / name; path.write_bytes(body); path.chmod(mode)
+            inventory = case.base.metadata_inventory(root, ctx.budget)
+            literal = (b"file\0a\0false\0" + b"1\0A" + b"dir\0lib\0false\0" + b"0\0"
+                       + b"file\0lib/b\0false\0" + b"2\0BC" + b"file\0run\0true\0" + b"2\0#!")
+            bodies, digest = case.capture_package(ctx, active, inventory, (1, "0" * 64))
+            self.assertEqual(bodies, {"a": b"A", "lib/b": b"BC", "run": b"#!"})
+            self.assertEqual(digest, "sha256:" + hashlib.sha256(literal).hexdigest())
+            self.assertEqual(case.base.read_bootstrap_file(ctx, "package/a", inventory["package/a"], inventory), b"A")
+            with mock.patch.object(os, "read", side_effect=AssertionError("invalid sink read bytes")):
+                with self.assertRaisesRegex(ValueError, "SHA256 state"):
+                    case.base.read_bootstrap_file(ctx, "package/a", inventory["package/a"], inventory, package_digest=hashlib.sha1())
+            read = os.read
+            def replace_after_read(fd, count):
+                body = read(fd, count)
+                if body:
+                    info = (active / "a").stat()
+                    os.utime(active / "a", ns=(info.st_atime_ns, info.st_mtime_ns + 2000000000))
+                return body
+            with mock.patch.object(os, "read", side_effect=replace_after_read):
+                with self.assertRaisesRegex(ValueError, "bootstrap file changed"):
+                    case.capture_package(ctx, active, inventory, (1, "0" * 64))
+            self.assertNotIn("global_lifecycle_capture_complete", ctx.summary)
+
+    def test_actual_state_consumer_joins_all_digests_and_keeps_retained_installation(self):
+        with self.installed_state() as (journey, value, path, active, data):
+            item = value["installations"][0]
+            binding = next(iter(item["clients"].values()))
+            for change in ("native", "package", "source", "revision", "data"):
+                wrong = copy.deepcopy(value); selected = wrong["installations"][0]
+                target = next(iter(selected["clients"].values()))
+                if change == "native": target["native_objects"][1]["managed_digest"] = "sha256:" + "0" * 64
+                elif change == "package":
+                    target["native_objects"][0]["managed_digest"] = target["receipts"][0]["after_digest"] = "sha256:" + "0" * 64
+                elif change == "source": selected["source"]["tree_digest"] = "sha256:" + "0" * 64
+                elif change == "revision": target["package_revision"]["manifest_digest"] = "sha256:" + "0" * 64
+                else: selected["data_receipts"][binding["data_receipt_id"]]["locator"] = str(data.parent / "foreign")
+                path.write_text(json.dumps(wrong))
+                with self.subTest(change=change), self.assertRaises(ValueError):
+                    journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
+            original = data.stat(); marker = data / ".agentplugins-data-owner.json"
+            marker_before = marker.stat(); marker_body = marker.read_bytes()
+            shutil.rmtree(active)
+            shutil.rmtree(journey.profile / "skills" / case.SKILL)
+            retained = self.removal_state(value, binding)
+            path.write_text(json.dumps(retained))
+            self.assertEqual(journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget), removed=True), retained)
+            self.assertTrue(os.path.samestat(original, data.stat()))
+            self.assertEqual((marker.stat().st_ino, marker.stat().st_mode, marker.stat().st_mtime_ns, marker.read_bytes()),
+                             (marker_before.st_ino, marker_before.st_mode, marker_before.st_mtime_ns, marker_body))
+            for wrong in (dict(schema_version=5, installations=[]), value):
+                path.write_text(json.dumps(wrong))
+                with self.assertRaises(ValueError):
+                    journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget), removed=True)
+
+    def test_pending_native_intent_and_authentication_attestation_are_typed(self):
+        with self.installed_state() as (journey, value, path, _active, _data):
+            for field, invalid in (("pending_native_intent", {}), ("pending_native_intent", False),
+                                   ("pending_native_intent", 0), ("pending_native_intent", []),
+                                   ("authentication_attested", True), ("authentication_attested", 0),
+                                   ("authentication_attested", None)):
+                wrong = copy.deepcopy(value)
+                next(iter(wrong["installations"][0]["clients"].values()))[field] = invalid
+                path.write_text(json.dumps(wrong))
+                with self.subTest(field=field, invalid=invalid), self.assertRaisesRegex(ValueError, "Global binding authority"):
+                    journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
+
+    def test_committed_receipts_preserve_consecutive_directory_swap_history(self):
+        with self.installed_state() as (journey, value, path, _active, _data):
+            binding = next(iter(value["installations"][0]["clients"].values()))
+            original = copy.deepcopy(binding["receipts"][0])
+            second = dict(original, operation_id="group-repair-001", operation_group_id="group-repair", sequence=2,
+                          before_digest=original["after_digest"])
+            for receipts in ([dict(original, mutation_type="entry_write")], [dict(original, sequence=True)],
+                             [original, original], [original, dict(second, sequence=3)]):
+                binding["receipts"] = receipts; path.write_text(json.dumps(value))
+                with self.subTest(receipts=receipts), self.assertRaisesRegex(ValueError, "Global committed public receipts"):
+                    journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
+            value["installations"][0]["operation_group_id"] = "group-repair"
+            binding["receipts"] = [original, second]; path.write_text(json.dumps(value))
+            journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
+            for receipts in ([original], [dict(original, operation_id="rewritten"), second], [second]):
+                binding["receipts"] = receipts; path.write_text(json.dumps(value))
+                with self.subTest(receipts=receipts), self.assertRaisesRegex(ValueError, "Global committed public receipts"):
+                    journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
+
+    def test_public_grouped_repair_requires_its_second_committed_receipt(self):
+        for append in (False, True):
+            with self.subTest(append=append), self.installed_state() as (journey, value, path, _active, _data):
+                journey.installer = journey.ctx.private / "hosted-agentplugins"
+                journey.public_labels = ["uap-add", "uap-doctor-installed"]
+                journey.ctx.env = {"PATH": os.defpath}
+                def command(label, arguments, cwd, *_args):
+                    if append:
+                        item = value["installations"][0]
+                        binding = next(iter(item["clients"].values()))
+                        binding["receipts"].append(dict(binding["receipts"][0], operation_id="group-repair-001",
+                            operation_group_id="group-repair", sequence=2, before_digest=binding["receipts"][0]["after_digest"]))
+                        item["operation_group_id"] = "group-repair"
+                        path.write_text(json.dumps(value))
+                    item = value["installations"][0]
+                    out = json.dumps(dict(schema_version=1, command="repair", result="success",
+                                     data=self.public_data(item, next(iter(item["clients"].values())), "repair"))).encode()
+                    return self.command_record(label, arguments, cwd, out), out, b""
+                journey.ctx.command = command
+                with mock.patch.object(case, "installer_pin", return_value=journey.cli_pin):
+                    if append:
+                        journey.public("uap-repair", ["repair", journey.identifier])
+                        self.assertEqual(journey.public_labels[-1], "uap-repair")
+                    else:
+                        with self.assertRaisesRegex(ValueError, "Global public receipt sequence"):
+                            journey.public("uap-repair", ["repair", journey.identifier])
+                        self.assertEqual(journey.ctx.summary.get("command_effects", []), [])
+
+    def test_coherent_unauthored_projection_digests_do_not_create_ownership(self):
+        for change in ("disabled", "approval", "cwd", "headers", "type", "schema"):
+            with self.subTest(change=change), self.installed_state() as (journey, value, path, active, _data):
+                projection = active / "mcp.json"
+                document = json.loads(projection.read_bytes())
+                selected = document["mcpServers"]
+                if change == "disabled": selected[case.SERVERS[0]]["disabled"] = True
+                elif change == "approval": selected[case.SERVERS[0]]["autoApprove"] = ["unreviewed"]
+                elif change == "cwd": selected[case.SERVERS[0]]["cwd"] = str(active)
+                elif change == "headers": selected[case.SERVERS[1]]["headers"] = {"Authorization": "foreign"}
+                elif change == "type": selected[case.SERVERS[1]]["type"] = "sse"
+                else: document.pop("$schema")
+                projection.write_text(json.dumps(document))
+                native_path = journey.profile / "mcp_config.json"
+                native = json.loads(native_path.read_bytes())
+                for name in case.SERVERS:
+                    entry = dict(selected[name]); entry.pop("type")
+                    if name == case.SERVERS[1]: entry["transport"] = "http"
+                    native["mcpServers"][name] = entry
+                native_path.write_text(json.dumps(native))
+                inventory = case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget)
+                _, digest = case.capture_package(journey.ctx, active, inventory, journey.cli_pin)
+                binding = next(iter(value["installations"][0]["clients"].values()))
+                binding["receipts"][-1]["after_digest"] = digest
+                for obj in binding["native_objects"]:
+                    if obj["kind"] == "managed_package_directory": obj["managed_digest"] = digest
+                    elif obj["kind"] == "devin_global_mcp_server":
+                        obj["managed_digest"] = case.entry_digest(obj["logical_name"], native["mcpServers"][obj["logical_name"]])
+                path.write_text(json.dumps(value))
+                journey.installation_basis = journey.binding_basis = journey.data_authority = journey.binding = None
+                with self.assertRaisesRegex(ValueError, "Global projected (transport|document settings)"):
+                    journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
+                self.assertEqual((journey.source / "mcp.json").read_bytes(), journey.source_bodies["mcp.json"])
+
+    def test_canonical_devin_digest_is_distinct_from_raw_json_and_skill_hash(self):
+        entry = {"url": "https://example.invalid/?a=1&b=2", "headers": {"z": "\u2028", "a": "<owned>"}}
+        literal = b'{"headers":{"a":"\\u003cowned\\u003e","z":"\\u2028"},"url":"https://example.invalid/?a=1\\u0026b=2"}'
+        expected = hashlib.sha256(b"agentplugins-native-mcp-v1\0devin-mcpServers\0owned\0" + literal).hexdigest()
+        self.assertEqual(case.entry_digest("owned", entry), "sha256:" + expected)
+        self.assertNotEqual(case.entry_digest("other", entry), "sha256:" + expected)
+
+    def test_doctor_accepts_only_the_truthful_prepared_result(self):
+        identifier = "owned-id"
+        binding = dict(package_revision=dict(version="1.0.0", tree_digest="sha256:" + "a" * 64, manifest_digest="sha256:" + "b" * 64))
+        data = dict(read_only=True, installation_count=1, open_operation_count=0, project_readiness=[],
+                    installation=dict(installation_id=identifier, name=case.NAME, version="1.0.0", source="local", mixed_version=False,
+                    clients=[dict(client_id="windsurf", scope="user", package_revision=copy.deepcopy(binding["package_revision"]),
+                        activation="prepared", materialization="materialized", authentication="not_checked", policy="allowed",
+                        verification="installation_verified")]),
+                    findings=[dict(status=status, code=code, installation_id=identifier, installation_name=case.NAME, client_id="windsurf")
+                              for status, code in (("degraded", "activation_pending"), ("unknown", "authentication_not_checked"),
+                                                   ("unknown", "native_projection_not_checked"))])
+        case.doctor_result(data, identifier, binding)
+        for change in ("write", "healthy", "false-drift", "active", "count", "missing", "version", "source", "revision"):
+            wrong = copy.deepcopy(data)
+            if change == "write": wrong["read_only"] = False
+            elif change == "healthy": wrong["findings"][2].update(status="healthy", code="no_degradation_detected")
+            elif change == "false-drift": wrong["findings"][2].update(status="degraded", code="native_projection_changed")
+            elif change == "active": wrong["installation"]["clients"][0]["activation"] = "active"
+            elif change == "count": wrong["open_operation_count"] = False
+            elif change in ("version", "source"): wrong["installation"][change] = "unrelated"
+            elif change == "revision": wrong["installation"]["clients"][0]["package_revision"]["tree_digest"] = "sha256:" + "c" * 64
+            else: wrong["findings"].pop()
+            with self.subTest(change=change), self.assertRaises(ValueError): case.doctor_result(wrong, identifier, binding)
+
+    def test_global_completion_requires_two_original_build_streams(self):
+        value = self.completed_summary()
+        for change in ("bool", "source", "bytes", "version", "command", "extra", "owner"):
+            wrong = copy.deepcopy(value)
+            receipt = wrong["global_build_receipt"]
+            if change == "bool": receipt["commands"][0]["exit"] = False
+            elif change == "source": receipt["source_tree"] = "d" * 40
+            elif change == "bytes": receipt["commands"][0]["stdout_bytes"] += 1
+            elif change == "version": receipt["streams"]["build-go-version.stdout.log"] = base64.b64encode(b"go version go1.26.10 linux/amd64\n").decode()
+            elif change == "command": receipt["commands"][1]["argv"].append("-tags=unreviewed")
+            elif change == "extra": receipt["commands"].append(receipt["commands"][0])
+            else: receipt["installer"]["uid"] += 1
+            with self.subTest(change=change), self.assertRaises(ValueError): case.completion(wrong)
+
+    def test_ordinary_global_gate_preserves_actual_argv_and_first_migration_gate(self):
+        ctx = SimpleNamespace(summary=dict(metadata_recipe="ordinary-global", metadata_route=case.ordinary.OrdinaryEffects.metadata_route,
+                              metadata_capture_complete=True, commands=[], command_effects=[{} for _ in case.base.METADATA_PROBES]),
+                              argv=["/owned/devin"], projects={scope: Path("/owned/" + scope) for scope in ("a", "b", "user")},
+                              root=Path("/owned"), budget=object())
+        expected = [(label, args, "a") for label, args in case.base.HELP]
+        expected += [(kind + "-" + label, [kind, "list", "--json"], scope)
+                     for label, scope in (("a", "a"), ("b", "b"), ("user", "user"), ("a-repeat", "a")) for kind in ("mcp", "skills")]
+        ctx.summary["commands"] = [dict(probe=label, argv=[*ctx.argv, *args], cwd=str(ctx.projects[scope])) for label, args, scope in expected]
+        effects = SimpleNamespace(verify=mock.Mock(), step=13, after={"observed": True})
+        with mock.patch.object(case.base, "metadata_inventory", return_value={}):
+            case.complete_ordinary_gate(ctx, effects)
+            for step, after in ((12, effects.after), (13, None)):
+                effects.step, effects.after = step, after
+                with self.assertRaisesRegex(ValueError, "gate incomplete"): case.complete_ordinary_gate(ctx, effects)
+        ctx.summary["commands"][-1]["argv"].insert(1, "--config")
+        with self.assertRaisesRegex(ValueError, "argv or scope"):
+            case.ordinary.require_ordinary_commands(ctx, recipe="ordinary-global")
+        with self.assertRaisesRegex(ValueError, "recipe or sequence"):
+            case.ordinary.require_ordinary_commands(ctx)
+
+    def test_readout_extends_only_the_fixed_global_catalog(self):
+        value = self.completed_summary()
+        value.update(collection_complete=True, cleanup_complete=True)
+        state = dict(phase="source-final-clean", reason="metadata-complete", deadline=float(case.base.time.monotonic() + 10))
+        readout = case.base.closed_readout(value, state)
+        self.assertEqual((readout["commands"], len(readout["effects"])), (39, 32))
+        value.update(collection_complete=False, metadata_recipe="ordinary")
+        state.update(phase="mcp-a", reason="capture-incomplete")
+        with self.assertRaisesRegex(ValueError, "readout counts"): case.base.closed_readout(value, state)
+
+
+
+    def test_owned_skill_row_is_closed_in_the_actual_native_consumer(self):
+        profile = Path("/owned/home/config/devin")
+        for change in ("valid", "name", "project-qualified-name", "description", "provider", "triggers", "warnings", "errors", "extra", "sibling"):
+            journey = object.__new__(case.Journey)
+            ctx = SimpleNamespace(root=Path("/owned"), projects={"a": Path("/owned/a"), "b": Path("/owned/b")},
+                                  summary={}, budget=object())
+            journey.ctx, journey.profile, journey.expected, journey.nonce = ctx, profile, {"user": {"mcp": {}}}, "n" * 64
+            journey.probes, journey.log_births, journey.native_labels = {}, {}, []
+            journey.frame = mock.Mock(return_value=({}, {}))
+            journey.read = lambda *_args: json.dumps({"mcpServers": {name: {} for name in case.SERVERS}}).encode()
+            row = case.owned_skill_row(ctx, profile, "a")
+            if change == "sibling": row["base_dir"] = str(profile / "skills/foreign")
+            elif change == "project-qualified-name": row["name"] = str(ctx.projects["a"]) + ":" + case.SKILL
+            elif change == "extra": row["unreviewed"] = True
+            elif change != "valid": row[change] = "different"
+            ctx.probe = mock.Mock(side_effect=[({"exit": 0}, json.dumps([{"name": name} for name in case.SERVERS]).encode(), b""),
+                ({"exit": 0}, json.dumps([row]).encode(), b""), StopIteration("next scope")])
+            with mock.patch.object(case.base, "metadata_inventory", return_value={}):
+                with mock.patch.object(case.base, "verify_metadata_sources"), mock.patch.object(case.base, "verify_skill_metadata_sources"):
+                    with mock.patch.object(case.base, "zero_effects"):
+                        with self.subTest(change=change), self.assertRaises(StopIteration if change == "valid" else ValueError):
+                            journey.native("installed")
+            self.assertEqual(ctx.probe.call_count, 3 if change == "valid" else 2)
+            self.assertEqual(journey.native_labels, ["mcp-installed-a", "skills-installed-a"] if change == "valid" else ["mcp-installed-a"])
+
+    def test_build_commands_are_separate_bounded_original_receipts(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            go, installer = root / "build-toolchain/go/bin/go", root / "installer"
+            go.parent.mkdir(parents=True)
+            go.write_bytes(b"inert-go"); go.chmod(0o755)
+            ctx = SimpleNamespace(summary=dict(source_commit="a" * 40, source_tree="b" * 40, commands=[]),
+                                  budget=SimpleNamespace(check=lambda: 20), private=root, identities={},
+                                  env={"HOME": "/native-profile"}, process_cleanup_proved=True)
+            def run(argv, cwd, environment, _output, label, **kwargs):
+                self.assertEqual(environment.get("HOME"), os.environ.get("HOME"))
+                self.assertEqual(environment["GOTOOLCHAIN"], "local")
+                self.assertEqual(environment["GOROOT"], str(root / "build-toolchain/go"))
+                self.assertEqual(environment["GOENV"], "off")
+                self.assertEqual(environment["PATH"], str(go.parent) + ":/usr/bin:/bin")
+                self.assertEqual((kwargs["timeout"], kwargs["limit"], kwargs["memory_only"]),
+                                 (10 if label == "build-go-version" else 20, 1 << 20, True))
+                receipt = self.build_receipt()
+                index = 0 if label == "build-go-version" else 1
+                record = receipt["commands"][index]; record["argv"], record["cwd"] = argv, str(cwd)
+                bodies = [base64.b64decode(receipt["streams"][label + "." + kind + ".log"]) for kind in ("stdout", "stderr")]
+                if label == "build-uap": installer.write_bytes(b"inert-built-cli"); installer.chmod(0o755)
+                return record, *bodies
+            with mock.patch.object(case.private_go, "prepared", self.selected_private_compiler(go)), \
+                    mock.patch.multiple(case.private_go, GO_BYTES=8, GO_SHA256=case.sha(b"inert-go")):
+                with mock.patch.object(case.base.shared, "run_probe", side_effect=run) as execute:
+                    pin = case.build_installer(ctx, installer)
+                    self.assertEqual(pin, (15, hashlib.sha256(b"inert-built-cli").hexdigest()))
+                    self.assertEqual(execute.call_count, 2)
+                    self.assertEqual(ctx.summary["commands"], [])
+                    self.assertTrue(ctx.process_cleanup_proved)
+                    self.assertEqual(ctx.summary["global_build_authority"]["selected_lstat"],
+                                     ctx.summary["global_build_authority"]["initial_pin_lstat"])
+                    with self.assertRaisesRegex(ValueError, "fresh installer output"): case.build_installer(ctx, installer)
+                    self.assertEqual(execute.call_count, 2)
+
+    def test_build_metadata_refusal_records_real_facts_before_content_or_process(self):
+        fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid", "st_size", "st_mtime_ns", "st_ctime_ns")
+        for effect in ("mode", "links", "empty", "oversize", "directory", "owner"):
+            with self.subTest(effect=effect), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); go = root / "go"
+                if effect == "directory": go.mkdir(mode=0o755)
+                else: go.write_bytes(b"inert Go; never opened"); go.chmod(0o755)
+                if effect == "mode": go.chmod(0o700)
+                elif effect == "links": os.link(go, root / "alias")
+                elif effect == "empty": go.write_bytes(b"")
+                elif effect == "oversize":
+                    with go.open("r+b") as stream: stream.truncate((128 << 20) + 1)
+                before = go.lstat(); expected = {name: getattr(before, name) for name in fields}
+                ctx = SimpleNamespace(summary={}, budget=SimpleNamespace(check=lambda: 20))
+                metadata = {}
+                with mock.patch.object(case.private_go, "prepared", self.selected_private_compiler(go)), \
+                        mock.patch.object(case.base.shared.artifacts, "open_member", side_effect=AssertionError("refused file opened")) as opened, \
+                        mock.patch.object(case.os, "read", side_effect=AssertionError("refused bytes read")) as read, \
+                        mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("refused process started")) as probe:
+                    with self.assertRaisesRegex(ValueError, "prebuilt installer authority"):
+                        if effect == "owner":
+                            case.installer_pin(go, ctx.budget, owner=(before.st_uid + 1, before.st_gid), metadata=metadata)
+                        else: case.build_installer(ctx, root / "installer")
+                opened.assert_not_called(); read.assert_not_called(); probe.assert_not_called()
+                if effect == "owner": self.assertEqual(metadata, expected)
+                else:
+                    self.assertEqual(ctx.summary, {"global_build_authority": {
+                        "schema_version": 1, "role": "verified-private-go", "selected_lstat": expected,
+                        "expected_owner": {"uid": before.st_uid, "gid": before.st_gid}, "initial_pin_lstat": expected},
+                        "global_build_authority_refusal": {
+                            "role": "go", "predicate": {"mode": "mode", "links": "single-link", "empty": "size",
+                                                       "oversize": "size", "directory": "regular"}[effect],
+                            "regular": case.stat.S_ISREG(expected["st_mode"]), "owner_matches": True,
+                            "mode": case.stat.S_IMODE(expected["st_mode"]), "nlink": expected["st_nlink"],
+                            "bytes": expected["st_size"]}})
+                    self.assertLess(len(json.dumps(ctx.summary)), 2048)
+                self.assertFalse((root / "installer").exists())
+
+    def test_build_diagnostic_keeps_selection_and_gate_observations_distinct(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(); go = root / "go"
+            go.write_bytes(b"inert Go; never opened"); go.chmod(0o755)
+            selected, pin = go.lstat(), case.installer_pin
+            ctx = SimpleNamespace(summary={}, budget=SimpleNamespace(check=lambda: 20))
+            def changed(path, budget, **kwargs):
+                path.chmod(0o700)
+                return pin(path, budget, **kwargs)
+            with mock.patch.object(case.private_go, "prepared", self.selected_private_compiler(go)), \
+                    mock.patch.object(case, "installer_pin", side_effect=changed), \
+                    mock.patch.object(case.base.shared.artifacts, "open_member", side_effect=AssertionError("refused file opened")) as opened:
+                with self.assertRaisesRegex(ValueError, "prebuilt installer authority"):
+                    case.build_installer(ctx, root / "installer")
+            opened.assert_not_called()
+            value = ctx.summary["global_build_authority"]; gate = go.lstat()
+            self.assertEqual(value["expected_owner"], {"uid": selected.st_uid, "gid": selected.st_gid})
+            self.assertNotEqual(value["selected_lstat"]["st_mode"], value["initial_pin_lstat"]["st_mode"])
+            for field in value["selected_lstat"]:
+                self.assertEqual(value["selected_lstat"][field], getattr(selected, field))
+                self.assertEqual(value["initial_pin_lstat"][field], getattr(gate, field))
+            expected = dict(role="go", predicate="mode", regular=True, owner_matches=True,
+                            mode=case.stat.S_IMODE(value["initial_pin_lstat"]["st_mode"]),
+                            nlink=value["initial_pin_lstat"]["st_nlink"], bytes=value["initial_pin_lstat"]["st_size"])
+            self.assertEqual(ctx.summary["global_build_authority_refusal"], expected)
+            summary = dict(self.refused_build_summary(), **ctx.summary)
+            state = dict(phase="build-go-authority", reason="executable-authority-refused",
+                         deadline=float(case.base.time.monotonic() + 10))
+            self.assertEqual(case.base.closed_readout(summary, state)["build_authority_refusal"], expected)
+
+
+
+    def test_executable_metadata_refusal_keeps_original_checks_before_any_open(self):
+        for fault, predicate in (("directory", "regular"), ("hardlink", "single-link"), ("owner", "owner"),
+                                 ("mode", "mode"), ("empty", "size"), ("large", "size")):
+            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as temporary:
+                path = Path(temporary).resolve() / "executable"
+                if fault == "directory": path.mkdir(mode=0o755)
+                else:
+                    path.write_bytes(b"inert executable; never run")
+                    path.chmod(0o555 if fault == "mode" else 0o755)
+                    if fault == "hardlink": os.link(path, path.with_name("alias"))
+                    if fault in ("empty", "large"):
+                        with path.open("r+b") as stream: stream.truncate(0 if fault == "empty" else (128 << 20) + 1)
+                owner = (os.getuid() + (fault == "owner"), os.getgid())
+                before = path.lstat()
+                with mock.patch.object(case.base.shared.artifacts, "open_member") as opened:
+                    with self.assertRaises(case.ExecutableAuthorityRefusal) as caught:
+                        case.installer_pin(path, SimpleNamespace(check=lambda: 10), owner=owner)
+                opened.assert_not_called()
+                self.assertEqual(str(caught.exception), "prebuilt installer authority")
+                self.assertEqual(caught.exception.metadata, dict(predicate=predicate, regular=case.stat.S_ISREG(before.st_mode),
+                    owner_matches=(before.st_uid, before.st_gid) == owner, mode=case.stat.S_IMODE(before.st_mode),
+                    nlink=before.st_nlink, bytes=before.st_size))
+                self.assertEqual(path.lstat(), before)
+
+    def refused_build_summary(self):
+        return dict(metadata_recipe="ordinary-global", collection_complete=False, metadata_capture_complete=False,
+                    admission_qualified=False, cleanup_complete=True, commands=[], command_effects=[],
+                    qualification=dict.fromkeys(case.base.shared.QUALIFICATION_CASES, False),
+                    source_commit="a" * 40, source_tree="b" * 40)
+
+    def test_original_build_entry_reports_go_metadata_without_open_or_command(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            go, installer = root / "go", root / "installer"
+            go.write_bytes(b"inert-go"); go.chmod(0o555)
+            state = dict(phase="preparation", reason="capture-incomplete", deadline=float(case.base.time.monotonic() + 10))
+            ctx = SimpleNamespace(summary=self.refused_build_summary(), budget=SimpleNamespace(check=lambda: 20),
+                                  private=root, identities={}, process_cleanup_proved=True, global_readout_state=state)
+            with mock.patch.object(case.private_go, "prepared", self.selected_private_compiler(go)):
+                with mock.patch.object(case.base.shared, "run_probe") as execute, mock.patch.object(case.base.shared.artifacts, "open_member") as opened:
+                    with self.assertRaises(case.ExecutableAuthorityRefusal) as caught: case.build_installer(ctx, installer)
+            execute.assert_not_called(); opened.assert_not_called()
+            self.assertNotIn("global_build_receipt", ctx.summary)
+            self.assertFalse(installer.exists())
+            self.assertEqual(state["phase"], "build-go-authority")
+            state["reason"] = case.base.readout_reason(caught.exception)
+            expected = dict(role="go", predicate="mode", regular=True, owner_matches=True, mode=0o555, nlink=1, bytes=8)
+            self.assertEqual(ctx.summary["global_build_authority_refusal"], expected)
+            readout = case.base.closed_readout(ctx.summary, state)
+            self.assertEqual(readout["build_authority_refusal"], expected)
+            self.assertEqual(readout["reason"], "executable-authority-refused")
+            self.assertFalse(readout["collection_complete"])
+            self.assertNotIn(str(go), json.dumps(readout))
+
+    def test_final_build_metadata_refusal_keeps_installer_role_and_original_commands(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            go, installer = root / "go", root / "installer"
+            go.write_bytes(b"inert-go"); go.chmod(0o755)
+            state = dict(phase="preparation", reason="capture-incomplete", deadline=float(case.base.time.monotonic() + 10))
+            ctx = SimpleNamespace(summary=self.refused_build_summary(), budget=SimpleNamespace(check=lambda: 20),
+                                  private=root, identities={}, process_cleanup_proved=True, global_readout_state=state)
+            def run(argv, cwd, _environment, _output, label, **_kwargs):
+                receipt = self.build_receipt()
+                record = receipt["commands"][0 if label == "build-go-version" else 1]
+                record["argv"], record["cwd"] = argv, str(cwd)
+                if label == "build-uap": installer.write_bytes(b"inert-built-cli"); installer.chmod(0o700)
+                return record, *(base64.b64decode(receipt["streams"][label + "." + kind + ".log"]) for kind in ("stdout", "stderr"))
+            with mock.patch.object(case.private_go, "prepared", self.selected_private_compiler(go)):
+                with mock.patch.object(case.base.shared, "run_probe", side_effect=run) as execute:
+                    with self.assertRaises(case.ExecutableAuthorityRefusal) as caught: case.build_installer(ctx, installer)
+            self.assertEqual(execute.call_count, 2)
+            self.assertEqual([row["probe"] for row in ctx.summary["global_build_receipt"]["commands"]], ["build-go-version", "build-uap"])
+            self.assertIsNone(ctx.summary["global_build_receipt"]["installer"])
+            self.assertEqual(state["phase"], "build-installer-authority")
+            state["reason"] = case.base.readout_reason(caught.exception)
+            readout = case.base.closed_readout(ctx.summary, state)
+            self.assertEqual(readout["build_authority_refusal"]["role"], "installer")
+            self.assertEqual(readout["build_authority_refusal"]["mode"], 0o700)
+            self.assertFalse(readout["metadata_capture_complete"])
+
+    def test_build_authority_diagnostic_is_closed_and_never_accepts_success(self):
+        refused = dict(role="go", predicate="mode", regular=True, owner_matches=True, mode=0o555, nlink=1, bytes=8)
+        mutations = (("extra", "PRIVATE_CONFIG"), ("role", "foreign"), ("predicate", "unknown"), ("predicate", "size"),
+                     ("regular", 1), ("owner_matches", 0), ("mode", True), ("mode", -1), ("mode", 0o10000),
+                     ("mode", 0o755), ("nlink", True), ("nlink", -1), ("nlink", 1 << 63),
+                     ("bytes", True), ("bytes", -1), ("bytes", 1 << 63))
+        for key, value in mutations:
+            summary = self.refused_build_summary()
+            summary["global_build_authority_refusal"] = dict(refused, **{key: value})
+            state = dict(phase="build-go-authority", reason="executable-authority-refused", deadline=float(case.base.time.monotonic() + 10))
+            with self.subTest(key=key, value=value), self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        for fault in ("missing-record", "missing-field", "role-phase", "reason", "recipe", "complete", "metadata", "qualified", "runtime"):
+            summary = self.refused_build_summary()
+            summary["global_build_authority_refusal"] = dict(refused)
+            state = dict(phase="build-go-authority", reason="executable-authority-refused", deadline=float(case.base.time.monotonic() + 10))
+            if fault == "missing-record": del summary["global_build_authority_refusal"]
+            elif fault == "missing-field": del summary["global_build_authority_refusal"]["bytes"]
+            elif fault == "role-phase": state["phase"] = "build-installer-authority"
+            elif fault == "reason": state["reason"] = "capture-incomplete"
+            elif fault == "recipe": summary["metadata_recipe"] = "ordinary"
+            elif fault == "complete": summary["collection_complete"] = True
+            elif fault == "metadata": summary["metadata_capture_complete"] = True
+            elif fault == "qualified": summary["admission_qualified"] = True
+            else: summary["qualification"][next(iter(summary["qualification"]))] = True
+            with self.subTest(fault=fault), self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        for key in ("ordinary_metadata_capture_complete", "global_lifecycle_capture_complete"):
+            summary = self.refused_build_summary()
+            summary["global_build_authority_refusal"] = dict(refused)
+            state = dict(phase="build-go-authority", reason="executable-authority-refused", deadline=float(case.base.time.monotonic() + 10))
+            summary[key] = False
+            self.assertEqual(case.base.closed_readout(summary, state)["build_authority_refusal"], refused)
+            for value in (True, None, 0, "false", {}):
+                summary[key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        completed = self.completed_summary()
+        completed["global_build_authority_refusal"] = refused
+        with self.assertRaisesRegex(ValueError, "Global completion refused"): case.completion(completed)
+
+
+
+    def test_removal_requires_original_binding_digest_and_new_committed_group(self):
+        with self.installed_state() as (journey, value, path, active, _data):
+            shutil.rmtree(active); shutil.rmtree(journey.profile / "skills" / case.SKILL)
+            retained = self.removal_state(value, journey.binding)
+            for change in ("missing", "extra", "phase", "kind", "binding", "path", "sequence", "group", "operation", "before", "after", "reused"):
+                wrong = copy.deepcopy(retained)
+                row = wrong["transaction_receipts"][0]
+                if change == "missing": del wrong["transaction_receipts"]
+                elif change == "extra": wrong["transaction_receipts"].append(copy.deepcopy(row))
+                elif change == "reused":
+                    group = journey.binding["receipts"][-1]["operation_group_id"]
+                    wrong["installations"][0]["operation_group_id"] = group
+                    row.update(operation_group_id=group, operation_id=group + "-001")
+                else:
+                    key = {"phase": "phase", "kind": "mutation_type", "binding": "client_binding_id", "path": "active_path",
+                           "sequence": "sequence", "group": "operation_group_id", "operation": "operation_id",
+                           "before": "before_digest", "after": "after_digest"}[change]
+                    row[key] = True if change == "sequence" else "unrelated"
+                path.write_text(json.dumps(wrong))
+                with self.subTest(change=change), self.assertRaises(ValueError):
+                    journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget), removed=True)
+            path.write_text(json.dumps(retained))
+            self.assertEqual(journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget), removed=True), retained)
+
+    def test_swap_operation_ids_and_digest_chain_cannot_be_forged(self):
+        for change in ("group", "operation", "before", "missing-group", "reused-group", "installation-group", "transaction"):
+            with self.subTest(change=change), self.installed_state() as (journey, value, path, _active, _data):
+                item = value["installations"][0]; binding = next(iter(item["clients"].values()))
+                original = binding["receipts"][0]
+                second = dict(original, operation_group_id="group-repair", operation_id="group-repair-001",
+                              sequence=2, before_digest=original["after_digest"])
+                item["operation_group_id"] = "group-repair"
+                binding["receipts"].append(second)
+                if change == "missing-group": del second["operation_group_id"]
+                elif change == "reused-group":
+                    second.update(operation_group_id="group-install", operation_id="group-install-001")
+                    item["operation_group_id"] = "group-install"
+                elif change == "installation-group": item["operation_group_id"] = "other-installation-group"
+                elif change == "transaction": value["transaction_receipts"] = [dict(phase="committed")]
+                else: second[{"group": "operation_group_id", "operation": "operation_id", "before": "before_digest"}[change]] = "unrelated"
+                path.write_text(json.dumps(value))
+                with self.assertRaises(ValueError): journey.state(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget))
+
+
+    def test_public_actual_dto_joins_target_revision_prepared_and_retained_facts(self):
+        with self.installed_state() as (journey, value, _path, _active, _data):
+            for verb in ("add", "repair", "remove"):
+                item = copy.deepcopy(value["installations"][0]); binding = journey.binding
+                if verb == "remove": item.update(clients={}, data_retained=True)
+                original = self.public_data(item, binding, verb)
+                case.public_result(original, verb, item, binding)
+                for change in ("empty", "count", "target", "status", "batch-group", "output-group", "version", "source", "tree", "dry", "identity", "mutated", "confirmation", "phase", "detail"):
+                    wrong = copy.deepcopy(original); output = wrong["targets"][0]["output"]; outcome = output["result"]
+                    if change == "empty": wrong = {}
+                    elif change == "count": wrong["succeeded"] = True
+                    elif change == "target": wrong["targets"][0]["target"] = "unselected"
+                    elif change == "status": wrong["targets"][0]["status"] = "state_committed"
+                    elif change == "batch-group": wrong["operation_id"] = "unrelated"
+                    elif change == "output-group": output["operation_id"] = "unrelated"
+                    elif change in ("version", "source"): output[change] = "unrelated"
+                    elif change == "tree": output["tree_digest"] = "sha256:" + "0" * 64
+                    elif change == "dry": output["dry_run"] = 0
+                    elif change == "identity": outcome["installation_id"] = "unrelated"
+                    elif change == "mutated": outcome["mutated"] = 1
+                    elif change == "confirmation": outcome["requires_confirmation"] = True
+                    elif change == "phase": outcome["group_phase"] = "state_committed"
+                    elif verb == "remove": wrong["plugin_data_preserved"] = False
+                    else: outcome["plan"]["components"][0]["support"] = "unsupported"
+                    with self.subTest(verb=verb, change=change), self.assertRaises(ValueError):
+                        case.public_result(wrong, verb, item, binding)
+
+    def test_public_repair_refuses_empty_success_or_wrong_command_before_effect_acknowledgement(self):
+        for failure in ("empty", "argv", "cwd", "stream"):
+            with self.subTest(failure=failure), self.installed_state() as (journey, value, path, _active, _data):
+                journey.installer = journey.ctx.private / "hosted-agentplugins"
+                journey.public_labels = ["uap-add", "uap-doctor-installed"]
+                binding_before = copy.deepcopy(journey.binding)
+                accepted = copy.deepcopy((journey.verified_inventory, journey.public_labels,
+                                          journey.state_history, journey.removed))
+                def command(label, arguments, cwd, *_args):
+                    item = value["installations"][0]; binding = next(iter(item["clients"].values()))
+                    binding["receipts"].append(dict(binding["receipts"][0], sequence=2, operation_id="group-repair-001",
+                        operation_group_id="group-repair", before_digest=binding["receipts"][0]["after_digest"]))
+                    item["operation_group_id"] = "group-repair"; path.write_text(json.dumps(value))
+                    data = {} if failure == "empty" else self.public_data(item, binding, "repair")
+                    out = json.dumps(dict(schema_version=1, command="repair", result="success", data=data)).encode()
+                    row = self.command_record(label, arguments, cwd, out)
+                    if failure == "argv": row["argv"] = arguments + ["--unbound"]
+                    elif failure == "cwd": row["cwd"] = str(journey.ctx.projects["b"])
+                    elif failure == "stream": row["stdout_sha256"] = "0" * 64
+                    return row, out, b""
+                journey.ctx.command = command
+                with mock.patch.object(case, "installer_pin", return_value=journey.cli_pin), self.assertRaises(ValueError):
+                    journey.public("uap-repair", ["repair", journey.identifier])
+                self.assertEqual(journey.ctx.summary.get("command_effects", []), [])
+                self.assertEqual(journey.ctx.summary.get("global_public_joins", []), [])
+                self.assertEqual((journey.verified_inventory, journey.public_labels,
+                                  journey.state_history, journey.removed), accepted)
+                if failure != "empty": self.assertEqual(journey.binding, binding_before)
+
+    def test_completion_rejects_detached_public_response_state_or_effect(self):
+        for change in ("missing", "response", "state", "effect", "installation", "group"):
+            value = self.completed_summary()
+            joined = value["global_public_joins"][0]
+            if change == "missing": value["global_public_joins"].pop()
+            elif change == "response": joined["response_sha256"] = "f" * 64
+            elif change == "state": joined["state_sha256"] = "f" * 64
+            elif change == "effect": next(row for row in value["command_effects"] if row["label"] == "uap-add")["changes"] = {}
+            elif change == "installation": joined["installation_id"] = "unrelated"
+            else: joined["operation_group_id"] = "unrelated"
+            with self.subTest(change=change), self.assertRaises(ValueError): case.completion(value)
+
+
+    def membership_readout_summary(self, message, phase="uap-add"):
+        summary = self.refused_build_summary()
+        summary.update(metadata_capture_complete=True, ordinary_metadata_capture_complete=True,
+                       error="ValueError: " + message)
+        state = dict(phase=phase, reason="unclassified-refusal",
+                     deadline=float(case.base.time.monotonic() + 10))
+        return summary, state
+
+    def test_membership_readout_joins_real_captured_peer_refusals_without_reading(self):
+        for variant in ("unexpected-file", "missing-required", "unexpected-directory", "file-before-missing"):
+            with self.subTest(variant=variant), self.installed_state() as (journey, _value, path, _active, data):
+                original_state = path.read_bytes()
+                marker = data / ".agentplugins-data-owner.json"
+                selected, reason = marker, variant
+                if variant in ("unexpected-file", "file-before-missing"):
+                    selected = journey.home / "a-private-unknown"
+                    selected.write_bytes(b"PRIVATE member body")
+                    (journey.home / "z-private-unknown").write_bytes(b"PRIVATE later body")
+                    reason = "unexpected-file"
+                if variant in ("missing-required", "file-before-missing"):
+                    marker.unlink()
+                elif variant == "unexpected-directory":
+                    selected = journey.home / "private-unknown-directory"
+                    selected.mkdir()
+                inventory = case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget)
+                original_inventory = copy.deepcopy(inventory)
+                with (mock.patch.object(case.base, "metadata_inventory", side_effect=AssertionError("second inventory")) as census,
+                      mock.patch.object(os, "read", side_effect=AssertionError("body read")) as read,
+                      mock.patch.object(journey, "read", side_effect=AssertionError("state read")) as state_read,
+                      mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("native command")) as native):
+                    with self.assertRaises(ValueError) as caught:
+                        journey.home_metadata(inventory)
+                    summary, state = self.membership_readout_summary(str(caught.exception))
+                    original_summary = copy.deepcopy(summary)
+                    value = case.base.closed_readout(summary, state)
+                    census.assert_not_called(); read.assert_not_called()
+                    state_read.assert_not_called(); native.assert_not_called()
+                expected = dict(reason=reason, member_sha256=hashlib.sha256(
+                    b"relative-state-member-v1\0" + selected.relative_to(journey.home).as_posix().encode()).hexdigest())
+                self.assertEqual(value["membership_refusal"], expected)
+                self.assertEqual(value["reason"], "unclassified-refusal")
+                self.assertIs(value["collection_complete"], False)
+                self.assertEqual(summary, original_summary)
+                self.assertEqual(inventory, original_inventory)
+                self.assertEqual(path.read_bytes(), original_state)
+                self.assertEqual((journey.public_labels, journey.native_labels), ([], []))
+                self.assertNotIn(selected.name, json.dumps(value))
+                self.assertNotIn("PRIVATE", json.dumps(value))
+
+    def test_membership_readout_retains_only_the_producer_catalog_and_actual_phases(self):
+        for reason, prefix in (("unexpected-file", "Global unknown UAP state member"),
+                               ("missing-required", "Global unknown UAP state member"),
+                               ("unexpected-directory", "Global unknown UAP directory")):
+            message = prefix + "; " + case.membership_diagnostic(reason, {"owned-relative-fixture"})
+            for phase in (*case.PUBLIC, *case.NATIVE, "global-skill-quarantine"):
+                with self.subTest(reason=reason, phase=phase):
+                    summary, state = self.membership_readout_summary(message, phase)
+                    expected = json.loads(message.split("; ", 1)[1])
+                    value = case.base.closed_readout(summary, state)
+                    self.assertEqual(value["membership_refusal"], expected)
+                    self.assertLessEqual(len(json.dumps(value).encode()), 16 << 10)
+                    summary["global_lifecycle_capture_complete"] = False
+                    self.assertEqual(case.base.closed_readout(summary, state), value)
+                    value["membership_refusal"]["reason"] = "changed-copy"
+                    self.assertEqual(case.base.closed_readout(summary, state)["membership_refusal"], expected)
+
+    def test_membership_readout_rejects_malformed_known_suffixes_and_mixed_prefixes(self):
+        prefix = "Global unknown UAP state member; "
+        valid = case.membership_diagnostic("unexpected-file", {"private-fixture"})
+        row = json.loads(valid)
+        mutations = [
+            ("member_sha256", "A" * 64), ("member_sha256", "a" * 63),
+            ("member_sha256", "a" * 65), ("member_sha256", False), ("member_sha256", None),
+            ("reason", "foreign"), ("reason", "unexpected-directory"), ("reason", True),
+            ("reason", []), ("extra", "PRIVATE"),
+        ]
+        invalid = [json.dumps(dict(row, **{key: value}), sort_keys=True, separators=(",", ":"))
+                   for key, value in mutations]
+        invalid += [valid + " ", valid.replace(",", ", "), "[]", "null", "{",
+                    json.dumps(dict(reason="unexpected-file")),
+                    '{"reason":"unexpected-file","member_sha256":"' + row["member_sha256"] + '"}',
+                    valid[:-1] + ',"reason":"unexpected-file"}',
+                    valid.replace(row["member_sha256"], "é" * 64), valid + " " * 256]
+        for index, suffix in enumerate(invalid):
+            with self.subTest(index=index):
+                summary, state = self.membership_readout_summary(prefix + suffix)
+                with self.assertRaises(ValueError):
+                    case.base.closed_readout(summary, state)
+        for reason in ("unexpected-file", "missing-required"):
+            summary, state = self.membership_readout_summary(
+                "Global unknown UAP directory; " + case.membership_diagnostic(reason, {"fixture"}))
+            with self.subTest(reason=reason), self.assertRaises(ValueError):
+                case.base.closed_readout(summary, state)
+
+    def test_membership_readout_refuses_success_recipe_phase_and_authority_contradictions(self):
+        message = "Global unknown UAP state member; " + case.membership_diagnostic("unexpected-file", {"fixture"})
+        summary_faults = [
+            ("metadata_recipe", "ordinary"), ("metadata_recipe", "structured"),
+            ("collection_complete", True), ("metadata_capture_complete", False),
+            ("ordinary_metadata_capture_complete", False), ("ordinary_metadata_capture_complete", 1),
+            ("ordinary_metadata_capture_complete", None), ("global_lifecycle_capture_complete", True),
+            ("global_lifecycle_capture_complete", 0), ("global_lifecycle_capture_complete", None),
+            ("cleanup_complete", False), ("admission_qualified", True), ("artifact_admission_failed", True),
+            ("source_commit", "unknown"), ("source_tree", True),
+        ]
+        for key, value in summary_faults:
+            with self.subTest(key=key, value=value):
+                summary, state = self.membership_readout_summary(message)
+                summary[key] = value
+                with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        summary, state = self.membership_readout_summary(message)
+        del summary["ordinary_metadata_capture_complete"]
+        with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        summary, state = self.membership_readout_summary(message)
+        summary["qualification"][next(iter(summary["qualification"]))] = True
+        with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        for key, value in (("phase", "fixture"), ("phase", "build-uap"),
+                           ("phase", "source-final-clean"), ("phase", "mcp-a"),
+                           ("reason", "capture-incomplete"), ("reason", "native-command-refused"),
+                           ("deadline", 0.0)):
+            with self.subTest(key=key, value=value):
+                summary, state = self.membership_readout_summary(message)
+                state[key] = value
+                with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        summary = self.completed_summary()
+        summary.update(collection_complete=True, cleanup_complete=True, error="ValueError: " + message)
+        state = dict(phase="source-final-clean", reason="metadata-complete",
+                     deadline=float(case.base.time.monotonic() + 10))
+        with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+
+    def test_membership_readout_leaves_unrelated_initial_empty_and_success_outputs_unchanged(self):
+        class Poison:
+            def __str__(self): raise AssertionError("stringified unknown error")
+            def __repr__(self): raise AssertionError("represented unknown error")
+        expected = dict(schema_version=1, phase="uap-add", reason="unclassified-refusal",
+                        collection_complete=False, metadata_capture_complete=True, cleanup_complete=True,
+                        commands=0, failed_commands=0, effects=[])
+        for index, error in enumerate((None, Poison(), "ValueError: Global unknown UAP state member",
+                                       "ValueError: Global unknown UAP directory", "PRIVATE" * 256, "PRIVATE é",
+                                       "RuntimeError: Global unknown UAP state member; {}")):
+            with self.subTest(index=index):
+                summary, state = self.membership_readout_summary("unused")
+                summary["error"] = error
+                self.assertEqual(case.base.closed_readout(summary, state), expected)
+        summary = self.completed_summary()
+        summary.update(collection_complete=True, cleanup_complete=True)
+        state = dict(phase="source-final-clean", reason="metadata-complete",
+                     deadline=float(case.base.time.monotonic() + 10))
+        value = case.base.closed_readout(summary, state)
+        self.assertNotIn("membership_refusal", value)
+        self.assertEqual(set(value), set(expected))
+        self.assertEqual((value["commands"], len(value["effects"])), (39, 32))
+
+    def test_membership_projection_uses_one_existing_frame_after_unchanged_publication(self):
+        valid = "Global unknown UAP state member; " + case.membership_diagnostic("unexpected-file", {"PRIVATE"})
+        for message in (valid, valid + " "):
+            summary, state = self.membership_readout_summary(message)
+            identity, output, ctx = object(), Path("/owned-output"), object()
+            with (mock.patch.object(case.base.shared, "publish") as publish,
+                  mock.patch.object(case.base, "root_identity", return_value=identity),
+                  mock.patch.object(os, "write") as write):
+                case.base.publish_with_readout(summary, ctx, output, identity, state)
+            publish.assert_called_once_with(summary, ctx, output)
+            write.assert_called_once()
+            descriptor, body = write.call_args.args
+            self.assertEqual(descriptor, 1)
+            self.assertTrue(body.startswith(b"DEVIN_CLOSED_READOUT=") and body.endswith(b"\n"))
+            self.assertEqual(body.count(b"\n"), 1)
+            self.assertLessEqual(len(body), (16 << 10) + 32)
+            self.assertNotIn(b"PRIVATE", body)
+            value = json.loads(body[len(b"DEVIN_CLOSED_READOUT="):-1])
+            if message == valid:
+                self.assertEqual(value["membership_refusal"], json.loads(valid.split("; ", 1)[1]))
+                self.assertIs(value["collection_complete"], False)
+            else:
+                self.assertEqual(value, dict(schema_version=1, reason="readout-refused"))
+
+
+    def native_skill_readout_summary(self, message, phase="skills-installed-a"):
+        summary, state = self.membership_readout_summary(message, phase)
+        summary["commands"].append(dict(probe=phase, exit=0, error=None))
+        return summary, state
+
+    def test_native_skill_readout_joins_actual_inert_row_refusals(self):
+        # Inert caller ports exercise the unchanged Journey.native refusal branches.
+        for variant, wanted in (("container", "row-container"), ("membership", "owned-membership"),
+                                ("identity", "owned-identity")):
+            with self.subTest(variant=variant):
+                summary, state = self.membership_readout_summary("unused", "skills-installed-a")
+                ctx = SimpleNamespace(root=Path("/owned"), projects={"a": Path("/owned/a"), "b": Path("/owned/b")},
+                                      summary=summary, budget=object(), global_readout_state=state)
+                journey = object.__new__(case.Journey)
+                journey.ctx, journey.profile = ctx, Path("/owned/home/config/devin")
+                journey.expected, journey.nonce = {"user": {"mcp": {}}}, "n" * 64
+                journey.probes, journey.log_births, journey.native_labels = {}, {}, []
+                journey.frame = mock.Mock(return_value=({}, {}))
+                journey.read = mock.Mock(return_value=json.dumps({"mcpServers": {name: {} for name in case.SERVERS}}).encode())
+                row = case.owned_skill_row(ctx, journey.profile, "a")
+                row["description"] = "PRIVATE changed description"
+                emitted = {"PRIVATE": "not a list"} if variant == "container" else [] if variant == "membership" else [row]
+                def probe(label, arguments, *, project):
+                    self.assertEqual(project, "a")
+                    kind = "mcp" if label == "mcp-installed-a" else "skills"
+                    self.assertEqual((label, arguments), (kind + "-installed-a", [kind, "list", "--json"]))
+                    record = dict(probe=label, exit=0, error=None)
+                    summary["commands"].append(record)
+                    rows = [{"name": name} for name in case.SERVERS] if kind == "mcp" else emitted
+                    return record, json.dumps(rows).encode(), b""
+                ctx.probe = mock.Mock(side_effect=probe)
+                with (mock.patch.object(case.base, "metadata_inventory", return_value={}),
+                      mock.patch.object(case.base, "verify_metadata_sources"),
+                      mock.patch.object(case.base, "verify_skill_metadata_sources", side_effect=AssertionError("foreign rows reached")),
+                      mock.patch.object(case.base, "zero_effects")):
+                    with self.assertRaises(ValueError) as caught:
+                        journey.native("installed")
+                summary["error"] = type(caught.exception).__name__ + ": " + str(caught.exception)
+                state["reason"] = case.base.readout_reason(caught.exception)
+                original = copy.deepcopy(summary)
+                with (mock.patch.object(case.base, "metadata_inventory", side_effect=AssertionError("second census")),
+                      mock.patch.object(os, "read", side_effect=AssertionError("body read")),
+                      mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("native command"))):
+                    value = case.base.closed_readout(summary, state)
+                self.assertEqual(value["native_skill_refusal"], wanted)
+                self.assertEqual((state["phase"], value["reason"]), ("skills-installed-a", "unclassified-refusal"))
+                self.assertEqual((ctx.probe.call_count, journey.native_labels), (2, ["mcp-installed-a"]))
+                self.assertEqual([item["phase"] for item in value["effects"]], ["mcp-installed-a"])
+                self.assertEqual(summary, original)
+                self.assertNotIn("PRIVATE", json.dumps(value))
+
+    def test_native_skill_readout_joins_actual_metadata_and_log_refusals(self):
+        log = "home/data/devin/cli/logs/devin_20261113-180000_12.log"
+        second = "home/data/devin/cli/logs/devin_20261113-180000_13.log"
+        for variant, wanted in (("foreign", "nonauxiliary-authority"), ("changed", "existing-log-changed"),
+                                ("multiple", "multiple-new-logs"), ("reused", "log-name-reused")):
+            with self.subTest(variant=variant):
+                journey = object.__new__(case.Journey)
+                journey.log_births = {log: {}} if variant == "reused" else {}
+                names = (log, second) if variant == "multiple" else (("project-b/PRIVATE",) if variant == "foreign" else (log,))
+                after = dict.fromkeys(names, (2,))
+                before = dict.fromkeys(names, (1,)) if variant in ("foreign", "changed") else {}
+                old = {name: {"sha256": "before"} for name in before}
+                now = {name: {"sha256": "PRIVATE body hash"} for name in after}
+                with self.assertRaises(ValueError) as caught:
+                    journey.verify_native_delta(before, after, old, now, "skills-installed-a")
+                summary, state = self.native_skill_readout_summary(str(caught.exception))
+                original = copy.deepcopy(summary)
+                value = case.base.closed_readout(summary, state)
+                self.assertEqual(value["native_skill_refusal"], wanted)
+                self.assertEqual(summary, original)
+                self.assertNotIn("PRIVATE", json.dumps(value))
+                self.assertNotIn(log, json.dumps(value))
+
+    def test_native_skill_readout_retains_all_six_existing_skills_phases(self):
+        phases = tuple(label for label in case.NATIVE if label.startswith("skills-"))
+        self.assertEqual(len(phases), 6)
+        for phase in phases:
+            for completion in ("absent", False):
+                with self.subTest(phase=phase, completion=completion):
+                    summary, state = self.native_skill_readout_summary("Global native Skill identity", phase)
+                    if completion is False:
+                        summary["global_lifecycle_capture_complete"] = False
+                    value = case.base.closed_readout(summary, state)
+                    self.assertEqual(value["native_skill_refusal"], "owned-identity")
+                    self.assertIs(value["collection_complete"], False)
+                    self.assertEqual((value["phase"], value["commands"], value["failed_commands"]), (phase, 1, 0))
+
+    def test_native_skill_readout_leaves_mcp_other_recipes_and_unknown_errors_unchanged(self):
+        message = "Global native row container"
+        for recipe, phase in (("ordinary", "skills-a"), ("structured", "mcp-a"),
+                              *(("ordinary-global", label) for label in case.NATIVE if label.startswith("mcp-")),
+                              ("ordinary-global", "uap-add")):
+            with self.subTest(recipe=recipe, phase=phase):
+                summary, state = self.native_skill_readout_summary("unused", phase)
+                summary["metadata_recipe"] = recipe
+                expected = case.base.closed_readout(summary, state)
+                summary["error"] = "ValueError: " + message
+                self.assertEqual(case.base.closed_readout(summary, state), expected)
+                self.assertNotIn("native_skill_refusal", expected)
+        class Poison:
+            def __str__(self): raise AssertionError("stringified error")
+            def __repr__(self): raise AssertionError("represented error")
+        summary, state = self.native_skill_readout_summary("unused")
+        expected = case.base.closed_readout(summary, state)
+        errors = (None, Poison(), "", "PRIVATE" * 4096, "ValueError: Global native Skill identity ",
+                  "ValueError: Global native Skill identity\nPRIVATE", "RuntimeError: Global native Skill identity",
+                  "ValueError: Global native Skill identity: PRIVATE", "ValueError: Global native MCP membership")
+        for index, error in enumerate(errors):
+            with self.subTest(index=index):
+                summary["error"] = error
+                self.assertEqual(case.base.closed_readout(summary, state), expected)
+
+    def test_native_skill_readout_refuses_authority_and_command_contradictions(self):
+        faults = (("collection_complete", True), ("metadata_capture_complete", False),
+                  ("ordinary_metadata_capture_complete", False), ("ordinary_metadata_capture_complete", 1),
+                  ("ordinary_metadata_capture_complete", None), ("global_lifecycle_capture_complete", True),
+                  ("global_lifecycle_capture_complete", 0), ("global_lifecycle_capture_complete", None),
+                  ("cleanup_complete", False), ("admission_qualified", True), ("artifact_admission_failed", True),
+                  ("source_commit", "unknown"), ("source_tree", True))
+        for key, value in faults:
+            with self.subTest(key=key, value=value):
+                summary, state = self.native_skill_readout_summary("Global native Skill identity")
+                summary[key] = value
+                with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+        for fault in ("missing-ordinary", "qualification", "reason", "deadline", "empty", "wrong-probe",
+                      "duplicate", "later-command", "exit", "bool-exit", "error", "missing-error", "accepted-effect"):
+            with self.subTest(fault=fault):
+                summary, state = self.native_skill_readout_summary("Global native Skill identity")
+                if fault == "missing-ordinary": del summary["ordinary_metadata_capture_complete"]
+                elif fault == "qualification": summary["qualification"][next(iter(summary["qualification"]))] = True
+                elif fault == "reason": state["reason"] = "native-command-refused"
+                elif fault == "deadline": state["deadline"] = 0.0
+                elif fault == "empty": summary["commands"].clear()
+                elif fault == "wrong-probe": summary["commands"][-1]["probe"] = "mcp-installed-a"
+                elif fault == "duplicate": summary["commands"].append(dict(summary["commands"][-1]))
+                elif fault == "later-command": summary["commands"].append(dict(probe="mcp-installed-b", exit=0, error=None))
+                elif fault == "exit": summary["commands"][-1]["exit"] = 1
+                elif fault == "bool-exit": summary["commands"][-1]["exit"] = False
+                elif fault == "error": summary["commands"][-1]["error"] = "PRIVATE transport error"
+                elif fault == "missing-error": del summary["commands"][-1]["error"]
+                else: summary["command_effects"].append(dict(label=state["phase"], changes={}, outer_changes={}))
+                with self.assertRaises(ValueError): case.base.closed_readout(summary, state)
+
+    def test_native_skill_projection_keeps_the_original_publication_and_single_frame(self):
+        for refused in (False, True):
+            with self.subTest(refused=refused):
+                summary, state = self.native_skill_readout_summary("Global native Skill identity")
+                if refused:
+                    summary["commands"][-1]["exit"] = 1
+                original = copy.deepcopy(summary)
+                identity, output, ctx, order = object(), Path("/owned-output"), object(), []
+                with (mock.patch.object(case.base.shared, "publish", side_effect=lambda *_: order.append("publish")) as publish,
+                      mock.patch.object(case.base, "root_identity", return_value=identity),
+                      mock.patch.object(os, "write", side_effect=lambda *_: order.append("write")) as write):
+                    case.base.publish_with_readout(summary, ctx, output, identity, state)
+                publish.assert_called_once_with(summary, ctx, output)
+                write.assert_called_once()
+                self.assertEqual(order, ["publish", "write"])
+                descriptor, body = write.call_args.args
+                self.assertEqual(descriptor, 1)
+                self.assertTrue(body.startswith(b"DEVIN_CLOSED_READOUT=") and body.endswith(b"\n"))
+                self.assertEqual(body.count(b"\n"), 1)
+                self.assertLessEqual(len(body), (16 << 10) + 32)
+                self.assertNotIn(b"Global native Skill", body)
+                value = json.loads(body[len(b"DEVIN_CLOSED_READOUT="):-1])
+                if refused:
+                    self.assertEqual(value, dict(schema_version=1, reason="readout-refused"))
+                else:
+                    self.assertEqual(value["native_skill_refusal"], "owned-identity")
+                    self.assertEqual(value["reason"], "unclassified-refusal")
+                    self.assertIs(value["collection_complete"], False)
+                self.assertEqual(summary, original)
+
+
+    def test_captured_unique_skill_literal_in_actual_native_consumer(self):
+        from test_devin_structured_inventory_admission import SkillsMetadataContracts
+
+        # Artifact 14110674396 reports this unprefixed unique owned Skill.
+        # Reuse the independent collision fixtures; never derive the native row
+        # from owned_skill_row, which previously hid the wrong name expectation.
+        for phase in ("installed", "repaired"):
+            for changed_scope in ("a", "b"):
+                for fault in ("valid", "prefixed", "path", "provider", "duplicate", "collision", "foreign-duplicate"):
+                    with self.subTest(phase=phase, scope=changed_scope, fault=fault):
+                        ctx, expected, original_foreign = SkillsMetadataContracts().fixture()
+                        ctx.summary, ctx.budget = {}, object()
+                        profile = ctx.home / "config/devin"
+                        expected["user"]["mcp"] = {}
+                        journey = object.__new__(case.Journey)
+                        journey.ctx, journey.profile, journey.expected, journey.nonce = ctx, profile, expected, "f" * 64
+                        journey.probes, journey.log_births, journey.native_labels = {}, {}, []
+                        journey.frame = mock.Mock(return_value=({}, {}))
+                        journey.read = lambda *_args: json.dumps({"mcpServers": {name: {} for name in case.SERVERS}}).encode()
+                        outputs = []
+                        for scope in ("a", "b"):
+                            foreign = copy.deepcopy(original_foreign)
+                            if scope == "b":
+                                for row in foreign[1:3]:
+                                    row["name"] = "/owned/project-b:same-skill"
+                                foreign[2].update(base_dir=str(Path(expected["b"]["skill"]).parent),
+                                                  description="Inert b " + "f" * 64)
+                            owned = dict(name="uap-global-marker", description="Owned Global source.",
+                                         triggers=["user", "model"], provider="Devin",
+                                         base_dir=str(profile / "skills/uap-global-marker"),
+                                         display_name="uap-global-marker", warnings=[], errors=[])
+                            rows = [*foreign, owned]
+                            if scope == changed_scope:
+                                if fault == "prefixed": owned["name"] = str(ctx.projects[scope]) + ":uap-global-marker"
+                                elif fault == "path": owned["base_dir"] = str(profile / "skills/foreign")
+                                elif fault == "provider": owned["provider"] = "Windsurf"
+                                elif fault == "duplicate": rows.append(copy.deepcopy(owned))
+                                elif fault == "collision": foreign[1]["name"] = "same-skill"
+                                elif fault == "foreign-duplicate": rows.append(copy.deepcopy(foreign[0]))
+                            outputs.extend((({"exit": 0}, json.dumps([{"name": name} for name in case.SERVERS]).encode(), b""),
+                                            ({"exit": 0}, json.dumps(rows).encode(), b"")))
+                        original = copy.deepcopy(outputs)
+                        ctx.probe = mock.Mock(side_effect=outputs)
+                        with (mock.patch.object(case.base, "metadata_inventory", return_value={}),
+                              mock.patch.object(case.base, "verify_metadata_sources"),
+                              mock.patch.object(case.base, "zero_effects"),
+                              mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("native child")) as native):
+                            if fault == "valid":
+                                journey.native(phase)
+                            else:
+                                with self.assertRaises(ValueError): journey.native(phase)
+                            native.assert_not_called()
+                        labels = [kind + "-" + phase + "-" + scope for scope in ("a", "b") for kind in ("mcp", "skills")]
+                        accepted = 1 if changed_scope == "a" else 3
+                        self.assertEqual(journey.native_labels, labels if fault == "valid" else labels[:accepted])
+                        self.assertEqual(ctx.probe.call_count, 4 if fault == "valid" else accepted + 1)
+                        self.assertEqual(outputs, original)
+
+
+
+class OriginalConfigObservationContracts(unittest.TestCase):
+    @contextmanager
+    def fixture(self):
+        from test_devin_ordinary_metadata_admission import MIGRATED_57_BYTES
+        from test_devin_structured_inventory_admission import KnownFileDiagnosticContracts, SkillsMetadataContracts
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            ctx = case.base.shared.Context(root, {}, SimpleNamespace(check=lambda: 10))
+            ctx.original_output_identity = case.base.root_identity(root)
+            ctx.argv = [str(root / "never-run-vendor")]
+            probes = {key: SimpleNamespace(url="http://127.0.0.1:1234/mcp", accepted_connections=[],
+                      methods=lambda: [], call_records=lambda: ([], 0)) for key in ("a", "b", "user", "local", "legacy")}
+            expected, _, _ = case.base.fixture(ctx, {key: probe.url for key, probe in probes.items()}, "f" * 64)
+            profile = Path(expected["user"]["root"])
+            entries = dict(expected["user"]["mcp"])
+            entries.update({case.SERVERS[0]: {"command": "python3", "args": []},
+                            case.SERVERS[1]: {"url": probes["user"].url}})
+            (profile / "mcp_config.json").write_text(json.dumps({"mcpServers": entries}))
+            skill = profile / "skills" / case.SKILL / "SKILL.md"
+            skill.parent.mkdir()
+            skill.write_text("---\nname: uap-global-marker\ndescription: Owned Global source.\n---\nInert.\n")
+            for relative in sorted(case.base.BOOTSTRAP_DIRS, key=lambda value: len(Path(value).parts)):
+                (root / relative).mkdir(mode=0o755, parents=True, exist_ok=True)
+            helper = KnownFileDiagnosticContracts()
+            user, _ = helper.fixture(root)
+            user.chmod(0o644)
+            held = helper.hold(root)
+            ctx.known_file_diagnostics = held
+            try:
+                effects = case.ordinary.OrdinaryEffects(ctx, case.base.metadata_inventory(root, ctx.budget))
+                before = case.base.metadata_inventory(root, ctx.budget)
+                for _ in case.base.HELP:
+                    effects.verify_command(before, before)
+                # Inert reproduction of the existing separately admitted first
+                # migration; the explicit observations never rewrite this file.
+                user.write_bytes(MIGRATED_57_BYTES)
+                user.chmod(0o600)
+                current = case.base.metadata_inventory(root, ctx.budget)
+                effects.verify_command(before, current)
+                for _ in case.base.METADATA_PROBES[effects.step:]:
+                    effects.verify_command(current, current)
+                ctx.summary.update(ordinary_metadata_capture_complete=True, metadata_capture_complete=True)
+                effects.max_logs, effects.max_members = 22, 36
+                journey = object.__new__(case.Journey)
+                journey.ctx, journey.effects, journey.profile = ctx, effects, profile
+                journey.probes, journey.expected, journey.nonce = probes, expected, "f" * 64
+                journey.log_births, journey.native_labels = {}, []
+                journey.cli_pin, journey.helper = (1, "0" * 64), None
+                original_profile = case.base.root_identity(profile)
+
+                def frame(inventory=None):
+                    inventory = inventory if inventory is not None else case.base.metadata_inventory(root, ctx.budget)
+                    effects.verify(inventory)
+                    return case.capture(ctx, journey.cli_pin, inventory=inventory,
+                                        authorities={profile.relative_to(root).as_posix(): original_profile})
+                journey.frame = frame
+                wanted = {name: (entry, profile / "mcp_config.json") for name, entry in entries.items()}
+                wanted.update({name: (entry, Path(expected["a"]["root"]) / "mcp_config.json")
+                               for name, entry in expected["a"]["mcp"].items()})
+                wanted["same-name"] = ({"url": expected["local"]["url"], "disabled": True}, Path(expected["local"]["path"]))
+                wanted["legacy-foreign"] = ({"url": expected["legacy_url"], "disabled": True},
+                                           ctx.home / ".codeium/windsurf/mcp_config.json")
+                mcp = [dict(name=name, enabled=not entry.get("disabled", False),
+                            disabled_reason="disabled" if entry.get("disabled") else None,
+                            transport="stdio" if "command" in entry else "http", command=entry.get("command"),
+                            args=entry.get("args", []), url=entry.get("url"),
+                            disabled_tools=entry.get("disabledTools", []), source=str(source))
+                       for name, (entry, source) in wanted.items()]
+                _, _, skills = SkillsMetadataContracts().fixture()
+                for row in skills:
+                    if row["base_dir"].startswith("/owned/"):
+                        row["base_dir"] = str(root / row["base_dir"][len("/owned/"):])
+                    if row["name"].startswith("/owned/project-a:"):
+                        row["name"] = str(ctx.projects["a"]) + ":same-skill"
+                skills.append(dict(name="uap-global-marker", description="Owned Global source.",
+                                   triggers=["user", "model"], provider="Devin", base_dir=str(skill.parent),
+                                   display_name="uap-global-marker", warnings=[], errors=[]))
+                output = {"mcp": json.dumps(mcp).encode(), "skills": json.dumps(skills).encode()}
+
+                def probe(label, arguments, *, project):
+                    self.assertEqual(project, "a")
+                    kind = "mcp" if label == case.ORIGINAL_CONFIG_NATIVE[0] else "skills"
+                    self.assertEqual(label, case.ORIGINAL_CONFIG_NATIVE[0 if kind == "mcp" else 1])
+                    self.assertEqual(arguments, ["--config", str(user), kind, "list", "--json"])
+                    out = output[kind]
+                    record = GlobalLifecycleContracts().command_record(
+                        label, [*ctx.argv, *arguments], ctx.projects[project], out)
+                    ctx.summary.setdefault("commands", []).append(record)
+                    return record, out, b""
+                ctx.probe = mock.Mock(side_effect=probe)
+                # This existing fixture exercises the actual parent/profile
+                # consumer without a vendor binary or host bwrap acquisition.
+                # The fixed prelude and input-custody guards have separate
+                # causal tests below; this is not a native-view proof.
+                header = case.READONLY_HEADER + b"f" * 64 + b"\n"
+                def wrapper(_ctx, arguments, _before, _old, _directories):
+                    return ["/usr/bin/bwrap", "--", *ctx.argv, *arguments], header
+                def command(label, argv, cwd, env):
+                    self.assertEqual((cwd, env), (ctx.projects["a"], ctx.env))
+                    record, out, err = ctx.probe(label, argv[3:], project="a")
+                    record["argv"] = argv[:2] + record["argv"]
+                    if record["stdout_sha256"] == case.sha(out):
+                        record["stdout_sha256"] = case.sha(header + out)
+                    record["stdout_bytes"] += len(header)
+                    return record, header + out, err
+                ctx.command = mock.Mock(side_effect=command)
+                with mock.patch.object(case, "readonly_system", return_value={"inert": True}), \
+                     mock.patch.object(case, "readonly_arguments", side_effect=wrapper):
+                    yield journey, user, output
+            finally:
+                held.close()
+
+    def test_original_config_pair_uses_same_file_and_strict_source_decoders(self):
+        with self.fixture() as (journey, user, _):
+            before = case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget)
+            fingerprint, environment = copy.deepcopy(journey.effects.after), dict(journey.ctx.env)
+            with mock.patch.object(case.base.shared, "run_probe", side_effect=AssertionError("native process")):
+                journey.native("installed", original_config=True)
+            self.assertEqual(journey.ctx.probe.call_count, 2)
+            self.assertEqual(journey.native_labels, list(case.ORIGINAL_CONFIG_NATIVE))
+            self.assertEqual([row["label"] for row in journey.ctx.summary["command_effects"]],
+                             list(case.ORIGINAL_CONFIG_NATIVE))
+            self.assertEqual(case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget), before)
+            self.assertEqual((journey.effects.after, journey.ctx.env), (fingerprint, environment))
+            self.assertEqual(user, journey.ctx.root / case.ordinary.OrdinaryEffects.config_path)
+            self.assertFalse((journey.ctx.root / case.base.METADATA_CONFIG).exists())
+            self.assertNotIn("global_lifecycle_capture_complete", journey.ctx.summary)
+
+    def test_original_config_substitution_refuses_before_dispatch_without_rebaselining(self):
+        for change in ("same-bytes-replacement", "body", "mode", "parent", "private-path", "incomplete-gate"):
+            with self.subTest(change=change), self.fixture() as (journey, user, _):
+                fingerprint = copy.deepcopy(journey.effects.after)
+                if change == "same-bytes-replacement":
+                    replacement = user.with_suffix(".replacement")
+                    replacement.write_bytes(user.read_bytes()); replacement.chmod(0o600)
+                    replacement.replace(user)
+                elif change == "body":
+                    user.write_bytes(b'{"read_config_from":{"cloud":false},"version":2}\n')
+                elif change == "mode":
+                    user.chmod(0o644)
+                elif change == "parent":
+                    old = user.parent.with_name("prior-devin")
+                    user.parent.rename(old)
+                    user.parent.mkdir()
+                    user.write_bytes((old / user.name).read_bytes()); user.chmod(0o600)
+                elif change == "private-path":
+                    journey.effects.config_path = case.base.METADATA_CONFIG
+                else:
+                    journey.ctx.summary["ordinary_metadata_capture_complete"] = False
+                with self.assertRaises(ValueError):
+                    journey.native("installed", original_config=True)
+                journey.ctx.probe.assert_not_called()
+                self.assertEqual(journey.native_labels, [])
+                self.assertEqual(journey.effects.after, fingerprint)
+
+    def test_original_config_post_effect_overruns_stop_before_second_command(self):
+        for change in ("two-log-births", "twenty-three-logs", "oversized-log", "aggregate-bytes", "config", "foreign"):
+            with self.subTest(change=change), self.fixture() as (journey, user, _):
+                original_probe = journey.ctx.probe.side_effect
+                fingerprint = copy.deepcopy(journey.effects.after)
+
+                def probe(*args, **kwargs):
+                    result = original_probe(*args, **kwargs)
+                    if change == "config":
+                        user.write_bytes(b'{"read_config_from":{"cloud":true},"version":1}\n')
+                    elif change == "foreign":
+                        (journey.ctx.home / "unknown-native-file").write_bytes(b"unexpected")
+                    else:
+                        count = {"two-log-births": 2, "twenty-three-logs": 23,
+                                 "oversized-log": 1, "aggregate-bytes": 18}[change]
+                        size = (16 << 10) + 1 if change == "oversized-log" else 16 << 10 if change == "aggregate-bytes" else 1
+                        for index in range(count):
+                            log = journey.ctx.root / ("home/data/devin/cli/logs/devin_20261114-200000_" + str(index + 1) + ".log")
+                            log.write_bytes(b"x" * size); log.chmod(0o644)
+                    return result
+                journey.ctx.probe.side_effect = probe
+                with self.assertRaises(ValueError):
+                    journey.native("installed", original_config=True)
+                self.assertEqual(journey.ctx.probe.call_count, 1)
+                self.assertEqual(journey.native_labels, [])
+                self.assertEqual(journey.effects.after, fingerprint)
+                self.assertFalse(journey.ctx.summary.get("global_lifecycle_capture_complete", False))
+
+    def test_original_config_result_keeps_exact_argv_cwd_stream_and_owned_source(self):
+        for change in ("config-path", "cwd", "stdout-hash", "owned-source", "owned-name", "skill-source"):
+            with self.subTest(change=change), self.fixture() as (journey, _user, output):
+                original_probe = journey.ctx.probe.side_effect
+                if change in ("owned-source", "owned-name"):
+                    rows = json.loads(output["mcp"])
+                    row = next(row for row in rows if row["name"] == case.SERVERS[0])
+                    row["source" if change == "owned-source" else "name"] = (
+                        str(journey.ctx.projects["b"] / ".devin/mcp_config.json") if change == "owned-source" else "foreign")
+                    output["mcp"] = json.dumps(rows).encode()
+                elif change == "skill-source":
+                    rows = json.loads(output["skills"])
+                    next(row for row in rows if row["name"] == case.SKILL)["base_dir"] = str(journey.profile / "skills/foreign")
+                    output["skills"] = json.dumps(rows).encode()
+
+                def probe(*args, **kwargs):
+                    record, stdout, stderr = original_probe(*args, **kwargs)
+                    if change == "config-path": record["argv"][2] = str(journey.ctx.root / case.base.METADATA_CONFIG)
+                    elif change == "cwd": record["cwd"] = str(journey.ctx.projects["b"])
+                    elif change == "stdout-hash": record["stdout_sha256"] = "0" * 64
+                    return record, stdout, stderr
+                journey.ctx.probe.side_effect = probe
+                with self.assertRaises(ValueError):
+                    journey.native("installed", original_config=True)
+                self.assertEqual(journey.ctx.probe.call_count, 2 if change == "skill-source" else 1)
+                self.assertEqual(journey.native_labels, list(case.ORIGINAL_CONFIG_NATIVE[:1]) if change == "skill-source" else [])
+
+    def test_journey_adds_only_the_fixed_pair_after_all_installed_observations(self):
+        journey = object.__new__(case.Journey)
+        journey.source, journey.identifier = Path("/source"), "installation"
+        journey.source_bodies = {"skills/" + case.SKILL + "/SKILL.md": b"inert"}
+        journey.profile = Path("/profile")
+        journey.ctx = SimpleNamespace(summary={})
+        journey.native_labels, journey.public_labels, journey.state_history, journey.log_births = [], [], [], {}
+        calls = []
+        def public(label, _argv, **_kwargs):
+            calls.append(label); journey.public_labels.append(label)
+        def native(phase, *, original_config=False):
+            labels = case.ORIGINAL_CONFIG_NATIVE if original_config else tuple(
+                kind + "-" + phase + "-" + scope for scope in ("a", "b") for kind in ("mcp", "skills"))
+            calls.extend(labels); journey.native_labels.extend(labels)
+        journey.public, journey.native, journey.quarantine = public, native, lambda: calls.append("quarantine")
+        journey.execute()
+        original = ["uap-add", *case.NATIVE[:4], "uap-doctor-installed", "quarantine",
+                    "uap-repair", *case.NATIVE[4:8], "uap-doctor-repaired", "uap-remove", *case.NATIVE[8:]]
+        self.assertEqual([label for label in calls if label not in case.ORIGINAL_CONFIG_NATIVE], original)
+        self.assertEqual(calls[5:7], list(case.ORIGINAL_CONFIG_NATIVE))
+        self.assertEqual(journey.ctx.summary["native_global_steps"], list(case.ALL_NATIVE))
+        self.assertEqual((case.base.BootstrapEffects.max_logs, case.base.BootstrapEffects.max_members), (8, 24))
+
+    def test_completion_requires_both_new_observations_in_the_declared_order(self):
+        fixture = GlobalLifecycleContracts()
+        value = fixture.completed_summary()
+        case.completion(value)
+        for change in ("missing-pair", "swapped", "duplicate", "extra", "missing-effect", "native-step"):
+            wrong = copy.deepcopy(value)
+            commands = wrong["commands"]
+            positions = [index for index, row in enumerate(commands) if row["probe"] in case.ORIGINAL_CONFIG_NATIVE]
+            if change == "missing-pair":
+                wrong["commands"] = [row for row in commands if row["probe"] not in case.ORIGINAL_CONFIG_NATIVE]
+                wrong["command_effects"] = [row for row in wrong["command_effects"] if row["label"] not in case.ORIGINAL_CONFIG_NATIVE]
+            elif change == "swapped":
+                commands[positions[0]], commands[positions[1]] = commands[positions[1]], commands[positions[0]]
+            elif change == "duplicate":
+                commands[positions[1]] = copy.deepcopy(commands[positions[0]])
+            elif change == "extra":
+                commands.insert(positions[-1] + 1, copy.deepcopy(commands[positions[-1]]))
+            elif change == "missing-effect":
+                wrong["command_effects"] = [row for row in wrong["command_effects"] if row["label"] != case.ORIGINAL_CONFIG_NATIVE[0]]
+            else:
+                wrong["native_global_steps"] = list(case.NATIVE)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                case.completion(wrong)
+
+
+
+class BwrapPolicySetupContracts(unittest.TestCase):
+    @staticmethod
+    def profile():
+        return "# This profile allows almost everything and only exists to allow\n# bwrap to work on a system with user namespace restrictions\n# being enforced.\n# bwrap is allowed access to user namespaces and capabilities\n# within the user namespace, but its children do not have\n# capabilities, blocking bwrap from being able to be used to\n# arbitrarily by-pass the user namespace restrictions.\n#\n# Note: the bwrap child is stacked against the bwrap profile due to\n# bwraps use of no-new-privs\n\n# disabled by default as it can break some use cases on a system that\n# doesn't have or has disable user namespace restrictions for unconfined\n# use aa-enforce to enable it\n\nabi <abi/4.0>,\n\ninclude <tunables/global>\n\nprofile bwrap /usr/bin/bwrap flags=(attach_disconnected) {\n  allow capability,\n  # not allow all, to allow for pix stack\n  # sadly we have to allow  m every where to allow children to work under\n  # stacking.\n  allow file rwlkm /{**,},\n  allow network,\n  allow unix,\n  allow ptrace,\n  allow signal,\n  allow mqueue,\n  allow io_uring,\n  allow userns,\n  allow mount,\n  allow umount,\n  allow pivot_root,\n  allow dbus,\n  allow px /** -> bwrap//&unpriv_bwrap,\n\n  # the local include should not be used without understanding the userns\n  # restriction.\n  # Site-specific additions and overrides. See local/README for details.\n  include if exists <local/bwrap-userns-restrict>\n}\n\nprofile unpriv_bwrap flags=(attach_disconnected) {\n  # not allow all, to allow for pix stack\n  allow file rwlkm /{**,},\n  allow network,\n  allow unix,\n  allow ptrace,\n  allow signal,\n  allow mqueue,\n  allow io_uring,\n  allow userns,\n  allow mount,\n  allow umount,\n  allow pivot_root,\n  allow dbus,\n\n  allow pix /** -> &unpriv_bwrap,\n\n  audit deny capability,\n\n  # the local include should not be used without understanding the userns\n  # restriction.\n  # Site-specific additions and overrides. See local/README for details.\n  include if exists <local/unpriv_bwrap>\n}\n".encode("utf-8")
+
+    def archive(self, *, change=None):
+        import tarfile
+        result = io.BytesIO()
+        with tarfile.open(fileobj=result, mode="w:") as archive:
+            body = self.profile()
+            if change == "bytes":
+                body = bytes([body[0] ^ 1]) + body[1:]
+            row = tarfile.TarInfo(policy_setup.PROFILE_MEMBER)
+            row.mode, row.uid, row.gid, row.size = 0o644, 0, 0, len(body)
+            if change == "mode": row.mode = 0o664
+            if change == "short": row.size -= 1; body = body[:-1]
+            if change == "symlink":
+                row.type, row.linkname, row.size = tarfile.SYMTYPE, "foreign", 0
+            archive.addfile(row, io.BytesIO(body) if row.isfile() else None)
+            if change == "duplicate": archive.addfile(row, io.BytesIO(body))
+        return result.getvalue()
+
+    def test_only_exact_signed_package_profile_member_can_be_selected(self):
+        self.assertEqual(policy_setup.profile_from_tar(self.archive()), self.profile())
+        for change in ("bytes", "mode", "short", "symlink", "duplicate"):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                policy_setup.profile_from_tar(self.archive(change=change))
+
+    def test_existing_policy_or_optional_override_is_preserved_and_refused(self):
+        for existing in ("bwrap", policy_setup.PROFILE_NAME, *policy_setup.OVERRIDES, "local-alias"):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); root.chmod(0o700)
+                foreign = root / "foreign"; foreign.write_bytes(b"original policy"); foreign.chmod(0o600)
+                if existing == "local-alias":
+                    (root / "local").symlink_to(root, target_is_directory=True)
+                else:
+                    (root / "local").mkdir(mode=0o700)
+                    path = root / existing
+                    path.symlink_to(foreign)
+                before = foreign.stat()
+                with mock.patch.object(policy_setup, "POLICY_DIRECTORY", root):
+                    fd, _ = policy_setup.open_policy_directory()
+                    try:
+                        with self.assertRaises(ValueError):
+                            policy_setup.check_policy_names(fd)
+                        self.assertEqual(foreign.read_bytes(), b"original policy")
+                        self.assertEqual(case.installer_metadata(foreign.stat()), case.installer_metadata(before))
+                    finally:
+                        os.close(fd)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); root.chmod(0o700)
+            with mock.patch.object(policy_setup, "POLICY_DIRECTORY", root):
+                fd, _ = policy_setup.open_policy_directory()
+                try:
+                    policy_setup.write_profile(fd, self.profile())
+                    original = (root / policy_setup.PROFILE_NAME).stat()
+                    with self.assertRaises(FileExistsError):
+                        policy_setup.write_profile(fd, self.profile())
+                    self.assertEqual((root / policy_setup.PROFILE_NAME).read_bytes(), self.profile())
+                    self.assertEqual(case.installer_metadata((root / policy_setup.PROFILE_NAME).stat()),
+                                     case.installer_metadata(original))
+                finally:
+                    os.close(fd)
+
+    def test_setup_adds_only_enforced_packaged_profiles_without_replacing_policy(self):
+        before = {"unprivileged_userns (enforce)", "existing-other (enforce)"}
+        for existing in ("bwrap (enforce)", "unpriv_bwrap (complain)", "foreign//&bwrap (enforce)"):
+            with self.subTest(existing=existing), self.assertRaises(ValueError):
+                policy_setup.require_loaded(before | {existing})
+        for after in (before | {"bwrap (enforce)"},
+                      before | {"bwrap (enforce)", "unpriv_bwrap (complain)"},
+                      policy_setup.EXPECTED_LOADED,
+                      before | policy_setup.EXPECTED_LOADED | {"extra (enforce)"}):
+            with self.subTest(after=after), self.assertRaises(ValueError):
+                policy_setup.require_loaded(before, after)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            download, policies = root / "download", root / "policies"
+            download.mkdir(mode=0o700); policies.mkdir(mode=0o700)
+            features = root / "features"
+            features.mkdir(mode=0o755)
+            for name in ("io_uring", "namespaces", "domain"):
+                (features / name).mkdir(mode=0o755)
+            for name, body in (("io_uring/mask", b"sqpoll override_creds\n"),
+                               ("namespaces/mask", b"userns_create\n"),
+                               ("domain/stack", b"yes\n"), ("domain/post_nnp_subset", b"yes\n")):
+                (features / name).write_bytes(body)
+                (features / name).chmod(0o444)
+            actual_abi = b"inert complete actual kernel ABI\n"
+            deb = b"inert bounded archive"
+            metadata = "\n".join(key + ": " + value for key, value in {
+                "Package": policy_setup.PACKAGE, "Version": policy_setup.VERSION, "Architecture": "all",
+                "Filename": "pool/main/a/apparmor/" + policy_setup.DEB_NAME,
+                "Size": str(len(deb)), "SHA256": case.sha(deb)}.items()).encode()
+            observed = []
+            def command(directory, label, argv, deadline, records, limit=policy_setup.LIMIT):
+                self.assertEqual(directory, download)
+                observed.append((label, list(argv)))
+                records.append({"probe": label, "argv": argv, "error": None, "exit": 0})
+                if label == "policy-metadata": return metadata
+                if label == "policy-download":
+                    (download / policy_setup.DEB_NAME).write_bytes(deb)
+                    (download / policy_setup.DEB_NAME).chmod(0o600)
+                    return b""
+                if label == "policy-package-data": return self.archive()
+                if label in ("policy-kernel-abi-before", "policy-kernel-abi-after"):
+                    self.assertEqual(argv, ["/usr/bin/aa-features-abi", "--extract", "--stdout"])
+                    self.assertEqual(limit, 65536)
+                    return actual_abi
+                self.assertEqual(label, "policy-add")
+                self.assertEqual(argv, ["/usr/sbin/apparmor_parser", "--config-file=/dev/null",
+                    "--add", "--skip-cache", "--jobs=1", "--override-policy-abi=<kernel>",
+                    "--warn=rule-not-enforced", "--Werror=rule-not-enforced",
+                    str(policies / policy_setup.PROFILE_NAME)])
+                self.assertEqual((policies / policy_setup.PROFILE_NAME).read_bytes(), self.profile())
+                return b""
+            with mock.patch.object(policy_setup, "POLICY_DIRECTORY", policies), \
+                 mock.patch.object(policy_setup, "KERNEL_FEATURE_DIRECTORY", features), \
+                 mock.patch.object(policy_setup, "DEB_BYTES", len(deb)), \
+                 mock.patch.object(policy_setup, "DEB_SHA256", case.sha(deb)), \
+                 mock.patch.object(policy_setup, "command", side_effect=command), \
+                 mock.patch.object(policy_setup, "loaded_profiles",
+                                   side_effect=[before, before | policy_setup.EXPECTED_LOADED]), \
+                 mock.patch.object(policy_setup, "kernel_read", return_value=b"1\n"):
+                result = policy_setup.setup(download, policy_setup.time.monotonic() + 10)
+            self.assertEqual([label for label, _ in observed],
+                             ["policy-metadata", "policy-download", "policy-package-data",
+                              "policy-kernel-abi-before", "policy-add", "policy-kernel-abi-after"])
+            self.assertFalse(result["native_executed"])
+            self.assertFalse(result["qualification"])
+            self.assertTrue(result["restrict_userns_unchanged"])
+            self.assertEqual(result["profile"]["sha256"], policy_setup.PROFILE_SHA256)
+
+
+    def test_original_policy_directory_survives_owned_entry_but_refuses_replacement_or_mode_drift(self):
+        for change in ("entry", "unsafe-mode", "tighter-mode", "replacement"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / "policies"
+                root.mkdir(mode=0o700)
+                with mock.patch.object(policy_setup, "POLICY_DIRECTORY", root):
+                    fd, original = policy_setup.open_policy_directory()
+                    try:
+                        if change == "entry":
+                            (root / "owned-entry").write_bytes(b"inert owned policy")
+                            policy_setup.verify_policy_directory(fd, original)
+                        else:
+                            if change == "replacement":
+                                root.rename(root.with_name("original-policies"))
+                                root.mkdir(mode=0o700)
+                            else:
+                                root.chmod(0o777 if change == "unsafe-mode" else 0o750)
+                                self.assertEqual(policy_setup.identity(os.fstat(fd))[:5],
+                                                 policy_setup.identity(root.lstat())[:5])
+                            with self.assertRaisesRegex(ValueError, "policy directory authority changed"):
+                                policy_setup.verify_policy_directory(fd, original)
+                    finally:
+                        os.close(fd)
+
+    def test_parser_diagnostic_preserves_original_failure_and_bounded_capture(self):
+        body = b"original prefix" * 200 + b"\n\x1b[31munsupported rule \xff\n"
+        for label, status, error in (("policy-add", 1, None), ("policy-add", None, "timeout"),
+                                     ("policy-add", 0, None), ("policy-metadata", 1, None)):
+            with self.subTest(label=label, status=status, error=error):
+                record = dict(exit=status, error=error, stderr_bytes=len(body), stderr_sha256=case.sha(body))
+                records, sink = [], io.StringIO()
+                with mock.patch.object(policy_setup, "run_probe", return_value=(record, b"stdout", body)) as capture, \
+                     mock.patch.object(policy_setup.sys, "stderr", sink):
+                    if status == 0:
+                        self.assertEqual(policy_setup.command(Path("/inert"), label, ["/inert/never-run"],
+                            policy_setup.time.monotonic() + 10, records), b"stdout")
+                    else:
+                        with self.assertRaisesRegex(ValueError, "Bubblewrap policy setup command refused: " + label):
+                            policy_setup.command(Path("/inert"), label, ["/inert/never-run"],
+                                policy_setup.time.monotonic() + 10, records)
+                capture.assert_called_once()
+                self.assertIs(records[0], record)
+                emitted = sink.getvalue()
+                if label == "policy-add" and status != 0:
+                    self.assertTrue(emitted.isascii())
+                    self.assertLessEqual(len(emitted), 16416)
+                    packet = json.loads(emitted.removeprefix("DEVIN_BWRAP_POLICY_FAILURE="))
+                    self.assertEqual((packet["exit"], packet["capture_error_present"]), (status, error is not None))
+                    self.assertEqual((packet["stderr_captured_bytes"], packet["stderr_captured_sha256"]),
+                                     (len(body), case.sha(body)))
+                    self.assertEqual(packet["stderr_tail"], body[-2048:].decode("utf-8", "backslashreplace"))
+                    self.assertTrue(packet["stderr_tail_truncated"])
+                else:
+                    self.assertEqual(emitted, "")
+        record = dict(exit=1, error=None, stderr_bytes=len(body), stderr_sha256=case.sha(body))
+        with mock.patch.object(policy_setup, "run_probe", return_value=(record, b"", body)), \
+             mock.patch.object(policy_setup.sys, "stderr") as sink:
+            sink.write.side_effect = OSError("inert diagnostic sink refusal")
+            with self.assertRaisesRegex(ValueError, "Bubblewrap policy setup command refused: policy-add"):
+                policy_setup.command(Path("/inert"), "policy-add", ["/inert/never-run"],
+                    policy_setup.time.monotonic() + 10, [])
+
+
+class ReadonlyViabilityContracts(unittest.TestCase):
+    def test_parent_pins_only_the_fixed_ca_bundle_and_rejects_substitution(self):
+        real_lstat, real_fstat, real_read = Path.lstat, os.fstat, os.read
+        real_open = case.base.shared.artifacts.open_member
+        variants = ("original", "empty", "oversized", "mode", "owner", "group", "alias", "hardlink",
+                    "parent-mode", "parent-owner", "parent-alias", "read-replace", "read-change",
+                    "read-parent-mode", "deadline")
+        for change in variants:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                parent = root / "etc/ssl/certs"
+                parent.mkdir(parents=True)
+                path = parent / "ca-certificates.crt"
+                body = b"inert original trust bundle\n"
+                path.write_bytes(body); path.chmod(0o644)
+                if change == "empty": path.write_bytes(b"")
+                elif change == "oversized": path.write_bytes(b"x" * ((1 << 20) + 1))
+                elif change == "mode": path.chmod(0o664)
+                elif change == "alias":
+                    path.rename(parent / "original"); path.symlink_to(parent / "original")
+                elif change == "hardlink": os.link(path, parent / "alias")
+                elif change == "parent-mode": parent.chmod(0o777)
+                elif change == "parent-alias":
+                    parent.rename(root / "original-certs"); parent.symlink_to(root / "original-certs")
+                mapped = {value: root / value.lstrip("/") for value in
+                          ("/etc", "/etc/ssl", "/etc/ssl/certs", "/etc/ssl/certs/ca-certificates.crt")}
+                opened, reads = [], []
+                def rooted(info, value=None):
+                    values = case.installer_metadata(info)
+                    values.update(st_uid=0, st_gid=0)
+                    if change == "owner" and value == path: values["st_uid"] = 1000
+                    if change == "group" and value == path: values["st_gid"] = 1000
+                    if change == "parent-owner" and value == parent: values["st_gid"] = 1000
+                    return SimpleNamespace(**values)
+                def open_member(value):
+                    self.assertEqual(value, path)
+                    descriptor = real_open(value); opened.append(descriptor)
+                    return descriptor
+                def read(descriptor, count):
+                    self.assertIn(descriptor, opened)
+                    self.assertLessEqual(count, 65536)
+                    result = real_read(descriptor, count)
+                    if not reads:
+                        if change == "read-replace":
+                            path.rename(parent / "original"); path.write_bytes(body); path.chmod(0o644)
+                        elif change == "read-change": path.write_bytes(b"changed" + body[7:])
+                        elif change == "read-parent-mode": parent.chmod(0o777)
+                    reads.append(result)
+                    return result
+                def check():
+                    if change == "deadline" and reads: raise ValueError("inert deadline")
+                    return 10
+                with mock.patch.object(case, "Path", side_effect=lambda value: mapped.get(str(value), Path(value))), \
+                     mock.patch.object(Path, "lstat", autospec=True, side_effect=lambda value: rooted(real_lstat(value), value)), \
+                     mock.patch.object(os, "fstat", side_effect=lambda descriptor: rooted(real_fstat(descriptor))), \
+                     mock.patch.object(os, "read", side_effect=read), \
+                     mock.patch.object(case.base.shared.artifacts, "open_member", side_effect=open_member):
+                    if change == "original":
+                        result = case.readonly_ca_bundle(SimpleNamespace(budget=SimpleNamespace(check=check)))
+                        self.assertEqual(result["sha256"], case.sha(body))
+                        self.assertEqual(result["file"], rooted(real_lstat(path), path).__dict__)
+                        self.assertEqual(set(result["parents"]), {str(mapped[name]) for name in ("/etc", "/etc/ssl", "/etc/ssl/certs")})
+                    else:
+                        with self.assertRaises((ValueError, OSError)):
+                            case.readonly_ca_bundle(SimpleNamespace(budget=SimpleNamespace(check=check)))
+                for descriptor in opened:
+                    with self.assertRaises(OSError): real_fstat(descriptor)
+
+    def test_parent_rejoins_exact_policy_and_closes_held_reads_on_refusal(self):
+        real_lstat, real_fstat = Path.lstat, os.fstat
+        real_open = case.base.shared.artifacts.open_member
+        def rooted(info):
+            values = case.installer_metadata(info)
+            values.update(st_uid=0, st_gid=0)
+            return SimpleNamespace(**values)
+        for change in ("original", "bytes", "mode", "alias", "hardlink", "override", "deadline"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                path = root / "bwrap-userns-restrict"
+                body = BwrapPolicySetupContracts.profile()
+                path.write_bytes(body); path.chmod(0o644)
+                if change == "bytes": path.write_bytes(bytes([body[0] ^ 1]) + body[1:])
+                elif change == "mode": path.chmod(0o664)
+                elif change == "alias":
+                    path.rename(root / "original"); path.symlink_to(root / "original")
+                elif change == "hardlink": os.link(path, root / "alias")
+                elif change == "override":
+                    (root / "local").mkdir()
+                    (root / "local/unpriv_bwrap").write_bytes(b"foreign override")
+                budget = SimpleNamespace(check=mock.Mock(return_value=10))
+                if change == "deadline": budget.check.side_effect = [10, 10, ValueError("budget")]
+                opened = []
+                def open_member(value):
+                    descriptor = real_open(value); opened.append(descriptor)
+                    return descriptor
+                with mock.patch.object(case, "Path", return_value=path), \
+                     mock.patch.object(Path, "lstat", autospec=True, side_effect=lambda value: rooted(real_lstat(value))), \
+                     mock.patch.object(os, "fstat", side_effect=lambda descriptor: rooted(real_fstat(descriptor))), \
+                     mock.patch.object(case.base.shared.artifacts, "open_member", side_effect=open_member):
+                    if change == "original":
+                        result = case.readonly_policy(SimpleNamespace(budget=budget))
+                        self.assertEqual(result["st_size"], len(body))
+                    else:
+                        with self.assertRaises(ValueError):
+                            case.readonly_policy(SimpleNamespace(budget=budget))
+                for descriptor in opened:
+                    with self.assertRaises(OSError): real_fstat(descriptor)
+
+    def prelude(self, change):
+        import errno
+        from types import ModuleType
+
+        fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
+                  "st_size", "st_mtime_ns", "st_ctime_ns")
+        file_info = [4, 12, case.stat.S_IFREG | 0o600, 1, 1000, 1000, 8, 10, 11]
+        dir_info = [4, 14, case.stat.S_IFDIR | 0o700, 2, 1000, 1000, 4096, 10, 11]
+        request = dict(uid=1000, gid=1000, cwd="/owned/a", home="/owned/home",
+            config="/owned/home/config/devin/config.json",
+            argv=["/owned/client/devin", "--config", "/owned/home/config/devin/config.json", "mcp", "list", "--json"],
+            environment={"HOME": "/owned/home", "XDG_DATA_HOME": "/owned/home/data",
+                         "XDG_CONFIG_HOME": "/owned/home/config"},
+            files={"/owned/client/devin": file_info, "/owned/home/config/devin/config.json": file_info},
+            directories={"/owned/a": dir_info, "/owned/home": dir_info,
+                         "/owned/home/data/devin/cli/logs": dir_info},
+            logs="/owned/home/data/devin/cli/logs")
+        raw = json.dumps(request, sort_keys=True, separators=(",", ":"))
+        fake_os, fake_sys = ModuleType("os"), ModuleType("sys")
+        fake_sys.argv = ["-c", raw]
+        fake_os.environ = dict(request["environment"])
+        if change == "home": fake_os.environ["HOME"] = "/shadow"
+        fake_os.getuid = fake_os.geteuid = lambda: 1001 if change == "uid" else 1000
+        fake_os.getgid = fake_os.getegid = lambda: 1001 if change == "gid" else 1000
+        fake_os.getcwd = lambda: "/owned/b" if change == "cwd" else "/owned/a"
+        for field in ("O_CREAT", "O_EXCL", "O_WRONLY", "O_NOFOLLOW"):
+            setattr(fake_os, field, getattr(os, field))
+        observations, dispatches, writes, closed = [], [], [], []
+        control = request["logs"] + "/" + case.READONLY_CONTROL
+        identities = {**request["files"], **request["directories"]}
+        def lstat(path):
+            observations.append(path)
+            if path == control:
+                if change == "preexisting-control":
+                    return SimpleNamespace(**dict(zip(fields, file_info)))
+                raise FileNotFoundError(path)
+            value = list(identities[path])
+            if change == "config-identity" and path == request["config"]: value[1] += 1
+            if change == "native-identity" and path == request["argv"][0]: value[1] += 1
+            if change == "log-parent" and path == request["logs"]: value[1] += 1
+            return SimpleNamespace(**dict(zip(fields, value)))
+        fake_os.lstat = lstat
+        def opened(path, flags, mode):
+            self.assertEqual((path, flags, mode), (control,
+                os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600))
+            if change == "writable": return 77
+            raise OSError(errno.EACCES if change == "eacces" else errno.EROFS, "inert fixed control")
+        fake_os.open, fake_os.close = opened, closed.append
+        def write(descriptor, body):
+            self.assertEqual(descriptor, 1)
+            writes.append(body)
+            return len(body)
+        fake_os.write = write
+        class Dispatched(Exception):
+            pass
+        def execute(path, argv, environment):
+            dispatches.append((path, argv, environment))
+            raise Dispatched()
+        fake_os.execve = execute
+        label = b"bwrap//&unpriv_bwrap (enforce)\n"
+        if change == "policy-unconfined": label = b"unconfined\n"
+        elif change == "policy-complain": label = b"bwrap//&unpriv_bwrap (complain)\n"
+        elif change == "policy-missing-child": label = b"bwrap (enforce)\n"
+        elif change == "policy-extra-layer": label = b"bwrap//&unpriv_bwrap//&foreign (enforce)\n"
+        elif change == "policy-long": label = b"x" * 257
+        status = ("CapInh: 0000000000000000\nCapPrm: 0000000000000000\n"
+                  "CapEff: 0000000000000000\nCapAmb: 0000000000000000\nNoNewPrivs: 1\n").encode()
+        if change == "policy-nnp": status = status.replace(b"NoNewPrivs: 1", b"NoNewPrivs: 0")
+        elif change == "policy-cap": status = status.replace(b"CapEff: 0000000000000000", b"CapEff: 0000000000000001")
+        elif change == "policy-duplicate": status += b"NoNewPrivs: 1\n"
+        elif change == "policy-status-long": status += b"x" * 16385
+        def kernel_open(path, mode, buffering):
+            self.assertEqual((mode, buffering), ("rb", 0))
+            self.assertIn(path, ("/proc/self/attr/apparmor/current", "/proc/self/status"))
+            return io.BytesIO(label if path.endswith("/current") else status)
+        with mock.patch.dict("sys.modules", {"os": fake_os, "sys": fake_sys}), \
+             mock.patch("builtins.open", side_effect=kernel_open):
+            if change == "erofs":
+                with self.assertRaises(Dispatched):
+                    exec(compile(case.READONLY_PRELUDE, "<fixed-readonly-viability>", "exec"), {})
+            else:
+                with self.assertRaises(ValueError):
+                    exec(compile(case.READONLY_PRELUDE, "<fixed-readonly-viability>", "exec"), {})
+        return request, raw, observations, dispatches, writes, closed
+
+    def test_fixed_prelude_requires_erofs_before_exact_original_exec(self):
+        request, raw, observations, dispatches, writes, closed = self.prelude("erofs")
+        self.assertEqual(dispatches, [(request["argv"][0], request["argv"], request["environment"])])
+        self.assertEqual(writes, [case.READONLY_HEADER + case.sha(raw.encode()).encode() + b"\n"])
+        self.assertEqual(observations.count(request["config"]), 2)
+        self.assertEqual(observations.count(request["argv"][0]), 2)
+        self.assertEqual(closed, [])
+        for change in ("writable", "eacces", "uid", "gid", "cwd", "home",
+                       "config-identity", "native-identity", "log-parent", "preexisting-control"):
+            with self.subTest(change=change):
+                _, _, _, dispatches, writes, closed = self.prelude(change)
+                self.assertEqual((dispatches, writes), ([], []))
+                self.assertEqual(closed, [77] if change == "writable" else [])
+
+    def test_prelude_requires_actual_restricted_child_policy_before_any_native_exec(self):
+        for change in ("policy-unconfined", "policy-complain", "policy-missing-child", "policy-extra-layer",
+                       "policy-long", "policy-nnp", "policy-cap", "policy-duplicate", "policy-status-long"):
+            with self.subTest(change=change):
+                _, _, _, dispatches, writes, closed = self.prelude(change)
+                self.assertEqual((dispatches, writes, closed), ([], [], []))
+
+    def test_raw_wrapper_and_header_are_joined_before_strict_native_tail(self):
+        for change in ("header-missing", "header-foreign", "header-duplicate", "tail-extra", "wrapper-argv"):
+            with self.subTest(change=change), OriginalConfigObservationContracts().fixture() as (journey, _, _):
+                original = journey.ctx.command.side_effect
+                def command(*args, **kwargs):
+                    record, out, err = original(*args, **kwargs)
+                    header = case.READONLY_HEADER + b"f" * 64 + b"\n"
+                    if change == "header-missing": out = out[len(header):]
+                    elif change == "header-foreign": out = case.READONLY_HEADER + b"0" * 64 + b"\n" + out[len(header):]
+                    elif change == "header-duplicate": out = header + out
+                    elif change == "tail-extra": out += b"\n{}"
+                    else: record["argv"][0] = "/foreign/bwrap"
+                    record["stdout_bytes"], record["stdout_sha256"] = len(out), case.sha(out)
+                    return record, out, err
+                journey.ctx.command.side_effect = command
+                with self.assertRaises(ValueError):
+                    journey.native("installed", original_config=True)
+                self.assertEqual(journey.ctx.command.call_count, 1)
+                self.assertEqual(journey.native_labels, [])
+
+    def test_readonly_zero_effects_and_system_custody_cannot_be_promoted(self):
+        for change in ("single-log", "directory-time", "system", "native-nonzero"):
+            with self.subTest(change=change), OriginalConfigObservationContracts().fixture() as (journey, user, _):
+                original = journey.ctx.probe.side_effect
+                config = user.read_bytes()
+                frame = mock.Mock(wraps=journey.frame)
+                journey.frame = frame
+                def probe(*args, **kwargs):
+                    record, out, err = original(*args, **kwargs)
+                    logs = journey.ctx.root / "home/data/devin/cli/logs"
+                    if change == "single-log":
+                        path = logs / "devin_20261114-200000_1.log"
+                        path.write_bytes(b"inert"); path.chmod(0o644)
+                    elif change == "directory-time":
+                        info = logs.stat()
+                        os.utime(logs, ns=(info.st_atime_ns, info.st_mtime_ns + 1000000000))
+                    elif change == "native-nonzero":
+                        record["exit"] = 1
+                    return record, out, err
+                journey.ctx.probe.side_effect = probe
+                with mock.patch.object(case, "readonly_system",
+                    side_effect=[{"original": True}, {"original": change != "system"}]):
+                    with self.assertRaises(ValueError):
+                        journey.native("installed", original_config=True)
+                self.assertEqual(journey.ctx.probe.call_count, 1)
+                self.assertEqual(journey.native_labels, [])
+                self.assertEqual(user.read_bytes(), config)
+                if change == "native-nonzero":
+                    self.assertEqual(frame.call_count, 2)  # Settled refusal still checks the complete after-frame.
+
+    def test_fixed_mount_arguments_refuse_uncovered_original_runtime(self):
+        root = Path("/owned")
+        native, config = root / "client/devin", root / case.ordinary.OrdinaryEffects.config_path
+        ctx = SimpleNamespace(root=root, home=root / "home", argv=[str(native)], projects={"a": root / "project-a"},
+            budget=SimpleNamespace(check=lambda: 10), identities={native: case.base.BINARY},
+            summary={"runtime_files": [{"path": str(native), "sha256": case.base.BINARY}]})
+        ctx.env = dict(HOME=str(ctx.home), TMPDIR=str(root / "tmp"), PATH="/usr/bin:/bin")
+        ctx.env.update({"XDG_" + name.upper() + "_HOME": str(ctx.home / name)
+                        for name in ("config", "data", "cache", "state")})
+        file_info = (4, 12, case.stat.S_IFREG | 0o700, 1, 1000, 1000, 213734376, 10, 11)
+        before = {path.relative_to(root).as_posix(): file_info for path in (native, config)}
+        old = {native.relative_to(root).as_posix(): {"sha256": case.base.BINARY}}
+        directories = {str(path): [4, 14, case.stat.S_IFDIR | 0o700, 2, 1000, 1000, 4096, 10, 11]
+                       for path in (ctx.home, ctx.projects["a"], root / "home/data/devin/cli/logs")}
+        arguments = ["--config", str(config), "mcp", "list", "--json"]
+        with mock.patch.object(case.os, "getuid", return_value=1000), \
+             mock.patch.object(case.os, "getgid", return_value=1000):
+            argv, header = case.readonly_arguments(ctx, arguments, before, old, directories)
+            mounts = [(argv[index + 1], argv[index + 2]) for index, value in enumerate(argv) if value == "--ro-bind"]
+            self.assertEqual(mounts, [(path, path) for path in (
+                "/usr", "/bin", "/lib", "/lib64", str(root), "/etc/ssl/certs/ca-certificates.crt")])
+            self.assertNotIn("--bind", argv)
+            self.assertNotIn("--ro-bind-try", argv)
+            self.assertEqual(argv[-5:-1], ["-I", "-B", "-c", case.READONLY_PRELUDE])
+            request = json.loads(argv[-1])
+            self.assertEqual(request["argv"], [str(native), *arguments])
+            self.assertEqual(header, case.READONLY_HEADER + case.sha(argv[-1].encode()).encode() + b"\n")
+            for change in ("native-outside", "runtime-outside", "runtime-hash", "config", "home", "root-uid"):
+                trial = copy.deepcopy(ctx)
+                options = list(arguments)
+                if change == "native-outside": trial.argv = ["/opt/toolcache/devin"]
+                elif change == "runtime-outside":
+                    trial.summary["runtime_files"].append({"path": "/opt/toolcache/runtime", "sha256": "a" * 64})
+                elif change == "runtime-hash": trial.summary["runtime_files"][0]["sha256"] = "a" * 64
+                elif change == "config": options[1] = str(root / case.base.METADATA_CONFIG)
+                elif change == "home": trial.env["HOME"] = "/shadow"
+                with self.subTest(change=change), mock.patch.object(case.os, "getuid", return_value=0 if change == "root-uid" else 1000):
+                    with self.assertRaises(ValueError):
+                        case.readonly_arguments(trial, options, before, old, directories)
+
+
+class ObservedDefinitionFrameContracts(unittest.TestCase):
+    def fixture(self, temporary):
+        from test_devin_structured_inventory_admission import FixedDefinitionCacheContracts
+        helper = FixedDefinitionCacheContracts()
+        ctx, effects, user, cache, body, _ = helper.fixture(temporary)
+        body += b"x" * 220
+        cache.write_bytes(body)
+        inventory = helper.observe(ctx, effects)
+        journey = object.__new__(case.Journey)
+        journey.ctx, journey.effects = ctx, effects
+        journey.cli_pin, journey.helper = (1, "0" * 64), None
+        journey.authorities = {"home": case.base.root_identity(ctx.root / "home")}
+        # The initial owner is real; unrelated installed-state guards retain
+        # their existing contracts. Exercise the actual frame/capture caller.
+        journey.guard_frame = mock.Mock(wraps=effects.verify)
+        return journey, effects, user, cache, body, inventory
+
+    def test_actual_frame_reuses_original_observation_without_historical_repin(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            journey, effects, user, cache, body, inventory = self.fixture(temporary)
+            original = copy.deepcopy((effects.definitions_identity, effects.definitions_observation, effects.baseline))
+            user_before = user.read_bytes()
+            strict = case.base.read_bootstrap_file
+            def ordinary(ctx, relative, *args, **kwargs):
+                self.assertNotEqual(relative, case.base.DEFINITIONS_CACHE)
+                return strict(ctx, relative, *args, **kwargs)
+            # Published evidence is mutable data, not the original cache authority.
+            effects.proofs[-1][case.base.DEFINITIONS_CACHE] = {"bytes": 0, "sha256": "0" * 64}
+            with mock.patch.object(case.base, "read_bootstrap_file", side_effect=ordinary):
+                current, frame = journey.frame(inventory)
+            self.assertEqual(current, inventory)
+            self.assertEqual(set(frame), set(inventory))
+            self.assertEqual(frame[case.base.DEFINITIONS_CACHE],
+                             {"identity": inventory[case.base.DEFINITIONS_CACHE], "sha256": case.sha(body)})
+            self.assertEqual((effects.definitions_identity, effects.definitions_observation, effects.baseline), original)
+            self.assertEqual(user.read_bytes(), user_before)
+            self.assertEqual(cache.read_bytes(), body)
+            self.assertNotEqual(len(body), case.base.DEFINITIONS_BYTES)
+            self.assertIs(journey.ctx.summary["admission_qualified"], False)
+            self.assertTrue(all(value is False for value in journey.ctx.summary["qualification"].values()))
+
+    def test_frame_refuses_missing_original_substitution_and_changed_content_without_adoption(self):
+        for change in ("missing-owner", "not-captured", "foreign-context", "missing-parent", "leaf", "parent", "hash"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                journey, effects, _user, cache, body, _ = self.fixture(temporary)
+                owner = effects
+                if change == "missing-owner": owner = None
+                elif change == "not-captured":
+                    effects.definitions_identity = effects.definitions_observation = None
+                elif change == "foreign-context": effects.ctx = copy.copy(journey.ctx)
+                elif change == "missing-parent": effects.definitions_identity.pop("home")
+                elif change == "leaf":
+                    cache.rename(cache.with_name("original.bin")); cache.write_bytes(body); cache.chmod(0o600)
+                elif change == "parent":
+                    cache.parent.rename(cache.parent.with_name("original-cli")); cache.parent.mkdir(mode=0o755)
+                    cache.write_bytes(body); cache.chmod(0o600)
+                inventory = case.base.metadata_inventory(journey.ctx.root, journey.ctx.budget)
+                original = copy.deepcopy((effects.definitions_identity, effects.definitions_observation, effects.baseline, effects.proofs))
+                reader = case.base.read_observed_definition
+                def changed(*args):
+                    measured = reader(*args)
+                    measured["sha256"] = "0" * 64
+                    return measured
+                read = changed if change == "hash" else mock.Mock(side_effect=AssertionError("unowned cache read"))
+                with mock.patch.object(case.base, "read_observed_definition", side_effect=read):
+                    with self.assertRaisesRegex(ValueError, "Global original definitions"):
+                        case.capture(journey.ctx, journey.cli_pin, inventory=inventory, effects=owner)
+                if change != "hash": read.assert_not_called()
+                self.assertEqual((effects.definitions_identity, effects.definitions_observation, effects.baseline, effects.proofs), original)
+                self.assertIs(journey.ctx.summary["admission_qualified"], False)
+
+
+
+if __name__ == "__main__":
+    unittest.main()
