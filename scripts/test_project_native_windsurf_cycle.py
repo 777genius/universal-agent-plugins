@@ -210,6 +210,15 @@ class WindsurfCycleContracts(unittest.TestCase):
         value=cycle.load(cycle.stream(row["stdout"]));value["data"]["result"].pop("no_change");row["stdout"]=wire(cycle.compact(value))
         with self.assertRaises(ValueError):self.admit()
 
+    def test_repeat_noop_progress_refuses_false_transactional_apply(self):
+        expected = b"Resolving and validating one Agent Plugin package for every selected target...\n"
+        self.assertEqual(cycle.progress("repeat-add-a"), expected)
+        self.assertTrue(next(row["value"] for row in self.commands if row["stage"] == "repeat-add-a"))
+        row = next(row["value"] for row in self.commands if row["stage"] == "repeat-add-a")
+        row["stderr"] = wire(expected + b"Applying transactional client package...\n")
+        with self.assertRaises(ValueError):
+            self.admit()
+
     def test_per_record_privacy_keeps_nested_stream_and_node_limits(self):
         aggregate=self.bodies()[cycle.MEMBERS[1]]
         self.assertTrue(cycle.private(aggregate))  # Whole-member generic node budget is finite.
