@@ -3,6 +3,7 @@ package kiro
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -220,6 +221,50 @@ func TestKiroExactMCPApprovalDisposableLifecycle(t *testing.T) {
 
 // A previously confirmed tool allowlist belongs to the user's live config
 // after installation. An out-of-band edit must not be overwritten by remove.
+func TestKiroActiveApprovedToolsRefuseStaleReprojection(t *testing.T) {
+	root := filepath.Join(t.TempDir(), ".kiro")
+	staged := filepath.Join(t.TempDir(), "staged")
+	if err := os.MkdirAll(staged, 0700); err != nil {
+		t.Fatal(err)
+	}
+	envelope := testKiroApprovedEnvelope(`{"version":1,"mcp_auto_approve":{"docs":["read_docs"]}}`)
+	plan := testKiroApprovalPlan(root, filepath.Join(t.TempDir(), "active"), domain.ScopeUser)
+	adapter := New()
+	if _, err := adapter.Project(t.Context(), clients.ProjectionInput{
+		StagingPath: staged, Plan: plan, Envelope: envelope,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := adapter.ProjectActiveNative(t.Context(), staged, envelope, plan, ""); err != nil {
+		t.Fatalf("unchanged Kiro approval failed read-only recovery: %v", err)
+	}
+	path := filepath.Join(staged, "mcp.json")
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(bytes, &document); err != nil {
+		t.Fatal(err)
+	}
+	delete(document["mcpServers"].(map[string]any)["docs"].(map[string]any), "autoApprove")
+	stale, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, stale, 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = adapter.ProjectActiveNative(t.Context(), staged, envelope, plan, "")
+	if !errors.Is(err, domain.ErrProjectionRefreshRequired) {
+		t.Fatalf("stale Kiro native tool approvals were silently credited: %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || string(after) != string(stale) {
+		t.Fatalf("read-only validation mutated Kiro projection: %v, %s", err, after)
+	}
+}
+
 func TestKiroUserEditedAutoApprovalBlocksRemoval(t *testing.T) {
 	root := filepath.Join(t.TempDir(), ".kiro")
 	stage := filepath.Join(t.TempDir(), "stage")
