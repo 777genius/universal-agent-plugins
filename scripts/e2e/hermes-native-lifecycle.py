@@ -153,7 +153,7 @@ class Lifecycle:
         shutil.copyfile(foreign, self.root / "foreign-skill.md")
         self.config.write_text("model: offline-native-smoke\nmcp_servers:\n"
                                "  foreign:\n    command: echo\n    args: [foreign]\n",
-                               encoding="utf-8")
+                               encoding="utf-8", newline="\n")
         # Keep the umask-derived mode Hermes' own installer leaves (0644).
         self.capture([*self.hermes, "--version"], "native-version.txt")
         self.native_home = self.resolved_home("native")
