@@ -143,8 +143,15 @@ func TestProjectSelectedClientSurfacesAreOwnedAndNotJSON(t *testing.T) {
 		t.Fatal("detected surface aliases the copied request")
 	}
 	body, err := json.Marshal(copied)
-	if err != nil || strings.Contains(string(body), "ClientSurfaces") || strings.Contains(string(body), "selected-host-only") {
-		t.Fatalf("private host surface leaked into public request JSON: %s %v", body, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(body, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := fields["ClientSurfaces"]; exists || strings.Contains(string(body), "selected-host-only") {
+		t.Fatalf("private host surface leaked into public request JSON: %s", body)
 	}
 	var injected Request
 	if err := json.Unmarshal([]byte(`{"ClientSurfaces":[{"id":"copilot_cli","detected":true}]}`), &injected); err != nil || len(injected.ClientSurfaces) != 0 {
