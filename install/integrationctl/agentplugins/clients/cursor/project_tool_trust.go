@@ -127,7 +127,7 @@ func cursorMergeToolPermissions(body []byte, approved cursorToolApprovals) ([]by
 		if cursorConflictsWithDeniedTool(rule, parsed.deny, parsed.ask) {
 			return nil, fmt.Errorf("preserved Cursor CLI deny/ask rule conflicts with selected MCP tool")
 		}
-		if !slices.ContainsFunc(parsed.allow, func(existing string) bool { return strings.EqualFold(existing, rule) }) {
+		if !slices.Contains(parsed.allow, rule) {
 			parsed.allow = append(parsed.allow, rule)
 			changed = true
 		}
