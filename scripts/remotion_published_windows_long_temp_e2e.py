@@ -9,12 +9,16 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+from runpy import run_path
 import shutil
 import subprocess
 import tempfile
 
 FIXTURE_SHA256 = "e22cb3b5b23e74a9e03b55e24a684ab93038f89cf18e28fd5d9755175754c0d9"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
+_TEMP_ROOTS = run_path(str(Path(__file__).with_name("remotion_windows_long_temp_e2e.py")))
+temp_root_authority = _TEMP_ROOTS["temp_root_authority"]
+physical_temp_root = _TEMP_ROOTS["physical_temp_root"]
 
 
 def main():
@@ -56,8 +60,6 @@ def main():
                              errors="replace", timeout=30)
     if version.returncode != 0 or version.stdout.strip() != "agentplugins 0.1.102":
         raise SystemExit("published npm CLI version does not match 0.1.102")
-    short = Path(tempfile.mkdtemp(prefix="uap-remotion-short-", dir=os.environ["RUNNER_TEMP"]))
-    long = Path(tempfile.mkdtemp(prefix="uap-live-30x30-"))
     evidence = {
         "source_checkout_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(),
         "fixture_sha256": FIXTURE_SHA256,
@@ -67,28 +69,67 @@ def main():
         "published_version": version.stdout.strip(),
         "published_tag": "agentplugins-v0.1.102",
         "results": {},
+        "temp_roots": {},
     }
     failures = []
+    created_roots, physical_roots = {}, {}
     try:
+        for label, options in (
+                ("runner-temp", {"prefix": "uap-remotion-short-", "dir": os.environ["RUNNER_TEMP"]}),
+                ("default-windows-temp", {"prefix": "uap-live-30x30-"})):
+            created = Path(tempfile.mkdtemp(**options))
+            created_roots[label] = (created, None)
+            evidence["temp_roots"][label] = {
+                "created_path": str(created), "created_root_chars": len(str(created / "skill-24")),
+                "cleanup": "retained-unverified",
+            }
+            authority = temp_root_authority(created)
+            created_roots[label] = (created, authority)
+            physical_roots[label] = physical_temp_root(created, authority)
+            evidence["temp_roots"][label]["root_chars"] = len(str(physical_roots[label] / "skill-24"))
+        short, long = physical_roots["runner-temp"], physical_roots["default-windows-temp"]
+        created_lengths = {label: row["created_root_chars"]
+                           for label, row in evidence["temp_roots"].items()}
         short_length = len(str(short / "skill-24"))
         long_length = len(str(long / "skill-24"))
-        if long_length < 65 or long_length <= short_length:
-            raise RuntimeError("default Windows TEMP is not longer than runner TEMP")
+        for shorter, longer in ((created_lengths["runner-temp"], created_lengths["default-windows-temp"]),
+                                (short_length, long_length)):
+            if longer < 65 or longer <= shorter:
+                raise RuntimeError("default Windows TEMP is not longer than runner TEMP")
         for label, root in (("runner-temp", short), ("default-windows-temp", long)):
             try:
                 row = audit.do_case(str(cli), "codex", "skill", item, 24, root,
                                     fixtures["plugin_declared_names"], fixtures["signed_release_pins"])
-                evidence["results"][label] = {"root_chars": len(str(root / "skill-24")), "case": row}
+                evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
+                                              "created_root_chars": created_lengths[label], "case": row}
                 if row.get("status") != "passed":
                     failures.append(f"{label}: native E2E case did not PASS")
             except Exception as error:
                 failures.append(f"{label}: {type(error).__name__}")
                 evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
-                                              "error_type": type(error).__name__}
+                                              "created_root_chars": created_lengths[label],
+                                              "error_type": type(error).__name__,
+                                              "error_traceback": audit.bounded_error_traceback(error)}
+    except Exception as error:
+        failures.append(f"TEMP setup: {type(error).__name__}")
+        evidence["setup_error"] = {"error_type": type(error).__name__,
+                                   "error_traceback": audit.bounded_error_traceback(error)}
     finally:
+        # Keep both created objects for evidence; a later pathname deletion
+        # cannot be authorized by an earlier same-object identity check.
+        # The unchanged native auditor still requires product uninstall.
+        for label, (created, authority) in created_roots.items():
+            try:
+                if authority is None or temp_root_authority(created) != authority:
+                    raise ValueError("created TEMP root authority is unverified or changed")
+                evidence["temp_roots"][label]["cleanup"] = "retained-for-evidence"
+            except Exception as error:
+                failures.append(f"{label}: TEMP ownership {type(error).__name__}")
+                evidence["temp_roots"][label].update({
+                    "cleanup": "retained-unverified", "cleanup_error_type": type(error).__name__,
+                    "cleanup_error_traceback": audit.bounded_error_traceback(error),
+                })
         report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
-        for root in (short, long):
-            shutil.rmtree(root, ignore_errors=True)
     if failures:
         raise SystemExit("; ".join(failures))
     print("Published npm 0.1.102 Codex Remotion lifecycle PASS in both Windows TEMP profiles")

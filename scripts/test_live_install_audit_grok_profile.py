@@ -280,18 +280,56 @@ class GrokProfileWiringTests(unittest.TestCase):
         workflow = yaml.safe_load(path.read_text())
         job = workflow["jobs"]["remaining-client-install"]
         matrix = job["strategy"]["matrix"]
+        defaults = '["cursor","kiro","windsurf","grok","chatgpt"]'
+        pretrusted = '[{"target":"grok","kind":"skill","project_profile":"owner-pretrusted"}]'
+        self.assertEqual(matrix["target"],
+                         "${{ fromJSON(needs.changes.outputs.remaining_clients || '" + defaults + "') }}")
+        self.assertEqual(matrix["include"],
+                         "${{ fromJSON(contains(fromJSON(needs.changes.outputs.remaining_clients || '"
+                         + defaults + "'), 'grok') && '" + pretrusted + "' || '[]') }}")
+        self.assertEqual(matrix["kind"], ["plugin", "skill"])
+        self.assertEqual(matrix["project_profile"], ["cold"])
+        self.assertEqual(matrix["exclude"], [{"target": "chatgpt", "kind": "skill"}])
         axes = ["target", "kind", "project_profile"]
-        original = [dict(zip(axes, values)) for values in itertools.product(*(matrix[key] for key in axes))]
-        original = [row for row in original if not any(all(row.get(k) == v for k, v in excluded.items())
-                    for excluded in matrix["exclude"])]
-        extra = matrix["include"]
-        self.assertEqual(len(original), 9)
-        self.assertTrue(all(row["project_profile"] == "cold" for row in original))
-        self.assertEqual(extra, [{"target": "grok", "kind": "skill", "project_profile": "owner-pretrusted"}])
-        self.assertNotIn(extra[0], original)
+        # Only the two exact expressions above are modeled here, not an Actions evaluator.
+        cases = (("full", defaults, 9, 1), ("fallback", "", 9, 1),
+                 ("unrelated", '["windsurf","chatgpt"]', 3, 0),
+                 ("grok", '["grok"]', 2, 1), ("desktop", '["chatgpt"]', 1, 0),
+                 ("empty", '[]', 0, 0))
+        for label, output, cold_count, extra_count in cases:
+            with self.subTest(selection=label):
+                targets = json.loads(output or defaults)
+                original = [dict(zip(axes, values)) for values in itertools.product(
+                    targets, matrix["kind"], matrix["project_profile"])]
+                original = [row for row in original if not any(
+                    all(row.get(k) == v for k, v in excluded.items()) for excluded in matrix["exclude"])]
+                extra = json.loads(pretrusted if "grok" in targets else '[]')
+                self.assertEqual((len(original), len(extra)), (cold_count, extra_count))
+                self.assertTrue(all(row["project_profile"] == "cold" for row in original))
+                self.assertEqual({(row["target"], row["kind"]) for row in original},
+                                 {(target, kind) for target in targets for kind in ("plugin", "skill")
+                                  if (target, kind) != ("chatgpt", "skill")})
+                self.assertTrue(all(row["target"] in targets for row in original + extra))
+                if extra_count:
+                    self.assertEqual(extra, [{"target": "grok", "kind": "skill",
+                                              "project_profile": "owner-pretrusted"}])
+                    self.assertNotIn(extra[0], original)
+                else:
+                    self.assertEqual(extra, [])
         self.assertIn("owner-pretrusted Project", job["name"])
         upload = next(step for step in job["steps"] if "upload-artifact@" in step.get("uses", ""))
         self.assertIn("-owner-pretrusted", upload["with"]["name"])
+        live = yaml.safe_load(path.with_name("live-install-audit.yml").read_text())
+        native = live["jobs"]["real-native-cli-matrix"]
+        self.assertNotIn("include", native["strategy"]["matrix"])
+        pi_plugin = "matrix.target == 'pi' && matrix.kind == 'plugin'"
+        self.assertIn(pi_plugin + " && 'installation' || 'native'", native["name"])
+        lifecycle = next(step for step in native["steps"]
+                         if step.get("name") == "Verify the selected installation lifecycle contract")
+        self.assertEqual(lifecycle["if"], "${{ " + pi_plugin + " }}")
+        run = next(step for step in native["steps"] if "AUDIT_ACCEPTANCE" in step.get("env", {}))
+        self.assertEqual(run["env"]["AUDIT_ACCEPTANCE"],
+                         "${{ " + pi_plugin + " && 'pi-installation' || 'native' }}")
 
 
 if __name__ == "__main__":

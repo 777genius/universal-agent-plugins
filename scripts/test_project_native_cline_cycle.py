@@ -210,7 +210,7 @@ def raw_skills_fixture(rows, states):
         if phase != "before":
             dto = {"schema_version": 1, "command": "agentplugins remove" if phase == "remove" else "skills add", "result": "success"}
             if phase != "remove": dto.update(status="succeeded", readiness="ready", items=[{"alias": "benchmark-note", "targetId": "cline", "destinationPath": active, "status": "unchanged" if phase == "repeat" else "succeeded"}])
-            argv = ["/inert/agentplugins", "remove", iid, "--target", "cline", "--scope", "project", "--project-root", project, "--yes", "--no-ui", "--format", "json"] if phase == "remove" else add
+            argv = ["/inert/agentplugins", "remove", iid, "--target", "cline", "--scope", "project", "--project-root", project, "--yes", "--format", "json"] if phase == "remove" else add
             command(phase, argv, outside, dto)
         for scope, cwd in (("a", project), ("b", "/inert/cycle/project-b"), ("user", outside)):
             baseline = {"a": "final-a", "b": "final-b", "user": "removed-user"}[scope]
@@ -224,6 +224,17 @@ def raw_skills_fixture(rows, states):
 
 
 class CompleteCycleTests(unittest.TestCase):
+    def test_raw_remove_matches_producer_and_rejects_extra_no_ui(self):
+        bodies, source = qualified_fixture()
+        summary = runtime.strict_json(bodies["runtime-attempt.json"])
+        command = next(row for row in summary["raw_skill_cycle"]["commands"] if row["stage"] == "remove")
+        self.assertNotIn("--no-ui", command["argv"])
+        self.assertTrue(runtime.cline_members(bodies, source)["runtime_attempt_complete"])
+        command["argv"].insert(command["argv"].index("--format"), "--no-ui")
+        bodies["runtime-attempt.json"] = raw(summary)
+        with self.assertRaises(ValueError):
+            runtime.cline_members(bodies, source)
+
     def test_raw_project_skills_are_required_with_exact_repeat_and_native_scope(self):
         for kind in ("absent", "missing-repeat", "prepared", "repeat-status", "repeat-argv", "repeat-state", "repeat-lock", "source-pin", "native-path", "foreign-inventory", "metadata", "resource", "probe", "cleanup", "removal", "public-stderr"):
             bodies, source = qualified_fixture()

@@ -30,6 +30,22 @@ complete. Existing queued jobs retain their old routing; rerun only the current
 required work after the workflow change reaches its branch. Preserve completed
 checks and avoid duplicating active runs.
 
+## Route only Core fast test-core
+
+The `test-core` job in `core-fast.yml` accepts `CI_CORE_TEST_RUNNER` before
+`CI_LINUX_RUNNER`. This dedicated repository variable changes only that job;
+all other jobs retain their current routing. Fork pull requests and the
+`ci:github-hosted` label still select `ubuntu-latest` before either variable.
+Node 22.21.1 is provisioned explicitly for the existing core tests.
+
+Leave `CI_CORE_TEST_RUNNER` unset until the dedicated runner target is ready.
+For a scoped rollout, set it to the qualified `hci-uap-core-linux` label and
+verify a fresh `test-core` job's actual runner allocation and completed tests.
+The workflow change alone does not activate that target. To roll back, unset
+`CI_CORE_TEST_RUNNER`; the job immediately returns to `CI_LINUX_RUNNER`, or
+`ubuntu-latest` when both variables are unset. Existing queued jobs keep their
+original allocation, so changing the variable does not move those jobs.
+
 ## Opt in one pull request to GitHub-hosted Linux
 
 Maintainers can apply the `ci:github-hosted` label to a pull request before a
@@ -149,6 +165,27 @@ newest one. None of them produces a release check, and keeping every one of
 those runs would add heavy E2E time on each merge. Pages keeps its serialized
 `github-pages` group.
 
+## Client-scoped native E2E
+
+The reusable PR classifier now selects clients for Native Client Runtime,
+Remaining live audit and Full Live audit. Isolated client-package changes
+and client-scoped repotests narrow the native Codex/Claude/OpenCode matrix;
+shared CLI, SDK, installer, probe, workflow and unknown inputs restore the
+full 8 V1 + 3 OpenCode V2 cells. Existing platforms/check names stay intact.
+
+In Remaining live audit, Codex sandbox and native acquisition changes
+select only ChatGPT plugin; the bounded Devin acquisition helper and its tests
+select Windsurf plugin and Skill. Shared audit inputs still run all nine cells.
+Full Live audit narrows only for named client diagnostic changes, while
+the real Codex pilot and historical published smoke remain mandatory and
+shared inputs retain all eighteen cells. Schedules/dispatch run the complete
+matrices. The PR files API includes both rename paths; missing/unsafe/large
+diffs fail open. Nothing treats skipped native evidence as success.
+
+A shared source PR such as #931 still legitimately runs the full suite.
+`TestCIPathPolicy_HeavyNativeMatrixSelection` locks the selectors and
+their failure modes. Release-required checks are unchanged.
+
 ## Heavy pull request lanes wait for a ready pull request
 
 Draft pull requests keep the fast lane. Lanes that start native clients or
@@ -259,6 +296,7 @@ unrelated publication work, change repository-wide runner variables, or replace
 the workflow's freshly built artifact with a local artifact.
 
 To return Linux execution to GitHub-hosted runners, unset `CI_LINUX_RUNNER`
-to restore each workflow's original GitHub-hosted label. Do not restore retired
+and the scoped `CI_CORE_TEST_RUNNER` override to restore the original
+GitHub-hosted labels. Do not restore retired
 Ubicloud labels. Restore any architecture
 specific overrides separately. No source or test logic changes are needed.

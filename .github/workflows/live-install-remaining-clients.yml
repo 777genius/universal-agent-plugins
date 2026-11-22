@@ -6,6 +6,12 @@ on:
     paths:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/pi_qoder_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/test_kiro_installation_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/grok_project_skill_audit.py'
       - 'scripts/test_grok_project_skill_audit.py'
@@ -22,6 +28,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   # pull_request runs check out a synthetic merge commit; retain the source branch HEAD too.
@@ -32,7 +39,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 
 jobs:
+  changes:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
+    uses: ./.github/workflows/pr-changes.yml
+    permissions:
+      pull-requests: read
   remaining-client-install:
+    needs: changes
     name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }}${{ matrix.project_profile == 'owner-pretrusted' && ' / owner-pretrusted Project' || '' }} (report even if blocked)
     if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     # Linux hosted runners do not delegate cgroup v2 for Kiro's required
@@ -44,15 +57,13 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        target: [cursor, kiro, windsurf, grok, chatgpt]
+        target: ${{ fromJSON(needs.changes.outputs.remaining_clients || '["cursor","kiro","windsurf","grok","chatgpt"]') }}
         kind: [plugin, skill]
         project_profile: [cold]
-        # A separate supported initial condition; the original cold Grok cell
-        # keeps its own non-native result and unchanged acceptance requirement.
-        include:
-          - target: grok
-            kind: skill
-            project_profile: owner-pretrusted
+        # A separate supported initial condition. Cold Grok retains its own
+        # non-native outcome under the explicit installation contract; this
+        # owner-pretrusted row independently qualifies native observations.
+        include: ${{ fromJSON(contains(fromJSON(needs.changes.outputs.remaining_clients || '["cursor","kiro","windsurf","grok","chatgpt"]'), 'grok') && '[{"target":"grok","kind":"skill","project_profile":"owner-pretrusted"}]' || '[]') }}
         # Desktop exposes User scope; Project Skills are a documented refusal.
         exclude:
           - target: chatgpt
@@ -83,6 +94,15 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
           python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
+      - name: Verify source-bound Cursor and cold Grok installation contracts
+        if: ${{ matrix.target == 'cursor' || matrix.target == 'grok' && matrix.kind == 'skill' && matrix.project_profile == 'cold' }}
+        run: python3 -m unittest discover -s scripts -p 'test_prepared_installation_audit.py'
+      - name: Verify Kiro installation custody and exact refusals
+        if: ${{ matrix.target == 'kiro' }}
+        run: python3 -m unittest discover -s scripts -p 'test_kiro_installation_audit.py'
+      - name: Verify Windsurf installation alongside preserved native observations
+        if: ${{ matrix.target == 'windsurf' && matrix.kind == 'plugin' }}
+        run: python3 -m unittest discover -s scripts -p 'test_windsurf_installation_audit.py'
       - name: Acquire actual public vendor client where a headless Linux build exists
         id: vendor-install
         # Preserve a complete explicit client-unavailable record even when a
@@ -343,7 +363,7 @@ jobs:
       # eligibility (minimum CLI 0.1.108); npm 0.1.95 historical parity is separate.
       - name: Build CLI under test (not the already-published binary)
         run: go build -trimpath -ldflags='-X main.version=0.1.115' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
-      - name: Run real acquisitions and report every source and outcome
+      - name: Run explicit installation contracts and preserve native outcomes
         env:
           AUDIT_KIND: ${{ matrix.kind }}
           AUDIT_TARGET: ${{ matrix.target }}
@@ -368,9 +388,22 @@ jobs:
           if [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == plugin ]]; then
             [[ "$(command -v docker)" == "$AUDIT_DOCKER_EXECUTABLE" ]]
           fi
+          # Preparation and manual activation have their own full installation
+          # proof. The owner-pretrusted Grok row keeps its independent native
+          # contract, and the four Windsurf native inventories still run.
+          audit_acceptance=native
+          case "$AUDIT_TARGET:$AUDIT_KIND:$AUDIT_PROJECT_PROFILE" in
+            cursor:plugin:cold) audit_acceptance=cursor-prepared-installation ;;
+            cursor:skill:cold) audit_acceptance=cursor-prepared-skills-installation ;;
+            grok:skill:cold) audit_acceptance=grok-prepared-skills-installation ;;
+            kiro:plugin:cold) audit_acceptance=kiro-installation ;;
+            kiro:skill:cold) audit_acceptance=kiro-skills-installation ;;
+            windsurf:plugin:cold) audit_acceptance=windsurf-global-installation ;;
+          esac
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \
             --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \
+            --acceptance "$audit_acceptance" \
             --grok-project-profile "$AUDIT_PROJECT_PROFILE" \
             --report-dir "$RUNNER_TEMP/live-audit-report"
       - name: Preserve exact per-case evidence, even if vendor install or CLI fails

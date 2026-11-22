@@ -61,6 +61,8 @@ type Request struct {
 	ClientID             string
 	ClientConfigRoot     string
 	ClientExecutable     string
+	// ClientSurfaces holds actual host detections, never inferred authority.
+	ClientSurfaces []domain.ClientSurface `json:"-"`
 	// ClientNativeConfigRoot preserves an independently observed User profile
 	// for a single target opting into UserNativeRegistryLayout, including read-only
 	// User-policy observation during Project delivery. It never selects a User
@@ -69,8 +71,7 @@ type Request struct {
 	ClientNativeConfigRoot string `json:"-"`
 	// ClientVersion is host-observed evidence for the selected executable.
 	// It is operational input, never portable package or diagnostic metadata.
-	ClientVersion      string                 `json:"-"`
-	ClientSurfaces     []domain.ClientSurface `json:"-"`
+	ClientVersion      string `json:"-"`
 	InstallationID     string
 	OperationID        string
 	Selector           string

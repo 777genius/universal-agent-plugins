@@ -32,10 +32,40 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertIn('if [[ "$KIND" == "skill" ]]; then', branch)
         self.assertEqual(pins, ["2.5.2", "2.4.1"])
         source = (WORKFLOW.parents[2] / "scripts/live-install-audit.py").read_text(encoding="utf-8")
-        guard = source.split("    kimi_log_case =", 1)[1].split("    kimi_repeat_log_facts =", 1)[0]
-        observed = re.search(r'client_version.get\("value"\) == "([0-9.]+)"', guard)
-        self.assertIsNotNone(observed)
-        self.assertEqual(pins[0], observed.group(1))
+        # Evaluate only the real pure predicate, without importing the live
+        # harness or running any of its module-level setup.
+        import ast
+        tree = ast.parse(source)
+        predicate = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                         and node.name == "kimi_log_evidence_eligible")
+        self.assertEqual([arg.arg for arg in predicate.args.args], ["target", "kind", "platform", "version"])
+        self.assertIsInstance(predicate.body[-1], ast.Return)
+        expression = compile(ast.Expression(predicate.body[-1].value), "kimi_log_evidence_eligible", "eval")
+        builtins = {"isinstance": isinstance, "dict": dict, "type": type, "int": int}
+        def eligible(target, kind, platform, version):
+            return eval(expression, {"__builtins__": builtins},
+                        {"target": target, "kind": kind, "platform": platform, "version": version})
+
+        assignment = next(node for node in ast.walk(tree) if isinstance(node, ast.Assign)
+                          and any(isinstance(target, ast.Name) and target.id == "kimi_log_case"
+                                  for target in node.targets))
+        self.assertEqual(ast.dump(assignment.value), ast.dump(ast.parse(
+            "kimi_log_evidence_eligible(target, kind, sys.platform, client_version)", mode="eval").body))
+        version = {"status": "reported", "value": pins[0], "exit_code": 0}
+        for value, expected in ((pins[0], True), ("2.3.2", True), (pins[1], False),
+                                ("2.3.1", False), ("2.5.3", False), (pins[0] + "\n", False), ("", False)):
+            with self.subTest(version=value):
+                self.assertIs(eligible("kimi", "skill", "linux", {**version, "value": value}), expected)
+        for target, kind, platform, changed in (
+                ("copilot", "skill", "linux", version), ("kimi", "plugin", "linux", version),
+                ("kimi", "skill", "darwin", version), ("kimi", "skill", "win32", version),
+                ("kimi", "skill", "linux", {**version, "status": "unreported"}),
+                ("kimi", "skill", "linux", {**version, "exit_code": 1}),
+                ("kimi", "skill", "linux", {**version, "exit_code": False}),
+                ("kimi", "skill", "linux", {**version, "exit_code": 0.0}),
+                ("kimi", "skill", "linux", None)):
+            with self.subTest(target=target, kind=kind, platform=platform, version=changed):
+                self.assertIs(eligible(target, kind, platform, changed), False)
 
     def test_ready_pr_and_main_are_always_full(self):
         self.assertRegex(self.body, r"(?m)^  pull_request:\s*$")
@@ -326,7 +356,16 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         native = NATIVE_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("types: [opened, synchronize, reopened, ready_for_review]", native)
         self.assertIn("github.event.pull_request.draft == false", native)
-        self.assertIn("client: [codex, claude, opencode]", native)
+        # The PR classifier may narrow a client's cells, but an unavailable
+        # classification or a shared source change must still admit all three.
+        self.assertIn(
+            'client: ${{ fromJSON(needs.changes.outputs.native_clients || '
+            '\'["codex","claude","opencode"]\') }}',
+            native,
+        )
+        self.assertIn("opencode-v2-project:", native)
+        self.assertIn("target: linux-amd64", native)
+        self.assertIn("client: opencode", native)
         self.assertIn("--project-components", native)
         self.assertIn("schedule:", native)
         self.assertIn("workflow_dispatch:", native)

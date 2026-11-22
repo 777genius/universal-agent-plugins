@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -64,8 +65,8 @@ func runInstallerFacadeLocalAdd(ctx context.Context, cmd *cobra.Command, app App
 		OnlinePreview:   !opts.dryRun,
 		SourceRoot:      loaded.envelope.Source.CanonicalSource,
 		ExecutableFiles: append([]string{}, loaded.envelope.ExecutableFiles...),
-		ClientID:        string(selected.ClientID), ClientConfigRoot: selected.ConfigRoot,
-		ClientExecutable: backendExecutable(selected, detected, app.scope()), ClientVersion: selected.Version, ClientSurfaces: append([]domain.ClientSurface(nil), selected.Surfaces...), OperationID: operationID,
+		ClientID:        string(selected.ClientID), ClientConfigRoot: selected.ConfigRoot, ClientSurfaces: slices.Clone(selected.Surfaces),
+		ClientExecutable: backendExecutable(selected, detected, app.scope()), ClientVersion: selected.Version, OperationID: operationID,
 		RequiredComponents: requiredFacadeComponents(loaded.envelope), Assessment: &assessment,
 	}
 	// A dry-run stages in disposable roots, never in the project's .uap namespace.
