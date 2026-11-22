@@ -148,6 +148,9 @@ func (session *applySession) validateExistingPackage() error {
 		return nil
 	}
 	if installation.OriginMode == domain.OriginModeDirectory && installation.Directory != nil && session.input.DirectoryResolution != nil && session.input.DirectoryResolution.DesiredReleaseSequence != installation.Directory.DesiredReleaseSequence {
+		if len(installation.Clients) == 0 {
+			return fmt.Errorf("%w (recorded release sequence %d)", domain.ErrRetainedRevisionChange, installation.Directory.DesiredReleaseSequence)
+		}
 		return fmt.Errorf("adding a target must use recorded release sequence %d; run update separately", installation.Directory.DesiredReleaseSequence)
 	}
 	if installation.Source.TreeDigest != session.input.Envelope.TreeDigest {

@@ -158,6 +158,7 @@ func describeBindingFailure(outcome environment.BindingOutcome) *installFailure 
 		// A skipped agent is only worth retrying when what stopped the run can be fixed by retrying.
 		_, _, failure.Retryable = applyFailureWording(cause)
 	}
+	explainRetainedRevision(&failure, cause, outcome.Err)
 	return &failure
 }
 
@@ -166,7 +167,21 @@ func describeBindingFailure(outcome environment.BindingOutcome) *installFailure 
 func describeSyncFailure(err error) *installFailure {
 	failure := installFailure{Kind: failureKindOf(err), Detail: errorText(err)}
 	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
+	explainRetainedRevision(&failure, failure.Kind, err)
 	return &failure
+}
+
+const retainedRevisionSummary = "This Directory installation has no installed targets."
+const retainedRevisionGuidance = "Replacing its recorded release through add is not supported, and update requires an installed target. The recorded revision is kept."
+
+func explainRetainedRevision(failure *installFailure, cause failureKind, err error) {
+	if cause != failureUpdateRequired || !errors.Is(err, domain.ErrRetainedRevisionChange) {
+		return
+	}
+	if failure.Kind != failureSkipped {
+		failure.Summary = retainedRevisionSummary
+	}
+	failure.Next, failure.Retryable = retainedRevisionGuidance, false
 }
 
 func failureKindOfOutcome(outcome installer.Outcome) failureKind {

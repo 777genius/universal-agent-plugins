@@ -23,7 +23,7 @@ func TestSavedDirectoryAddAfterImperativeRemoveRetainsIdentityAndData(t *testing
 		newerRelease  bool
 	}{
 		{name: "same immutable release"},
-		{name: "newer legitimate release cannot replace recorded pin", refusal: "adding a target must use recorded release sequence 1", newerRelease: true, change: func(f *rolloutDirectoryFixture) {
+		{name: "newer legitimate release cannot replace recorded pin", refusal: "no installed targets", newerRelease: true, change: func(f *rolloutDirectoryFixture) {
 			f.publishV2()
 		}},
 		{name: "rebound revision with identical bytes", refusal: "package-source revision", change: func(f *rolloutDirectoryFixture) {
@@ -57,14 +57,18 @@ func TestSavedDirectoryAddAfterImperativeRemoveRetainsIdentityAndData(t *testing
 			manifest, lock := fixture.app.dependencyPaths()
 			before := freshRestoreFiles(t, manifest, lock, fixture.store.Path, filepath.Dir(sentinel))
 			dataBefore := freshRestoreFiles(t, filepath.Dir(sentinel))
+			if test.newerRelease {
+				assertRetainedDirectoryRevisionRefusal(t, fixture, retained, sentinel, test.refusal)
+				return
+			}
 			out, stderr, err := fixture.execute(false, "add", "rollout-demo", "--target", "gemini", "--yes", "--format", "json")
 			if test.refusal != "" {
 				var foreign *environment.ForeignBindingError
 				if err == nil || !strings.Contains(err.Error(), test.refusal) || errors.As(err, &foreign) {
 					t.Fatalf("retained Directory policy changed: err=%v stdout=%s stderr=%s", err, out, stderr)
 				}
-				if test.newerRelease && !errors.Is(err, installer.ErrUpdateRequired) {
-					t.Fatalf("new release lost the ordinary explicit-update refusal: %v", err)
+				if errors.Is(err, domain.ErrRetainedRevisionChange) {
+					t.Fatalf("immutable publication refusal was replaced by retained-state advice: %v", err)
 				}
 				if !reflect.DeepEqual(before, freshRestoreFiles(t, manifest, lock, fixture.store.Path, filepath.Dir(sentinel))) {
 					t.Fatal("refusal changed retained state, intent, lock or PLUGIN_DATA")
@@ -79,6 +83,60 @@ func TestSavedDirectoryAddAfterImperativeRemoveRetainsIdentityAndData(t *testing
 				t.Fatal("same-pin add changed retained data metadata or acquired the newer release")
 			}
 		})
+	}
+}
+
+func assertRetainedDirectoryRevisionRefusal(t *testing.T, fixture cliFixture, retained domain.Installation, sentinel, refusal string) {
+	t.Helper()
+	manifest, lock := fixture.app.dependencyPaths()
+	before := freshRestoreFiles(t, manifest, lock, fixture.store.Path, filepath.Dir(sentinel))
+	// The former advice really is unavailable: update has no installed target
+	// after imperative remove-all. This is not a saved-remove intent fixture.
+	stdout, stderr, err := fixture.execute(false, "update", retained.InstallationID, "--target", "gemini", "--yes", "--format", "json")
+	if err == nil || !strings.Contains(err.Error(), `not installed for target "gemini" in user scope`) || errors.Is(err, domain.ErrRetainedRevisionChange) {
+		t.Fatalf("empty installation unexpectedly has an ordinary update path: err=%v stdout=%s stderr=%s", err, stdout, stderr)
+	}
+	if !reflect.DeepEqual(before, freshRestoreFiles(t, manifest, lock, fixture.store.Path, filepath.Dir(sentinel))) {
+		t.Fatal("refused update changed retained state, intent, lock or PLUGIN_DATA")
+	}
+	for _, command := range []string{"add", "install"} {
+		for _, format := range []string{"human", "json"} {
+			t.Run(command+"/"+format, func(t *testing.T) {
+				args := []string{command, "rollout-demo", "--target", "gemini", "--yes", "--format", format}
+				out, stderr, err := fixture.execute(false, args...)
+				var preflight *dependencyPreflightError
+				var foreign *environment.ForeignBindingError
+				if !errors.Is(err, installer.ErrUpdateRequired) || !errors.Is(err, domain.ErrRetainedRevisionChange) || !errors.As(err, &preflight) || preflight.Alias != "demo" || preflight.ClientID != "gemini" || errors.As(err, &foreign) {
+					t.Fatalf("retained revision refusal lost authoritative typing: err=%v stdout=%s stderr=%s", err, out, stderr)
+				}
+				text := ErrorText(args, nil, err)
+				if !strings.Contains(text, refusal) || !strings.Contains(text, "not supported") || ShouldWriteAgentFailure(err) || format == "json" && strings.TrimSpace(out) != "" {
+					t.Fatalf("retained refusal lost its diagnosis or changed its JSON contract: error=%s stdout=%s", text, out)
+				}
+				assertNoRetainedDirectoryUpdateAdvice(t, text+"\n"+out+"\n"+stderr)
+				for _, failure := range []*installFailure{
+					describeSyncFailure(err),
+					describeBindingFailure(environment.BindingOutcome{Status: environment.BindingFailed, Err: err}),
+				} {
+					if failure.Kind != failureUpdateRequired || failure.Retryable {
+						t.Fatalf("retained refusal changed the existing failure classification: %+v", failure)
+					}
+					assertNoRetainedDirectoryUpdateAdvice(t, failure.Summary+"\n"+failure.Next)
+				}
+				if !reflect.DeepEqual(before, freshRestoreFiles(t, manifest, lock, fixture.store.Path, filepath.Dir(sentinel))) {
+					t.Fatal("refusal changed retained state, intent, lock or PLUGIN_DATA")
+				}
+			})
+		}
+	}
+}
+
+func assertNoRetainedDirectoryUpdateAdvice(t *testing.T, text string) {
+	t.Helper()
+	for _, forbidden := range []string{"use update", "run update separately", "agentplugins update", "--no-save", "--purge-data"} {
+		if strings.Contains(strings.ToLower(text), forbidden) {
+			t.Fatalf("retained empty installation offered an unavailable or destructive next step %q: %s", forbidden, text)
+		}
 	}
 }
 

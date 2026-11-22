@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
@@ -133,6 +135,90 @@ func TestSkippedAgentIsRetryableOnlyWhenItsStopCauseIs(t *testing.T) {
 	}
 	if failure := stopped(context.Canceled); !failure.Retryable {
 		t.Fatalf("a canceled run can be retried: %+v", failure)
+	}
+}
+
+func retainedRevisionTestCause() error {
+	return fmt.Errorf("preflight private-retained-secret: %w", &domain.TypedError{
+		Text: "private-retained-secret: run update separately",
+		Kind: installer.ErrUpdateRequired, Cause: domain.ErrRetainedRevisionChange,
+	})
+}
+
+func TestRetainedRevisionFailureGuidanceKeepsInternalCause(t *testing.T) {
+	cause := retainedRevisionTestCause()
+	for name, failure := range map[string]*installFailure{
+		"binding": describeBindingFailure(environment.BindingOutcome{Status: environment.BindingFailed, Err: cause}),
+		"sync":    describeSyncFailure(cause),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if failure.Kind != failureUpdateRequired || failure.Retryable || failure.Detail != cause.Error() {
+				t.Fatalf("retained refusal lost its code, stop policy or internal detail: %+v", failure)
+			}
+			public := failure.Summary + " " + failure.Next
+			for _, want := range []string{"no installed targets", "not supported", "recorded revision is kept"} {
+				if !strings.Contains(public, want) {
+					t.Fatalf("missing retained-state fact %q: %s", want, public)
+				}
+			}
+			assertNoRetainedRevisionRetry(t, public)
+		})
+	}
+	var out bytes.Buffer
+	reports := reportByAgent([]agentItem{failedItem("demo", "gemini", cause)})
+	if err := renderAgentAttention(&out, reports, "", retryHintFor(&cobra.Command{Use: "add"}, reports)); err != nil {
+		t.Fatal(err)
+	}
+	assertNoRetainedRevisionRetry(t, out.String())
+}
+
+func assertNoRetainedRevisionRetry(t *testing.T, public string) {
+	t.Helper()
+	for _, forbidden := range []string{"private-retained-secret", "agentplugins update", "run update", "use update", "retry", "--target"} {
+		if strings.Contains(strings.ToLower(public), forbidden) {
+			t.Fatalf("unsafe retained-state advice %q: %s", forbidden, public)
+		}
+	}
+}
+
+func TestRetainedRevisionSkippedFailureKeepsSkippedSummary(t *testing.T) {
+	failure := describeBindingFailure(environment.BindingOutcome{
+		Status: environment.BindingNotAttempted, Err: retainedRevisionTestCause(),
+	})
+	if failure.Kind != failureSkipped || failure.Retryable || failure.Summary != "Not attempted because an earlier problem stopped the installation." {
+		t.Fatalf("retained refusal changed skipped status or offered retry: %+v", failure)
+	}
+	if !strings.Contains(failure.Next, "not supported") || !strings.Contains(failure.Next, "recorded revision is kept") {
+		t.Fatalf("skipped binding lost the actual stop cause: %+v", failure)
+	}
+	assertNoRetainedRevisionRetry(t, failure.Summary+" "+failure.Next)
+}
+
+func TestRetainedRevisionFailurePreservesRecoveryPriority(t *testing.T) {
+	cause := errors.Join(installer.ErrRecoveryRequired, retainedRevisionTestCause())
+	for name, failure := range map[string]*installFailure{
+		"binding": describeBindingFailure(environment.BindingOutcome{Status: environment.BindingFailed, Err: cause}),
+		"sync":    describeSyncFailure(cause),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if failure.Kind != failureRecovery || failure.Retryable || !strings.Contains(failure.Summary, "recovery") || !strings.Contains(failure.Next, "agentplugins doctor") {
+				t.Fatalf("retained guidance overrode recovery: %+v", failure)
+			}
+			if public := failure.Summary + failure.Next; strings.Contains(public, "private-retained-secret") || strings.Contains(public, "empty installation") || strings.Contains(public, "agentplugins update") {
+				t.Fatalf("recovery mixed in unsafe or lower-priority guidance: %s", public)
+			}
+		})
+	}
+}
+
+func TestActiveRevisionFailureKeepsUpdateGuidance(t *testing.T) {
+	for _, failure := range []*installFailure{
+		describeBindingFailure(environment.BindingOutcome{Status: environment.BindingFailed, Err: installer.ErrUpdateRequired}),
+		describeSyncFailure(installer.ErrUpdateRequired),
+	} {
+		if failure.Kind != failureUpdateRequired || failure.Retryable || !strings.Contains(failure.Next, "agentplugins update") || strings.Contains(failure.Summary, "no installed targets") {
+			t.Fatalf("ordinary active revision lost its existing update advice: %+v", failure)
+		}
 	}
 }
 

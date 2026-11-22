@@ -160,6 +160,9 @@ func (session *groupSession) validateAddedTargetPackage(installation domain.Inst
 	}
 	first := session.first
 	if installation.OriginMode == domain.OriginModeDirectory && installation.Directory != nil && first.DirectoryResolution != nil && first.DirectoryResolution.DesiredReleaseSequence != installation.Directory.DesiredReleaseSequence {
+		if len(installation.Clients) == 0 {
+			return fmt.Errorf("%w (recorded release sequence %d)", domain.ErrRetainedRevisionChange, installation.Directory.DesiredReleaseSequence)
+		}
 		return fmt.Errorf("adding targets must retain recorded release sequence %d; update separately", installation.Directory.DesiredReleaseSequence)
 	}
 	if installation.Source.TreeDigest != first.Envelope.TreeDigest {
