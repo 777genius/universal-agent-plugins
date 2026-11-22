@@ -116,7 +116,7 @@ jobs:
           # Strictly client-scoped paths may shrink heavy E2E; shared/unknown
           # inputs fail open. Files include both sides of each rename.
           native_full=false native_codex=false native_claude=false native_opencode=false
-          remaining_full=false remaining_chatgpt=false
+          remaining_full=false remaining_windsurf=false remaining_chatgpt=false
           live_full=false live_codex=false live_claude=false live_opencode=false
           live_gemini=false live_copilot=false live_cline=false live_kimi=false live_qoder=false live_pi=false
           while IFS= read -r path; do
@@ -131,7 +131,8 @@ jobs:
             esac
             case "$path" in
               scripts/prepare-codex-linux-sandbox.sh|scripts/run-native-client-matrix.py) remaining_chatgpt=true ;;
-              .github/workflows/live-install-remaining-clients.yml|.github/workflows/pr-changes.yml|scripts/live-install-audit.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|scripts/devin_project_auto_install_e2e.py|scripts/test_devin_project_auto_install_e2e.py|tests/live-install/fixtures.json) remaining_full=true ;;
+              scripts/devin_project_auto_install_e2e.py|scripts/test_devin_project_auto_install_e2e.py) remaining_windsurf=true ;;
+              .github/workflows/live-install-remaining-clients.yml|.github/workflows/pr-changes.yml|scripts/live-install-audit.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json) remaining_full=true ;;
             esac
             case "$path" in
               scripts/prepare-codex-linux-sandbox.sh|scripts/published_codex_baseline.py|scripts/test_published_codex_baseline.py|scripts/codex_runtime_audit.py|scripts/test_codex_runtime_audit.py) live_codex=true ;;
@@ -155,7 +156,7 @@ jobs:
             printf '[%s]' "$selected"
           }
           native_clients="$(selected_targets native_codex native_claude native_opencode)"
-          remaining_clients="$(selected_targets remaining_chatgpt)"
+          remaining_clients="$(selected_targets remaining_windsurf remaining_chatgpt)"
           live_clients="$(selected_targets live_codex live_claude live_opencode live_gemini live_copilot live_cline live_kimi live_qoder live_pi)"
           [[ "$native_full" == false ]] || native_clients="$full_native"
           [[ "$remaining_full" == false ]] || remaining_clients="$full_remaining"

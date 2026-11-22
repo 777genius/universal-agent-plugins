@@ -158,7 +158,8 @@ shared CLI, SDK, installer, probe, workflow and unknown inputs restore the
 full 8 V1 + 3 OpenCode V2 cells. Existing platforms/check names stay intact.
 
 In Remaining live audit, Codex sandbox and native acquisition changes
-need only ChatGPT plugin; shared audit inputs still run all nine cells.
+select only ChatGPT plugin; the bounded Devin acquisition helper and its tests
+select Windsurf plugin and Skill. Shared audit inputs still run all nine cells.
 Full Live audit narrows only for named client diagnostic changes, while
 the real Codex pilot and historical published smoke remain mandatory and
 shared inputs retain all eighteen cells. Schedules/dispatch run the complete
