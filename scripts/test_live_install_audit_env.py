@@ -10188,7 +10188,7 @@ class KiroDirectPreparedLifecycleTests(unittest.TestCase):
         audit = load_audit()
         modes = [(source, node, "clean") for source, node in self.recorded_rows()]
         source, node = self.recorded_rows()[0]
-        modes.extend((source, node, mode) for mode in ("repeat-uuid", "repeat-digest", "repeat-state", "remove-residue", "foreign-change", "reminted-name", "reminted-source"))
+        modes.extend((source, node, mode) for mode in ("repeat-uuid", "repeat-digest", "repeat-manifest", "repeat-state", "repeat-extra-digest", "repeat-extra-digest-reversed", "repeat-extra-same", "repeat-extra-duplicate", "repeat-extra-state", "repeat-extra-none", "repeat-extra-malformed", "repeat-extra-unrelated", "remove-residue", "foreign-change", "reminted-name", "reminted-source"))
         for source, original, mode in modes:
             with self.subTest(source=source, mode=mode), TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve()
@@ -10219,8 +10219,26 @@ class KiroDirectPreparedLifecycleTests(unittest.TestCase):
                         if state["adds"] == 2:
                             if mode == "repeat-uuid": row["installation_id"] = "00000000-0000-4000-8000-000000000001"
                             elif mode == "repeat-digest": row["clients"][0]["package_revision"]["tree_digest"] = "sha256:" + "0" * 64
+                            elif mode == "repeat-manifest": row["clients"][0]["package_revision"]["manifest_digest"] = "sha256:" + "0" * 64
                             elif mode == "repeat-state": row["clients"][0].update(activation="active", verification="installation_verified")
                         remaining = [row] if state["installed"] else []
+                        if state["installed"] and state["adds"] == 2 and mode.startswith("repeat-extra-"):
+                            extra = json.loads(json.dumps(original))
+                            if mode != "repeat-extra-duplicate":
+                                extra["installation_id"] = "00000000-0000-4000-8000-000000000001"
+                            if mode in ("repeat-extra-digest", "repeat-extra-digest-reversed"):
+                                extra["clients"][0]["package_revision"]["tree_digest"] = "sha256:" + "0" * 64
+                            elif mode == "repeat-extra-state":
+                                extra["clients"][0].update(activation="active", verification="installation_verified")
+                            elif mode == "repeat-extra-none":
+                                extra = None
+                            elif mode == "repeat-extra-malformed":
+                                extra = {}
+                            elif mode == "repeat-extra-unrelated":
+                                extra["source"] = "different/repository"
+                            remaining.append(extra)
+                            if mode == "repeat-extra-digest-reversed":
+                                remaining.reverse()
                         if not state["installed"] and mode in ("reminted-name", "reminted-source"):
                             row["installation_id"] = "00000000-0000-4000-8000-000000000001"
                             if mode == "reminted-name": row["name"] = "renamed-prepared-package"
@@ -10246,6 +10264,10 @@ class KiroDirectPreparedLifecycleTests(unittest.TestCase):
                     self.assertEqual(result["repeat_installation_ids"], [original["installation_id"]])
                 else:
                     self.assertNotEqual(result["status"], "prepared-lifecycle-passed")
+                    if mode.startswith("repeat-"):
+                        self.assertFalse(result["repeat_verified"])
+                    if mode in ("repeat-extra-digest", "repeat-extra-digest-reversed", "repeat-extra-same", "repeat-extra-duplicate"):
+                        self.assertEqual(len(result["repeat_installation_ids"]), 2)
 
 
 class LiveAuditNativeVersionRoutingTests(unittest.TestCase):
