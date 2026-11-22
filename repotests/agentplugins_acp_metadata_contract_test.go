@@ -115,6 +115,10 @@ func TestACPMetadataExchangeStopsClientRequestsWithoutAnyReply(t *testing.T) {
 			if len(p.Sent) != 1 || p.StoppedMethod != method || w.closes != 1 || !p.StdoutEOF {
 				t.Fatal("request advanced the session or did not close", p)
 			}
+			want := `{"id":1,"jsonrpc":"2.0","method":"initialize","params":{"clientCapabilities":{"fs":{"readTextFile":false,"writeTextFile":false},"terminal":false},"clientInfo":{"name":"uap-acp-metadata-observer","version":"1"},"protocolVersion":1}}` + "\n"
+			if !bytes.Equal(w.Bytes(), []byte(want)) {
+				t.Fatal("stdin must contain only the newline-terminated initialize request")
+			}
 			saved, err := json.Marshal(p)
 			if err != nil || bytes.Contains(saved, []byte("private-auth-canary")) {
 				t.Fatal("client request parameters leaked")
