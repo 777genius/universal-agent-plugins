@@ -51,6 +51,7 @@ const {
   document: sourceDocument,
   loading: documentLoading,
   failed: documentFailed,
+  waitingForRetry: documentWaitingForRetry,
   retry: retryDocument,
 } = useSkillDocument(listingId, documentName);
 const resolvedDocument = computed(() => {
@@ -201,7 +202,7 @@ usePageSeo(
       />
 
       <div v-if="isBusy" class="skills-detail__panel" role="status">
-        {{ t('registryUi.skills.loading') }}
+        {{ t(documentWaitingForRetry ? 'registryUi.skills.detail.waitingDocument' : 'registryUi.skills.loading') }}
       </div>
       <div v-else-if="!skill" class="skills-detail__panel skills-detail__empty">
         <h1>{{ t('registryUi.skills.detail.notFound') }}</h1>
@@ -309,7 +310,7 @@ usePageSeo(
 
           <section class="skills-detail__panel skills-detail__document">
             <h2>SKILL.md</h2>
-            <p v-if="documentLoading" role="status" class="skills-detail__hint">{{ t('registryUi.skills.detail.loadingDocument') }}</p>
+            <p v-if="documentLoading" role="status" class="skills-detail__hint">{{ t(documentWaitingForRetry ? 'registryUi.skills.detail.waitingDocument' : 'registryUi.skills.detail.loadingDocument') }}</p>
             <template v-else-if="resolvedDocument?.status === 'resolved' && resolvedDocument.markdown">
               <p class="skills-detail__hint skills-detail__document-caption">{{ t('registryUi.skills.detail.sourceDocumentNotice') }}</p>
               <SkillMarkdown
