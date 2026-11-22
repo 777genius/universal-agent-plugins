@@ -456,9 +456,9 @@ describe('unified registry landing', () => {
     assert.ok(plugin);
     const commands = pluginCommands(plugin);
     assert.equal(commands.add.includes('--target'), false);
-    assert.match(commands.add, /^npx -y universal-agent-plugins add /);
+    assert.match(commands.add, /^npx -y universal-agent-plugins@latest add /);
     for (const action of ['add', 'update', 'repair', 'switch', 'remove'] as const)
-      assert.match(commands[action], /^npx -y universal-agent-plugins /);
+      assert.match(commands[action], /^npx -y universal-agent-plugins@latest /);
   });
 
   it('uses one comma-separated target flag for explicit multi-agent installation', () => {
@@ -468,7 +468,7 @@ describe('unified registry landing', () => {
         item.client_support.clients.includes('cursor'),
     );
     assert.ok(plugin);
-    assert.match(pluginCommands(plugin, ['codex', 'cursor']).add, / --target codex,cursor$/);
+    assert.match(pluginCommands(plugin, ['codex', 'cursor']).add, / --target "codex,cursor"$/);
   });
 
   it('reserves a local logo for the newly published marketing kit', () => {

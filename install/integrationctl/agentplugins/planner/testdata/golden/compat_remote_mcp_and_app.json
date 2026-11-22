@@ -707,7 +707,7 @@
       "ActivationMode": "manual",
       "AppSupport": "unsupported",
       "ClientID": "kiro",
-      "ExtensionSupport": "unsupported",
+      "ExtensionSupport": "native",
       "MCPTransports": {
         "sse": "native",
         "stdio": "native",
@@ -735,7 +735,6 @@
         "Index": 1,
         "Kind": "extension",
         "Limitations": [
-          "component_not_supported_by_client",
           "extension_semantics_not_established"
         ],
         "Source": "",

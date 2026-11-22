@@ -2,7 +2,11 @@ import { productRoutes } from '../data/routes.ts';
 import { candidateLocales } from '../data/i18n.ts';
 import { expandLocalizedRoutes, isIndexablePath } from '../utils/localizedRoutes.ts';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
+import { labelLines, socialGrid, socialImageSvg } from '../build/social-image.ts';
+import { clients } from '../data/clients.ts';
+import { CLI_INVOCATION } from '../utils/commands.ts';
 import {
   canonicalPath,
   pageRouteSeo,
@@ -46,7 +50,7 @@ describe('SEO foundations', () => {
     });
     assert.equal(schema.isAccessibleForFree, true);
     assert.equal(schema.installUrl, 'https://www.npmjs.com/package/universal-agent-plugins');
-    assert.equal(schema.screenshot, 'https://example.com/product/og-image.png?v=20261106');
+    assert.equal(schema.screenshot, 'https://example.com/product/og-image.png?v=20261121');
     assert.deepEqual(schema.publisher, { '@id': 'https://example.com/product/#organization' });
     assert.equal(spdxLicenseUrl('Apache-2.0'), 'https://spdx.org/licenses/Apache-2.0.html');
     assert.equal(spdxLicenseUrl('invalid license'), undefined);
@@ -180,4 +184,26 @@ it('accepts localized software captions without changing machine identity', () =
   assert.equal(schema.featureList, 'fixture-features');
   assert.equal(schema['@id'], 'https://example.test/#software');
   assert.equal(schema.installUrl, 'https://www.npmjs.com/package/universal-agent-plugins');
+});
+
+describe('social preview', () => {
+  it('is generated from the public client list and shows every agent', () => {
+    // Regenerate with: node --experimental-strip-types scripts/render-social-image.mjs
+    const committed = readFileSync(new URL('../public/og-image.svg', import.meta.url), 'utf8');
+    assert.equal(committed, socialImageSvg({ clients, command: CLI_INVOCATION }));
+    for (const client of clients) {
+      assert.ok(committed.includes(`href="client-icons/${client.icon}"`), client.id);
+    }
+    assert.equal(committed.match(/class="agent"/g)?.length, clients.length);
+    assert.ok(committed.includes('href="icon.svg"'), 'uses the site logo');
+    assert.doesNotMatch(committed, /&amp; more|SELECTED CLIENTS|ONE CLI\.|One plugin\.|agents\.</);
+  });
+
+  it('fits the agent grid to the number of clients', () => {
+    assert.deepEqual([socialGrid(16).columns, socialGrid(16).rows], [4, 4]);
+    assert.deepEqual([socialGrid(17).columns, socialGrid(17).rows], [5, 4]);
+    assert.throws(() => socialGrid(60), /cannot fit 60 agents/);
+    assert.deepEqual(labelLines('GitHub Copilot CLI', 13), ['GitHub', 'Copilot CLI']);
+    assert.deepEqual(labelLines('Claude Code', 13), ['Claude Code']);
+  });
 });

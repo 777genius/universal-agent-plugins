@@ -47,7 +47,7 @@ type Evidence = { id: string; source: string; skill: string; command: string; ex
   installed: boolean; lock_written: boolean; native_skill_present: boolean; resources: number;
   stdout_tail: string; stderr_tail: string; error: string | null };
 const report = {
-  checked_at: new Date().toISOString(), production_cli: published ? 'npx universal-agent-plugins@latest' : binary,
+  checked_at: new Date().toISOString(), production_cli: published ? 'npx -y universal-agent-plugins@latest' : binary,
   profile: 'isolated temporary project',
   live_network: true, results: [] as Evidence[],
 };
@@ -95,7 +95,7 @@ try {
     // Never reuse the runner's real user configuration or credentials.
     mkdirSync(join(home, '.codex'), { recursive: true });
     const command = skillInstallCommand(listing(fixture)) ?? '';
-    const expectedCommand = 'npx universal-agent-plugins@latest skills add ' + fixture.source +
+    const expectedCommand = 'npx -y universal-agent-plugins@latest skills add ' + fixture.source +
       ' --skill ' + fixture.skill;
     const knownUnavailable = fixture.skill === 'lark-mail' &&
       fixture.source.startsWith('https://open.feishu.cn');

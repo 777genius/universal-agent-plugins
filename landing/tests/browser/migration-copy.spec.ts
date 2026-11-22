@@ -1,4 +1,4 @@
-import { hydrated, pinnedContext7Example, wording } from './i18n-state.helpers';
+import { hydrated, context7InstallExample, wording } from './i18n-state.helpers';
 import { expect, test } from '@playwright/test';
 import { clientLandingPages } from '../../data/clients';
 
@@ -93,17 +93,18 @@ for (const client of clientLandingPages) {
     });
     await page.goto(`./agents/${client.slug}/`);
     await hydrated(page);
-    const pinned = ['pi', 'hermes', 'antigravity'].includes(client.id)
-      ? await pinnedContext7Example(page, client.id)
+    const example = ['pi', 'hermes', 'antigravity'].includes(client.id)
+      ? await context7InstallExample(page, client.id)
       : undefined;
-    const command = pinned?.command ?? `npx -y universal-agent-plugins add context7 --target ${client.id}`;
+    const command = example?.command ?? `npx -y universal-agent-plugins@latest add context7 --target ${client.id}`;
     const install = page.locator('.agent-page__install');
     const snippet = install.locator('.command-snippet--add');
     await expect(snippet).toHaveCount(1);
     await expect(snippet.locator('code')).toHaveText(command);
-    if (pinned) {
-      await expect(install.locator('p code')).toHaveText(pinned.selector);
-      await expect(install).toContainText(wording('en')('registryUi.install.pinnedCatalogSource'));
+    if (example) {
+      await expect(install.locator('p code')).toHaveText(example.selector);
+      if (example.pinned) await expect(install).toContainText(wording('en')('registryUi.install.pinnedCatalogSource'));
+      else await expect(install).not.toContainText(wording('en')('registryUi.install.pinnedCatalogSource'));
       await expect(install).not.toContainText('First create a compatible Agent Plugins package at ./my-plugin');
     }
     await snippet.getByRole('button', { name: 'Copy command', exact: true }).click();

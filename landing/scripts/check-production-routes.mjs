@@ -106,7 +106,7 @@ export async function expectedAgentCommand(root, id) {
     `${id}: built projection differs from the verified catalog`);
   const plugins = catalogVisiblePlugins(projection.plugins).filter(plugin => plugin.trust_state !== 'conformant_unreviewed');
   const example = agentInstallExample(plugins, id);
-  if (!example) return `npx -y universal-agent-plugins add ./my-plugin --target ${id}`;
+  if (!example) return `npx -y universal-agent-plugins@latest add ./my-plugin --target ${id}`;
   assert.equal(example.target, id, 'agent example changed target');
   const availability = pluginInstallAvailability(example.plugin, [id], 'user');
   if (availability?.kind === 'pinned_git') {

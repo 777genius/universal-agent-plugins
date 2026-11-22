@@ -73,6 +73,20 @@ Changes after `v1.2.4` land here.
 The following `agentplugins` changes are breaking. They ship in the next minor
 0.x release without a compatibility layer; each item says how to move.
 
+- **One agent that cannot be prepared no longer stops the others.** In
+  `agentplugins add <plugin> --target a,b,c`, an agent whose own preflight or
+  package preparation fails for a cause that concerns only it (permission
+  denied, read-only location, agent program missing, agent facts unavailable,
+  unsupported agent, something UAP does not own at its install location) is
+  left out; the other agents install exactly as if only they had been
+  selected. Every other cause, unclassified ones included, still stops every
+  agent with "no selected client was changed", as does a selection with VS
+  Code. How to move: automation must treat a non-zero exit with
+  `status: "external_partial_failure"` as "some agents installed" and read the
+  per-target rows. A failed row with `error.stage: "preparation"` means that
+  agent was not prepared and nothing was applied for it; `external_failed` now
+  also has this meaning. Retry it with the same command and `--target <agent>`;
+  the retry is pinned to the package already installed for its peers.
 - **`io.github.777genius.agentplugins/commands/` is now read.** Every entry in
   it except dotfiles must be a valid command; an invalid one is reported and
   not delivered. Move unrelated files elsewhere, and add the CI check from
@@ -133,6 +147,18 @@ The following `agentplugins` changes are breaking. They ship in the next minor
 
 ### Fixed
 
+- `agentplugins doctor` no longer reports `native_projection_not_checked` for
+  healthy OpenCode, Cursor, Codex project and Kiro project installations whose
+  owned files verify intact. Native discovery that is still unobserved keeps
+  its own finding.
+- Claude Code project installs now record workspace trust in the file a plain
+  `claude` reads. Without `CLAUDE_CONFIG_DIR` that is `~/.claude.json`; it was
+  written to `~/.claude/.claude.json`, and native checks ran with
+  `CLAUDE_CONFIG_DIR=~/.claude`, so `active` was reported while Claude Code
+  still listed the project as untrusted. A set `CLAUDE_CONFIG_DIR` keeps using
+  `$CLAUDE_CONFIG_DIR/.claude.json`. For a project installed before this fix,
+  run the same `agentplugins add ... --scope project` again; the old
+  `~/.claude/.claude.json` is left untouched.
 - A pending ChatGPT registration no longer cancels a multi-client Context7
   installation. Other selected clients are installed and ChatGPT is reported
   as a separate setup step with a ChatGPT-only resume command.

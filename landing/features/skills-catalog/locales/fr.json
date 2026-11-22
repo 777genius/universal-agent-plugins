@@ -68,7 +68,8 @@
         "installation": "Installation",
         "command": "Commande",
         "prompt": "Consigne",
-        "promptText": "Installe ce Skill avec Universal Agent Plugins. Vérifie la source et les modifications avant d’exécuter :\n{command}",
+        "promptText": "Installe ce Skill avec Universal Agent Plugins. Vérifie d’abord la source et les modifications prévues avec un essai à blanc :\n{preview}\nSi le plan correspond à cette demande, applique-le :\n{apply}\nSi la CLI signale un problème de sécurité bloquant, arrête-toi et montre-le-moi.",
+        "promptTargetNote": "Dans les deux commandes, remplace {placeholder} par l’identifiant de ton agent ({agents}).",
         "exactNameUnavailable": "Le nom exact pour l'installation n'a pas pu être vérifié. Consultez la source de l'éditeur.",
         "security": "Contrôles de sécurité",
         "installs": "Installations",
@@ -79,7 +80,11 @@
         "documentUnavailable": "Le SKILL.md de l’éditeur n’a pas pu être chargé. Consultez directement sa source.",
         "viewPublisher": "Voir la source de l’éditeur",
         "revision": "Révision de la source",
-        "rawDocument": "Afficher le contenu source complet de SKILL.md"
+        "rawDocument": "Afficher le contenu source complet de SKILL.md",
+        "remove": "Supprimer",
+        "savedName": "Trouver le nom enregistré",
+        "removeHint": "Supprime la Skill enregistrée sous ce nom. Si vous avez installé une Skill du même nom depuis une autre source, vérifiez les noms enregistrés avec la commande list.",
+        "removeByListedName": "La CLI choisit le nom enregistré de cette Skill. Repérez-le à côté de cette source dans la sortie de list, puis lancez remove avec ce nom."
       },
       "scanFilterLabel": "Couverture de l'analyse",
       "scanModes": {

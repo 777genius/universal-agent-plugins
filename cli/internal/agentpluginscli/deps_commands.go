@@ -336,12 +336,11 @@ func resolveDependencyLock(ctx context.Context, app App, opts *options, requirem
 	if err != nil {
 		return requirements, environment.Lock{}, environment.Lock{}, err
 	}
-	resolver := dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}
 	var previousPin *environment.Lock
 	if hadPrevious {
 		previousPin = &previous
 	}
-	locked, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: resolver}).Resolve(ctx, requirements, derefLock(previousPin), updateAlias)
+	locked, err := (dependencyResolver{app: app, dryRun: opts.dryRun, requirements: requirements}).resolveLock(ctx, derefLock(previousPin), updateAlias)
 	if err != nil {
 		return requirements, environment.Lock{}, environment.Lock{}, err
 	}
