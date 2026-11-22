@@ -43,8 +43,10 @@ verifies them:
   proven closed. Under the mutation lock the confirmation runs one more
   read-only probe after a process census that is a heuristic, not a proof: on
   macOS and Linux it refuses while a live process of the user looks like Claude
-  Code and runs a `plugin` command, is bound to the same `CLAUDE_CONFIG_DIR`, or
-  hides both its arguments and environment; it recognizes no other process. On
+  Code and runs a `plugin` command, carries the same
+  `AGENTPLUGINS_CLAUDE_PROFILE` marker (or, from earlier versions, the same
+  `CLAUDE_CONFIG_DIR`), or hides both its arguments and environment; it
+  recognizes no other process. On
   Windows it relies on the kill-on-close job that ends every command with its
   invocation and lists no processes. Only an exactly recognized state is
   accepted, and it is never recorded as unchanged: the effect is committed with

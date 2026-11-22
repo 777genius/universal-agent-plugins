@@ -121,7 +121,7 @@
       "streamable-http": "native"
     },
     "app_support": "unsupported",
-    "extension_support": "unsupported",
+    "extension_support": "native",
     "saved_dependency": true,
     "excluded_reason": "",
     "project": {
@@ -131,7 +131,7 @@
         "stdio": "native",
         "streamable-http": "native"
       },
-      "extension_support": "unsupported"
+      "extension_support": "native"
     }
   },
   {

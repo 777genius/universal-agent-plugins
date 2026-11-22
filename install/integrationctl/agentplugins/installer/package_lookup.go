@@ -2,6 +2,7 @@ package installer
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -15,8 +16,11 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	if req.ClientConfigRoot != "" && !validRoot(req.ClientConfigRoot) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientConfigRoot must be an explicit absolute clean path", ErrInvalidRequest)
 	}
-	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "") {
+	if req.ClientExecutable != "" && !validRoot(req.ClientExecutable) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientExecutable must be an explicit absolute clean path", ErrInvalidRequest)
+	}
+	if req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "" {
+		return domain.DetectedClient{}, missingExecutableError(ErrInvalidRequest, id)
 	}
 	selectedNativeUser := false
 	if req.ClientNativeConfigRoot != "" {
@@ -40,7 +44,7 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 			return domain.DetectedClient{}, fmt.Errorf("%w: invalid client profile: %w", ErrInvalidRequest, err)
 		}
 	}
-	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, NativeConfigRoot: req.ClientNativeConfigRoot, ExecutablePath: req.ClientExecutable, Version: req.ClientVersion}, nil
+	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, NativeConfigRoot: req.ClientNativeConfigRoot, ExecutablePath: req.ClientExecutable, Version: req.ClientVersion, Surfaces: slices.Clone(req.ClientSurfaces)}, nil
 }
 
 func missingRequired(envelope domain.PackageEnvelope, required []string) []string {

@@ -222,7 +222,7 @@
         "nextStep": "Após a instalação"
       },
       "scrollHint": "Role a tabela para os lados para ver todas as colunas.",
-      "note": "Automático: o UAP instala os componentes compatíveis. Guiado: siga as instruções do agente. Preparado: ative os arquivos preparados. Manual: conclua a configuração no aplicativo. Após a confirmação, o UAP conclui a configuração nativa compatível e informa as etapas restantes de confiança, login ou recarga. A disponibilidade depende do plugin e da versão do agente. Referência: CLI nativo 0.1.110. A publicação no npm é independente e pode atrasar. O suporte a um agente não garante uma versão assinada do catálogo compatível com cada plugin e escopo.",
+      "note": "Automático: o UAP instala os componentes compatíveis. Guiado: siga as instruções do agente. Preparado: ative os arquivos preparados. Manual: conclua a configuração no aplicativo. Após a confirmação, o UAP conclui a configuração nativa compatível e informa as etapas restantes de confiança, login ou recarga. A disponibilidade depende do plugin e da versão do agente. Referência: CLI nativo 0.1.115. A publicação no npm é independente e pode atrasar. O suporte a um agente não garante uma versão assinada do catálogo compatível com cada plugin e escopo.",
       "details": "Ver detalhes de compatibilidade",
       "capabilities": {
         "pluginsSkillsMcp": "Plugins, habilidades, MCP",
@@ -234,6 +234,7 @@
         "personalAppSetup": "Configuração de aplicativo pessoal",
         "skillsOnly": "Somente habilidades",
         "skillsMcpPrepared": "Habilidades, MCP (preparado)",
+        "pluginsSkillsMcpPrepared": "Plugins, habilidades, MCP (preparado)",
         "notSupported": "Não suportado"
       },
       "setup": {
@@ -312,11 +313,54 @@
       "sourceDescription": "Veja de onde vem cada pacote e se a listagem do catálogo foi revisada antes de instalar.",
       "standardDescription": "Use um pacote Agent Plugins 1.0 com {manifest}, sem criar um formato exclusivo para o UAP."
     },
-    "builtWith": {
-      "title": "Já criado com UAP",
-      "agentNotificationsDescription": "Notificações de desktop, sons e foco na janela com um clique para agentes de programação com IA.",
-      "viewRepository": "Ver no GitHub",
-      "buildWithSdk": "Crie com o SDK"
+    "sdk": {
+      "title": "Crie plugins universais",
+      "tagline": "Crie uma vez. Conecte seus agentes.",
+      "intro": "Crie plugins com o SDK e a CLI do UAP ou leve o gerenciamento de plugins e Skills para o seu próprio app.",
+      "featuresLabel": "Recursos do SDK e da CLI",
+      "features": {
+        "detect": {
+          "title": "Detecte agentes instalados",
+          "description": "A CLI encontra os agentes compatíveis na máquina, então um comando alcança todos eles."
+        },
+        "install": {
+          "title": "Instale nos agentes escolhidos",
+          "description": "Escolha agentes específicos e o UAP prepara o formato nativo que cada um suporta."
+        },
+        "cli": {
+          "title": "CLI de gerenciamento de plugins",
+          "description": "Instale, atualize, repare e remova plugins com um único comando no terminal."
+        },
+        "hooks": {
+          "title": "Hooks tipados",
+          "description": "Trate eventos nativos de hooks dos agentes com handlers Go tipados."
+        }
+      },
+      "apps": {
+        "eyebrow": "Para quem cria apps",
+        "badge": "Prévia de integração",
+        "title": "Adicione gerenciamento de plugins ao seu app",
+        "description": "O TypeScript Management SDK permite que um app desktop ou Node.js descubra agentes e instale, atualize ou remova plugins e Skills pelo mecanismo do UAP.",
+        "guide": "Guia do TypeScript Management SDK",
+        "diagramLabel": "Ilustração: seu app pede ao UAP Management SDK para instalar o plugin marketing-kit, e o SDK o instala para Codex, Claude Code e Gemini CLI.",
+        "yourApp": "Seu app",
+        "tag": "Plugins e Skills",
+        "kind": "Plugin",
+        "install": "Instalar",
+        "update": "Atualizar",
+        "remove": "Remover",
+        "installing": "Instalando…",
+        "installed": "Instalado",
+        "caption": "Crie plugins. Potencialize seu app."
+      },
+      "showcase": {
+        "eyebrow": "Feito com UAP",
+        "description": "Notificações inteligentes multiplataforma. Alertas no desktop, sons, clique para focar e webhooks.",
+        "builtOn": "Construído sobre o SDK do UAP: hooks de agente tipados e o instalador do UAP.",
+        "repository": "Ver no GitHub",
+        "stars": "{stars} estrelas no GitHub"
+      },
+      "guides": "Explore os guias do SDK"
     },
     "faq": {
       "eyebrow": "Perguntas frequentes",
@@ -370,7 +414,7 @@
       "notAvailableForPlugin": "Não disponível para este plugin",
       "title": "Um plugin",
       "subtitle": "Todos os seus agentes",
-      "intro": "Instale, atualize, repare e remova Agent Plugins 1.0 entre agentes de IA compatíveis com um comando. Deixe a CLI detectar agentes instalados ou escolha exatamente para onde o plugin vai.",
+      "intro": "Instale, atualize, repare e remova Agent Plugins 1.0 / Agent Skills entre agentes de IA compatíveis com um comando. Deixe a CLI detectar agentes instalados ou escolha exatamente onde instalar.",
       "github": "Abrir GitHub",
       "choose": "Escolher agentes",
       "chooseHint": "Um, vários ou autodetectar",
@@ -797,12 +841,12 @@
       "chatgptFinish": "Abra o ChatGPT, selecione {name} em Apps ou Plugins, conecte-o e inicie uma nova conversa. A disponibilidade depende da sua conta e do espaço de trabalho.",
       "expectedFallback": "Origem alternativa esperada: {source}.",
       "dependencySaving": {
-        "saved": "Salvo para sua conta de usuário em uap.toml e uap.lock. Veja os caminhos com npx -y universal-agent-plugins deps status. O comando remove afeta todos os destinos salvos.",
+        "saved": "Salvo para sua conta de usuário em uap.toml e uap.lock. Veja os caminhos com {command}. O comando remove afeta todos os destinos salvos.",
         "noSave": "Esta seleção usa --no-save e não registra uma dependência.",
         "local": "Pacotes locais não são salvos como dependências portáteis.",
         "discovery": "Seletores Discovery não são salvos como dependências.",
         "chatgpt": "A preparação do ChatGPT não salva uma dependência.",
-        "projectSaved": "Salvo nos arquivos uap.toml e uap.lock deste projeto. Confira com npx -y universal-agent-plugins deps status --scope project nesta pasta. A remoção afeta todos os agentes salvos neste projeto."
+        "projectSaved": "Salvo nos arquivos uap.toml e uap.lock deste projeto. Confira com {command} nesta pasta. A remoção afeta todos os agentes salvos neste projeto."
       },
       "scope": {
         "label": "Instalar para",
@@ -902,7 +946,7 @@
       },
       "cursor": {
         "note": "Pacote nativo de Agent Plugin",
-        "status": "Compatível",
+        "status": "Preparado pela CLI",
         "intro": "Instale Agent Plugins 1.0 em projetos do Cursor sem adaptar cada plugin manualmente. A CLI planeja o pacote nativo antes de alterar arquivos.",
         "delivery": "A CLI prepara os componentes de plugin, skills e MCP compatíveis com Cursor no escopo escolhido. O comando add usa o escopo de usuário por padrão; selecione explicitamente o escopo de projeto para add.",
         "activation": "Recarregue o Cursor quando solicitado e verifique se o plugin foi detectado."
@@ -911,7 +955,7 @@
         "note": "Plugin nativo gerenciado",
         "status": "Compatível",
         "intro": "Instale Agent Plugins 1.0 pela GitHub Copilot CLI usando o fluxo nativo de plugins e o mesmo comando de ciclo de vida usado para outros agentes.",
-        "delivery": "A CLI usa o layout compatível de plugin do Copilot e verifica o estado resultante da instalação.",
+        "delivery": "A CLI usa o layout compatível de plugin do Copilot e verifica o estado resultante da instalação. No escopo de projeto, com uma versão estável do Copilot CLI 1.0.81 ou posterior, um pacote compatível é registrado como plugin nativo do projeto.",
         "activation": "Reinicie ou recarregue o cliente somente quando o fluxo nativo do Copilot solicitar."
       },
       "vscode": {
@@ -957,11 +1001,11 @@
         "activation": "Recarregue o Cline e autentique-se no provedor. O MCP de projeto exige a sessão gerenciada escolhida explicitamente e seu CLINE_MCP_SETTINGS_PATH; a inicialização normal não seleciona essa configuração."
       },
       "windsurf": {
-        "note": "Pacote preparado; ativação manual obrigatória",
-        "status": "Preparado pela CLI",
-        "intro": "Prepare Agent Plugins 1.0 para o Windsurf com um único comando da CLI e depois conclua explicitamente a etapa de ativação específica do cliente.",
-        "delivery": "A CLI grava seus Skills e a configuração MCP para Devin de usuário 3000.11.205 ou 3000.12.57 e de projeto 3000.11.205. A preparação não comprova descoberta, confiança, entrada nem execução real.",
-        "activation": "Siga exatamente o caminho de ativação manual exibido após a preparação."
+        "note": "Skills e configuração MCP gerenciadas",
+        "status": "Compatível",
+        "intro": "Instale Skills e servidores MCP do Agent Plugins 1.0 para o Windsurf / Devin com um único comando da CLI.",
+        "delivery": "A CLI grava seus Skills e a configuração MCP para Devin 3000.11.205 ou 3000.12.57 nos escopos de usuário e de projeto. A preparação não comprova descoberta, confiança, entrada nem execução real.",
+        "activation": "Abra ou reinicie o Devin no projeto selecionado e revise o acesso. O UAP verifica os Skills instalados com a CLI do Devin; verifique os servidores MCP no Devin."
       },
       "grok": {
         "note": "Plugin nativo de Skills e MCP; verificação pela CLI",

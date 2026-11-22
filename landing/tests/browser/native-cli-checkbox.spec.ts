@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { navigate, offline, projections, registryFixture } from './i18n-state.helpers';
 
 const npxSkillCommand =
-  'npx universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
+  'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
 const nativeSkillCommand =
   'agentplugins skills add https://github.com/anthropics/skills --skill frontend-design --scope project';
 const checkboxName = 'Use installed agentplugins CLI instead of npx';
@@ -67,15 +67,15 @@ test('native CLI checkbox changes Skills, plugin install and copy commands acros
   await page.keyboard.press('Escape');
   await restoredCard.getByRole('link', { name: 'frontend-design' }).click();
   const detail = page.locator('#skill-install');
-  await expect(detail.locator('.command-snippet code')).toHaveText(nativeSkillCommand);
+  await expect(detail.locator('.command-snippet--add code')).toHaveText(nativeSkillCommand);
   await detail.getByRole('tab', { name: 'Prompt' }).click();
   await expect(detail.locator('.command-snippet code')).toContainText(nativeSkillCommand);
 
   await detail.getByRole('checkbox', { name: checkboxName }).uncheck();
   await expect(detail.locator('.command-snippet code')).toContainText(npxSkillCommand);
   await detail.getByRole('tab', { name: 'Command' }).click();
-  await expect(detail.locator('.command-snippet code')).toHaveText(npxSkillCommand);
-  await detail.getByRole('button', { name: 'Copy command' }).click();
+  await expect(detail.locator('.command-snippet--add code')).toHaveText(npxSkillCommand);
+  await detail.locator('.command-snippet--add').getByRole('button', { name: 'Copy command' }).click();
   await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toBe(npxSkillCommand);
   expect(errors).toEqual([]);

@@ -39,6 +39,10 @@ func (*Adapter) RefinePlan(_ context.Context, in clients.PlanInput, plan *domain
 		}
 		return nil
 	}
+	// Grok Build installs and lists a raw Skill wrapper in User scope without a
+	// login, so its installation needs no authentication. Project Skills keep
+	// their observation-based qualification in project_skill_observation.go.
+	shared.QualifyRawSkillInstallationAuthentication(in.Envelope, plan)
 	shared.PromoteNativeReady(plan, in.Client.ConfigRoot, shared.OnlyNativeComponents(plan.Components))
 	if plan.Status == domain.PlanUnsupported {
 		return nil

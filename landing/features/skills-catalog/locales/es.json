@@ -68,7 +68,8 @@
         "installation": "Instalación",
         "command": "Comando",
         "prompt": "Instrucción",
-        "promptText": "Instala este Skill con Universal Agent Plugins. Revisa la fuente y los cambios antes de ejecutar:\n{command}",
+        "promptText": "Instala este Skill con Universal Agent Plugins. Primero revisa la fuente y los cambios previstos con una ejecución de prueba:\n{preview}\nSi el plan coincide con esta solicitud, aplícalo:\n{apply}\nSi la CLI informa de un hallazgo de seguridad bloqueante, detente y muéstramelo.",
+        "promptTargetNote": "En ambos comandos, sustituye {placeholder} por el ID de tu agente ({agents}).",
         "exactNameUnavailable": "No se pudo validar el nombre exacto de instalación. Revisa la fuente del editor.",
         "security": "Comprobaciones de seguridad",
         "installs": "Instalaciones",
@@ -79,7 +80,11 @@
         "documentUnavailable": "No se pudo cargar SKILL.md del editor. Puedes revisar la fuente directamente.",
         "viewPublisher": "Ver fuente del editor",
         "revision": "Revisión de origen",
-        "rawDocument": "Ver el archivo SKILL.md completo"
+        "rawDocument": "Ver el archivo SKILL.md completo",
+        "remove": "Quitar",
+        "savedName": "Buscar el nombre guardado",
+        "removeHint": "Quita la Skill guardada con este nombre. Si instalaste una Skill con el mismo nombre desde otra fuente, consulta los nombres guardados con el comando list.",
+        "removeByListedName": "La CLI elige el nombre guardado de esta Skill. Búscalo junto a esta fuente en la salida de list y ejecuta remove con ese nombre."
       },
       "scanFilterLabel": "Cobertura del análisis",
       "scanModes": {

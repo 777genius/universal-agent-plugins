@@ -91,40 +91,8 @@ func projectSkillRowsObserved(rows []any, proof *projectSkillProof) bool {
 }
 
 func projectSkillEntry(row map[string]any) bool {
-	fields := []string{"name", "description", "source", "userInvocable"}
-	if disabled, exists := row["disabled"]; exists {
-		if _, ok := disabled.(bool); !ok {
-			return false
-		}
-		fields = append(fields, "disabled")
-	}
-	// Grok reports unrelated native Skills alongside plugin Skills.
-	// Keep only the native optional inspect fields and their exact types.
-	if vendor, present := row["vendor"]; present {
-		if value, ok := vendor.(string); !ok || value == "" {
-			return false
-		}
-		fields = append(fields, "vendor")
-	}
-	if status, present := row["compatibilityStatus"]; present {
-		if status != "enabled" && status != "disabled" {
-			return false
-		}
-		fields = append(fields, "compatibilityStatus")
-	}
-	if collision, present := row["collidesWith"]; present {
-		if value, ok := collision.(string); !ok || value == "" {
-			return false
-		}
-		fields = append(fields, "collidesWith")
-	}
-	if invoked, present := row["invocableAs"]; present {
-		if value, ok := invoked.(string); !ok || value == "" {
-			return false
-		}
-		fields = append(fields, "invocableAs")
-	}
-	if !projectSkillFields(row, fields...) {
+	fields, valid := projectSkillOptionalFields(row)
+	if !valid || !projectSkillFields(row, fields...) {
 		return false
 	}
 	if _, ok := row["description"].(string); !ok {
@@ -134,10 +102,9 @@ func projectSkillEntry(row map[string]any) bool {
 		return false
 	}
 	source, ok := row["source"].(map[string]any)
-	return ok && projectSkillSource(source)
-}
-
-func projectSkillSource(source map[string]any) bool {
+	if !ok {
+		return false
+	}
 	path, located := source["path"].(string)
 	if !located || path == "" {
 		return false
@@ -156,6 +123,43 @@ func projectSkillSource(source map[string]any) bool {
 	default:
 		return false
 	}
+}
+
+func projectSkillOptionalFields(row map[string]any) ([]string, bool) {
+	fields := []string{"name", "description", "source", "userInvocable"}
+	if disabled, exists := row["disabled"]; exists {
+		if _, ok := disabled.(bool); !ok {
+			return nil, false
+		}
+		fields = append(fields, "disabled")
+	}
+	// Grok reports unrelated native Skills alongside plugin Skills.
+	// Keep only the native optional inspect fields and their exact types.
+	if vendor, present := row["vendor"]; present {
+		if value, ok := vendor.(string); !ok || value == "" {
+			return nil, false
+		}
+		fields = append(fields, "vendor")
+	}
+	if status, present := row["compatibilityStatus"]; present {
+		if status != "enabled" && status != "disabled" {
+			return nil, false
+		}
+		fields = append(fields, "compatibilityStatus")
+	}
+	if collision, present := row["collidesWith"]; present {
+		if value, ok := collision.(string); !ok || value == "" {
+			return nil, false
+		}
+		fields = append(fields, "collidesWith")
+	}
+	if invoked, present := row["invocableAs"]; present {
+		if value, ok := invoked.(string); !ok || value == "" {
+			return nil, false
+		}
+		fields = append(fields, "invocableAs")
+	}
+	return fields, true
 }
 
 func projectSkillPluginObserved(document map[string]any, proof *projectSkillProof) bool {

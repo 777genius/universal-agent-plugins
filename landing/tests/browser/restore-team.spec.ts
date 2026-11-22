@@ -5,10 +5,10 @@ import { hydrated, navigate, offline, projections, registryFixture } from './i18
 test.describe.configure({ mode: 'parallel' });
 
 const commands = {
-  project: ['npx -y universal-agent-plugins install marketing-kit --scope project', 'npx -y universal-agent-plugins install --scope project'],
-  global: ['npx -y universal-agent-plugins install marketing-kit', 'npx -y universal-agent-plugins deps import --install'],
+  project: ['npx -y universal-agent-plugins@latest install marketing-kit --scope project', 'npx -y universal-agent-plugins@latest install --scope project'],
+  global: ['npx -y universal-agent-plugins@latest install marketing-kit', 'npx -y universal-agent-plugins@latest deps import --install'],
 } as const;
-const exportCommand = 'npx -y universal-agent-plugins deps export';
+const exportCommand = 'npx -y universal-agent-plugins@latest deps export';
 const manifest = `schema_version = 1
 
 [dependencies]

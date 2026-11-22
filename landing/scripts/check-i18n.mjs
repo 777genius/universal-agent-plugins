@@ -131,6 +131,7 @@ const reviewedCaptions = {
     // French words are identical to English at these exact UI captions.
     'registryUi.skills.detail.installation': 'Installation',
     'registryUi.skills.detail.source': 'Source',
+    'shell.sdk.apps.kind': 'Plugin',
   },
   hi: { 'registryUi.components.mcp': 'mcp' },
   pt: {
@@ -142,6 +143,7 @@ const reviewedCaptions = {
     'registryUi.detail.plugins': 'Plugins',
     'registryUi.community.plugins': 'Plugins',
     'registryUi.components.mcp': 'mcp',
+    'shell.sdk.apps.kind': 'Plugin',
   },
   ru: { 'registryUi.components.mcp': 'mcp' },
   zh: { 'registryUi.components.mcp': 'mcp' },

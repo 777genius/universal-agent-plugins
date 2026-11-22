@@ -11,6 +11,36 @@ localeDisposition: "current-translation"
 
 # Матрица проверок клиентов UAP
 
+## Поддерживаемые агенты {#supported-agents}
+
+UAP устанавливает или подготавливает пакеты для этих агентов. Передайте значение
+`--target`, чтобы выбрать агентов явно, или не указывайте `--target` и выберите
+из агентов, найденных на компьютере.
+
+| Агент | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop), `chatgptweb` (Web) |
+
+Поддержка пользовательской и проектной областей, способ настройки и шаги после
+установки различаются у разных агентов; см. [таблицу поддержки агентов](https://universal-agent-plugins.com/ru/#agent-support).
+Поддержка агента не означает, что в нём работает каждый пакет, компонент,
+версия или область установки.
+
 ## Текущий выпуск и область результатов
 
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest),

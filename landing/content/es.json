@@ -1,7 +1,7 @@
 {
   "hero": {
     "title": "Universal Agent Plugins",
-    "subtitle": "Instala, actualiza, repara y elimina Agent Plugins 1.0 en tus agentes de IA con un solo comando."
+    "subtitle": "Instala, actualiza, repara y elimina Agent Plugins 1.0 / Agent Skills en tus agentes de IA con un solo comando."
   },
   "features": [
     {
@@ -985,7 +985,7 @@
     {
       "id": "fastestStart",
       "question": "¿Cuál es la forma más rápida de empezar?",
-      "answer": "Instala la CLI nativa de Go y ejecuta <code>agentplugins add context7 --target codex,cursor</code>. Elige uno o varios agentes y sigue cualquier paso de activación que muestre el cliente."
+      "answer": "Instala la CLI nativa de Go y ejecuta <code>agentplugins add context7 --target \"codex,cursor\"</code>. Elige uno o varios agentes y sigue cualquier paso de activación que muestre el cliente."
     },
     {
       "id": "whichPathFirst",
@@ -1014,8 +1014,8 @@
       "description": "La opción más rápida si ya tiene Node.js 22+: ejecute el comando del plugin inmediatamente.",
       "href": "https://www.npmjs.com/package/universal-agent-plugins",
       "note": "Sin instalación permanente: npx descarga la CLI verificada y ejecuta el comando en un solo paso.",
-      "command": "npx -y universal-agent-plugins version",
-      "invocation": "npx -y universal-agent-plugins"
+      "command": "npx -y universal-agent-plugins@latest version",
+      "invocation": "npx -y universal-agent-plugins@latest"
     },
     {
       "id": "script",
@@ -1056,25 +1056,25 @@
     {
       "id": "install-cli",
       "title": "Ejecute la CLI",
-      "command": "npx -y universal-agent-plugins version",
+      "command": "npx -y universal-agent-plugins@latest version",
       "note": "Use npx para empezar rápido o instale el binario para el uso diario."
     },
     {
       "id": "try-plugin",
       "title": "Instale un plugin real",
-      "command": "universal-agent-plugins add context7 --target codex,cursor",
+      "command": "universal-agent-plugins add context7 --target \"codex,cursor\"",
       "note": "El mismo comando acepta un destino o una lista separada por comas."
     },
     {
       "id": "build-plugin",
       "title": "Manténgalo actualizado",
-      "command": "universal-agent-plugins update context7 --target codex,cursor\nuniversal-agent-plugins repair context7 --target codex,cursor",
+      "command": "universal-agent-plugins update context7 --target \"codex,cursor\"\nuniversal-agent-plugins repair context7 --target \"codex,cursor\"",
       "note": "Use update para una nueva versión y repair si el cliente se desvía."
     },
     {
       "id": "validate",
       "title": "Elimínelo limpiamente",
-      "command": "universal-agent-plugins remove context7 --target codex,cursor",
+      "command": "universal-agent-plugins remove context7 --target \"codex,cursor\"",
       "note": "La CLI elimina las entradas gestionadas y conserva los datos del plugin por defecto."
     }
   ],

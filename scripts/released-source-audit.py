@@ -25,8 +25,8 @@ from datetime import datetime, timezone
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-RELEASE_TAG = "agentplugins-v0.1.108"
-RELEASE_COMMIT = "8c3cfa28e332c533b0cc0845739c0275730a4285"
+RELEASE_TAG = "agentplugins-v0.1.116"
+RELEASE_COMMIT = "4858d973afcf6cf31b49bba98bdf06482dce6226"
 REPOSITORY = "777genius/universal-agent-plugins"
 LEDGER = "617ebdec67a58af3d265cae49e90c43497299db0"
 ORIGIN = f"https://raw.githubusercontent.com/777genius/universal-agent-plugins-registry/{LEDGER}/registry/schemas/1/"

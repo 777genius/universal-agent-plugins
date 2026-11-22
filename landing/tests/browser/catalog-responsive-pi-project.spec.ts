@@ -118,7 +118,7 @@ for (const width of [1440, 390]) {
     await expect(pi).toContainText(wording('en')('registryUi.install.pinnedSourceShort'));
     await pi.click();
     const direct = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/sentry';
-    const add = `npx -y universal-agent-plugins@0.1.110 add ${direct} --target pi --scope project`;
+    const add = `npx -y universal-agent-plugins@0.1.115 add ${direct} --target pi --scope project`;
     await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add code')).toHaveText(add);
     const addSnippet = page.getByRole('dialog').locator('.install-dialog__footer .command-snippet--add');
     expect(await addSnippet.locator('code').textContent()).toBe(add);
@@ -130,7 +130,7 @@ for (const width of [1440, 390]) {
     // Explicit choices stay selected; the shared Git route adds no signed Pi grant.
     const dialog = page.getByRole('dialog');
     const codex = page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ });
-    const commonAdd = `npx -y universal-agent-plugins@0.1.110 add ${direct} --target codex,pi --scope project`;
+    const commonAdd = `npx -y universal-agent-plugins@0.1.115 add ${direct} --target "codex,pi" --scope project`;
     await codex.click();
     await expect(codex).toBeChecked();
     await expect(pi).toBeChecked();
@@ -141,7 +141,7 @@ for (const width of [1440, 390]) {
     await expect(pi).not.toBeChecked();
     await expect(codex).toBeChecked();
     await expect(addSnippet.locator('code')).toHaveText(
-      'npx -y universal-agent-plugins add sentry --target codex --scope project');
+      'npx -y universal-agent-plugins@latest add sentry --target codex --scope project');
 
     await pi.click();
     await expect(pi).toBeChecked();
@@ -174,7 +174,7 @@ for (const width of [1440, 390]) {
     });
     await detail.getByRole('button', { name: 'This computer', exact: true }).click();
     await expect(detail.locator('.command-snippet--add code')).toHaveText(
-      'npx -y universal-agent-plugins add sentry');
+      'npx -y universal-agent-plugins@latest add sentry');
     await expect(detail.locator('.app-multiselect__auto')).toContainText(
       wording('en')('registryUi.install.allInstalledAgents'),
     );

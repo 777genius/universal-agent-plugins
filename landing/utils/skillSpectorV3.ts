@@ -726,7 +726,7 @@ export function decodeSkillSpectorShardV3(
       if (
         !Array.isArray(r.recovery_witnesses) ||
         r.recovery_witnesses.length < 1 ||
-        r.recovery_witnesses.length > 2 ||
+        r.recovery_witnesses.length > 3 ||
         !['current', 'historical'].includes(r.freshness) ||
         r.status !== 'partial' ||
         !r.findings_truncated ||

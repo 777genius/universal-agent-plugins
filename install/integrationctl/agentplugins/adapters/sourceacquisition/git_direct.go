@@ -56,7 +56,7 @@ func (acquirer Acquirer) AcquireGit(ctx context.Context, source sourcespec.Git, 
 		if errors.As(err, &selected) {
 			return domain.PackageSnapshot{}, fmt.Errorf("acquire direct Git source: package path %q: %s", packagePath, selected.reason)
 		}
-		return domain.PackageSnapshot{}, fmt.Errorf("acquire direct Git source: immutable fetch or package snapshot failed; verify native Git credentials and repository access")
+		return domain.PackageSnapshot{}, gitFailure(err, "acquire direct Git source: immutable fetch or package snapshot failed; verify native Git credentials and repository access")
 	}
 	if expectedTreeDigest != "" && snapshot.TreeDigest != expectedTreeDigest {
 		_ = packagedigest.Remove(snapshot)
@@ -134,6 +134,11 @@ func (workspace directGitWorkspace) remote(ctx context.Context, args ...string) 
 	return workspace.run(ctx, true, append([]string{"-C", workspace.repository}, args...)...)
 }
 
+// lsRemote runs one stateless remote ls-remote read with the connect retry.
+func (workspace directGitWorkspace) lsRemote(ctx context.Context, args ...string) ([]byte, error) {
+	return withGitConnectRetry(ctx, func(ctx context.Context) ([]byte, error) { return workspace.remote(ctx, args...) })
+}
+
 func (acquirer Acquirer) ResolveGit(ctx context.Context, source sourcespec.Git, selector string, exactRef bool) (RefResolution, error) {
 	endpoint, repository, err := acquirer.gitEndpoint(source)
 	if err != nil {
@@ -152,9 +157,9 @@ func (acquirer Acquirer) ResolveGit(ctx context.Context, source sourcespec.Git, 
 	defer func() { _ = os.RemoveAll(workspace.root) }()
 	endpoint = acquirer.directEndpoint(endpoint, repository)
 	if !exactRef && (selector == "default" || selector == "HEAD") {
-		output, err := workspace.remote(ctx, "ls-remote", "--symref", "--", endpoint, "HEAD")
+		output, err := workspace.lsRemote(ctx, "ls-remote", "--symref", "--", endpoint, "HEAD")
 		if err != nil {
-			return RefResolution{}, directRefError(ctx)
+			return RefResolution{}, directRefError(ctx, err)
 		}
 		branch, commit, err := parseDefaultBranch(output)
 		if err != nil {
@@ -175,9 +180,9 @@ func (acquirer Acquirer) ResolveGit(ctx context.Context, source sourcespec.Git, 
 			return RefResolution{}, errors.New("invalid exact Git ref")
 		}
 	}
-	output, err := workspace.remote(ctx, append([]string{"ls-remote", "--refs", "--", endpoint}, patterns...)...)
+	output, err := workspace.lsRemote(ctx, append([]string{"ls-remote", "--refs", "--", endpoint}, patterns...)...)
 	if err != nil {
-		return RefResolution{}, directRefError(ctx)
+		return RefResolution{}, directRefError(ctx, err)
 	}
 	match, err := selectExactGitRef(output, patterns, selector, resolvedRef)
 	if err != nil {
@@ -194,8 +199,9 @@ func (workspace directGitWorkspace) commit(ctx context.Context, endpoint string,
 	if strings.HasPrefix(ref.name, "refs/heads/") {
 		return ref.object, nil
 	}
+	// Not retried: this fetch reuses the ref workspace instead of a fresh one.
 	if _, err := workspace.remote(ctx, "fetch", "--quiet", "--depth=1", "--no-tags", "--no-recurse-submodules", "--", endpoint, ref.object); err != nil {
-		return "", directRefError(ctx)
+		return "", directRefError(ctx, err)
 	}
 	output, err := workspace.run(ctx, false, "-C", workspace.repository, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
 	if err != nil || !sourcespec.ValidCommit(strings.TrimSpace(string(output))) {
@@ -223,9 +229,9 @@ func (acquirer Acquirer) resolveBrowserGit(ctx context.Context, source sourcespe
 	}
 	defer func() { _ = os.RemoveAll(workspace.root) }()
 	transportEndpoint := acquirer.directEndpoint(endpoint, repository)
-	output, err := workspace.remote(ctx, "ls-remote", "--refs", "--", transportEndpoint, "refs/heads/*", "refs/tags/*")
+	output, err := workspace.lsRemote(ctx, "ls-remote", "--refs", "--", transportEndpoint, "refs/heads/*", "refs/tags/*")
 	if err != nil {
-		return ResolvedGit{}, directRefError(ctx)
+		return ResolvedGit{}, directRefError(ctx, err)
 	}
 	type candidate struct {
 		ref  remoteRef
@@ -257,11 +263,11 @@ func (acquirer Acquirer) resolveBrowserGit(ctx context.Context, source sourcespe
 	return ResolvedGit{Git: source, Resolution: RefResolution{RequestedRef: selected.ref.name, ResolvedRef: selected.ref.name, Commit: commit}}, nil
 }
 
-func directRefError(ctx context.Context) error {
+func directRefError(ctx context.Context, cause error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	return errors.New("resolve direct Git ref failed; verify native Git credentials and repository access")
+	return gitFailure(cause, "resolve direct Git ref failed; verify native Git credentials and repository access")
 }
 
 // URLForRepo is an explicit dependency-injection seam used by local Git fixtures;

@@ -51,7 +51,7 @@ const allClientLandingPages: ClientLandingPage[] = [
     name: 'Cursor',
     icon: 'cursor.svg',
     note: 'Native Agent Plugin package',
-    status: 'Supported',
+    status: 'Prepared by CLI',
     intro:
       'Install Agent Plugins 1.0 into Cursor projects without translating each plugin by hand. The CLI plans the native package before changing files.',
     delivery:
@@ -69,7 +69,7 @@ const allClientLandingPages: ClientLandingPage[] = [
     intro:
       'Install Agent Plugins 1.0 through GitHub Copilot CLI using its native plugin workflow and the same lifecycle command used for other agents.',
     delivery:
-      'The CLI uses the supported Copilot plugin layout and verifies the resulting install state.',
+      'The CLI uses the supported Copilot plugin layout and verifies the resulting install state. In project scope with stable Copilot CLI 1.0.81 or later, a compatible package is registered as a native project plugin.',
     activation: 'Restart or reload the client only when the native Copilot workflow asks for it.',
   },
   {
@@ -162,13 +162,13 @@ const allClientLandingPages: ClientLandingPage[] = [
     slug: 'windsurf',
     name: 'Windsurf',
     icon: 'windsurf.svg',
-    note: 'Prepared package; manual activation required',
-    status: 'Prepared by CLI',
-    intro:
-      'Prepare Agent Plugins 1.0 for Windsurf with one CLI command, then finish the client-specific activation step explicitly.',
+    note: 'Managed skills and MCP configuration',
+    status: 'Supported',
+    intro: 'Install Agent Plugins 1.0 Skills and MCP servers for Windsurf / Devin with one CLI command.',
     delivery:
-      'The CLI writes owned Skills and MCP configuration for Devin User versions 3000.11.205 or 3000.12.57 and Project version 3000.11.205. Preparation does not prove discovery, trust, sign-in, or live execution.',
-    activation: 'Follow the exact manual activation path printed after preparation.',
+      'The CLI writes owned Skills and MCP configuration for Devin versions 3000.11.205 or 3000.12.57 in User and Project scope. Preparation does not prove discovery, trust, sign-in, or live execution.',
+    activation:
+      'Open or restart Devin in the selected project and review access. UAP checks installed Skills with the Devin CLI; verify MCP servers in Devin.',
   },
   {
     id: 'grok',

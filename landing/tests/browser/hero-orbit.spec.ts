@@ -77,10 +77,10 @@ test('CSS background depth animates on the right and pauses offscreen or hidden'
   expect(await field.evaluate((node) => getComputedStyle(node).pointerEvents)).toBe('none');
   const copy = (await page.locator('.hero__copy').boundingBox())!;
   const bounds = (await field.boundingBox())!;
-  const installation = (await page.locator('.hero__window').boundingBox())!;
+  const visual = (await page.locator('.hero__visual').boundingBox())!;
   expect(bounds.x).toBeGreaterThan(copy.x + copy.width);
-  expect(bounds.y).toBeCloseTo(installation.y, 1);
-  expect(bounds.height).toBeCloseTo(installation.height, 1);
+  expect(bounds.y).toBeCloseTo(visual.y, 1);
+  expect(bounds.height).toBeCloseTo(visual.height, 1);
   expect(await field.evaluate((node) => getComputedStyle(node).position)).toBe('fixed');
   const sceneAnimations = await field.evaluate((node) => node.getAnimations({ subtree: true })
     .map((animation) => (animation as CSSAnimation).animationName));
@@ -172,6 +172,12 @@ test('larger breathing background never changes layout or blocks the foreground'
   for (const width of [1440, 1280, 1024, 800, 390, 280]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    if (width <= 980) {
+      // Stacked hero: a ring around the video would run behind the copy and buttons.
+      await expect(field).toBeHidden();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      continue;
+    }
     // Read one viewport atomically, retaining every geometry check while avoiding
     // repeated protocol/snapshot work between these read-only measurements.
     const geometry = await field.evaluate((node: HTMLElement) => {
@@ -194,11 +200,11 @@ test('larger breathing background never changes layout or blocks the foreground'
       return { ...result, hidden };
     });
     const { windowBefore, heroBefore } = geometry;
-    expect(geometry.planeLeft).toBeCloseTo(geometry.fieldWidth * 0.62 - 100, 1);
-    expect(geometry.planeWidth).toBeCloseTo(Math.min(width <= 720 ? 492 : 720, geometry.fieldWidth * 1.5), 1);
-    expect(geometry.nodeWidth).toBe(width <= 720 ? 30 : 38);
-    expect(geometry.hubWidth).toBe(width <= 720 ? 96 : 116);
-    expect(geometry.hubImageWidth).toBe(width <= 720 ? 64 : 76);
+    expect(geometry.planeLeft).toBeCloseTo(geometry.fieldWidth * 0.58, 1);
+    expect(geometry.planeWidth).toBeCloseTo(Math.min(720, geometry.fieldWidth * 1.5), 1);
+    expect(geometry.nodeWidth).toBe(38);
+    expect(geometry.hubWidth).toBe(116);
+    expect(geometry.hubImageWidth).toBe(76);
     expect(geometry.hidden.window).toEqual(windowBefore);
     expect(geometry.hidden.hero).toEqual(heroBefore);
     const samples = await field.evaluate(async (node, times) => {
@@ -326,7 +332,7 @@ test('installation works with WebGL forbidden and the orbit has no canvas or opt
     .click();
   await page.getByRole('checkbox', { name: /^Cursor / }).click();
   await page.keyboard.press('Escape');
-  await expect(page.locator('.hero__demo .command-snippet')).toContainText('--target cursor');
+  await expect(page.locator('.hero-quick-start .command-snippet')).toContainText('--target cursor');
   await page.getByRole('button', { name: 'Light', exact: true }).click();
   await expect(page.locator('.v-application')).toHaveClass(/v-theme--light/);
   await expect(field.locator('[data-client-id]')).toHaveCount(uniqueLogos.length);
@@ -337,20 +343,20 @@ test('installation works with WebGL forbidden and the orbit has no canvas or opt
   await cursor.click();
   await expect(cursor).not.toBeChecked();
   await expect(page.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.locator('.hero__demo .command-snippet')).not.toContainText('--target');
+  await expect(page.locator('.hero-quick-start .command-snippet')).not.toContainText('--target');
   const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT Web / });
   if (guidedSetupEligible) {
     await expect(chatgpt).toBeEnabled();
     await expect(chatgpt.locator('small')).toHaveText('Guided web setup');
     await chatgpt.click();
     await expect(chatgpt).toBeChecked();
-    await expect(page.locator('.hero__demo .command-snippet')).toContainText(
+    await expect(page.locator('.hero-quick-start .command-snippet')).toContainText(
       'add context7 --target chatgptweb',
     );
   } else {
     await expect(chatgpt).toBeDisabled();
     await expect(chatgpt).toContainText('No verified ChatGPT Web app binding for this plugin. Connect Web apps inside ChatGPT.');
-    await expect(page.locator('.hero__demo .command-snippet')).not.toContainText(
+    await expect(page.locator('.hero-quick-start .command-snippet')).not.toContainText(
       '--target chatgptweb',
     );
   }
@@ -395,7 +401,7 @@ test('guided ChatGPT preparation remains available for an eligible deterministic
   await expect(chatgpt.locator('small')).toHaveText('Guided web setup');
   await chatgpt.click();
   await expect(chatgpt).toBeChecked();
-  await expect(page.locator('.hero__demo .command-snippet')).toContainText(
+  await expect(page.locator('.hero-quick-start .command-snippet')).toContainText(
     'add context7 --target chatgptweb',
   );
   // Community metadata cannot grant remote setup authority by imitating the
@@ -407,7 +413,7 @@ test('guided ChatGPT preparation remains available for an eligible deterministic
     .getByRole('button', { name: 'Choose target agents: Choose agents in terminal', exact: true })
     .click();
   await expect(page.getByRole('checkbox', { name: /^ChatGPT Web / })).toBeDisabled();
-  await expect(page.locator('.hero__demo .command-snippet')).not.toContainText(
+  await expect(page.locator('.hero-quick-start .command-snippet')).not.toContainText(
     '--target chatgptweb',
   );
 });
@@ -431,7 +437,7 @@ test('orbit follows scrolling with a small upward and leftward drift, then retur
   // Resize while scrolled: the anchor must still be measured in document coordinates.
   await page.mouse.wheel(0, 600);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(600);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 1024, height: 844 });
   const anchor = page.locator('.hero-agent-field-anchor');
   await expect.poll(async () => {
     const origin = (await anchor.boundingBox())!;
@@ -466,8 +472,8 @@ test('orbit progressively defocuses near the catalog and sharpens again at the h
   await page.mouse.wheel(0, -await page.evaluate(() => scrollY));
   await expect.poll(() => page.evaluate(() => scrollY)).toBe(0);
   await expect(field).toHaveCSS('filter', 'blur(0px)');
-  // Mobile layout has a different catalog offset; resizing must refresh it.
-  await page.setViewportSize({ width: 390, height: 844 });
+  // A narrower layout has a different catalog offset; resizing must refresh it.
+  await page.setViewportSize({ width: 1024, height: 844 });
   await page.locator('#plugins').scrollIntoViewIfNeeded();
   await expect(field).toHaveCSS('filter', 'blur(12px)');
 });
