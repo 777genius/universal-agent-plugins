@@ -170,8 +170,8 @@ importers:
         specifier: 11.4.14
         version: 11.4.14(vue@3.5.45(@typescript/typescript6@6.0.2))
       vue-router:
-        specifier: ^4.6.4
-        version: 4.6.4(vue@3.5.45(@typescript/typescript6@6.0.2))
+        specifier: 5.4.0
+        version: 5.4.0(@vue/compiler-sfc@3.5.45)(esbuild@0.28.2)(pinia@3.0.4(@typescript/typescript6@6.0.2)(vue@3.5.45(@typescript/typescript6@6.0.2)))(rolldown@1.2.19)(rollup@4.68.4)(vite@8.3.8(@types/node@22.20.1)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.104.0)(terser@5.51.2)(yaml@2.9.0))(vue@3.5.45(@typescript/typescript6@6.0.2))
       vuetify:
         specifier: ^3.12.11
         version: 3.13.3(@typescript/typescript6@6.0.2)(vite-plugin-vuetify@2.1.3)(vue@3.5.45(@typescript/typescript6@6.0.2))
@@ -5260,11 +5260,6 @@ packages:
     engines: {node: '>= 22'}
     peerDependencies:
       vue: ^3.0.0
-
-  vue-router@4.6.4:
-    resolution: {integrity: sha512-Hz9q5sa33Yhduglwz6g9skT8OBPii+4bFn88w6J+J4MfEo4KRRpmiNG/hHHkdbRFlLBOqxN8y8gf2Fb0MTUgVg==}
-    peerDependencies:
-      vue: ^3.5.0
 
   vue-router@5.4.0:
     resolution: {integrity: sha512-pFvcYcxinDHjZUlf7AzFBrT8r8Xqvv4uMHoJnjc+EqPawXQvHTkF8S4tfSmQLpriVHUGfkaKlI7Et0KRjTMTdw==}
@@ -10842,11 +10837,6 @@ snapshots:
       '@intlify/core-base': 11.4.14
       '@intlify/devtools-types': 11.4.14
       '@intlify/shared': 11.4.14
-      '@vue/devtools-api': 6.6.4
-      vue: 3.5.45(@typescript/typescript6@6.0.2)
-
-  vue-router@4.6.4(vue@3.5.45(@typescript/typescript6@6.0.2)):
-    dependencies:
       '@vue/devtools-api': 6.6.4
       vue: 3.5.45(@typescript/typescript6@6.0.2)
 
