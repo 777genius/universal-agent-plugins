@@ -1,4 +1,4 @@
-name: Devin Project 3000.12.57 automatic install E2E
+name: Devin User and Project 3000.12.57 installation E2E
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled]
@@ -6,6 +6,8 @@ on:
       - '.github/workflows/devin-project-auto-install.yml'
       - 'scripts/devin_project_auto_install_e2e.py'
       - 'scripts/test_devin_project_auto_install_e2e.py'
+      - 'scripts/devin_user_native_install_e2e.py'
+      - 'scripts/test_devin_user_native_install_e2e.py'
       - 'scripts/native_client_research.py'
       - 'install/integrationctl/agentplugins/clients/windsurf/**'
       - 'install/integrationctl/agentplugins/clients/shared/owned_skill_metadata.go'
@@ -19,7 +21,7 @@ permissions:
   contents: read
 jobs:
   native:
-    name: Pinned Devin Project Skills and MCP add-repair-remove
+    name: Pinned Devin User and Project Skills and MCP add-repair-remove
     if: ${{ (github.event.action != 'labeled' || github.event.label.name == 'ci:full') && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     concurrency:
       group: devin-project-v57-${{ github.event.pull_request.number }}
@@ -38,7 +40,13 @@ jobs:
       - name: Run Devin profile and lifecycle adapter tests
         run: go test -count=1 -p=2 -timeout=5m ./install/integrationctl/agentplugins/clients/windsurf
       - name: Verify native E2E closed contracts
-        run: python3 -m unittest discover -s scripts -p 'test_devin_project_auto_install_e2e.py'
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_devin_project_auto_install_e2e.py'
+          python3 -m unittest discover -s scripts -p 'test_devin_user_native_install_e2e.py'
+      - name: Verify separate User CLI-only root against pinned genuine Devin
+        env:
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/devin_user_native_install_e2e.py
       - name: Verify public UAP install against pinned genuine Devin
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
@@ -48,6 +56,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: devin-project-v57-native-e2e
-          path: ${{ runner.temp }}/devin-project-v57-e2e.json
+          path: |
+            ${{ runner.temp }}/devin-project-v57-e2e.json
+            ${{ runner.temp }}/devin-user-v57-e2e.json
           if-no-files-found: warn
           retention-days: 14
