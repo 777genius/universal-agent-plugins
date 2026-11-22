@@ -74,46 +74,51 @@ func TestDependencyHumanResultsUsePairedIdentityAndKeepGuidance(t *testing.T) {
 		return installer.Result{InstallationID: id, Operation: installer.OpInstall, Outcome: installer.OutcomeCompleted, Client: installer.ClientResult{ClientID: client}}
 	}
 	a, b, c := result("id-alpha", "claude"), result("id-beta", "claude"), result("id-alpha", "codex")
+	b.Outcome, b.Reason = installer.OutcomeIncomplete, "client apply failed"
+	applyErr := fmt.Errorf("beta client apply failed")
 	a.ManualActions = []string{"Claude has not connected this server; inspect its existing policy"}
 	a.NextActions = []installer.NextAction{{Kind: "authenticate", Reason: "review existing authentication"}}
 	items := outcomeAgentItems([]environment.BindingOutcome{
 		{Binding: dependencyAction{Alias: "not-attempted", ClientID: "claude"}, Status: environment.BindingNotAttempted},
 		{Binding: dependencyAction{Alias: "alpha", ClientID: "claude"}, Result: &a},
-		{Binding: dependencyAction{Alias: "beta", ClientID: "claude"}, Result: &b},
+		{Binding: dependencyAction{Alias: "beta", ClientID: "claude"}, Status: environment.BindingFailed, Result: &b, Err: applyErr},
 		{Binding: dependencyAction{Alias: "alpha", ClientID: "codex"}, Result: &c},
 	})
 	// Reorder actual results: alias lookup must use paired identity, not position.
 	results := []installer.Result{b, a, c}
 	cmd, out, _ := retryTestCommand(t)
 	opts := &options{format: "human", installResult: &installOutcome{Items: items}}
-	if err := renderDependencyResults(cmd, opts, nil, results, nil); err != nil {
+	if err := renderDependencyResults(cmd, opts, nil, results, applyErr); err != nil {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, want := range []string{"Install beta for Claude Code: completed", "Install alpha for Claude Code: completed", "Install alpha for OpenAI Codex: completed", "Manual: " + a.ManualActions[0], "Next: authenticate review existing authentication"} {
+	for _, want := range []string{"Install beta for Claude Code: incomplete client apply failed", "Install alpha for Claude Code: completed", "Install alpha for OpenAI Codex: completed", "Installation: id-beta (beta)\n", "Installation: id-alpha (alpha)\n", "Manual: " + a.ManualActions[0], "Next: authenticate review existing authentication"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing paired result/guidance %q: %q", want, text)
 		}
 	}
-	if strings.Count(text, "Installation: id-alpha") != 1 || strings.Count(text, "Installation: id-beta") != 1 || strings.Contains(text, "not-attempted") || strings.Contains(text, "Ready") {
+	if strings.Count(text, "id-alpha") != 1 || strings.Count(text, "id-beta") != 1 || strings.Contains(text, "not-attempted") || strings.Contains(text, "Ready") {
 		t.Fatalf("identity references or readiness changed: %q", text)
 	}
 	for _, metadata := range []*installOutcome{nil, {Items: append(items, agentItem{Alias: "ambiguous", ClientID: "claude", installationID: "id-alpha"})}} {
 		if alias := dependencyResultAlias(metadata, dependencyResultDTO{InstallationID: "id-alpha", ClientID: "claude"}); alias != "id-alpha" {
 			t.Fatalf("missing/ambiguous identity guessed a package: %q", alias)
 		}
+		if suffix := dependencyInstallationAliasSuffix(metadata, []dependencyResultDTO{{InstallationID: "id-alpha", ClientID: "claude"}}, "id-alpha"); suffix != "" {
+			t.Fatalf("missing/ambiguous identity invented a footer label: %q", suffix)
+		}
 	}
 
 	// The same results serialize identically with and without human metadata.
 	opts.format = "json"
 	out.Reset()
-	if err := renderDependencyResults(cmd, opts, nil, results, nil); err != nil {
+	if err := renderDependencyResults(cmd, opts, nil, results, applyErr); err != nil {
 		t.Fatal(err)
 	}
 	withMetadata := bytes.Clone(out.Bytes())
 	opts.installResult = nil
 	out.Reset()
-	if err := renderDependencyResults(cmd, opts, nil, results, nil); err != nil {
+	if err := renderDependencyResults(cmd, opts, nil, results, applyErr); err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(withMetadata, out.Bytes()) {

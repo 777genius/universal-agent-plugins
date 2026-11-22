@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 import tempfile
@@ -300,6 +301,112 @@ class DevinUserNativeContracts(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 verify()
 
+
+    def test_owned_native_json_refuses_fifo_and_nonblocking_swap(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            config = root / "mcp_config.json"
+            body = b'{"mcpServers":{"foreign-user":{"disabled":true}}}'
+            config.write_bytes(body)
+            self.assertEqual(subject.read_json(config, root), json.loads(body))
+            with patch.object(subject, "MAX_FILE", 4), self.assertRaises(RuntimeError):
+                subject.read_json(config, root)
+            config.unlink()
+            os.mkfifo(config)
+            with self.assertRaises(RuntimeError):
+                subject.read_json(config, root)
+            config.unlink()
+            config.write_bytes(body)
+            real_open = os.open
+            def swapped(path, flags):
+                self.assertTrue(flags & os.O_NONBLOCK)
+                self.assertTrue(flags & os.O_NOFOLLOW)
+                config.unlink()
+                os.mkfifo(config)
+                return real_open(path, flags)
+            with patch.object(subject.os, "open", side_effect=swapped), self.assertRaises(RuntimeError):
+                subject.read_json(config, root)
+
+    def test_complete_project_context_detects_extra_names_but_accepts_user_only_delivery(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            native = root / "config/devin"
+            native.mkdir(parents=True)
+            (native / "config.json").write_text("{}")
+            projects = [root / "a", root / "b"]
+            for base in [native, *(project / ".devin" for project in projects)]:
+                skill = base / "skills" / ("foreign-0" if base == native else "foreign-project")
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_bytes(b"foreign bytes")
+                if base != native:
+                    (base / "mcp_config.json").write_text('{"mcpServers":{}}')
+            paths = subject.protected_context_paths(native, projects)
+            before = subject.snapshot(paths, root)
+            user_skill = native / "skills" / subject.NAME
+            user_skill.mkdir()
+            (user_skill / "SKILL.md").write_bytes(b"correct User-only delivery")
+            self.assertEqual(subject.snapshot(paths, root), before)
+            extra = projects[0] / ".devin/skills/other-name"
+            extra.mkdir()
+            (extra / "SKILL.md").write_bytes(b"unexpected Project write")
+            self.assertNotEqual(subject.snapshot(paths, root), before)
+
+    def test_repair_requires_original_data_directory_contents_and_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            data = root / "owned-data"
+            data.mkdir()
+            sentinel = data / "fixture-user-data.txt"
+            sentinel.write_bytes(subject.DATA_SENTINEL)
+            receipt = {"data_receipt_id": "owned", "ownership_digest": "sha256:" + "a" * 64}
+            before = subject.snapshot([data], root)
+            subject.assert_repair_data(data, root, before, receipt, dict(receipt))
+            with self.assertRaises(RuntimeError):
+                subject.assert_repair_data(data, root, before, receipt,
+                    dict(receipt, ownership_digest="sha256:" + "b" * 64))
+            sentinel.write_bytes(b"lost original contents")
+            with self.assertRaises(RuntimeError):
+                subject.assert_repair_data(data, root, before, receipt, receipt)
+            data.rename(root / "original-data")
+            data.mkdir()
+            sentinel.write_bytes(subject.DATA_SENTINEL)
+            with self.assertRaises(RuntimeError):
+                subject.assert_repair_data(data, root, before, receipt, receipt)
+
+    def test_snapshot_entry_bound_stops_lazy_enumeration_and_closes_iterator(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            directory = root / "many"
+            directory.mkdir()
+            for name in ["a", "b"]:
+                (directory / name).write_bytes(b"ordinary")
+            real_scandir = os.scandir
+            opened = []
+            class TrackedEntries:
+                def __init__(self, path):
+                    self.entries = real_scandir(path)
+                    self.yielded = 0
+                    self.closed = False
+                    opened.append(self)
+                def __enter__(self):
+                    return self
+                def __exit__(self, *args):
+                    self.closed = True
+                    self.entries.close()
+                def __iter__(self):
+                    return self
+                def __next__(self):
+                    self.yielded += 1
+                    if self.yielded > 1:
+                        raise AssertionError("enumerated beyond first excess entry")
+                    return next(self.entries)
+            with patch.object(subject, "MAX_ENTRIES", 1), patch.object(subject.os, "scandir", TrackedEntries):
+                with self.assertRaises(RuntimeError):
+                    subject.snapshot([directory], root)
+            self.assertEqual(len(opened), 1)
+            self.assertEqual(opened[0].yielded, 1)
+            self.assertTrue(opened[0].closed)
+
     def test_project_success_and_cleanup_failure_cannot_qualify_user(self):
         self.assertFalse(subject.qualified({"installation_discovery_e2e": True,
                          "raw_project_skills_native_ready": True, "cleanup_complete": True}))
@@ -319,6 +426,19 @@ class DevinUserNativeContracts(unittest.TestCase):
         self.assertIn("devin-user-v57-e2e.json", workflow)
         self.assertIn("devin-project-v57-e2e.json", workflow)
         self.assertIn("ref: \u0024{{ github.event.pull_request.head.sha }}", workflow)
+        blocks = re.split(r"(?m)^      - name: ", workflow)[1:]
+        def step(name):
+            return next(block for block in blocks if block.startswith(name + "\n"))
+        contracts = step("Verify native E2E closed contracts")
+        self.assertRegex(contracts, r"(?m)^        id: contracts$")
+        project = step("Verify public UAP install against pinned genuine Devin")
+        condition = re.search(r"(?m)^        if: (.+)$", project)
+        self.assertIsNotNone(condition)
+        self.assertEqual(condition.group(1),
+                         "\u0024{{ !cancelled() && steps.contracts.outcome == 'success' }}")
+        user = step("Verify separate User CLI-only root against pinned genuine Devin")
+        self.assertNotIn("continue-on-error:", user)
+        self.assertNotIn("continue-on-error:", project)
 
 
 if __name__ == "__main__":

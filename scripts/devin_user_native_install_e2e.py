@@ -23,6 +23,7 @@ MAX_ENTRIES = 256
 MAX_FILE = 1 << 20
 MAX_TOTAL = 4 << 20
 LAUNCHER = Path("io.github.777genius.agentplugins/managed-stdio-v1/agentplugins")
+DATA_SENTINEL = b"owned User data must survive repair\n"
 
 
 def require(value, message):
@@ -33,6 +34,26 @@ def require(value, message):
 def identity(info):
     return (info.st_dev, info.st_ino, info.st_mode, info.st_nlink, info.st_uid,
             info.st_gid, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
+def read_owned(path, anchor):
+    """Read a bounded owned regular file without following or blocking on a replacement."""
+    path, anchor = Path(path), Path(anchor)
+    require(path.is_absolute() and path.is_relative_to(anchor)
+            and path.resolve(strict=True) == path, "User file escaped or aliased")
+    before = path.lstat()
+    require(stat.S_ISREG(before.st_mode) and before.st_uid == os.getuid()
+            and before.st_nlink == 1 and before.st_size <= MAX_FILE, "User file is not bounded, regular and owned")
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), "rb") as stream:
+        require(identity(os.fstat(stream.fileno())) == identity(before), "User file replaced before read")
+        body = stream.read(MAX_FILE + 1)
+        require(identity(os.fstat(stream.fileno())) == identity(before), "User file changed while reading")
+    require(len(body) == before.st_size and identity(path.lstat()) == identity(before), "User file identity drift")
+    return body
+
+
+def read_json(path, anchor):
+    return json.loads(read_owned(path, anchor).decode("utf-8"))
 
 
 def file_digest(path):
@@ -78,8 +99,9 @@ def snapshot(paths, anchor, trusted_launcher=None):
         result[str(path)] = row
         if stat.S_ISDIR(info.st_mode):
             row.append(info.st_mtime_ns)
-            for child in sorted(path.iterdir()):
-                visit(child)
+            with os.scandir(path) as entries:
+                for entry in entries:
+                    visit(Path(entry.path))
             require(identity(path.lstat()) == identity(info), "User snapshot directory changed")
         else:
             require(info.st_nlink == 1, "aliased User snapshot file")
@@ -88,11 +110,7 @@ def snapshot(paths, anchor, trusted_launcher=None):
                 require(digest == trusted_launcher[1], "generated launcher differs from exact source CLI")
             else:
                 require(info.st_size <= MAX_FILE, "oversized ordinary User snapshot file")
-                fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-                with os.fdopen(fd, "rb") as stream:
-                    require(identity(os.fstat(stream.fileno())) == identity(info), "User snapshot file replaced")
-                    body = stream.read(MAX_FILE + 1)
-                    require(identity(os.fstat(stream.fileno())) == identity(info), "User snapshot file changed")
+                body = read_owned(path, anchor)
                 total += len(body)
                 require(len(body) == info.st_size and total <= MAX_TOTAL, "User snapshot byte bound")
                 digest = pinned.digest(body)
@@ -101,6 +119,17 @@ def snapshot(paths, anchor, trusted_launcher=None):
     for path in paths:
         visit(Path(path))
     return result
+
+
+def protected_context_paths(native, projects):
+    return [native / "config.json", native / "skills" / "foreign-0",
+            *(project / ".devin" for project in projects)]
+
+
+def assert_repair_data(data, anchor, before, receipt_before, receipt_after):
+    require(snapshot([data], anchor) == before and receipt_before == receipt_after
+            and read_owned(data / "fixture-user-data.txt", anchor) == DATA_SENTINEL,
+            "User repair changed original owned data directory, contents or receipt")
 
 
 def no_cascade(home):
@@ -216,8 +245,8 @@ def verify_projection(managed, package, native, data, service, port, cli_hash, a
                       str(LAUNCHER), str(LAUNCHER.parent / "metadata.json")}
     require(set(files) == expected_files, "User managed generated-file inventory differs")
     for relative in ("plugin.json", "skills/" + NAME + "/SKILL.md"):
-        require(files[relative] == pinned.digest((package / relative).read_bytes()), "User authored payload differs")
-    metadata = json.loads((managed / LAUNCHER.parent / "metadata.json").read_text())
+        require(files[relative] == pinned.digest(read_owned(package / relative, anchor)), "User authored payload differs")
+    metadata = read_json(managed / LAUNCHER.parent / "metadata.json", anchor)
     require(metadata == {"protocol": 1, "sha256": cli_hash, "cliVersion": "0.1.0-development"},
             "User generated launcher metadata differs")
     argv = ["--internal-stdio-v1", str(managed), str(data), str(managed), "plugin", "--",
@@ -228,9 +257,9 @@ def verify_projection(managed, package, native, data, service, port, cli_hash, a
     expected = {"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
                 "mcpServers": {STDIO: dict(stdio, type="stdio"),
                                HTTP: {"type": "streamable-http", "url": url}}}
-    require(json.loads((managed / "mcp.json").read_text()) == expected,
+    require(read_json(managed / "mcp.json", anchor) == expected,
             "User managed MCP roots, wrapper argv or environment differs")
-    actual = json.loads((native / "mcp_config.json").read_text()).get("mcpServers", {})
+    actual = read_json(native / "mcp_config.json", anchor).get("mcpServers", {})
     require(actual.get(STDIO) == stdio and actual.get(HTTP) == {"url": url, "transport": "http"},
             "User native MCP projection differs from selected owned resources")
     return files
@@ -270,15 +299,13 @@ def run(root, report):
     (native / "config.json").write_text('{"version":1,"auto_update":false}\n')
     foreign_mcp = {"mcpServers": {"foreign-user": {"url": "https://foreign.invalid/mcp", "disabled": True}}}
     (native / "mcp_config.json").write_text(json.dumps(foreign_mcp) + "\n")
-    protected = [native / "config.json"]
+    protected = protected_context_paths(native, projects)
     for index, path in enumerate([native, *(project / ".devin" for project in projects)]):
         foreign = path / "skills" / ("foreign-" + str(index))
         foreign.mkdir(parents=True)
         (foreign / "SKILL.md").write_text("---\nname: foreign-" + str(index) + "\ndescription: Inert foreign Skill\n---\n")
-        protected.append(foreign)
         if index:
             (path / "mcp_config.json").write_text('{"mcpServers":{}}\n')
-            protected.append(path / "mcp_config.json")
     original = snapshot(protected, root)
     cli = root / "agentplugins"
     pinned.command(["go", "build", "-trimpath", "-o", str(cli), "./cli/cmd/agentplugins"],
@@ -300,7 +327,7 @@ def run(root, report):
         if source is not None:
             require(snapshot([package, service], root) == source, "User inert source changed")
         require(snapshot(protected, root) == original, "User cohort changed foreign or Project authority")
-        require(json.loads((native / "mcp_config.json").read_text()).get("mcpServers", {}).get("foreign-user")
+        require(read_json(native / "mcp_config.json", root).get("mcpServers", {}).get("foreign-user")
                 == foreign_mcp["mcpServers"]["foreign-user"], "User cohort changed foreign Global MCP")
 
     def command(stage, argv, cwd=projects[0], timeout=90):
@@ -332,7 +359,7 @@ def run(root, report):
 
     def binding(iid, required=True):
         snapshot([state_file], root)
-        return selected_binding(json.loads(state_file.read_text()), iid, native, managed_root, required)
+        return selected_binding(read_json(state_file, root), iid, native, managed_root, required)
 
     def inventory(stage, present):
         observations = []
@@ -374,7 +401,7 @@ def run(root, report):
         data = state / "plugin-data" / selected["physical_artifact_id"]
         report["projected_files_sha256"] = verify_projection(
             managed, package, native, data, service, port, executable_facts[cli]["sha256"], root)
-        require((skill / "SKILL.md").read_bytes() == payload.read_bytes(), "User native pinned Skill bytes differ")
+        require(read_owned(skill / "SKILL.md", root) == read_owned(payload, root), "User native pinned Skill bytes differ")
         held = snapshot([managed, skill, data, state_file, native / "mcp_config.json"], root,
                         trusted_launcher=(managed / LAUNCHER, executable_facts[cli]["sha256"]))
         inventory("after-add", True)
@@ -384,6 +411,13 @@ def run(root, report):
                              trusted_launcher=(managed / LAUNCHER, executable_facts[cli]["sha256"])) == held,
                 "User repeat changed identity, state, ownership or native bytes")
         inventory("after-repeat", True)
+        sentinel = data / "fixture-user-data.txt"
+        with os.fdopen(os.open(sentinel, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600), "wb") as stream:
+            stream.write(DATA_SENTINEL)
+        data_before = snapshot([data], root)
+        state_before = read_json(state_file, root)
+        receipt_before = next(row["data_receipts"][selected["data_receipt_id"]]
+                              for row in state_before["installations"] if row["installation_id"] == iid)
         current_skill = snapshot([skill], root)
         require(current_skill == {key: value for key, value in held.items()
                                   if Path(key).is_relative_to(skill)}, "User repair target identity changed")
@@ -393,14 +427,19 @@ def run(root, report):
         require(repaired["client_binding_id"] == selected["client_binding_id"]
                 and repaired["target_locator"] == str(managed)
                 and repaired["data_receipt_id"] == selected["data_receipt_id"]
-                and (skill / "SKILL.md").read_bytes() == payload.read_bytes(), "User repair changed authority or bytes")
+                and read_owned(skill / "SKILL.md", root) == read_owned(payload, root), "User repair changed authority or bytes")
         verify_projection(managed, package, native, data, service, port, executable_facts[cli]["sha256"], root)
+        state_after = read_json(state_file, root)
+        receipt_after = next(row["data_receipts"][repaired["data_receipt_id"]]
+                             for row in state_after["installations"] if row["installation_id"] == iid)
+        assert_repair_data(data, root, data_before, receipt_before, receipt_after)
+        report["repair_data_preserved"] = True
         inventory("after-repair", True)
         public("remove", iid)
         inventory("after-remove", False)
         binding(iid, required=False)
         require(not os.path.lexists(managed) and not os.path.lexists(skill)
-                and json.loads((native / "mcp_config.json").read_text()) == foreign_mcp,
+                and read_json(native / "mcp_config.json", root) == foreign_mcp,
                 "User removal retained owned payload or changed foreign native config")
         require(snapshot([package, service], root) == source, "User cohort changed inert source")
     guard()

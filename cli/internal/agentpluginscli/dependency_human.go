@@ -70,3 +70,24 @@ func dependencyResultAlias(outcome *installOutcome, result dependencyResultDTO) 
 	}
 	return result.InstallationID
 }
+
+// Each footer ID names its actual aliases without repeating the ID per client.
+func dependencyInstallationAliasSuffix(outcome *installOutcome, results []dependencyResultDTO, installationID string) string {
+	var aliases []string
+	seen := map[string]bool{}
+	for _, result := range results {
+		if result.InstallationID != installationID {
+			continue
+		}
+		alias := dependencyResultAlias(outcome, result)
+		if alias == "" || alias == installationID || seen[alias] {
+			continue
+		}
+		seen[alias] = true
+		aliases = append(aliases, alias)
+	}
+	if len(aliases) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(aliases, ", ") + ")"
+}
