@@ -48,13 +48,13 @@ for (const width of [1440, 390]) {
     await checkChoices(dialog);
     const source = index.plugins[0]!.distributions[0]!.releases[0]!.source;
     const selector = `github:${source.repository}@${source.revision}//${source.path}`;
-    const npxAdd = `npx -y universal-agent-plugins@0.1.115 add ${selector} --target "codex,cursor,hermes,antigravity"`;
+    const npxAdd = `npx -y universal-agent-plugins@0.1.116 add ${selector} --target "codex,cursor,hermes,antigravity"`;
     const snippet = dialog.locator('.command-snippet--add');
     await expect(snippet.locator('code')).toHaveText(npxAdd);
     await snippet.locator('button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(npxAdd);
     await dialog.locator('.native-cli-checkbox input').check();
-    const nativeAdd = npxAdd.replace('npx -y universal-agent-plugins@0.1.115', 'agentplugins');
+    const nativeAdd = npxAdd.replace('npx -y universal-agent-plugins@0.1.116', 'agentplugins');
     await expect(snippet.locator('code')).toHaveText(nativeAdd);
     await snippet.locator('button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(nativeAdd);

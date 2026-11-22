@@ -11,7 +11,7 @@ import type { ClientID, ComponentID, DistributionResolution, InstallScope, Plugi
 // delivery, NOT exact MCP-transport approval or runtime/activation evidence.
 // The released CLI checks actual package bytes, dependencies and native policy.
 const clientCapabilities = new Map(capabilities.map((client) => [client.id, client] as const));
-export const PINNED_CATALOG_CLI_VERSION: string = '0.1.115';
+export const PINNED_CATALOG_CLI_VERSION: string = '0.1.116';
 
 // Broad capability preview only: the signed release does not expose which MCP
 // transports a package needs (including SSE-only). The CLI decides exact fit.

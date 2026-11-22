@@ -151,7 +151,7 @@ test('agent pages use the exact source command and stop offering it when the Dir
       'agents/[client].vue', { slug: 'gitlab', client }, registry,
     );
     assert.equal(toValue(installCommand), pinnedCatalogCommands(registry.plugins[0], client, 'user').add);
-    assert.ok(toValue(installCommand).includes('@0.1.115 add github:'));
+    assert.ok(toValue(installCommand).includes('@0.1.116 add github:'));
     assert.equal(toValue(pinnedRepairLimitation)?.key,
       undefined);
     directoryCurrent.value = false;

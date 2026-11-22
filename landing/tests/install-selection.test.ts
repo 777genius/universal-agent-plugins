@@ -315,7 +315,7 @@ test('mixed explicit choices use one eligible source and survive navigation', as
   state.updateTargets(chosen);
   assert.deepEqual(state.targets.value, chosen);
   const command = state.pinnedSourceCommands.value;
-  assert.match(command?.add ?? '', /^npx -y universal-agent-plugins@0\.1\.115 add github:/);
+  assert.match(command?.add ?? '', /^npx -y universal-agent-plugins@0\.1\.116 add github:/);
   assert.match(command?.add ?? '', /--target "cursor,codex,hermes,antigravity,pi"$/);
   assert.doesNotMatch(command?.add ?? '', /--no-save|chatgpt|\n/);
   assert.match(command?.repair ?? '', /--target "cursor,codex,hermes,antigravity,pi"$/);
