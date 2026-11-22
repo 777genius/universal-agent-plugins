@@ -129,7 +129,7 @@ for (const width of [1440, 390]) {
     await web.click();
     const snippet = page.getByRole('dialog').locator('.install-dialog__footer .command-snippet');
     const code = snippet.locator('code');
-    await expect(code).toHaveText(/--target (chatgpt,chatgptweb|chatgptweb,chatgpt) --no-save$/);
+    await expect(code).toHaveText(/--target "(chatgpt,chatgptweb|chatgptweb,chatgpt)" --no-save$/);
     const command = (await code.textContent())?.trim() ?? '';
     expect(command.match(/\bchatgpt\b/g)).toHaveLength(1);
     expect(command.match(/chatgptweb/g)).toHaveLength(1);
@@ -145,7 +145,7 @@ for (const width of [1440, 390]) {
     await expect(panel.locator('.command-snippet')).toHaveCount(4);
     for (const action of ['update', 'repair', 'remove'])
       await expect(panel.locator(`.command-snippet--${action} code`))
-        .toHaveText(new RegExp(`${action} i18n-state-00 --target (chatgpt,chatgptweb|chatgptweb,chatgpt)$`));
+        .toHaveText(new RegExp(`${action} i18n-state-00 --target "(chatgpt,chatgptweb|chatgptweb,chatgpt)"$`));
     expect(errors).toEqual([]);
   });
 }
