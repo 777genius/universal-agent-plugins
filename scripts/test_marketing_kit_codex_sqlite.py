@@ -210,6 +210,68 @@ class MarketingKitCodexSQLiteTests(unittest.TestCase):
         self.assertEqual(self.runner["_CLI_VERSION"].get(), "0.1.104")
         self.assertIsNone(self.runner["_CODEX_SQLITE"].get())
 
+    def test_c_native_initialization_cannot_rebaseline_a_non_sqlite_config(self):
+        # Import locally: exposing the shared TestCase at module scope would
+        # make unittest collect its unrelated acceptance suite a second time.
+        from scripts.test_live_install_audit_env import IsolatedClientEnvironmentTest
+
+        for mutation, native_exception in ((False, False), (True, False), (True, True)):
+            with self.subTest(mutation=mutation, native_exception=native_exception):
+                initialized = []
+                contexts = []
+
+                def initialize(runner, env, project):
+                    contexts[:] = [runner["_CLI_VERSION"], runner["_CODEX_SQLITE"]]
+                    runtime_helpers = runner["audit"]["CODEX_RUNTIME_AUDIT"]
+                    exchange_globals = runtime_helpers["CodexPluginSQLiteAudit"].__init__.__globals__
+
+                    async def discover(_binary, selected_project, profile, environment, **options):
+                        self.assertEqual(options, {"sqlite_baseline": True})
+                        self.assertEqual(profile, Path(environment["CODEX_HOME"]))
+                        case = project.parent.name
+                        database = Path(env["HOME"]) / ".local/state/codex-sqlite/state_5.sqlite"
+                        with closing(sqlite3.connect(database)) as connection:
+                            connection.execute("CREATE TABLE fixture_rows (value TEXT)")
+                            connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+                            connection.commit()
+                        initialized.append(case)
+                        if case == "C" and mutation:
+                            peer = project.parent.parent / "A/home/.codex/config.toml"
+                            before = exchange_globals["tomllib"].loads(peer.read_text())
+                            with peer.open("a") as stream:
+                                stream.write('model = "peer-mutated"\n')
+                            after = exchange_globals["tomllib"].loads(peer.read_text())
+                            self.assertEqual(before["sqlite_home"], after["sqlite_home"])
+                            with closing(sqlite3.connect(Path(before["sqlite_home"]) / "state_5.sqlite")) as connection:
+                                self.assertEqual(connection.execute("SELECT * FROM fixture_rows").fetchall(),
+                                                 [("stable",)])
+                            if native_exception:
+                                raise RuntimeError("inert C native initialization refused")
+                        return {"data": [{"cwd": str(selected_project), "errors": [], "skills": []}]}
+
+                    with (patch.dict(runner["audit"]["AGENT_BINARIES"], {"codex": sys.executable}),
+                          patch.dict(exchange_globals, {"_exchange": discover})):
+                        return runner["initialize_codex_sqlite"](env, project)
+
+                fixture = IsolatedClientEnvironmentTest("runTest")
+                code, report, _ = fixture._exercise_marketing_kit_scope_report(
+                    "codex", codex_initializer=initialize)
+                self.assertEqual(initialized, ["A", "B", "C"])
+                self.assertEqual(contexts[0].get(), "0.1.104")
+                self.assertIsNone(contexts[1].get())
+                if mutation:
+                    self.assertEqual(code, 1, "peer config mutation was falsely qualified")
+                    self.assertEqual(report["status"], "failed")
+                    self.assertFalse(report["two_scope_lifecycle_qualified"])
+                    self.assertIn("original isolated profile changed", report["failure"])
+                    self.assertIn("config.toml", report["failure"])
+                else:
+                    self.assertEqual(code, 0, report.get("failure"))
+                    self.assertTrue(report["two_scope_lifecycle_qualified"])
+                    for proof in report["codex_sqlite_profiles"].values():
+                        self.assertEqual(proof["status"], "observed")
+                        self.assertTrue(proof["runtime_semantics_unchanged"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1939,16 +1939,29 @@ def main():
 
             # Project B has previously installed packages; a true cold User
             # restore needs a third HOME with no prior installs or native state.
+            # Pin A before any C preparation/native execution, so a peer write
+            # cannot become part of the accepted full-profile baseline.
+            user_a_native_before_c = settled_profile_snapshot(env, project_a)
             env_c, project_c, foreign_c, project_foreign_c, native_foreign_c = (
                 run_case(options.cli, options.target, root, "C"))
             bind_pinned_launcher_cache(env_c, launcher_cache, root)
-            if sqlite_audits is not None:
-                sqlite_audits.add("C", env_c, project_c)
             # User operations must not mutate their own working Project C.
             protected_c_project = scoped_snapshot([project_c])
             foreign_files.extend(pin_foreign([(foreign_c, "unmanaged user data\n"),
                                               (project_foreign_c, "unmanaged project data\n"),
                                               *native_foreign_c], root))
+            if sqlite_audits is not None:
+                guarded_native_attestation(
+                    lambda: sqlite_audits.add("C", env_c, project_c),
+                    (
+                        lambda: check_foreign(foreign_files, root),
+                        lambda: check_profile_unchanged(
+                            env, project_a, user_a_native_before_c, "User C native initialization"),
+                        lambda: check_profile_unchanged(
+                            env_b, project_b, protected_b, "User C native initialization"),
+                        lambda: check_user_project_unchanged(
+                            project_c, protected_c_project, "User C native initialization"),
+                    ))
             # Read-only forensic baseline: native Copilot may retain disabled
             # settings after uninstall. Never treat a residue as a PASS here.
             copilot_c_shapes = ({"before": copilot_user_c_settings_shape(env_c, root)}
@@ -1959,7 +1972,6 @@ def main():
             user_portable_c.mkdir(parents=True, exist_ok=True)
             for name in ("uap.toml", "uap.lock"):
                 shutil.copyfile(user_portable / name, user_portable_c / name)
-            user_a_native_before_c = settled_profile_snapshot(env, project_a)
             observe_production_policy(options.cli, env_c, project_c, options.target,
                 report["positive_policy"], (
                     lambda: check_foreign(foreign_files, root),

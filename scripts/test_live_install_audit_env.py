@@ -2393,7 +2393,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
     def _exercise_marketing_kit_scope_report(self, target, *, cleanup_failure=False,
                                               boundary_error=False, grants=7, native_error=None, native_peer_mutation=False,
                                               final_policy_error=False, final_peer_mutation=None,
-                                              native_root_redirect=None):
+                                              native_root_redirect=None, codex_initializer=None):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2523,6 +2523,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             return {"status": "installed" if owners else "absent", "managed_count": len(owners),
                     "profile": str(Path(env["HOME"]).resolve()), "owners": owners}
 
+        def initialize_sqlite(env, project):
+            if codex_initializer is not None:
+                return codex_initializer(runner, env, project)
+            return SimpleNamespace(checkpoint=lambda *_: None, evidence=lambda: {})
+
         with TemporaryDirectory() as output:
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
@@ -2543,8 +2548,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     # This shared scope/report fixture already replaces public
                     # and native operations; SQLite semantics have their own
                     # real-database Marketing Kit regression tests.
-                    "initialize_codex_sqlite": lambda *_: SimpleNamespace(
-                        checkpoint=lambda *_: None, evidence=lambda: {}),
+                    "initialize_codex_sqlite": initialize_sqlite,
                     "codex_user_native_remove_attestation": lambda *_: ("--external-uninstalled",),
                     # Patch the runner binding, preserving tempfile for setup helpers.
                     "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
