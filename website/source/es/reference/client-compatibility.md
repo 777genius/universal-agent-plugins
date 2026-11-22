@@ -11,6 +11,31 @@ localeDisposition: "current-translation"
 
 # Compatibilidad de clientes UAP
 
+## Agentes compatibles {#supported-agents}
+
+UAP instala o prepara paquetes para estos agentes. Indica el valor de `--target` para elegir agentes de forma explícita, u omite `--target` para elegir entre los agentes detectados en tu equipo.
+
+| Agente | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop), `chatgptweb` (Web) |
+
+La compatibilidad con los ámbitos de usuario y de proyecto, la configuración y los pasos que quedan después de instalar varían según el agente; consulta la [tabla de compatibilidad de agentes](https://universal-agent-plugins.com/es/#agent-support). Que un agente sea compatible no significa que funcionen en él todos los paquetes, componentes, versiones o ámbitos.
+
 ## Versión actual y alcance
 
 [CLI nativo](https://github.com/777genius/universal-agent-plugins/releases/latest) añade una API local de gestión con un proceso controlado por la aplicación, detección de clientes y perfiles sin cambios y extensiones Pi, Skills y MCP stdio/Streamable HTTP para usuario y proyecto elegible. Consulta [la gestión local](../use/manage#local-management-api). Los canales de los gestores de paquetes pueden actualizarse más tarde: comprueba `agentplugins version`.

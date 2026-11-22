@@ -125,7 +125,7 @@ test('agents without an eligible catalog source explain own-package prerequisite
     await navigate(page, `/agents/${agent}`, 'en');
     const example = page.locator('.agent-page__install');
     const snippet = example.locator('.command-snippet--add');
-    const command = `npx -y universal-agent-plugins add ./my-plugin --target ${agent}`;
+    const command = `npx -y universal-agent-plugins@latest add ./my-plugin --target ${agent}`;
     await expect(snippet).toHaveCount(1);
     await expect(snippet.locator('code')).toHaveText(command);
     await expect(example).toContainText(

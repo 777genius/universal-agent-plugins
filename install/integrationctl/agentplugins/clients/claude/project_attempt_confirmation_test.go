@@ -34,6 +34,8 @@ func TestSurvivingClaudeCommandRecognizesPluginAndProfileProcesses(t *testing.T)
 		{"non-node program naming script on this profile", legacyports.LiveProcess{Executable: "/bin/sleep", Argv: []string{"sleep", script, "plugin"}, Env: []string{"CLAUDE_CONFIG_DIR=" + profile}}, false},
 		{"wrapper script", legacyports.LiveProcess{Executable: "/bin/sh", Argv: []string{"/bin/sh", "/wrap/claude", "plugin", "uninstall", "demo@m"}}, true},
 		{"rewritten arguments on this profile", legacyports.LiveProcess{Executable: "claude", Argv: []string{"claude"}, Env: []string{"CLAUDE_CONFIG_DIR=" + profile}}, true},
+		{"rewritten arguments with this profile marker", legacyports.LiveProcess{Executable: "claude", Argv: []string{"claude"}, Env: []string{claudeProfileMarker + "=" + profile}}, true},
+		{"session with another profile marker", legacyports.LiveProcess{Executable: "claude", Argv: []string{"claude"}, Env: []string{claudeProfileMarker + "=/elsewhere"}}, false},
 		{"session on another profile", legacyports.LiveProcess{Argv: []string{"claude", "--resume"}, Env: []string{"CLAUDE_CONFIG_DIR=/elsewhere"}}, false},
 		{"other program on this profile", legacyports.LiveProcess{Executable: "/bin/sleep", Argv: []string{"sleep", "30"}, Env: []string{"CLAUDE_CONFIG_DIR=" + profile}}, false},
 		{"other program naming claude", legacyports.LiveProcess{Argv: []string{"npm", "plugin", "claude"}}, false},

@@ -61,8 +61,7 @@ type Request struct {
 	ClientID             string
 	ClientConfigRoot     string
 	ClientExecutable     string
-	// ClientSurfaces preserves actual host observations, including unavailable
-	// or incompatible surfaces. It grants no authority inferred from paths.
+	// ClientSurfaces holds actual host detections, never inferred authority.
 	ClientSurfaces []domain.ClientSurface `json:"-"`
 	// ClientNativeConfigRoot preserves an independently observed User profile
 	// for a single target opting into UserNativeRegistryLayout, including read-only

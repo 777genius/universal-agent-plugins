@@ -11,7 +11,7 @@ import type { ClientID, ComponentID, DistributionResolution, InstallScope, Plugi
 // delivery, NOT exact MCP-transport approval or runtime/activation evidence.
 // The released CLI checks actual package bytes, dependencies and native policy.
 const clientCapabilities = new Map(capabilities.map((client) => [client.id, client] as const));
-export const PINNED_CATALOG_CLI_VERSION: string = '0.1.110';
+export const PINNED_CATALOG_CLI_VERSION: string = '0.1.115';
 
 // Broad capability preview only: the signed release does not expose which MCP
 // transports a package needs (including SSE-only). The CLI decides exact fit.
@@ -48,6 +48,9 @@ function projectCompatible(
         (part) => !/^[A-Za-z0-9._-]+$/.test(part) || part === '.' || part === '..',
       )))) return false;
   return targets.every((client) => {
+    // Kiro's native extension only approves tools of a selected MCP server.
+    // An extension-only summary cannot qualify without a portable component.
+    if (client === 'kiro' && dist.components.every(component => component === 'extensions')) return false;
     const target = dist.targets.find((candidate) => candidate.client === client);
     return Boolean(target && !target.app_binding &&
       dist.components.some((component) => projectComponentSupported(client, component)));

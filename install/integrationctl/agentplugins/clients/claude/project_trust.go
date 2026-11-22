@@ -25,7 +25,11 @@ func grantClaudeProjectTrust(env clients.Env, request domain.ActivationRequest) 
 	if request.VerifyOnly || request.Delivery.ArtifactDigest == "" {
 		return false, fmt.Errorf("claude Code project trust requires a confirmed verified delivery")
 	}
-	return shared.UpdateProjectTrustFile(env.NativeConfig, filepath.Join(request.Client.ConfigRoot, ".claude.json"), func(body []byte) ([]byte, error) { return renderClaudeProjectTrust(body, project) })
+	profile, err := claudeGlobalConfigPath(request.Client.ConfigRoot)
+	if err != nil {
+		return false, err
+	}
+	return shared.UpdateProjectTrustFileWithLimit(env.NativeConfig, profile, []byte("{}"), claudeGlobalConfigLimit, func(body []byte) ([]byte, error) { return renderClaudeProjectTrust(body, project) })
 }
 
 func claudeTrustableProject(request domain.ActivationRequest) (string, error) {

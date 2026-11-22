@@ -10,6 +10,35 @@ translationRequired: false
 
 # UAP client compatibility evidence
 
+## Supported agents {#supported-agents}
+
+UAP installs or prepares packages for these agents. Pass the `--target`
+value to choose agents explicitly, or omit `--target` to pick from the agents
+detected on your computer.
+
+| Agent | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop), `chatgptweb` (Web) |
+
+User and project support, setup and the steps that remain after installation
+differ by agent; see the [agent support table](https://universal-agent-plugins.com/#agent-support). Support for an agent
+does not mean that every package, component, version or scope works there.
+
 ## Current release and scope
 
 The [currently published native CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)

@@ -20,8 +20,11 @@ func (e *Engine) knownTargetIndex(operation Operation, facts []TargetFacts) (map
 		if !validRoot(fact.ConfigRoot) {
 			return nil, fmt.Errorf("%w: ConfigRoot must be an explicit absolute clean path for %s", ErrTargetFactsUnavailable, fact.ClientID)
 		}
-		if (fact.Executable != "" && !validRoot(fact.Executable)) || (operation != OpRemove && requiresExecutable(e.cfg.Registry, domain.ClientID(fact.ClientID), e.scope()) && fact.Executable == "") {
+		if fact.Executable != "" && !validRoot(fact.Executable) {
 			return nil, fmt.Errorf("%w: Executable must be an explicit absolute clean path for %s", ErrTargetFactsUnavailable, fact.ClientID)
+		}
+		if operation != OpRemove && requiresExecutable(e.cfg.Registry, domain.ClientID(fact.ClientID), e.scope()) && fact.Executable == "" {
+			return nil, missingExecutableError(ErrTargetFactsUnavailable, domain.ClientID(fact.ClientID))
 		}
 		if _, exists := indexed[fact.ClientID]; exists {
 			return nil, fmt.Errorf("%w: duplicate facts for %s", ErrTargetFactsUnavailable, fact.ClientID)

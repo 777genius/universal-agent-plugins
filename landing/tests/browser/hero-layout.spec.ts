@@ -5,13 +5,40 @@ import { clientLandingPages } from '../../data/clients';
 import { hydrated, setSignedMirrorTestTime, wording } from './i18n-state.helpers';
 
 const exactCommand =
-  'npx -y universal-agent-plugins add context7 --target codex,cursor,copilot';
+  'npx -y universal-agent-plugins@latest add context7 --target "codex,cursor,copilot"';
 
 async function capture(page: Page, name: string) {
   const directory = process.env.UAP_LANDING_SCREENSHOT_DIR;
   if (!directory) return;
   mkdirSync(directory, { recursive: true });
   await page.screenshot({ path: resolve(directory, `${name}.png`) });
+}
+
+type TileBox = { x: number; y: number; width: number; right: number };
+
+// Every agent tile has the same width, and a short last row sits centered
+// under the full rows instead of leaving a hole on one side.
+async function expectCenteredEqualTiles(page: Page, tiles: TileBox[], rows: number[]) {
+  const widths = tiles.map((tile) => tile.width);
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(0.5);
+  const strip = (await page.locator('.client-strip').boundingBox())!;
+  const center = strip.x + strip.width / 2;
+  for (const row of rows) {
+    const items = tiles.filter((tile) => Math.round(tile.y) === row);
+    const left = Math.min(...items.map((tile) => tile.x));
+    const right = Math.max(...items.map((tile) => tile.right));
+    expect(Math.abs((left + right) / 2 - center)).toBeLessThanOrEqual(1);
+  }
+}
+
+async function tileGeometry(page: Page) {
+  const tiles = await page.locator('.client-strip > li').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const rect = node.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, right: rect.right };
+    }),
+  );
+  return { tiles, rows: [...new Set(tiles.map((tile) => Math.round(tile.y)))] };
 }
 
 async function waitForCommand(page: Page) {
@@ -83,15 +110,25 @@ for (const width of [1440, 1024, 390, 320]) {
       }),
     );
     const rows = [...new Set(geometry.map((item) => Math.round(item.y)))];
-    if (width >= 1440) {
-      expect(rows).toHaveLength(1);
-    } else if (width < 1024) {
+    const perRow = geometry.filter((item) => Math.round(item.y) === rows[0]).length;
+    const install = (await page.locator('.hero-quick-start').boundingBox())!;
+    const agents = (await page.locator('.client-section__agents').boundingBox())!;
+    if (width >= 1024) {
+      // Two columns: the install steps sit beside a wrapping agent grid.
+      expect(install.x + install.width).toBeLessThanOrEqual(agents.x + 0.5);
+      expect(rows.length).toBeGreaterThanOrEqual(2);
+      expect(perRow).toBeGreaterThanOrEqual(4);
+    } else {
+      // Stacked: install steps first, then several agents per row.
+      expect(install.y + install.height).toBeLessThanOrEqual(agents.y + 0.5);
       expect(rows.length).toBeGreaterThanOrEqual(3);
+      expect(perRow).toBeGreaterThanOrEqual(3);
     }
     for (const item of geometry) {
       expect(item.x).toBeGreaterThanOrEqual(0);
       expect(item.right).toBeLessThanOrEqual(width + 0.5);
     }
+    await expectCenteredEqualTiles(page, geometry, rows);
     expect(
       await page
         .locator('.client-strip__copy strong')
@@ -128,6 +165,19 @@ for (const width of [1440, 1024, 390, 320]) {
     await capture(page, `hero-layout-${width}`);
   });
 }
+
+test('right-to-left agent rows stay centered with equal tiles', async ({ page }) => {
+  for (const width of [1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('./ar/');
+    await hydrated(page);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('.client-strip > li')).toHaveCount(clientLandingPages.length);
+    const { tiles, rows } = await tileGeometry(page);
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    await expectCenteredEqualTiles(page, tiles, rows);
+  }
+});
 
 test('selected targets produce one complete copyable command with keyboard activation', async ({
   page,
@@ -216,12 +266,13 @@ test('catalog reveal is early on navigation, compact trust badges stay compact, 
   await expect(page.locator('.hero-demo-video')).toBeVisible();
   await expect(page.locator('.hero-demo-video button')).toHaveAccessibleName('Watch demo');
   const preview = (await page.locator('.hero-demo-video').boundingBox())!;
+  const copy = (await page.locator('.hero__copy').boundingBox())!;
   const supported = (await page.locator('.client-section').boundingBox())!;
-  const install = (await page.locator('.hero__window').boundingBox())!;
-  expect(preview.width).toBeCloseTo(800, 0);
-  expect(preview.y - (supported.y + supported.height)).toBeGreaterThanOrEqual(15);
-  expect(install.y + install.height).toBeLessThan(preview.y);
-  await expect(page.locator('.hero__demo .hero-demo-video')).toHaveCount(0);
+  // The video is the hero's right column, above the install steps and agents.
+  expect(preview.width).toBeGreaterThanOrEqual(500);
+  expect(preview.x).toBeGreaterThanOrEqual(copy.x + copy.width);
+  expect(preview.y + preview.height).toBeLessThanOrEqual(supported.y);
+  await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
   // After seven seconds the hidden warm-up frame is intentional. It must not
   // become an active, focusable or autoplay-enabled player without a gesture.
   const muxFrames = page.locator('iframe[src*="player.mux.com"]');

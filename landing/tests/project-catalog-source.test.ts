@@ -20,17 +20,17 @@ test('published signed-v1 short name installs into explicit Project without v2 g
   assert.deepEqual(plugin.distributions[0]!.releases[0]!.targets, original,
     'Project preview must not alter signed User evidence');
   const commands = projectCatalogCommands(plugin, ['codex']);
-  assert.equal(commands.add, 'npx -y universal-agent-plugins add gitlab --target codex --scope project');
-  assert.equal(commands.update, 'npx -y universal-agent-plugins update gitlab --scope project');
-  assert.equal(commands.repair, 'npx -y universal-agent-plugins repair gitlab --target codex --scope project');
-  assert.equal(commands.remove, 'npx -y universal-agent-plugins remove gitlab --scope project');
+  assert.equal(commands.add, 'npx -y universal-agent-plugins@latest add gitlab --target codex --scope project');
+  assert.equal(commands.update, 'npx -y universal-agent-plugins@latest update gitlab --scope project');
+  assert.equal(commands.repair, 'npx -y universal-agent-plugins@latest repair gitlab --target codex --scope project');
+  assert.equal(commands.remove, 'npx -y universal-agent-plugins@latest remove gitlab --scope project');
 });
 
 test('automatic Project command defers compatible installed-agent selection to CLI', () => {
   const plugin = reviewed();
   assert.ok(projectCatalogAutomaticSelection(plugin)?.resolution.distribution);
   assert.equal(projectCatalogCommands(plugin).add,
-    'npx -y universal-agent-plugins add gitlab --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --scope project');
 });
 
 test('Marketing Kit with signed-v1 user grants and null Git revision can use Project', () => {
@@ -45,9 +45,9 @@ test('Marketing Kit with signed-v1 user grants and null Git revision can use Pro
   };
   assert.ok(projectCatalogSelection(plugin, ['codex']).resolution.distribution);
   assert.equal(projectCatalogCommands(plugin, ['codex']).add,
-    'npx -y universal-agent-plugins add marketing-kit --target codex --scope project');
+    'npx -y universal-agent-plugins@latest add marketing-kit --target codex --scope project');
   assert.equal(projectCatalogCommands(plugin).add,
-    'npx -y universal-agent-plugins add marketing-kit --scope project');
+    'npx -y universal-agent-plugins@latest add marketing-kit --scope project');
 });
 
 test('an explicit project grant is compatible but never claims native execution', () => {
@@ -56,7 +56,7 @@ test('an explicit project grant is compatible but never claims native execution'
   const choice = projectCatalogSelection(plugin, ['codex']);
   assert.equal(choice.resolution.distribution?.targets.find(x => x.client === 'codex')?.delivery, 'prepared');
   assert.equal(projectCatalogCommands(plugin, ['codex']).add,
-    'npx -y universal-agent-plugins add gitlab --target codex --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --target codex --scope project');
 });
 
 test('revoked, unsigned, malformed and unsupported sources still refuse Project', () => {
@@ -77,13 +77,29 @@ test('revoked, unsigned, malformed and unsupported sources still refuse Project'
   assert.equal(projectCatalogSelection(reviewed(), []).resolution.distribution, undefined);
 });
 
+test('Kiro Project preview needs MCP alongside its approval extension', () => {
+  const plugin = reviewed();
+  const release = plugin.distributions[0]!.releases[0]!;
+  release.components = ['extensions'];
+  assert.equal(projectCatalogSelection(plugin, ['kiro']).resolution.distribution, undefined);
+  assert.equal(projectCatalogAutomaticSelection(plugin), undefined);
+  // A portable Skill still qualifies for partial installation if an unrelated
+  // extension cannot be projected; the summary cannot identify namespaces.
+  release.components = ['skills', 'extensions'];
+  assert.ok(projectCatalogSelection(plugin, ['kiro']).resolution.distribution);
+  release.components = ['mcp', 'extensions'];
+  const selected = projectCatalogSelection(plugin, ['kiro']).resolution.distribution;
+  assert.ok(selected, 'MCP-backed Kiro extension may be prepared for exact CLI validation');
+  assert.equal(selected.targets.find(target => target.client === 'kiro')?.delivery, 'prepared');
+});
+
 test('extra unsupported sibling does not revoke signed-v1 Project selection', () => {
   const plugin = reviewed();
   plugin.distributions[0]!.releases[0]!.components = ['skills', 'extensions'];
   const chosen = projectCatalogSelection(plugin, ['codex']);
   assert.ok(chosen.resolution.distribution);
   assert.equal(projectCatalogCommands(plugin, ['codex']).add,
-    'npx -y universal-agent-plugins add gitlab --target codex --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --target codex --scope project');
 });
 
 test('signed-v2 canonical closure cannot fall back from User to ungranted Project', () => {
@@ -111,10 +127,10 @@ test('Pi project uses an explicit immutable Git source instead of inventing a si
   const source = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab';
   assert.equal(pinnedCatalogSelection(plugin, 'pi', 'project')?.selector, source);
   const commands = pinnedCatalogCommands(plugin, 'pi', 'project');
-  assert.equal(commands.add, `npx -y universal-agent-plugins@0.1.110 add ${source} --target pi --scope project`);
-  assert.equal(commands.update, 'npx -y universal-agent-plugins@0.1.110 update gitlab --target pi --scope project');
-  assert.equal(commands.repair, 'npx -y universal-agent-plugins@0.1.110 repair gitlab --target pi --scope project');
-  assert.equal(commands.remove, 'npx -y universal-agent-plugins@0.1.110 remove gitlab --target pi --scope project');
+  assert.equal(commands.add, `npx -y universal-agent-plugins@0.1.115 add ${source} --target pi --scope project`);
+  assert.equal(commands.update, 'npx -y universal-agent-plugins@0.1.115 update gitlab --target pi --scope project');
+  assert.equal(commands.repair, 'npx -y universal-agent-plugins@0.1.115 repair gitlab --target pi --scope project');
+  assert.equal(commands.remove, 'npx -y universal-agent-plugins@0.1.115 remove gitlab --target pi --scope project');
   assert.deepEqual(plugin.distributions, previous, 'The signed target list must not be rewritten');
 });
 
@@ -168,7 +184,7 @@ test('signed Pi Project grant keeps the original signed short-name route', () =>
   assert.ok(projectCatalogSelection(plugin, ['pi']).resolution.distribution);
   assert.equal(pinnedCatalogSelection(plugin, 'pi', 'project')?.selector, undefined);
   assert.equal(projectCatalogCommands(plugin, ['pi']).add,
-    'npx -y universal-agent-plugins add gitlab --target pi --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --target pi --scope project');
 });
 
 test('signed Pi extension Project grant retains its normal signed route', () => {
@@ -181,7 +197,7 @@ test('signed Pi extension Project grant retains its normal signed route', () => 
   assert.ok(projectCatalogSelection(plugin, ['pi']).resolution.distribution);
   assert.equal(pinnedCatalogSelection(plugin, 'pi', 'project'), undefined);
   assert.equal(projectCatalogCommands(plugin, ['pi']).add,
-    'npx -y universal-agent-plugins add gitlab --target pi --scope project');
+    'npx -y universal-agent-plugins@latest add gitlab --target pi --scope project');
 });
 
 test('ChatGPT app-only binding does not authorize portable Pi Project source', () => {
@@ -235,7 +251,7 @@ test('Pi pinned source identity follows the selected older release, not newer Ch
   assert.deepEqual(selected?.components, ['mcp']);
   assert.equal(pinnedCatalogSelection(plugin, 'pi', 'project')?.selector, selected?.selector);
   assert.equal(pinnedCatalogCommands(plugin, 'pi', 'project').add,
-    `npx -y universal-agent-plugins@0.1.110 add ${selected?.selector} --target pi --scope project`);
+    `npx -y universal-agent-plugins@0.1.115 add ${selected?.selector} --target pi --scope project`);
 });
 
 test('all source commands pin the released npm facade and preserve explicit saved maintenance', () => {
@@ -245,7 +261,7 @@ test('all source commands pin the released npm facade and preserve explicit save
       const selected = pinnedCatalogSelection(plugin, client, scope)!;
       const commands = pinnedCatalogCommands(plugin, client, scope);
       const suffix = ` --target ${client}${scope === 'project' ? ' --scope project' : ''}`;
-      const invocation = 'npx -y universal-agent-plugins@0.1.110';
+      const invocation = 'npx -y universal-agent-plugins@0.1.115';
       assert.equal(commands.add, `${invocation} add ${selected.selector}${suffix}`);
       for (const action of ['update', 'repair', 'remove'] as const)
         assert.equal(commands[action], `${invocation} ${action} gitlab${suffix}`);
@@ -262,7 +278,7 @@ test('release 0.1.110 restores explicit Antigravity MCP repair in both scopes', 
     assert.ok(selection);
     assert.equal(pinnedCatalogRepairLimitation(selection), undefined);
     assert.equal(pinnedCatalogCommands(plugin, 'antigravity', scope).repair,
-      `npx -y universal-agent-plugins@0.1.110 repair gitlab --target antigravity${scope === 'project' ? ' --scope project' : ''}`);
+      `npx -y universal-agent-plugins@0.1.115 repair gitlab --target antigravity${scope === 'project' ? ' --scope project' : ''}`);
   }
 });
 
@@ -274,16 +290,16 @@ test('saved maintenance uses the selected source manifest identity, not the cata
   const selection = pinnedCatalogSelection(plugin, 'hermes', 'user')!;
   assert.equal(selection.manifestName, 'source-package');
   const commands = pinnedCatalogCommands(plugin, 'hermes', 'user');
-  assert.equal(commands.add, `npx -y universal-agent-plugins@0.1.110 add ${selection.selector} --target hermes`);
+  assert.equal(commands.add, `npx -y universal-agent-plugins@0.1.115 add ${selection.selector} --target hermes`);
   for (const action of ['update', 'repair', 'remove'] as const)
-    assert.equal(commands[action], `npx -y universal-agent-plugins@0.1.110 ${action} source-package --target hermes`);
+    assert.equal(commands[action], `npx -y universal-agent-plugins@0.1.115 ${action} source-package --target hermes`);
 });
 
 test('Hermes Project source uses prepared MCP capability; the CLI qualifies the host bundle and session', () => {
   const plugin = reviewed();
   assert.equal(scopedComponentSupported('hermes', 'mcp', 'project'), true);
   assert.ok(pinnedCatalogSelection(plugin, 'hermes', 'project'));
-  assert.match(pinnedCatalogCommands(plugin, 'hermes', 'project').add, /@0\.1\.110 add github:.* --target hermes --scope project$/);
+  assert.match(pinnedCatalogCommands(plugin, 'hermes', 'project').add, /@0\.1\.115 add github:.* --target hermes --scope project$/);
   plugin.distributions[0]!.releases[0]!.components = ['skills'];
   assert.ok(pinnedCatalogSelection(plugin, 'hermes', 'project'));
   for (const scope of ['user', 'project'] as const)

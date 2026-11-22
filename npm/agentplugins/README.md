@@ -61,19 +61,21 @@ See the [real Context7 ChatGPT and Kiro E2E evidence](https://github.com/777geni
 - keeps activation and OAuth prompts visible to you.
 
 Supported clients include Codex, ChatGPT, Cursor, GitHub Copilot CLI, VS Code,
-Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf, Grok Build, Kimi Code,
-and Qoder. Compatibility depends on the package, selected scope and client.
-The CLI distinguishes installed components, prepared configuration and remaining
-activation or sign-in steps. Native Pi extensions support user scope and
-eligible project scope; Skills and MCP have separate client-specific contracts. Check the
-installed channel version and the version-bound native evidence before use.
+Kiro, Claude Code, Gemini CLI, OpenCode, Cline, Windsurf / Devin, Grok Build,
+Kimi Code, Qoder, Hermes Agent, Google Antigravity and Pi. Compatibility depends
+on the package, selected scope and client. The CLI distinguishes installed
+components, prepared configuration and remaining activation or sign-in steps.
+Pi extensions, Skills and stdio/Streamable HTTP MCP support user scope and
+eligible project scope. Check the installed channel version and the
+version-bound native evidence before use. The
+[supported clients matrix](https://github.com/777genius/universal-agent-plugins#supported-clients)
+lists user and project support and the steps that remain for each agent.
 
-This source includes Hermes User Skills and stdio/Streamable HTTP MCP, plus
-Project Skills only; Project MCP is unsupported. It also prepares Antigravity
-User/Project native plugins with Skills and stdio/Streamable HTTP MCP.
-Antigravity remains **Prepared**: verify discovery, trust and enablement in the
-selected IDE scope. Availability depends on the exact installed CLI version;
-source presence does not establish a published release or IDE activation.
+Hermes supports User Skills and stdio/Streamable HTTP MCP, plus Project Skills.
+Project MCP is prepared only with a verified standalone Hermes host bundle and
+an explicitly confirmed UAP project session. Antigravity prepares User/Project
+native plugins with Skills and stdio/Streamable HTTP MCP and remains
+**Prepared**: verify discovery, trust and enablement in the selected IDE scope.
 Signed Directory eligibility is separate from client delivery capability.
 
 See the [client compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)

@@ -151,7 +151,7 @@ test('agent pages use the exact source command and stop offering it when the Dir
       'agents/[client].vue', { slug: 'gitlab', client }, registry,
     );
     assert.equal(toValue(installCommand), pinnedCatalogCommands(registry.plugins[0], client, 'user').add);
-    assert.ok(toValue(installCommand).includes('@0.1.110 add github:'));
+    assert.ok(toValue(installCommand).includes('@0.1.115 add github:'));
     assert.equal(toValue(pinnedRepairLimitation)?.key,
       undefined);
     directoryCurrent.value = false;
@@ -180,14 +180,14 @@ for (const client of ['claude', 'codex', 'cursor'] as const) {
     registry.plugins.push(defaultPlugin);
     const slug = clientLandingById.get(client)!.slug;
     const state = await page('agents/[client].vue', { slug: 'gitlab', client: slug }, registry, { plugin: 'gitlab' });
-    const defaultCommand = `npx -y universal-agent-plugins add context7 --target ${client}`;
+    const defaultCommand = `npx -y universal-agent-plugins@latest add context7 --target ${client}`;
     assert.equal(toValue(state.installCommand), defaultCommand, 'Query context must not change the initial SSG/hydration tree');
     assert.equal(toValue(state.originPlugin), undefined);
     assert.equal(toValue(state.navigationParents).length, 1);
     state.mount();
     assert.equal(toValue(state.originPlugin).name, 'gitlab');
     assert.equal(toValue(state.exampleScope), 'project');
-    assert.equal(toValue(state.installCommand), `npx -y universal-agent-plugins add gitlab --target ${client} --scope project`);
+    assert.equal(toValue(state.installCommand), `npx -y universal-agent-plugins@latest add gitlab --target ${client} --scope project`);
     assert.equal(toValue(state.navigationParents)[1].to, '/plugins/gitlab/');
     state.locale.value = 'uk';
     assert.equal(toValue(state.navigationParents)[1].to, '/uk/plugins/gitlab/');

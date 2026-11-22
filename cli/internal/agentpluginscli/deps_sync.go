@@ -145,7 +145,7 @@ func (adapter *dependencyInstaller) verifyUnchangedProjection(ctx context.Contex
 }
 
 func (adapter *dependencyInstaller) preflightProjectVersions(ctx context.Context, actions []dependencyAction) error {
-	if (adapter.app.scope() != domain.ScopeProject && adapter.app.scope() != domain.ScopeUser) || adapter.opts.dryRun {
+	if adapter.app.scope() != domain.ScopeProject && adapter.app.scope() != domain.ScopeUser {
 		return nil
 	}
 	var targets []domain.ClientID

@@ -640,6 +640,17 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
                     raise RuntimeError("Pi global removal left owned Skill/MCP")
                 if "foreign" not in json.loads((profile/"mcp.json").read_text()).get("mcpServers",{}):
                     raise RuntimeError("Pi global removal destroyed foreign MCP")
+                # A fresh genuine Pi process must stop discovering both owned
+                # resource types after removal, not just observe deleted files.
+                observed_after_remove=checked_rpc(pi,project_c,native_env,True,label+"-global-removed")
+                if any(item.get("name")=="skill:pi-managed" for item in observed_after_remove):
+                    raise RuntimeError("Pi global Skill is still discoverable after removal")
+                mcp_after_remove=json.loads(run([str(pi),"mcp","list","--json"],
+                                              project_c,env=native_env,timeout=55))
+                if any(entry.get("name") in ("pi-managed","pi-http")
+                       for entry in mcp_after_remove.get("servers",[])):
+                    raise RuntimeError("Pi global MCP is still discoverable after removal")
+                state["stages"].append(label+"_Pi_global_native_absence_after_remove")
                 if (project_b/".pi/skills/pi-managed/SKILL.md").exists() is False:
                     raise RuntimeError("global cycle mutated project B")
                 state["stages"].append(label+"_Pi_global_skill_stdio_HTTP_call_update_repair_remove")

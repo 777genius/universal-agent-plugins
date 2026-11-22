@@ -195,6 +195,13 @@ func TestSkillsCLIUserScopeCodexClaudeInstallAndRemove(t *testing.T) {
 		}
 		nativeSnapshots[client] = savedJourneyTree(t, binding.TargetLocator)
 	}
+	// Read-only commands accept the saved Skill name, as remove does below.
+	for _, command := range []string{"info", "doctor"} {
+		stdout := journey.run(t, command, "review", "--scope", "user", "--format", "json")
+		if !strings.Contains(stdout, state.EnvironmentReceipts[0].InstallationID) {
+			t.Fatalf("%s did not resolve the saved Skill name: %s", command, stdout)
+		}
+	}
 	assertNativeUnchanged := func(target string) {
 		t.Helper()
 		binding := savedJourneyBinding(t, journey.state(t), target)

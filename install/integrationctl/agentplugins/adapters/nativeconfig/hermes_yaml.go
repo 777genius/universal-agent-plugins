@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"runtime"
 	"sort"
 
@@ -225,17 +226,41 @@ func replaceHermesMCPEntryNodes(
 	return nodes, nil
 }
 
+// encodeVerifiedMCPEntries prefers re-encoding only the top-level mcp_servers
+// lines so Hermes' comments and blank lines elsewhere stay byte-for-byte. A
+// layout the splice cannot address falls back to re-encoding the whole tree,
+// which keeps every setting and comment but may drop blank lines.
 func (doc *hermesYAMLDocument) encodeVerifiedMCPEntries(desired map[string]json.RawMessage) ([]byte, error) {
+	if spliced, err := doc.spliceMCPBlock(); err == nil {
+		if check, err := verifyHermesMCPEntries(spliced, desired); err == nil && sameHermesForeignSettings(&check.root, &doc.root) {
+			return spliced, nil
+		}
+	}
+	out, err := encodeHermesNode(&doc.root)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := verifyHermesMCPEntries(out, desired); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func encodeHermesNode(node *yaml.Node) ([]byte, error) {
 	var out bytes.Buffer
 	encoder := yaml.NewEncoder(&out)
 	encoder.SetIndent(2)
-	if err := encoder.Encode(&doc.root); err != nil {
+	if err := encoder.Encode(node); err != nil {
 		return nil, err
 	}
 	if err := encoder.Close(); err != nil {
 		return nil, err
 	}
-	check, err := parseHermesYAML(out.Bytes())
+	return out.Bytes(), nil
+}
+
+func verifyHermesMCPEntries(body []byte, desired map[string]json.RawMessage) (*hermesYAMLDocument, error) {
+	check, err := parseHermesYAML(body)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +271,60 @@ func (doc *hermesYAMLDocument) encodeVerifiedMCPEntries(desired map[string]json.
 	if !equalHermesMCPEntries(actual, desired) {
 		return nil, fmt.Errorf("%w: hermes YAML rendered different MCP entries", ErrMalformed)
 	}
-	return out.Bytes(), nil
+	return check, nil
+}
+
+// spliceMCPBlock replaces the column-1 mcp_servers key line and the indented
+// or blank lines after it, or appends the block when the key is new.
+func (doc *hermesYAMLDocument) spliceMCPBlock() ([]byte, error) {
+	parent := doc.root.Content[0]
+	value, index := hermesMappingValue(parent, "mcp_servers")
+	if value == nil {
+		return nil, fmt.Errorf("hermes mcp_servers is absent")
+	}
+	key := parent.Content[index]
+	if len(value.Content) > 0 {
+		value.Style &^= yaml.FlowStyle
+	}
+	block, err := encodeHermesNode(&yaml.Node{Kind: yaml.MappingNode, Tag: "!!map", Content: []*yaml.Node{
+		{Kind: yaml.ScalarNode, Tag: "!!str", Value: key.Value, LineComment: key.LineComment}, value}})
+	if err != nil {
+		return nil, err
+	}
+	lines := bytes.SplitAfter(doc.original, []byte("\n"))
+	start, end := len(lines), len(lines)
+	if key.Line > 0 {
+		if key.Column != 1 {
+			return nil, fmt.Errorf("hermes mcp_servers is not a column-1 key")
+		}
+		start, end = key.Line-1, key.Line
+		for end < len(lines) && (len(bytes.TrimSpace(lines[end])) == 0 || lines[end][0] == ' ') {
+			end++
+		}
+		for end > key.Line && len(bytes.TrimSpace(lines[end-1])) == 0 {
+			end--
+		}
+	}
+	out := bytes.Join(lines[:start], nil)
+	if len(out) > 0 && out[len(out)-1] != '\n' {
+		out = append(out, '\n')
+	}
+	if key.Line == 0 && len(out) > 0 && !bytes.HasSuffix(out, []byte("\n\n")) {
+		out = append(out, '\n') // keep a new block apart from the comments above it
+	}
+	return append(append(out, block...), bytes.Join(lines[end:], nil)...), nil
+}
+
+// sameHermesForeignSettings proves a text splice changed no setting outside
+// mcp_servers.
+func sameHermesForeignSettings(rendered, original *yaml.Node) bool {
+	var left, right map[string]any
+	if rendered.Content[0].Decode(&left) != nil || original.Content[0].Decode(&right) != nil {
+		return false
+	}
+	delete(left, "mcp_servers")
+	delete(right, "mcp_servers")
+	return reflect.DeepEqual(left, right)
 }
 
 func hermesValueNode(encoded json.RawMessage) (*yaml.Node, error) {
@@ -261,16 +339,22 @@ func hermesValueNode(encoded json.RawMessage) (*yaml.Node, error) {
 	return &value, nil
 }
 
-// Refuse to mutate an existing provider config that is readable by another
-// local Unix user. The mutation kernel retains existing file modes by design,
-// so writing credentials into a pre-existing 0644 file would preserve the leak.
-// Windows uses ACLs rather than meaningful POSIX permission bits.
+// Refuse to manage an existing config that any local user may rewrite: such a
+// user could plant MCP commands that Hermes runs. Hermes' own installer copies
+// config.yaml with the umask (0644, or 0664 under Debian/Ubuntu user private
+// groups), so readable or group-writable files are accepted. UAP writes only
+// package-declared MCP entries, no user credentials, and the mutation kernel
+// keeps the existing mode, never widening it. Symlinks and non-regular files
+// are already refused when the file is opened, and the atomic replacement
+// leaves a file the current user owns. Windows uses ACLs rather than
+// meaningful POSIX permission bits.
 func requireHermesPrivateConfig(file resolvedFile, codec Codec) error {
 	if codec != CodecHermes || !file.exists || runtime.GOOS == "windows" {
 		return nil
 	}
-	if file.mode.Perm()&0o077 != 0 {
-		return fmt.Errorf("hermes config.yaml must have owner-only permissions before UAP manages MCP entries")
+	if file.mode.Perm()&0o002 != 0 {
+		return fmt.Errorf("hermes config.yaml %q has mode %04o, so every local user can change it; run chmod o-w %q and retry",
+			file.path, file.mode.Perm(), file.path)
 	}
 	return nil
 }

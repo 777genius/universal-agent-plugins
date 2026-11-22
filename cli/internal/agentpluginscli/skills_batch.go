@@ -96,7 +96,7 @@ func (p *PreparedSkillsBatch) check(ctx context.Context) error {
 			return ErrSkillsPlanStale
 		}
 		old, current := p.request.detected[domain.ClientID(action.ClientID)], detected[domain.ClientID(action.ClientID)]
-		if old.ConfigRoot != current.ConfigRoot || old.ExecutablePath != current.ExecutablePath {
+		if old.ConfigRoot != current.ConfigRoot || old.ExecutablePath != current.ExecutablePath || !reflect.DeepEqual(old.Surfaces, current.Surfaces) {
 			return ErrSkillsPlanStale
 		}
 	}

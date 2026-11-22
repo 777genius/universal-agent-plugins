@@ -264,9 +264,16 @@ function updateTargets(values: string[]) {
         </div>
       </div>
 
-      <div class="hero__demo">
-        <div class="hero__install">
-          <HeroAgentField />
+      <!-- The demo video sits in front of the decorative agent orbit (aria-hidden itself). -->
+      <div class="hero__visual">
+        <HeroAgentField />
+        <HeroDemoVideo />
+      </div>
+    </div>
+
+    <div class="client-section">
+      <div class="client-section__inner container">
+        <div class="hero-quick-start">
           <div class="hero__window">
             <div class="hero__window-body">
               <div class="hero-quick-start__header">
@@ -329,20 +336,16 @@ function updateTargets(values: string[]) {
             </div>
           </div>
         </div>
+        <section class="client-section__agents" aria-labelledby="supported-clients-title">
+          <h2 id="supported-clients-title" class="client-section__title">
+            {{ t('shell.hero.supportedClients') }}
+          </h2>
+          <ClientStrip />
+          <p class="client-section__note">
+            {{ t('shell.hero.clientNote') }}
+          </p>
+        </section>
       </div>
     </div>
-
-    <div class="client-section" aria-labelledby="supported-clients-title">
-      <div class="client-section__inner container">
-        <p id="supported-clients-title">{{ t('shell.hero.supportedClients') }}</p>
-        <ClientStrip />
-        <p class="client-section__note">
-          {{ t('shell.hero.clientNote') }}
-        </p>
-      </div>
-    </div>
-  </section>
-  <section class="demo-showcase" :aria-label="t('shell.hero.demoVideoTitle')">
-    <HeroDemoVideo />
   </section>
 </template>
