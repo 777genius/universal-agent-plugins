@@ -11,7 +11,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from marketing_kit_claude_retirement import SignedClosureRetirement
+from marketing_kit_claude_retirement import (SignedClosureRetirement, observe_project_checkpoint,
+                                           project_checkpoint_summary)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -47,9 +48,9 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             shutil.copytree(bundle, cache)
             revision = {"distribution_id": distribution, "version": pin["package_version"],
                         **{key: pin[key] for key in ("release_sequence", "resolved_revision", "tree_digest", "manifest_digest")}}
-            # Published CLI 0.1.115 projects schema-1 Directory authentication
-            # to unknown for Project, then persists not_checked for all four.
-            # User required/not_required policy is not Project authority.
+            # The exact Project checkpoint requires the schema-1 Directory
+            # unknown decision to survive as not_checked for all four. This
+            # fixture does not assert every published install path preserves it.
             authentication = "not_checked"
             client = {"client_id": "claude", "scope": "project", "activation": "active",
                       "materialization": "materialized", "authentication": authentication,
@@ -180,6 +181,147 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     f["state"].write_text(json.dumps(state))
                     with self.assertRaisesRegex(ValueError, "authentication"):
                         self.capture(f)
+
+    def test_authentication_refusal_identifies_recorded_and_public_states_without_arbitrary_data(self):
+        for raw, public, expected in (
+                ("not_required", "not_required", "recorded=not_required, public=not_required"),
+                ("not_checked", "auth_pending", "recorded=not_checked, public=auth_pending"),
+                ("foreign-secret-value", {"untrusted": "secret"}, "recorded=invalid, public=invalid")):
+            with self.subTest(raw=raw), TemporaryDirectory() as directory:
+                f = self.fixture(Path(directory).resolve())
+                state = json.loads(f["state"].read_text())
+                next(iter(state["installations"][0]["clients"].values()))["authentication"] = raw
+                f["public"][0]["clients"][0]["authentication"] = public
+                f["state"].write_text(json.dumps(state))
+                with self.assertRaises(ValueError) as failure:
+                    self.capture(f)
+                self.assertIn(expected, str(failure.exception))
+                self.assertIn("expected=not_checked", str(failure.exception))
+                self.assertNotIn("secret", str(failure.exception))
+
+    def test_first_authentication_refusal_retains_all_four_exact_checkpoint_observations(self):
+        with TemporaryDirectory() as directory:
+            f = self.fixture(Path(directory).resolve())
+            state = json.loads(f["state"].read_text())
+            digest = "sha256:" + "a" * 64
+            for record, public in zip(state["installations"], f["public"]):
+                binding = next(iter(record["clients"].values()))
+                binding["authentication"] = public["clients"][0]["authentication"] = "not_required"
+                record["directory"]["snapshot_digest"] = digest
+                binding["package_revision"]["catalog_evidence"] = {
+                    "schema_version": 1, "catalog_version": "directory-snapshot-1", "digest": digest,
+                    "compatibility": {"claude": {"authentication": "unknown", "package": "projected", "verification": "schema_only"}}}
+            f["state"].write_text(json.dumps(state))
+            checkpoints = []
+            with self.assertRaisesRegex(ValueError, "marketing-kit.*authentication"):
+                SignedClosureRetirement(f["root"], f["home"], f["project"], f["public"], f["pins"], f["audit"],
+                                        checkpoint_diagnostics=checkpoints)
+            self.assertEqual(len(checkpoints), 1)
+            observation = checkpoints[0]
+            self.assertEqual(observation["status"], "observed")
+            self.assertEqual(set(observation["members"]), set(f["audit"]["MARKETING_KIT_DISTRIBUTIONS"]))
+            for member in observation["members"].values():
+                self.assertTrue(member["same_installation_id"])
+                self.assertEqual(member["recorded"], member["public"])
+                self.assertEqual(member["recorded"]["authentication"], "not_required")
+                self.assertEqual(member["recorded_catalog_evidence"]["authentication"], "unknown")
+                self.assertTrue(member["recorded_catalog_evidence"]["digest_matches_recorded_snapshot"])
+                self.assertEqual(member["public_catalog_evidence"], "not_exposed_by_public_schema")
+            self.assertTrue(all(owner["cache"].is_dir() for owner in f["owners"]))
+
+    def test_checkpoint_projection_redacts_malicious_fields_and_does_not_guess_ambiguous_binding(self):
+        with TemporaryDirectory() as directory:
+            f = self.fixture(Path(directory).resolve())
+            state = json.loads(f["state"].read_text())
+            record, public = state["installations"][0], f["public"][0]
+            raw = next(iter(record["clients"].values()))
+            for binding in (raw, public["clients"][0]):
+                binding.update(authentication="private-secret", activation={"secret": "value"},
+                               verification=["secret"], policy="private-secret")
+                binding["package_revision"]["catalog_evidence"] = {
+                    "schema_version": True, "catalog_version": "private-secret", "digest": "private-secret",
+                    "repository": "private-secret", "compatibility": {"claude": {
+                        "authentication": "private-secret", "package": {"secret": True}, "verification": "private-secret"}}}
+            observation = project_checkpoint_summary(state, f["public"], f["audit"])
+            member = observation["members"]["marketing-kit"]
+            self.assertEqual(set(member["recorded"].values()), {"invalid"})
+            self.assertEqual(member["recorded_catalog_evidence"]["schema_version"], "invalid")
+            self.assertEqual(member["recorded_catalog_evidence"]["digest_shape"], "invalid")
+            self.assertNotIn("secret", json.dumps(observation))
+            self.assertNotIn(str(f["root"]), json.dumps(observation))
+            record["clients"]["another"] = copy.deepcopy(raw)
+            observation = project_checkpoint_summary(state, f["public"], f["audit"])
+            self.assertEqual(set(observation["members"]["marketing-kit"]["recorded"].values()), {"missing"})
+            self.assertEqual(observation["members"]["marketing-kit"]["recorded_binding_selection"], "multiple")
+
+    def test_checkpoint_safe_read_failure_is_unavailable_and_does_not_replace_strict_error(self):
+        with TemporaryDirectory() as directory:
+            f = self.fixture(Path(directory).resolve())
+            audit = dict(f["audit"], copilot_settings_read=lambda *_: (None, "private-secret"))
+            self.assertEqual(observe_project_checkpoint(f["root"], f["project"], f["public"], audit), {"status": "unavailable"})
+            checkpoints = []
+            original = ValueError("original strict refusal")
+            with patch.object(SignedClosureRetirement, "document", side_effect=original):
+                with self.assertRaises(ValueError) as refusal:
+                    SignedClosureRetirement(f["root"], f["home"], f["project"], f["public"], f["pins"], f["audit"],
+                                            checkpoint_diagnostics=checkpoints)
+            self.assertIs(refusal.exception, original)
+            self.assertEqual(checkpoints, [{"status": "unavailable"}])
+
+    def test_checkpoint_normalizes_only_actual_domain_enums_and_catalog_presence(self):
+        with TemporaryDirectory() as directory:
+            f = self.fixture(Path(directory).resolve())
+            state = json.loads(f["state"].read_text())
+            binding = next(iter(state["installations"][0]["clients"].values()))
+            public = f["public"][0]["clients"][0]
+            enums = {"authentication": ("not_checked", "not_required", "auth_pending", "authenticated", "failed"),
+                     "activation": ("not_required", "prepared", "manual_activation_required", "active", "failed"),
+                     "verification": ("not_run", "package_validated", "installation_verified", "runtime_verified", "failed"),
+                     "policy": ("allowed", "blocked", "approval_required")}
+            for key, values in enums.items():
+                for value in values:
+                    binding[key] = public[key] = value
+                    member = project_checkpoint_summary(state, f["public"], f["audit"])["members"]["marketing-kit"]
+                    self.assertEqual(member["recorded"][key], value)
+                    self.assertEqual(member["public"][key], value)
+            for key, value in (("activation", "degraded"), ("verification", "not_checked"), ("policy", "not_checked")):
+                binding[key] = value
+                self.assertEqual(project_checkpoint_summary(state, f["public"], f["audit"])["members"]["marketing-kit"]["recorded"][key], "invalid")
+            for record, value in zip(state["installations"][1:], (None, [], {"schema_version": 1,
+                    "catalog_version": "directory-snapshot-1", "compatibility": {}})):
+                next(iter(record["clients"].values()))["package_revision"]["catalog_evidence"] = value
+            members = project_checkpoint_summary(state, f["public"], f["audit"])["members"]
+            self.assertEqual([member["recorded_catalog_evidence"]["presence"] for member in members.values()],
+                             ["absent", "null", "invalid", "object"])
+            self.assertEqual(members["playwright"]["recorded_catalog_evidence"]["claude_compatibility"], "absent")
+
+    def test_checkpoint_sink_keeps_successful_retirement_and_fd_custody_unchanged(self):
+        with TemporaryDirectory() as directory:
+            f = self.fixture(Path(directory).resolve())
+            checkpoints = []
+            subject = SignedClosureRetirement(f["root"], f["home"], f["project"], f["public"], f["pins"], f["audit"],
+                                              checkpoint_diagnostics=checkpoints)
+            self.assertEqual(checkpoints, [observe_project_checkpoint(f["root"], f["project"], f["public"], f["audit"])])
+            held = tuple(subject.fds)
+            self.assertTrue(held)
+            self.retire(f)
+            proof = subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
+            self.assertEqual(len(proof["members"]), 4)
+            self.assertEqual(subject.fds, [])
+            for fd in held:
+                with self.assertRaises(OSError): os.fstat(fd)
+
+    def test_main_attaches_bounded_A_and_B_diagnostics_only_to_failure_report(self):
+        from test_live_install_audit_env import IsolatedClientEnvironmentTest
+        fixture = IsolatedClientEnvironmentTest()
+        code, report, _ = fixture._exercise_marketing_kit_scope_report("claude", project_remove_error="remove B")
+        self.assertEqual(code, 1)
+        self.assertIn("injected Project removal failure", report["failure"])
+        self.assertEqual(set(report["claude_project_checkpoint_diagnostics"]),
+                         {"project_a_after_repair", "project_b_before_remove"})
+        code, report, _ = fixture._exercise_marketing_kit_scope_report("claude")
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertNotIn("claude_project_checkpoint_diagnostics", report)
 
     def test_other_readiness_fields_still_fail_closed(self):
         for key, values in {"activation": ("failed", "manual_activation_required", "not_required", "degraded", "unknown", ""),

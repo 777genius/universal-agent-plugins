@@ -11,6 +11,7 @@ on:
       - 'scripts/marketing_kit_codex_profile.py'
       - 'scripts/test_marketing_kit_claude_retirement.py'
       - 'scripts/test_marketing_kit_codex_profile.py'
+      - 'scripts/test_marketing_kit_policy_boundary.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/claude_cache_retirement_audit.py'
       - 'scripts/native_client_project_artifacts.py'
@@ -29,6 +30,7 @@ on:
       - 'scripts/marketing_kit_codex_profile.py'
       - 'scripts/test_marketing_kit_claude_retirement.py'
       - 'scripts/test_marketing_kit_codex_profile.py'
+      - 'scripts/test_marketing_kit_policy_boundary.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/claude_cache_retirement_audit.py'
       - 'scripts/native_client_project_artifacts.py'
@@ -232,6 +234,7 @@ jobs:
           python3 -m unittest scripts/test_live_install_audit_env.py -k marketing_kit_ 2>&1 | tee "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 -m unittest discover -s scripts -p 'test_marketing_kit_claude_retirement.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 -m unittest discover -s scripts -p 'test_marketing_kit_codex_profile.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
+          python3 -m unittest discover -s scripts -p 'test_marketing_kit_policy_boundary.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)"             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures
         if: always()

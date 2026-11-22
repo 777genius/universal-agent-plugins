@@ -450,6 +450,7 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                 matched = [{'installation_id': 'owned-id', 'name': 'owned-test',
                             'clients': [{'client_id': 'gemini'}]}]
                 operations, held, native_calls, public_lists = [], [], [], []
+                baseline_stdout = "full Windows baseline body\n" * 200
                 parent_changed, injected_parent_facts = [False], []
                 real_observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
                 clock = _contracts.GeminiFixtureClock()
@@ -475,10 +476,11 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                         close()
                     native.close = capture_close
                     return observer
-                def fake_call(argv, env, cwd, timeout=105):
+                def fake_call(argv, env, cwd, timeout=105, *, capture_full=False):
                     operation = ('native-list' if argv[0] == gemini else
                                  argv[2] if argv[1] == 'skills' else argv[1])
                     operations.append(operation)
+                    self.assertIs(capture_full, operation == 'native-list')
                     if operation == 'native-list':
                         self.assertEqual(argv, [gemini, 'skills', 'list', '--all'])
                         self.assertEqual(cwd, project)
@@ -512,7 +514,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                     if operation == 'add':
                         response.update(readiness='ready', next_actions=[])
                     return {'exit_code': 0, 'stdout_tail': '', 'stderr_tail': '', 'timeout': False,
-                            '_json': response}
+                            '_json': response,
+                            **({'stdout_full': baseline_stdout, 'stderr_full': ''} if capture_full else {})}
                 with (patch.dict(audit.AGENT_BINARIES, {'gemini': gemini}, clear=True),
                       patch.dict(audit.GEMINI_RUNTIME_AUDIT, {'GeminiRepeatAudit': observe}),
                       patch.dict(real_observer.__init__.__globals__, {'_now': clock.now}),
@@ -531,6 +534,14 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                 self.assertEqual(baseline['operation'], 'native-skills-list-baseline')
                 self.assertEqual(baseline['observation']['exit_code'], 0)
                 self.assertFalse(baseline['observation']['timeout'])
+                self.assertNotIn('stdout_full', baseline['observation'])
+                self.assertNotIn('stderr_full', baseline['observation'])
+                self.assertEqual(baseline['command'], {
+                    'argv': [gemini, 'skills', 'list', '--all'], 'cwd': str(project),
+                    'exit_code': 0, 'timeout': False,
+                    'stdout_bytes': len(baseline_stdout.encode('utf-8')),
+                    'stdout_sha256': hashlib.sha256(baseline_stdout.encode('utf-8')).hexdigest(),
+                    'stderr_bytes': 0, 'stderr_sha256': hashlib.sha256(b'').hexdigest()})
                 self.assertFalse(baseline['selected_skill_discovery_claimed'])
                 proof = row['gemini_runtime_proof']
                 self.assertEqual(proof['baseline']['records'], 3)

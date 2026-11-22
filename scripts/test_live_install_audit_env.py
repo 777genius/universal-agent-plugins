@@ -1620,15 +1620,15 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     current = {**policy, "snapshot_sequence": sequence}
                     self.assertEqual(runner["current_vscode_boundary_kind"](current),
                         "saved_management_capability" if prepared else "signed_grant_refusal")
-                for mutation in ("missing-client", "extra-client", "scope", "managed-vscode",
+                for mutation in ("missing-client", "malformed-extra-client", "scope", "managed-vscode",
                                  "prepared-copilot", "origin", "source-tuple", "bool-sequence"):
                     with self.subTest(prepared=prepared, mutation=mutation):
                         changed = deepcopy(policy)
                         targets = changed["root_target_compatibility"]
                         if mutation == "missing-client":
                             targets.pop("opencode")
-                        elif mutation == "extra-client":
-                            targets["unknown"] = {"scopes": ["user"], "delivery": "managed"}
+                        elif mutation == "malformed-extra-client":
+                            targets["unknown"] = {"scopes": ["project"], "delivery": "managed"}
                         elif mutation == "scope":
                             targets["copilot"]["scopes"] = ["project"]
                         elif mutation == "managed-vscode":
@@ -2421,7 +2421,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                               native_root_redirect=None, project_remove_error=None,
                                               codex_checkpoint_error=None, codex_constructor_error=None,
                                               require_copilot_trust=False, copilot_trust_mutation=None,
-                                              copilot_fixture_failure=None, claude_retained_scan_error=False):
+                                              copilot_fixture_failure=None, claude_retained_scan_error=False,
+                                              temporary_root_alias=False):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2501,16 +2502,28 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         class CheckedCleanup:
             def __init__(self, **kwargs):
                 self.inner = TemporaryDirectory(**kwargs)
+                self.alias_directory = None
 
             def __enter__(self):
-                return self.inner.__enter__()
+                location = self.inner.__enter__()
+                if not temporary_root_alias:
+                    return location
+                self.alias_directory = TemporaryDirectory(prefix="marketing-root-alias-")
+                alias = Path(self.alias_directory.name).resolve() / "temporary-parent"
+                alias.symlink_to(Path(location).resolve().parent, target_is_directory=True)
+                phases.append("temporary-root-alias")
+                return str(alias / Path(location).name)
 
             def __exit__(self, exc_type, exc, traceback):
-                if retirements:
-                    self_test.assertTrue(all(retirement.closed for retirement in retirements),
-                                         "custody descriptors must close before disposable tree cleanup")
-                    phases.append("claude-closed-before-disposal")
-                self.inner.__exit__(exc_type, exc, traceback)
+                try:
+                    if retirements:
+                        self_test.assertTrue(all(retirement.closed for retirement in retirements),
+                                             "custody descriptors must close before disposable tree cleanup")
+                        phases.append("claude-closed-before-disposal")
+                    self.inner.__exit__(exc_type, exc, traceback)
+                finally:
+                    if self.alias_directory is not None:
+                        self.alias_directory.cleanup()
                 if exc_type is None and cleanup_failure:
                     raise OSError("disposable cleanup failed")
 
@@ -2547,7 +2560,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 return {"status": "orchestration-fixture", "checkpoints": len(self.checkpoints)}
 
         class FakeRetirement:
-            def __init__(self, root, home, project, public, pins, audit):
+            def __init__(self, root, home, project, public, pins, audit, *, checkpoint_diagnostics=None):
                 self.case, self.home, self.project = root, home, project
                 self.public, self.closed = dict(public), False
                 self.finished = False
@@ -2735,6 +2748,26 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.assertTrue(all(retirement.finished for retirement in retirements)
                                 if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
             return code, json.loads(report_path.read_text()), phases
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_canonicalizes_allocated_root_before_trust_and_keeps_later_guards(self):
+        for redirected in (None, "A", "C"):
+            with self.subTest(redirected=redirected):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", require_copilot_trust=True, temporary_root_alias=True,
+                    native_root_redirect=redirected)
+                self.assertIn("temporary-root-alias", phases)
+                self.assertIn("cold locked restore", phases, report.get("failure"))
+                if redirected is None:
+                    self.assertEqual(code, 0, report.get("failure"))
+                    self.assertTrue(report["two_scope_lifecycle_qualified"])
+                    self.assertIn("remove B", phases)
+                else:
+                    self.assertEqual(code, 1)
+                    self.assertIn("redirected", report["failure"])
+                    self.assertFalse(report["two_scope_lifecycle_qualified"])
+                    self.assertIn("guard-foreign-after-redirect", phases)
+                    self.assertFalse(any(item.startswith("outside-read:") for item in phases))
 
     @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
     def test_marketing_kit_copilot_project_b_prepares_native_trust_before_locked_restore(self):

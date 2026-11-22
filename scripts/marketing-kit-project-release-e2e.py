@@ -17,7 +17,9 @@ import traceback
 ROOT = Path(__file__).resolve().parents[1]
 audit = runpy.run_path(str(ROOT / "scripts/live-install-audit.py"))
 CodexProfile = runpy.run_path(str(ROOT / "scripts/marketing_kit_codex_profile.py"))["CodexProfile"]
-SignedClosureRetirement = runpy.run_path(str(ROOT / "scripts/marketing_kit_claude_retirement.py"))["SignedClosureRetirement"]
+claude_retirement = runpy.run_path(str(ROOT / "scripts/marketing_kit_claude_retirement.py"))
+SignedClosureRetirement = claude_retirement["SignedClosureRetirement"]
+observe_claude_checkpoint = claude_retirement["observe_project_checkpoint"]
 isolated_env = audit["isolated_client_env"]
 invoke = audit["call"]
 REQUIRED_DISTRIBUTIONS = audit["MARKETING_KIT_DISTRIBUTIONS"]
@@ -1557,9 +1559,19 @@ def current_vscode_boundary_kind(policy):
             or policy.get("closure") != FIXED_SIGNED_CLOSURE):
         raise AssertionError("current VS Code boundary requires authenticated positive policy")
     targets = policy.get("root_target_compatibility")
-    if targets == managed:
+    # The authenticated Directory may add other clients without changing this
+    # Copilot/VS Code boundary. Keep every required grant exact, and validate
+    # additional User grants rather than pinning the entire feed's client set.
+    if (not isinstance(targets, dict)
+            or any(targets.get(client) != grant for client, grant in managed.items())
+            or any(not isinstance(client, str) or not client
+                   or grant != {"scopes": ["user"], "delivery": "managed"}
+                   for client, grant in targets.items()
+                   if client not in managed and client != "vscode")):
+        raise AssertionError("current VS Code boundary has unqualified signed target shape")
+    if "vscode" not in targets:
         return "signed_grant_refusal"
-    if targets == {**managed, "vscode": {"scopes": ["user"], "delivery": "prepared"}}:
+    if targets["vscode"] == {"scopes": ["user"], "delivery": "prepared"}:
         return "saved_management_capability"
     raise AssertionError("current VS Code boundary has unqualified signed target shape")
 
@@ -1678,9 +1690,10 @@ def main():
                                 "user": {"expectation": "positive_lifecycle", "status": "not_run"}},
               "historical_policy_results": {"signed45": {
                   "status": "separate_point_in_time_audit", "required_for_current_qualification": False}}}
+    claude_checkpoint_diagnostics = {}
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location, ExitStack() as custody:
-            root = Path(location)
+            root = Path(location).resolve(strict=True)
             # The pinned npm launcher validates the SHA-256 on every cache hit.
             # Keep one private executable cache for A/B: cold restore is still
             # independent in lock, receipts, clients and native HOME/profile.
@@ -1790,8 +1803,13 @@ def main():
                 retained = False
                 if options.target == "claude":
                     listed = inventory(options.cli, e, p, options.target)
-                    retirement = SignedClosureRetirement(root, Path(e["HOME"]), p,
-                        listed, FIXED_SIGNED_CLOSURE, audit)
+                    checkpoint = []
+                    try:
+                        retirement = SignedClosureRetirement(root, Path(e["HOME"]), p,
+                            listed, FIXED_SIGNED_CLOSURE, audit, checkpoint_diagnostics=checkpoint)
+                    finally:
+                        key = "project_a_before_remove" if p == project_a else "project_b_before_remove"
+                        claude_checkpoint_diagnostics[key] = checkpoint[0] if checkpoint else {"status": "unavailable"}
                     if keep_retirement:
                         custody.callback(retirement.close)
                 try:
@@ -1847,10 +1865,15 @@ def main():
             manifest_after_update = (project_a / "uap.toml").read_bytes()
             run(env, project_a, "repair intact", "repair", "marketing-kit",
                 "--target", options.target, *scoped)
-            if identities(inventory(options.cli, env, project_a, options.target), options.target) != identities_after_update:
+            repaired_rows = inventory(options.cli, env, project_a, options.target)
+            if identities(repaired_rows, options.target) != identities_after_update:
                 raise AssertionError("repair changed installation identities")
             if (project_a / "uap.lock").read_bytes() != pinned_after_update:
                 raise AssertionError("repair changed the signed lock")
+            if options.target == "claude":
+                claude_checkpoint_diagnostics["project_a_after_repair"] = observe_claude_checkpoint(
+                    root, project_a, repaired_rows, audit)
+            del repaired_rows
             native_a_before_b = settled_profile_snapshot(env, project_a)
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
             bind_pinned_launcher_cache(env_b, launcher_cache, root)
@@ -2205,6 +2228,8 @@ def main():
     except Exception as error:
         report["status"] = "failed"
         report["failure"] = str(error)[:2500]
+        if options.target == "claude" and claude_checkpoint_diagnostics:
+            report["claude_project_checkpoint_diagnostics"] = claude_checkpoint_diagnostics
         traceback.print_exc()
     finally:
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
