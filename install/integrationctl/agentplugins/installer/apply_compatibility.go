@@ -66,20 +66,19 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 		if _, ok := selected[binding.ClientID]; ok {
 			continue
 		}
-		configRoot := req.ClientConfigRoot
-		executable := req.ClientExecutable
+		facts := TargetFacts{ClientID: binding.ClientID, ConfigRoot: req.ClientConfigRoot,
+			NativeConfigRoot: req.ClientNativeConfigRoot, Executable: req.ClientExecutable, Version: req.ClientVersion, Surfaces: req.ClientSurfaces}
 		if binding.ClientID != req.ClientID {
-			facts, ok := known[binding.ClientID]
+			var ok bool
+			facts, ok = known[binding.ClientID]
 			if !ok {
 				return nil, fmt.Errorf("%w: binding %s (%s) has no host facts", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID)
 			}
 			if facts.BindingID != binding.ClientBindingID {
 				return nil, fmt.Errorf("%w: binding %s (%s) does not match host binding %s", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, facts.BindingID)
 			}
-			configRoot = facts.ConfigRoot
-			executable = facts.Executable
 		}
-		check, err := e.compatibilityBindingCheck(binding, configRoot, executable, target)
+		check, err := e.compatibilityBindingCheck(binding, facts, target)
 		if err != nil {
 			return nil, err
 		}
@@ -118,11 +117,8 @@ func (e *Engine) groupCompatibilityChecks(req Request, targets []usecase.AddInpu
 	return checks, nil
 }
 
-func (e *Engine) compatibilityBindingCheck(binding domain.ClientBinding, configRoot, executable string, target usecase.AddInput) (usecase.AddInput, error) {
-	client, err := e.detectedClient(Request{
-		Operation: OpUpdate, ClientID: binding.ClientID, ClientConfigRoot: configRoot,
-		ClientExecutable: executable,
-	})
+func (e *Engine) compatibilityBindingCheck(binding domain.ClientBinding, facts TargetFacts, target usecase.AddInput) (usecase.AddInput, error) {
+	client, err := e.detectedClient(facts.clientRequest(OpUpdate))
 	if err != nil {
 		return usecase.AddInput{}, fmt.Errorf("%w: binding %s (%s): %w", ErrTargetFactsUnavailable, binding.ClientBindingID, binding.ClientID, err)
 	}

@@ -132,7 +132,7 @@ func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []d
 			continue
 		}
 		seen[result.InstallationID] = true
-		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Installation:", prompt.SafeText(result.InstallationID)); err != nil {
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Installation:", prompt.SafeText(result.InstallationID+dependencyInstallationAliasSuffix(opts.installResult, out, result.InstallationID))); err != nil {
 			return err
 		}
 	}

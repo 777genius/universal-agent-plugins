@@ -261,6 +261,9 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 		ClientExecutable:       backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
 		Selector: action.InstallationID, EnvironmentAuthority: action.Authority, ExternalUninstalled: action.Action == environment.ActionRemove && adapter.opts.externalUninstalled, ActivationComplete: action.ActivationComplete, AuthComplete: action.AuthComplete,
 		ProjectTrustConsent: adapter.explicitAddTrustConsent(action)}
+	if err := adapter.ensureDependencySiblingVersions(ctx, view, action.InstallationID, request.ClientID, request.Operation); err != nil {
+		return nil, err
+	}
 	if err := adapter.populateDependencyTargets(view, action.InstallationID, &request); err != nil {
 		return nil, err
 	}
@@ -428,25 +431,6 @@ func resolveDependencyBindingIdentity(view installer.Inspection, action *environ
 			if receipt.ClientID == action.ClientID && action.Action == environment.ActionInstall {
 				return installer.ErrPlanChanged
 			}
-		}
-	}
-	return nil
-}
-
-func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Inspection, installationID string, request *installer.Request) error {
-	for _, installation := range view.Installations {
-		if installation.InstallationID != installationID {
-			continue
-		}
-		for _, binding := range installation.Bindings {
-			if binding.ClientID == request.ClientID {
-				continue
-			}
-			sibling, ok := adapter.detected[domain.ClientID(binding.ClientID)]
-			if !ok {
-				return fmt.Errorf("installed sibling %s is not detected", binding.ClientID)
-			}
-			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected, adapter.app.scope()), Surfaces: slices.Clone(sibling.Surfaces)})
 		}
 	}
 	return nil

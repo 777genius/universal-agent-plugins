@@ -40,6 +40,7 @@ jobs:
       - name: Run Devin profile and lifecycle adapter tests
         run: go test -count=1 -p=2 -timeout=5m ./install/integrationctl/agentplugins/clients/windsurf
       - name: Verify native E2E closed contracts
+        id: contracts
         run: |
           python3 -m unittest discover -s scripts -p 'test_devin_project_auto_install_e2e.py'
           python3 -m unittest discover -s scripts -p 'test_devin_user_native_install_e2e.py'
@@ -48,6 +49,7 @@ jobs:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
         run: python3 scripts/devin_user_native_install_e2e.py
       - name: Verify public UAP install against pinned genuine Devin
+        if: ${{ !cancelled() && steps.contracts.outcome == 'success' }}
         env:
           EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha }}
         run: python3 scripts/devin_project_auto_install_e2e.py
