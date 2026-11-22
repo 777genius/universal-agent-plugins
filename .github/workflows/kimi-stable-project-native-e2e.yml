@@ -8,6 +8,8 @@ on:
       - 'install/integrationctl/agentplugins/providers/project_kimi_*'
       - 'cli/cmd/agentplugins/project_kimi_*'
       - 'scripts/live-install-audit.py'
+      - 'scripts/test_kimi_repeat_log_audit.py'
+      - 'scripts/test_kimi_stable_project_audit_policy.py'
       - 'scripts/prepared_installation_audit.py'
       - 'scripts/test_prepared_installation_audit.py'
       - 'scripts/windsurf_installation_audit.py'
@@ -59,6 +61,7 @@ jobs:
 
       - name: Run the real project admission and ownership regressions
         run: |
+          python3 -m unittest discover -s scripts -p 'test_kimi_*audit*.py' -v
           go test ./install/integrationctl/agentplugins/providers -run '^TestProjectKimi' -count=1
           go test ./install/integrationctl/agentplugins/clients/kimi -count=1
 
@@ -86,7 +89,7 @@ jobs:
           # The shared audit accepts documented negative cases as coverage.
           # Stable admission requires 30 genuine positive passes, not 30 attempts.
           python3 - "$AUDIT_REPORT_DIR/kimi-skill.json" "$AUDIT_PR_HEAD_SHA" <<'PY'
-          import json, pathlib, sys
+          import json, pathlib, re, sys
           evidence = json.loads(pathlib.Path(sys.argv[1]).read_text())
           expected_head = sys.argv[2]
           rows = evidence.get("results", [])
@@ -95,15 +98,72 @@ jobs:
           required_positive = (
               "skill_bytes_match", "lock_written", "lock_contains_identity",
               "lock_exact_source_pinned", "listed_identity", "repeat_verified",
-              "repeat_native_unchanged", "repeat_lock_unchanged",
+              "repeat_lock_unchanged",
               "removal_verified", "sentinels_preserved", "post_list_schema_valid",
           )
+          def verified_repeat(row):
+              command = row.get("repeat_add")
+              if (row.get("target") != "kimi" or row.get("kind") != "skill"
+                      or not isinstance(command, dict)
+                      or type(command.get("exit_code")) is not int
+                      or command.get("exit_code") != 0 or command.get("timeout") is not False):
+                  return False
+              if row.get("repeat_native_unchanged") is True:
+                  return True
+              if (row.get("repeat_native_unchanged") is not False
+                      or row.get("repeat_native_runtime_only") is not True):
+                  return False
+              # The producer's held-byte proof admits exactly one bounded log
+              # append, with unchanged parents/inode and a closed Ready command.
+              # A generic runtime-only flag cannot satisfy this native gate.
+              proof = row.get("kimi_repeat_log_proof")
+              keys = {"status", "path", "before_bytes", "after_bytes", "before_sha256",
+                      "after_sha256", "append_sha256", "same_inode_mode_parents", "post_list_unchanged"}
+              if (not isinstance(proof, dict) or set(proof) not in (keys, keys | {"workspace_lock"})
+                      or proof.get("status") != "verified-owned-log-append"
+                      or proof.get("path") != ".kimi-code/logs/kimi-code.log"
+                      or proof.get("same_inode_mode_parents") is not True
+                      or proof.get("post_list_unchanged") is not True
+                      or ("workspace_lock" in proof
+                          and proof["workspace_lock"] != "verified-empty-native-coordinator")
+                      or type(proof.get("before_bytes")) is not int
+                      or type(proof.get("after_bytes")) is not int
+                      or not 0 <= proof["before_bytes"] < proof["after_bytes"] <= 1 << 20
+                      or any(not isinstance(proof.get(key), str)
+                             or re.fullmatch(r"[0-9a-f]{64}", proof[key]) is None
+                             for key in ("before_sha256", "after_sha256", "append_sha256"))
+                      or proof["before_sha256"] == proof["after_sha256"]):
+                  return False
+              changes = row.get("repeat_native_changes")
+              if (not isinstance(changes, dict) or set(changes) != {"total", "omitted", "entries"}
+                      or type(changes.get("total")) is not int or changes["total"] != 1
+                      or type(changes.get("omitted")) is not int or changes["omitted"] != 0
+                      or not isinstance(changes.get("entries"), list) or len(changes["entries"]) != 1):
+                  return False
+              entry = changes["entries"][0]
+              if (not isinstance(entry, dict) or entry.get("path_truncated") is not False
+                      or entry != {"path": proof["path"], "path_truncated": False,
+                                   "before": proof["before_sha256"], "after": proof["after_sha256"]}):
+                  return False
+              facts = row.get("kimi_repeat_log_facts")
+              if (not isinstance(facts, dict) or set(facts) != {"captures", "append"}
+                      or facts["append"] != {"reason": "verified-append"}
+                      or not isinstance(facts["captures"], dict)
+                      or set(facts["captures"]) != {"before", "after-add", "post-list"}):
+                  return False
+              return all(isinstance(capture := facts["captures"][phase], dict)
+                         and type(capture.get("log_bytes")) is int
+                         and capture == {"reason": "captured", "log_bytes": proof[size]}
+                         for phase, size in (("before", "before_bytes"),
+                                             ("after-add", "after_bytes"), ("post-list", "after_bytes")))
           failures = []
           for index, row in enumerate(rows):
               if not isinstance(row, dict):
                   failures.append(f"{index}: malformed evidence")
                   continue
               missing = [key for key in required_positive if row.get(key) is not True]
+              if not verified_repeat(row):
+                  missing.append("verified_native_repeat")
               states = row.get("public_target_states", {})
               ready = row.get("public_skill_ready")
               exact_state = {"materialization": "materialized", "activation": "active",

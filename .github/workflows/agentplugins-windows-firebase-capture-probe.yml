@@ -12,6 +12,8 @@ on:
       - 'scripts/published_codex_baseline.py'
       - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/windows_owned_timeout.py'
+      - 'scripts/test_windows_owned_timeout.py'
       - 'scripts/firebase_runtime_failure.py'
       - 'scripts/test_firebase_runtime_failure.py'
   workflow_dispatch:
@@ -42,7 +44,7 @@ jobs:
       - name: Focused output capture regression
         shell: pwsh
         run: |
-          python -m unittest scripts.test_live_install_audit_env.CrossPlatformPublishedProofRegressions.test_scoped_file_capture_reads_native_json_without_pipe_wait scripts.test_live_install_audit_env.WindowsOwnedFileCaptureContracts -v
+          python -m unittest scripts.test_windows_owned_timeout scripts.test_live_install_audit_env.CrossPlatformPublishedProofRegressions.test_scoped_file_capture_reads_native_json_without_pipe_wait scripts.test_live_install_audit_env.WindowsOwnedFileCaptureContracts -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install genuine pinned Claude 2.1.263
         id: native-bootstrap

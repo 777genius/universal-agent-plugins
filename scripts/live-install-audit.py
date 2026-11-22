@@ -258,6 +258,7 @@ def _windows_file_call(argv, *, cwd, env, stdout, stderr, stdin, timeout, check)
     """Own the blocked bootstrap before it can start any command descendants."""
     import time
     started, child, job = time.monotonic(), None, None
+    cleanup_deadline = None
     helpers = run_path(str(ROOT / "scripts/e2e/hermes-noauth-tool-call.py"))
     try:
         child = subprocess.Popen(
@@ -274,7 +275,18 @@ def _windows_file_call(argv, *, cwd, env, stdout, stderr, stdin, timeout, check)
         try:
             code = child.wait(timeout=remaining)
         except subprocess.TimeoutExpired:
-            raise subprocess.TimeoutExpired(argv, timeout) from None
+            # Observe only the already-owned job, inside its existing cleanup
+            # budget. Diagnostic refusal never bypasses mandatory termination.
+            cleanup_deadline = time.monotonic() + 5
+            error = subprocess.TimeoutExpired(argv, timeout)
+            error.owned_timeout_diagnostic = {"status": "refused", "qualified": False}
+            try:
+                observer = run_path(str(ROOT / "scripts/windows_owned_timeout.py"))["snapshot"]
+                error.owned_timeout_diagnostic = observer(
+                    job, child, argv[0], started, cleanup_deadline)
+            except Exception:
+                pass
+            raise error from None
         counts = job.Accounting()
         job.check(job.api.QueryInformationJobObject(
             job.handle, 1, job.C.byref(counts), job.C.sizeof(counts), None))
@@ -283,7 +295,7 @@ def _windows_file_call(argv, *, cwd, env, stdout, stderr, stdin, timeout, check)
         return subprocess.CompletedProcess(argv, code)
     finally:
         if child is not None:
-            deadline = time.monotonic() + 5
+            deadline = cleanup_deadline if cleanup_deadline is not None else time.monotonic() + 5
             try:
                 try:
                     if child.stdin is not None and not child.stdin.closed:
@@ -326,7 +338,7 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
                     p = runner(argv, cwd=cwd, env=env, stdout=stdout_file,
                                stderr=stderr_file, stdin=subprocess.DEVNULL,
                                timeout=timeout, check=False)
-                except subprocess.TimeoutExpired:
+                except subprocess.TimeoutExpired as error:
                     if capture_full or sys.platform != "win32":
                         raise
                     stdout_file.seek(0)
@@ -334,9 +346,11 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
                     output, errors = stdout_file.read((1 << 20) + 1), stderr_file.read((1 << 20) + 1)
                     if len(output) > 1 << 20 or len(errors) > 1 << 20:
                         output, errors = b"", b"bounded native output capture exceeded"
+                    diagnostic = ({"owned_timeout_diagnostic": error.owned_timeout_diagnostic}
+                                  if hasattr(error, "owned_timeout_diagnostic") else {})
                     return {"exit_code": None, "stdout_tail": output.decode("utf-8", errors="replace")[-1800:],
                             "stderr_tail": errors.decode("utf-8", errors="replace")[-1800:],
-                            "timeout": True, "_json": None}
+                            "timeout": True, "_json": None, **diagnostic}
                 stdout_file.seek(0)
                 stderr_file.seek(0)
                 limit = 1 << 20
@@ -1598,7 +1612,29 @@ def prepared_package_binding(client, target):
             and client.get("policy") == "allowed")
 
 
-def matching_installations(response, identity, target, kind, item, signed_release_pins=None):
+def kiro_direct_prepared_installation(node, identity, target, kind, item):
+    """Bind Kiro's non-native User preparation to one exact Git source and UUID."""
+    if target != "kiro" or kind != "plugin" or type(item) is not str or type(node) is not dict:
+        return False
+    repository = r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*"
+    selector = re.fullmatch(r"github:(" + repository + r")@([0-9a-f]{40})", item)
+    source, uid, clients = node.get("source"), node.get("installation_id"), node.get("clients")
+    if (selector is None or type(identity) is not str or not identity or node.get("name") != identity
+            or type(source) is not str or re.fullmatch(repository, source) is None
+            or source.lower() != selector[1].lower() or type(uid) is not str
+            or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", uid) is None
+            or type(clients) is not list or len(clients) != 1):
+        return False
+    client = clients[0]
+    if not prepared_package_binding(client, "kiro") or client.get("authentication") != "not_checked":
+        return False
+    revision = client.get("package_revision")
+    return (type(revision) is dict and revision.get("resolved_revision") == selector[2]
+            and all(type(revision.get(key)) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", revision[key])
+                    for key in ("tree_digest", "manifest_digest")))
+
+
+def matching_installations(response, identity, target, kind, item, signed_release_pins=None, *, kiro_prepared=False):
     """Verify the frozen Registry release, never only live self-consistency."""
     signed_release_pins = signed_release_pins or {}
     if not isinstance(response, dict):
@@ -1614,6 +1650,9 @@ def matching_installations(response, identity, target, kind, item, signed_releas
     result = []
     for node in installations:
         if not isinstance(node, dict):
+            continue
+        if kiro_prepared and kiro_direct_prepared_installation(node, identity, target, kind, item):
+            result.append(node)
             continue
         clients = node.get("clients", [])
         if not isinstance(clients, list):
@@ -2109,6 +2148,49 @@ def kimi_log_fact(facts, reason, changed=None):
     return None
 
 
+def kimi_workspace_lock_require_no_companion(path):
+    """Check the final native lock entry without following even broken links."""
+    try:
+        path.with_name(path.name + ".lock").lstat()
+    except FileNotFoundError:
+        return
+    raise ValueError("Kimi workspace coordinator remains locked")
+
+
+def kimi_workspace_lock_capture(home, case_root, scope):
+    """Bind the native empty coordination target to the held scoped snapshot."""
+    relative = ".kimi-code/.projects-write-lock"
+    path = home / relative
+    metadata_key = "metadata:0:" + relative
+    content_key = home.name + "/" + relative
+    # proper-lockfile's live companion must not survive native completion.
+    if "metadata:0:" + relative + ".lock" in scope:
+        raise ValueError("Kimi workspace coordinator remains locked")
+    try:
+        initial = path.lstat()
+    except FileNotFoundError:
+        if metadata_key in scope or content_key in scope:
+            raise ValueError("Kimi workspace coordinator disappeared")
+        kimi_workspace_lock_require_no_companion(path)
+        return None
+    fields = ("st_dev", "st_mode", "st_nlink", "st_size",
+              "st_uid", "st_gid", "st_ino", "st_mtime_ns")
+    identity = tuple(getattr(initial, field) for field in fields)
+    if (not stat.S_ISREG(initial.st_mode) or stat.S_IMODE(initial.st_mode) != 0o600
+            or initial.st_nlink != 1 or initial.st_size != 0
+            or initial.st_uid != home.lstat().st_uid):
+        raise ValueError("Kimi workspace coordinator is not private and empty")
+    body, error = copilot_settings_read(path, case_root)
+    if (error is not None or body != ""
+            or identity != tuple(getattr(path.lstat(), field) for field in fields)
+            or scope.get(metadata_key) != (initial.st_mode, initial.st_dev,
+                                           initial.st_ino, initial.st_mtime_ns)
+            or scope.get(content_key) != hashlib.sha256(b"").hexdigest()):
+        raise ValueError("Kimi workspace coordinator changed during capture")
+    kimi_workspace_lock_require_no_companion(path)
+    return identity
+
+
 def kimi_repeat_log_capture(home, project, case_root, facts=None):
     """Private bounded bytes; only hashes leave the isolated audit case."""
     path = home / ".kimi-code/logs/kimi-code.log"
@@ -2137,6 +2219,7 @@ def kimi_repeat_log_capture(home, project, case_root, facts=None):
         body = body.encode("utf-8")
         if scope.get(log_key) != hashlib.sha256(body).hexdigest():
             return kimi_log_fact(facts, "log-hash-mismatch")
+        workspace_lock = kimi_workspace_lock_capture(home, case_root, scope)
         if identity != tuple(getattr(path.lstat(), key) for key in fields):
             return kimi_log_fact(facts, "log-identity-after-scope-changed")
         if before_parents != parent_facts():
@@ -2150,7 +2233,8 @@ def kimi_repeat_log_capture(home, project, case_root, facts=None):
         if isinstance(facts, dict):
             facts["log_bytes"] = len(body)
         return {"body": body, "identity": identity, "native": native,
-                "parents": before_parents, "scope": scope, "log_key": log_key}
+                "parents": before_parents, "scope": scope, "log_key": log_key,
+                "workspace_lock": workspace_lock}
     except OSError:
         return kimi_log_fact(facts, "filesystem-read-refused")
     except ValueError:
@@ -2223,6 +2307,13 @@ def kimi_repeat_log_append(before, after, listed, added, repeated, command, nati
     if len(after["body"]) <= len(before["body"]):
         return kimi_log_fact(facts, "log-not-append")
     ignored = {before["log_key"], "metadata:0:.kimi-code/logs/kimi-code.log"}
+    left, right = before["workspace_lock"], after["workspace_lock"]
+    if ((left is None) != (right is None)
+            or left is not None and left[:6] != right[:6]):
+        return kimi_log_fact(facts, "workspace-lock-authority-changed")
+    if left is not None:
+        # Native 2.5.2 atomically rewrites this empty target before taking its lock.
+        ignored.add("metadata:0:.kimi-code/.projects-write-lock")
     original = {key: value for key, value in before["scope"].items() if key not in ignored}
     current = {key: value for key, value in after["scope"].items() if key not in ignored}
     if original != current:
@@ -2236,7 +2327,8 @@ def kimi_repeat_log_append(before, after, listed, added, repeated, command, nati
             "before_sha256": hashlib.sha256(before["body"]).hexdigest(),
             "after_sha256": hashlib.sha256(after["body"]).hexdigest(),
             "append_sha256": hashlib.sha256(after["body"][len(before["body"]):]).hexdigest(),
-            "same_inode_mode_parents": True, "post_list_unchanged": True}
+            "same_inode_mode_parents": True, "post_list_unchanged": True,
+            **({"workspace_lock": "verified-empty-native-coordinator"} if left is not None else {})}
 
 
 def copilot_settings_sanitized_shape(home, case_root, identity):
@@ -2351,11 +2443,15 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if historical_plugins and ((target, kind) != ("codex", "plugin") or historical_baseline):
         raise ValueError("historical archived feed requires its distinct Codex plugin lane")
     installation_routes = dict(PREPARED_INSTALLATION["ROUTES"])
+    installation_routes.update(PREPARED_INSTALLATION["KIRO_ROUTES"])
     installation_routes[WINDSURF_INSTALLATION["ACCEPTANCE"]] = ("windsurf", "plugin")
     if installation_audit and installation_routes.get(installation_audit) != (target, kind):
         raise ValueError("installation audit does not match selected client and scope")
     if installation_audit == WINDSURF_INSTALLATION["ACCEPTANCE"] and type(installation_fixtures) is not dict:
         raise ValueError("Windsurf installation requires the validated complete fixture set")
+    kiro_installation_case = installation_audit in PREPARED_INSTALLATION["KIRO_ACCEPTANCES"]
+    if kiro_installation_case and type(installation_fixtures) is not dict:
+        raise ValueError("Kiro installation requires the validated complete fixture set")
     native_target = audit_client_id(target, kind)
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
@@ -2420,6 +2516,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if native_target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     env = isolated_client_env(home, case_root, data)
+    kiro_installation = None
+    if kiro_installation_case:
+        kiro_installation = PREPARED_INSTALLATION["KiroInstallationAudit"](
+            cli, env, project, case_root, globals(), kind)
+        audits.callback(kiro_installation.close)
     windsurf_installation = None
     if installation_audit == WINDSURF_INSTALLATION["ACCEPTANCE"]:
         windsurf_installation = WINDSURF_INSTALLATION["WindsurfInstallationAudit"](
@@ -2471,6 +2572,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 codex_plugin_sqlite.guard()
             if windsurf_installation is not None:
                 windsurf_installation.guard()
+            if kiro_installation is not None:
+                kiro_installation.guard()
         except (OSError, RuntimeError) as error:
             raise ValueError("audit case root became unavailable") from error
 
@@ -2490,6 +2593,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             codex_plugin_sqlite.checkpoint("after-public-command")
         if windsurf_installation is not None:
             windsurf_installation.observe(list(args[0]), outcome)
+        if kiro_installation is not None:
+            kiro_installation.observe(list(args[0]), outcome)
         if (installation_audit or historical_plugins) and not requested_full:
             outcome.pop("stdout_full", None)
             outcome.pop("stderr_full", None)
@@ -2628,7 +2733,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                    env, project, 30))
     listed_json = listed.pop("_json", None) if listed else None
     matching = matching_installations(listed_json, identity, native_target, kind, item,
-                                     signed_release_pins)
+                                     signed_release_pins, **({"kiro_prepared": True} if kiro_installation_case else {}))
+    kiro_direct_prepared = bool(kiro_installation_case and len(matching) == 1
+        and kiro_direct_prepared_installation(matching[0], identity, native_target, kind, item))
     grok_prepared = (grok_prepared_skill_installations(
         listed_json, item, skill_path, project, output,
         **({"full_receipt": added_json} if installation_audit else {}))
@@ -2762,7 +2869,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             repeat_list_json, item, skill_path, project, repeat_add, repeated=True,
             **({"full_receipt": repeat_add_json} if installation_audit else {}))
             if grok_prepared else matching_installations(
-                repeat_list_json, identity, native_target, kind, item, signed_release_pins))
+                repeat_list_json, identity, native_target, kind, item, signed_release_pins,
+                **({"kiro_prepared": True} if kiro_installation_case else {})))
+        if kiro_direct_prepared:
+            repeat_matches = [node for node in repeat_matches
+                if kiro_direct_prepared_installation(node, identity, native_target, kind, item)
+                and node["clients"][0]["package_revision"] == matching[0]["clients"][0]["package_revision"]]
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
         if codex_runtime is not None:
@@ -2860,7 +2972,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         attestation = (["--external-uninstalled"] if
                        native_uninstall and native_uninstall["completed"] else [])
         # Grok project Skills have generated bundle names; never select by raw alias.
-        selector = matching[0]["installation_id"] if grok_prepared else identity
+        selector = matching[0]["installation_id"] if grok_prepared or kiro_installation_case else identity
         cleanup = audited_call([cli, "remove", selector, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup_json = cleanup.pop("_json", None)
@@ -3006,6 +3118,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         # This fresh case owns the whole signed kit closure. An original or
         # reminted child record must not survive even when native state is empty.
         and (kind != "plugin" or item != "marketing-kit" or post_list_empty)
+        and (not kiro_direct_prepared or post_list_empty)
         and (target != "qoder" or kind != "plugin"
              or (qoder_native_after_remove is not None
                  and qoder_native_after_remove["status"] == "absent"))
@@ -3099,6 +3212,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     historical_archive_status = status
     if historical_plugins and status == "passed":
         status = "historical-archive-lifecycle-observed"
+    if kiro_installation_case and status == "passed":
+        status = "installation-lifecycle-observed"
     row = {"kind": kind, "index": index, "identity": identity, "target": target,
             **({target + "_preparation_envelopes": PREPARED_INSTALLATION["observe"](
                 kind, identity, {"install": added_json, "list": listed_json,
@@ -3195,6 +3310,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if windsurf_installation is not None:
         row["windsurf_installation_audit"] = windsurf_installation.finish(
             row, item, index, installation_fixtures)
+    if kiro_installation is not None:
+        row["kiro_installation_custody"] = kiro_installation.finish(row, item, index, installation_fixtures)
     return row
 
 
@@ -3316,6 +3433,7 @@ def main():
     p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"],
                                          HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"],
                                          *PREPARED_INSTALLATION["ACCEPTANCES"],
+                                         *PREPARED_INSTALLATION["KIRO_ACCEPTANCES"],
                                          WINDSURF_INSTALLATION["ACCEPTANCE"]),
                    default="native")
     args = p.parse_args()
@@ -3328,6 +3446,10 @@ def main():
             "codex", "plugin", "linux", "x86_64", 2):
         p.error("Historical archived feed requires exactly two Codex plugins on Linux x86_64")
     prepared_installation = args.acceptance in PREPARED_INSTALLATION["ACCEPTANCES"]
+    kiro_installation = args.acceptance in PREPARED_INSTALLATION["KIRO_ACCEPTANCES"]
+    if kiro_installation and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
+            *PREPARED_INSTALLATION["KIRO_ROUTES"][args.acceptance], "darwin", "arm64", 30):
+        p.error("Kiro installation requires its complete pinned macOS arm64 lane")
     if prepared_installation and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
             *PREPARED_INSTALLATION["ROUTES"][args.acceptance], "linux", "x86_64", 30):
         p.error("Preparation requires its exact pinned Linux x86_64 complete installation lane")
@@ -3367,6 +3489,9 @@ def main():
     if prepared_installation:
         report["acceptance"] = args.acceptance
         report.update(PREPARED_INSTALLATION["summary"](report, doc, args.acceptance))
+    if kiro_installation:
+        report["acceptance"] = args.acceptance
+        report.update(PREPARED_INSTALLATION["kiro_summary"](report, doc, args.acceptance))
     if windsurf_installation:
         report["acceptance"] = args.acceptance
         report.update(WINDSURF_INSTALLATION["summary"](report, doc, fixture_sha256=report["fixture_sha256"]))
@@ -3437,7 +3562,7 @@ def main():
                                  **({"historical_plugins": True} if historical_plugins else {}),
                                  **({"installation_audit": args.acceptance} if prepared_installation else {}),
                                  **({"installation_audit": args.acceptance, "installation_fixtures": doc}
-                                    if windsurf_installation else {}))
+                                    if windsurf_installation or kiro_installation else {}))
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "source": item if args.kind == "plugin" else item["source"],
@@ -3489,6 +3614,13 @@ def main():
         save()
         print(f'{args.target} prepared installation: {report["installation_passed"]}/30; '
               'native discovery, activation and authenticated execution remain unqualified')
+        return 0 if report["installation_acceptance_passed"] else 1
+    if kiro_installation:
+        report.update(PREPARED_INSTALLATION["kiro_summary"](report, doc, args.acceptance))
+        save()
+        print(f'Kiro installation: {report["installation_passed"]}/30; '
+              f'exact signed refusals={report["installation_verified_negative_coverage"]}; '
+              'native discovery, activation, runtime, authentication and tools remain unqualified')
         return 0 if report["installation_acceptance_passed"] else 1
     if windsurf_installation:
         report.update(WINDSURF_INSTALLATION["summary"](report, doc, fixture_sha256=report["fixture_sha256"]))

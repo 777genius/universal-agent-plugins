@@ -8,6 +8,7 @@ on:
       - 'scripts/live-install-audit.py'
       - 'scripts/prepared_installation_audit.py'
       - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/test_kiro_installation_audit.py'
       - 'scripts/windsurf_installation_audit.py'
       - 'scripts/test_windsurf_installation_audit.py'
       - 'scripts/published_codex_baseline.py'
@@ -67,6 +68,7 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
           python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
           python3 -m unittest discover -s scripts -p 'test_prepared_installation_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_kiro_installation_audit.py'
           python3 -m unittest discover -s scripts -p 'test_windsurf_installation_audit.py'
       - name: Acquire actual public vendor client where a headless Linux build exists
         id: vendor-install
@@ -357,6 +359,12 @@ jobs:
             audit_acceptance=windsurf-global-installation
           elif [[ "$AUDIT_TARGET" == grok && "$AUDIT_KIND" == skill ]]; then
             audit_acceptance=grok-prepared-skills-installation
+          elif [[ "$AUDIT_TARGET" == kiro ]]; then
+            if [[ "$AUDIT_KIND" == skill ]]; then
+              audit_acceptance=kiro-skills-installation
+            else
+              audit_acceptance=kiro-installation
+            fi
           fi
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \

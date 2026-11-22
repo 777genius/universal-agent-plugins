@@ -9489,6 +9489,15 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
                         self.assertTrue(refusal, facts)
                     else:
                         self.assertIn("timeout-owned-bytes", result["stdout_tail"])
+                        diagnostic = result["owned_timeout_diagnostic"]
+                        self.assertEqual(diagnostic["status"], "observed-unqualified")
+                        self.assertIs(diagnostic["qualified"], False)
+                        self.assertEqual(diagnostic["stage"], "timeout-before-owned-termination")
+                        self.assertEqual(diagnostic["bootstrap_state"], "running")
+                        self.assertEqual(diagnostic["active"], 3)
+                        self.assertEqual(len(diagnostic["members"]), 3)
+                        self.assertTrue(all(member["state"] == "running" for member in diagnostic["members"]))
+                        self.assertNotIn(str(root), json.dumps(diagnostic))
                     self.assertEqual(waits, {"launcher": 0, "descendant": 0}, facts)
                     self.assertIsNone(ambient.poll())
                 finally:
