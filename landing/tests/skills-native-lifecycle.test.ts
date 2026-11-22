@@ -14,7 +14,9 @@ const command = args[0], root = process.cwd(), marker = p.join(root, 'mock-ident
 const envelope = (command, data) => console.log(JSON.stringify({schema_version:1,command,result:'success',data}));
 if (command === 'version') { envelope('version', {version:'mock-version'}); process.exit(0); }
 if (command === 'skills') {
- const skill = args[args.indexOf('--skill')+1], native = p.join(root,'.agents','skills',skill);
+ const skill = args[args.indexOf('--skill')+1];
+ if(skill==='frontend-design' && args[2]!=='https://github.com/anthropics/skills') throw Error('Expected captured root source');
+ const native = p.join(root,'.agents','skills',skill);
  fs.mkdirSync(native,{recursive:true}); fs.writeFileSync(p.join(native,'SKILL.md'),'mock Skill');
  fs.writeFileSync(marker,skill); fs.writeFileSync(p.join(root,'uap.toml'),'mock requirements');
  const digest = 'sha256:'+'a'.repeat(64);
@@ -57,6 +59,10 @@ for (const mode of ['success', 'reported-ready', 'wrong-source', 'stale-requirem
       assert.ifError(output.error);
       const evidence = JSON.parse(readFileSync(join(report, 'npm-install.json'), 'utf8'));
       assert.equal(evidence.results.length, 2);
+      assert.equal(evidence.results[0].source, 'https://github.com/anthropics/skills');
+      assert.equal(evidence.results[0].id, 'skills-sh:anthropics/skills:frontend-design');
+      assert.equal(evidence.results[0].command, 'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design');
+      assert.deepEqual(evidence.historical_capture.commands[evidence.results[0].id], evidence.results[0].command);
       assert.equal(output.status === 0, ['success', 'reported-ready'].includes(mode), output.stderr);
       for (const result of evidence.results) {
         assert.equal(result.lifecycle.removed, ['success', 'reported-ready'].includes(mode));

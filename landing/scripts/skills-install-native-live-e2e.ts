@@ -17,7 +17,17 @@ if (!published) assert.ok(existsSync(binary), 'Build the actual CLI before this 
 const reportRoot = process.env.UAP_SKILLS_INSTALL_REPORT_DIR || join(tmpdir(), 'uap-native-skills-report');
 mkdirSync(reportRoot, { recursive: true });
 
+// Exact base strings observed in the public Install dialogs on 2026-11-22 UTC.
+// This assertion ties modeled commands to that historical capture; CI does not
+// recapture the deployed site. Target/scope/JSON arguments are test additions.
+const capturedBaseCommands = {
+  'skills-sh:anthropics/skills:frontend-design': 'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design',
+  'skills-sh:uizze.com:ui-radar': 'npx -y universal-agent-plugins@latest skills add https://uizze.com --skill ui-radar',
+} as const;
 const fixtures = [
+  { source: 'https://github.com/anthropics/skills',
+    skill: 'frontend-design', id: 'skills-sh:anthropics/skills:frontend-design',
+    providerUrl: 'https://www.skills.sh/anthropics/skills/frontend-design' },
   { source: 'https://github.com/anthropics/skills/tree/main/skills/frontend-design',
     skill: 'frontend-design',
     id: 'skills-sh:anthropics/skills/tree/main/skills/frontend-design:frontend-design',
@@ -50,7 +60,8 @@ type Evidence = { id: string; source: string; skill: string; command: string; ex
 const report = {
   checked_at: new Date().toISOString(), production_cli: published ? 'npx -y universal-agent-plugins@latest' : binary,
   profile: 'isolated temporary project',
-  command_origin: 'repository DTO model and command generator; not captured from deployed site',
+  command_origin: 'repository DTO model and generator; published base strings compared to historical public browser capture, not recaptured by CI',
+  historical_capture: { observed_at: '2026-11-22 UTC', commands: capturedBaseCommands },
   version_attribution: 'Separate version observations do not prove which binary each @latest operation executed',
   live_network: true, results: [] as Evidence[],
 };
@@ -60,11 +71,14 @@ function listing(fixture: typeof fixtures[number]): SkillListing {
   // Model the API's actual website DTOs rather than inventing unsupported
   // source metadata: one current origin form and two legacy listing-page forms.
   const currentPublisher = fixture.source === 'https://uizze.sh';
+  const rootGitHub = fixture.source === 'https://github.com/anthropics/skills';
   return {
     id: fixture.id, providerId: 'skills-sh', providerUrl: fixture.providerUrl,
     title: fixture.skill, skillNameHint: fixture.skill,
-    availability: currentPublisher ? 'unverified' : 'unsupported-source',
-    source: { kind: 'external', url: currentPublisher ? fixture.source : fixture.providerUrl },
+    availability: rootGitHub || currentPublisher ? 'unverified' : 'unsupported-source',
+    source: rootGitHub
+      ? { kind: 'github', repository: 'anthropics/skills', url: fixture.source }
+      : { kind: 'external', url: currentPublisher ? fixture.source : fixture.providerUrl },
     metrics: { installs: 1, window: 'all-time' },
   };
 }
@@ -107,7 +121,7 @@ function completeJSON(output: ReturnType<typeof spawnSync>, command: string): CL
 }
 const selected = published
   ? fixtures.filter(fixture => [
-      'https://github.com/anthropics/skills/tree/main/skills/frontend-design',
+      'https://github.com/anthropics/skills',
       'https://uizze.com',
     ].includes(fixture.source))
   : fixtures;
@@ -127,6 +141,10 @@ try {
     const command = skillInstallCommand(listing(fixture)) ?? '';
     const expectedCommand = 'npx -y universal-agent-plugins@latest skills add ' + fixture.source +
       ' --skill ' + fixture.skill;
+    if (published) {
+      assert.equal(command, capturedBaseCommands[fixture.id as keyof typeof capturedBaseCommands],
+        'Modeled base command differs from historical public browser capture');
+    }
     const knownUnavailable = fixture.skill === 'lark-mail' &&
       fixture.source.startsWith('https://open.feishu.cn');
     if (knownUnavailable ? Boolean(command) : command !== expectedCommand) {
@@ -311,7 +329,7 @@ try {
       failures.push('CLI version observation failed after ' + fixture.id + ': ' + String(error));
     }
   }
-  // Preserve all seven independent live source results, even when the first
+  // Preserve all eight independent live source results, even when the first
   // publisher is broken. The suite still fails closed; no fixture can give
   // another source a false green.
   assert.deepEqual(failures, [], 'Native source acquisition failures; inspect saved evidence');
