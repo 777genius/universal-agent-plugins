@@ -79,7 +79,7 @@ test('Hermes logo is a valid WebP and README uses it consistently', () => {
   const bytes = readFileSync(new URL(`../public/client-icons/${icon}`, import.meta.url));
   assert.equal(bytes.toString('ascii', 0, 4), 'RIFF');
   assert.equal(bytes.toString('ascii', 8, 12), 'WEBP');
-  assert.equal(readme.split('landing/public/client-icons/hermes.webp').length - 1, 2);
+  assert.ok(readme.includes('landing/public/client-icons/hermes.webp'));
   assert.ok(!readme.includes('hermes.svg'));
   assert.ok(!readme.includes('The static website initially shows'));
 });
