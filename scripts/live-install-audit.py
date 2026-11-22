@@ -393,12 +393,15 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
         return {"exit_code": None, "stdout_tail": "", "stderr_tail": str(e)[-1800:], "timeout": False}
 
 
-def install_case_timeout(target, kind, item):
-    # The frozen Firebase Windows runtime can finish durable registration
-    # while a cold native runtime setup still holds the original add process.
-    # Stay bounded: a timeout or any surviving registration still FAILS E2E.
+def install_case_timeout(target, kind, item, *, repeat=False):
     if (sys.platform == "win32" and kind == "plugin"
             and item == "firebase"):
+        # A fresh Claude installation includes runLockedNPM's existing
+        # 10-minute npm deadline and sequential native probes. Use a bounded
+        # cold-install window; expiration still fails the lifecycle and kills
+        # the owned job. The warm repeat retains the original bound.
+        if target == "claude" and not repeat:
+            return 900
         return 180
     return 105
 
@@ -2477,7 +2480,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if (path.is_symlink() or
                 not path.parent.resolve().is_relative_to(canonical_case)):
             raise ValueError("nested audit directory escapes disposable case")
-        path.mkdir(parents=True, exist_ok=True)
+        # Directory caches and state-v2 protect the owned data root as 0700.
+        # Seed that mode before Kiro's immutable directory baseline; retain
+        # strict detection of any later mode, owner or inode change.
+        mode = 0o700 if kiro_installation_case and path == data else 0o777
+        path.mkdir(parents=True, exist_ok=True, mode=mode)
         if path.is_symlink() or not path.resolve().is_relative_to(canonical_case):
             raise ValueError("nested audit directory escapes disposable case")
     native_roots = [home / v for v in NATIVE_ROOTS[native_target]]
@@ -2844,7 +2851,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         kimi_log_before = (kimi_repeat_log_capture(home, project, case_root,
                             kimi_repeat_log_facts["captures"]["before"]) if kimi_log_case else None)
         repeat_add_started = datetime.now(timezone.utc)
-        repeat_add = audited_call([cli, *args], env, project, add_timeout,
+        repeat_timeout = install_case_timeout(target, kind, item, repeat=True)
+        repeat_add = audited_call([cli, *args], env, project, repeat_timeout,
                                   **capture_option)
         repeat_add_finished = datetime.now(timezone.utc)
         kimi_log_after = (kimi_repeat_log_capture(home, project, case_root,

@@ -269,7 +269,8 @@ class KiroInstallationTests(unittest.TestCase):
             self.assertEqual(match(changed, "sanity", "kiro", "plugin", item, kiro_prepared=True), [])
 
     def test_unknown_cache_foreign_bytes_mode_hardlink_and_parent_changes_refuse(self):
-        for change in ("cache", "foreign", "mode", "hardlink", "symlink", "parent", "wrong-scope"):
+        for change in ("cache", "foreign", "mode", "hardlink", "symlink", "parent",
+                       "data-mode", "data-parent", "wrong-scope"):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
                 observer = self.fixture(Path(directory).resolve(), "plugin")
                 documents = raw("plugin", 0, observer.project)
@@ -286,6 +287,10 @@ class KiroInstallationTests(unittest.TestCase):
                 elif change == "parent":
                     old = observer.mcp.parent.with_name("old-settings")
                     observer.mcp.parent.rename(old); observer.mcp.parent.mkdir(); shutil.copyfile(old / "mcp.json", observer.mcp)
+                elif change == "data-mode":
+                    observer.data.chmod(0o700 if observer.data.stat().st_mode & 0o777 != 0o700 else 0o755)
+                elif change == "data-parent":
+                    observer.data.rename(observer.data.with_name("old-data")); observer.data.mkdir()
                 else:
                     (observer.project / ".kiro/settings/mcp.json").write_text('{"mcpServers":{"wrong":{}}}\n')
                 with self.assertRaises(ValueError):
@@ -482,6 +487,12 @@ class KiroInstallationTests(unittest.TestCase):
                     self.assertEqual(cwd, project)
                     self.assertTrue((Path(env["HOME"]) / ".kiro/settings/mcp.json").is_file())
                     self.assertTrue((project / ".kiro/settings/mcp.json").is_file())
+                    # The real Directory cache and state-v2 writer protect
+                    # this owned root with chmod(0700). Seed that mode before
+                    # the observer captures it; later mode/inode drift fails.
+                    data = Path(env["AGENTPLUGINS_HOME"])
+                    self.assertEqual(data.stat().st_mode & 0o777, 0o700)
+                    data.chmod(0o700)
                     calls.append(list(argv))
                     if index == 13:
                         if len(calls) == 1:

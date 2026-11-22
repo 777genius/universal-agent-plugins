@@ -29,7 +29,10 @@ permissions:
 jobs:
   firebase-claude:
     runs-on: windows-2025
-    timeout-minutes: 20
+    # One source lifecycle can use 900s cold add + 180s repeat + 150s
+    # list/remove calls. Manual runs also execute the published control.
+    # Leave time for native bootstrap, source build, cleanup and evidence.
+    timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 45 || 25 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,7 +47,7 @@ jobs:
       - name: Focused output capture regression
         shell: pwsh
         run: |
-          python -m unittest scripts.test_windows_owned_timeout scripts.test_live_install_audit_env.CrossPlatformPublishedProofRegressions.test_scoped_file_capture_reads_native_json_without_pipe_wait scripts.test_live_install_audit_env.WindowsOwnedFileCaptureContracts -v
+          python -m unittest scripts.test_windows_owned_timeout scripts.test_live_install_audit_env.CrossPlatformPublishedProofRegressions.test_scoped_file_capture_reads_native_json_without_pipe_wait scripts.test_live_install_audit_env.CrossPlatformPublishedProofRegressions.test_published_windows_firebase_timeout_is_bounded_and_scoped scripts.test_live_install_audit_env.WindowsFirebaseBudgetContracts scripts.test_live_install_audit_env.WindowsOwnedFileCaptureContracts -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install genuine pinned Claude 2.1.263
         id: native-bootstrap

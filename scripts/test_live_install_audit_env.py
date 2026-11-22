@@ -8828,13 +8828,90 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
         with patch.object(audit.sys, "platform", "win32"):
             for target in ("codex", "claude", "opencode", "gemini",
                            "copilot", "cline", "kimi", "qoder", "pi"):
-                self.assertEqual(audit.install_case_timeout(target, "plugin", "firebase"), 180)
-                self.assertEqual(audit.install_case_timeout(target, "plugin", "docker-hub"), 105)
-                self.assertEqual(audit.install_case_timeout(target, "skill", "firebase"), 105)
-        with patch.object(audit.sys, "platform", "darwin"):
-            self.assertEqual(audit.install_case_timeout("codex", "plugin", "firebase"), 105)
-        with patch.object(audit.sys, "platform", "linux"):
-            self.assertEqual(audit.install_case_timeout("claude", "plugin", "firebase"), 105)
+                for repeat in (False, True):
+                    expected = 900 if target == "claude" and not repeat else 180
+                    self.assertEqual(audit.install_case_timeout(
+                        target, "plugin", "firebase", repeat=repeat), expected)
+                    self.assertEqual(audit.install_case_timeout(
+                        target, "plugin", "docker-hub", repeat=repeat), 105)
+                    self.assertEqual(audit.install_case_timeout(
+                        target, "skill", "firebase", repeat=repeat), 105)
+        for platform in ("darwin", "linux"):
+            with patch.object(audit.sys, "platform", platform):
+                for repeat in (False, True):
+                    self.assertEqual(audit.install_case_timeout(
+                        "claude", "plugin", "firebase", repeat=repeat), 105)
+
+
+class WindowsFirebaseBudgetContracts(unittest.TestCase):
+    """Exercise the real lifecycle oracle with distinct cold and warm bounds."""
+
+    def test_cold_budget_routes_once_and_timeout_never_qualifies_registration(self):
+        audit = load_audit()
+        pin = {"distribution": "777genius/firebase", "repository": "example/plugins",
+               "path": "plugins/firebase", "revision": "a" * 40, "sequence": 1,
+               "tree_digest": "sha256:" + "b" * 64, "manifest_digest": "sha256:" + "c" * 64}
+        revision = {"distribution_id": pin["distribution"], "resolved_revision": pin["revision"],
+                    "release_sequence": 1, "tree_digest": pin["tree_digest"],
+                    "manifest_digest": pin["manifest_digest"]}
+        matched = {"name": "firebase", "installation_id": "same-firebase-installation",
+                   "source": "example/plugins/plugins/firebase", "clients": [{
+                       "client_id": "claude", "scope": "user", "materialization": "materialized",
+                       "activation": "active", "verification": "installation_verified",
+                       "policy": "allowed", "authentication": "not_required", "package_revision": revision}],
+                   "directory": {"product_id": "firebase", "recorded_distribution": pin["distribution"],
+                                 "recorded_revision": pin["revision"], "recorded_release_sequence": 1}}
+        for timeout_at in (None, 1, 2):
+            with self.subTest(timeout_at=timeout_at), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                config = root / "plugin-06/home/.claude/firebase.json"
+                state = {"installed": False, "adds": 0}
+                calls = []
+
+                def fake_call(argv, _env, _cwd, timeout=105, **options):
+                    operation = argv[1]
+                    calls.append((operation, timeout, options))
+                    timed_out = False
+                    if operation == "add":
+                        state["adds"] += 1
+                        config.parent.mkdir(parents=True, exist_ok=True)
+                        config.write_text('{"firebase":{"command":"inert"}}', encoding="utf-8")
+                        state["installed"] = True
+                        timed_out = state["adds"] == timeout_at
+                        data = {"actions": [{"component_support": [{"name": "firebase", "support": "native"}]}]}
+                    else:
+                        if operation == "remove":
+                            config.unlink()
+                            state["installed"] = False
+                        data = {"installations": [matched] if state["installed"] else []}
+                    # Even valid success JSON and durable registration cannot
+                    # turn an expired command into a qualified installation.
+                    return {"exit_code": None if timed_out else 0, "stdout_tail": "", "stderr_tail": "",
+                            "timeout": timed_out, "_json": {"result": "success", "data": data}}
+
+                with (patch.object(audit.sys, "platform", "win32"),
+                      patch.object(audit, "call", side_effect=fake_call)):
+                    row = audit.do_case("/unused/agentplugins", "claude", "plugin", "firebase",
+                                        6, root, {}, {"firebase": pin})
+                expected = [("add", 900, {"capture_files": True}), ("list", 30, {})]
+                if timeout_at != 1:
+                    expected += [("add", 180, {"capture_files": True}), ("list", 30, {}),
+                                 ("remove", 60, {}), ("list", 30, {})]
+                self.assertEqual(calls, expected)
+                self.assertTrue(row["sentinels_preserved"])
+                if timeout_at is None:
+                    self.assertEqual(row["status"], "passed")
+                    self.assertTrue(row["repeat_verified"])
+                    self.assertTrue(row["removal_verified"])
+                elif timeout_at == 1:
+                    self.assertEqual(row["status"], "failed-install-residue")
+                    self.assertTrue(row["failed_install_registered"])
+                    self.assertFalse(row["repeat_verified"])
+                    self.assertFalse(row["removal_verified"])
+                else:
+                    self.assertEqual(row["status"], "repeat-add-unqualified")
+                    self.assertFalse(row["repeat_verified"])
+                    self.assertTrue(row["removal_verified"])
 
 
 
