@@ -114,6 +114,11 @@ def write_projection(observer, kind, index, documents):
                 "logical_name": name, "path": str(profile / "settings/mcp.json"),
                 "managed_digest": "sha256:" + "b" * 64, "protection_class": "managed"})
     (active / "mcp.json").write_text(json.dumps(projection))
+    if projection["mcpServers"] and kind == "plugin":
+        # Model the default native writer's persistent coordination file.
+        lock = profile / "settings/mcp.json.agentplugins.lock"
+        fd = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+        os.close(fd)
     repository = (item["repo"] if kind == "skill" else item[len("github:"):].rsplit("@", 1)[0]
                   if item.startswith("github:") else FIXTURES["signed_release_pins"][item]["repository"])
     subpath = ("skills/" + item["folder"] if kind == "skill" else "" if item.startswith("github:")
@@ -123,7 +128,8 @@ def write_projection(observer, kind, index, documents):
                   "resolved_revision": client["package_revision"]["resolved_revision"], "tree_digest": client["package_revision"]["tree_digest"]},
               "package": {"manifest_digest": client["package_revision"]["manifest_digest"]},
               "clients": {"fixture-binding": {**deepcopy(client), "client_binding_id": "fixture-binding",
-                  "native_profile_root": str(profile), "physical_artifact_id": physical,
+                  **({"native_profile_root": str(profile)} if kind == "skill" else {}),
+                  "physical_artifact_id": physical,
                   "target_locator": str(active), "native_objects": objects}}}
     (state_root / "state-v2.json").write_text(json.dumps({"schema_version": 5, "installations": [record]}))
 
@@ -392,7 +398,8 @@ class KiroInstallationTests(unittest.TestCase):
                 self.assertEqual(len(positions), 6 if mutation == "fresh-iid" else 1)
 
     def test_source_bound_private_receipt_and_projection_cannot_be_substituted(self):
-        for mutation in ("receipt-source", "receipt-id", "receipt-profile", "receipt-locator", "projection", "extra-object"):
+        for mutation in ("receipt-source", "receipt-id", "receipt-profile", "receipt-user-profile",
+                         "receipt-null-profile", "receipt-locator", "projection", "extra-object"):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
                 observer = self.fixture(Path(directory).resolve(), "plugin")
                 documents = raw("plugin", 0, observer.project)
@@ -406,6 +413,8 @@ class KiroInstallationTests(unittest.TestCase):
                         if mutation == "receipt-source": record["source"]["resolved_revision"] = "f" * 40
                         elif mutation == "receipt-id": record["installation_id"] = "11111111-1111-4111-8111-111111111111"
                         elif mutation == "receipt-profile": binding["native_profile_root"] = str(observer.project / ".kiro")
+                        elif mutation == "receipt-user-profile": binding["native_profile_root"] = str(observer.home / ".kiro")
+                        elif mutation == "receipt-null-profile": binding["native_profile_root"] = None
                         elif mutation == "receipt-locator": binding["target_locator"] = str(observer.data / "unowned")
                         elif mutation == "projection":
                             (Path(binding["target_locator"]) / "mcp.json").write_text('{"mcpServers":{"atlassian":{"command":"wrong source"}}}')
@@ -415,6 +424,47 @@ class KiroInstallationTests(unittest.TestCase):
                     return original(argv, outcome)
                 observer.observe = adversarial
                 with self.assertRaises(ValueError): self.finish(observer, "plugin", 0, documents)
+
+    def test_project_private_profile_cannot_use_unbound_user_semantics(self):
+        for mutation in ("missing", "empty", "user"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                observer = self.fixture(Path(directory).resolve(), "skill")
+                documents = raw("skill", 0, observer.project)
+                original = observer.observe
+                def adversarial(argv, outcome):
+                    path = observer.project / ".uap/state-v2.json"
+                    state = json.loads(path.read_bytes())
+                    if state["installations"]:
+                        binding = next(iter(state["installations"][0]["clients"].values()))
+                        if mutation == "missing": binding.pop("native_profile_root", None)
+                        else: binding["native_profile_root"] = "" if mutation == "empty" else str(observer.home / ".kiro")
+                        path.write_text(json.dumps(state))
+                    return original(argv, outcome)
+                observer.observe = adversarial
+                with self.assertRaises(ValueError): self.finish(observer, "skill", 0, documents)
+
+    def test_native_writer_lock_is_held_before_calls_and_immutable_afterward(self):
+        for mutation in (None, "bytes", "mode", "replace", "hardlink", "symlink", "remove"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                observer = self.fixture(Path(directory).resolve(), "plugin")
+                lock = observer.mcp.with_name(observer.mcp.name + ".agentplugins.lock")
+                self.assertIn(lock, observer.initial_paths)
+                self.assertIn(lock, observer.protected_files)
+                self.assertEqual(lock.read_bytes(), b"")
+                self.assertEqual(lock.stat().st_mode & 0o777, 0o600)
+                if mutation is None:
+                    self.finish(observer, "plugin", 0, raw("plugin", 0, observer.project))
+                    observer.guard()
+                    continue
+                if mutation == "bytes": lock.write_bytes(b"unowned")
+                elif mutation == "mode": lock.chmod(0o644)
+                elif mutation == "replace":
+                    lock.unlink(); lock.write_bytes(b""); lock.chmod(0o600)
+                elif mutation == "hardlink": os.link(lock, observer.home / "foreign-lock-alias")
+                elif mutation == "symlink":
+                    held = observer.home / "held-lock"; lock.rename(held); lock.symlink_to(held)
+                else: lock.unlink()
+                with self.assertRaises((ValueError, OSError)): observer.image()
 
     def test_owned_active_root_cleanup_and_deterministic_private_physical_identity(self):
         for kind in ("plugin", "skill"):

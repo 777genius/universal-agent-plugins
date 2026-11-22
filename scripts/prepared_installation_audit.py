@@ -458,6 +458,11 @@ class KiroInstallationAudit:
                          *(base / relative for base in (self.home / ".kiro", self.project / ".kiro")
                            for relative in (".", "settings", "skills", "skills/foreign-neighbor")))}
         self.mcp = self.home / ".kiro/settings/mcp.json"
+        if kind == "plugin":
+            # BeginExactFile retains this empty coordination file after unlock.
+            # Seed it before custody, then hold it like every other initial file.
+            with self.mcp.with_name(self.mcp.name + ".agentplugins.lock").open("xb") as stream:
+                os.fchmod(stream.fileno(), 0o600)
         info = self.mcp.lstat()
         self.mcp_owner = (info.st_mode, info.st_uid, info.st_gid, info.st_dev, info.st_nlink)
         self.observations = []
@@ -777,6 +782,8 @@ class KiroInstallationAudit:
                              fixtures["signed_release_pins"][source]["repository"])
             expected_subpath = ("skills/" + item["folder"] if self.kind == "skill" else
                                 "" if source.startswith("github:") else fixtures["signed_release_pins"][source]["path"])
+            # Only Project Kiro binds a private native profile. User ownership
+            # still requires exact native-object paths under the held HOME.
             for delivery in self.deliveries:
                 record, binding = delivery["record"], delivery["binding"]
                 origin, package = record.get("source"), record.get("package")
@@ -795,7 +802,8 @@ class KiroInstallationAudit:
                              and all(exact(binding["package_revision"].get(key), value) for key, value in revision.items())
                              and all(exact(binding.get(key), public_client.get(key)) for key in
                                      ("materialization", "activation", "authentication", "policy", "verification"))
-                             and binding.get("native_profile_root") == str(self.project / ".kiro" if self.kind == "skill" else self.home / ".kiro"))
+                             and binding.get("native_profile_root", "")
+                             == (str(self.project / ".kiro") if self.kind == "skill" else ""))
                 kiro_require(binding.get("physical_artifact_id") == physical and binding.get("target_locator") == str(expected_active))
                 if self.kind == "skill":
                     kiro_require(all(document["items"][0].get("destinationPath") == str(expected_active)
