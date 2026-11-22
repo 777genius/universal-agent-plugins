@@ -22,13 +22,27 @@ import (
 
 const cursorEditorPin = "c8003e009f96a6e4fd7185f7016c66d7e36e03d8fa2e2394197511907bcd8226"
 
+// The exact archive above contains 16,137 entries under usr/share/cursor,
+// including that root: 13,212 regular files and 2,925 directories. Its full
+// 1,037,799,007 regular-file bytes remain below the unchanged 1 GiB tree cap.
+// Only the archive-verified runtime receives this measured entry capacity.
+const cursorEditorRuntimeEntries = 16137
+
+func cursorEditorTreeEntryAllowed(label string, admitted int) bool {
+	limit := 10000
+	if label == "runtime" {
+		limit = cursorEditorRuntimeEntries
+	}
+	return admitted < limit
+}
+
 // Only internal runtime aliases are admitted; no alias is ever traversed by
 // the walk. Regular files use the existing held no-follow snapshot reader.
-func cursorEditorTree(ctx context.Context, root string) (map[string]acpMetadataFile, error) {
+func cursorEditorTree(ctx context.Context, root, label string) (map[string]acpMetadataFile, error) {
 	facts := map[string]acpMetadataFile{}
 	var total int64
 	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil || ctx.Err() != nil || len(facts) >= 10000 {
+		if walkErr != nil || ctx.Err() != nil || !cursorEditorTreeEntryAllowed(label, len(facts)) {
 			return fmt.Errorf("editor tree boundary")
 		}
 		info, err := os.Lstat(path)
@@ -162,7 +176,7 @@ func cursorEditorFrozen(ctx context.Context, t *testing.T, roots map[string]stri
 		if err != nil || resolved != root || !filepath.IsAbs(root) {
 			t.Fatal("editor frozen root authority")
 		}
-		facts, err := cursorEditorTree(ctx, root)
+		facts, err := cursorEditorTree(ctx, root, label)
 		if err != nil {
 			t.Log(cursorEditorRefusalFacts(label, facts, err))
 			t.Fatalf("editor frozen tree refused: %s", label)
@@ -170,6 +184,35 @@ func cursorEditorFrozen(ctx context.Context, t *testing.T, roots map[string]stri
 		result[label] = facts
 	}
 	return result
+}
+
+func TestCursorEditorPinnedRuntimeEntryCapacity(t *testing.T) {
+	root := t.TempDir()
+	for index := range cursorEditorRuntimeEntries - 1 {
+		if err := os.WriteFile(filepath.Join(root, fmt.Sprintf("entry-%05d", index)), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	facts, err := cursorEditorTree(t.Context(), root, "runtime")
+	if err != nil || len(facts) != cursorEditorRuntimeEntries {
+		t.Fatalf("pinned runtime capacity refused: entries=%d error=%v", len(facts), err)
+	}
+	facts, err = cursorEditorTree(t.Context(), root, "project-skills")
+	if err == nil || len(facts) != 10000 || cursorEditorRefusalCause(err) != "tree-boundary" {
+		t.Fatalf("ordinary tree entry cap changed: entries=%d error=%v", len(facts), err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "extra"), nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	facts, err = cursorEditorTree(t.Context(), root, "runtime")
+	if err == nil || len(facts) != cursorEditorRuntimeEntries || cursorEditorRefusalCause(err) != "tree-boundary" {
+		t.Fatalf("extra runtime entry admitted: entries=%d error=%v", len(facts), err)
+	}
+	for _, label := range []string{"", "project-skills", "user-plugin", "playwright", "playwright-core", "unknown"} {
+		if !cursorEditorTreeEntryAllowed(label, 9999) || cursorEditorTreeEntryAllowed(label, 10000) {
+			t.Fatalf("ordinary tree entry cap changed: %q", label)
+		}
+	}
 }
 
 func TestCursorEditorFreezeRefusalFacts(t *testing.T) {
@@ -222,7 +265,7 @@ func TestCursorEditorFreezeRefusalFacts(t *testing.T) {
 			case "canceled":
 				cancel()
 			}
-			facts, err := cursorEditorTree(ctx, root)
+			facts, err := cursorEditorTree(ctx, root, "runtime")
 			if scenario.cause == "" {
 				if err != nil || len(facts) != scenario.entries || facts["00-safe"].Bytes != scenario.bytes {
 					t.Fatal("ordinary custody control failed", err)
