@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/copilot"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/opencode"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -120,5 +121,120 @@ func TestOpenCodeDetectorCleansDisposableProfileAfterFailureOrCancellation(t *te
 				t.Fatalf("private profile remains after failure: %v", err)
 			}
 		})
+	}
+}
+
+func TestOpenCodeDetectorVersionProbeAcceptsAliasedConfigRoot(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	scratch := filepath.Join(base, "scratch")
+	home := filepath.Join(base, "home")
+	configParent := filepath.Join(home, ".config")
+	target := filepath.Join(base, "selected-config")
+	for _, dir := range []string{scratch, configParent, target} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alias := filepath.Join(configParent, "opencode")
+	if err := os.Symlink(target, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	canary := filepath.Join(target, "foreign")
+	if err := os.WriteFile(canary, []byte("unchanged"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", scratch)
+	t.Setenv("TMP", scratch)
+	t.Setenv("TEMP", scratch)
+	t.Setenv("XDG_CONFIG_HOME", configParent)
+	d := NewOS(home)
+	d.Registry, err = clients.NewRegistry(opencode.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.LookPath = func(name string) (string, error) {
+		if name == "opencode" {
+			return filepath.Join(base, "native"), nil
+		}
+		return "", errors.New("absent")
+	}
+	var private string
+	d.ProbeVersionWithEnvironment = func(_ context.Context, _ string, env []string) (string, error) {
+		for _, entry := range env {
+			if value, ok := strings.CutPrefix(entry, "HOME="); ok {
+				private = filepath.Dir(value)
+			}
+		}
+		return "1.19.4", nil
+	}
+	got, err := d.DetectTargetsWithVersionProbe(context.Background(), []domain.ClientID{domain.ClientOpenCode})
+	if err != nil || len(got) != 1 || got[0].Status != domain.DetectionDetected || got[0].Version != "1.19.4" || got[0].ConfigRoot != alias {
+		t.Fatalf("aliased OpenCode detection = %+v, %v", got, err)
+	}
+	if private == "" {
+		t.Fatal("native probe did not receive a private profile")
+	}
+	if _, err := os.Stat(private); !os.IsNotExist(err) {
+		t.Fatalf("private profile remains: %v", err)
+	}
+	if body, err := os.ReadFile(canary); err != nil || string(body) != "unchanged" {
+		t.Fatalf("selected config changed: %q, %v", body, err)
+	}
+}
+
+func TestOpenCodeVersionProbeRejectsTempOverlapThroughAlias(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(base, "selected-config")
+	scratch := filepath.Join(target, "scratch")
+	if err := os.MkdirAll(scratch, 0700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(base, "config-alias")
+	if err := os.Symlink(target, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	t.Setenv("TMPDIR", scratch)
+	t.Setenv("TMP", scratch)
+	t.Setenv("TEMP", scratch)
+	adapter := opencode.New()
+	env, cleanup, err := versionProbeEnvironment(adapter, adapter, alias)
+	defer cleanup()
+	if err == nil || len(env) != 0 {
+		t.Fatalf("overlapping profile accepted: env=%v err=%v", env, err)
+	}
+	entries, err := os.ReadDir(scratch)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("overlapping scratch modified: %v %v", entries, err)
+	}
+}
+
+func TestCopilotVersionProbeStillRejectsAliasedConfigRoot(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(base, "selected-config")
+	if err := os.Mkdir(target, 0700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(base, "config-alias")
+	if err := os.Symlink(target, alias); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	adapter := copilot.New()
+	env, cleanup, err := versionProbeEnvironment(adapter, adapter, alias)
+	defer cleanup()
+	if err == nil || len(env) != 0 {
+		t.Fatalf("aliased Copilot profile accepted: env=%v err=%v", env, err)
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("selected profile modified: %v %v", entries, err)
 	}
 }
