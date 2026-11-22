@@ -296,6 +296,7 @@ unrelated publication work, change repository-wide runner variables, or replace
 the workflow's freshly built artifact with a local artifact.
 
 To return Linux execution to GitHub-hosted runners, unset `CI_LINUX_RUNNER`
-to restore each workflow's original GitHub-hosted label. Do not restore retired
+and the scoped `CI_CORE_TEST_RUNNER` override to restore the original
+GitHub-hosted labels. Do not restore retired
 Ubicloud labels. Restore any architecture
 specific overrides separately. No source or test logic changes are needed.
