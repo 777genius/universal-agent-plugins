@@ -30,6 +30,22 @@ complete. Existing queued jobs retain their old routing; rerun only the current
 required work after the workflow change reaches its branch. Preserve completed
 checks and avoid duplicating active runs.
 
+## Route only Core fast test-core
+
+The `test-core` job in `core-fast.yml` accepts `CI_CORE_TEST_RUNNER` before
+`CI_LINUX_RUNNER`. This dedicated repository variable changes only that job;
+all other jobs retain their current routing. Fork pull requests and the
+`ci:github-hosted` label still select `ubuntu-latest` before either variable.
+Node 22.21.1 is provisioned explicitly for the existing core tests.
+
+Leave `CI_CORE_TEST_RUNNER` unset until the dedicated runner target is ready.
+For a scoped rollout, set it to the qualified `hci-uap-core-linux` label and
+verify a fresh `test-core` job's actual runner allocation and completed tests.
+The workflow change alone does not activate that target. To roll back, unset
+`CI_CORE_TEST_RUNNER`; the job immediately returns to `CI_LINUX_RUNNER`, or
+`ubuntu-latest` when both variables are unset. Existing queued jobs keep their
+original allocation, so changing the variable does not move those jobs.
+
 ## Opt in one pull request to GitHub-hosted Linux
 
 Maintainers can apply the `ci:github-hosted` label to a pull request before a
