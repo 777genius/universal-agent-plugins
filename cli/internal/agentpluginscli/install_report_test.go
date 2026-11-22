@@ -49,11 +49,11 @@ func TestReportByAgentKeepsDistinctUpdateGuidance(t *testing.T) {
 		t.Run(fmt.Sprintf("retained-first=%t", retainedFirst), func(t *testing.T) {
 			active := failedItem("active", "gemini", fmt.Errorf("private-active: %w", installer.ErrUpdateRequired))
 			retained := failedItem("retained-a", "gemini", retainedRevisionTestCause())
-			items := []agentItem{active, retained}
+			items := []agentItem{active, retained,
+				failedItem("retained-b", "gemini", fmt.Errorf("second private cause: %w", retainedRevisionTestCause()))}
 			if retainedFirst {
 				items[0], items[1] = items[1], items[0]
 			}
-			items = append(items, failedItem("retained-b", "gemini", fmt.Errorf("second private cause: %w", retainedRevisionTestCause())))
 			reports := reportByAgent(items)
 			if len(reports) != 1 || len(reports[0].Problems) != 2 || reports[0].Retryable() {
 				t.Fatalf("different update explanations must remain separate: %+v", reports)
