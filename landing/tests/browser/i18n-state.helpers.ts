@@ -149,6 +149,31 @@ export async function projections(page: Page, index: RegistryIndex) {
 }
 
 // Read the built artifact independently of the production command formatter.
+export async function signedContext7Example(page: Page, client: ClientID) {
+  const response = await page.request.get(`./api/registry/client/${client}`);
+  expect(response.status()).toBe(200);
+  const index = await response.json() as RegistryIndex;
+  const plugin = index.plugins.find((item) => item.name === 'context7');
+  expect(plugin?.trust_state).toBe('reviewed');
+  expect(plugin?.install_source).toBe('context7');
+  const distribution = plugin?.distributions.find((item) => item.id === '777genius/context7');
+  expect(distribution?.status).toBe('active');
+  const release = distribution?.releases.find((item) => item.release_sequence === distribution.release_sequence);
+  expect(release?.selectable).toBe(true);
+  expect(release?.release_status).toBe('active');
+  expect(release?.manifest_name).toBe('context7');
+  expect(release?.blocking_clients).not.toContain(client);
+  expect(release?.targets.find((target) => target.client === client)?.scopes).toContain('user');
+  expect(release?.source.repository).toBe('777genius/universal-agent-plugins-registry');
+  expect(release?.source.revision).toMatch(/^[0-9a-f]{40}$/);
+  expect(release?.source.path).toBe('plugins/context7');
+  return {
+    selector: 'context7',
+    command: `npx -y universal-agent-plugins@latest add context7 --target ${client}`,
+  };
+}
+
+// Exact Git examples remain available for fixtures without a signed target grant.
 export async function pinnedContext7Example(page: Page, client: ClientID) {
   const response = await page.request.get(`./api/registry/client/${client}`);
   expect(response.status()).toBe(200);
