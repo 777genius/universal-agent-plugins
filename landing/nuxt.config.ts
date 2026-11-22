@@ -1,4 +1,5 @@
 import vuetify from 'vite-plugin-vuetify';
+import { defineLink } from '@unhead/vue';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { clientLandingPages } from './data/clients';
@@ -104,19 +105,34 @@ export default defineNuxtConfig({
         { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${baseURL}favicon-32.png` },
         { rel: 'shortcut icon', href: `${baseURL}favicon.ico` },
         { rel: 'apple-touch-icon', sizes: '180x180', href: `${baseURL}apple-touch-icon.png` },
-        {
+        defineLink({
           rel: 'ai-catalog',
           type: 'application/ai-catalog+json',
           href: `${baseURL}.well-known/ai-catalog.json`,
-        },
-        { rel: 'ard', type: 'application/json', href: `${baseURL}.well-known/ard.json` },
-        { rel: 'describedby', type: 'text/plain', href: `${baseURL}llms.txt` },
+        }),
+        defineLink({ rel: 'ard', type: 'application/json', href: `${baseURL}.well-known/ard.json` }),
+        defineLink({ rel: 'describedby', type: 'text/plain', href: `${baseURL}llms.txt` }),
         { rel: 'dns-prefetch', href: 'https://api.github.com' },
         { rel: 'stylesheet', href: `${baseURL}fonts/fonts.css` },
       ],
     },
   },
-  modules: ['@pinia/nuxt', '@nuxtjs/i18n', '@vueuse/nuxt', 'nuxt-icon', '@nuxt/eslint'],
+  modules: ['@pinia/nuxt', '@nuxtjs/i18n', '@vueuse/nuxt', '@nuxt/icon', '@nuxt/eslint'],
+  icon: {
+    // The static site has no icon API. Bundle the language switcher's dynamic names.
+    mode: 'svg',
+    provider: 'none',
+    serverBundle: false,
+    clientBundle: {
+      scan: false,
+      icons: ['gb', 'ru', 'ua', 'es', 'fr', 'cn', 'in', 'sa', 'br', 'xx']
+        .map((country) => `circle-flags:${country}`),
+    },
+  },
+  typescript: {
+    // Preserve the Nuxt 3 compiler contract during this framework upgrade.
+    tsConfig: { compilerOptions: { noUncheckedIndexedAccess: false } },
+  },
   css: ['~/assets/styles/main.scss', '~/assets/styles/registry.scss'],
   components: [
     {
@@ -179,11 +195,6 @@ export default defineNuxtConfig({
     // Published locales have explicit URLs. Keep the requested route instead
     // of redirecting automatically from the browser's language preference.
     detectBrowserLanguage: false,
-  },
-  // @ts-expect-error - field provided by nuxt modules
-  site: {
-    url: siteUrl,
-    name: productName,
   },
   runtimeConfig: {
     // The complete reviewed Directory is server/build-only. Route-scoped API

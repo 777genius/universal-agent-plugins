@@ -40,8 +40,7 @@ test('configured Nuxt workspace stays inside the project despite a parent worksp
   writeFileSync(join(parent, 'pnpm-lock.yaml'), "lockfileVersion: '9.0'\n");
   writeFileSync(join(project, 'package.json'), '{"private":true}\n');
 
-  // Exercise the installed, lockfile-selected Nuxt resolver, including its
-  // vulnerable automatic discovery, without starting a dev server.
+  // Exercise the installed, lockfile-selected Nuxt resolver without starting a dev server.
   const workspaceSchema = NuxtConfigSchema.workspaceDir;
   assert.ok(workspaceSchema !== null && typeof workspaceSchema === 'object');
   assert.ok('$resolve' in workspaceSchema);
@@ -53,8 +52,12 @@ test('configured Nuxt workspace stays inside the project despite a parent worksp
   };
   assert.equal(
     await resolveWorkspace(undefined, get),
-    parent,
-    'fixture must reproduce parent discovery',
+    project,
+    'Nuxt 4 must ignore a parent settings file that declares no workspace',
   );
+  assert.equal(await resolveWorkspace(configuredWorkspaceDir(), get), project);
+  // Explicit workspace discovery can widen the default, but our pin must hold.
+  writeFileSync(join(parent, 'pnpm-workspace.yaml'), "packages:\n  - landing\n");
+  assert.equal(await resolveWorkspace(undefined, get), parent);
   assert.equal(await resolveWorkspace(configuredWorkspaceDir(), get), project);
 });

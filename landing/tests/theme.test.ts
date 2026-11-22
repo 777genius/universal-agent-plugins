@@ -10,6 +10,7 @@ import { useThemeStore } from '../stores/theme.ts';
 function evaluate(path: string, globals: object, result: string) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
     .replace(/^import .*;\n/gm, '')
+    .replace(/^export \{[^}]+\};?\n/gm, '')
     .replace(/export default /g, 'const plugin = ')
     .replace(/export const /g, 'const ')
     .replace(/import.meta.hot/g, 'false')
