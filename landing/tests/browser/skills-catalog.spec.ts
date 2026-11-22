@@ -480,6 +480,38 @@ test('A deep-linked Skill renders source instructions without relying on bounded
   await expect(page.locator('a[href*="skills.sh"]')).toHaveCount(0);
 });
 
+test('a busy Skill preview waits and automatically displays the source after retry', async ({ page }) => {
+  let documentRequests = 0;
+  let releaseBusy!: () => void;
+  const busyReady = new Promise<void>(resolve => { releaseBusy = resolve; });
+  await page.route('https://**/*', route => route.abort());
+  await page.route('https://api.universal-agent-plugins.com/v1/skills**', (route) =>
+    route.fulfill({
+      json: { items: [], page: 0, hasMore: false, view: 'popular',
+        cache: { status: 'fresh', fetchedAt: '2026-11-01T10:00:00Z' } },
+    }),
+  );
+  await page.route('https://api.universal-agent-plugins.com/v1/skills/document?**', async (route) => {
+    documentRequests++;
+    if (documentRequests === 1) {
+      await busyReady;
+      return route.fulfill({ status: 429, json: { error: { code: 'preview_busy' }, retryAfter: 2 } });
+    }
+    return route.fulfill({
+      json: { status: 'resolved', source: 'anthropics/skills',
+        markdown: '---\nname: frontend-design\ndescription: Design\n---\n## Source after retry\n' },
+    });
+  });
+  await page.goto('skills/?id=skills-sh%3Aanthropics%2Fskills%3Afrontend-design&q=frontend-design');
+  await hydrated(page);
+  releaseBusy();
+  await expect(page.getByRole('status').filter({ hasText: 'Preview is busy. Retrying shortly…' })).toBeVisible();
+  expect(documentRequests).toBe(1);
+  await expect(page.locator('.skills-detail__document .skill-markdown h2')).toHaveText('Source after retry');
+  expect(documentRequests).toBe(2);
+  await expect(page.getByText("The publisher's SKILL.md could not be loaded.")).toHaveCount(0);
+});
+
 
 test('catalog preserves upstream ordering even for non-installable Skills', async ({ page }) => {
   const requested: number[] = [];
