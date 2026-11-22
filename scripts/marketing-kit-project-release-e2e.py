@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Actual public npm 0.1.104 + signed Marketing Kit Project lifecycle, no mocks."""
+"""Actual pinned public npm CLI + signed Marketing Kit lifecycle, no mocks."""
 import argparse
+from contextvars import ContextVar
 import hashlib
 import json
 import os
@@ -12,11 +13,22 @@ import stat
 import tempfile
 from time import sleep
 import traceback
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 audit = runpy.run_path(str(ROOT / "scripts/live-install-audit.py"))
 isolated_env = audit["isolated_client_env"]
-invoke = audit["call"]
+_CLI_VERSION = ContextVar("marketing_kit_cli_version", default="0.1.104")
+_CODEX_SQLITE = ContextVar("marketing_kit_codex_sqlite", default=None)
+
+
+def invoke(*args, **kwargs):
+    observers = _CODEX_SQLITE.get()
+    if observers is None:
+        return audit["call"](*args, **kwargs)
+    return observers.command(lambda: audit["call"](*args, **kwargs))
+
+
 REQUIRED_DISTRIBUTIONS = audit["MARKETING_KIT_DISTRIBUTIONS"]
 EXPECTED = set(REQUIRED_DISTRIBUTIONS.values())
 # Versions declared by the immutable, published Marketing Kit uap.toml.
@@ -175,13 +187,21 @@ def verified(result, stage, operation=None, target=None, scope=None):
     raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
 
 
-def require_exact_published_version(result):
+def published_cli_version(value):
+    if not re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", value):
+        raise argparse.ArgumentTypeError("expected an exact published CLI version")
+    return value
+
+
+def require_exact_published_version(result, expected_version=None):
     """Reject a dev/newer/wrong binary even if its output contains the pinned version."""
+    expected_version = published_cli_version(
+        _CLI_VERSION.get() if expected_version is None else expected_version)
     stdout = result.get("stdout_tail")
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(stdout, str)
-            or stdout.strip() != "agentplugins 0.1.104"):
-        raise AssertionError("not exact published agentplugins 0.1.104")
+            or stdout.strip() != "agentplugins " + expected_version):
+        raise AssertionError("not exact published agentplugins " + expected_version)
 
 
 def verify_pinned_launcher(cli, env, project):
@@ -652,6 +672,111 @@ def run_case(cli, target, root, name, portable=None):
         for filename in ("uap.toml", "uap.lock"):
             shutil.copyfile(portable / filename, project / filename)
     return env, project, user_foreign, project_foreign, native_foreign
+
+
+def initialize_codex_sqlite(env, project):
+    """Admit only the shared auditor's exact preinstall artifacts, never WAL names."""
+    helpers = audit["CODEX_RUNTIME_AUDIT"]
+    binary = audit["AGENT_BINARIES"].get("codex")
+    if not binary or not Path(binary).is_absolute() or not Path(binary).is_file():
+        raise AssertionError("pinned native Codex executable required")
+    home = Path(env["HOME"])
+    case, profile = home.parent, home / ".codex"
+    if (project.is_symlink() or project.resolve(strict=True) != case / "project"
+            or env.get("CODEX_HOME") != str(profile)
+            or Path(env["AGENTPLUGINS_HOME"]) != case / "data"):
+        raise AssertionError("Codex preinstall requires the exact disposable profile")
+    project = case / "project"
+    for path in (case, home, project, profile, case / "data", case / "tmp"):
+        helpers["_real_directory"](path)
+    # Match the shared plugin audit's authored, protected native prerequisites.
+    for directory in (profile / "tmp", profile / "tmp/arg0"):
+        directory.mkdir(mode=0o700)
+    with (profile / "installation_id").open("xb") as stream:
+        if os.name != "nt":
+            os.fchmod(stream.fileno(), 0o644)
+        stream.write(str(uuid.uuid4()).encode("ascii"))
+    protected_home = scoped_snapshot((home,))
+    protected_delivery = scoped_snapshot((project, Path(env["AGENTPLUGINS_HOME"])))
+    observer = helpers["CodexPluginSQLiteAudit"](binary, case, home, project, env)
+    files, directories, metadata = helpers["plugin_initialization"](profile)
+    initialized_home = scoped_snapshot((home,))
+    runtime = home / ".local/state/codex-sqlite"
+    config = profile / "config.toml"
+    if observer.runtime != runtime or observer.config != config:
+        raise AssertionError("Codex preinstall changed fixture authority")
+    owned_files = {
+        config: hashlib.sha256(helpers["_sqlite_config"](observer.pin)).hexdigest(),
+        **{runtime / name: fact["sha256"] for name, fact in
+           observer.observations[0]["runtime_files_fully_read"].items()},
+        **files,
+    }
+    owned_directories = (home / ".local", home / ".local/state", runtime, *directories)
+    expected_home = dict(protected_home)
+    for path in (*owned_directories, *owned_files):
+        directory = path in owned_directories
+        relative = path.relative_to(home)
+        metadata_key = "metadata:0:" + relative.as_posix()
+        observed = initialized_home.get(metadata_key)
+        if (not isinstance(observed, tuple) or not observed
+                or not (stat.S_ISDIR(observed[0]) if directory else stat.S_ISREG(observed[0]))
+                or path in metadata and observed != metadata[path]):
+            raise AssertionError("Codex preinstall changed fixture authority")
+        entries = {metadata_key: observed}
+        if directory:
+            entries["directory:0:" + relative.as_posix()] = "present"
+        else:
+            entries[home.name + "/" + str(relative)] = owned_files[path]
+        for key, value in entries.items():
+            if key not in protected_home:
+                expected_home[key] = value
+    observer.guard()
+    if (initialized_home != expected_home
+            or scoped_snapshot((project, Path(env["AGENTPLUGINS_HOME"]))) != protected_delivery):
+        raise AssertionError("Codex preinstall changed protected profile or Project")
+    return observer
+
+
+class CodexProfileAudits:
+    """Independent SQLite authorities; generic native/profile scanners stay strict."""
+    def __init__(self, report):
+        self.observers = {}
+        self.report = report.setdefault("codex_sqlite_profiles", {})
+
+    def add(self, name, env, project):
+        if name in self.observers or name in self.report:
+            raise AssertionError("duplicate Codex SQLite profile")
+        self.checkpoint("before-profile-" + name)
+        self.report[name] = {"status": "initializing"}
+        try:
+            self.observers[name] = self.command(lambda: initialize_codex_sqlite(env, project))
+            self.checkpoint("after-profile-" + name)
+        except BaseException:
+            self.report[name]["status"] = "failed"
+            raise
+
+    def checkpoint(self, phase):
+        failures = []
+        for name, observer in self.observers.items():
+            try:
+                if self.report[name].get("status") == "failed":
+                    raise AssertionError("Codex SQLite profile has a prior failed checkpoint")
+                observer.checkpoint(phase)
+                self.report[name] = {"status": "observed", **observer.evidence()}
+            except BaseException as error:
+                self.report[name].update(status="failed", failure_phase=phase)
+                self.report[name].pop("runtime_semantics_unchanged", None)
+                failures.append(error)
+        if failures:
+            raise failures[0]
+
+    def command(self, action):
+        self.checkpoint("before-command")
+        try:
+            return action()
+        finally:
+            # Also inspect actual SQLite state after CLI refusal/exception.
+            self.checkpoint("after-command")
 
 
 def pin_foreign(entries, case_root):
@@ -1524,10 +1649,11 @@ def main():
     parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode", "copilot"])
     parser.add_argument("--report", required=True)
     parser.add_argument("--cli", default="agentplugins")
+    parser.add_argument("--cli-version", type=published_cli_version, default="0.1.104")
     options = parser.parse_args()
     report_path = Path(options.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report = {"cli_version": "0.1.104", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
+    report = {"cli_version": options.cli_version, "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
               "qualification_scope": "user_and_project", "two_scope_lifecycle_qualified": False,
               "positive_policy": None, "logical_owner_evidence": None,
               "final_policy_observation": {"status": "not_run", "source_profile": "E",
@@ -1539,6 +1665,9 @@ def main():
                                 "user": {"expectation": "positive_lifecycle", "status": "not_run"}},
               "historical_policy_results": {"signed45": {
                   "status": "separate_point_in_time_audit", "required_for_current_qualification": False}}}
+    version_token = _CLI_VERSION.set(options.cli_version)
+    sqlite_audits = CodexProfileAudits(report) if options.target == "codex" else None
+    sqlite_token = _CODEX_SQLITE.set(sqlite_audits)
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
             root = Path(location)
@@ -1549,6 +1678,8 @@ def main():
             launcher_cache.mkdir(mode=0o700)
             env, project_a, foreign_a, project_foreign_a, native_foreign_a = run_case(options.cli, options.target, root, "A")
             bind_pinned_launcher_cache(env, launcher_cache, root)
+            if sqlite_audits is not None:
+                sqlite_audits.add("A", env, project_a)
             foreign_a_files = pin_foreign([(foreign_a, "unmanaged user data\n"),
                                            (project_foreign_a, "unmanaged project data\n"),
                                            *native_foreign_a], root)
@@ -1661,6 +1792,8 @@ def main():
             native_a_before_b = settled_profile_snapshot(env, project_a)
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
             bind_pinned_launcher_cache(env_b, launcher_cache, root)
+            if sqlite_audits is not None:
+                sqlite_audits.add("B", env_b, project_b)
             foreign_b_files = pin_foreign([(foreign_b, "unmanaged user data\n"),
                                            (project_foreign_b, "unmanaged project data\n"),
                                            *native_foreign_b], root)
@@ -1792,6 +1925,8 @@ def main():
             env_c, project_c, foreign_c, project_foreign_c, native_foreign_c = (
                 run_case(options.cli, options.target, root, "C"))
             bind_pinned_launcher_cache(env_c, launcher_cache, root)
+            if sqlite_audits is not None:
+                sqlite_audits.add("C", env_c, project_c)
             # User operations must not mutate their own working Project C.
             protected_c_project = scoped_snapshot([project_c])
             foreign_files.extend(pin_foreign([(foreign_c, "unmanaged user data\n"),
@@ -1855,7 +1990,8 @@ def main():
             remove_c_attestation = ()
             if options.target == "codex":
                 remove_c_attestation = guarded_native_attestation(
-                    lambda: codex_user_native_remove_attestation(env_c, project_c),
+                    lambda: sqlite_audits.command(
+                        lambda: codex_user_native_remove_attestation(env_c, project_c)),
                     (
                         lambda: check_foreign(foreign_files, root),
                         lambda: check_profile_unchanged(
@@ -1909,7 +2045,8 @@ def main():
             user_remove_attestation = ()
             if options.target == "codex":
                 user_remove_attestation = guarded_native_attestation(
-                    lambda: codex_user_native_remove_attestation(env, project_a),
+                    lambda: sqlite_audits.command(
+                        lambda: codex_user_native_remove_attestation(env, project_a)),
                     (
                         lambda: check_foreign(foreign_files, root),
                         lambda: check_user_project_unchanged(
@@ -1991,6 +2128,8 @@ def main():
                 report["current_vscode_user_boundary"].update(
                     status="refused_as_expected", contract=boundary["contract"],
                     reason=boundary["reason"], policy=boundary["policy"])
+            if sqlite_audits is not None:
+                sqlite_audits.checkpoint("final-policy-and-inventory")
             report["scope_results"]["user"]["status"] = "passed"
         # TemporaryDirectory cleanup is part of qualification; exceptions from
         # its __exit__ must never leave a successful two-scope result behind.
@@ -2001,6 +2140,8 @@ def main():
         report["failure"] = str(error)[:2500]
         traceback.print_exc()
     finally:
+        _CODEX_SQLITE.reset(sqlite_token)
+        _CLI_VERSION.reset(version_token)
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(json.dumps(report, indent=2, ensure_ascii=False))
     return 0 if report["status"] == "passed" else 1
