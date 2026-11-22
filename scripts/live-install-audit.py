@@ -118,6 +118,30 @@ AGENT_BINARIES = {
 GIT_EXECUTABLE = str(Path(path).resolve()) if (path := shutil.which("git")) else None
 
 
+def validate_signed_release_pin(alias, pin):
+    if not isinstance(pin, dict) or set(pin) != {
+            "distribution", "repository", "path", "revision",
+            "sequence", "tree_digest", "manifest_digest"}:
+        raise ValueError(f"Invalid frozen signed release pin: {alias}")
+    if (not all(isinstance(pin[key], str) and pin[key]
+                for key in ("distribution", "repository", "path"))
+            or type(pin["sequence"]) is not int or pin["sequence"] < 1
+            or not isinstance(pin["revision"], str)
+            or not re.fullmatch(r"[0-9a-f]{40}", pin["revision"])
+            or any(not isinstance(pin[key], str) or
+                   re.fullmatch(r"sha256:[0-9a-f]{64}", pin[key]) is None
+                   for key in ("tree_digest", "manifest_digest"))):
+        raise ValueError(f"Malformed frozen signed release pin: {alias}")
+
+
+def effective_signed_release_pins(doc, native_target):
+    """Freeze one selected client's source expectations without mutating defaults."""
+    pins = {alias: dict(pin) for alias, pin in doc["signed_release_pins"].items()}
+    for alias, pin in doc.get("signed_release_pins_by_target", {}).get(native_target, {}).items():
+        pins[alias] = dict(pin)
+    return pins
+
+
 def validate_fixtures(doc):
     names = doc["plugin_aliases"]
     skills = doc["skills"]
@@ -137,19 +161,18 @@ def validate_fixtures(doc):
     if not isinstance(pins, dict) or set(pins) != signed_aliases:
         raise ValueError("Missing frozen Registry release pins for signed aliases")
     for alias, pin in pins.items():
-        if not isinstance(pin, dict) or set(pin) != {
-                "distribution", "repository", "path", "revision",
-                "sequence", "tree_digest", "manifest_digest"}:
-            raise ValueError(f"Invalid frozen signed release pin: {alias}")
-        if (not all(isinstance(pin[key], str) and pin[key]
-                    for key in ("distribution", "repository", "path"))
-                or type(pin["sequence"]) is not int or pin["sequence"] < 1
-                or not isinstance(pin["revision"], str)
-                or not re.fullmatch(r"[0-9a-f]{40}", pin["revision"])
-                or any(not isinstance(pin[key], str) or
-                       re.fullmatch(r"sha256:[0-9a-f]{64}", pin[key]) is None
-                       for key in ("tree_digest", "manifest_digest"))):
-            raise ValueError(f"Malformed frozen signed release pin: {alias}")
+        validate_signed_release_pin(alias, pin)
+    if "signed_release_pins_by_target" in doc:
+        overrides = doc["signed_release_pins_by_target"]
+        canonical_targets = {audit_client_id(target, "plugin") for target in targets}
+        if not isinstance(overrides, dict) or not overrides or not set(overrides) <= canonical_targets:
+            raise ValueError("Invalid target-specific signed release pin maps")
+        for target, target_pins in overrides.items():
+            if (not isinstance(target_pins, dict) or not target_pins
+                    or not set(target_pins) <= signed_aliases):
+                raise ValueError(f"Invalid target-specific signed release pins: {target}")
+            for alias, pin in target_pins.items():
+                validate_signed_release_pin(alias, pin)
     for plugin in exact_git:
         if not re.fullmatch(r"github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[a-f0-9]{40}", plugin):
             raise ValueError("Direct plugin source is not a pinned root package")
@@ -1393,11 +1416,17 @@ def path_inside_case(path, case_root):
         return False
 
 
+def project_skill_scan_roots(target):
+    """Scan owned projections without changing independent foreign fixtures."""
+    return PROJECT_SKILL_ROOTS.get(target, []) + (
+        [".uap/managed/clients/copilot"] if target == "copilot" else [])
+
+
 def skill_removal_leftovers(project, target, skill_name, installed_path=None):
     """Reject surviving Skills and substituted intermediate project roots."""
     leftovers = []
     case_root = project.parent
-    for relative_root in PROJECT_SKILL_ROOTS.get(target, []):
+    for relative_root in project_skill_scan_roots(target):
         base = project / relative_root
         named = base / skill_name
         if not path_inside_case(base, case_root) or not path_inside_case(named, case_root):
@@ -1415,7 +1444,7 @@ def skill_removal_leftovers(project, target, skill_name, installed_path=None):
 
 def skill_file_present(project, target, skill_name):
     case_root = project.parent
-    for relative_root in PROJECT_SKILL_ROOTS.get(target, []):
+    for relative_root in project_skill_scan_roots(target):
         base = project / relative_root
         if not path_inside_case(base, case_root) or not base.is_dir():
             continue
@@ -1429,6 +1458,129 @@ def skill_file_present(project, target, skill_name):
             if re.search(r"(?m)^name:\s*['\"]?" + re.escape(skill_name) + r"['\"]?\s*$", head):
                 return str(f.relative_to(project))
     return None
+
+
+def copilot_project_skill_path(project, fixture, receipt, matches, *, repeated=False):
+    """Find only the exact raw Skill selected by public source/IID receipts.
+
+    This is a file/source proof, not a Ready qualifier. The existing public
+    add/repeat readiness gate remains mandatory. A recursive same-name match
+    anywhere else in the managed root cannot substitute for this destination.
+    """
+    if (type(fixture) is not dict or type(receipt) is not dict
+            or type(matches) is not list or len(matches) != 1
+            or type(matches[0]) is not dict
+            or type(receipt.get("schema_version")) is not int
+            or receipt.get("schema_version") != 1
+            or receipt.get("command") != "skills add"
+            or receipt.get("result") != "success"
+            or receipt.get("status") != "succeeded"
+            or receipt.get("scope") != "project"):
+        return None
+    selected = receipt.get("items")
+    public = matches[0]
+    if (type(selected) is not list or len(selected) != 1
+            or type(selected[0]) is not dict):
+        return None
+    identities = PREPARED_INSTALLATION["grok_skill_identity"](
+        fixture, public.get("installation_id"))
+    if identities is None:
+        return None
+    candidate, name, physical = identities
+    identity, source_path = fixture["name"], "skills/" + fixture["folder"]
+    if (identity in (".", "..") or Path(identity).name != identity
+            or "\\" in identity or any(c in identity for c in "\x00\r\n")):
+        return None
+    destination = project / ".uap/managed/clients/copilot" / physical
+    chosen = selected[0]
+    if (public.get("name") != name
+            or public.get("source") != fixture["repo"] + "/" + source_path
+            or chosen.get("alias") != identity or chosen.get("targetId") != "copilot"
+            or chosen.get("status") != ("unchanged" if repeated else "succeeded")
+            or chosen.get("candidateId") != candidate
+            or chosen.get("destinationPath") != str(destination)):
+        return None
+    clients = public.get("clients")
+    if (type(clients) is not list or len(clients) != 1 or type(clients[0]) is not dict
+            or any(clients[0].get(key) != value for key, value in (
+                ("client_id", "copilot"), ("scope", "project"),
+                ("materialization", "materialized"), ("policy", "allowed"),
+                ("verification", "installation_verified")))):
+        return None
+    revision = clients[0].get("package_revision")
+    if type(revision) is not dict or revision.get("resolved_revision") != fixture["ref"]:
+        return None
+    case_root = project.parent
+    text, status = copilot_settings_read(project / "uap.lock", case_root)
+    if status is not None:
+        return None
+    try:
+        lock = json.loads(text, object_pairs_hook=_unique_json_object,
+                          parse_constant=_invalid_json_constant)
+        packages = lock["packages"]
+        if type(packages) is not list or any(type(p) is not dict for p in packages):
+            return None
+        selected_lock = [p for p in packages if p.get("alias") == identity]
+        if len(selected_lock) != 1:
+            return None
+        package = selected_lock[0]
+        git = package["source"]["git"]
+        targets = package["targets"]
+        if (type(git) is not dict or type(targets) is not list
+                or targets != ["copilot"]
+                or git.get("kind") != "skill" or git.get("skill") != identity
+                or type(git.get("repository")) is not str
+                or git["repository"].casefold() != fixture["repo"].casefold()
+                or git.get("commit") != fixture["ref"]
+                or git.get("path") != source_path
+                or git.get("resolved_skill_path") != source_path):
+            return None
+        for key in ("tree_digest", "manifest_digest"):
+            value = revision.get(key)
+            if (type(value) is not str or re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None
+                    or package.get(key) != value):
+                return None
+    except (KeyError, TypeError, ValueError):
+        return None
+    skill = destination / "skills" / identity / "SKILL.md"
+    text, status = copilot_settings_read(skill, case_root)
+    if status is not None:
+        return None
+    body = text.encode("utf-8")
+    blob = b"blob " + str(len(body)).encode("ascii") + b"\0" + body
+    if hashlib.sha1(blob).hexdigest() != fixture.get("skill_md_git_blob_sha1"):
+        return None
+    return str(skill.relative_to(project))
+
+
+def copilot_skill_success_response(response, command):
+    """Validate the public envelope for this fresh Copilot Skill lifecycle."""
+    return (type(response) is dict and type(response.get("schema_version")) is int
+            and response.get("schema_version") == 1 and response.get("command") == command
+            and response.get("result") == "success")
+
+
+def copilot_skill_list_ready(response, matches):
+    """A Ready receipt must agree with its fresh, single-target public binding.
+
+    Normalized raw Skills have no catalog authentication requirement. Copilot's
+    observed pure-Skill qualifier yields not_required after native discovery.
+    This acceptance check does not prevent finding/removing unready files.
+    """
+    if not copilot_skill_success_response(response, "list"):
+        return False
+    data = response.get("data")
+    nodes = data.get("installations") if type(data) is dict else None
+    if (type(nodes) is not list or len(nodes) != 1 or type(nodes[0]) is not dict
+            or type(matches) is not list or nodes != matches):
+        return False
+    clients = nodes[0].get("clients")
+    return (type(clients) is list and len(clients) == 1 and type(clients[0]) is dict
+            and all(clients[0].get(key) == value for key, value in (
+                ("client_id", "copilot"), ("scope", "project"),
+                ("materialization", "materialized"), ("activation", "active"),
+                ("authentication", "not_required"), ("policy", "allowed"),
+                ("verification", "installation_verified"))))
 
 
 def locked_skill_is_pinned(project, item, target):
@@ -2481,9 +2633,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 not path.parent.resolve().is_relative_to(canonical_case)):
             raise ValueError("nested audit directory escapes disposable case")
         # Directory caches and state-v2 protect the owned data root as 0700.
-        # Seed that mode before Kiro's immutable directory baseline; retain
+        # Seed that mode before the Kiro/Windsurf immutable baseline; retain
         # strict detection of any later mode, owner or inode change.
-        mode = 0o700 if kiro_installation_case and path == data else 0o777
+        strict_data_root = kiro_installation_case or installation_audit == WINDSURF_INSTALLATION["ACCEPTANCE"]
+        mode = 0o700 if strict_data_root and path == data else 0o777
         path.mkdir(parents=True, exist_ok=True, mode=mode)
         if path.is_symlink() or not path.resolve().is_relative_to(canonical_case):
             raise ValueError("nested audit directory escapes disposable case")
@@ -2501,7 +2654,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         native_foreign.parent.mkdir(parents=True, exist_ok=True)
         native_foreign.write_text("unmanaged native neighbor must survive\n")
     # A pre-existing, unrelated project Skill is an independently owned neighbor.
-    project_skill_roots = PROJECT_SKILL_ROOTS.get(target, [])
+    project_skill_roots = project_skill_scan_roots(target)
     project_foreign = None
     if kind == "skill" and project_skill_roots:
         # Qoder's UAP-managed bundle is not an unmanaged native Skill location.
@@ -2510,10 +2663,31 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         foreign_root = (".qoder/skills" if target == "qoder" else
                         ".grok/skills" if target == "grok" else
                         project_skill_roots[0])
-        project_foreign = project / foreign_root / "foreign-neighbor" / "SKILL.md"
+        # Pi trusts only UAP-owned executable Skills in the selected project.
+        # Keep the independent foreign Skill in B, alongside A's ordinary
+        # foreign-file sentinel, without bypassing Pi's project trust refusal.
+        foreign_project = case_root / "project-b" if target == "pi" else project
+        project_foreign = foreign_project / foreign_root / "foreign-neighbor" / "SKILL.md"
     if project_foreign:
+        if not path_inside_case(project_foreign, case_root):
+            raise ValueError("foreign Skill neighbor escapes disposable case")
         project_foreign.parent.mkdir(parents=True, exist_ok=True)
-        project_foreign.write_text("---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
+        if target == "pi":
+            # Recheck after creating parents; never overwrite a prior foreign
+            # file or a hardlink when seeding the independent Pi project.
+            if not path_inside_case(project_foreign, case_root):
+                raise ValueError("Pi foreign Skill neighbor was redirected before fixture write")
+            with project_foreign.open("x", encoding="utf-8") as stream:
+                stream.write("---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
+        else:
+            project_foreign.write_text("---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
+    pi_foreign_project = None
+    if target == "pi" and kind == "skill":
+        foreign_project = case_root / "project-b"
+        if (not foreign_project.is_dir() or foreign_project.is_symlink()
+                or not path_inside_case(foreign_project, case_root)):
+            raise ValueError("Pi foreign project is not an ordinary contained directory")
+        pi_foreign_project = scoped_snapshot((foreign_project,))
     # An installed Skill must leave the complete project Skill tree unchanged
     # after remove, not just its old SKILL.md pathname.
     before_skill_tree = (snapshot([project / name for name in project_skill_roots])
@@ -2568,6 +2742,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                          *(project / rel for rel in project_skill_roots)):
                 if not path_inside_case(path, case_root):
                     raise ValueError("audit case native/project ancestor was redirected")
+            if (pi_foreign_project is not None
+                    and scoped_snapshot((case_root / "project-b",)) != pi_foreign_project):
+                raise ValueError("Pi foreign project changed after external execution")
             if gemini_settings is not None:
                 if (GEMINI_RUNTIME_AUDIT["_FILES"]["identity"](gemini_settings.lstat())
                         != gemini_settings_identity
@@ -2623,9 +2800,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             stream.write(gemini_settings_text.encode("utf-8"))
         gemini_settings_identity = GEMINI_RUNTIME_AUDIT["_FILES"]["identity"](gemini_settings.lstat())
         assert_case_unchanged()
-    if kind == "skill" and target in ("kimi", "grok"):
-        # Grok inspect reports projectRoot from Git discovery. Never weaken its
-        # strict native project identity contract to accept a missing root.
+    if kind == "skill" and target in ("kimi", "grok", "copilot"):
+        # Native project discovery requires an actual Git worktree. Never
+        # weaken the exact project identity or owned-plugin discovery gates.
         initialize_project_skill_git_root(project, env, case_root)
     if codex_skill_case and AGENT_BINARIES.get("codex"):
         codex_runtime = CODEX_RUNTIME_AUDIT["CodexRuntimeAudit"](
@@ -2730,7 +2907,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     changed = set(snapshot(native_roots).items()) - set(before.items())
     native_attribution = attributable_native_changes(
         native_roots, changed, identity, native_target, native_components)
-    skill_path = skill_file_present(project, target, identity) if kind == "skill" else None
+    copilot_skill_case = target == "copilot" and kind == "skill"
+    skill_path = (skill_file_present(project, target, identity)
+                  if kind == "skill" and not copilot_skill_case else None)
     locked = (project / "uap.toml").is_file() and (project / "uap.lock").is_file()
     lock_contains = locked and identity in (project / "uap.lock").read_text(encoding="utf-8")
     lock_pinned = bool(kind == "skill" and locked and locked_skill_is_pinned(project, item, target))
@@ -2741,6 +2920,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     listed_json = listed.pop("_json", None) if listed else None
     matching = matching_installations(listed_json, identity, native_target, kind, item,
                                      signed_release_pins, **({"kiro_prepared": True} if kiro_installation_case else {}))
+    if copilot_skill_case:
+        skill_path = copilot_project_skill_path(project, item, added_json, matching)
+        # The bounded receipt-bound read already verified the exact Git blob.
+        skill_bytes_match = skill_path is not None
     kiro_direct_prepared = bool(kiro_installation_case and len(matching) == 1
         and kiro_direct_prepared_installation(matching[0], identity, native_target, kind, item))
     grok_prepared = (grok_prepared_skill_installations(
@@ -2837,8 +3020,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
                                  if codex_runtime is not None else None)
-        before_repeat_project = (snapshot([project / root for root in project_skill_roots])
-                                 if grok_prepared else None)
+        repeat_project_snapshot = scoped_snapshot if copilot_skill_case else snapshot
+        before_repeat_project = (repeat_project_snapshot([project / root for root in project_skill_roots])
+                                 if grok_prepared or copilot_skill_case else None)
         lock_root = project if kind == "skill" else data
         lock_paths = (lock_root / "uap.toml", lock_root / "uap.lock")
         def lock_state():
@@ -2883,6 +3067,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             repeat_matches = [node for node in repeat_matches
                 if kiro_direct_prepared_installation(node, identity, native_target, kind, item)
                 and node["clients"][0]["package_revision"] == matching[0]["clients"][0]["package_revision"]]
+        copilot_repeat_path = (copilot_project_skill_path(
+            project, item, repeat_add_json, repeat_matches, repeated=True)
+            if copilot_skill_case else None)
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
         if codex_runtime is not None:
@@ -2911,15 +3098,16 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     kimi_log_before, kimi_log_after, kimi_log_listed, added_json, repeat_add_json, repeat_add,
                     before_repeat_native, after_repeat_native, kimi_repeat_log_facts["append"])
                 repeat_native_runtime_only = kimi_repeat_log_proof is not None
-        repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
-                                    == before_repeat_project if grok_prepared else None)
+        repeat_project_unchanged = (repeat_project_snapshot([project / root for root in project_skill_roots])
+                                    == before_repeat_project if grok_prepared or copilot_skill_case else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
         historical_repeat_lifecycle_verified = bool(
             repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
             and len(repeat_matches) == 1
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
-            and (not grok_prepared or repeat_project_unchanged)
+            and (not (grok_prepared or copilot_skill_case) or repeat_project_unchanged)
+            and (not copilot_skill_case or copilot_repeat_path == skill_path)
         )
         repeat_verified = bool(historical_repeat_lifecycle_verified
                                and (not codex_skill_case or codex_repeat_ready)
@@ -3040,6 +3228,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 post_list_empty = not entries
         except (KeyError, TypeError):
             pass
+    if copilot_skill_case:
+        post_list_schema_valid = (post_list_schema_valid
+                                  and copilot_skill_success_response(post_list_json, "list"))
     old_ids = {entry["installation_id"] for entry in matching}
     # A successful remove must not re-register this identity under a new ID.
     post_remove_identity_registered = bool(
@@ -3123,6 +3314,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
+        and (not copilot_skill_case or (post_list_empty
+             and copilot_skill_success_response(cleanup_json, "remove")))
         # This fresh case owns the whole signed kit closure. An original or
         # reminted child record must not survive even when native state is empty.
         and (kind != "plugin" or item != "marketing-kit" or post_list_empty)
@@ -3215,8 +3408,17 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         and response.get("next_actions") in (None, []))
         for phase, response in (("after-add", added_json), ("repeat-add", repeat_add_json))}
         if kind == "skill" else None)
+    if copilot_skill_case:
+        for phase, response, matches in (("after-add", listed_json, matching),
+                                          ("repeat-add", repeat_list_json, repeat_matches)):
+            skill_public_ready[phase] = (skill_public_ready[phase]
+                                         and copilot_skill_list_ready(response, matches))
     if status == "passed" and skill_public_ready is not None and not all(skill_public_ready.values()):
         status = "incomplete-native-proof"
+    # Pi component support and owned files do not provide independent
+    # before/add/repeat/remove native inventories in this catalog lane.
+    if status == "passed" and (native_target, kind) == ("pi", "plugin"):
+        status = "package-installed-native-unqualified"
     historical_archive_status = status
     if historical_plugins and status == "passed":
         status = "historical-archive-lifecycle-observed"
@@ -3367,7 +3569,8 @@ def expected_negative_coverage(row, cli_version=None):
             "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
         }
         if (row.get("status") == "package-installed-native-unqualified"
-                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101", "agentplugins 0.1.102")
+                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101", "agentplugins 0.1.102",
+                                    "agentplugins 0.1.115")
                 and row.get("prepared_components_only") is False
                 and native_files == []
                 and row.get("source") in non_native_direct_sources):
@@ -3507,6 +3710,7 @@ def main():
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     native_target = audit_client_id(args.target, args.kind)
+    signed_release_pins = effective_signed_release_pins(doc, native_target)
     if args.target == "chatgpt":
         report["canonical_client_id"] = native_target
     eligible_binaries = EXECUTABLE.get(native_target, ())
@@ -3562,7 +3766,7 @@ def main():
             try:
                 result = do_case(cli, args.target, args.kind, item, i, runroot,
                                  doc["plugin_declared_names"],
-                                 doc["signed_release_pins"],
+                                 signed_release_pins,
                                  **({"client_version": report.get("client_version")}
                                     if (args.target, args.kind) in (("gemini", "skill"), ("kimi", "skill"))
                                     or args.target == "opencode" else {}),
@@ -3589,7 +3793,7 @@ def main():
                 line.update(failed_case_diagnostics(result))
             if result["status"] == "incomplete-native-proof" and args.kind == "plugin":
                 line["observed_signed_release"] = result.get("signed_release_observation", [])
-                line["expected_signed_release"] = doc["signed_release_pins"].get(item)
+                line["expected_signed_release"] = signed_release_pins.get(item)
             print(json.dumps(line), flush=True)
     passed = sum(r["status"] == "passed" for r in report["results"])
     report["passed"] = passed

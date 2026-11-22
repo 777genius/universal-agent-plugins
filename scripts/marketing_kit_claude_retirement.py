@@ -11,9 +11,11 @@ import sys
 _CUSTODY = run_path(str(Path(__file__).with_name("claude_cache_retirement_audit.py")))
 require = _CUSTODY["require"]
 
-# Published CLI 0.1.115 source_evidence.go projects schema-1 Directory
-# authentication to unknown for Project; the planner persists not_checked.
-# User required/not_required policy never qualifies this Project checkpoint.
+# Published CLI 0.1.115 reloads locked packages without CatalogEvidence.
+# Its observed native installation qualifies the pinned Skill-only root and
+# local Playwright MCP as not_required only while active. Prepared installs
+# retain not_checked, or a prior not_required across repeat/repair. Remote
+# Notion/HubSpot MCP installation stays not_checked; this is no account grant.
 
 
 class SignedClosureRetirement:
@@ -105,13 +107,17 @@ class SignedClosureRetirement:
                 and type(record["clients"]) is dict and len(record["clients"]) == 1)
         binding_id, binding = next(iter(record["clients"].items()))
         require(type(binding_id) is str and bool(binding_id) and binding["client_binding_id"] == binding_id)
+        authentication = ("not_checked",)
+        if alias in ("marketing-kit", "playwright"):
+            authentication = (("not_required",) if binding.get("activation") == "active"
+                              else ("not_checked", "not_required"))
         checkpoint = {"client_id": ("claude",), "scope": ("project",),
                 # Installed but unready MCPs and untrusted/suppressed plugins
                 # can remain prepared in the published adapter. Exact cache,
                 # registry and receipt ownership below is still mandatory.
                 "activation": ("active", "prepared"), "materialization": ("materialized",),
                 "verification": ("installation_verified",),
-                "authentication": ("not_checked",), "policy": ("allowed",)}
+                "authentication": authentication, "policy": ("allowed",)}
         for key, allowed in checkpoint.items():
             if binding.get(key) != clients[0].get(key) or binding.get(key) not in allowed:
                 raise ValueError(f"Claude cache retirement {alias} binding field {key} differs from checkpoint contract")

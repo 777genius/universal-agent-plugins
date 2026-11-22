@@ -47,10 +47,11 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             shutil.copytree(bundle, cache)
             revision = {"distribution_id": distribution, "version": pin["package_version"],
                         **{key: pin[key] for key in ("release_sequence", "resolved_revision", "tree_digest", "manifest_digest")}}
-            # Published CLI 0.1.115 projects schema-1 Directory authentication
-            # to unknown for Project, then persists not_checked for all four.
-            # User required/not_required policy is not Project authority.
-            authentication = "not_checked"
+            # Published locked-package planning has no CatalogEvidence. Exact
+            # active native installation qualifies the Skill-only root/local MCP;
+            # the two remote MCPs still have no observed account authentication.
+            authentication = ("not_required" if alias in ("marketing-kit", "playwright")
+                              else "not_checked")
             client = {"client_id": "claude", "scope": "project", "activation": "active",
                       "materialization": "materialized", "authentication": authentication,
                       "policy": "allowed", "verification": "installation_verified", "package_revision": revision}
@@ -161,25 +162,55 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 proof = subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
                 self.assertEqual([member["binding_at_capture"] for member in proof["members"]], expected)
                 self.assertEqual([row["authentication"] for row in expected],
-                                 ["not_checked"] * 4)
+                                 ["not_required", "not_checked", "not_checked", "not_required"])
                 self.assertFalse(proof["writer_closure_claimed"])
 
+    def test_fresh_prepared_authentication_is_preserved_without_promotion(self):
+        with TemporaryDirectory() as directory:
+            f = self.fixture(Path(directory).resolve())
+            state = json.loads(f["state"].read_text())
+            for record, public in zip(state["installations"], f["public"]):
+                binding = next(iter(record["clients"].values()))
+                binding["activation"] = public["clients"][0]["activation"] = "prepared"
+                binding["authentication"] = public["clients"][0]["authentication"] = "not_checked"
+            f["state"].write_text(json.dumps(state))
+            subject = self.capture(f)
+            self.retire(f)
+            proof = subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
+            self.assertEqual([row["binding_at_capture"]["authentication"] for row in proof["members"]],
+                             ["not_checked"] * 4)
+            self.assertEqual([row["binding_at_capture"]["activation"] for row in proof["members"]],
+                             ["prepared"] * 4)
+            self.assertFalse(proof["writer_closure_claimed"])
+
     def test_exact_project_authentication_and_raw_public_agreement_required(self):
-        for index, wrong in ((index, value) for index in range(4)
-                             for value in ("auth_pending", "not_required", "failed", "authenticated",
-                                           "pending", "unknown", "", None, "missing")):
-            for location in ("both", "raw", "public"):
-                with self.subTest(index=index, wrong=wrong, location=location), TemporaryDirectory() as directory:
-                    f = self.fixture(Path(directory).resolve())
-                    state = json.loads(f["state"].read_text())
-                    binding = next(iter(state["installations"][index]["clients"].values()))
-                    for label, row in (("raw", binding), ("public", f["public"][index]["clients"][0])):
-                        if location not in ("both", label): continue
-                        if wrong == "missing": row.pop("authentication")
-                        else: row["authentication"] = wrong
-                    f["state"].write_text(json.dumps(state))
-                    with self.assertRaisesRegex(ValueError, "authentication"):
-                        self.capture(f)
+        cases = {
+            "marketing-kit": {"active": ("not_required",), "prepared": ("not_checked", "not_required")},
+            "notion": {"active": ("not_checked",), "prepared": ("not_checked",)},
+            "hubspot-crm": {"active": ("not_checked",), "prepared": ("not_checked",)},
+            "playwright": {"active": ("not_required",), "prepared": ("not_checked", "not_required")},
+        }
+        for index, (alias, activations) in enumerate(cases.items()):
+            for activation, allowed in activations.items():
+                for wrong in ("auth_pending", "not_required", "not_checked", "failed", "authenticated",
+                              "pending", "unknown", "", None, "missing"):
+                    for location in ("both", "raw", "public"):
+                        baseline = "not_required" if alias in ("marketing-kit", "playwright") else "not_checked"
+                        if wrong == baseline or (location == "both" and wrong in allowed):
+                            continue
+                        with self.subTest(alias=alias, activation=activation, wrong=wrong, location=location), TemporaryDirectory() as directory:
+                            f = self.fixture(Path(directory).resolve())
+                            state = json.loads(f["state"].read_text())
+                            binding = next(iter(state["installations"][index]["clients"].values()))
+                            public = f["public"][index]["clients"][0]
+                            binding["activation"] = public["activation"] = activation
+                            for label, row in (("raw", binding), ("public", public)):
+                                if location not in ("both", label): continue
+                                if wrong == "missing": row.pop("authentication")
+                                else: row["authentication"] = wrong
+                            f["state"].write_text(json.dumps(state))
+                            with self.assertRaisesRegex(ValueError, "authentication"):
+                                self.capture(f)
 
     def test_other_readiness_fields_still_fail_closed(self):
         for key, values in {"activation": ("failed", "manual_activation_required", "not_required", "degraded", "unknown", ""),

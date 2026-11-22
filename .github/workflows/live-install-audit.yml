@@ -203,9 +203,9 @@ jobs:
             copilot) npm install --global @github/copilot@1.0.105 ;;
             cline) npm install --global cline@3.0.74 ;;
             kimi)
-              # Project Skills qualify only against observed 2.3.1/2.3.2.
+              # Match the supported 2.5.2 Skill discovery and strict repeat-log proof.
               if [[ "$KIND" == "skill" ]]; then
-                npm install --global @moonshot-ai/kimi-code@2.3.2
+                npm install --global @moonshot-ai/kimi-code@2.5.2
               else
                 npm install --global @moonshot-ai/kimi-code@2.4.1
               fi

@@ -60,7 +60,7 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	if !reflect.DeepEqual(before, copilotRawInventories(t, f, "repeat", &binding)) {
 		t.Fatal("repeat changed foreign catalogs")
 	}
-	removed := f.command(t, "raw-remove", f.outside, f.env(), []string{f.installer, "remove", installed.InstallationID, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--no-ui", "--format", "json"}, 45*time.Second)
+	removed := f.command(t, "raw-remove", f.outside, f.env(), []string{f.installer, "remove", installed.InstallationID, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--format", "json"}, 45*time.Second)
 	value, err := projectNativeRuntimeJSON(removed.Stdout)
 	doc, ok := value.(map[string]any)
 	if err != nil || !ok || doc["schema_version"] != json.Number("1") || doc["command"] != "agentplugins remove" || doc["result"] != "success" {

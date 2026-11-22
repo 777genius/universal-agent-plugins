@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from io import StringIO
 from runpy import run_path
+import stat
 import sys
 from tempfile import TemporaryDirectory
 import unittest
@@ -389,21 +390,34 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                         outcome["_json"] = {"schema_version": 1, "command": "add", "result": "success",
                                             "data": outcome["_json"]}
                         outcome["stdout_tail"] = json.dumps(outcome["_json"])[-1800:]
-                calls = []
+                calls, data_identities = [], []
                 def public_call(argv, env, project, *args, **kwargs):
                     expected, outcome = sequence[len(calls)]
                     self.assertEqual(argv, expected)
                     self.assertIs(kwargs.get("capture_full"), True)
                     self.assertTrue((Path(env["XDG_CONFIG_HOME"]) / "devin/foreign-neighbor.txt").is_file())
                     self.assertEqual(project, Path(temporary).resolve() / f"plugin-{index:02d}/project")
+                    data = Path(env["AGENTPLUGINS_HOME"])
+                    info = data.lstat()
+                    data_identities.append((info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid))
+                    if not calls:
+                        # The real directory cache and state store harden their
+                        # owned parent before the first public result returns.
+                        data.chmod(0o700)
                     calls.append(list(argv))
                     return copy.deepcopy(outcome)
-                with patch.dict(self.audit["do_case"].__globals__, {"call": public_call}):
-                    row = self.audit["do_case"](cli, "windsurf", "plugin", expected_row["source"], index,
-                        Path(temporary).resolve(), self.fixtures["plugin_declared_names"],
-                        self.fixtures["signed_release_pins"], installation_audit="windsurf-global-installation",
-                        installation_fixtures=self.fixtures)
+                previous_umask = os.umask(0o022)
+                try:
+                    with patch.dict(self.audit["do_case"].__globals__, {"call": public_call}):
+                        row = self.audit["do_case"](cli, "windsurf", "plugin", expected_row["source"], index,
+                            Path(temporary).resolve(), self.fixtures["plugin_declared_names"],
+                            self.fixtures["signed_release_pins"], installation_audit="windsurf-global-installation",
+                            installation_fixtures=self.fixtures)
+                finally:
+                    os.umask(previous_umask)
                 self.assertEqual(len(calls), count)
+                self.assertEqual(stat.S_IMODE(data_identities[0][0]), 0o700)
+                self.assertTrue(all(value == data_identities[0] for value in data_identities))
                 self.assertEqual(row["status"], expected_row["status"])
                 proof = row["windsurf_installation_audit"]
                 self.assertEqual(proof["public_state"], None if count == 2 else ACTIVE_SKILLS if index == 22 else PREPARED)
@@ -411,6 +425,42 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 for operation in ("install", "list", "repeat_add", "repeat_list", "cleanup", "post_remove_list"):
                     if row[operation] is not None:
                         self.assertTrue({"_json", "stdout_full", "stderr_full"}.isdisjoint(row[operation]))
+
+    def test_real_do_case_keeps_data_custody_after_baseline(self):
+        cli = str(Path(sys.executable).resolve())
+        for mutation in ("mode", "inode", "existing-mode", "symlink"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                data = root / "plugin-00/uap-data"
+                if mutation in ("existing-mode", "symlink"):
+                    data.parent.mkdir()
+                    if mutation == "existing-mode":
+                        data.mkdir(mode=0o755)
+                        data.chmod(0o755)
+                    else:
+                        saved = root / "foreign-data"
+                        saved.mkdir()
+                        data.symlink_to(saved, target_is_directory=True)
+                calls = []
+                def public_call(argv, env, project, *args, **kwargs):
+                    calls.append(list(argv))
+                    if mutation == "existing-mode":
+                        self.assertEqual(stat.S_IMODE(data.lstat().st_mode), 0o755)
+                        data.chmod(0o700)
+                    elif mutation == "mode":
+                        data.chmod(0o755)
+                    elif mutation == "inode":
+                        data.rename(data.with_name("saved-data"))
+                        data.mkdir(mode=0o700)
+                    else:
+                        self.fail("redirected data root reached a public command")
+                    return self.outcome()
+                with patch.dict(self.audit["do_case"].__globals__, {"call": public_call}):
+                    with self.assertRaises(ValueError):
+                        self.audit["do_case"](cli, "windsurf", "plugin", self.fixtures["plugin_aliases"][0], 0,
+                            root, self.fixtures["plugin_declared_names"], self.fixtures["signed_release_pins"],
+                            installation_audit="windsurf-global-installation", installation_fixtures=self.fixtures)
+                self.assertEqual(len(calls), 0 if mutation == "symlink" else 1)
 
     def test_real_do_case_rejects_wrong_route_before_any_public_call(self):
         with TemporaryDirectory() as temporary, patch.dict(self.audit["do_case"].__globals__, {

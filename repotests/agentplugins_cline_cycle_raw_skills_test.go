@@ -76,7 +76,7 @@ func clineProjectRawSkills(t *testing.T, c *clineProjectCycle) {
 	}
 	delete(f.trees, binding.TargetLocator)
 	delete(f.trees, filepath.Dir(native))
-	remove := []string{f.installer, "remove", i.InstallationID, "--target", "cline", "--scope", "project", "--project-root", r.Project, "--yes", "--no-ui", "--format", "json"}
+	remove := []string{f.installer, "remove", i.InstallationID, "--target", "cline", "--scope", "project", "--project-root", r.Project, "--yes", "--format", "json"}
 	removed := c.rawCommand(t, record, "remove", f.outside, remove)
 	value, err := projectNativeRuntimeJSON(removed.Stdout)
 	doc, ok := value.(map[string]any)

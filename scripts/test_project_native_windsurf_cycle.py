@@ -199,6 +199,16 @@ class WindsurfCycleContracts(unittest.TestCase):
         row["frames"][root][old]["Inode"]+=1
         with self.assertRaises(ValueError):self.admit()
 
+    def test_repeat_progress_matches_the_public_noop_path(self):
+        row=next(row["value"] for row in self.commands if row["stage"]=="repeat-add-a")
+        resolving=b"Resolving and validating one Agent Plugin package for every selected target...\n"
+        row["stderr"]=wire(resolving)
+        self.assertEqual(self.admit(),self.result)
+        for invalid in (resolving+b"Applying transactional client package...\n",b"",resolving+resolving):
+            with self.subTest(stderr=invalid):
+                row["stderr"]=wire(invalid)
+                with self.assertRaises(ValueError):self.admit()
+
     def test_noop_and_whole_catalog_controls_refuse(self):
         original=copy.deepcopy(self.commands)
         row=next(row["value"] for row in self.commands if row["stage"]=="updated-a-skills")

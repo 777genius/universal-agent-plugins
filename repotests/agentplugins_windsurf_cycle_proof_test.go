@@ -193,12 +193,7 @@ func (c *windProjectCycle) publicProof(t *testing.T, label string, r *windCompon
 	w.freezeProof(t, r)
 }
 
-// The mixed Windsurf package still takes the public apply path on repeat.
-// Grok's completed pure-Skills no-op omits that second progress line.
 func windCycleProgress(stage string) string {
-	if stage == "repeat-add-a" {
-		return "Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
-	}
 	if stage == "add-user" {
 		stage = "add-a"
 	}
