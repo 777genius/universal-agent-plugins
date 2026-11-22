@@ -174,7 +174,7 @@ func TestPlainSelectionWithNotesEnforcesMinimum(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || got.Cancelled != tc.canceled || got.Accepted == tc.canceled {
+			if err != nil || got.Cancelled != tc.canceled || got.Accepted == tc.canceled { //nolint:misspell // Existing public result field.
 				t.Fatalf("selection: %+v, %v", got, err)
 			}
 		})

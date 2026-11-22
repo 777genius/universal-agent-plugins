@@ -108,7 +108,7 @@ func (u *UI) SelectManyWithNotes(ctx context.Context, req MultiSelectRequest, co
 		return Selection{}, err
 	}
 	selection, err := u.selectMany(ctx, annotatedRequest(req, terminaltheme.Theme{}), plainUnavailable(req.UnavailableHeading, req.Unavailable, terminaltheme.Theme{Enabled: color}))
-	if err != nil || selection.Cancelled {
+	if err != nil || selection.Cancelled { //nolint:misspell // Preserve the existing public cancellation field.
 		return selection, err
 	}
 	return terminalSelection(req, selection.IDs)
