@@ -97,10 +97,14 @@ def main():
                 if row.get("status") != "passed":
                     failures.append(f"{label}: native E2E case did not PASS")
             except Exception as error:
-                failures.append(f"{label}: {type(error).__name__}")
+                site = sanitized_failure_site(error, repo)
+                # The workflow log and artifact identify only an allowed source
+                # coordinate, never exception text, paths or native profile data.
+                failures.append(f"{label}: {type(error).__name__} at "
+                                f"{site['file']}:{site['line']}:{site['function']}")
                 evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
                                               "error_type": type(error).__name__,
-                                              "source_site": sanitized_failure_site(error, repo)}
+                                              "source_site": site}
     finally:
         report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
         for root in (short, long):
