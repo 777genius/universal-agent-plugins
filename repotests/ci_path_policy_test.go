@@ -138,8 +138,8 @@ func fakeGitHubCLI(t *testing.T) string {
 
 type classifierCase struct {
 	name, changed, fail, event string
-	files                     []string
-	lint, sdk, authoring      string
+	files                      []string
+	lint, sdk, authoring       string
 }
 
 var classifierCases = []classifierCase{
@@ -262,14 +262,18 @@ func runClassifier(t *testing.T, bash, script, fakeBin string, tc classifierCase
 }
 
 func TestCIPathPolicy_HeavyNativeMatrixSelection(t *testing.T) {
-	if runtime.GOOS == "windows" { t.Skip("Linux-only selector") }
+	if runtime.GOOS == "windows" {
+		t.Skip("Linux-only selector")
+	}
 	bash, err := exec.LookPath("bash")
-	if err != nil { t.Skip("bash unavailable") }
+	if err != nil {
+		t.Skip("bash unavailable")
+	}
 	script, fakeBin := classifierScript(t), fakeGitHubCLI(t)
 	cases := []struct {
-		name string
-		files []string
-		event, changed, fail string
+		name                    string
+		files                   []string
+		event, changed, fail    string
 		native, remaining, live string
 	}{
 		{"codex scoped", []string{"install/integrationctl/agentplugins/clients/codex/config.go", "docs/index.md"}, "", "", "", "[\"codex\"]", "[]", "[]"},
@@ -299,7 +303,9 @@ func TestCIPathPolicy_HeavyNativeMatrixSelection(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := runClassifier(t, bash, script, fakeBin, classifierCase{files: tc.files, event: tc.event, changed: tc.changed, fail: tc.fail})
 			for key, want := range map[string]string{"native_clients": tc.native, "remaining_clients": tc.remaining, "live_clients": tc.live} {
-				if got[key] != want { t.Fatalf("%s = %q; want %q (outputs: %v)", key, got[key], want, got) }
+				if got[key] != want {
+					t.Fatalf("%s = %q; want %q (outputs: %v)", key, got[key], want, got)
+				}
 			}
 		})
 	}
