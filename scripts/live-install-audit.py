@@ -2715,10 +2715,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
             if grok_prepared else matching_installations(
                 repeat_list_json, identity, native_target, kind, item, signed_release_pins))
-        if kiro_direct_prepared:
-            repeat_matches = [node for node in repeat_matches
-                if kiro_direct_prepared_installation(node, identity, native_target, kind, item)
-                and node["clients"][0]["package_revision"] == matching[0]["clients"][0]["package_revision"]]
+        repeat_data = repeat_list_json.get("data") if isinstance(repeat_list_json, dict) else None
+        kiro_repeat_unchanged = not kiro_direct_prepared or (
+            isinstance(repeat_data, dict) and len(repeat_matches) == 1
+            and repeat_data.get("installations") == repeat_matches
+            and kiro_direct_prepared_installation(repeat_matches[0], identity, native_target, kind, item)
+            and repeat_matches[0]["clients"][0]["package_revision"] == matching[0]["clients"][0]["package_revision"])
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
         if codex_runtime is not None:
@@ -2752,7 +2754,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         repeat_lock_unchanged = lock_state() == before_repeat_lock
         historical_repeat_lifecycle_verified = bool(
             repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
-            and len(repeat_matches) == 1
+            and len(repeat_matches) == 1 and kiro_repeat_unchanged
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
             and (not grok_prepared or repeat_project_unchanged)
