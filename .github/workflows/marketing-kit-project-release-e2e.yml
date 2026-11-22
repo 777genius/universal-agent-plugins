@@ -8,6 +8,7 @@ on:
       - 'scripts/marketing-kit-project-release-e2e.py'
       - 'scripts/marketing-kit-published-launcher-abort.js'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/test_marketing_kit_codex_sqlite.py'
       - 'scripts/live-install-audit.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
@@ -18,6 +19,7 @@ on:
       - 'scripts/marketing-kit-project-release-e2e.py'
       - 'scripts/marketing-kit-published-launcher-abort.js'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/test_marketing_kit_codex_sqlite.py'
       - 'scripts/live-install-audit.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
@@ -58,6 +60,9 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Install Codex Linux sandbox prerequisites
+        if: ${{ matrix.target == 'codex' }}
+        run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Install real released UAP and native client
         env:
           NATIVE_PACKAGE: ${{ matrix.package }}
