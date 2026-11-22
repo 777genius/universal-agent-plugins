@@ -77,6 +77,22 @@ test('revoked, unsigned, malformed and unsupported sources still refuse Project'
   assert.equal(projectCatalogSelection(reviewed(), []).resolution.distribution, undefined);
 });
 
+test('Kiro Project preview needs MCP alongside its approval extension', () => {
+  const plugin = reviewed();
+  const release = plugin.distributions[0]!.releases[0]!;
+  release.components = ['extensions'];
+  assert.equal(projectCatalogSelection(plugin, ['kiro']).resolution.distribution, undefined);
+  assert.equal(projectCatalogAutomaticSelection(plugin), undefined);
+  // A portable Skill still qualifies for partial installation if an unrelated
+  // extension cannot be projected; the summary cannot identify namespaces.
+  release.components = ['skills', 'extensions'];
+  assert.ok(projectCatalogSelection(plugin, ['kiro']).resolution.distribution);
+  release.components = ['mcp', 'extensions'];
+  const selected = projectCatalogSelection(plugin, ['kiro']).resolution.distribution;
+  assert.ok(selected, 'MCP-backed Kiro extension may be prepared for exact CLI validation');
+  assert.equal(selected.targets.find(target => target.client === 'kiro')?.delivery, 'prepared');
+});
+
 test('extra unsupported sibling does not revoke signed-v1 Project selection', () => {
   const plugin = reviewed();
   plugin.distributions[0]!.releases[0]!.components = ['skills', 'extensions'];

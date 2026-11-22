@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { clientSupportRows } from '../../data/clientSupport.ts';
 import { clientIds } from '../../data/clientIds.generated.ts';
 import { hiddenPublicClientIds } from '../../data/clients.ts';
-import { hydrated, pinnedContext7Example, wording } from './i18n-state.helpers';
+import { hydrated, context7InstallExample, wording } from './i18n-state.helpers';
 
 test('home lists the complete scope matrix immediately before FAQ', async ({ page }) => {
   await page.goto('./');
@@ -109,7 +109,7 @@ const nativeClientCases = (['hermes', 'antigravity'] as const).flatMap((client) 
 );
 
 for (const { client, locale, theme, width } of nativeClientCases) {
-  test(`${client} ${locale} ${theme} route copies an immutable source command at ${width}px`, async ({ page, context }, testInfo) => {
+  test(`${client} ${locale} ${theme} route copies its eligible source command at ${width}px`, async ({ page, context }, testInfo) => {
     const t = wording(locale);
     const direction = locale === 'ar' ? 'rtl' : 'ltr';
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -152,14 +152,15 @@ for (const { client, locale, theme, width } of nativeClientCases) {
       expect(firstStep.y).toBeLessThan(lastStep.y);
     }
     await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${theme}`));
-    const { command, selector } = await pinnedContext7Example(page, client);
+    const { command, selector, pinned } = await context7InstallExample(page, client);
     const install = page.locator('.agent-page__install');
     const snippet = install.locator('.command-snippet--add');
     await expect(snippet).toHaveCount(1);
     await expect(snippet.locator('code')).toHaveText(command);
     await expect(snippet.locator('pre')).toHaveCSS('direction', 'ltr');
     await expect(install.locator('p code')).toHaveText(selector);
-    await expect(install).toContainText(t('registryUi.install.pinnedCatalogSource'));
+    if (pinned) await expect(install).toContainText(t('registryUi.install.pinnedCatalogSource'));
+    else await expect(install).not.toContainText(t('registryUi.install.pinnedCatalogSource'));
     const repairNotice = t('registryUi.install.antigravityRepairUnavailable', { version: '0.1.115' });
     await expect(install).not.toContainText(repairNotice);
     await expect(page.locator('.agent-page__steps article').nth(2).locator('p'))
