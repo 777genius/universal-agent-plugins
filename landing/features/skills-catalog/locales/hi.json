@@ -68,7 +68,8 @@
         "installation": "इंस्टॉल करें",
         "command": "कमांड",
         "prompt": "प्रॉम्प्ट",
-        "promptText": "इस Skill को Universal Agent Plugins से इंस्टॉल करें। चलाने से पहले स्रोत और बदलावों की समीक्षा करें:\n{command}",
+        "promptText": "इस Skill को Universal Agent Plugins से इंस्टॉल करें। पहले ड्राई रन से स्रोत और नियोजित बदलावों की समीक्षा करें:\n{preview}\nअगर योजना इस अनुरोध से मेल खाती है, तो उसे लागू करें:\n{apply}\nअगर CLI कोई अवरोधक सुरक्षा समस्या बताए, तो रुकें और उसे मुझे दिखाएँ।",
+        "promptTargetNote": "दोनों कमांड में {placeholder} को अपने एजेंट ID ({agents}) से बदलें।",
         "exactNameUnavailable": "इंस्टॉल के लिए सटीक नाम सत्यापित नहीं हो सका। प्रकाशक का स्रोत देखें।",
         "security": "सुरक्षा जाँच",
         "installs": "इंस्टॉल",
@@ -79,7 +80,11 @@
         "documentUnavailable": "प्रकाशक से SKILL.md लोड नहीं हो सका। आप स्रोत सीधे देख सकते हैं।",
         "viewPublisher": "प्रकाशक का स्रोत देखें",
         "revision": "स्रोत संशोधन",
-        "rawDocument": "पूरा SKILL.md स्रोत देखें"
+        "rawDocument": "पूरा SKILL.md स्रोत देखें",
+        "remove": "हटाएँ",
+        "savedName": "सहेजा गया नाम खोजें",
+        "removeHint": "इस नाम से सहेजे गए Skill को हटाता है। अगर आपने किसी दूसरे स्रोत से इसी नाम का Skill इंस्टॉल किया है, तो list कमांड से सहेजे गए नाम देखें।",
+        "removeByListedName": "CLI इस Skill के लिए सहेजा गया नाम खुद चुनता है। list के आउटपुट में इस स्रोत के पास उसे खोजें, फिर उसी नाम से remove चलाएँ।"
       },
       "scanFilterLabel": "स्कैन कवरेज",
       "scanModes": {

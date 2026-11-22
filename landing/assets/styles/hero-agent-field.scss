@@ -16,7 +16,8 @@
   inset: 0;
   perspective: 1125px;
   pointer-events: none;
-  opacity: 0.55;
+  // Ambient only: the demo video in front of it is the hero's focus.
+  opacity: 0.4;
 }
 .hero-agent-field--fixed {
   position: fixed;
@@ -29,7 +30,9 @@
 .hero-agent-field__plane {
   position: absolute;
   top: 50%;
-  left: calc(62% - 100px);
+  // Just right of the video's centre, so the ring never runs behind the hero
+  // copy or buttons. The video always paints above the orbit.
+  left: 58%;
   width: min(720px, 150%);
   aspect-ratio: 1;
   translate: -50% -50%;
@@ -133,12 +136,10 @@
   .hero-agent-field__orbit,
   .hero-agent-field__rotor { animation-play-state: paused; }
 }
-@media (max-width: 720px) {
-  .hero-agent-field__plane { width: min(492px, 150%); }
-  .hero-agent-field__node { width: 30px; height: 30px; }
-  .hero-agent-field__node img { width: 22px; height: 22px; }
-  .hero-agent-field__hub { width: 96px; height: 96px; border-radius: 28px; }
-  .hero-agent-field__hub img { width: 64px; height: 64px; }
+// When the hero stacks, the copy and buttons sit right above the video, so a ring
+// around it would run behind them. Phones and tablets show the video alone.
+@media (max-width: 980px) {
+  .hero-agent-field { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-agent-field--fixed { translate: none; will-change: auto; }

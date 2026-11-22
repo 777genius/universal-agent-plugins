@@ -16,6 +16,10 @@ import type { RegistryPlugin } from '../types/registry.ts';
 import type { PluginInstallTargetId } from '../types/content.ts';
 import clientCapabilities from '../data/clientCapabilities.generated.json' with { type: 'json' };
 
+// PowerShell would split an unquoted comma list, so the CLI commands quote it.
+const targetList = (targets: readonly string[]) =>
+  targets.length > 1 ? `"${targets.join(',')}"` : targets[0];
+
 const plugin: RegistryPlugin = JSON.parse(
   readFileSync(new URL('./fixtures/registry-responses/gitlab.json', import.meta.url), 'utf8'),
 ).plugins[0];
@@ -24,21 +28,21 @@ test('production saves supported selections and retains explicit legacy command 
   assert.equal(SAVED_DEPENDENCIES_CLI_RELEASED, true);
   const published = pluginCommands(plugin, ['codex', 'cursor']);
   assert.equal(published.saveMode, 'saved');
-  assert.equal(published.add, 'npx -y universal-agent-plugins add gitlab --target codex,cursor');
-  assert.equal(published.update, 'npx -y universal-agent-plugins update gitlab');
-  assert.equal(published.remove, 'npx -y universal-agent-plugins remove gitlab');
+  assert.equal(published.add, 'npx -y universal-agent-plugins@latest add gitlab --target "codex,cursor"');
+  assert.equal(published.update, 'npx -y universal-agent-plugins@latest update gitlab');
+  assert.equal(published.remove, 'npx -y universal-agent-plugins@latest remove gitlab');
   for (const targets of [['gemini'], ['opencode'], ['cursor'], ['chatgpt'], ['chatgptweb', 'codex']]) {
     const commands = pluginCommands(plugin, targets, false);
-    const targetFlag = ` --target ${targets.join(',')}`;
-    assert.equal(commands.add, `npx -y universal-agent-plugins add gitlab${targetFlag}`);
-    assert.equal(commands.update, `npx -y universal-agent-plugins update gitlab${targetFlag}`);
-    assert.equal(commands.remove, `npx -y universal-agent-plugins remove gitlab${targetFlag}`);
+    const targetFlag = ` --target ${targetList(targets)}`;
+    assert.equal(commands.add, `npx -y universal-agent-plugins@latest add gitlab${targetFlag}`);
+    assert.equal(commands.update, `npx -y universal-agent-plugins@latest update gitlab${targetFlag}`);
+    assert.equal(commands.remove, `npx -y universal-agent-plugins@latest remove gitlab${targetFlag}`);
     assert.equal(commands.saveMode, undefined);
   }
   const commands = pluginCommands(plugin, ['codex', 'cursor'], false);
-  assert.equal(commands.add, 'npx -y universal-agent-plugins add gitlab --target codex,cursor');
-  assert.equal(commands.update, 'npx -y universal-agent-plugins update gitlab --target codex,cursor');
-  assert.equal(commands.remove, 'npx -y universal-agent-plugins remove gitlab --target codex,cursor');
+  assert.equal(commands.add, 'npx -y universal-agent-plugins@latest add gitlab --target "codex,cursor"');
+  assert.equal(commands.update, 'npx -y universal-agent-plugins@latest update gitlab --target "codex,cursor"');
+  assert.equal(commands.remove, 'npx -y universal-agent-plugins@latest remove gitlab --target "codex,cursor"');
   assert.equal(commands.saveMode, undefined);
 });
 
@@ -49,23 +53,23 @@ test('released generator saves supported remote selections and manages all owned
       ['claude', 'codex'],
       true,
     );
-    assert.equal(commands.add, `npx -y universal-agent-plugins add ${source} --target claude,codex`);
+    assert.equal(commands.add, `npx -y universal-agent-plugins@latest add ${source} --target "claude,codex"`);
     assert.equal(commands.saveMode, 'saved');
     assert.equal(
       commands.update,
       source === 'gitlab'
-        ? 'npx -y universal-agent-plugins update gitlab'
-        : `npx -y universal-agent-plugins add ${source} --target claude,codex`,
+        ? 'npx -y universal-agent-plugins@latest update gitlab'
+        : `npx -y universal-agent-plugins@latest add ${source} --target "claude,codex"`,
     );
-    assert.equal(commands.remove, 'npx -y universal-agent-plugins remove gitlab');
+    assert.equal(commands.remove, 'npx -y universal-agent-plugins@latest remove gitlab');
   }
   assert.equal(pluginCommands(plugin, undefined, true).saveMode, 'saved');
   for (const targets of [['gemini'], ['opencode'], ['cursor'], ['codex', 'cursor']]) {
     const commands = pluginCommands(plugin, targets, true);
-    assert.equal(commands.add, `npx -y universal-agent-plugins add gitlab --target ${targets.join(',')}`);
+    assert.equal(commands.add, `npx -y universal-agent-plugins@latest add gitlab --target ${targetList(targets)}`);
     assert.equal(commands.saveMode, 'saved');
-    assert.equal(commands.update, 'npx -y universal-agent-plugins update gitlab');
-    assert.equal(commands.remove, 'npx -y universal-agent-plugins remove gitlab');
+    assert.equal(commands.update, 'npx -y universal-agent-plugins@latest update gitlab');
+    assert.equal(commands.remove, 'npx -y universal-agent-plugins@latest remove gitlab');
   }
 });
 
@@ -74,12 +78,12 @@ test('released generator explicitly opts unsupported and mixed remote selections
     const commands = pluginCommands(plugin, targets, true);
     assert.equal(
       commands.add,
-      `npx -y universal-agent-plugins add gitlab --target ${targets.join(',')} --no-save`,
+      `npx -y universal-agent-plugins@latest add gitlab --target ${targetList(targets)} --no-save`,
     );
     assert.equal(commands.saveMode, 'noSave');
     assert.equal(
       commands.remove,
-      `npx -y universal-agent-plugins remove gitlab --target ${targets.join(',')}`,
+      `npx -y universal-agent-plugins@latest remove gitlab --target ${targetList(targets)}`,
     );
   }
 });
@@ -92,9 +96,9 @@ test('guided mixed setup keeps add unsaved and maintenance limited to installed 
     );
     assert.equal(commands.saveMode, 'noSave');
     assert.equal(commands.add,
-      `npx -y universal-agent-plugins add context7 --target ${peer},chatgptweb --no-save`);
+      `npx -y universal-agent-plugins@latest add context7 --target "${peer},chatgptweb" --no-save`);
     for (const action of ['update', 'repair', 'remove'] as const)
-      assert.equal(commands[action], `npx -y universal-agent-plugins ${action} context7 --target ${peer}`);
+      assert.equal(commands[action], `npx -y universal-agent-plugins@latest ${action} context7 --target ${peer}`);
   }
 });
 
@@ -140,7 +144,7 @@ test('local, literal discovery, and ChatGPT-only keep imperative commands and tr
     assert.equal(commands.saveMode, mode);
     assert.equal(
       commands.add,
-      `npx -y universal-agent-plugins add ${source} --target ${targets.join(',')}`,
+      `npx -y universal-agent-plugins@latest add ${source} --target ${targetList(targets)}`,
     );
   }
   assert.equal(dependencySaveMode('github:example/plugin@main', ['codex']), 'noSave');
@@ -192,7 +196,7 @@ test('catalog selection generator preserves released bytes and saves eligible us
       computed: (read: () => unknown) => read(),
       props: { installSpec },
       selectedTargetIds: { value: selectedTargetIds },
-      selectedCliInvocation: { value: 'npx -y universal-agent-plugins' },
+      selectedCliInvocation: { value: 'npx -y universal-agent-plugins@latest' },
       applyCliInvocation,
       buildManageCommandsForSelection: (current: unknown, targets: string[]) =>
         api.buildManageCommandsForSelection(current, targets, released),
@@ -203,25 +207,25 @@ test('catalog selection generator preserves released bytes and saves eligible us
       assert.equal(
         all[action],
         released && action !== 'repair'
-          ? `npx -y universal-agent-plugins ${action} gitlab`
-          : `npx -y universal-agent-plugins ${action} gitlab --target claude,codex,gemini,opencode,cursor`,
+          ? `npx -y universal-agent-plugins@latest ${action} gitlab`
+          : `npx -y universal-agent-plugins@latest ${action} gitlab --target "claude,codex,gemini,opencode,cursor"`,
       );
       assert.doesNotMatch(all[action], /--target(?:\s*$|\s+--)/);
     }
   }
-  assert.equal(displayed(true).update, 'npx -y universal-agent-plugins update gitlab');
-  assert.equal(displayed(false).update, 'npx -y universal-agent-plugins update gitlab --target codex');
+  assert.equal(displayed(true).update, 'npx -y universal-agent-plugins@latest update gitlab');
+  assert.equal(displayed(false).update, 'npx -y universal-agent-plugins@latest update gitlab --target codex');
   const exactSource = `github:example/demo@${'c'.repeat(40)}//plugins/demo`;
   api.getPluginInstallSpec('gitlab').cliSource = exactSource;
   const gitSpec = api.getResolvedPluginInstallSpec('gitlab', true);
   assert.equal(
     displayed(true, gitSpec, []).update,
-    `npx -y universal-agent-plugins add ${exactSource} --target claude,codex,gemini,opencode,cursor`,
+    `npx -y universal-agent-plugins@latest add ${exactSource} --target "claude,codex,gemini,opencode,cursor"`,
   );
 
   assert.equal(
     displayed(true, gitSpec).update,
-    `npx -y universal-agent-plugins add ${exactSource} --target codex`,
+    `npx -y universal-agent-plugins@latest add ${exactSource} --target codex`,
   );
   assert.equal(
     api.buildManageCommandsForSelection(gitSpec, ['codex'], true).update,
@@ -232,16 +236,16 @@ test('catalog selection generator preserves released bytes and saves eligible us
   // Derive future commands from the current selection rather than those stale bases.
   assert.equal(
     displayed(true, gitSpec, ['codex', 'cursor']).update,
-    `npx -y universal-agent-plugins add ${exactSource} --target codex,cursor`,
+    `npx -y universal-agent-plugins@latest add ${exactSource} --target "codex,cursor"`,
   );
   const legacyGitSpec = api.getResolvedPluginInstallSpec('gitlab', false);
   assert.equal(
     displayed(true, legacyGitSpec, ['codex']).update,
-    `npx -y universal-agent-plugins add ${exactSource} --target codex`,
+    `npx -y universal-agent-plugins@latest add ${exactSource} --target codex`,
   );
   assert.equal(
     displayed(false, legacyGitSpec, []).update,
-    'npx -y universal-agent-plugins update gitlab --target claude,codex,gemini,opencode,cursor',
+    'npx -y universal-agent-plugins@latest update gitlab --target "claude,codex,gemini,opencode,cursor"',
   );
   assert.equal(gitSpec.manageCommands.update, `universal-agent-plugins add ${exactSource}`);
   assert.equal(
@@ -264,19 +268,19 @@ test('catalog selection generator preserves released bytes and saves eligible us
   }
   assert.equal(
     api.buildInstallCommandForSelection(spec, ['claude', 'codex'], false),
-    'universal-agent-plugins add gitlab --target claude,codex',
+    'universal-agent-plugins add gitlab --target "claude,codex"',
   );
   assert.equal(
     api.buildInstallCommandForSelection(spec, ['claude', 'codex'], true),
-    'universal-agent-plugins add gitlab --target claude,codex',
+    'universal-agent-plugins add gitlab --target "claude,codex"',
   );
   assert.equal(
     api.buildInstallCommandForSelection(spec, ['codex', 'cursor'], true),
-    'universal-agent-plugins add gitlab --target codex,cursor',
+    'universal-agent-plugins add gitlab --target "codex,cursor"',
   );
   assert.equal(
     api.buildInstallCommandForSelection(spec, [], true),
-    'universal-agent-plugins add gitlab --target claude,codex,gemini,opencode,cursor',
+    'universal-agent-plugins add gitlab --target "claude,codex,gemini,opencode,cursor"',
   );
 });
 
@@ -294,11 +298,11 @@ test('saved community Git update uses the currently displayed exact selector and
   const command = pluginCommands(current, ['codex'], true).update;
   assert.equal(
     command,
-    `npx -y universal-agent-plugins add github:example/demo@${'b'.repeat(40)}//plugins/demo --target codex`,
+    `npx -y universal-agent-plugins@latest add github:example/demo@${'b'.repeat(40)}//plugins/demo --target codex`,
   );
   assert.equal(
     pluginCommands(current, ['codex'], false).update,
-    'npx -y universal-agent-plugins update gitlab --target codex',
+    'npx -y universal-agent-plugins@latest update gitlab --target codex',
   );
 });
 
@@ -315,9 +319,9 @@ test('reviewed Directory card offers native-qualified Context7 commands for Code
     assert.ok(selected.targets.some((target) => target.client === client && target.scopes.includes('user')));
   }
   const commands = pluginCommands(context7, ['claude', 'codex'], true);
-  assert.equal(commands.add, 'npx -y universal-agent-plugins add context7 --target claude,codex');
+  assert.equal(commands.add, 'npx -y universal-agent-plugins@latest add context7 --target "claude,codex"');
   assert.equal(commands.saveMode, 'saved');
-  assert.equal(commands.update, 'npx -y universal-agent-plugins update context7');
-  assert.equal(commands.repair, 'npx -y universal-agent-plugins repair context7 --target claude,codex');
-  assert.equal(commands.remove, 'npx -y universal-agent-plugins remove context7');
+  assert.equal(commands.update, 'npx -y universal-agent-plugins@latest update context7');
+  assert.equal(commands.repair, 'npx -y universal-agent-plugins@latest repair context7 --target "claude,codex"');
+  assert.equal(commands.remove, 'npx -y universal-agent-plugins@latest remove context7');
 });

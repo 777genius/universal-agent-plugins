@@ -3,7 +3,6 @@ package claude
 import (
 	"bytes"
 	"fmt"
-	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
@@ -39,11 +38,15 @@ func claudeProjectTrustRecorded(env clients.Env, request domain.ActivationReques
 	if err != nil {
 		return false, err
 	}
-	snapshot, err := env.NativeConfig.ReadExactFile(filepath.Join(request.Client.ConfigRoot, ".claude.json"))
+	profile, err := claudeGlobalConfigPath(request.Client.ConfigRoot)
+	if err != nil {
+		return false, err
+	}
+	snapshot, err := env.NativeConfig.ReadExactFile(profile)
 	if err != nil || !snapshot.Exists {
 		return false, err
 	}
-	if len(snapshot.Body) > 1<<20 {
+	if len(snapshot.Body) > claudeGlobalConfigLimit {
 		return false, fmt.Errorf("claude project trust document exceeds limit")
 	}
 	trusted, err := renderClaudeProjectTrust(snapshot.Body, project)

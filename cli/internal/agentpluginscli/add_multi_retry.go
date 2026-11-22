@@ -138,6 +138,9 @@ func setPreflightNextActions(targets []addTargetResult) {
 // client process unconfirmed closed, because retrying could start more work.
 func (combined *addMultiResult) markPreparationNotAttempted(err error, cleanupUnconfirmed bool) {
 	for index := range combined.Targets {
+		if combined.Targets[index].failure != nil {
+			continue // An agent left out earlier keeps its own failure.
+		}
 		combined.Targets[index].Status = string(usecase.GroupTargetExternalNotAttempted)
 		if !cleanupUnconfirmed {
 			combined.Targets[index].NextAction = "resolve the preparation error and retry the same command"

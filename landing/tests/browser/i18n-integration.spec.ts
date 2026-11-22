@@ -41,19 +41,19 @@ for (const locale of publishedLocales) {
         await expect(restore.locator('.registry-restore__terminal')).toHaveCount(2);
         await expect(restore).toHaveAttribute('data-mode', 'project');
         await expect(restore.locator('.registry-restore__guide')).toHaveAttribute('href', /#restore-project-dependencies$/);
-        await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install marketing-kit --scope project');
-        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install --scope project');
+        await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins@latest install marketing-kit --scope project');
+        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins@latest install --scope project');
         await expect(restore.locator('.registry-restore__subtitle')).toHaveText(showcase.projectSubtitle);
         await expect(restore.locator('.registry-restore__handoff-note')).toHaveText(showcase.projectHandoff);
         await expect(restore.locator('.registry-restore__copy')).toHaveCount(2);
         await expect(restore.locator('.registry-restore__qualification')).toHaveCount(0);
         await restore.getByRole('button', { name: showcase.globalLabel, exact: true }).click();
         await expect(restore.locator('.registry-restore__guide')).toHaveAttribute('href', /#restore-on-another-machine$/);
-        await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins install marketing-kit');
-        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins deps import --install');
+        await expect(restore.locator('.registry-restore__terminal').first()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins@latest install marketing-kit');
+        await expect(restore.locator('.registry-restore__terminal').last()).toHaveAttribute('data-command', 'npx -y universal-agent-plugins@latest deps import --install');
         await expect(restore.locator('.registry-restore__subtitle')).toHaveText(showcase.globalSubtitle);
         await expect(restore.locator('.registry-restore__handoff-note')).toHaveText(showcase.globalHandoff);
-        await expect(restore.locator('.registry-restore__export code')).toHaveText('npx -y universal-agent-plugins deps export');
+        await expect(restore.locator('.registry-restore__export code')).toHaveText('npx -y universal-agent-plugins@latest deps export');
         await restore.getByRole('button', { name: showcase.projectLabel, exact: true }).click();
         const docsLocale = ['en', 'ru', 'uk', 'zh', 'es', 'hi', 'ar', 'pt', 'fr'].includes(locale) ? locale : 'en';
         const guideLabel = docsLocale === locale ? copy.guide! : messages.docs.englishLabel.replace('{label}', copy.guide!);
@@ -184,7 +184,7 @@ for (const locale of publishedLocales) {
       const page = await context.newPage();
       await page.goto(`.${localizedPath('/create-plugin/', locale)}`);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(messages.publicAuthoring.title);
-      await expect(page.locator('#use-plugins code')).toHaveText('npx -y universal-agent-plugins add context7');
+      await expect(page.locator('#use-plugins code')).toHaveText('npx -y universal-agent-plugins@latest add context7');
       await expect(page.locator('#historical-v1')).toHaveCount(0);
     } finally {
       await context.close();

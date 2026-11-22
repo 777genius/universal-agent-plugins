@@ -188,6 +188,11 @@ type lazySourceAcquirer struct {
 	acquirer sourceacquisition.Acquirer
 }
 
+// AcquisitionTempRoot reports where the wrapped acquirer stages its files.
+func (acquirer lazySourceAcquirer) AcquisitionTempRoot() string {
+	return acquirer.acquirer.AcquisitionTempRoot()
+}
+
 func (acquirer lazySourceAcquirer) prepare() error {
 	if err := os.MkdirAll(acquirer.dataRoot, 0o700); err != nil {
 		return fmt.Errorf("create agentplugins data directory: %w", err)

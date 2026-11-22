@@ -78,8 +78,8 @@ test('static Global example keeps released commands readable without JavaScript'
     await expect(section).toHaveAttribute('data-mode', 'project');
     await expect(section.locator('.registry-restore__package').first()).toBeVisible();
     await expect(section.locator('.registry-restore__package').last()).toBeVisible();
-    await expect(section.locator('.typed-command__visible').first()).toHaveText('npx -y universal-agent-plugins install marketing-kit --scope project');
-    await expect(section.locator('.typed-command__visible').last()).toHaveText('npx -y universal-agent-plugins install --scope project');
+    await expect(section.locator('.typed-command__visible').first()).toHaveText('npx -y universal-agent-plugins@latest install marketing-kit --scope project');
+    await expect(section.locator('.typed-command__visible').last()).toHaveText('npx -y universal-agent-plugins@latest install --scope project');
     await expect(page.locator('.hero-demo-video iframe')).toHaveCount(0);
   } finally {
     await context.close();

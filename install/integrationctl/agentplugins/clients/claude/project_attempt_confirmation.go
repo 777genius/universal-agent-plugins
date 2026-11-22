@@ -111,8 +111,9 @@ func requireNoSurvivingClaudeCommand(ctx context.Context, env clients.Env, execu
 }
 
 // survivingClaudeCommand finds a Claude Code process running a `plugin`
-// command, or one bound to this profile through CLAUDE_CONFIG_DIR, which every
-// native command of this adapter carries even if it rewrote its arguments.
+// command, or one bound to this profile through the marker every native
+// command of this adapter carries even if it rewrote its arguments. Earlier
+// versions bound every command through CLAUDE_CONFIG_DIR, which still counts.
 // A wrapper script counts as Claude Code through its own name. A Claude
 // process that hides both its arguments and its environment cannot be
 // cleared, so it counts as well.
@@ -122,7 +123,7 @@ func survivingClaudeCommand(processes []legacyports.LiveProcess, executable, con
 		names[claudeCommandName(resolved)] = true
 	}
 	delete(names, "")
-	profile := "CLAUDE_CONFIG_DIR=" + filepath.Clean(configRoot)
+	profile, marker := "CLAUDE_CONFIG_DIR="+filepath.Clean(configRoot), claudeProfileMarker+"="+filepath.Clean(configRoot)
 	for _, process := range processes {
 		claude, plugin := names[claudeCommandName(process.Executable)], false
 		nodeScript := false
@@ -138,7 +139,7 @@ func survivingClaudeCommand(processes []legacyports.LiveProcess, executable, con
 			}
 		}
 		hidden := len(process.Argv) == 0 && len(process.Env) == 0
-		if claude && (plugin || hidden || slices.Contains(process.Env, profile)) {
+		if claude && (plugin || hidden || slices.Contains(process.Env, profile) || slices.Contains(process.Env, marker)) {
 			return process, true
 		}
 	}

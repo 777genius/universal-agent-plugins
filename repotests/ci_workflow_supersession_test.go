@@ -53,7 +53,7 @@ func TestVSCodePluginNativeWorkflowsAreManualOnly(t *testing.T) {
 
 func TestRemainingClientMatrixDoesNotScheduleVSCode(t *testing.T) {
 	body := readRepoFile(t, RepoRoot(t), ".github", "workflows", "live-install-remaining-clients.yml")
-	if !strings.Contains(body, "target: [cursor, kiro, windsurf, grok, chatgpt]") {
+	if !strings.Contains(body, `target: ${{ fromJSON(needs.changes.outputs.remaining_clients || '["cursor","kiro","windsurf","grok","chatgpt"]') }}`) {
 		t.Fatal("remaining-client automatic matrix must exclude the retired VS Code plugin target")
 	}
 	// Preserve the existing vendor acquisition code for intentional manual diagnostics.

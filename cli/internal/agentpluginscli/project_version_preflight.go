@@ -27,8 +27,10 @@ func preflightProjectLifecycleTargets(ctx context.Context, app App, opts *option
 	return selected, detected, nil
 }
 
-func ensureSelectedProjectVersions(ctx context.Context, app App, opts *options, targets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) error {
-	if (app.scope() != domain.ScopeProject && app.scope() != domain.ScopeUser) || opts.dryRun {
+// A dry run executes the same read-only targeted version probe as the real
+// operation, so its preview admits or refuses a version-gated target alike.
+func ensureSelectedProjectVersions(ctx context.Context, app App, _ *options, targets []domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) error {
+	if app.scope() != domain.ScopeProject && app.scope() != domain.ScopeUser {
 		return nil
 	}
 	if app.ClientRegistry == nil {
@@ -150,7 +152,10 @@ func selectedProjectVersion(original domain.DetectedClient, probed []domain.Dete
 	if matches != 1 {
 		return "", fmt.Errorf("target %q version detection returned %d matching clients; no target was changed", original.ClientID, matches)
 	}
-	if client.Status != domain.DetectionDetected || client.DetectionError != nil || strings.TrimSpace(client.Version) == "" {
+	if client.DetectionError != nil {
+		return "", fmt.Errorf("target %q version detection failed; no target was changed: %w", original.ClientID, client.DetectionError)
+	}
+	if client.Status != domain.DetectionDetected || strings.TrimSpace(client.Version) == "" {
 		return "", fmt.Errorf("target %q version detection did not return a successful version; no target was changed", original.ClientID)
 	}
 	if client.ExecutablePath != original.ExecutablePath || client.ConfigRoot != original.ConfigRoot || client.NativeConfigRoot != original.NativeConfigRoot || client.ProfileNamespace != original.ProfileNamespace || !domain.SameProfileAuthority(client.ProfileAuthority, original.ProfileAuthority) {
