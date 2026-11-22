@@ -44,6 +44,68 @@ func TestReportByAgentIsolatesFailuresAndGroupsSharedCauses(t *testing.T) {
 	}
 }
 
+func TestReportByAgentKeepsDistinctUpdateGuidance(t *testing.T) {
+	for _, retainedFirst := range []bool{false, true} {
+		t.Run(fmt.Sprintf("retained-first=%t", retainedFirst), func(t *testing.T) {
+			active := failedItem("active", "gemini", fmt.Errorf("private-active: %w", installer.ErrUpdateRequired))
+			retained := failedItem("retained-a", "gemini", retainedRevisionTestCause())
+			items := []agentItem{active, retained}
+			if retainedFirst {
+				items[0], items[1] = items[1], items[0]
+			}
+			items = append(items, failedItem("retained-b", "gemini", fmt.Errorf("second private cause: %w", retainedRevisionTestCause())))
+			reports := reportByAgent(items)
+			if len(reports) != 1 || len(reports[0].Problems) != 2 || reports[0].Retryable() {
+				t.Fatalf("different update explanations must remain separate: %+v", reports)
+			}
+			var out bytes.Buffer
+			if err := renderAgentAttention(&out, reports, "", retryHintFor(&cobra.Command{Use: "add"}, reports)); err != nil {
+				t.Fatal(err)
+			}
+			for _, want := range []string{
+				"It is already installed at a different version. (active)\n  Next: Run `agentplugins update` for it, then try again.",
+				retainedRevisionSummary + " (retained-a, retained-b)\n  Next: " + retainedRevisionGuidance,
+			} {
+				if !strings.Contains(out.String(), want) {
+					t.Fatalf("guidance was assigned to the wrong package; missing %q:\n%s", want, out.String())
+				}
+			}
+			for _, forbidden := range []string{"private", "second", "--target"} {
+				if strings.Contains(out.String(), forbidden) {
+					t.Fatalf("private detail or impossible retry reached attention output: %s", out.String())
+				}
+			}
+			bindings := (&installOutcome{Items: items, Agents: reports}).bindingsJSON()
+			if len(bindings) != len(items) {
+				t.Fatalf("public bindings collapsed with the presentation: %+v", bindings)
+			}
+			for index, binding := range bindings {
+				if binding.Alias != items[index].Alias || binding.ClientID != "gemini" || binding.Code != "UPDATE_REQUIRED" || binding.Status != "failed" {
+					t.Fatalf("existing per-binding JSON contract changed: %+v", binding)
+				}
+			}
+		})
+	}
+}
+
+func TestReportByAgentKeepsSkippedRetryPolicy(t *testing.T) {
+	for _, recoveryFirst := range []bool{false, true} {
+		t.Run(fmt.Sprintf("recovery-first=%t", recoveryFirst), func(t *testing.T) {
+			items := []agentItem{
+				{Alias: "canceled", ClientID: "gemini", Status: "not_attempted", failure: describeBindingFailure(environment.BindingOutcome{Status: environment.BindingNotAttempted, Err: context.Canceled})},
+				{Alias: "recovery", ClientID: "gemini", Status: "not_attempted", failure: describeBindingFailure(environment.BindingOutcome{Status: environment.BindingNotAttempted, Err: installer.ErrRecoveryRequired})},
+			}
+			if recoveryFirst {
+				items[0], items[1] = items[1], items[0]
+			}
+			reports := reportByAgent(items)
+			if len(reports) != 1 || len(reports[0].Problems) != 2 || reports[0].Retryable() || retryTargetHint(reports) != "" {
+				t.Fatalf("grouping lost a skipped item's non-retryable cause: %+v", reports)
+			}
+		})
+	}
+}
+
 func TestRecoveryRequiredIsNeverOfferedForRetry(t *testing.T) {
 	reports := reportByAgent([]agentItem{
 		failedItem("pdf", "codex", installer.ErrRecoveryRequired),

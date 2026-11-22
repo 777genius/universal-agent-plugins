@@ -3284,6 +3284,70 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 check({**installed, "_json": {**installed["_json"], **changed}},
                       "cold locked restore", "install")
 
+    def test_marketing_kit_signed_tuple_failure_preserves_bounded_public_evidence(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        inspect = runner["inspect_signed_closure"]
+        distribution = runner["REQUIRED_DISTRIBUTIONS"]["playwright"]
+        def invoke(command, *_):
+            response = self._marketing_kit_info_response(runner, command[2])
+            if command[2] == distribution:
+                response["_json"]["data"]["selected_release"].update(
+                    release_sequence=1, repository="x" * 300,
+                    resolved_revision="128b01ff2b4f7242ad061ad823d5e4018af6b2e4",
+                    private_unselected_field="must-not-appear")
+            return response
+        with patch.dict(inspect.__globals__, {"invoke": invoke}):
+            with self.assertRaisesRegex(AssertionError, "immutable source identity changed") as caught:
+                inspect("agentplugins", {}, Path("."), "codex")
+        text = str(caught.exception)
+        observed = json.loads(text.split(": ", 1)[1])
+        self.assertEqual(observed["distribution"], distribution)
+        self.assertEqual(observed["snapshot_sequence"], runner["FIXED_REFUSAL_POLICY"]["snapshot_sequence"])
+        self.assertEqual(observed["snapshot_digest"], runner["FIXED_REFUSAL_POLICY"]["snapshot_digest"])
+        self.assertEqual(observed["expected_release"]["release_sequence"], 2)
+        self.assertEqual(observed["observed_release"]["release_sequence"], 1)
+        self.assertEqual(len(observed["observed_release"]["repository"]), 200)
+        self.assertNotIn("must-not-appear", text)
+        self.assertNotIn("private_unselected_field", text)
+        self.assertLess(len(text), 2500)
+
+    def test_marketing_kit_workflow_separates_current_lifecycle_and_historical_abort(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/marketing-kit-project-release-e2e.yml").read_text()
+        self.assertIn("npm install --global universal-agent-plugins@0.1.116", workflow)
+        self.assertIn('--cli-version 0.1.116', workflow)
+        self.assertIn('release.version !== "0.1.116"', workflow)
+        self.assertIn('result.stdout.replace(/\\n+$/, "") !== "agentplugins 0.1.116"', workflow)
+        historical = workflow.split("      - name: Verify historical npm 0.1.104 launcher abort cleanup", 1)[1].split("      - name:", 1)[0]
+        self.assertIn('npm install --prefix "$RUNNER_TEMP/uap-legacy" --no-audit --no-fund universal-agent-plugins@0.1.104', historical)
+        self.assertIn('UAP_GLOBAL_NPM_ROOT="$RUNNER_TEMP/uap-legacy/node_modules"', historical)
+        self.assertIn('timeout 20s node scripts/marketing-kit-published-launcher-abort.js', historical)
+        self.assertNotIn('continue-on-error', historical)
+
+    def test_marketing_kit_selected_published_version_is_strict_and_context_local(self):
+        import argparse
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        require = runner["require_exact_published_version"]
+        token = runner["_CLI_VERSION"].set("0.1.116")
+        valid = {"exit_code": 0, "timeout": False, "stdout_tail": "agentplugins 0.1.116\n"}
+        try:
+            require(valid)
+            with patch.dict(require.__globals__, {"invoke": Mock(return_value=valid)}):
+                runner["verify_pinned_launcher"]("agentplugins", {}, Path("."))
+            for value in ("0.1.104", "0.1.116-dev", "0.1.1161", "0.1.117"):
+                with self.subTest(value=value), self.assertRaisesRegex(AssertionError, "not exact"):
+                    require({**valid, "stdout_tail": "agentplugins " + value})
+            for value in ("latest", "0.1.116-dev", "01.1.116", "0.1.116\n"):
+                with self.subTest(pin=value), self.assertRaises(argparse.ArgumentTypeError):
+                    runner["published_cli_version"](value)
+        finally:
+            runner["_CLI_VERSION"].reset(token)
+        require({**valid, "stdout_tail": "agentplugins 0.1.104\n"})
+
     def test_marketing_kit_published_abort_watchdog_refuses_stranded_proof_phases(self):
         # Run the actual script with an inert private bootstrap. A stranded
         # downloader or lock waiter must fail instead of letting Node exit

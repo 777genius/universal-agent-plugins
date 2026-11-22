@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Actual public npm 0.1.104 + signed Marketing Kit Project lifecycle, no mocks."""
+"""Actual pinned public npm CLI + signed Marketing Kit lifecycle, no mocks."""
 import argparse
+from contextvars import ContextVar
 import hashlib
 import json
 import os
@@ -17,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 audit = runpy.run_path(str(ROOT / "scripts/live-install-audit.py"))
 isolated_env = audit["isolated_client_env"]
 invoke = audit["call"]
+_CLI_VERSION = ContextVar("marketing_kit_cli_version", default="0.1.104")
 REQUIRED_DISTRIBUTIONS = audit["MARKETING_KIT_DISTRIBUTIONS"]
 EXPECTED = set(REQUIRED_DISTRIBUTIONS.values())
 # Versions declared by the immutable, published Marketing Kit uap.toml.
@@ -175,13 +177,21 @@ def verified(result, stage, operation=None, target=None, scope=None):
     raise AssertionError(f"{stage}: CLI did not succeed with JSON: {result}")
 
 
-def require_exact_published_version(result):
+def published_cli_version(value):
+    if not re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", value):
+        raise argparse.ArgumentTypeError("expected an exact published CLI version")
+    return value
+
+
+def require_exact_published_version(result, expected_version=None):
     """Reject a dev/newer/wrong binary even if its output contains the pinned version."""
+    expected_version = published_cli_version(
+        _CLI_VERSION.get() if expected_version is None else expected_version)
     stdout = result.get("stdout_tail")
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(stdout, str)
-            or stdout.strip() != "agentplugins 0.1.104"):
-        raise AssertionError("not exact published agentplugins 0.1.104")
+            or stdout.strip() != "agentplugins " + expected_version):
+        raise AssertionError("not exact published agentplugins " + expected_version)
 
 
 def verify_pinned_launcher(cli, env, project):
@@ -194,6 +204,22 @@ def verify_pinned_launcher(cli, env, project):
         if attempt < 2:
             sleep((attempt + 1) * 5)
     require_exact_published_version(result)
+
+
+def signed_identity_diagnostic(data, distribution, pinned):
+    """Preserve bounded public tuple evidence, never arbitrary CLI output or env."""
+    def bounded(value):
+        if value is None or type(value) in (bool, int):
+            return value
+        return value[:200] if isinstance(value, str) else {"type": type(value).__name__}
+    release = data.get("selected_release")
+    fields = ("id", "release_status", *pinned)
+    return {"cli_version": _CLI_VERSION.get(), "distribution": distribution,
+            "snapshot_sequence": data["snapshot_sequence"], "snapshot_digest": data["snapshot_digest"],
+            "selected_distribution": bounded(data.get("selected_distribution")),
+            "expected_release": {"id": distribution, "release_status": "active", **pinned},
+            "observed_release": {key: bounded(release.get(key) if isinstance(release, dict) else None)
+                                 for key in fields}}
 
 
 def inspect_signed_closure(cli, env, project, target, expected_policy=None):
@@ -223,7 +249,8 @@ def inspect_signed_closure(cli, env, project, target, expected_policy=None):
                 or release.get("release_status") != "active"
                 or type(release.get("release_sequence")) is not int
                 or any(release.get(field) != value for field, value in pinned.items())):
-            raise AssertionError("signed Directory immutable source identity changed")
+            raise AssertionError("signed Directory immutable source identity changed: " + json.dumps(
+                signed_identity_diagnostic(data, distribution, pinned), sort_keys=True))
         if target == "vscode":
             targets = release.get("target_compatibility")
             if (not isinstance(targets, list) or any(not isinstance(item, dict) for item in targets)
@@ -1524,10 +1551,11 @@ def main():
     parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode", "copilot"])
     parser.add_argument("--report", required=True)
     parser.add_argument("--cli", default="agentplugins")
+    parser.add_argument("--cli-version", type=published_cli_version, default="0.1.104")
     options = parser.parse_args()
     report_path = Path(options.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report = {"cli_version": "0.1.104", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
+    report = {"cli_version": options.cli_version, "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
               "qualification_scope": "user_and_project", "two_scope_lifecycle_qualified": False,
               "positive_policy": None, "logical_owner_evidence": None,
               "final_policy_observation": {"status": "not_run", "source_profile": "E",
@@ -1539,6 +1567,7 @@ def main():
                                 "user": {"expectation": "positive_lifecycle", "status": "not_run"}},
               "historical_policy_results": {"signed45": {
                   "status": "separate_point_in_time_audit", "required_for_current_qualification": False}}}
+    version_token = _CLI_VERSION.set(options.cli_version)
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location:
             root = Path(location)
@@ -2001,6 +2030,7 @@ def main():
         report["failure"] = str(error)[:2500]
         traceback.print_exc()
     finally:
+        _CLI_VERSION.reset(version_token)
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(json.dumps(report, indent=2, ensure_ascii=False))
     return 0 if report["status"] == "passed" else 1

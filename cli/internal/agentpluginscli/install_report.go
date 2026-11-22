@@ -92,7 +92,8 @@ func reportByAgent(items []agentItem) []agentReport {
 
 func (report *agentReport) addProblem(failure installFailure, item string) {
 	for index := range report.Problems {
-		if report.Problems[index].Failure.Kind == failure.Kind {
+		previous := report.Problems[index].Failure
+		if previous.Kind == failure.Kind && previous.Summary == failure.Summary && previous.Next == failure.Next && previous.Retryable == failure.Retryable {
 			report.Problems[index].Items = append(report.Problems[index].Items, item)
 			return
 		}

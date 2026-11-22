@@ -3,6 +3,7 @@ package usecase
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -287,21 +288,43 @@ func (fixture retainedRevisionFixture) snapshot(t *testing.T) map[string]string 
 	}
 	files := map[string]string{"state": retainedRevisionStamp(t, fixture.store.Path, string(body))}
 	if fixture.data != "" {
-		if _, err := os.Lstat(fixture.data); os.IsNotExist(err) {
-			files["data"] = "<absent>"
-		} else {
-			files[fixture.data] = retainedRevisionStamp(t, fixture.data, "directory")
-			for path, content := range lifecycleFiles(t, fixture.data) {
-				files[path] = retainedRevisionStamp(t, path, content)
-			}
-		}
+		snapshotRetainedRevisionData(t, fixture.data, files)
 	}
 	return files
 }
 
+func snapshotRetainedRevisionData(t *testing.T, root string, files map[string]string) {
+	t.Helper()
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if os.IsNotExist(err) && path == root {
+			files["data"] = "<absent>"
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		body := "directory"
+		if entry.Type()&os.ModeSymlink != 0 {
+			body, err = os.Readlink(path)
+		} else if !entry.IsDir() {
+			var raw []byte
+			raw, err = os.ReadFile(path)
+			body = string(raw)
+		}
+		if err != nil {
+			return err
+		}
+		files[path] = retainedRevisionStamp(t, path, body)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func retainedRevisionStamp(t *testing.T, path, body string) string {
 	t.Helper()
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		t.Fatal(err)
 	}
