@@ -10306,6 +10306,25 @@ class LiveAuditNativeVersionRoutingTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == "posix", "Copilot whole Skill descriptor audit")
 class CopilotWholeProjectSkillAuditContracts(unittest.TestCase):
+    def test_protected_snapshot_failure_retains_bounded_private_delta(self):
+        audit = load_audit()
+        before = {"../../private-path\n": "private-before", **{f"home/item-{i:02}": "private-before" for i in range(25)}}
+        after = {key: "private-after" for key in before}
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(AssertionError, "modified protected state") as caught:
+                audit.check_copilot_snapshot_unchanged(root / "home", root, before, after, "test", 2)
+        delta = caught.exception.copilot_snapshot_delta
+        self.assertEqual(delta["changed_key_count"], 26)
+        self.assertEqual(len(delta["items"]), 20)
+        self.assertEqual(delta["omitted_key_count"], 6)
+        self.assertNotIn("key", delta["items"][0])
+        self.assertTrue(all(item["before_present"] and item["after_present"] for item in delta["items"]))
+        for item in delta["items"]:
+            self.assertRegex(item["before_sha256"], r"^[0-9a-f]{64}$")
+        self.assertNotIn("private-", json.dumps(delta))
+        self.assertEqual(after, {key: "private-after" for key in before})
+
     def exercise(self, *, ready=True, fault=None, preinitialized_git=False):
         audit = load_audit()
         body = b"---\nname: frontend-design\ndescription: Inert original Skill\n---\nOriginal body\n"

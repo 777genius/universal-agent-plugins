@@ -624,6 +624,25 @@ def scoped_snapshot(roots, *, snapshotter=None):
                     record_metadata(index, path, path.relative_to(root).as_posix())
     return state
 
+def copilot_snapshot_delta(before, after):
+    """Bounded failure diagnostics; snapshot values and unsafe names stay private."""
+    keys = sorted(key for key in before.keys() | after.keys()
+                  if (key in before) != (key in after) or before.get(key) != after.get(key))
+    items = []
+    for key in keys[:20]:
+        item = {"key_sha256": hashlib.sha256(key.encode("utf-8", "surrogatepass")).hexdigest()}
+        if (re.fullmatch(r"[A-Za-z0-9_.:/-]{1,192}", key)
+                and not key.startswith("/") and ":/" not in key and ".." not in key):
+            item["key"] = key
+        for label, snapshot in (("before", before), ("after", after)):
+            item[label + "_present"] = key in snapshot
+            if key in snapshot:
+                value = json.dumps(snapshot[key], ensure_ascii=True, separators=(",", ":")).encode()
+                item[label + "_sha256"] = hashlib.sha256(value).hexdigest() if len(value) <= 8192 else None
+        items.append(item)
+    return {"comparison": "protected snapshot after permitted process logs were excluded",
+            "changed_key_count": len(keys), "items": items, "omitted_key_count": max(0, len(keys) - len(items))}
+
 def check_copilot_snapshot_unchanged(home, case_root, before, after, stage, log_limit):
     """Only this real read may create bounded new vendor process logs."""
     prefix = home.name + "/" + str(Path(".copilot") / "logs") + os.sep
@@ -642,7 +661,12 @@ def check_copilot_snapshot_unchanged(home, case_root, before, after, stage, log_
         after.pop(key)
         after.pop("metadata:0:" + Path(relative).as_posix(), None)
     if after != before:
-        raise AssertionError(stage + ": native query modified protected state")
+        failure = AssertionError(stage + ": native query modified protected state")
+        try:
+            failure.copilot_snapshot_delta = copilot_snapshot_delta(before, after)
+        except Exception as error:
+            failure.copilot_snapshot_delta = {"diagnostic_error": type(error).__name__}
+        raise failure
 
 def exact_native_identity(text, identity):
     """Recognize an identity token in native data, never a URL substring."""
@@ -2648,6 +2672,8 @@ class CopilotProjectSkillAudit:
                     check()
                 except Exception as error:
                     failures.append(error)
+                    if hasattr(error, "copilot_snapshot_delta"):
+                        self.evidence.setdefault("protected_snapshot_deltas", {})[phase] = error.copilot_snapshot_delta
             if failures:
                 self.evidence["custody_refusal"] = self.refusal(failures[0])
                 failure = RuntimeError("Copilot whole Project Skill protected state changed during catalogs")
