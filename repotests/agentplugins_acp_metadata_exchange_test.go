@@ -111,9 +111,13 @@ func (p *acpMetadataExchange) frame(w io.Writer, frame map[string]any, cwd strin
 		p.Frames = append(p.Frames, frame)
 		return p.notification(w, frame)
 	}
-	p.Frames = append(p.Frames, frame)
+	return p.response(w, frame, cwd)
+}
+
+func (p *acpMetadataExchange) response(w io.Writer, frame map[string]any, cwd string) error {
 	id, ok := frame["id"].(json.Number)
-	if !ok || (id != "1" && id != "2") || p.seen[string(id)] {
+	sent := id == "1" && len(p.Sent) >= 1 || id == "2" && len(p.Sent) >= 2
+	if !ok || !sent || p.seen[string(id)] {
 		return fmt.Errorf("ACP unexpected or duplicate response ID")
 	}
 	p.seen[string(id)] = true
@@ -126,14 +130,17 @@ func (p *acpMetadataExchange) frame(w io.Writer, frame map[string]any, cwd strin
 		if _, exists := frame["result"]; exists || !objectOK || !codeOK || !messageOK {
 			return fmt.Errorf("ACP ambiguous error response")
 		}
+		p.Frames = append(p.Frames, map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": failureObject["code"]}})
 		return p.stop(w, "rpc-error-observed")
 	}
+	p.Frames = append(p.Frames, frame)
 	if !resultOK || p.closed {
 		return fmt.Errorf("ACP response shape or progression after stop")
 	}
 	if id == "1" {
-		_, capabilities := result["agentCapabilities"].(map[string]any)
-		if result["protocolVersion"] != json.Number("1") || !capabilities {
+		capabilityValue, present := result["agentCapabilities"]
+		_, capabilities := capabilityValue.(map[string]any)
+		if result["protocolVersion"] != json.Number("1") || present && !capabilities {
 			return fmt.Errorf("ACP protocol version differs")
 		}
 		return p.send(w, 2, "session/new", map[string]any{"cwd": cwd, "mcpServers": []any{}})
@@ -178,12 +185,16 @@ func (p *acpMetadataExchange) notification(w io.Writer, frame map[string]any) er
 		return fmt.Errorf("ACP command catalog shape")
 	}
 	p.MarkerListed = false // Catalog updates replace, rather than append to, current metadata.
+	markerListed := false
 	for _, value := range commands {
 		row, ok := value.(map[string]any)
-		if !ok {
+		name, nameOK := row["name"].(string)
+		_, descriptionOK := row["description"].(string)
+		if !ok || !nameOK || !descriptionOK {
 			return fmt.Errorf("ACP catalog row")
 		}
-		p.MarkerListed = p.MarkerListed || row["name"] == acpMetadataMarker
+		markerListed = markerListed || name == acpMetadataMarker
 	}
+	p.MarkerListed = markerListed
 	return nil
 }

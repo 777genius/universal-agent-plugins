@@ -5,7 +5,7 @@ const test = require('node:test');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { isolationArguments, gate, ordinary } = require('./cursor_editor_observation.cjs');
+const { isolationArguments, gate, ordinary, inventoryScreenshot } = require('./cursor_editor_observation.cjs');
 
 const directories = { userData: '/owned/userdata', extensions: '/owned/extensions', project: '/owned/project' };
 // A synthetic usage control only: actual 3.30.14 help must admit these rows.
@@ -59,5 +59,96 @@ test('ordinary input paths refuse aliases, hardlinks and incorrect types', () =>
     fs.linkSync(file, link);
     assert.throws(() => ordinary(file, false), /path-refused/u);
     assert.throws(() => ordinary(link, false), /path-refused/u);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+function inventoryPage(options = {}) {
+  const events = [], waited = new Set();
+  const page = {
+    locator(selector) {
+      assert.equal(selector, 'body');
+      return { async evaluate() {
+        events.push('text');
+        return { text: options.text ? options.text(events, waited) : 'Skills first second', overflow: false };
+      } };
+    },
+    getByText(name, match) {
+      assert.deepEqual(match, { exact: true });
+      return { filter(filter) {
+        assert.deepEqual(filter, { visible: true });
+        return {
+          async waitFor(bound) {
+            assert.deepEqual(bound, { state: 'visible', timeout: 5000 });
+            events.push('wait:' + name);
+            if (options.wait) await options.wait(name, events, waited);
+            await Promise.resolve(); // Synthetic asynchronous rendering, no real UI.
+            waited.add(name);
+          },
+          async count() {
+            events.push('count:' + name);
+            return options.count ? options.count(name, events, waited) : Number(waited.has(name));
+          },
+        };
+      } };
+    },
+    async screenshot(bound) {
+      assert.deepEqual(bound, { timeout: 5000 });
+      events.push('screenshot');
+      return Buffer.from('inert screenshot bytes; not native UI evidence');
+    },
+  };
+  return { page, events };
+}
+
+test('inventory capture waits for every marker before facts and screenshot, then rechecks', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-editor-sequence-')));
+  try {
+    const { page, events } = inventoryPage();
+    const result = await inventoryScreenshot(page, root, 'skills.png', ['first', 'second']);
+    assert.deepEqual(result.markers, { first: true, second: true });
+    assert.deepEqual(events, ['text', 'wait:first', 'wait:second', 'text', 'count:first',
+      'count:second', 'screenshot', 'text', 'count:first', 'count:second']);
+    assert.equal(result.image.bytes, fs.statSync(path.join(root, 'skills.png')).size);
+    assert.equal(result.image.sha256.length, 64);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('missing, duplicate, disappearing and gated markers refuse before screenshot', async () => {
+  const rendered = new Set();
+  const cases = [
+    { options: { wait: async () => { throw new Error('private-timeout'); } }, cause: /component-unobserved/u },
+    { options: { count: () => 2 }, cause: /component-unobserved/u },
+    { options: {
+      wait: async name => {
+        rendered.add(name);
+        if (name === 'second') rendered.delete('first');
+      },
+      count: name => Number(rendered.has(name)),
+    }, cause: /component-unobserved/u },
+    { options: { text: () => 'Do you trust the authors?' }, cause: /trust-gate/u },
+    { options: { text: (_events, waited) => waited.size ? 'Sign in to continue' : 'Skills' }, cause: /login-gate/u },
+    { options: {
+      wait: async () => { throw new Error('private-timeout'); },
+      text: events => events.includes('wait:first') ? 'Local plugin imports are disabled' : 'Skills',
+    }, cause: /import-policy-gate/u },
+  ];
+  for (const sample of cases) {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-editor-refusal-')));
+    try {
+      const { page, events } = inventoryPage(sample.options);
+      await assert.rejects(inventoryScreenshot(page, root, 'skills.png', ['first', 'second']), sample.cause);
+      assert.equal(events.includes('screenshot'), false);
+      assert.equal(fs.existsSync(path.join(root, 'skills.png')), false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('a marker disappearing during capture cannot produce a positive inventory result', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-editor-drift-')));
+  try {
+    const { page, events } = inventoryPage({ count: (_name, observed) => Number(!observed.includes('screenshot')) });
+    await assert.rejects(inventoryScreenshot(page, root, 'plugins.png', ['first']), /component-unobserved/u);
+    assert.equal(events.includes('screenshot'), true);
+    assert.equal(fs.existsSync(path.join(root, 'plugins.png')), true);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

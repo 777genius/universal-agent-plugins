@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -264,24 +263,9 @@ func acpMetadataCompletionClass(err error) string {
 	if errors.Is(err, os.ErrPermission) {
 		return "permission-refused"
 	}
-	// Classify known supervisor boundaries without publishing native stderr,
-	// OAuth URLs, request parameters or an unrestricted error string.
-	text := err.Error()
-	for _, boundary := range []struct{ match, class string }{
-		{"forced", "forced-cleanup"},
-		{"before the exchange completed", "early-exit"},
-		{"containment", "containment-refused"},
-		{"enumerat", "process-enumeration-refused"},
-		{"ACP ", "protocol-refused"},
-	} {
-		if strings.Contains(text, boundary.match) {
-			return boundary.class
-		}
-	}
-	var exit *exec.ExitError
-	if errors.As(err, &exit) {
-		return fmt.Sprintf("native-exit-%d", exit.ExitCode())
-	}
+	// The runner may join supervisor failures and native exits, and may append
+	// vendor stderr to error text. Without a typed supervisor outcome, neither
+	// that text nor an embedded ExitError proves a particular completion class.
 	return "completion-refused"
 }
 

@@ -84,6 +84,34 @@ async function clickNamed(page, name) {
   await control.click({ timeout: 5000 });
 }
 
+async function confirmedMarkers(page, names) {
+  const markers = {};
+  for (const name of names) {
+    markers[name] = await page.getByText(name, { exact: true }).filter({ visible: true }).count() === 1;
+    if (!markers[name]) throw new Error('component-unobserved');
+  }
+  return markers;
+}
+
+async function inventoryScreenshot(page, directory, filename, names) {
+  await visibleText(page);
+  for (const name of names) {
+    try {
+      await page.getByText(name, { exact: true }).filter({ visible: true })
+        .waitFor({ state: 'visible', timeout: 5000 });
+    } catch {
+      await visibleText(page); // Preserve a gate that appeared during the wait.
+      throw new Error('component-unobserved');
+    }
+  }
+  const text = await visibleText(page);
+  const markers = await confirmedMarkers(page, names);
+  const image = await screenshot(page, directory, filename);
+  await visibleText(page);
+  await confirmedMarkers(page, names);
+  return { text, markers, image };
+}
+
 async function quit(app, closed, result) {
   // Use the real Electron application's ordinary Quit; never app.close(), whose
   // Playwright BrowserContext closure can fall back to process termination.
@@ -125,17 +153,15 @@ async function observe(input) {
     await clickNamed(page, 'Customize');
     result.stage = 'skills';
     await clickNamed(page, 'Skills');
-    result.screenshots.push(await screenshot(page, input.output, 'skills.png'));
-    const skills = await visibleText(page);
-    for (const name of [input.projectSkill, input.pluginSkill]) {
-      result.markers[name] = await page.getByText(name, { exact: true }).filter({ visible: true }).count() === 1;
-    }
-    result.source_paths_visible = skills.includes(input.projectSkillPath) && skills.includes(input.pluginSkillPath);
+    const skills = await inventoryScreenshot(page, input.output, 'skills.png', [input.projectSkill, input.pluginSkill]);
+    result.screenshots.push(skills.image);
+    Object.assign(result.markers, skills.markers);
+    result.source_paths_visible = skills.text.includes(input.projectSkillPath) && skills.text.includes(input.pluginSkillPath);
     result.stage = 'plugins';
     await clickNamed(page, 'Plugins');
-    result.screenshots.push(await screenshot(page, input.output, 'plugins.png'));
-    await visibleText(page);
-    result.markers[input.pluginName] = await page.getByText(input.pluginName, { exact: true }).filter({ visible: true }).count() === 1;
+    const plugins = await inventoryScreenshot(page, input.output, 'plugins.png', [input.pluginName]);
+    result.screenshots.push(plugins.image);
+    Object.assign(result.markers, plugins.markers);
     if (Object.values(result.markers).some(value => value !== true)) throw new Error('component-unobserved');
     result.observation = 'component-names-observed';
     result.stage = 'ordinary-quit';
@@ -166,7 +192,7 @@ async function main() {
   if (result.status !== 'observed') process.exitCode = 1;
 }
 
-module.exports = { isolationArguments, gate, ordinary };
+module.exports = { isolationArguments, gate, ordinary, inventoryScreenshot };
 if (require.main === module) main().catch(() => {
   process.stdout.write('{"status":"unqualified","observation":"driver-refused"}\n');
   process.exitCode = 1;
