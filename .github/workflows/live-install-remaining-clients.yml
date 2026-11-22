@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   # pull_request runs check out a synthetic merge commit; retain the source branch HEAD too.
@@ -27,7 +28,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 
 jobs:
+  changes:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
+    uses: ./.github/workflows/pr-changes.yml
+    permissions:
+      pull-requests: read
   remaining-client-install:
+    needs: changes
     name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
     if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     # Linux hosted runners do not delegate cgroup v2 for Kiro's required
@@ -39,7 +46,7 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        target: [cursor, kiro, windsurf, grok, chatgpt]
+        target: ${{ fromJSON(needs.changes.outputs.remaining_clients || '["cursor","kiro","windsurf","grok","chatgpt"]') }}
         kind: [plugin, skill]
         # Desktop exposes User scope; Project Skills are a documented refusal.
         exclude:

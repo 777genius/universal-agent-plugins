@@ -149,6 +149,26 @@ newest one. None of them produces a release check, and keeping every one of
 those runs would add heavy E2E time on each merge. Pages keeps its serialized
 `github-pages` group.
 
+## Client-scoped native E2E
+
+The reusable PR classifier now selects clients for Native Client Runtime,
+Remaining live audit and Full Live audit. Isolated client-package changes
+and client-scoped repotests narrow the native Codex/Claude/OpenCode matrix;
+shared CLI, SDK, installer, probe, workflow and unknown inputs restore the
+full 8 V1 + 3 OpenCode V2 cells. Existing platforms/check names stay intact.
+
+In Remaining live audit, Codex sandbox and native acquisition changes
+need only ChatGPT plugin; shared audit inputs still run all nine cells.
+Full Live audit narrows only for named client diagnostic changes, while
+the real Codex pilot and historical published smoke remain mandatory and
+shared inputs retain all eighteen cells. Schedules/dispatch run the complete
+matrices. The PR files API includes both rename paths; missing/unsafe/large
+diffs fail open. Nothing treats skipped native evidence as success.
+
+A shared source PR such as #931 still legitimately runs the full suite.
+`TestCIPathPolicy_HeavyNativeMatrixSelection` locks the selectors and
+their failure modes. Release-required checks are unchanged.
+
 ## Heavy pull request lanes wait for a ready pull request
 
 Draft pull requests keep the fast lane. Lanes that start native clients or
