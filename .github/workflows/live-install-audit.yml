@@ -32,6 +32,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   # pull_request runs check out a synthetic merge commit; retain the source branch HEAD too.
@@ -42,7 +43,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 
 jobs:
+  changes:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
+    uses: ./.github/workflows/pr-changes.yml
+    permissions:
+      pull-requests: read
   native-pilot:
+    needs: changes
     name: Real ${{ matrix.target }} / ${{ matrix.kind }} source install (pilot)
     if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     runs-on: ubuntu-24.04
@@ -169,14 +176,14 @@ jobs:
 
   real-native-cli-matrix:
     name: All 30 ${{ matrix.kind }} / ${{ matrix.target == 'pi' && matrix.kind == 'skill' && 'foreign Prepared + clean native' || matrix.target == 'qoder' && matrix.kind == 'skill' && 'Prepared installation' || 'native' }} ${{ matrix.target }}
-    needs: native-pilot
+    needs: [changes, native-pilot]
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     strategy:
       fail-fast: false
       max-parallel: 6
       matrix:
-        target: [codex, claude, opencode, gemini, copilot, cline, kimi, qoder, pi]
+        target: ${{ fromJSON(needs.changes.outputs.live_clients || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
         kind: [plugin, skill]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

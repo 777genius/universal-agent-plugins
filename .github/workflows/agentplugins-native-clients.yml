@@ -49,6 +49,7 @@ on:
 permissions:
   contents: read
   attestations: read
+  pull-requests: read
 
 # Replace ordinary CI for the same PR/ref; keep manual runs independent.
 concurrency:
@@ -56,26 +57,28 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
 
 jobs:
+  changes:
+    uses: ./.github/workflows/pr-changes.yml
+    permissions:
+      pull-requests: read
   native-client:
-    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.event_name != 'workflow_dispatch' || !inputs.sdk_linux_only) }}
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.native_clients != '[]') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.event_name != 'workflow_dispatch' || !inputs.sdk_linux_only) }}
     name: ${{ matrix.client }} runtime (${{ matrix.platform.target }})
     strategy:
       fail-fast: false
       matrix:
-        client: [codex, claude, opencode]
+        client: ${{ fromJSON(needs.changes.outputs.native_clients || '["codex","claude","opencode"]') }}
         platform:
           - target: darwin-arm64
             runner: macos-15
           - target: windows-amd64
             runner: windows-2025
-        # Current-source qualification must cover Linux as well. Add only
-        # Codex/Claude cells; existing OpenCode lanes remain unchanged.
-        include:
-          - client: codex
-            platform:
-              target: linux-amd64
-              runner: ubuntu-24.04
-          - client: claude
+          - target: linux-amd64
+            runner: ubuntu-24.04
+        # Preserve the original eight V1 cells; OpenCode V1 has no Linux cell.
+        exclude:
+          - client: opencode
             platform:
               target: linux-amd64
               runner: ubuntu-24.04
@@ -238,7 +241,8 @@ jobs:
   # Keep the published V1 proof intact. V2 has a different plugin/server API,
   # so start with the exact project A/B native discovery and lifecycle fixture.
   opencode-v2-project:
-    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.event_name != 'workflow_dispatch' || !inputs.sdk_linux_only) }}
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON(needs.changes.outputs.native_clients || '["codex","claude","opencode"]'), 'opencode')) && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.event_name != 'workflow_dispatch' || !inputs.sdk_linux_only) }}
     name: opencode V2 project runtime (${{ matrix.target }})
     strategy:
       fail-fast: false
