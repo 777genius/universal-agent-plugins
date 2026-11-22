@@ -614,6 +614,75 @@ class RefusalTests(unittest.TestCase):
             audit.checked_dependency_refusal(output, self.selected)
 
 
+class ProtectedScopeDiagnosticTests(unittest.TestCase):
+    def test_bounded_paths_redact_values_and_distinguish_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            native = root / "home/.pi/agent"
+            before = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 4)}, "files": {}}
+            after = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 5),
+                                      "link:0:../../PRIVATE": "secret link destination"},
+                     "files": {f"uap-data/entry-{index}": {"digest": "private-value"}
+                               for index in range(40)}}
+            result = audit.protected_scope_changes(before, after, root, "project", native)
+            self.assertEqual(result["total"], 42)
+            self.assertEqual(len(result["entries"]), 32)
+            self.assertTrue(result["truncated"])
+            self.assertIn({"path": "home/.pi/agent/foreign.json", "kind": "changed",
+                           "field": "metadata", "changed_fields": ["mtime"]}, result["entries"])
+            self.assertIn({"path": "<redacted>", "kind": "added", "field": "entry"}, result["entries"])
+            encoded = json.dumps(result)
+            self.assertNotIn(temporary, encoded)
+            self.assertNotIn("private-value", encoded)
+            self.assertNotIn("secret link destination", encoded)
+            self.assertNotIn("PRIVATE", encoded)
+
+    def test_scope_mismatch_remains_failure_with_redacted_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "case"
+            before = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 4)}, "files": {}}
+            after = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 5)}, "files": {}}
+            result = {"exit_code": 0, "timeout": False, "_json": {"result": "success"},
+                      "stdout_tail": "", "stderr_tail": ""}
+            with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+                 mock.patch.object(audit.live, "call", return_value=result), \
+                 mock.patch.object(audit, "protected_scope_snapshot", side_effect=[before, after]):
+                receipt = audit.run_case(Path("/test-only-cli"), case(), root, None)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertEqual(receipt["reason"], "add changed the other scope")
+            changes = receipt["protected_scope_changes"]
+            self.assertEqual(changes["entries"][0]["changed_fields"], ["mtime"])
+            self.assertNotIn(temporary, json.dumps(changes))
+
+    def test_successful_dependency_add_remains_inconclusive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "case"
+            selected = {**case(), "expected": "dependency-refusal"}
+            result = {"exit_code": 0, "timeout": False, "_json": {"result": "success"},
+                      "stdout_tail": "", "stderr_tail": ""}
+            with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+                 mock.patch.object(audit.live, "call", return_value=result):
+                receipt = audit.run_case(Path("/test-only-cli"), selected, root, None)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertIn("inconclusive", receipt["reason"])
+            self.assertFalse(receipt["activation_qualified"])
+
+    def test_exact_refusal_still_requires_no_scope_mutation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "case"
+            selected = {**case(), "expected": "dependency-refusal", "name": "marketing-kit",
+                        "distribution": "777genius/marketing-kit"}
+            message = "agentplugins: dependency conflict for directory:777genius/notion: marketing-kit version 0.1.0"
+            result = {"exit_code": 1, "timeout": False, "_json": None, "stdout_full": "",
+                      "stderr_full": message, "stdout_tail": "", "stderr_tail": message}
+            with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+                 mock.patch.object(audit.live, "call", return_value=result):
+                receipt = audit.run_case(Path("/test-only-cli"), selected, root, None)
+            self.assertEqual(receipt["status"], "expected-dependency-refusal")
+            self.assertEqual(receipt["refusal"]["distribution"], "777genius/notion")
+            self.assertNotIn("protected_scope_changes", receipt)
+
+
 class NativeExtractionTests(unittest.TestCase):
     @staticmethod
     def archive(kind, size=64, names=None, symlink=False, prefix=None):

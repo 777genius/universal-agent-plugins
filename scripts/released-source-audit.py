@@ -163,6 +163,62 @@ def protected_scope_snapshot(root, scope, native_root):
     return observed
 
 
+def protected_scope_changes(before, after, root, scope, native_root):
+    """Describe only bounded disposable-relative paths; never include values."""
+    documents = root / ("project" if scope == "user" else "uap-data")
+    state = documents / ".uap" if scope == "user" else documents
+    directories = [native_root, *[state / name for name in
+                   ("managed", "operations-v2", "plugin-data", "installer-tmp", "clients")]]
+
+    def safe_path(section, key):
+        if not isinstance(key, str):
+            return "<redacted>"
+        path = None
+        if section == "files":
+            path = key
+        else:
+            match = re.fullmatch(r"(?:metadata|directory|link|root-kind|root-link):(\d+)(?::(.*))?", key)
+            if match and int(match.group(1)) < len(directories):
+                path = str(directories[int(match.group(1))].relative_to(root) / (match.group(2) or ""))
+            else:
+                for directory in directories:
+                    prefix = directory.name + "/"
+                    if key.startswith(prefix):
+                        path = str(directory.relative_to(root) / key[len(prefix):])
+                        break
+        if path is not None:
+            path = path.replace("\\", "/")
+        if (path is None or len(path) > 200 or not re.fullmatch(r"[A-Za-z0-9._/-]+", path)
+                or path.startswith("/") or any(part in ("", ".", "..") for part in path.split("/"))):
+            return "<redacted>"
+        return path
+
+    changes, total = [], 0
+    for section in ("directories", "files"):
+        old, new = before[section], after[section]
+        for key in sorted(set(old) | set(new)):
+            if key not in old or key not in new or old[key] != new[key]:
+                kind = "added" if key not in old else "removed" if key not in new else "changed"
+                field = "metadata" if section == "directories" and isinstance(key, str) and key.startswith("metadata:") else "entry"
+                total += 1
+                if len(changes) < 32:
+                    try:
+                        path = safe_path(section, key)
+                    except ValueError:
+                        path = "<redacted>"
+                    entry = {"path": path, "kind": kind, "field": field}
+                    if kind == "changed" and field == "metadata":
+                        left, right = old[key], new[key]
+                        labels = ("mode", "device", "inode", "mtime")
+                        if isinstance(left, (list, tuple)) and isinstance(right, (list, tuple)) and len(left) == len(right):
+                            entry["changed_fields"] = [name for name, a, b in zip(labels, left, right) if a != b]
+                    elif kind == "changed" and section == "files" and isinstance(old[key], dict) and isinstance(new[key], dict):
+                        labels = ("digest", "mtime_ns", "inode", "mode")
+                        entry["changed_fields"] = [name for name in labels if old[key].get(name) != new[key].get(name)]
+                    changes.append(entry)
+    return {"entries": changes, "total": total, "truncated": total > len(changes)}
+
+
 def read_saved_record(path):
     """Read owned manifest/lock/state bytes only after a held identity join."""
     try:
@@ -517,10 +573,12 @@ def run_case(binary, case, root, executable):
     if case["scope"] == "project":
         scope += ["--project-root", str(project)]
     trace = []
+    scope_changes = None
     saved_root = data if case["scope"] == "user" else project
     documents = [saved_root / "uap.toml", saved_root / "uap.lock"]
 
     def run(operation, selector=None, success=True):
+        nonlocal scope_changes
         argv = [str(binary), operation, *([selector] if selector else []), "--target", case["client"], *scope, "--format", "json"]
         if operation in ("add", "update", "repair", "remove"):
             argv += ["--yes"]
@@ -532,8 +590,10 @@ def run_case(binary, case, root, executable):
         for path in sentinels:
             require(live.preserved_regular_text(path, "unmanaged source audit neighbor\n", root), "foreign state changed")
         check_unrelated_native_mcp(foreign_mcp_control, root)
-        require(protected_scope_snapshot(root, case["scope"], protected_root) == protected,
-                operation + " changed the other scope")
+        current = protected_scope_snapshot(root, case["scope"], protected_root)
+        if current != protected:
+            scope_changes = protected_scope_changes(protected, current, root, case["scope"], protected_root)
+            raise ValueError(operation + " changed the other scope")
         if success:
             require(result["exit_code"] == 0 and not result.get("timeout") and isinstance(parsed, dict), operation + " did not complete")
         return parsed, result
@@ -545,6 +605,8 @@ def run_case(binary, case, root, executable):
     try:
         _, added = run("add", case["selector"], case["expected"] != "dependency-refusal")
         if case["expected"] == "dependency-refusal":
+            if type(added.get("exit_code")) is int and added["exit_code"] == 0 and added.get("timeout") is False:
+                raise ValueError("successful closure is inconclusive: runtime signed policy and full owned lifecycle are unverified")
             refusal = checked_dependency_refusal(added, case)
             require(not state_file(root, case["scope"]).get("installations"), "refused closure left managed installation")
             require(not any(path.exists() for path in documents), "refused closure published saved state")
@@ -587,11 +649,17 @@ def run_case(binary, case, root, executable):
                        "native_files_after_add": len(native_after), "native_cleanup": cleanup,
                        "saved_intent": saved_intent, "native_content": native_content,
                        "update": "immutable-no-change", "repair": "healthy-repair"}
-        require(protected_scope_snapshot(root, case["scope"], protected_root) == protected, "other scope changed")
+        current = protected_scope_snapshot(root, case["scope"], protected_root)
+        if current != protected:
+            scope_changes = protected_scope_changes(protected, current, root, case["scope"], protected_root)
+            raise ValueError("other scope changed")
         return {**case, **outcome, "trace": trace, "activation_qualified": False, "runtime_qualified": False}
     except Exception as error:
-        return {**case, "status": "failed", "reason": str(error), "trace": trace,
-                "activation_qualified": False, "runtime_qualified": False}
+        outcome = {**case, "status": "failed", "reason": str(error), "trace": trace,
+                   "activation_qualified": False, "runtime_qualified": False}
+        if scope_changes is not None:
+            outcome["protected_scope_changes"] = scope_changes
+        return outcome
 
 
 def main():
