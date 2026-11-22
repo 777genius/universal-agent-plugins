@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
@@ -77,6 +78,12 @@ func renderAddMultiDryRun(writer io.Writer, result addMultiResult) error {
 	for _, target := range result.Targets {
 		if target.Status == "action_required" {
 			if _, err := fmt.Fprintf(writer, "  %s: setup required\n    Next: %s\n", target.Target, target.NextAction); err != nil {
+				return err
+			}
+			continue
+		}
+		if target.failure != nil {
+			if _, err := fmt.Fprintf(writer, "  %s: cannot be installed\n    %s\n", target.Target, prompt.SafeText(target.Error.Message)); err != nil {
 				return err
 			}
 			continue

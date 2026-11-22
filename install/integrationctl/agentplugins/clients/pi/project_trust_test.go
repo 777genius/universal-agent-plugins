@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -449,6 +450,31 @@ func TestPiProjectTrustConcurrentGrantsAndLeftoverTemporaries(t *testing.T) {
 	}
 	if err := grantPiProjectTrust(env, requests[1]); err != nil {
 		t.Fatal("leftover temporary broke a later grant:", err)
+	}
+}
+
+// A project installation can precede Pi's first start, when the canonical
+// agent directory does not exist yet. The grant creates it privately.
+func TestPiProjectTrustGrantBeforePiFirstStart(t *testing.T) {
+	root := piTrustTemp(t)
+	if err := os.Mkdir(filepath.Join(root, "home"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	user, project := filepath.Join(root, "home", ".pi", "agent"), filepath.Join(root, "project")
+	piTrustWrite(t, filepath.Join(project, ".pi", "extensions", "owned-0123456789ab", "index.ts"), "owned\n")
+	request := piTrustRequest(t, user, project, "owned-0123456789ab", nil, nil)
+	env := clients.Env{NativeConfig: nativeconfig.New()}
+	if err := grantPiProjectTrust(env, request); err != nil {
+		t.Fatal("grant before Pi's first start:", err)
+	}
+	request.VerifyOnly = true
+	if recorded, err := observePiProjectTrust(env.NativeConfig, request); err != nil || !recorded {
+		t.Fatal("granted trust is not observed:", recorded, err)
+	}
+	for _, dir := range []string{filepath.Dir(user), user} {
+		if info, err := os.Lstat(dir); err != nil || !info.IsDir() || runtime.GOOS != "windows" && info.Mode().Perm() != 0o700 {
+			t.Fatalf("%s is not a private directory: %v %v", dir, info, err)
+		}
 	}
 }
 

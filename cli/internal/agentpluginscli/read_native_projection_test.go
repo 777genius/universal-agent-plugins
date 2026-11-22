@@ -111,8 +111,32 @@ func TestDoctorNativeProjectionCanceledDuringVerificationIsInconclusive(t *testi
 	}
 }
 
+// Prepared only qualifies a projection that the adapter verified as installed.
+func TestDoctorNativeProjectionPreparedNeedsInstalledVerification(t *testing.T) {
+	for _, tc := range []struct {
+		outcome domain.ActivationOutcome
+		checked bool
+	}{
+		{domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled}, true},
+		{domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationPackageValid}, false},
+		{domain.ActivationOutcome{Activation: domain.ActivationManual, Verification: domain.VerificationInstalled}, false},
+	} {
+		activator := &doctorProjectionActivator{outcome: tc.outcome}
+		findings := checkNativeProjectionIntegrity(context.Background(), App{Lifecycle: usecasetest.NewService(usecase.Service{Activator: activator})},
+			domain.DetectedClient{ClientID: domain.ClientOpenCode, ConfigRoot: "/client-config"}, domain.DeliveryTarget{},
+			domain.Installation{InstallationID: "installation-id", DeclaredName: "demo"},
+			domain.ClientBinding{ClientID: string(domain.ClientOpenCode), Scope: string(domain.ScopeProject),
+				NativeObjects: []domain.NativeObjectOwnership{{Kind: "owned_native_projection"}}}, "sha256:package")
+		notChecked := len(findings) == 1 && findings[0].Status == "unknown" && findings[0].Code == "native_projection_not_checked"
+		if tc.checked && len(findings) != 0 || !tc.checked && !notChecked {
+			t.Fatalf("outcome %+v gave findings %+v", tc.outcome, findings)
+		}
+	}
+}
+
 type doctorProjectionActivator struct {
 	requests []domain.ActivationRequest
+	outcome  domain.ActivationOutcome
 	err      error
 	cancel   context.CancelFunc
 }
@@ -122,7 +146,7 @@ func (activator *doctorProjectionActivator) Activate(_ context.Context, request 
 	if activator.cancel != nil {
 		activator.cancel()
 	}
-	return domain.ActivationOutcome{}, activator.err
+	return activator.outcome, activator.err
 }
 
 func (*doctorProjectionActivator) Deactivate(context.Context, domain.DeactivationRequest) (domain.DeactivationOutcome, error) {

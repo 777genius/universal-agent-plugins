@@ -238,6 +238,35 @@ func TestFacadeDevinGlobalOriginalRootIsFrozenAndPrivate(t *testing.T) {
 	devinGlobalRecordedRootRefusal(t, f, state)
 }
 
+// A current Devin user without Windsurf has no legacy Cascade root. The
+// selected native Global root alone must be enough for User install and removal.
+func TestFacadeDevinGlobalWithoutLegacyCascadeRoot(t *testing.T) {
+	f := newDevinGlobalHostFixture(t, false)
+	f.request.ClientConfigRoot = ""
+	native := filepath.Join(f.profile, "mcp_config.json")
+	for _, op := range []installer.Operation{installer.OpInstall, installer.OpRemove} {
+		f.request.Operation, f.request.OperationID = op, "global-no-cascade-"+string(op)
+		prepared, err := f.engine.Prepare(t.Context(), f.request)
+		if err != nil {
+			t.Fatal(op, err)
+		}
+		_, err = f.engine.Apply(t.Context(), prepared, installer.Decision{Confirmed: true})
+		if closeErr := prepared.Close(); closeErr != nil {
+			t.Error(closeErr)
+		}
+		if err != nil || f.runner.calls != 0 {
+			t.Fatal(op, err, f.runner.calls)
+		}
+		_, skillErr := os.Lstat(filepath.Join(f.profile, "skills", "docs", "SKILL.md"))
+		if installed := op == installer.OpInstall; installed != (skillErr == nil) || installed != strings.Contains(devinSDKRead(t, native), `"docs"`) {
+			t.Fatal(op, "unexpected native Global state", skillErr, devinSDKRead(t, native))
+		}
+	}
+	if body := devinSDKRead(t, native); !strings.Contains(body, `"foreign"`) {
+		t.Fatal("foreign Global entry was not preserved", body)
+	}
+}
+
 func devinGlobalRecordedRootRefusal(t *testing.T, f devinGlobalHostFixture, state domain.StateFileV2) {
 	t.Helper()
 	for key, binding := range state.Installations[0].Clients {

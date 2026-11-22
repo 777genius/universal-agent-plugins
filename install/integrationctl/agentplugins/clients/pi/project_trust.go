@@ -228,9 +228,16 @@ const (
 
 // preparePiTrustHookDir admits only real directories for the extensions root
 // and the hook directory. A grant creates them and tolerates a concurrent
-// creator; observation and revocation report errPiTrustAbsent instead.
+// creator; observation and revocation report errPiTrustAbsent instead. Before
+// Pi's first start its canonical agent directory may be absent too, so a grant
+// creates it private, as the hook directories are.
 func preparePiTrustHookDir(user string, use piTrustDirUse) error {
 	dir, _, _ := piTrustHookPaths(user)
+	if use == piTrustDirGrant {
+		if err := os.MkdirAll(user, 0o700); err != nil {
+			return err
+		}
+	}
 	for _, path := range []string{filepath.Dir(dir), dir} {
 		if _, err := os.Lstat(path); os.IsNotExist(err) {
 			if use != piTrustDirGrant {

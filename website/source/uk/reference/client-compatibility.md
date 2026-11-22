@@ -12,12 +12,43 @@ translationRequired: false
 
 # Докази сумісності клієнтів UAP {#uap-client-compatibility-evidence}
 
+## Підтримувані агенти {#supported-agents}
+
+UAP встановлює або готує пакети для цих агентів. Передайте значення `--target`,
+щоб вибрати агентів явно, або не вказуйте `--target` і виберіть серед агентів,
+знайдених на комп'ютері.
+
+| Агент | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop), `chatgptweb` (Web) |
+
+Підтримка областей користувача та проєкту, спосіб налаштування й кроки після
+встановлення відрізняються для різних агентів; див. [таблицю підтримки агентів](https://universal-agent-plugins.com/uk/#agent-support).
+Підтримка агента не означає, що в ньому працює кожен пакет, компонент, версія
+чи область встановлення.
+
 ## Поточний випуск та область застосування {#current-release-and-scope}
 
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest),
 нативний випуск, додає локальний API керування
 з процесом під керуванням застосунку, виявлення клієнтів і профілів без внесення
-змін та підтримку нативних розширень Pi в області користувача. Див.
+змін та підтримку нативних розширень Pi, Skills і MCP stdio/Streamable HTTP
+в області користувача та сумісного проєкту. Див.
 [локальне керування](../use/manage#local-management-api). Канали менеджерів
 пакетів можуть відставати; перевірте `agentplugins version`.
 

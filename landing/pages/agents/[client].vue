@@ -94,7 +94,7 @@ const exampleSource = computed(
   () => pinnedExample.value?.selector ?? example.value?.plugin.install_source ?? './my-plugin',
 );
 const installCommand = computed(() => {
-  if (!example.value) return `npx -y universal-agent-plugins add ./my-plugin --target ${client.id}`;
+  if (!example.value) return `npx -y universal-agent-plugins@latest add ./my-plugin --target ${client.id}`;
   if (!current.value) return '';
   return pinnedExample.value
     ? pinnedCatalogCommands(example.value.plugin, pinnedExample.value.client, exampleScope.value).add

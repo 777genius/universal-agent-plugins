@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"io/fs"
 	"net"
@@ -90,7 +91,7 @@ func environmentFailureKind(err error) failureKind {
 		return failureAgentMissing
 	case errors.Is(err, fs.ErrPermission):
 		return failurePermission
-	case errors.As(err, &opErr), errors.As(err, &dnsErr):
+	case errors.As(err, &opErr) && !tlsAlert(opErr, err), errors.As(err, &dnsErr):
 		// Only connection-level causes. TLS, URL syntax and other errors that
 		// merely implement net.Error stay generic, and a timeout is a timeout.
 		if timeoutCause(err) {
@@ -99,6 +100,22 @@ func environmentFailureKind(err error) failureKind {
 		return failureNetwork
 	}
 	return failureUnknown
+}
+
+// tlsAlert reports a TLS failure that surfaces as a net.OpError: an alert sent
+// by the remote end ("remote error"), one raised by the local client ("local
+// error"), or a handshake or certificate error that an https proxy path wraps
+// in an operation error. The network was reachable, so none of them is an
+// unreachable-network problem.
+func tlsAlert(opErr *net.OpError, err error) bool {
+	if opErr.Op == "remote error" || opErr.Op == "local error" {
+		return true
+	}
+	var (
+		certErr   *tls.CertificateVerificationError
+		headerErr tls.RecordHeaderError
+	)
+	return errors.As(err, &certErr) || errors.As(err, &headerErr)
 }
 
 func timeoutCause(err error) bool {
@@ -187,7 +204,7 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 	case failureTimeout:
 		return "A step took too long and was stopped.", "Check network access and the agent, then retry.", true
 	case failurePermission:
-		return "UAP is not allowed to write to a folder this agent needs.", "Fix the folder's permissions, then retry this agent.", true
+		return "UAP does not have permission to use a folder this agent needs.", "Fix the folder's permissions, then retry this agent.", true
 	case failureReadOnly:
 		return "A folder this agent needs is read-only.", "Make the location writable or choose another one, then retry this agent.", true
 	case failureDiskFull:

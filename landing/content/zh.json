@@ -1,7 +1,7 @@
 {
   "hero": {
     "title": "Universal Agent Plugins",
-    "subtitle": "使用一条命令在 AI 代理中安装、更新、修复和删除 Agent Plugins 1.0。"
+    "subtitle": "使用一条命令在 AI 代理中安装、更新、修复和删除 Agent Plugins 1.0 / Agent Skills。"
   },
   "features": [
     {
@@ -985,7 +985,7 @@
     {
       "id": "fastestStart",
       "question": "最快的开始方式是什么？",
-      "answer": "安装原生 Go CLI，然后运行 <code>agentplugins add context7 --target codex,cursor</code>。选择一个或多个代理，然后按客户端提示完成激活。"
+      "answer": "安装原生 Go CLI，然后运行 <code>agentplugins add context7 --target \"codex,cursor\"</code>。选择一个或多个代理，然后按客户端提示完成激活。"
     },
     {
       "id": "whichPathFirst",
@@ -1014,8 +1014,8 @@
       "description": "如果已安装 Node.js 22+，这是最快的方式：直接运行插件命令。",
       "href": "https://www.npmjs.com/package/universal-agent-plugins",
       "note": "无需永久安装：npx 下载已验证的 CLI，并一步运行插件命令。",
-      "command": "npx -y universal-agent-plugins version",
-      "invocation": "npx -y universal-agent-plugins"
+      "command": "npx -y universal-agent-plugins@latest version",
+      "invocation": "npx -y universal-agent-plugins@latest"
     },
     {
       "id": "script",
@@ -1056,25 +1056,25 @@
     {
       "id": "install-cli",
       "title": "运行 CLI",
-      "command": "npx -y universal-agent-plugins version",
+      "command": "npx -y universal-agent-plugins@latest version",
       "note": "使用 npx 快速开始，或安装二进制文件供日常使用。"
     },
     {
       "id": "try-plugin",
       "title": "安装一个真实插件",
-      "command": "universal-agent-plugins add context7 --target codex,cursor",
+      "command": "universal-agent-plugins add context7 --target \"codex,cursor\"",
       "note": "同一命令支持一个目标或用逗号分隔的目标列表。"
     },
     {
       "id": "build-plugin",
       "title": "保持最新",
-      "command": "universal-agent-plugins update context7 --target codex,cursor\nuniversal-agent-plugins repair context7 --target codex,cursor",
+      "command": "universal-agent-plugins update context7 --target \"codex,cursor\"\nuniversal-agent-plugins repair context7 --target \"codex,cursor\"",
       "note": "新版本使用 update，客户端出现偏差时使用 repair。"
     },
     {
       "id": "validate",
       "title": "干净地移除",
-      "command": "universal-agent-plugins remove context7 --target codex,cursor",
+      "command": "universal-agent-plugins remove context7 --target \"codex,cursor\"",
       "note": "CLI 会删除其管理的客户端条目，默认保留插件数据。"
     }
   ],

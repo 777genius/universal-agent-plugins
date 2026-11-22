@@ -203,6 +203,28 @@ func TestQoderRejectsForeignAndAbsentRegistration(t *testing.T) {
 	}
 }
 
+// Qoder lists a local plugin without a manifest version as "local"; a raw
+// Skill package declares no version and must still verify.
+func TestQoderUnversionedPackageVerifiesThroughLocalVersion(t *testing.T) {
+	r := qoderRequest(t)
+	r.VerifyOnly = true
+	r.Plan.DeclaredVersion = ""
+	f := &fakeQoder{entries: []pluginEntry{{ID: "demo@local", Version: "local"}}}
+	out, err := New().Activate(context.Background(), clients.Env{Runner: f}, r)
+	if err != nil || out.Activation != domain.ActivationActive || out.Verification != domain.VerificationInstalled {
+		t.Fatalf("unversioned package listed as local: %+v %v", out, err)
+	}
+	f.entries[0].Version = "2.0.0"
+	if _, err := New().Activate(context.Background(), clients.Env{Runner: f}, r); err == nil {
+		t.Fatal("unversioned package verified against a versioned registration")
+	}
+	r.Plan.DeclaredVersion = "2.0.0"
+	f.entries[0].Version = "local"
+	if _, err := New().Activate(context.Background(), clients.Env{Runner: f}, r); err == nil {
+		t.Fatal("versioned package verified against an unversioned registration")
+	}
+}
+
 func TestQoderMissingVersionCannotProveInstall(t *testing.T) {
 	r := qoderRequest(t)
 	r.VerifyOnly = true

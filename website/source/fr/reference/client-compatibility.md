@@ -11,6 +11,31 @@ localeDisposition: "current-translation"
 
 # Compatibilité des clients UAP
 
+## Agents pris en charge {#supported-agents}
+
+UAP installe ou prépare des paquets pour ces agents. Indiquez la valeur de `--target` pour choisir les agents explicitement, ou omettez `--target` pour choisir parmi les agents détectés sur votre ordinateur.
+
+| Agent | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop), `chatgptweb` (Web) |
+
+La prise en charge des portées utilisateur et projet, la configuration et les étapes restantes après l’installation varient selon l’agent ; consultez le [tableau de prise en charge des agents](https://universal-agent-plugins.com/fr/#agent-support). La prise en charge d’un agent ne signifie pas que chaque paquet, composant, version ou portée y fonctionne.
+
 ## Version actuelle et portée
 
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest) ajoute une API de gestion locale dont l’hôte gère le cycle de vie, la découverte en lecture seule des clients et profils, ainsi que les extensions Pi, Skills et MCP stdio/Streamable HTTP en portée utilisateur et projet admissible. Consultez [la gestion locale](../use/manage#local-management-api). Les versions des gestionnaires de paquets peuvent être antérieures ; vérifiez `agentplugins version`.
