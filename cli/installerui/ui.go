@@ -107,7 +107,11 @@ func (u *UI) SelectManyWithNotes(ctx context.Context, req MultiSelectRequest, co
 	if err != nil {
 		return Selection{}, err
 	}
-	return u.selectMany(ctx, annotatedRequest(req, terminaltheme.Theme{}), plainUnavailable(req.UnavailableHeading, req.Unavailable, terminaltheme.Theme{Enabled: color}))
+	selection, err := u.selectMany(ctx, annotatedRequest(req, terminaltheme.Theme{}), plainUnavailable(req.UnavailableHeading, req.Unavailable, terminaltheme.Theme{Enabled: color}))
+	if err != nil || selection.Cancelled {
+		return selection, err
+	}
+	return terminalSelection(req, selection.IDs)
 }
 
 func (u *UI) selectMany(ctx context.Context, req SelectRequest, below string) (Selection, error) {

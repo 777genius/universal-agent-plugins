@@ -2,6 +2,7 @@ package installerui
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -140,5 +141,60 @@ func TestPlainSelectionPrintsExplanationsBetweenListAndPrompt(t *testing.T) {
 	list, notes, prompt := strings.Index(text, "Kiro (kiro) (prepare only) - verify manually"), strings.Index(text, "Not available for automatic install:"), strings.Index(text, "Choose one or more")
 	if list < 0 || notes <= list || prompt <= notes {
 		t.Fatalf("plain order list=%d notes=%d prompt=%d:\n%s", list, notes, prompt, text)
+	}
+}
+
+func TestPlainSelectionWithNotesEnforcesMinimum(t *testing.T) {
+	for _, tc := range []struct {
+		name, input string
+		minimum     int
+		defaults    []string
+		invalid     bool
+		canceled    bool
+	}{
+		{name: "too few", input: "1\n", minimum: 2, invalid: true},
+		{name: "empty enter", input: "\n", minimum: 1, invalid: true},
+		{name: "valid explicit", input: "1,2\n", minimum: 2},
+		{name: "valid defaults", input: "\n", minimum: 2, defaults: []string{"codex", "kiro"}},
+		{name: "optional empty", input: "\n"},
+		{name: "cancel", input: "q\n", minimum: 2, canceled: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := unavailableFixture()
+			req.MinSelected, req.Defaults = tc.minimum, tc.defaults
+			var out strings.Builder
+			u, err := New(Config{Input: strings.NewReader(tc.input), Output: &out})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := u.SelectManyWithNotes(context.Background(), req, false)
+			if tc.invalid {
+				if !errors.Is(err, ErrInvalidSelection) || got.Accepted {
+					t.Fatalf("below-minimum selection accepted: %+v, %v", got, err)
+				}
+				return
+			}
+			if err != nil || got.Cancelled != tc.canceled || got.Accepted == tc.canceled {
+				t.Fatalf("selection: %+v, %v", got, err)
+			}
+		})
+	}
+}
+
+func TestAnnotatedOptionRowsMatchRenderedWidthBoundary(t *testing.T) {
+	req := unavailableFixture()
+	req.Options, req.Defaults = req.Options[1:], []string{"kiro"}
+	req.Unavailable = nil
+	_, _, layout, _ := newSelectionForm(req, terminaltheme.Theme{})
+	if got := layout.optionRows(51); got != 2 {
+		t.Fatalf("annotated option rows = %d, want 2", got)
+	}
+	rows := viewRows(t, req, 51, 24)
+	if rowIndex(rows, "manually") < 0 {
+		t.Fatalf("annotation clipped:\n%s", strings.Join(rows, "\n"))
+	}
+	layout.labels = []string{"Kiro (kiro)"}
+	if got := layout.optionRows(51); got != 1 {
+		t.Fatalf("short option rows = %d, want 1", got)
 	}
 }

@@ -147,7 +147,7 @@ type selectionLayout struct {
 }
 
 // selectionOptionPrefix covers the border, cursor and checkbox before a label.
-const selectionOptionPrefix = 7
+const selectionOptionPrefix = 8
 
 const selectionControls = "↑/↓ move · space toggle · enter submit\nesc/ctrl+c/ctrl+d cancel"
 
