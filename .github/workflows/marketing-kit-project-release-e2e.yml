@@ -7,6 +7,9 @@ on:
       - 'landing/**'
       - 'scripts/marketing-kit-project-release-e2e.py'
       - 'scripts/marketing-kit-published-launcher-abort.js'
+      - 'scripts/prepare-codex-linux-sandbox.sh'
+      - 'scripts/test_marketing_kit_codex_sqlite.py'
+      - 'scripts/codex_runtime_audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
@@ -16,6 +19,9 @@ on:
       - 'landing/**'
       - 'scripts/marketing-kit-project-release-e2e.py'
       - 'scripts/marketing-kit-published-launcher-abort.js'
+      - 'scripts/prepare-codex-linux-sandbox.sh'
+      - 'scripts/test_marketing_kit_codex_sqlite.py'
+      - 'scripts/codex_runtime_audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
@@ -56,6 +62,9 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Install Codex Linux sandbox prerequisites
+        if: ${{ matrix.target == 'codex' }}
+        run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Install real released UAP and native client
         env:
           NATIVE_PACKAGE: ${{ matrix.package }}
@@ -210,6 +219,7 @@ jobs:
           mkdir -p "$RUNNER_TEMP/marketing-kit-project"
           set -o pipefail
           python3 -m unittest scripts/test_live_install_audit_env.py -k marketing_kit_ 2>&1 | tee "$RUNNER_TEMP/marketing-kit-project/regressions.log"
+          python3 -m unittest scripts/test_marketing_kit_codex_sqlite.py
           python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)" --cli-version 0.1.116             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures
         if: always()
