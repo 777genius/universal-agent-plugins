@@ -12,6 +12,18 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+func TestPrepareSurfaceEvidenceCannotSelectAnotherTarget(t *testing.T) {
+	for _, targets := range [][]ClientTarget{
+		{{ClientID: "cline"}},
+		{{ClientID: "codex"}, {ClientID: "claude"}},
+	} {
+		req := Request{ClientID: "copilot", ClientSurfaces: []domain.ClientSurface{{ID: "copilot_cli", Detected: true}}, Targets: targets}
+		if _, err := (&Engine{}).Prepare(t.Context(), req); !errors.Is(err, ErrInvalidRequest) {
+			t.Fatalf("client surface evidence was reassigned through Targets: %v", err)
+		}
+	}
+}
+
 func TestSnapshotRequestPreservesAssessedExecutableInventory(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()

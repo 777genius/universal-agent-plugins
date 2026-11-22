@@ -89,6 +89,7 @@ func clonePrepareRequest(req Request) Request {
 	copied := req
 	copied.RequiredComponents = append([]string(nil), req.RequiredComponents...)
 	copied.ExecutableFiles = slices.Clone(req.ExecutableFiles)
+	copied.ClientSurfaces = slices.Clone(req.ClientSurfaces)
 	copied.Targets = append([]ClientTarget(nil), req.Targets...)
 	copied.KnownTargets = append([]TargetFacts(nil), req.KnownTargets...)
 	if req.Assessment != nil {
@@ -113,6 +114,9 @@ func clonePrepareRequest(req Request) Request {
 }
 
 func validatePrepareInput(ctx context.Context, req Request) error {
+	if len(req.ClientSurfaces) != 0 && len(req.Targets) > 0 {
+		return fmt.Errorf("%w: group surface observations must be per target", ErrInvalidRequest)
+	}
 	if req.ConfirmPluginEnable && (req.Operation != OpRepair || req.Scope != domain.ScopeProject || req.InstallationID == "" || len(req.Targets) > 1 || req.ClientID == "" && len(req.Targets) == 0) {
 		return fmt.Errorf("%w: explicit plugin enablement requires one selected Project repair", ErrInvalidRequest)
 	}
