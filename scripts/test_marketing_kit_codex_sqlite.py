@@ -14,6 +14,24 @@ from unittest.mock import patch
 
 
 class MarketingKitCodexSQLiteTests(unittest.TestCase):
+    def test_codex_workflow_provisions_native_sandbox_before_lifecycle(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/marketing-kit-project-release-e2e.yml").read_text()
+        prerequisite = "      - name: Install Codex Linux sandbox prerequisites\n"
+        step = workflow.split(prerequisite, 1)[1].split("      - name:", 1)[0]
+        self.assertIn("if: ${{ matrix.target == 'codex' }}", step)
+        self.assertIn("run: bash scripts/prepare-codex-linux-sandbox.sh", step)
+        self.assertNotIn("continue-on-error", step)
+        positions = [workflow.index(marker) for marker in (
+            "      - uses: actions/setup-node@",
+            prerequisite,
+            "      - name: Install real released UAP and native client",
+            "      - name: Exercise actual signed Marketing Kit",
+        )]
+        self.assertEqual(positions, sorted(positions))
+        events = workflow.split("permissions:", 1)[0]
+        self.assertEqual(events.count("      - 'scripts/prepare-codex-linux-sandbox.sh'"), 2)
+
     def setUp(self):
         self.runner = run_path(str(Path(__file__).with_name("marketing-kit-project-release-e2e.py")))
         self.globals = self.runner["main"].__globals__
