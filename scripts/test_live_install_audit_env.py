@@ -10108,6 +10108,146 @@ class GeminiStartupEnvironmentContracts(unittest.TestCase):
 
 
 
+class KiroDirectPreparedLifecycleTests(unittest.TestCase):
+    """Original public row projections and inert cleanup regression; no native proof."""
+
+    @staticmethod
+    def recorded_rows():
+        # remaining-client-kiro-plugin.json, run 44939583949, zero-based rows 21/24/27.
+        # These are the complete public list installation facts from that original artifact.
+        rows = (
+            ("sanity-io/agent-toolkit", "sanity", "3ed3a143f8d3413faa7790ac0b2274fd3a8a6320",
+             "93f1590c-e09b-4014-b9f7-8bd02502d85f", "1.0.0",
+             "c02e90a28469ff7c67ac1bdae28bee66c4f280aac4f7f00e48509d0522b565c2",
+             "3014016b8d78767b677a5a0b0ce05c03260caa15ecca6ff2efbecf79cf89a661"),
+            ("GoogleCloudPlatform/google-cloud-storage-plugin", "google-cloud-storage", "b346e39698fcdfdc711ca3ee35e41c8dbaa1aa2b",
+             "53a583b6-93a4-4f9d-9392-313f25332853", "1.2.0",
+             "fe39a4a7d74309dc558178435aa3ec22f5b060ff1c3194842592e3293a18d6ac",
+             "f88a697e417fcb6d3b50aa4dd7ced412ef4514a76144fe8980216833836772ad"),
+            ("cometchat/cometchat-skills", "cometchat-skills", "8652f1ea41d12e5058123db1e4e6babef9c918f1",
+             "76f87837-564e-4121-aaef-e27ab4956dea", "5.1.0",
+             "d9d5bd85581b88fda0820cee837d3480c36b0a79084832022a60d805396e8410",
+             "2c8ea317034b147cc7f9d05de5f38a24bc59ece84cb732174c501ceccd343a86"),
+        )
+        return [("github:" + repo + "@" + commit, {
+            "installation_id": uid, "name": name, "version": version, "source": repo.lower(), "mixed_version": False,
+            "clients": [{"install_intent": "prepare", "client_id": "kiro", "scope": "user",
+                         "materialization": "materialized", "activation": "prepared", "authentication": "not_checked",
+                         "policy": "allowed", "verification": "package_validated", "affected_surfaces": ["kiro"],
+                         "package_revision": {"version": version, "resolved_revision": commit,
+                                              "tree_digest": "sha256:" + tree, "manifest_digest": "sha256:" + manifest}}]})
+                for repo, name, commit, uid, version, tree, manifest in rows]
+
+    def test_original_direct_git_prepared_rows_are_selected_for_lifecycle(self):
+        audit = load_audit()
+        for source, node in self.recorded_rows():
+            with self.subTest(source=source):
+                response = {"schema_version": 1, "command": "list", "result": "success",
+                            "data": {"installations": [node]}}
+                self.assertEqual(audit.matching_installations(response, node["name"], "kiro", "plugin", source), [node])
+
+    def test_direct_prepared_route_requires_exact_source_commit_target_and_state(self):
+        audit = load_audit()
+        source, original = self.recorded_rows()[0]
+        changes = [("node", "name", "unrelated"), ("node", "source", "foreign/agent-toolkit"),
+                   ("node", "source", "https://github.com/" + original["source"]),
+                   ("node", "source", original["source"] + "@" + "a" * 40),
+                   ("node", "source", original["source"] + "/extra"),
+                   ("node", "installation_id", "display-id"), ("node", "installation_id", None),
+                   ("client", "client_id", "cursor"), ("client", "scope", "project"),
+                   ("client", "materialization", "absent"), ("client", "activation", "failed"),
+                   ("client", "activation", "active"), ("client", "authentication", "not_required"),
+                   ("client", "policy", "blocked"), ("client", "verification", "not_run"),
+                   ("client", "package_revision", {}), ("revision", "resolved_revision", "0" * 40),
+                   ("revision", "tree_digest", "sha256:short"), ("revision", "manifest_digest", None)]
+        for section, key, value in changes:
+            with self.subTest(section=section, key=key, value=value):
+                node = json.loads(json.dumps(original))
+                selected = node if section == "node" else node["clients"][0]
+                if section == "revision":
+                    selected = selected["package_revision"]
+                selected[key] = value
+                self.assertEqual(audit.matching_installations({"data": {"installations": [node]}},
+                                 original["name"], "kiro", "plugin", source), [])
+        for clients in ([], original["clients"] * 2, [*original["clients"], {"client_id": "cursor"}], [None]):
+            with self.subTest(clients=clients):
+                node = dict(original, clients=clients)
+                self.assertEqual(audit.matching_installations({"data": {"installations": [node]}},
+                                 original["name"], "kiro", "plugin", source), [])
+        for selector in (source.split("@", 1)[0] + "@main", source[:-1], source + "/extra", "sanity", None):
+            with self.subTest(selector=selector):
+                self.assertFalse(audit.kiro_direct_prepared_installation(original, original["name"], "kiro", "plugin", selector))
+        for target in ("cursor", "grok", "windsurf"):
+            with self.subTest(target=target):
+                node = json.loads(json.dumps(original))
+                node["clients"][0]["client_id"] = target
+                self.assertEqual(audit.matching_installations({"data": {"installations": [node]}},
+                                 original["name"], target, "plugin", source), [])
+
+    def test_direct_prepared_repeats_and_removes_original_uuid_without_native_acceptance(self):
+        audit = load_audit()
+        modes = [(source, node, "clean") for source, node in self.recorded_rows()]
+        source, node = self.recorded_rows()[0]
+        modes.extend((source, node, mode) for mode in ("repeat-uuid", "repeat-digest", "repeat-state", "remove-residue", "foreign-change", "reminted-name", "reminted-source"))
+        for source, original, mode in modes:
+            with self.subTest(source=source, mode=mode), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                config = root / "plugin-00/home/.kiro/settings/mcp.json"
+                state, operations = {"installed": False, "adds": 0}, []
+
+                def child(argv, _env, cwd, timeout=105, **_kwargs):
+                    operation = argv[1]
+                    operations.append(operation)
+                    if operation == "add":
+                        self.assertEqual(argv[2], source)
+                        state["adds"] += 1
+                        config.parent.mkdir(parents=True, exist_ok=True)
+                        config.write_text(json.dumps({"mcpServers": {original["name"]: {"command": "inert-never-execute"}}}))
+                        state["installed"] = True
+                        document = {"data": {"actions": [{"component_support": [
+                            {"kind": "mcp_server", "name": original["name"], "support": "native"}]}]}}
+                    elif operation == "remove":
+                        self.assertEqual(argv[2], original["installation_id"])
+                        if mode != "remove-residue":
+                            config.unlink()
+                        state["installed"] = False
+                        if mode == "foreign-change":
+                            (cwd / "foreign-untouched.txt").write_text("changed foreign fixture")
+                        document = {"result": "success"}
+                    elif operation == "list":
+                        row = json.loads(json.dumps(original))
+                        if state["adds"] == 2:
+                            if mode == "repeat-uuid": row["installation_id"] = "00000000-0000-4000-8000-000000000001"
+                            elif mode == "repeat-digest": row["clients"][0]["package_revision"]["tree_digest"] = "sha256:" + "0" * 64
+                            elif mode == "repeat-state": row["clients"][0].update(activation="active", verification="installation_verified")
+                        remaining = [row] if state["installed"] else []
+                        if not state["installed"] and mode in ("reminted-name", "reminted-source"):
+                            row["installation_id"] = "00000000-0000-4000-8000-000000000001"
+                            if mode == "reminted-name": row["name"] = "renamed-prepared-package"
+                            else: row["source"] = "different/repository"
+                            remaining = [row]
+                        document = {"data": {"installations": remaining}}
+                    else:
+                        raise AssertionError(argv)
+                    return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "", "timeout": False, "_json": document}
+
+                with patch.object(audit, "call", side_effect=child):
+                    result = audit.do_case("/unused/agentplugins", "kiro", "plugin", source, 0, root,
+                                           {source: original["name"]})
+                self.assertEqual(operations, ["add", "list", "add", "list", "remove", "list"])
+                self.assertTrue(result["prepared_binding"])
+                self.assertNotEqual(result["status"], "passed")
+                self.assertFalse(audit.expected_negative_coverage(result))
+                if mode == "clean":
+                    self.assertEqual(result["status"], "prepared-lifecycle-passed")
+                    self.assertTrue(result["repeat_verified"])
+                    self.assertTrue(result["removal_verified"])
+                    self.assertTrue(result["sentinels_preserved"])
+                    self.assertEqual(result["repeat_installation_ids"], [original["installation_id"]])
+                else:
+                    self.assertNotEqual(result["status"], "prepared-lifecycle-passed")
+
+
 class LiveAuditNativeVersionRoutingTests(unittest.TestCase):
     def test_catalog_entrypoint_passes_observed_version_to_gemini_skills_and_opencode(self):
         from io import StringIO

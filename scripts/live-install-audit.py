@@ -1594,6 +1594,28 @@ def prepared_package_binding(client, target):
             and client.get("policy") == "allowed")
 
 
+def kiro_direct_prepared_installation(node, identity, target, kind, item):
+    """Bind Kiro's non-native User preparation to one exact Git source and UUID."""
+    if target != "kiro" or kind != "plugin" or type(item) is not str or type(node) is not dict:
+        return False
+    repository = r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*"
+    selector = re.fullmatch(r"github:(" + repository + r")@([0-9a-f]{40})", item)
+    source, uid, clients = node.get("source"), node.get("installation_id"), node.get("clients")
+    if (selector is None or type(identity) is not str or not identity or node.get("name") != identity
+            or type(source) is not str or re.fullmatch(repository, source) is None
+            or source.lower() != selector[1].lower() or type(uid) is not str
+            or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", uid) is None
+            or type(clients) is not list or len(clients) != 1):
+        return False
+    client = clients[0]
+    if not prepared_package_binding(client, "kiro") or client.get("authentication") != "not_checked":
+        return False
+    revision = client.get("package_revision")
+    return (type(revision) is dict and revision.get("resolved_revision") == selector[2]
+            and all(type(revision.get(key)) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", revision[key])
+                    for key in ("tree_digest", "manifest_digest")))
+
+
 def matching_installations(response, identity, target, kind, item, signed_release_pins=None):
     """Verify the frozen Registry release, never only live self-consistency."""
     signed_release_pins = signed_release_pins or {}
@@ -1610,6 +1632,9 @@ def matching_installations(response, identity, target, kind, item, signed_releas
     result = []
     for node in installations:
         if not isinstance(node, dict):
+            continue
+        if kiro_direct_prepared_installation(node, identity, target, kind, item):
+            result.append(node)
             continue
         clients = node.get("clients", [])
         if not isinstance(clients, list):
@@ -2568,6 +2593,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if kind == "plugin" and isinstance(item, str) and not item.startswith("github:")
         else [])
     listed_identity = len(matching) == 1
+    kiro_direct_prepared = bool(listed_identity and kiro_direct_prepared_installation(
+        matching[0], identity, native_target, kind, item))
     failed_install_registered = has_target_registration(listed_json, identity, native_target) if (
         output["exit_code"] != 0) else False
     failed_install_residue = bool(output["exit_code"] != 0 and (
@@ -2688,6 +2715,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
             if grok_prepared else matching_installations(
                 repeat_list_json, identity, native_target, kind, item, signed_release_pins))
+        if kiro_direct_prepared:
+            repeat_matches = [node for node in repeat_matches
+                if kiro_direct_prepared_installation(node, identity, native_target, kind, item)
+                and node["clients"][0]["package_revision"] == matching[0]["clients"][0]["package_revision"]]
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
         if codex_runtime is not None:
@@ -2784,8 +2815,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 codex_plugin_sqlite.checkpoint("after-native-uninstall")
         attestation = (["--external-uninstalled"] if
                        native_uninstall and native_uninstall["completed"] else [])
-        # Grok project Skills have generated bundle names; never select by raw alias.
-        selector = matching[0]["installation_id"] if grok_prepared else identity
+        # Source-bound prepared delivery removes its recorded owner, never a display alias.
+        selector = matching[0]["installation_id"] if grok_prepared or kiro_direct_prepared else identity
         cleanup = audited_call([cli, "remove", selector, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup_json = cleanup.pop("_json", None)
@@ -2931,6 +2962,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         # This fresh case owns the whole signed kit closure. An original or
         # reminted child record must not survive even when native state is empty.
         and (kind != "plugin" or item != "marketing-kit" or post_list_empty)
+        # A fresh direct-source Kiro case cannot retain a reminted registration.
+        and (not kiro_direct_prepared or post_list_empty)
         and (target != "qoder" or kind != "plugin"
              or (qoder_native_after_remove is not None
                  and qoder_native_after_remove["status"] == "absent"))
@@ -2953,7 +2986,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         status = "repeat-add-unqualified"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
         status = ("prepared-lifecycle-passed" if (
-                       kind == "plugin" and prepared_components_only)
+                       kind == "plugin" and (prepared_components_only or kiro_direct_prepared))
                   else "package-installed-native-unqualified" if (
                        kind == "plugin" and (
                            (target == "qoder" and
