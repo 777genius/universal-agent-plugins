@@ -6,9 +6,16 @@ on:
     paths:
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/live-install-audit.py'
+      - 'scripts/pi_project_skill_audit.py'
+      - 'scripts/test_pi_project_skill_audit.py'
+      - 'scripts/qoder_prepared_skill_audit.py'
+      - 'scripts/test_qoder_prepared_skill_audit.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/test_native_client_research.py'
       - 'scripts/published_codex_baseline.py'
       - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_live_install_audit_opencode_negative.py'
       - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/claude_cache_retirement_audit.py'
@@ -25,6 +32,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   # pull_request runs check out a synthetic merge commit; retain the source branch HEAD too.
@@ -35,7 +43,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 
 jobs:
+  changes:
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
+    uses: ./.github/workflows/pr-changes.yml
+    permissions:
+      pull-requests: read
   native-pilot:
+    needs: changes
     name: Real ${{ matrix.target }} / ${{ matrix.kind }} source install (pilot)
     if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     runs-on: ubuntu-24.04
@@ -70,10 +84,14 @@ jobs:
           codex --version
       # The Go source defaults to 0.1.0-development; signed directory policies
       # require an ordinary release-semver CLI. This is still the PR source
-      # binary, NOT the published agentplugins-v0.1.95 release.
+      # binary, NOT the published agentplugins-v0.1.115 release.
       - name: Refuse ambient native-profile and Git configuration leakage
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
+          python3 -m unittest discover -s scripts -p 'test_qoder_prepared_skill_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
+          python3 -m unittest discover -s scripts -p 'test_pi_project_skill_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_opencode_negative.py'
           python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
           python3 -m unittest discover -s scripts -p 'test_gemini_windows_runtime_audit.py'
           python3 -m unittest discover -s scripts -p 'test_codex_runtime_audit.py'
@@ -81,7 +99,7 @@ jobs:
       - name: Verify exact empty-stderr LintAI exit diagnostic
         run: go test ./install/integrationctl/agentplugins/adapters/securityscan -run '^TestCommandScannerIncludesNonzeroExitWhenStderrIsEmpty$' -count=1
       - name: Build actual PR CLI with current eligible directory version policy
-        run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
+        run: go build -trimpath -ldflags='-X main.version=0.1.115' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Run isolated real source install and remove; preserve per-case proof
         env:
           AUDIT_VENDOR_OUTCOME: ${{ steps.native-install-pilot.outcome }}
@@ -104,7 +122,7 @@ jobs:
 
 
   published-cli-smoke:
-    name: Published npm 0.1.95 / Codex CLI parity
+    name: Historical npm 0.1.95 / Codex lifecycle and default refusal
     needs: native-pilot
     runs-on: ubuntu-24.04
     timeout-minutes: 25
@@ -137,7 +155,9 @@ jobs:
           result=0
           for kind in plugin skill; do
             # Keep this immutable release's lifecycle distinct from current Ready.
-            acceptance=native
+            # Observe the default feed refusal separately; only the plugin
+            # lifecycle uses the unexpired, original-key official sequence 48.
+            acceptance=published-0.1.95-codex-plugins-archived-feed
             if [ "$kind" = skill ]; then acceptance=published-0.1.95-codex-skills; fi
             python3 scripts/live-install-audit.py --cli "$(command -v agentplugins)" \
               --target codex --kind "$kind" --limit 2 --acceptance "$acceptance" \
@@ -154,15 +174,15 @@ jobs:
           retention-days: 14
 
   real-native-cli-matrix:
-    name: All 30 ${{ matrix.kind }} / native ${{ matrix.target }}
-    needs: native-pilot
+    name: All 30 ${{ matrix.kind }} / ${{ matrix.target == 'pi' && matrix.kind == 'skill' && 'foreign Prepared + clean native' || matrix.target == 'qoder' && matrix.kind == 'skill' && 'Prepared installation' || 'native' }} ${{ matrix.target }}
+    needs: [changes, native-pilot]
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     strategy:
       fail-fast: false
       max-parallel: 6
       matrix:
-        target: [codex, claude, opencode, gemini, copilot, cline, kimi, qoder, pi]
+        target: ${{ fromJSON(needs.changes.outputs.live_clients || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
         kind: [plugin, skill]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -187,6 +207,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           KIND: ${{ matrix.kind }}
+          CLINE_NO_AUTO_UPDATE: '1'
         shell: bash
         run: |
           set -euo pipefail
@@ -212,10 +233,12 @@ jobs:
           binary="$TARGET"
           if [[ "$TARGET" == qoder ]]; then binary=qodercli; fi
           command -v "$binary"
-          timeout 25s "$binary" --version
+          native_version=$(timeout 25s "$binary" --version)
+          printf '%s\n' "$native_version"
+          if [[ "$TARGET" == cline ]]; then [[ "$native_version" == 3.0.74 ]]; fi
       - name: Build PR source CLI with current signed Registry eligibility version
         if: ${{ !cancelled() }} # BUG-010: retain negative evidence after native bootstrap failure
-        run: go build -trimpath -ldflags='-X main.version=0.1.95' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
+        run: go build -trimpath -ldflags='-X main.version=0.1.115' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Attempt all 30 independent pinned sources in isolated profiles
         if: ${{ !cancelled() }} # Missing client produces explicit non-PASS source rows
         env:
@@ -223,9 +246,42 @@ jobs:
           KIND: ${{ matrix.kind }}
           AUDIT_VENDOR_OUTCOME: ${{ steps.native-install.outcome }}
         run: |
-          python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
-            --target "$TARGET" --kind "$KIND" --limit 30 \
-            --report-dir "$RUNNER_TEMP/full-proof"
+          if [[ "$TARGET" == pi && "$KIND" == skill ]]; then
+            # Two independent fresh invocations: never move or remove a foreign
+            # Skill to turn an existing Prepared project into a trusted one.
+            foreign_status=0
+            python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
+              --target pi --kind skill --limit 30 --acceptance pi-foreign-prepared-skills-installation \
+              --report-dir "$RUNNER_TEMP/full-proof/pi-foreign-prepared" || foreign_status=$?
+            native_status=0
+            python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
+              --target pi --kind skill --limit 30 --acceptance pi-clean-native-skills \
+              --report-dir "$RUNNER_TEMP/full-proof/pi-clean-native" || native_status=$?
+            [[ "$foreign_status" -eq 0 && "$native_status" -eq 0 ]]
+          else
+            acceptance=native
+            if [[ "$TARGET" == qoder && "$KIND" == skill ]]; then
+              acceptance=qoder-prepared-skills-installation
+            fi
+            python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
+              --target "$TARGET" --kind "$KIND" --limit 30 --acceptance "$acceptance" \
+              --report-dir "$RUNNER_TEMP/full-proof"
+          fi
+      - name: Verify the audited Cline version matches this workflow pin
+        if: ${{ !cancelled() && matrix.target == 'cline' }}
+        env:
+          KIND: ${{ matrix.kind }}
+        run: |
+          python3 - <<'CLINE_PIN'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ["RUNNER_TEMP"]) / "full-proof" /
+                               ("cline-" + os.environ["KIND"] + ".json")).read_text())
+          version = report.get("client_version", {})
+          if not (version.get("status") == "reported" and version.get("value") == "3.0.74"
+                  and type(version.get("exit_code")) is int and version["exit_code"] == 0):
+              raise SystemExit("Cline audit did not observe this workflow's pinned 3.0.74: " + repr(version))
+          CLINE_PIN
       - name: Upload all per-source installation outcomes (even on failures)
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

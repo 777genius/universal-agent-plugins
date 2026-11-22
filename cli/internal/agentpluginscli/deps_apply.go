@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -235,6 +236,7 @@ func detectDependencyClients(ctx context.Context, app App) (map[domain.ClientID]
 	}
 	detected := map[domain.ClientID]domain.DetectedClient{}
 	for _, client := range clients {
+		client.Surfaces = slices.Clone(client.Surfaces)
 		detected[client.ClientID] = client
 	}
 	return detected, nil
