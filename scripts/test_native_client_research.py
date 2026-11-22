@@ -289,6 +289,89 @@ class CaptureTests(unittest.TestCase):
             self.assertEqual((stdout, stderr), (b"", b""))
 
 
+@unittest.skipUnless(os.name == "posix", "requires POSIX process capture")
+class FiniteInputProbeTests(unittest.TestCase):
+    def test_exact_input_is_closed_at_eof_and_capture_is_complete(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            payload = b'{"id":"one","type":"get_commands"}\n'
+            command = [sys.executable, "-c", "import sys; data=sys.stdin.buffer.read(); sys.stdout.buffer.write(data)"]
+            record, stdout, stderr = research.run_probe(command, root, {}, root, "stdin", memory_only=True, input_bytes=payload)
+            self.assertEqual((record["exit"], record["error"], stdout, stderr), (0, None, payload, b""))
+            self.assertTrue(record["stdin_written"])
+            self.assertEqual(record["stdin_bytes"], len(payload))
+            self.assertEqual(record["stdin_sha256"], hashlib.sha256(payload).hexdigest())
+            self.assertEqual(list(root.iterdir()), [])
+
+    def test_input_refuses_before_files_or_spawn(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for payload in (b"", b"a" * 257, "text", bytearray(b"a"), 1):
+                with self.subTest(payload=type(payload).__name__), patch.object(research.subprocess, "Popen") as spawn:
+                    with self.assertRaises(ValueError):
+                        research.run_probe(["never"], root, {}, root, "invalid", input_bytes=payload)
+                    spawn.assert_not_called()
+                self.assertEqual(list(root.iterdir()), [])
+
+    def test_partial_and_nonblocking_refusal_never_claim_written(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for effect in (lambda *_: 0, BlockingIOError(errno.EAGAIN, "full"), BrokenPipeError(errno.EPIPE, "closed")):
+                with self.subTest(effect=str(effect)), patch.object(research.os, "write", side_effect=effect):
+                    record, _, _ = research.run_probe([sys.executable, "-c", "import sys; sys.stdin.buffer.read()"], root, {}, root, "short", memory_only=True, input_bytes=b"a")
+                self.assertIsNotNone(record["error"])
+                self.assertFalse(record["stdin_written"])
+
+    def test_timeout_and_output_bound_still_apply_with_input(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for body, kwargs, error in (("import sys,time; sys.stdin.buffer.read(); time.sleep(5)", {"timeout": .1}, "probe deadline exceeded"),
+                                       ("import sys; sys.stdin.buffer.read(); sys.stdout.buffer.write(b'x'*100000); sys.stdout.flush()", {"limit": 16}, "output limit reached")):
+                record, stdout, _ = research.run_probe([sys.executable, "-c", body], root, {}, root, "bounded", memory_only=True, input_bytes=b"a", **kwargs)
+                self.assertEqual(record["error"], error)
+                self.assertTrue(record["stdin_written"])
+                self.assertLess(record["elapsed_seconds"], 3)
+                self.assertLessEqual(len(stdout), kwargs.get("limit", 1 << 20))
+
+    def test_response_is_confirmed_before_eof_even_for_delayed_handler(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            payload = b'{"id":"one","type":"get_commands"}\n'
+            body = "import sys,time; from pathlib import Path; line=sys.stdin.buffer.readline(); time.sleep(.05); sys.stdout.buffer.write(line); sys.stdout.flush(); assert sys.stdin.buffer.read()==b''; Path('eof-after-response').write_text('yes')"
+            seen = []
+            def complete(line):
+                self.assertFalse((root / "eof-after-response").exists())
+                seen.append(line)
+                return line == payload
+            record, stdout, stderr = research.run_probe([sys.executable, "-c", body], root, {}, root, "delayed", memory_only=True, input_bytes=payload, input_complete=complete)
+            self.assertEqual((record["exit"], record["error"], stdout, stderr, seen), (0, None, payload, b"", [payload]))
+            self.assertTrue(record["stdin_response_confirmed"])
+            self.assertEqual((root / "eof-after-response").read_text(), "yes")
+
+    def test_response_refusal_exception_missing_frame_and_deadline_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            def refused(_): raise RuntimeError("exact frame refused")
+            for body, predicate, error in (
+                    ("import sys; sys.stdin.buffer.readline(); print('wrong', flush=True); sys.stdin.buffer.read()", lambda _: False, "probe input response refused"),
+                    ("import sys; sys.stdin.buffer.readline(); print('wrong', flush=True); sys.stdin.buffer.read()", refused, "probe input response predicate raised RuntimeError"),
+                    ("import sys; sys.stdin.buffer.readline()", lambda _: True, "probe input response missing"),
+                    ("import sys,time; sys.stdin.buffer.readline(); time.sleep(5)", lambda _: True, "probe deadline exceeded")):
+                record, _, _ = research.run_probe([sys.executable, "-c", body], root, {}, root, "response", memory_only=True, timeout=.2, input_bytes=b"one\n", input_complete=predicate)
+                self.assertEqual(record["error"], error)
+                self.assertFalse(record["stdin_response_confirmed"])
+                if predicate is refused:
+                    self.assertEqual(record["stdin_response_exception"], {"type": "RuntimeError", "message": "exact frame refused"})
+
+    def test_none_keeps_legacy_devnull_and_result_schema(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            record, stdout, stderr = research.run_probe([sys.executable, "-c", "import sys; assert sys.stdin.buffer.read()==b''; print('legacy')"], root, {}, root, "legacy", memory_only=True)
+            self.assertEqual((record["exit"], record["error"], stdout, stderr), (0, None, b"legacy\n", b""))
+            self.assertFalse(any(key.startswith("stdin_") for key in record))
+
+
 if __name__ == "__main__":
     unittest.main()
 

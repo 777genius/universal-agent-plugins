@@ -255,7 +255,7 @@ func (adapter *dependencyInstaller) Prepare(ctx context.Context, action environm
 		}
 	}
 	adapter.currentAction = action
-	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot,
+	request := installer.Request{Scope: adapter.app.scope(), ProjectRoot: adapter.app.ProjectRoot, OperationID: operationID, Operation: installer.Operation(action.Action), ClientID: action.ClientID, ClientConfigRoot: client.ConfigRoot, ClientSurfaces: slices.Clone(client.Surfaces),
 		ConfirmPluginEnable:    adapter.opts.confirmPluginEnable && action.Action == "repair",
 		ClientNativeConfigRoot: dependencyNativeConfigRoot(adapter.app, client),
 		ClientExecutable:       backendExecutable(client, adapter.detected, adapter.app.scope()), ClientVersion: client.Version, InstallationID: action.InstallationID,
