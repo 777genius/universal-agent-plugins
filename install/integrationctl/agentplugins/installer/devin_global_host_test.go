@@ -379,3 +379,60 @@ func devinGlobalRecordedRootRefusal(t *testing.T, f devinGlobalHostFixture, stat
 		t.Fatal("recorded root refusal changed original authority")
 	}
 }
+
+func TestFacadeNativeOnlyUserSiblingAllowsSameInstallationLifecycle(t *testing.T) {
+	f := newDevinGlobalHostFixture(t, false)
+	if err := os.RemoveAll(filepath.Join(f.root, ".codeium")); err != nil {
+		t.Fatal(err)
+	}
+	f.request.ClientConfigRoot = ""
+	apply := func(request installer.Request) installer.Result {
+		t.Helper()
+		prepared, err := f.engine.Prepare(t.Context(), request)
+		if err != nil {
+			t.Fatal(request.ClientID, request.Operation, err)
+		}
+		result, applyErr := f.engine.Apply(t.Context(), prepared, installer.Decision{Confirmed: true})
+		if err := prepared.Close(); err != nil {
+			t.Error(err)
+		}
+		if applyErr != nil {
+			t.Fatal(request.ClientID, request.Operation, applyErr)
+		}
+		return result
+	}
+	nativeResult := apply(f.request)
+	fact := installer.TargetFacts{ClientID: "windsurf", BindingID: nativeResult.Binding.BindingID,
+		NativeConfigRoot: f.profile, Executable: f.request.ClientExecutable, Version: f.request.ClientVersion}
+	nativeBefore := devinSDKRead(t, filepath.Join(f.profile, "mcp_config.json"))
+	skillBefore := devinSDKRead(t, filepath.Join(f.profile, "skills", "docs", "SKILL.md"))
+	selected := f.request
+	selected.ClientID, selected.ClientConfigRoot, selected.ClientNativeConfigRoot = "cline", filepath.Join(f.root, "cline"), ""
+	selected.ClientExecutable, selected.ClientVersion = "", ""
+	selected.KnownTargets = []installer.TargetFacts{fact}
+	for _, op := range []installer.Operation{installer.OpInstall, installer.OpRepair, installer.OpUpdate, installer.OpRemove} {
+		selected.Operation, selected.OperationID = op, "native-sibling-"+string(op)
+		if op == installer.OpRemove {
+			// Removal observes the exact native sibling without needing a version
+			// or granting that sibling a new delivery/activation operation.
+			selected.KnownTargets[0].Version = ""
+		}
+		apply(selected)
+		if nativeBefore != devinSDKRead(t, filepath.Join(f.profile, "mcp_config.json")) ||
+			skillBefore != devinSDKRead(t, filepath.Join(f.profile, "skills", "docs", "SKILL.md")) || f.runner.calls != 0 {
+			t.Fatal(op, "selected Cline lifecycle changed or executed the native sibling")
+		}
+		if _, err := os.Lstat(filepath.Join(f.root, ".codeium")); !os.IsNotExist(err) {
+			t.Fatal(op, "invented an unrelated Cascade profile", err)
+		}
+	}
+	state, err := f.store.Load()
+	if err != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+		t.Fatal("same-installation lifecycle lost the retained native binding", state, err)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.ClientID != "windsurf" || binding.NativeProfileRoot != f.profile || binding.ClientBindingID != fact.BindingID {
+			t.Fatal("native sibling ownership changed", binding)
+		}
+	}
+}

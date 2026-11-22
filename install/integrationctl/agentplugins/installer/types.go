@@ -121,6 +121,10 @@ type TargetFacts struct {
 	BindingID     string
 	ConfigRoot    string
 	Executable    string
+	// NativeConfigRoot and Version retain independently observed native User
+	// authority for an unselected sibling. Neither is read from owned state.
+	NativeConfigRoot string `json:"-"`
+	Version          string `json:"-"`
 }
 
 // Decision is host UI confirmation, outside mutation locks.

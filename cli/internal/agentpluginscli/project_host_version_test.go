@@ -3,11 +3,13 @@ package agentpluginscli
 import (
 	"errors"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/codex"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
@@ -55,7 +57,7 @@ func TestProjectDependencyKnownFactsRetainOnlyUnselectedSiblings(t *testing.T) {
 	if err := adapter.populateDependencyTargets(view, "selected", &request); err != nil {
 		t.Fatal(err)
 	}
-	if len(request.KnownTargets) != 1 || request.KnownTargets[0] != (installer.TargetFacts{ClientID: "gemini", BindingID: "sibling-binding", ConfigRoot: sibling.ConfigRoot, Executable: sibling.ExecutablePath}) {
+	if len(request.KnownTargets) != 1 || !reflect.DeepEqual(request.KnownTargets[0], installer.TargetFacts{ClientID: "gemini", BindingID: "sibling-binding", ConfigRoot: sibling.ConfigRoot, Executable: sibling.ExecutablePath}) {
 		t.Fatalf("selected/sibling facts mixed: %+v", request.KnownTargets)
 	}
 	if request.ClientVersion != "3000.11.205" || request.ClientConfigRoot != "" {
@@ -64,5 +66,28 @@ func TestProjectDependencyKnownFactsRetainOnlyUnselectedSiblings(t *testing.T) {
 	delete(adapter.detected, domain.ClientGemini)
 	if err := adapter.populateDependencyTargets(view, "selected", &installer.Request{ClientID: "windsurf"}); err == nil {
 		t.Fatal("unselected sibling missing facts accepted")
+	}
+}
+
+func TestDependencyKnownFactsRetainNativeOnlyUserSibling(t *testing.T) {
+	root := t.TempDir()
+	registry, err := clients.NewRegistry(windsurf.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sibling := domain.DetectedClient{ClientID: domain.ClientWindsurf,
+		NativeConfigRoot: filepath.Join(root, "original", "devin"),
+		ExecutablePath:   filepath.Join(root, "bin", "devin"), Version: "3000.12.57"}
+	adapter := dependencyInstaller{app: App{Scope: domain.ScopeUser, ClientRegistry: registry},
+		detected: map[domain.ClientID]domain.DetectedClient{domain.ClientWindsurf: sibling}}
+	view := installer.Inspection{Installations: []installer.InspectedInstallation{{InstallationID: "same-installation",
+		Bindings: []installer.InspectedBinding{{ClientID: "cline", BindingID: "selected-binding"}, {ClientID: "windsurf", BindingID: "native-binding"}}}}}
+	request := installer.Request{ClientID: "cline"}
+	if err := adapter.populateDependencyTargets(view, "same-installation", &request); err != nil {
+		t.Fatal(err)
+	}
+	if len(request.KnownTargets) != 1 || !reflect.DeepEqual(request.KnownTargets[0], installer.TargetFacts{ClientID: "windsurf", BindingID: "native-binding",
+		NativeConfigRoot: sibling.NativeConfigRoot, Executable: sibling.ExecutablePath, Version: sibling.Version}) {
+		t.Fatal("CLI dropped native-only sibling facts or invented a legacy root", request.KnownTargets)
 	}
 }
