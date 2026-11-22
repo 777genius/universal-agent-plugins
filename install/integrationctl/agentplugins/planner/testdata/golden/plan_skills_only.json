@@ -512,6 +512,7 @@
       "TargetRoot": "\u003croot\u003e/managed/clients/hermes",
       "UserActions": [
         "verify the plugin's authentication requirements before using it",
+        "Confirmed installation starts the selected Hermes runtime to verify Skill discovery; Hermes may complete its own startup setup and update its native caches",
         "Reload or restart Hermes and verify managed Skills are visible; copied files alone do not prove native activation"
       ],
       "Verification": "package_validated",

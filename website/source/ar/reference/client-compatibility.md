@@ -11,9 +11,34 @@ translationRequired: false
 
 # أدلة توافق عملاء UAP {#uap-client-compatibility-evidence}
 
+## الوكلاء المدعومون {#supported-agents}
+
+يثبّت UAP الحزم أو يجهّزها لهؤلاء الوكلاء. مرّر قيمة `--target` لاختيار الوكلاء صراحةً، أو احذف `--target` لتختار من بين الوكلاء المكتشفين على حاسوبك.
+
+| الوكيل | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop)، `chatgptweb` (Web) |
+
+يختلف دعم نطاقي المستخدم والمشروع وطريقة الإعداد والخطوات المتبقية بعد التثبيت من وكيل إلى آخر؛ راجع [جدول دعم الوكلاء](https://universal-agent-plugins.com/ar/#agent-support). لا يعني دعم وكيل ما أن كل حزمة أو مكوّن أو إصدار أو نطاق يعمل فيه.
+
 ## الإصدار الحالي ونطاقه {#current-release-and-scope}
 
-يضيف [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)، الإصدار الأصلي المنشور، واجهة API للإدارة المحلية يدير المضيف دورة حياتها، واكتشافًا للعملاء وملفات التعريف للقراءة فقط، وموفّرًا لامتدادات Pi الأصلية ضمن نطاق المستخدم. راجع [الإدارة المحلية](../use/manage#local-management-api). قد تتأخر قنوات مديري الحزم؛ تحقّق من `agentplugins version`.
+يضيف [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)، الإصدار الأصلي المنشور، واجهة API للإدارة المحلية يدير المضيف دورة حياتها، واكتشافًا للعملاء وملفات التعريف للقراءة فقط، ودعمًا لامتدادات Pi الأصلية وSkills وMCP عبر stdio/Streamable HTTP ضمن نطاق المستخدم ونطاق المشروع المؤهل. راجع [الإدارة المحلية](../use/manage#local-management-api). قد تتأخر قنوات مديري الحزم؛ تحقّق من `agentplugins version`.
 
 منذ CLI 0.1.94، يختار `install` دون وسيطة مصدر المشروع إذا احتوى المجلد الحالي نفسه على ملف عادي باسم `uap.toml`. تكون الأولوية للنطاق الصريح، ولا تُبحث المجلدات الأب. تُفحص الأقفال الموجودة بصرامة حتى دون `--locked`. أُضيف التسليم الصريح ضمن نطاق المشروع في 0.1.93. لا تؤهّل أدلة إصدار المثبّت تشغيل كل وكيل أصلي أو الملف التنفيذي للتأليف المعياري. لا يتضمن المثبّت الحالي عبر npm أو التثبيت الأصلي `agentplugins author`؛ راجع [دليل البناء](../build/) لأدوات المصدر.
 
@@ -33,11 +58,15 @@ translationRequired: false
 
 ## Hermes وAntigravity: الدعم في إصدار CLI المنشور {#hermes-antigravity-source}
 
-نُشر CLI الأصلي **0.1.108** في 2026-11-13 ويتضمن Hermes وAntigravity. نجح التحقق من الإصدار وترقيته؛ وتبقى أهلية كل حزمة في Directory الموقّع مستقلة. لا يعني ذلك نشر npm 0.1.108 أو مصادقة المزوّد أو التفعيل التلقائي.
+يتضمن CLI الأصلي **0.1.110** كلًا من Hermes وAntigravity. يضبط UAP المكونات المدعومة تلقائيًا؛ أكمل الإجراءات المتبقية المطبوعة لعميلك. تبقى أهلية حزم Directory الموقّع مستقلة. لا يثبت التثبيت مصادقة المزوّد أو تفعيل وقت التشغيل.
 
-[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+[0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) · source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`.
 
-**أدلة دورة الحياة التاريخية (2026-11-10):**
+يكون Project MCP في Hermes بحالة **Prepared** فقط مع توزيع مستقل لمضيف Hermes يتحقق UAP من بيان حزمته، ثم جلسة مشروع UAP مؤكدة صراحةً. لا يختار التشغيل العادي لـ Hermes إعداد MCP هذا. لا يستطيع مضيف Hermes المثبّت من شفرته المصدرية استخدام Project MCP؛ استخدم User MCP أو Project Skills فقط. لا يقيّد شرط المضيف هذا تثبيت الإضافات من Git. ما زالت Project Skills تتطلب الثقة وجلسة جديدة. تحتفظ الملاحظات المؤرخة أدناه بنطاقها التاريخي.
+
+**أدلة دورة الحياة التاريخية (2026-11-10–13):**
+
+[0.1.108 (2026-11-13)](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
 
 **Hermes 0.23.0:** مهارات Skills للمستخدم وإعدادات MCP عبر stdio/Streamable HTTP التي يملكها UAP؛ وفي المشروع، Skills فقط. يُرفض Project MCP دون تحويله إلى إعدادات المستخدم. اجتازت Linux x64 وmacOS arm64 وWindows x64 الأصلية الإضافة الأولى والمكررة والتحديث والإصلاح والإزالة والاكتشاف في مشروع غير موثوق والعزل بين A وB: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862)، عند مصدر UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. تثبت أربع تبادلات HTTP عبر الحلقة المحلية لكل نظام `initialize`/`tools/list` الاتصال واكتشاف الأدوات؛ ولا تثبت `tools/call` أو استخدام نموذج أو المصادقة أو التنفيذ في مشروع موثوق. لا يُدعم SSE أو hooks. تُحوّل الأوامر المحمولة إلى Skills؛ وتُحجب الأوامر التي تتطلب استدعاءً صريحًا فقط عندما لا يستطيع العميل فرض ذلك.
 

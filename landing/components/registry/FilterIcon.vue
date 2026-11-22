@@ -1,13 +1,24 @@
 <script setup lang="ts">
 type FilterIconName =
-  'category' | 'component' | 'source' | 'trust' | 'agent' | 'authentication' | 'owner' | 'filters';
+  | 'sort'
+  | 'category'
+  | 'component'
+  | 'source'
+  | 'trust'
+  | 'agent'
+  | 'authentication'
+  | 'owner'
+  | 'filters';
 
 defineProps<{ name: FilterIconName }>();
 </script>
 
 <template>
   <svg class="filter-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-    <template v-if="name === 'filters'">
+    <template v-if="name === 'sort'">
+      <path d="M4 6h12M4 12h8M4 18h4M18 9v11m-3-3 3 3 3-3" />
+    </template>
+    <template v-else-if="name === 'filters'">
       <path d="M4 5h16l-6 7v6l-4 2v-8L4 5Z" />
     </template>
     <template v-else-if="name === 'category'">

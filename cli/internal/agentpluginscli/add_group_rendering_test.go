@@ -43,18 +43,24 @@ func TestSharedGroupHumanReviewIdentifiesLogicalTargets(t *testing.T) {
 	}
 }
 
-func TestGroupCollisionErrorIncludesSelectedTargetContext(t *testing.T) {
+// A foreign native identity at one target fails only that target, in plain
+// words, and leaves the other selected target installed.
+func TestGroupForeignIdentityFailsOnlyThatTarget(t *testing.T) {
 	f := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor), fixtureClient(t, domain.ClientKiro)})
 	f.app.Lifecycle.NativeObserver = selectiveNativeObserver{foreign: domain.ClientCursor}
-	_, _, err := f.execute(false, "add", writeCLIPlugin(t), "--target", "cursor,kiro")
-	if err == nil || !strings.Contains(err.Error(), "selected targets: [cursor kiro]") ||
-		!strings.Contains(err.Error(), "target cursor identity preflight") ||
-		!strings.Contains(err.Error(), "unmanaged") || !strings.Contains(err.Error(), "no target was changed") {
-		t.Fatalf("collision error: %v", err)
+	stdout, _, err := f.execute(false, "add", writeCLIPlugin(t), "--target", "cursor,kiro")
+	if err == nil || err.Error() != "1 of 2 client installations failed; see results above" ||
+		!strings.Contains(stdout, "Something UAP does not own already exists at the install location.") {
+		t.Fatalf("collision error: %v\n%s", err, stdout)
 	}
 	state, loadErr := f.store.Load()
-	if loadErr != nil || len(state.Installations) != 0 {
-		t.Fatalf("collision mutated state: %+v, %v", state, loadErr)
+	if loadErr != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 1 {
+		t.Fatalf("collision state: %+v, %v", state, loadErr)
+	}
+	for _, binding := range state.Installations[0].Clients {
+		if binding.ClientID != string(domain.ClientKiro) {
+			t.Fatalf("collision installed %s", binding.ClientID)
+		}
 	}
 }
 

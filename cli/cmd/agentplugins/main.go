@@ -37,6 +37,10 @@ var (
 	defaultDirectoryOrigin    = "https://777genius.github.io/universal-agent-plugins-registry/registry/schemas/1/"
 	defaultDirectoryKeyID     = "uap-directory-2026-01"
 	defaultDirectoryPublicKey = "HalXARjat+v3ylTPLMAnvuavRo4ZfrF+DbWwsjlp2bI="
+	// The next Directory signing key is trusted ahead of the signer switch so
+	// that this release can verify snapshots signed by either key.
+	nextDirectoryKeyID        = "uap-directory-2026-11"
+	nextDirectoryPublicKey    = "k0F0ZlRXsgUa3+OMOUle6GdpihXUUcHI+42wNeuGAMc="
 	defaultDiscoveryOrigin    = "https://777genius.github.io/universal-agent-plugins-registry/discovery/"
 	defaultDiscoveryKeyID     = "uap-discovery-2026-01"
 	defaultDiscoveryPublicKey = "IxWvGuscXR9crlCrGyBQZNqroYNVPbBA1B3pnjSffhc="
@@ -49,6 +53,12 @@ var (
 )
 
 func main() {
+	// This private process protocol must remain available in every build mode.
+	// In particular, release command routing must not reinterpret its argv as
+	// installer flags before the native stdio launcher can handle it.
+	if handled, code := managedstdio.Dispatch(os.Args[1:], os.Stderr); handled {
+		os.Exit(code)
+	}
 	if commands.IsRelease() {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
@@ -56,9 +66,6 @@ func main() {
 			os.Exit(exitx.Code(err))
 		}
 		return
-	}
-	if handled, code := managedstdio.Dispatch(os.Args[1:], os.Stderr); handled {
-		os.Exit(code)
 	}
 	if commands.IsEnabled() && commands.IsAuthorInvocation(os.Args[1:], agentpluginscli.NewRoot(agentpluginscli.App{Version: version})) {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -95,7 +102,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := installerSignalContext(context.Background())
 	defer stop()
 	// Preserve the real os.Stdout *os.File for native TTY detection. An
 	// io.Writer counter here silently downgrades rich prompts to plain input.
@@ -109,7 +116,25 @@ func run() error {
 			}
 		}
 	}
+	if err != nil && ctx.Err() != nil {
+		// A client change the installer could not confirm is never resumed blindly;
+		// doctor reports it as an open recovery operation instead.
+		err = fmt.Errorf("%w\ninterrupted: run the same command again to resume; `agentplugins doctor` lists anything it cannot resume", err)
+	}
 	return err
+}
+
+// installerSignalContext cancels an installer command on interrupt, termination
+// or terminal hangup. Closing the terminal or SSH session must take the same
+// cancellation path as Ctrl+C, so already made native effects get recorded
+// instead of leaving an unresolved native activation attempt. A hangup the
+// caller ignores (nohup) stays ignored: Notify would reinstall a handler.
+func installerSignalContext(parent context.Context) (context.Context, context.CancelFunc) {
+	signals := []os.Signal{os.Interrupt, syscall.SIGTERM}
+	if !signal.Ignored(syscall.SIGHUP) {
+		signals = append(signals, syscall.SIGHUP)
+	}
+	return signal.NotifyContext(parent, signals...)
 }
 
 func resolveAgentpluginsRoots() (string, string, error) {
@@ -163,6 +188,11 @@ type lazySourceAcquirer struct {
 	acquirer sourceacquisition.Acquirer
 }
 
+// AcquisitionTempRoot reports where the wrapped acquirer stages its files.
+func (acquirer lazySourceAcquirer) AcquisitionTempRoot() string {
+	return acquirer.acquirer.AcquisitionTempRoot()
+}
+
 func (acquirer lazySourceAcquirer) prepare() error {
 	if err := os.MkdirAll(acquirer.dataRoot, 0o700); err != nil {
 		return fmt.Errorf("create agentplugins data directory: %w", err)
@@ -199,11 +229,15 @@ func (acquirer lazySourceAcquirer) AcquireGitHubVerified(ctx context.Context, re
 }
 
 func newDirectoryClient(dataRoot string) (*directoryv1.Client, error) {
-	publicKey, err := base64.StdEncoding.Strict().DecodeString(defaultDirectoryPublicKey)
-	if err != nil || len(publicKey) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("decode Directory public key")
+	currentKey, err := decodeDirectoryKey(defaultDirectoryKeyID, defaultDirectoryPublicKey, directoryv1.KeyCurrent)
+	if err != nil {
+		return nil, err
 	}
-	trust := directoryv1.TrustStore{Keys: []directoryv1.TrustedKey{{ID: defaultDirectoryKeyID, PublicKey: ed25519.PublicKey(publicKey), State: directoryv1.KeyCurrent}}}
+	nextKey, err := decodeDirectoryKey(nextDirectoryKeyID, nextDirectoryPublicKey, directoryv1.KeyNext)
+	if err != nil {
+		return nil, err
+	}
+	trust := directoryv1.TrustStore{Keys: []directoryv1.TrustedKey{currentKey, nextKey}}
 	embedded, _, err := directoryv1.DecodeReleaseBootstrap(generatedProductionDirectoryBootstrap, trust)
 	if err != nil {
 		return nil, fmt.Errorf("load generated production Directory bootstrap: %w", err)
@@ -221,6 +255,14 @@ func newDirectoryClient(dataRoot string) (*directoryv1.Client, error) {
 		Embedded: embedded, RequireEmbeddedBootstrap: true,
 		Cache: directoryv1.Cache{Path: filepath.Join(dataRoot, "directory-v1-cache.json")},
 	}, nil
+}
+
+func decodeDirectoryKey(id, encoded string, state directoryv1.KeyState) (directoryv1.TrustedKey, error) {
+	publicKey, err := base64.StdEncoding.Strict().DecodeString(encoded)
+	if err != nil || len(publicKey) != ed25519.PublicKeySize {
+		return directoryv1.TrustedKey{}, fmt.Errorf("decode Directory public key %s", id)
+	}
+	return directoryv1.TrustedKey{ID: id, PublicKey: ed25519.PublicKey(publicKey), State: state}, nil
 }
 
 func productionDirectoryOrigin(environmentValue string) (string, error) {

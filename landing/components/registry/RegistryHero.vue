@@ -119,7 +119,8 @@ const targetOptions = computed(() =>
     value: client.id,
     label: client.id === 'copilot' ? 'Copilot' : client.name,
     icon: asset(`client-icons/${client.icon}`),
-    disabled: !availableTargets.value.includes(client.id),
+    disabled: !availableTargets.value.includes(client.id) &&
+      (autoDetect.value || !selectedTargets.value.includes(client.id)),
     description: (() => {
       const hint = pluginTargetDescription(demoPlugin.value, client, {
         scope: 'user', published: published.value, expired: expired.value, current: current.value,
@@ -193,7 +194,7 @@ const command = computed(() => {
   if (!current.value || (!autoDetect.value && !available))
     return '';
   if (pinnedSelection.value)
-    return pinnedCatalogCommands(demoPlugin.value, pinnedSelection.value.client, 'user').add;
+    return pinnedCatalogCommands(demoPlugin.value, pinnedSelection.value.clients ?? pinnedSelection.value.client, 'user').add;
   return pluginCommands(
     demoPlugin.value,
     autoDetect.value ? undefined : cliInstallTargets(selectedClients.value.map((client) => client.id)),
@@ -202,7 +203,10 @@ const command = computed(() => {
 
 function updateTargets(values: string[]) {
   const allowed = new Set(compatibleClients.value.map((client) => client.id));
-  const next = values.filter((value): value is InstallTargetID => allowed.has(value as InstallTargetID));
+  const next = values.filter((value): value is InstallTargetID =>
+    installTargets.some(target => target.id === value) &&
+    (allowed.has(value as InstallTargetID) || selectedTargets.value.includes(value as InstallTargetID)),
+  );
   if (!next.length) return;
   preferences.selectPackage(
     selectionIdentity.value,
@@ -260,9 +264,16 @@ function updateTargets(values: string[]) {
         </div>
       </div>
 
-      <div class="hero__demo">
-        <div class="hero__install">
-          <HeroAgentField />
+      <!-- The demo video sits in front of the decorative agent orbit (aria-hidden itself). -->
+      <div class="hero__visual">
+        <HeroAgentField />
+        <HeroDemoVideo />
+      </div>
+    </div>
+
+    <div class="client-section">
+      <div class="client-section__inner container">
+        <div class="hero-quick-start">
           <div class="hero__window">
             <div class="hero__window-body">
               <div class="hero-quick-start__header">
@@ -305,7 +316,7 @@ function updateTargets(values: string[]) {
                     </p>
                     <CommandSnippet v-if="command" :command="command" kind="add" inline />
                     <p v-else class="install-panel__notice" role="status">
-                      {{ t('shell.hero.refreshNotice') }}
+                      {{ t(current && !autoDetect ? 'registryUi.install.selectionRoutesUnavailable' : 'shell.hero.refreshNotice') }}
                     </p>
                     <p
                       v-if="command && !autoDetect && selectedTargets.includes('chatgptweb')"
@@ -325,20 +336,16 @@ function updateTargets(values: string[]) {
             </div>
           </div>
         </div>
+        <section class="client-section__agents" aria-labelledby="supported-clients-title">
+          <h2 id="supported-clients-title" class="client-section__title">
+            {{ t('shell.hero.supportedClients') }}
+          </h2>
+          <ClientStrip />
+          <p class="client-section__note">
+            {{ t('shell.hero.clientNote') }}
+          </p>
+        </section>
       </div>
     </div>
-
-    <div class="client-section" aria-labelledby="supported-clients-title">
-      <div class="client-section__inner container">
-        <p id="supported-clients-title">{{ t('shell.hero.supportedClients') }}</p>
-        <ClientStrip />
-        <p class="client-section__note">
-          {{ t('shell.hero.clientNote') }}
-        </p>
-      </div>
-    </div>
-  </section>
-  <section class="demo-showcase" :aria-label="t('shell.hero.demoVideoTitle')">
-    <HeroDemoVideo />
   </section>
 </template>

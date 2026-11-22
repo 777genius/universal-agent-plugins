@@ -66,7 +66,29 @@ func runRemoveMany(ctx context.Context, cmd *cobra.Command, app App, opts *optio
 	if opts.dryRun {
 		return renderRemoveMultiResult(cmd, opts, session.result)
 	}
+	// Without --target the remove command inferred these targets in a terminal.
+	// That selection is not consent, unlike an explicit --target.
+	if !cmd.Flags().Changed("target") {
+		confirmed, err := session.confirmInferredTargets()
+		if err != nil || !confirmed {
+			return err
+		}
+	}
 	return session.apply()
+}
+
+func (session *removeManySession) confirmInferredTargets() (bool, error) {
+	preview := session.result
+	preview.DryRun = true // A reviewed plan is not an incomplete removal.
+	if err := renderRemoveMultiResult(session.cmd, session.opts, preview); err != nil {
+		return false, err
+	}
+	confirmed, err := promptYesNo(session.ctx, session.cmd.InOrStdin(), session.cmd.OutOrStdout(), session.cmd.ErrOrStderr(), "Remove the selected targets? [y/N]")
+	if err != nil || confirmed {
+		return confirmed, err
+	}
+	_, err = fmt.Fprintln(session.cmd.OutOrStdout(), "No changes made.")
+	return false, err
 }
 
 func (session *removeManySession) prepare(selector string) error {
@@ -113,6 +135,10 @@ func (session *removeManySession) buildInputs() error {
 	selected := make([]domain.DetectedClient, 0, len(session.targets))
 	for _, target := range session.targets {
 		if !installationHasTarget(session.installation, target, session.opts.scope) {
+			if session.opts.finishedInterrupted {
+				// The rerun did change files: it completed the earlier removal.
+				return fmt.Errorf("plugin is not installed for target %q in %s scope", target, session.opts.scope)
+			}
 			return fmt.Errorf("plugin is not installed for target %q in %s scope; no target was changed", target, session.opts.scope)
 		}
 		if err := selectedDetectionError(target, session.detected); err != nil {

@@ -1,6 +1,7 @@
 name: Kiro no-auth installation E2E
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - '.github/workflows/kiro-no-auth-installation.yml'
       - 'scripts/project_native_kiro_no_auth.py'
@@ -33,17 +34,19 @@ on:
       - 'cli/**'
       - 'install/integrationctl/**'
       - 'go.work*'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: kiro-no-auth-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: kiro-no-auth-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.event_name == 'pull_request' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 env:
   EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
   PYTHONDONTWRITEBYTECODE: '1'
 jobs:
   lifecycle:
     name: UAP composed lifecycle (${{ matrix.os }})
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     strategy:
       fail-fast: false
       matrix:
@@ -82,6 +85,14 @@ jobs:
         shell: bash
         working-directory: install/integrationctl/agentplugins
         run: go test -json -count=1 -timeout=180s ./installer -run '^Test(ProjectKiroPublicSDKStdioDataRepairRestartAndRemove|FacadeHostedPreparation(PinsIntentAndSnapshot|PreservesAutomaticAndOtherFailures|RefusesAppearingRetainedInstallation|PreservesRecordedModesAndOwnership|EligibilityDoesNotBroadenScopeOrConsent|RejectsRetainedStateAtMutationLock))$' | tee "$RUNNER_TEMP/kiro-composed-sdk.log"
+      - name: Verify public Kiro CLI publisher approval install and repair
+        shell: bash
+        working-directory: cli
+        run: go test -json -count=1 -timeout=180s ./internal/agentpluginscli -run '^TestKiro(PublisherMCPApprovalsFullCLI|SkillsWithoutMCPApprovalFullCLI)$' | tee "$RUNNER_TEMP/kiro-composed-cli-trust.log"
+      - name: Verify Kiro exact MCP approval and ownership lifecycles
+        shell: bash
+        working-directory: install/integrationctl/agentplugins
+        run: go test -json -count=1 -timeout=180s ./clients/kiro -run '^TestKiro(NamedMCPApprovalSchemaFailClosed|ApprovalWithoutSelectedMCPKeepsSkills|ApprovalPreviewAndNoUnselectedPrivilege|ExactApprovalPreservesNativeVerifierAndAutomaticActivation|ExactMCPApprovalDisposableLifecycle|ProjectApprovalDoesNotForgeWorkspaceTrust|ActiveApprovedToolsRefuseStaleReprojection|UserEditedAutoApprovalBlocksRemoval)$' | tee "$RUNNER_TEMP/kiro-composed-sdk-trust.log"
       - name: Admit actual named cases and unchanged source
         if: ${{ always() }}
         shell: bash
@@ -129,7 +140,38 @@ jobs:
                               'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/attested',
                               'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/update',
                               'TestFacadeHostedPreparationEligibilityDoesNotBroadenScopeOrConsent/recorded',
-                              'TestFacadeHostedPreparationRejectsRetainedStateAtMutationLock']}
+                              'TestFacadeHostedPreparationRejectsRetainedStateAtMutationLock'],
+                      'cli-trust': ['TestKiroPublisherMCPApprovalsFullCLI',
+                                    'TestKiroSkillsWithoutMCPApprovalFullCLI'],
+                      'sdk-trust': ['TestKiroNamedMCPApprovalSchemaFailClosed',
+                                    'TestKiroApprovalWithoutSelectedMCPKeepsSkills',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/empty',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/root',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/unsupported-version',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/empty-list',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/wildcard',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/embedded-wildcard',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/path',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/duplicate-tool',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/duplicate-server',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/unknown-field',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/field-alias',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/field-alias-server',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/noncanonical-number',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/wrong-shape',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/null',
+                                    'TestKiroNamedMCPApprovalSchemaFailClosed/trailing-content',
+                                    'TestKiroApprovalPreviewAndNoUnselectedPrivilege',
+                                    'TestKiroExactApprovalPreservesNativeVerifierAndAutomaticActivation',
+                                    'TestKiroExactMCPApprovalDisposableLifecycle',
+                                    'TestKiroExactMCPApprovalDisposableLifecycle/install',
+                                    'TestKiroExactMCPApprovalDisposableLifecycle/repeat',
+                                    'TestKiroExactMCPApprovalDisposableLifecycle/update',
+                                    'TestKiroExactMCPApprovalDisposableLifecycle/repair',
+                                    'TestKiroExactMCPApprovalDisposableLifecycle/narrow',
+                                    'TestKiroProjectApprovalDoesNotForgeWorkspaceTrust',
+                                    'TestKiroActiveApprovedToolsRefuseStaleReprojection',
+                                    'TestKiroUserEditedAutoApprovalBlocksRemoval']}
           receipts = []
           for label, tests in required.items():
               path = root / ('kiro-composed-' + label + '.log')
@@ -150,7 +192,7 @@ jobs:
           receipt = {'source_before': before, 'source_after': after, 'logs': receipts,
                      'qualification': 'UAP composed installation only; inert discovery/security/helper seams; no native Kiro loading'}
           (root / 'kiro-composed-admission.json').write_text(json.dumps(receipt, sort_keys=True, indent=2) + '\n')
-          print('PASS: exact CLI Git/ZIP and SDK lifecycle RUN/PASS cases; clean source preserved')
+          print('PASS: exact Kiro CLI+SDK approval cases and Git/ZIP lifecycle RUN/PASS on unchanged source')
           PYTHON
       - name: Preserve actual lifecycle logs and source admission
         if: ${{ always() }}
@@ -165,6 +207,7 @@ jobs:
           retention-days: 14
   native:
     name: Pinned Kiro no-auth observations
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -189,7 +232,7 @@ jobs:
   acceptance:
     name: Kiro no-auth acceptance
     needs: [lifecycle, native]
-    if: ${{ always() }}
+    if: ${{ always() && (github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-24.04
     steps:
       - name: Require actual completed lifecycle and native contracts

@@ -6,6 +6,10 @@ type ClientSurface struct {
 	Evidence string `json:"evidence,omitempty"`
 }
 
+// CursorAgentSurfaceID is the cursor-agent CLI surface. It selects Cursor for
+// project scope only: user scope installs the package for the Cursor editor.
+const CursorAgentSurfaceID = "cursor_agent"
+
 // OpenCodeHostAuthority is a read-only, immutable prepared-host port. It does
 // no probing. The client contract owns the closed parent profile snapshot.
 type OpenCodeHostAuthority interface {
@@ -31,6 +35,9 @@ type DetectedClient struct {
 	// DetectionError is private diagnostic evidence. A failed client must not
 	// contribute paths or become a lifecycle target.
 	DetectionError error `json:"-"`
+	// NotDetectedHint is the client's own advice for a client that is present
+	// in another form but not selectable in this scope. It is empty otherwise.
+	NotDetectedHint string `json:"-"`
 }
 
 type ClientCapabilities struct {
@@ -57,6 +64,7 @@ type ComponentDecision struct {
 
 type DeliveryPlan struct {
 	requiresNativeProjectionRefresh bool
+	nativePluginRegistration        bool
 
 	TargetContext              TargetContext           `json:"-"`
 	profileAuthority           *ProfileAuthority       `json:"-"`
@@ -102,6 +110,13 @@ type DeliveryPlan struct {
 	TargetRoot   string `json:"-"`
 	ActivePath   string `json:"-"`
 }
+
+// SetNativePluginRegistration selects transient native project registration without
+// changing public DTOs or the planner's recorded golden snapshots.
+func (p *DeliveryPlan) SetNativePluginRegistration(yes bool) { p.nativePluginRegistration = yes }
+
+// HasNativePluginRegistration is an in-memory scoped plan choice, never a persisted capability flag.
+func (p DeliveryPlan) HasNativePluginRegistration() bool { return p.nativePluginRegistration }
 
 // DeliveryTarget contains deterministic operational paths computed from the
 // configured client roots. Persisted state must be checked against this value
@@ -169,15 +184,18 @@ type ActivationRequest struct {
 }
 
 type ActivationOutcome struct {
-	LocalEntryObservation  *LocalEntryObservation `json:"-"`
-	Activation             ActivationState        `json:"activation"`
-	Authentication         AuthenticationState    `json:"authentication"`
-	Policy                 PolicyState            `json:"policy"`
-	Verification           VerificationState      `json:"verification"`
-	UserActions            []string               `json:"user_actions,omitempty"`
-	LocalActions           []string               `json:"-"`
-	ActivationAttested     bool                   `json:"activation_attested,omitempty"`
-	AuthenticationAttested bool                   `json:"authentication_attested,omitempty"`
+	LocalEntryObservation *LocalEntryObservation `json:"-"`
+	Activation            ActivationState        `json:"activation"`
+	Authentication        AuthenticationState    `json:"authentication"`
+	Policy                PolicyState            `json:"policy"`
+	Verification          VerificationState      `json:"verification"`
+	UserActions           []string               `json:"user_actions,omitempty"`
+	// CompletedUserActions identifies verified informational entries retained
+	// in UserActions for disclosure. It never changes lifecycle or saved state.
+	CompletedUserActions   []string `json:"-"`
+	LocalActions           []string `json:"-"`
+	ActivationAttested     bool     `json:"activation_attested,omitempty"`
+	AuthenticationAttested bool     `json:"authentication_attested,omitempty"`
 	// AuthoritativeObservation marks recognized negative verifier evidence.
 	// It is transient control-plane metadata and is never persisted as state.
 	AuthoritativeObservation bool `json:"-"`
@@ -187,33 +205,40 @@ type ActivationOutcome struct {
 }
 
 type DeactivationRequest struct {
-	NativeAttempt         NativeAttemptIdentity   `json:"-"`
-	TargetContext         TargetContext           `json:"-"`
-	NativeRegistryRoot    string                  `json:"-"`
-	LocalEntryObservation *LocalEntryObservation  `json:"-"`
-	RemoveOwnedEntry      bool                    `json:"-"`
-	SelectedDelivery      SelectedDelivery        `json:"-"`
-	Client                DetectedClient          `json:"client"`
-	DeclaredName          string                  `json:"declared_name"`
-	CurrentActivation     ActivationState         `json:"current_activation"`
-	Interactive           bool                    `json:"interactive"`
-	ExternalUninstalled   bool                    `json:"external_uninstalled"`
-	Confirmed             bool                    `json:"confirmed"`
-	PhysicalArtifactID    string                  `json:"physical_artifact_id"`
-	BackendExecutable     string                  `json:"-"`
-	ManagedArtifactPath   string                  `json:"-"`
-	NativeObjects         []NativeObjectOwnership `json:"-"`
+	NativeAttempt         NativeAttemptIdentity  `json:"-"`
+	TargetContext         TargetContext          `json:"-"`
+	NativeRegistryRoot    string                 `json:"-"`
+	LocalEntryObservation *LocalEntryObservation `json:"-"`
+	RemoveOwnedEntry      bool                   `json:"-"`
+	// PurgeData asks a client that keeps plugin data outside the installer's
+	// owned PLUGIN_DATA to delete it with the native removal.
+	PurgeData           bool                    `json:"-"`
+	SelectedDelivery    SelectedDelivery        `json:"-"`
+	Client              DetectedClient          `json:"client"`
+	DeclaredName        string                  `json:"declared_name"`
+	CurrentActivation   ActivationState         `json:"current_activation"`
+	Interactive         bool                    `json:"interactive"`
+	ExternalUninstalled bool                    `json:"external_uninstalled"`
+	Confirmed           bool                    `json:"confirmed"`
+	PhysicalArtifactID  string                  `json:"physical_artifact_id"`
+	BackendExecutable   string                  `json:"-"`
+	ManagedArtifactPath string                  `json:"-"`
+	NativeObjects       []NativeObjectOwnership `json:"-"`
 }
 
 type DeactivationOutcome struct {
 	// NativeEffect is transient evidence of a native transaction's actual
 	// effects. An ordinary error never establishes that removal was unchanged.
-	NativeEffect            NativeEffectState `json:"-"`
-	Activation              ActivationState   `json:"activation"`
-	ArtifactRemovalAllowed  bool              `json:"artifact_removal_allowed"`
-	ExternalRemovalComplete bool              `json:"external_removal_complete"`
-	UserActions             []string          `json:"user_actions,omitempty"`
-	LocalActions            []string          `json:"-"`
+	NativeEffect NativeEffectState `json:"-"`
+	// SettledPartialRemoval qualifies a committed effect of a failed removal:
+	// the adapter re-read the client after its processes closed and every
+	// recorded native object is still exactly owned, so no attempt stays open.
+	SettledPartialRemoval   bool            `json:"-"`
+	Activation              ActivationState `json:"activation"`
+	ArtifactRemovalAllowed  bool            `json:"artifact_removal_allowed"`
+	ExternalRemovalComplete bool            `json:"external_removal_complete"`
+	UserActions             []string        `json:"user_actions,omitempty"`
+	LocalActions            []string        `json:"-"`
 }
 
 func supportsLocalDelivery(id ClientID) bool { return id == ClientVSCode }

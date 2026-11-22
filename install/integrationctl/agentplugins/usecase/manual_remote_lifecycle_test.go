@@ -230,7 +230,8 @@ func TestOpenCodeSupportsAutomaticMCPAndSkillLifecycle(t *testing.T) {
 		t.Fatalf("OpenCode remove failed: result=%+v err=%v", removed, err)
 	}
 	config = readUsecaseObject(t, configPath)
-	if _, exists := config["mcp"].(map[string]any)["docs"]; exists {
+	mcp, _ := config["mcp"].(map[string]any)
+	if _, exists := mcp["docs"]; exists {
 		t.Fatalf("managed OpenCode MCP entry survived remove: %#v", config)
 	}
 	if _, err := os.Stat(filepath.Join(client.ConfigRoot, "skills", "docs")); !os.IsNotExist(err) {

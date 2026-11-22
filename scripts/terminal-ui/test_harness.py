@@ -3,10 +3,13 @@ import argparse
 import importlib.util
 import json
 import os
+import socket
 from pathlib import Path
 import sys
 import tempfile
+import time
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location('terminal_harness', Path(__file__).with_name('harness.py'))
 h = importlib.util.module_from_spec(spec)
@@ -123,6 +126,18 @@ class ScannerTests(unittest.TestCase):
 
 
 class ScreenTests(unittest.TestCase):
+    def test_backward_tab_rejects_private_multiple_or_intermediate_parameters(self):
+        for sequence in (b'\x1b[?2Z', b'\x1b[>2Z', b'\x1b[1;2Z',
+                         b'\x1b[;Z', b'\x1b[1:2Z', b'\x1b[2 Z', b'\x1b[2$Z'):
+            with self.subTest(sequence=sequence):
+                screen = h.Screen(3, 30)
+                screen.feed(b'unchanged cells')
+                before = screen.snapshot(), screen.row, screen.col
+                for value in sequence:
+                    screen.feed(bytes([value]))
+                self.assertEqual((screen.snapshot(), screen.row, screen.col), before)
+                self.assertEqual(screen.unknown, {sequence.decode('ascii')})
+
     def test_fragmented_ansi_and_utf8(self):
         screen = h.Screen(3, 30)
         for chunk in (b'old\r\x1b[', b'2Knew \xc3', b'\xa9\n\rsecond'):
@@ -162,6 +177,43 @@ class SessionTests(unittest.TestCase):
         s.finish()
         self.assertTrue(all(s.restoration.values()))
         self.assertTrue((self.evidence / 'ready.frame.txt').exists())
+
+    def test_restoration_waits_for_final_marker_after_probe_exit(self):
+        s = self.session("print('SELECT_READY',flush=True)")
+        s.wait('SELECT_READY', 'ready')
+        s.process.wait()
+        s.drain()
+        owned_process, pump = h.OwnedProcess, s.pump
+        delayed = bytearray()
+        observed = {'exited': False, 'delayed': False, 'released': False}
+
+        class ProbeProcess(owned_process):
+            def poll(self):
+                status = super().poll()
+                if status == 0:
+                    observed['exited'] = True
+                return status
+
+        def delay_final_marker(timeout=0.1):
+            # Model PTY output becoming visible after its owner has reaped the
+            # successful shell. Nonblocking drain cannot supply that evidence.
+            if delayed and observed['exited'] and timeout > 0:
+                s.raw.extend(delayed)
+                delayed.clear()
+                observed['released'] = True
+                return True
+            received = pump(timeout)
+            marker = s.raw.find(b'RESTORE_OK_')
+            if marker >= 0 and not observed['delayed']:
+                delayed.extend(s.raw[marker:])
+                del s.raw[marker:]
+                observed['delayed'] = True
+            return received
+
+        with patch.object(h, 'OwnedProcess', ProbeProcess), patch.object(s, 'pump', delay_final_marker):
+            s.restore_probe()
+        self.assertTrue(all(observed.values()), observed)
+        self.assertTrue(all(s.restoration.values()), s.restoration)
 
     def test_timeout_is_bounded_and_cleanup_kills_child(self):
         s = self.session("import sys; sys.stdin.readline()")
@@ -207,6 +259,58 @@ class SessionTests(unittest.TestCase):
         events = json.loads((self.evidence / 'events.json').read_text())
         self.assertTrue(events['forced_cleanup'])
         self.assertIsNone(events['restoration'])
+
+    def test_kill_job_terminates_descendant_with_live_or_exited_leader(self):
+        for leader_exits in (False, True):
+            with self.subTest(leader_exits=leader_exits):
+                with tempfile.TemporaryDirectory(prefix="pty-live-", dir="/tmp") as short:
+                    endpoint = str(Path(short) / "child.sock")
+                    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                        listener.settimeout(3)
+                        listener.bind(endpoint)
+                        listener.listen(1)
+                        descendant = (
+                            "import os,socket,time; "
+                            f"channel=socket.socket(socket.AF_UNIX); channel.connect({endpoint!r}); "
+                            "channel.sendall((str(os.getpid())+':'+str(os.getpgrp())+'\\n').encode()); "
+                            "time.sleep(30)")
+                        code = (
+                            "import subprocess,sys,time; "
+                            f"subprocess.Popen([sys.executable,'-I','-c',{descendant!r}]); "
+                            + ("" if leader_exits else "time.sleep(30)"))
+                        s = None
+                        channel = None
+                        try:
+                            s = self.session(code)
+                            channel, _ = listener.accept()
+                            channel.settimeout(3)
+                            readiness = bytearray()
+                            while not readiness.endswith(b"\n") and len(readiness) < 80:
+                                chunk = channel.recv(1)
+                                self.assertTrue(chunk, "descendant closed before readiness")
+                                readiness.extend(chunk)
+                            self.assertTrue(readiness.endswith(b"\n"), "unbounded descendant identity")
+                            pid, group = map(int, readiness.decode().strip().split(':'))
+                            self.assertNotEqual(pid, s.process.pid)
+                            self.assertEqual(group, s.process.pid, 'descendant escaped the owned group')
+                            if leader_exits:
+                                self.assertEqual(s.process.wait(timeout=3), 0)
+                            else:
+                                self.assertIsNone(s.process.poll())
+                            channel.settimeout(0.05)
+                            with self.assertRaises(socket.timeout):
+                                channel.recv(1)  # Exact owned descendant is still alive.
+                            s.process.kill()  # Real RPC reaches pty_owner.kill_job.
+                            channel.settimeout(3)
+                            self.assertEqual(channel.recv(1), b"", "owned descendant retained its liveness channel")
+                            self.assertIsNotNone(s.process.poll(), "owned leader was not reaped")
+                        finally:
+                            try:
+                                if channel is not None:
+                                    channel.close()
+                            finally:
+                                if s is not None:
+                                    s.close()
 
     def test_raw_to_plain_lifecycle_and_nonzero_status(self):
         s = self.session("import sys,tty,termios; before=termios.tcgetattr(0); "

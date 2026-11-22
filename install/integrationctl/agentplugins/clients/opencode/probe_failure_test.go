@@ -67,7 +67,7 @@ func nativeProbeFailureFixture(t *testing.T) (domain.ActivationRequest, clients.
 // An unknown close/reap/containment failure must stop activation and group
 // progress. A proved-closed or never-started failure can remain pending.
 func TestNativeProbeFailurePreservesProcessClosureEvidence(t *testing.T) {
-	for index, phase := range []string{"debug config", "debug skill", "mcp list"} {
+	for index, phase := range []string{"debug config", "debug skill", "mcp list", "final debug config"} {
 		for _, closure := range []struct {
 			name   string
 			result legacyports.CommandResult
@@ -83,7 +83,14 @@ func TestNativeProbeFailurePreservesProcessClosureEvidence(t *testing.T) {
 				calls := 0
 				env.Runner = skillObservationRunner(func(_ context.Context, c legacyports.Command) (legacyports.CommandResult, error) {
 					calls++
-					if c.Argv[1]+" "+c.Argv[2] == phase {
+					if calls == index+1 {
+						want := phase
+						if phase == "final debug config" {
+							want = "debug config"
+						}
+						if c.Argv[1]+" "+c.Argv[2] != want {
+							t.Fatalf("wrong failed probe phase: got=%v want=%s", c.Argv, want)
+						}
 						return closure.result, sentinel
 					}
 					output := []byte("┌  MCP Servers\n●  ✓ local connected\n└  1 server(s)\n")
@@ -97,7 +104,7 @@ func TestNativeProbeFailurePreservesProcessClosureEvidence(t *testing.T) {
 				})
 				var outcome domain.ActivationOutcome
 				var err error
-				if phase == "mcp list" {
+				if index >= 2 {
 					// MCP health belongs to the already confirmed acting path.
 					request.VerifyOnly = false
 					outcome, err = observeOpenCodeNativeComponents(t.Context(), env, request, domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectUnchanged})
@@ -116,5 +123,33 @@ func TestNativeProbeFailurePreservesProcessClosureEvidence(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+// Interrupting the command while OpenCode runs a discovery query closes the
+// query cleanly, but proves nothing. The interruption must reach the caller
+// instead of ending as a successful prepared install.
+func TestNativeProbeCancellationReportsInterruption(t *testing.T) {
+	for _, phase := range []string{"debug config", "debug skill", "mcp list"} {
+		t.Run(phase, func(t *testing.T) {
+			request, env, config, skills := nativeProbeFailureFixture(t)
+			request.VerifyOnly = false
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			env.Runner = skillObservationRunner(func(_ context.Context, c legacyports.Command) (legacyports.CommandResult, error) {
+				if c.Argv[1]+" "+c.Argv[2] == phase {
+					cancel()
+					return legacyports.CommandResult{CleanupComplete: true}, context.Canceled
+				}
+				if c.Argv[2] == "config" {
+					return legacyports.CommandResult{Stdout: config}, nil
+				}
+				return legacyports.CommandResult{Stdout: skills}, nil
+			})
+			outcome, err := observeOpenCodeNativeComponents(ctx, env, request, domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectCommitted})
+			if !errors.Is(err, context.Canceled) || outcome.Activation != domain.ActivationPrepared || outcome.NativeEffect != domain.NativeEffectCommitted {
+				t.Fatalf("interruption reported as completed discovery: outcome=%+v err=%v", outcome, err)
+			}
+		})
 	}
 }

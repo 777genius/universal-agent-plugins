@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { recommendedSkills } from '../data/catalogCuration.ts';
 import { skillInstallCommand } from '../utils/skillsCatalog.ts';
 import type { SkillListing } from '../types/skillsCatalog.ts';
+import { installedDirectory, nativeSkillFile } from './featured-skills-native-paths.ts';
 
 // The six IDs are the exact public website recommendations. Never replace
 // missing native evidence with a mock CLI, simulated client or provider URL.
@@ -37,71 +38,6 @@ const run = (args: string[], cwd: string, env: NodeJS.ProcessEnv) => {
 const receipt = ({ code, error, stdout, stderr }: ReturnType<typeof run>) =>
   ({ code, error, stdout, stderr });
 const sha256 = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
-// Native clients choose their own project Skill directory names. Claude uses
-// managed physical skill IDs; Codex/OpenCode may expose the original slug.
-// Discover the one exact source-named native SKILL.md under the selected root,
-// without trusting a guessed slug path or following foreign symlinks.
-function installedDirectory(output: string, slug: string, targetId: string, repeated = false): string | null {
-  try {
-    const response = JSON.parse(output) as Record<string, unknown>;
-    if (response.command !== 'skills add' || response.result !== 'success' ||
-        response.status !== 'succeeded' || response.scope !== 'project' ||
-        !Array.isArray(response.items) || response.items.length !== 1) return null;
-    const item = response.items[0] as Record<string, unknown>;
-    if (item.alias !== slug || item.targetId !== targetId ||
-        (item.status !== (repeated ? 'unchanged' : 'succeeded')) ||
-        typeof item.destinationPath !== 'string' || !isAbsolute(item.destinationPath) ||
-        resolve(item.destinationPath) !== item.destinationPath) return null;
-    return item.destinationPath;
-  } catch {
-    return null;
-  }
-}
-
-// The official client can install a selected Skill under a physical ID (e.g.
-// Claude's skill-<digest>) rather than the original slug. Validate the CLI's
-// exact source-bound destination and expected native projection. This does not
-// infer or claim that a fresh vendor session activated the Skill.
-function nativeSkillFile(
-  project: string, relativeRoot: string, reportedDirectory: string | null, targetId: string, slug: string,
-): string | null {
-  if (!reportedDirectory) return null;
-  const root = resolve(project, relativeRoot);
-  const reported = resolve(reportedDirectory);
-  // Claude's physical receipt is its native skill root; Codex/OpenCode
-  // separately project a managed package into the native per-skill directory.
-  const expectedReceiptParent = targetId === 'claude' ? root :
-    resolve(project, '.uap', 'managed', 'clients', targetId);
-  // Claude's project package is itself a skills-directory plugin; its native
-  // manifest points to the isolated runtime subdirectory, not to root/SKILL.md.
-  const directory = targetId === 'claude'
-    ? join(reported, '.agentplugins-runtime', 'skills', slug)
-    : join(root, slug);
-  const expectedSkillParent = targetId === 'claude'
-    ? join(reported, '.agentplugins-runtime', 'skills') : root;
-  if (dirname(reported) !== expectedReceiptParent ||
-      dirname(directory) !== expectedSkillParent ||
-      !existsSync(root) || !existsSync(reported) || !existsSync(directory) ||
-      !lstatSync(root).isDirectory() || lstatSync(root).isSymbolicLink() ||
-      !lstatSync(reported).isDirectory() || lstatSync(reported).isSymbolicLink() ||
-      !lstatSync(directory).isDirectory() || lstatSync(directory).isSymbolicLink())
-    return null;
-  if (targetId === 'claude') {
-    for (const parent of [join(reported, '.agentplugins-runtime'), expectedSkillParent]) {
-      if (!existsSync(parent) || !lstatSync(parent).isDirectory() ||
-          lstatSync(parent).isSymbolicLink()) return null;
-    }
-  }
-  const file = join(directory, 'SKILL.md');
-  if (!existsSync(file) || !lstatSync(file).isFile() || lstatSync(file).isSymbolicLink())
-    return null;
-  const lines = readFileSync(file, 'utf8').split(/\r?\n/);
-  if (lines[0] !== '---') return null;
-  const end = lines.indexOf('---', 1);
-  if (end < 0 || !lines.slice(1, end).some((line) => line.startsWith('name:')) ||
-      !lines.slice(1, end).some((line) => line.startsWith('description:'))) return null;
-  return file;
-}
 
 const checkout = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8', timeout: 15_000 });
 const checkoutSha = (checkout.stdout || '').trim();
@@ -155,7 +91,7 @@ try {
       availability: 'unverified', metrics: { installs: 0, window: 'all-time' },
     };
     const command = skillInstallCommand(listing, [target], 'project');
-    const expected: string = 'npx universal-agent-plugins@latest skills add ' + source +
+    const expected: string = 'npx -y universal-agent-plugins@latest skills add ' + source +
       ' --skill ' + slug + ' --target ' + target + ' --scope project';
     assert.equal(command, expected, 'The actual website command must match this native test');
     const addArgs = ['skills', 'add', source, '--skill', slug, '--target', target,

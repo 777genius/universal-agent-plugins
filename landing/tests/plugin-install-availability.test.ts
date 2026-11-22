@@ -74,46 +74,70 @@ test('explicit saved source routes use generated agent and scope capabilities', 
     assert.equal(pluginInstallAvailability(plugin, [client])?.kind, 'pinned_git');
     assert.equal(hasPluginInstallTarget(plugin, client), true);
     assert.equal(pluginInstallAvailability(plugin, [client], 'project')?.kind,
-      client === 'hermes' ? undefined : 'pinned_git');
+      'pinned_git');
   }
   assert.equal(pluginInstallAvailability(plugin, []), undefined);
-  assert.equal(pluginInstallAvailability(plugin, ['pi', 'codex'], 'project'), undefined);
-  assert.equal(pluginInstallAvailability(plugin, ['pi', 'hermes']), undefined);
+  assert.equal(pluginInstallAvailability(plugin, ['pi', 'codex'], 'project')?.kind, 'pinned_git');
+  assert.equal(pluginInstallAvailability(plugin, ['pi', 'hermes'])?.kind, 'pinned_git');
   assert.deepEqual(plugin, before, 'Source availability must not synthesize signed target records');
   plugin.distributions[0]!.releases[0]!.blocking_clients.push('pi');
   assert.equal(hasPluginInstallTarget(plugin, 'pi'), false);
 });
 
-test('source requests stay exclusive when adding another source or a signed peer', () => {
+test('all picker choices survive route and eligibility differences', () => {
   const plugin = fixture();
-  assert.deepEqual(reconcilePluginSourceTargets(plugin, ['codex', 'pi'], ['codex']), ['pi']);
-  assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'hermes'], ['pi']), ['hermes']);
-  assert.deepEqual(reconcilePluginSourceTargets(plugin, ['hermes', 'codex'], ['hermes']), ['codex']);
-  assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'antigravity'], ['pi'], 'project'), ['antigravity']);
+  for (const scope of ['user', 'project'] as const) {
+    const choices = ['codex', 'pi', 'hermes', 'antigravity'] as const;
+    assert.deepEqual(reconcilePluginSourceTargets(plugin, [...choices], ['codex'], scope), choices);
+    plugin.distributions[0]!.releases[0]!.blocking_clients.push('pi');
+    assert.deepEqual(reconcilePluginSourceTargets(plugin, [...choices], ['pi'], scope), choices);
+    assert.equal(pluginInstallAvailability(plugin, choices, scope), undefined);
+  }
 });
 
-test('withdrawn source choices yield only to an explicitly added eligible replacement', () => {
+test('common Git source never downgrades scoped closure or borrows another signed source', () => {
   const plugin = fixture();
-  plugin.distributions[0]!.releases[0]!.blocking_clients.push('pi');
-  for (const scope of ['user', 'project'] as const) {
-    assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi'], ['pi'], scope), ['pi']);
-    assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'codex'], ['pi', 'codex'], scope), ['pi', 'codex'],
-      'An existing unavailable group is never silently replaced');
-    assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'chatgptweb'], ['pi'], scope), ['pi', 'chatgptweb'],
-      'An unavailable added target cannot trigger recovery');
-    const recovered = reconcilePluginSourceTargets(plugin, ['pi', 'codex'], ['pi'], scope);
-    assert.deepEqual(recovered, ['codex']);
-    assert.equal(pluginInstallAvailability(plugin, recovered, scope)?.kind, 'signed');
-    assert.deepEqual(reconcilePluginSourceTargets(plugin, ['pi', 'antigravity'], ['pi'], scope), ['antigravity']);
-  }
+  const release = plugin.distributions[0]!.releases[0]!;
+  const before = structuredClone(plugin);
+  const offered = pluginInstallAvailability(plugin, ['codex', 'hermes', 'antigravity']);
+  assert.equal(offered?.kind, 'pinned_git');
+  if (offered?.kind === 'pinned_git')
+    assert.deepEqual(offered.selection.clients, ['codex', 'hermes', 'antigravity']);
+  assert.deepEqual(plugin, before);
+  release.targets = release.targets.filter(target => target.client !== 'cursor');
+  const different = structuredClone(plugin.distributions[0]!);
+  different.id = 'other/cursor';
+  different.releases[0]!.targets = [{
+    client: 'cursor', scopes: ['user'], delivery: 'managed', authentication: 'not_required',
+  }];
+  different.releases[0]!.source.revision = 'e'.repeat(40);
+  plugin.distributions.push(different);
+  assert.equal(pluginInstallAvailability(plugin, ['codex', 'cursor', 'hermes']), undefined,
+    'A signed peer with a different immutable source cannot share the Git request');
+  plugin.distributions.pop();
+  release.targets[0]!.canonical_closure = { components: [] } as never;
+  assert.equal(pluginInstallAvailability(plugin, ['codex', 'hermes']), undefined);
 });
 
 test('canonical aliases and non-saved clients never gain a source fallback', () => {
   const plugin = fixture();
+  assert.equal(pluginInstallAvailability(plugin, ['chatgpt'])?.kind, 'signed');
+  for (const targets of [['chatgpt', 'hermes'], ['chatgpt', 'codex', 'hermes']] as const) {
+    const available = pluginInstallAvailability(plugin, targets);
+    assert.equal(available?.kind, 'pinned_git', 'An eligible Desktop surface can share the common source');
+    if (available?.kind === 'pinned_git')
+      assert.deepEqual(available.selection.clients, ['codex', 'hermes']);
+  }
   plugin.distributions[0]!.releases[0]!.targets = [{
     client: 'claude', scopes: ['user'], delivery: 'managed', authentication: 'unknown',
   }];
   assert.equal(pluginInstallAvailability(plugin, ['codex'])?.kind, 'pinned_git');
+  for (const targets of [['chatgpt', 'hermes'], ['chatgpt', 'codex', 'hermes']] as const) {
+    assert.equal(pluginInstallAvailability(plugin, targets), undefined,
+      'A retained Desktop choice cannot borrow the canonical Codex source route');
+    assert.deepEqual(reconcilePluginSourceTargets(plugin, [...targets], targets), targets,
+      'Unavailable aliases stay selected for an explanation');
+  }
   for (const client of ['chatgpt', 'chatgptweb', 'vscode'] as const)
     assert.equal(pluginInstallAvailability(plugin, [client]), undefined);
 });

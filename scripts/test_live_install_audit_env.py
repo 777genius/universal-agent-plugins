@@ -1,5 +1,8 @@
 """Prevent the live acceptance harness from touching ambient client profiles."""
 import importlib.util
+from contextlib import contextmanager
+from datetime import datetime, timezone, timedelta
+import hashlib
 import json
 import os
 import subprocess
@@ -7,8 +10,9 @@ import sys
 import textwrap
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 def load_audit():
@@ -16,10 +20,169 @@ def load_audit():
     spec = importlib.util.spec_from_file_location("live_install_audit", file)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    # Unit fixtures inject native executables explicitly, never from the host.
+    module.AGENT_BINARIES.clear()
     return module
 
 
+class PiContext7SignedFallbackContracts(unittest.TestCase):
+    # Literal original public row: no expected pin is learned from this DTO.
+    NODE = json.loads(r'''{"installation_id":"ae532983-081d-4238-98ad-ea0cf8adfbf3","name":"context7","version":"0.2.5","source":"777genius/universal-agent-plugins-registry/plugins/context7","clients":[{"client_id":"pi","scope":"user","materialization":"materialized","activation":"prepared","authentication":"not_checked","policy":"allowed","verification":"installation_verified","package_revision":{"version":"0.2.5","resolved_revision":"8360159c07140d17cbd4060a110553092c9cd245","distribution_id":"777genius/context7","release_sequence":7,"tree_digest":"sha256:635e673ec3aa8440a2826dc3a677ebe652b63e542db2e861b61d2df7f55e48b3","manifest_digest":"sha256:1c1b8633e99d8ae10ed804b2c98532c4e08049b95f6229a6dd0b3746bdaea496"},"affected_surfaces":["pi"]}],"directory":{"product_id":"context7","recorded_distribution":"777genius/context7","current_distribution":"777genius/context7","recorded_revision":"8360159c07140d17cbd4060a110553092c9cd245","current_revision":"8360159c07140d17cbd4060a110553092c9cd245","recorded_release_sequence":7,"current_release_sequence":7,"recorded_snapshot_sequence":49},"mixed_version":false}''')
+    INSTALL = json.loads(r'''{"schema_version":1,"command":"add","result":"success","data":{"actions":[{"to_version":"0.2.5","component_support":[{"kind":"mcp_server","name":"context7","support":"native"}],"alias":"context7","client_id":"pi","action":"install","reason":"no matching environment-owned binding","package_digest":"sha256:635e673ec3aa8440a2826dc3a677ebe652b63e542db2e861b61d2df7f55e48b3","revision":"8360159c07140d17cbd4060a110553092c9cd245"}],"command":"agentplugins add","environment":{"alias":"context7","intent_change":true,"lock_path":"/tmp/uap-live-30x30-b7gj262v/plugin-01/uap-data/uap.lock","manifest_path":"/tmp/uap-live-30x30-b7gj262v/plugin-01/uap-data/uap.toml","saved":true,"scope":"user","scope_selection_reason":"explicit","selected_targets":["pi"]},"outcome":"completed","result":"success","results":[{"installation_id":"ae532983-081d-4238-98ad-ea0cf8adfbf3","client_id":"pi","operation":"install","outcome":"completed","manual_actions":["Reload resources or restart Pi to discover user Skills and MCP; installed files do not prove an authenticated connection or model tool call."]}],"schema_version":1,"scope":"user","scope_selection_reason":"explicit"}}''')
+    EXPECTED = {
+        "distribution": "777genius/context7", "repository": "777genius/universal-agent-plugins-registry",
+        "path": "plugins/context7", "revision": "8360159c07140d17cbd4060a110553092c9cd245", "sequence": 7,
+        "tree_digest": "sha256:635e673ec3aa8440a2826dc3a677ebe652b63e542db2e861b61d2df7f55e48b3",
+        "manifest_digest": "sha256:1c1b8633e99d8ae10ed804b2c98532c4e08049b95f6229a6dd0b3746bdaea496",
+    }
+
+    def inputs(self):
+        import copy
+        audit = load_audit()
+        fixtures = json.loads(audit.FIXTURES.read_text())
+        return audit, fixtures['signed_release_pins'], copy.deepcopy(self.NODE)
+
+    def matching(self, audit, pins, node, target='pi', alias='context7'):
+        return audit.matching_installations({'data': {'installations': [node]}},
+                                           'context7', target, 'plugin', alias, pins)
+
+    def test_actual_target_fallback_row_requires_the_full_immutable_pin(self):
+        import copy
+        audit, pins, node = self.inputs()
+        self.assertEqual(self.matching(audit, pins, node), [node])
+        self.assertEqual(audit.expected_signed_release_pin('context7', 'pi', pins), self.EXPECTED)
+        self.assertEqual(node['clients'][0]['activation'], 'prepared')
+        self.assertEqual(node['clients'][0]['authentication'], 'not_checked')
+        mutations = [
+            ('source', 'other/repository/plugins/context7'),
+            ('directory.product_id', 'other'), ('directory.recorded_distribution', 'upstash/context7'),
+            ('directory.recorded_revision', '0' * 40), ('directory.recorded_release_sequence', 6),
+            ('directory.recorded_release_sequence', True),
+            ('client.scope', 'project'), ('client.client_id', 'codex'), ('client.verification', 'failed'),
+            ('revision.distribution_id', 'upstash/context7'), ('revision.resolved_revision', '0' * 40),
+            ('revision.release_sequence', 6), ('revision.tree_digest', 'sha256:' + '0' * 64),
+            ('revision.manifest_digest', 'sha256:' + '0' * 64),
+        ]
+        for key, value in mutations:
+            with self.subTest(field=key, value=value):
+                bad = copy.deepcopy(node)
+                if key.startswith('directory.'): bad['directory'][key.split('.')[1]] = value
+                elif key.startswith('client.'): bad['clients'][0][key.split('.')[1]] = value
+                elif key.startswith('revision.'): bad['clients'][0]['package_revision'][key.split('.')[1]] = value
+                else: bad[key] = value
+                self.assertEqual(self.matching(audit, pins, bad), [])
+        current_only = copy.deepcopy(node)
+        for key in ('recorded_distribution', 'recorded_revision', 'recorded_release_sequence'):
+            del current_only['directory'][key]
+        self.assertEqual(self.matching(audit, pins, current_only), [])
+
+    def test_default_authority_and_all_other_clients_aliases_stay_exact(self):
+        import copy
+        audit, pins, node = self.inputs()
+        original = copy.deepcopy(pins)
+        for target in audit.NATIVE_ROOTS:
+            for alias in pins:
+                if (target, alias) == ('pi', 'context7'): continue
+                self.assertEqual(audit.expected_signed_release_pin(alias, target, pins), pins[alias])
+        for target in audit.NATIVE_ROOTS:
+            if target == 'pi': continue
+            foreign = copy.deepcopy(node)
+            foreign['clients'][0]['client_id'] = target
+            self.assertEqual(self.matching(audit, pins, foreign, target=target), [])
+        upstream = copy.deepcopy(node)
+        pin = pins['context7']
+        upstream['source'] = pin['repository'] + '/' + pin['path']
+        upstream['directory'].update(recorded_distribution=pin['distribution'],
+            recorded_revision=pin['revision'], recorded_release_sequence=pin['sequence'])
+        upstream['clients'][0]['package_revision'].update(distribution_id=pin['distribution'],
+            resolved_revision=pin['revision'], release_sequence=pin['sequence'],
+            tree_digest=pin['tree_digest'], manifest_digest=pin['manifest_digest'])
+        upstream['clients'][0]['client_id'] = 'codex'
+        self.assertEqual(self.matching(audit, pins, upstream, target='codex'), [upstream])
+        upstream['clients'][0]['client_id'] = 'pi'
+        self.assertEqual(self.matching(audit, pins, upstream), [])
+        for mutation in ('missing', 'extra', 'revision', 'bool-sequence', 'string-sequence'):
+            with self.subTest(mutation=mutation):
+                bad = copy.deepcopy(pins)
+                if mutation == 'missing': del bad['context7']
+                elif mutation == 'extra': bad['context7']['unreviewed'] = True
+                elif mutation == 'revision': bad['context7']['revision'] = '0' * 40
+                elif mutation == 'bool-sequence': bad['context7']['sequence'] = True
+                else: bad['context7']['sequence'] = '1'
+                self.assertIsNone(audit.expected_signed_release_pin('context7', 'pi', bad))
+                self.assertEqual(self.matching(audit, bad, node), [])
+        self.assertEqual(self.matching(audit, pins, node, alias='notion'), [])
+        self.assertEqual(pins, original)
+
+    def test_real_case_orchestration_keeps_prepared_state_and_all_repeat_removal_gates(self):
+        import copy
+        import shutil
+        audit, pins, node = self.inputs()
+        calls, installed = [], [False]
+        def perform(argv, env, project, timeout=105):
+            operation = argv[1]
+            calls.append(operation)
+            home = Path(env['HOME'])
+            owned = home / '.pi/agent/extensions/context7-test-owned'
+            aggregate = home / '.pi/agent/mcp.json'
+            if operation == 'add':
+                installed[0] = True
+                owned.mkdir(parents=True, exist_ok=True)
+                (owned / 'plugin.json').write_text('{"name":"context7","version":"0.2.5"}')
+                (owned / 'mcp.json').write_text('{"mcpServers":{"context7":{"url":"https://inert.test/mcp"}}}')
+                aggregate.write_text('{"mcpServers":{"context7":{"url":"https://inert.test/mcp"}}}')
+                response = copy.deepcopy(self.INSTALL)
+            elif operation == 'list':
+                response = {'schema_version': 1, 'command': 'list', 'result': 'success',
+                            'data': {'installations': [copy.deepcopy(node)] if installed[0] else []}}
+            else:
+                self.assertEqual(operation, 'remove')
+                self.assertEqual(argv[2], 'context7')
+                installed[0] = False
+                shutil.rmtree(owned)
+                aggregate.unlink()
+                response = {'schema_version': 1, 'result': 'success'}
+            return {'exit_code': 0, 'stdout_tail': json.dumps(response), 'stderr_tail': '',
+                    'timeout': False, '_json': response}
+        with TemporaryDirectory() as temporary, patch.object(audit, 'call', side_effect=perform):
+            result = audit.do_case('/inert/uap', 'pi', 'plugin', 'context7', 1,
+                                  Path(temporary).resolve(), {}, pins)
+        self.assertEqual(result['status'], 'passed')
+        self.assertEqual(calls, ['add', 'list', 'add', 'list', 'remove', 'list'])
+        self.assertEqual(result['matched_installation_ids'], result['repeat_installation_ids'])
+        self.assertTrue(result['repeat_verified'])
+        self.assertTrue(result['removal_verified'])
+        self.assertTrue(result['sentinels_preserved'])
+        self.assertEqual(result['public_target_states']['after-add']['states'][0]['activation'], 'prepared')
+        self.assertEqual(result['public_target_states']['after-add']['states'][0]['authentication'], 'not_checked')
+
+
 class IsolatedClientEnvironmentTest(unittest.TestCase):
+
+    def test_gemini_repeat_snapshot_tracks_ordinary_empty_directory_deltas(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            profile = Path(temporary) / ".gemini"
+            chats = profile / "tmp" / "project" / "chats"
+            chats.mkdir(parents=True)
+            before = audit.snapshot([profile], include_directories=True)
+            ordinary_before = audit.snapshot([profile])
+            untracked = profile / "unexpected-empty"
+            untracked.mkdir()
+            after = audit.snapshot([profile], include_directories=True)
+            self.assertNotEqual(before, after)
+            self.assertIn("directory:.gemini/unexpected-empty", after)
+            # Other client snapshots intentionally keep the old contract.
+            self.assertEqual(audit.snapshot([profile]), ordinary_before)
+            untracked.rmdir()
+            # A valid journal under the same chats parents changes one file,
+            # not the directory identities used to reject foreign deltas.
+            (chats / "record.json").write_text("{}\\n")
+            journal = audit.snapshot([profile], include_directories=True)
+            self.assertEqual(set(journal) - set(before),
+                             {".gemini/tmp/project/chats/record.json"})
+            (chats / "record.json").unlink()
+            self.assertEqual(audit.snapshot([profile], include_directories=True), before)
 
     def test_marketing_kit_rejects_non_success_json_even_with_zero_exit(self):
         # A zero process exit with a refusal/partial response is not lifecycle PASS.
@@ -4792,6 +4955,46 @@ module.exports = {
         with self.assertRaisesRegex(ValueError, "non-execution"):
             audit.unexecuted_source_rows([], "plugin", "grok", "passed", {})
 
+    def test_cline_updates_disabled_in_isolated_child_despite_host_override(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            home, data = case / "home", case / "data"
+            home.mkdir()
+            data.mkdir()
+            for inherited in ("0", "", "1"):
+                with self.subTest(inherited=inherited), patch.dict(
+                        os.environ, {"CLINE_NO_AUTO_UPDATE": inherited}):
+                    env = audit.isolated_client_env(home, case, data)
+                    self.assertEqual(env["CLINE_NO_AUTO_UPDATE"], "1")
+                    child = subprocess.run(
+                        [sys.executable, "-c", "import os; print(os.environ['CLINE_NO_AUTO_UPDATE'])"],
+                        env=env, cwd=case, capture_output=True, text=True, check=True)
+                    self.assertEqual(child.stdout.strip(), "1")
+
+    def test_live_workflow_cline_pin_rejects_drift_and_unobserved_version(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-audit.yml").read_text()
+        bootstrap = workflow.split("        id: native-install\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("CLINE_NO_AUTO_UPDATE: '1'", bootstrap)
+        self.assertIn('[[ "$native_version" == 3.0.74 ]]', bootstrap)
+        validator = textwrap.dedent(workflow.split("<<'CLINE_PIN'\n", 1)[1]
+                                    .split("          CLINE_PIN", 1)[0])
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            proof = root / "full-proof"
+            proof.mkdir()
+            for value in ({"status": "reported", "value": "3.0.74", "exit_code": 0},
+                          {"status": "reported", "value": "3.0.75", "exit_code": 0},
+                          {"status": "not-probed"},
+                          {"status": "reported", "value": "3.0.74", "exit_code": False}):
+                with self.subTest(version=value):
+                    (proof / "cline-plugin.json").write_text(json.dumps({"client_version": value}))
+                    child = subprocess.run([sys.executable, "-c", validator], capture_output=True,
+                                           env={**os.environ, "RUNNER_TEMP": str(root), "KIND": "plugin"})
+                    self.assertEqual(child.returncode == 0, value.get("value") == "3.0.74"
+                                     and type(value.get("exit_code")) is int)
+
     def test_rebinds_all_client_overrides_and_strips_git_injection(self):
         audit = load_audit()
         hostile = {key: "/outside/actual-user-profile" for key in audit.PROFILE_ENV_KEYS}
@@ -4991,7 +5194,8 @@ module.exports = {
                 def source_call(argv, *_args, **_kwargs):
                     return dict(empty if len(argv) > 1 and argv[1] == "list" else refused)
                 with TemporaryDirectory() as temporary:
-                    with patch.object(audit, "call", side_effect=source_call):
+                    with patch.dict(audit.AGENT_BINARIES, {}, clear=True), \
+                         patch.object(audit, "call", side_effect=source_call):
                         result = audit.do_case(
                             "/unused/audit-cli", target, "plugin", "atlassian",
                             0, Path(temporary).resolve(), {})
@@ -5028,6 +5232,7 @@ module.exports = {
         import shutil
         audit = load_audit()
         item = {"name": "demo-skill", "source": "https://github.com/example/repo",
+                "repo": "example/repo", "folder": "demo-skill",
                 "skill_md_git_blob_sha1": "a" * 40}
         installed = [{"name": "demo-skill", "installation_id": "owned-install",
                       "clients": [{"client_id": "claude"}]}]
@@ -5052,6 +5257,9 @@ module.exports = {
                             (project / "uap.toml").write_text("demo-skill")
                             (project / "uap.lock").write_text("demo-skill")
                         state["added"] += 1
+                        result = success()
+                        result["_json"].update(readiness="ready", next_actions=[])
+                        return result
                     elif operation == "remove":
                         if relocate:
                             moved = skill_dir.with_name("other")
@@ -5128,13 +5336,13 @@ module.exports = {
             self.assertFalse(refused["completed"])
             self.assertIn("pinned", refused["reason"])
 
-    def test_chatgpt_prepared_requires_registration_and_verified_cleanup(self):
+    def test_chatgpt_alias_requires_registration_and_verified_cleanup(self):
         # BUG-013: a zero-exit CLI can still leave no managed installation.
         audit = load_audit()
         source = "github:example/chatgpt-demo@" + ("a" * 40)
         identity = "chatgpt-demo"
         matched = [{"name": identity, "installation_id": "isolated-owned-install",
-                    "clients": [{"client_id": "chatgpt",
+                    "clients": [{"client_id": "codex",
                                  "verification": "installation_verified"}]}]
 
         def response(exit_code, installations=None):
@@ -5144,11 +5352,20 @@ module.exports = {
 
         def run_case(outputs, matches):
             with TemporaryDirectory() as temporary:
-                with patch.object(audit, "call", side_effect=outputs), \
-                     patch.object(audit, "matching_installations", return_value=matches):
-                    return audit.do_case(
+                with patch.dict(audit.AGENT_BINARIES, {}, clear=True), \
+                     patch.object(audit, "call", side_effect=outputs) as calls, \
+                     patch.object(audit, "matching_installations", return_value=matches) as matching:
+                    result = audit.do_case(
                         "/unused/agentplugins", "chatgpt", "plugin", source, 0,
                         Path(temporary).resolve(), {source: identity})
+                self.assertEqual(result["canonical_client_id"], "codex")
+                self.assertGreater(matching.call_count, 0)
+                self.assertTrue(all(call.args[2] == "codex" for call in matching.call_args_list))
+                for call in calls.call_args_list:
+                    argv = call.args[0]
+                    if "--target" in argv:
+                        self.assertEqual(argv[argv.index("--target") + 1], "chatgpt")
+                return result
 
         empty = run_case([response(0), response(0)], [])
         self.assertEqual(empty["status"], "incomplete-native-proof")
@@ -5172,7 +5389,7 @@ module.exports = {
         prepared = run_case(
             [response(0), response(0), response(0), response(0), response(0), response(0)],
             matched)
-        self.assertEqual(prepared["status"], "manual-setup-prepared")
+        self.assertEqual(prepared["status"], "package-installed-native-unqualified")
         self.assertTrue(prepared["repeat_verified"])
         self.assertTrue(prepared["repeat_native_unchanged"])
         self.assertTrue(prepared["repeat_lock_unchanged"])
@@ -5180,6 +5397,79 @@ module.exports = {
         self.assertTrue(prepared["listed_identity"])
         self.assertTrue(prepared["removal_verified"])
         self.assertTrue(prepared["sentinels_preserved"])
+
+    def test_chatgpt_desktop_requires_actual_codex_bootstrap(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch("sys.argv", ["live-install-audit.py", "--cli", "/unused/agentplugins",
+                                       "--target", "chatgpt", "--kind", "plugin",
+                                       "--limit", "1", "--report-dir", temporary]), \
+                    patch.object(audit, "do_case") as cases, \
+                    patch.object(audit, "version_evidence") as version:
+                self.assertEqual(audit.main(), 2)
+            cases.assert_not_called()
+            version.assert_not_called()
+            report = json.loads((Path(temporary) / "chatgpt-plugin.json").read_text())
+        self.assertEqual(report["canonical_client_id"], "codex")
+        self.assertEqual(report["cases_attempted"], 0)
+        self.assertEqual([row["status"] for row in report["results"]], ["client-unavailable"])
+        self.assertIn("codex", report["blocker"])
+
+    def test_chatgpt_desktop_bootstrap_binds_the_shared_pin_and_regular_binary(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        vendor = workflow.split("        id: vendor-install\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("        continue-on-error: true\n", vendor)
+        self.assertIn('if [[ "$TARGET" == chatgpt && "$KIND" == plugin ]]; then\n'
+                      '            bash scripts/prepare-codex-linux-sandbox.sh\n          fi', vendor)
+        self.assertLess(vendor.index("bash scripts/prepare-codex-linux-sandbox.sh"),
+                        vendor.index('mkdir -p "$RUNNER_TEMP/vendor-proof"'))
+        self.assertIn("exclude:\n          - target: chatgpt\n            kind: skill", workflow)
+        block = textwrap.dedent(workflow.split("<<'CHATGPT_CODEX'\n", 1)[1]
+                                .split("          CHATGPT_CODEX", 1)[0])
+        pin = ("existing", "immutable", "catalog", "pin")
+        for mode in ("regular", "symlink", "not-executable", "foreign-path"):
+            with self.subTest(mode=mode), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                (root / "vendor-proof").mkdir()
+                observed = []
+
+                def provision(selected, directory, name):
+                    self.assertIs(selected, pin)
+                    self.assertEqual((directory, name), (root / "vendor-root", "codex"))
+                    binary = directory / "codex"
+                    if mode == "foreign-path":
+                        binary = root / "foreign"
+                    binary.write_bytes(b"inert test fixture, never executed")
+                    binary.chmod(0o600 if mode == "not-executable" else 0o700)
+                    if mode == "symlink":
+                        target = root / "link-target"
+                        binary.rename(target)
+                        binary.symlink_to(target)
+                    observed.append(binary)
+                    return binary, {"source": "https://example.invalid/pinned-archive"}
+
+                module = SimpleNamespace(PINS={"linux-amd64": {"codex": pin}}, provision=provision)
+                spec = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda _module: None))
+                with patch("sys.argv", ["bootstrap", str(root)]), \
+                        patch("sys.platform", "linux"), patch("platform.machine", return_value="x86_64"), \
+                        patch("importlib.util.spec_from_file_location", return_value=spec), \
+                        patch("importlib.util.module_from_spec", return_value=module):
+                    if mode == "regular":
+                        exec(compile(block, "<desktop-bootstrap-contract>", "exec"), {})
+                    else:
+                        with self.assertRaisesRegex(SystemExit, "unverified staged Codex executable"):
+                            exec(compile(block, "<desktop-bootstrap-contract>", "exec"), {})
+                self.assertEqual(len(observed), 1)
+                proof = root / "vendor-proof/codex-runtime.json"
+                if mode == "regular":
+                    value = json.loads(proof.read_text())
+                    self.assertEqual((value["public_target"], value["canonical_client_id"],
+                                      value["pin_family"], value["executable"]),
+                                     ("chatgpt", "codex", "full-catalog", str(observed[0])))
+                else:
+                    self.assertFalse(proof.exists())
 
     def test_both_native_matrices_bind_real_bootstrap_outcomes(self):
         # BUG-014: present binary + failed native --version must never produce PASS.
@@ -5208,6 +5498,7 @@ module.exports = {
             cli = Path(temporary) / "inert-cli"
             cli.write_text("no native execution")
             with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch.dict(audit.AGENT_BINARIES, {"codex": str(cli)}, clear=True), \
                     patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
                                        "--target", "chatgpt", "--kind", "plugin",
                                        "--limit", "1", "--report-dir", temporary]), \
@@ -5222,6 +5513,49 @@ module.exports = {
         self.assertEqual(case["source"], source)
         self.assertEqual(case["identity"], fixtures["plugin_declared_names"].get(source, source))
         self.assertEqual((case["kind"], case["target"]), ("plugin", "chatgpt"))
+
+    def test_harness_timeout_retains_bounded_chained_traceback_without_locals(self):
+        audit = load_audit()
+        for large_cause in (False, True):
+            with self.subTest(large_cause=large_cause), TemporaryDirectory() as temporary:
+                def fail(*args):
+                    private_local = "do-not-capture-" + "local-value"
+                    try:
+                        raise ValueError("inner diagnostic cause" + ("x" * 16384 if large_cause else ""))
+                    except ValueError as cause:
+                        failure = TimeoutError()
+                        failure.add_note("phase='before-install'; command=['/isolated/codex', 'app-server']")
+                        raise failure from cause
+
+                cli = Path(temporary) / "inert-cli"
+                cli.write_text("no native execution")
+                with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                        patch.dict(audit.AGENT_BINARIES, {"codex": str(cli)}, clear=True), \
+                        patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
+                                           "--target", "chatgpt", "--kind", "plugin",
+                                           "--limit", "1", "--report-dir", temporary]), \
+                        patch.object(audit, "version_evidence", return_value={"status": "reported"}), \
+                        patch.object(audit, "do_case", side_effect=fail) as run_case, \
+                        patch("builtins.print") as printed:
+                    self.assertEqual(audit.main(), 1)
+                run_case.assert_called_once()
+                report = json.loads((Path(temporary) / "chatgpt-plugin.json").read_text())
+                self.assertEqual((report["cases_attempted"], report["passed"],
+                                  report["verified_negative_coverage"]), (1, 0, 0))
+                case = report["results"][0]
+                self.assertEqual((case["status"], case["error"]), ("harness-error", "TimeoutError()"))
+                detail = case.get("error_traceback", "")
+                self.assertIn("TimeoutError", detail)
+                self.assertIn("in fail", detail)
+                self.assertIn("phase='before-install'", detail)
+                self.assertIn("command=['/isolated/codex', 'app-server']", detail)
+                self.assertNotIn("do-not-capture-local-value", detail)
+                self.assertLessEqual(len(detail), 8192)
+                if not large_cause:
+                    self.assertIn("ValueError: inner diagnostic cause", detail)
+                    self.assertIn("direct cause", detail)
+                logged = json.loads(printed.call_args_list[0].args[0])
+                self.assertEqual(logged.get("error_traceback"), detail)
 
     def test_reports_distinct_pr_head_and_checked_merge_sha(self):
         # BUG-015: pull_request GITHUB_SHA is a merge checkout, not PR head.
@@ -5323,28 +5657,62 @@ module.exports = {
         self.assertIn('env -i PATH="$PATH" HOME="$probe_home"', workflow)
 
     def test_devin_project_skills_use_exact_reviewed_native_version(self):
-        # BUG-054: actual 30/30 project Skills refused with Devin 3000.11.234;
-        # production requireCurrentDevin accepts only 3000.11.205.
+        # Both obsolete CDN routes stopped before cases with HTTP 403. The
+        # existing User and Project admission already supports official .12.57.
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github/workflows/live-install-remaining-clients.yml").read_text()
+        self.assertEqual(workflow.count("            windsurf)"), 1)
+        vendor = workflow.split("            windsurf)", 1)[1].split("              ;;", 1)[0]
+        self.assertIn('https://registry.npmjs.org/devin/-/devin-3000.12.57-linux-x64.tgz', vendor)
+        self.assertNotIn('if [[ "$KIND"', vendor)
+        self.assertNotIn("static.devin.ai/cli/", workflow)
+        self.assertIn("PYTHONPATH=scripts python3 -", workflow)
+        self.assertIn('executable="$RUNNER_TEMP/vendor-devin/bin/devin"', workflow)
+        self.assertIn('test -f "$executable" && test -x "$executable" && test ! -L "$executable" || exit 4', workflow)
+        self.assertIn('env -i PATH="$PATH" HOME="$probe_home"', workflow)
+        version = (root / "install/integrationctl/agentplugins/clients/windsurf/version_profile.go").read_text()
+        self.assertIn('version == "3000.12.57"', version)
+        for relative in ("global_profile.go", "project_validation.go"):
+            self.assertIn("supportedDevinNativeVersion(client.Version)",
+                          (root / "install/integrationctl/agentplugins/clients/windsurf" / relative).read_text())
+
+    def test_devin_npm_bootstrap_binds_reviewed_archive_binary_and_package_path(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
         workflow = (Path(__file__).resolve().parents[1] /
                     ".github/workflows/live-install-remaining-clients.yml").read_text()
-        self.assertEqual(workflow.count("            windsurf)"), 2)
-        vendor_block, sha_block = (
-            block.split("              ;;", 1)[0]
-            for block in workflow.split("            windsurf)")[1:]
-        )
-        self.assertIn('if [[ "$KIND" == skill ]]; then', vendor_block)
-        self.assertIn('if [[ "$KIND" == skill ]]; then', sha_block)
-        self.assertIn("devin-3000.11.205-x86_64-unknown-linux.tar.gz", vendor_block)
-        self.assertIn("devin-3000.11.234-x86_64-unknown-linux.tar.gz", vendor_block)
-        self.assertIn('SHA256="2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4"', sha_block)
-        self.assertIn('SHA256="201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a"', sha_block)
-        self.assertLess(vendor_block.index("3000.11.205"), vendor_block.index("3000.11.234"))
-        self.assertLess(sha_block.index("2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4"),
-                        sha_block.index("201370cddd2924294e3ca6b46fd8ece49b5763953b644a1dd823fce5490cb41a"))
-        self.assertLess(workflow.index('sha256_file -c -'),
-                        workflow.index('archive.extractall(path=sys.argv[2], filter="data")'))
-        self.assertIn('test -f "$executable" && test -x "$executable" && test ! -L "$executable"', workflow)
-        self.assertIn('env -i PATH="$PATH" HOME="$probe_home"', workflow)
+        marker = 'PYTHONPATH=scripts python3 - "$RUNNER_TEMP" "$URL" <<\'PY_DEVIN\'\n'
+        self.assertIn(marker, workflow)
+        source = textwrap.dedent(workflow.split(marker, 1)[1].split("\n          PY_DEVIN", 1)[0])
+        integrity = "sha512-SZhb9rrYghHvOh0PRpZT1GpNPMMo+7P9VH6t6ZNMrBmyVX3x3XflPvCv8yomx/i7vnvf64bdFR++cRRg/c8mLQ=="
+        url = "https://registry.npmjs.org/devin/-/devin-3000.12.57-linux-x64.tgz"
+        binary_sha = "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d"
+        for mode in ("good", "integrity", "version", "url", "binary", "path", "acquisition"):
+            with self.subTest(mode=mode), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(strict=True)
+                (root / "vendor-proof").mkdir()
+                install = Mock(return_value=(root / "vendor-devin/bin/devin", integrity))
+                module = SimpleNamespace(VERSION="3000.12.57", TARBALL_URL=url,
+                                         BINARY_SHA=binary_sha, install_genuine_devin=install)
+                if mode == "integrity":
+                    install.return_value = (root / "vendor-devin/bin/devin", "sha512-unreviewed")
+                elif mode == "path":
+                    install.return_value = (root / "foreign/devin", integrity)
+                elif mode == "acquisition":
+                    install.side_effect = RuntimeError("ordinary acquisition refused")
+                elif mode in ("version", "url", "binary"):
+                    setattr(module, {"version": "VERSION", "url": "TARBALL_URL", "binary": "BINARY_SHA"}[mode], "unreviewed")
+                with patch.dict(sys.modules, devin_project_auto_install_e2e=module), \
+                     patch.object(sys, "argv", ["workflow", temporary, url]):
+                    if mode == "good":
+                        exec(compile(source, "remaining-devin-bootstrap", "exec"), {})
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "Devin|acquisition"):
+                            exec(compile(source, "remaining-devin-bootstrap", "exec"), {})
+                proof = json.loads((root / "vendor-proof/devin-npm.json").read_text())
+                self.assertEqual(proof["acquisition_verified"], mode == "good")
+                self.assertEqual(proof["reviewed_integrity"], integrity)
+                self.assertEqual(install.call_count, 0 if mode in ("version", "url", "binary") else 1)
 
     def test_vscode_deb_uses_exact_verified_staged_launcher(self):
         # BUG-055: /usr/bin/code may be an absolute .deb symlink, not a
@@ -5447,6 +5815,232 @@ module.exports = {
         self.assertEqual(audit.signed_release_public_observation(
             response, "atlassian", "grok"), [])
 
+
+    def test_public_target_states_select_only_owned_target_and_project_finite_enums(self):
+        audit = load_audit()
+        selected = {"client_id": "kiro", "materialization": "materialized",
+                    "activation": "prepared", "authentication": "auth_pending",
+                    "policy": "allowed", "verification": "package_validated",
+                    "path": "/private/account", "credential": "password=private"}
+        response = {"data": {"installations": [
+            {"name": "foreign-private", "clients": [dict(selected, activation="failed")]},
+            {"name": "owned-private", "installation_id": "private-id", "clients": [
+                dict(selected, client_id="claude", activation="failed"), selected]},
+        ]}}
+        original = json.dumps(response, sort_keys=True)
+        observed = audit.public_target_state_observation(response, "owned-private", "kiro")
+        expected = {key: selected[key] for key in
+                    ("materialization", "activation", "authentication", "policy", "verification")}
+        self.assertEqual(observed, {"status": "observed", "selected_installations": 1,
+                                   "selected_bindings": 1, "invalid_rows": 0,
+                                   "states": [expected], "truncated": False})
+        self.assertNotIn("private", json.dumps(observed))
+        self.assertNotIn("credential", json.dumps(observed))
+        self.assertEqual(json.dumps(response, sort_keys=True), original)
+        self.assertEqual(audit.failed_case_diagnostics(
+            {"public_target_states": {"after-add": observed}}),
+            {"public_target_states": {"after-add": observed}})
+
+    def test_unqualified_skill_source_remains_visible_without_qualifying_its_binding(self):
+        for failed_phase in ('after-add', 'repeat-add'):
+            for verification in ('package_validated', 'failed'):
+                with self.subTest(phase=failed_phase, verification=verification), TemporaryDirectory() as temp:
+                    audit = load_audit()
+                    root = Path(temp).resolve()
+                    project = root / 'skill-00/project'
+                    skill = project / '.gemini/skills/owned-test/SKILL.md'
+                    body = b'---\nname: owned-test\ndescription: selected fixture\n---\n'
+                    item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
+                            'source': 'unused', 'skill_md_git_blob_sha1': hashlib.sha1(
+                                b'blob ' + str(len(body)).encode() + b'\0' + body).hexdigest()}
+                    source = 'example/skills/skills/owned-test'
+                    operations, rejected = [], []
+
+                    def perform(argv, env, cwd, timeout=105):
+                        operation = argv[2] if argv[1] == 'skills' else argv[1]
+                        operations.append(operation)
+                        response = {'readiness': 'ready', 'next_actions': []}
+                        if operation == 'add':
+                            skill.parent.mkdir(parents=True, exist_ok=True)
+                            skill.write_bytes(body)
+                            (project / 'uap.toml').write_text('owned-test')
+                            (project / 'uap.lock').write_text('owned-test')
+                        elif operation == 'remove':
+                            skill.unlink()
+                            skill.parent.rmdir()
+                            (project / 'uap.lock').unlink()
+                        elif operation == 'list':
+                            invalid = operations.count('list') == (1 if failed_phase == 'after-add' else 2)
+                            state = {'client_id': 'gemini', 'materialization': 'materialized',
+                                     'activation': 'active', 'authentication': 'not_required', 'policy': 'allowed',
+                                     'verification': verification if invalid else 'installation_verified'}
+                            selected = {'installation_id': 'selected-id', 'name': 'skill-generated-name',
+                                        'source': source, 'clients': [state]}
+                            neighbor = dict(selected, installation_id='other-id', source=source + '-other',
+                                            clients=[dict(state, verification='not_run')])
+                            response = {'data': {'installations': [] if 'remove' in operations else
+                                                 [selected, neighbor]}}
+                            if invalid:
+                                rejected.append(response)
+                        return {'exit_code': 0, 'stdout_tail': '', 'stderr_tail': '',
+                                'timeout': False, '_json': response}
+
+                    with (patch.object(audit, 'call', side_effect=perform),
+                          patch.object(audit, 'locked_skill_is_pinned',
+                                       side_effect=lambda *a: (project / 'uap.lock').exists())):
+                        row = audit.do_case('/inert/uap', 'gemini', 'skill', item, 0, root, {})
+                    self.assertEqual(len(rejected), 1)
+                    self.assertEqual(audit.matching_installations(
+                        rejected[0], item['name'], 'gemini', 'skill', item), [])
+                    state = row['public_target_states'][failed_phase]
+                    self.assertEqual((state['selected_installations'], state['selected_bindings']), (1, 1))
+                    self.assertEqual([v['verification'] for v in state['states']], [verification])
+                    self.assertNotEqual(row['status'], 'passed')
+                    self.assertFalse(row['repeat_verified'])
+                    self.assertEqual(row['repeat_installation_ids'], [])
+                    self.assertEqual(row['matched_installation_ids'],
+                                     [] if failed_phase == 'after-add' else ['selected-id'])
+                    self.assertEqual(operations, ['add', 'list'] if failed_phase == 'after-add' else
+                                     ['add', 'list', 'add', 'list', 'remove', 'list'])
+
+    def test_failed_case_diagnostics_projects_gemini_refusal_without_journal_contents(self):
+        audit = load_audit()
+        proof = {
+            "status": "unqualified", "reason": "Gemini startup environment framing differs",
+            "phases": ["after-public-repeat-add"],
+            "baseline": {"bytes": 1234, "records": 3,
+                         "started": "2026-11-18T10:40:00+00:00",
+                         "finished": "2026-11-18T10:40:01+00:00",
+                         "path": "/private/journal", "text": "private journal content"},
+            "failure_facts": {"phase": "after-public-repeat-list", "role": "new-chat",
+                              "operation": "record-framing", "bytes": 1234, "lf_count": 3,
+                              "final_lf": True, "record_shapes": [
+                                  "metadata-fields", "user-text-fields", "last-updated-fields"],
+                              "text": "private journal content", "stdout": "private native output"},
+            "files": [{"path": "/private/journal", "body": "private journal content"}],
+            "stdout": "private native output",
+        }
+        row = {"status": "repeat-add-unqualified", "repeat_verified": False,
+               "public_skill_ready": {"after-add": False, "repeat-add": True},
+               "removal_verified": True, "gemini_runtime_proof": proof}
+        original = json.dumps(row, sort_keys=True)
+        observed = audit.failed_case_diagnostics(row)
+        expected = {
+            "status": proof["status"], "reason": proof["reason"],
+            "phases": proof["phases"], "phases_truncated": False,
+            "baseline": {key: proof["baseline"][key]
+                         for key in ("bytes", "records", "started", "finished")},
+            "failure_facts": {key: proof["failure_facts"][key] for key in (
+                "phase", "role", "operation", "bytes", "lf_count", "final_lf", "record_shapes")},
+        }
+        expected["failure_facts"]["record_shapes_truncated"] = False
+        self.assertEqual(observed, {"repeat_verified": False, "removal_verified": True,
+                                   "public_skill_ready": {"after-add": False, "repeat-add": True},
+                                   "gemini_runtime_proof": expected})
+        self.assertNotIn("private", json.dumps(observed))
+        self.assertEqual(json.dumps(row, sort_keys=True), original)
+
+    def test_failed_case_diagnostics_bounds_invalid_gemini_facts_without_changing_other_clients(self):
+        audit = load_audit()
+        for proof in (None, [], "private", 7):
+            with self.subTest(proof=proof):
+                self.assertEqual(audit.failed_case_diagnostics(
+                    {"repeat_verified": False, "gemini_runtime_proof": proof}),
+                    {"repeat_verified": False})
+        proof = {
+            "status": "x" * 1000, "reason": "r" * 1000,
+            "phases": ["after-public-repeat-add", {"private": "secret"}] * 100,
+            "baseline": {"bytes": 1 << 30, "records": {"private": "secret"},
+                         "started": "s" * 1000, "finished": ["private"]},
+            "failure_facts": {"operation": "o" * 1000, "bytes": -1,
+                              "within_limit": True, "slug_binding_count": None,
+                              "record_shapes": ["metadata-fields", {"private": "secret"},
+                                                "private"] * 100,
+                              "unknown": "private"},
+        }
+        original = json.dumps(proof, sort_keys=True)
+        observed = audit.failed_case_diagnostics({"gemini_runtime_proof": proof})["gemini_runtime_proof"]
+        self.assertEqual(observed["status"], "x" * 512)
+        self.assertEqual(observed["reason"], "r" * 512)
+        self.assertEqual(observed["phases"], ["after-public-repeat-add", "invalid"])
+        self.assertTrue(observed["phases_truncated"])
+        self.assertEqual(observed["baseline"], {
+            "bytes": "invalid", "records": "invalid", "started": "s" * 64, "finished": "invalid"})
+        self.assertEqual(observed["failure_facts"], {
+            "operation": "o" * 64, "bytes": "invalid", "within_limit": True,
+            "slug_binding_count": None, "record_shapes": ["metadata-fields", "invalid", "invalid"],
+            "record_shapes_truncated": True})
+        self.assertLess(len(json.dumps(observed).encode()), 4096)
+        self.assertNotIn("private", json.dumps(observed))
+        self.assertEqual(json.dumps(proof, sort_keys=True), original)
+
+    def test_public_target_states_select_skill_ids_and_reminted_exact_source(self):
+        audit = load_audit()
+        source = "private-repo/skills/owned-test"
+        state = {"materialization": "materialized", "activation": "active",
+                 "authentication": "not_required", "policy": "allowed",
+                 "verification": "installation_verified"}
+        owned = {"name": "private-generated-name", "installation_id": "private-old-id",
+                 "source": source, "clients": [
+                     dict(state, client_id="kiro", activation="failed"),
+                     dict(state, client_id="claude", path="/private/native/skill")]}
+        response = {"data": {"installations": [
+            {"name": "owned-test", "installation_id": "private-foreign-id",
+             "source": source + "-other", "clients": [dict(state, client_id="claude", activation="failed")]},
+            owned,
+            {"name": "owned-test", "installation_id": {"private": "malformed"},
+             "source": source + "/other", "clients": [dict(state, client_id="claude")]},
+        ]}}
+        for installation_id in ("private-old-id", "private-repeat-id"):
+            with self.subTest(installation_id=installation_id):
+                owned["installation_id"] = installation_id
+                observed = audit.public_target_state_observation(
+                    response, "owned-test", "claude", installation_ids={installation_id})
+                self.assertEqual(observed["selected_installations"], 1)
+                self.assertEqual(observed["selected_bindings"], 1)
+                self.assertEqual(observed["states"], [state])
+                self.assertNotIn("private", json.dumps(observed))
+        self.assertEqual(audit.public_target_state_observation(
+            response, "owned-test", "claude", installation_ids=set())["selected_bindings"], 0)
+        owned.update(name="private-renamed", installation_id="private-reminted-id")
+        owned["clients"][1]["verification"] = "failed"
+        ids = {"private-old-id", "private-repeat-id"}
+        self.assertEqual(audit.public_target_state_observation(
+            response, "owned-test", "claude", installation_ids=ids)["selected_bindings"], 0)
+        observed = audit.public_target_state_observation(
+            response, "owned-test", "claude", installation_ids=ids, skill_source=source)
+        self.assertEqual(observed["selected_installations"], 1)
+        self.assertEqual(observed["selected_bindings"], 1)
+        self.assertEqual(observed["states"], [dict(state, verification="failed")])
+        self.assertNotIn("private", json.dumps(observed))
+        owned["source"] = source + "/other"
+        self.assertEqual(audit.public_target_state_observation(
+            response, "owned-test", "claude", installation_ids=ids,
+            skill_source=source)["selected_bindings"], 0)
+
+    def test_public_target_states_bound_rows_and_redact_invalid_values(self):
+        audit = load_audit()
+        for value in (None, {}, {"data": {"installations": "private"}}):
+            self.assertEqual(audit.public_target_state_observation(value, "owned", "kiro"),
+                             {"status": "unobserved" if value is None else "invalid"})
+        client = {"client_id": "kiro", "materialization": ["private"],
+                  "activation": "private", "authentication": True, "policy": None,
+                  "verification": {"private": "secret"}}
+        response = {"data": {"installations": [
+            {"name": "owned", "clients": [client] * 33}] * 33}}
+        observed = audit.public_target_state_observation(response, "owned", "kiro")
+        self.assertEqual(observed["selected_installations"], 32)
+        self.assertEqual(observed["selected_bindings"], 32)
+        self.assertTrue(observed["truncated"])
+        self.assertEqual(observed["states"], [dict.fromkeys(
+            ("materialization", "activation", "authentication", "policy", "verification"), "invalid")])
+        self.assertNotIn("private", json.dumps(observed))
+        variants = [dict(client, activation=value) for value in
+                    ("not_required", "prepared", "manual_activation_required", "active", "failed")]
+        observed = audit.public_target_state_observation(
+            {"data": {"installations": [{"name": "owned", "clients": variants}]}}, "owned", "kiro")
+        self.assertEqual(len(observed["states"]), 4)
+        self.assertTrue(observed["truncated"])
 
     def test_signed_release_requires_same_verified_target_and_immutable_metadata(self):
         audit = load_audit()
@@ -5691,7 +6285,7 @@ module.exports = {
             self.assertEqual(initial[".codex/linked-dir"], "symlink")
             self.assertIn(".codex/managed.yaml", initial)
             self.assertNotIn(".codex/linked-dir/unrelated.txt", initial)
-            with patch.object(Path, "open", side_effect=OSError("unreadable")):
+            with patch.dict(audit.NATIVE_ARTIFACTS, open_member=Mock(side_effect=OSError("unreadable"))):
                 invalid = audit.snapshot([root])
             self.assertEqual(invalid[".codex/managed.yaml"], "unreadable")
             self.assertIn("unknown-link: symlink", " ".join(
@@ -6872,6 +7466,7 @@ module.exports = {
             self.assertEqual(list(foreign.iterdir()), [])
 
     def test_skill_removal_rejects_surviving_links_and_native_registration(self):
+        from types import SimpleNamespace
         audit = load_audit()
         identity = "demo-skill"
         item = {"name": identity, "folder": identity, "repo": "example/skills",
@@ -6881,15 +7476,30 @@ module.exports = {
                   "clients": [{"client_id": "claude",
                                "verification": "installation_verified"}]}]
 
-        def check(residue):
+        def check(residue, selected_target="claude", readiness=("ready", "ready"),
+                  actions=(None, None)):
             with TemporaryDirectory() as temporary:
-                runroot = Path(temporary)
+                runroot = Path(temporary).resolve()
                 project = runroot / "skill-00/project"
-                native = runroot / "skill-00/home/.claude"
-                skill = project / ".claude/skills/demo-skill/SKILL.md"
-                state = {"installed": False}
+                target = "codex" if residue == "post-native-recreated" else selected_target
+                native = runroot / "skill-00/home" / ("." + target)
+                skill = project / audit.PROJECT_SKILL_ROOTS[target][0] / "demo-skill/SKILL.md"
+                selected_match = [dict(match[0], clients=[
+                    {"client_id": target, "verification": "installation_verified"}])]
+                state, phases = {"installed": False}, []
+                def native_checkpoint(phase, present):
+                    phases.append(phase)
+                    if phase == "removed" and residue == "post-native-recreated":
+                        skill.parent.mkdir(parents=True, exist_ok=True)
+                        skill.write_text("---\nname: demo-skill\n---\n")
+                observer = SimpleNamespace(
+                    guard=lambda: None, checkpoint=native_checkpoint,
+                    temporary_git_state=lambda: ({}, {}),
+                    repeat_runtime_only=lambda *args: False,
+                    evidence=lambda: {"phases": list(phases)})
                 def fake_call(argv, env, cwd, timeout=105):
                     if argv[1] == "skills":
+                        state["add_count"] = state.get("add_count", 0) + 1
                         skill.parent.mkdir(parents=True, exist_ok=True)
                         skill.write_text("---\nname: demo-skill\n---\n")
                         (project / "uap.toml").write_text("demo-skill\n")
@@ -6906,23 +7516,49 @@ module.exports = {
                         elif residue == "native":
                             (native / "agent-registry.json").write_text(
                                 '{"skills":{"demo-skill":{}}}')
+                    elif argv[1] == "list" and not state["installed"]:
+                        state["post_list_empty"] = True
+                        if residue == "post-list-recreated":
+                            skill.parent.mkdir(parents=True, exist_ok=True)
+                            skill.write_text("---\nname: demo-skill\n---\n")
+                        elif residue == "post-list-foreign":
+                            (runroot / "skill-00/home/foreign-untouched.txt").write_text("changed by list")
+                    result = {"data": {"installations": selected_match if state["installed"] else []}}
+                    if argv[1] == "skills":
+                        result = {"schema_version": 1, "command": "skills add", "result": "success",
+                                  "status": "succeeded", "scope": "project", "items": [{
+                                      "alias": identity, "targetId": target, "status": "succeeded"}]}
+                        index = state["add_count"] - 1
+                        if readiness[index] is not None:
+                            result["readiness"] = readiness[index]
+                        if actions[index] is not None:
+                            result["next_actions"] = actions[index]
                     return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
-                            "timeout": False,
-                            "_json": {"data": {"installations":
-                                               match if state["installed"] else []}}}
+                            "timeout": False, "_json": result}
                 with patch.object(audit, "call", side_effect=fake_call), \
-                     patch.object(audit, "matching_installations", return_value=match), \
+                     patch.object(audit, "matching_installations", return_value=selected_match), \
                      patch.object(audit, "locked_skill_is_pinned", return_value=True), \
-                     patch.object(audit, "matches_pinned_skill_bytes", return_value=True):
-                    evidence = audit.do_case("/unused/agentplugins", "claude", "skill",
+                     patch.object(audit, "matches_pinned_skill_bytes", return_value=True), \
+                     patch.dict(audit.AGENT_BINARIES, {"codex": "/inert/codex"}, clear=True), \
+                     patch.dict(audit.CODEX_RUNTIME_AUDIT, {
+                         "CodexRuntimeAudit": lambda *args: observer,
+                         "public_skill_ready": lambda *args: True}):
+                    evidence = audit.do_case("/unused/agentplugins", target, "skill",
                                              item, 0, runroot, {})
                 self.assertTrue(evidence["installed"] if "installed" in evidence
                                 else evidence["listed_identity"])
                 self.assertTrue(evidence["repeat_verified"])
+                self.assertTrue(state.get("post_list_empty"))
+                self.assertTrue(evidence["post_list_schema_valid"])
+                self.assertFalse(evidence["post_remove_identity_registered"])
                 return evidence
         clean = check(None)
         self.assertTrue(clean["removal_verified"])
         self.assertEqual(clean["status"], "passed")
+        self.assertTrue(clean["sentinels_preserved"])
+        self.assertIsNone(clean["post_removal_skill"])
+        self.assertEqual(clean["post_removal_leftovers"], [])
+        self.assertEqual(clean["post_skill_tree_delta"], [])
         linked = check("symlink")
         self.assertFalse(linked["removal_verified"])
         self.assertEqual(linked["status"], "cleanup-failed")
@@ -6931,6 +7567,46 @@ module.exports = {
         self.assertFalse(native["removal_verified"])
         self.assertEqual(native["status"], "cleanup-failed")
         self.assertTrue(native["native_residuals"])
+
+
+        for mutation in ("post-list-recreated", "post-native-recreated"):
+            with self.subTest(mutation=mutation):
+                recreated = check(mutation)
+                self.assertFalse(recreated["removal_verified"])
+                self.assertEqual(recreated["status"], "cleanup-failed")
+                self.assertTrue(recreated["post_removal_skill"])
+                self.assertTrue(recreated["post_removal_leftovers"])
+                self.assertTrue(recreated["post_skill_tree_delta"])
+                if mutation == "post-native-recreated":
+                    self.assertIn("removed", recreated["codex_runtime_proof"]["phases"])
+        foreign = check("post-list-foreign")
+        self.assertFalse(foreign["sentinels_preserved"])
+        self.assertEqual(foreign["status"], "cleanup-failed")
+
+        # Actual catalog runs for these clients had clean file lifecycles but
+        # public needs_action. Preserve the cleanup proof without native PASS.
+        for target in ("cursor", "kiro", "windsurf", "claude"):
+            for readiness in (("needs_action", "needs_action"), ("ready", "needs_action"),
+                              ("needs_action", "ready"), (None, "ready"), ("ready", None),
+                              (True, "ready"), ("unknown", "ready")):
+                with self.subTest(target=target, readiness=readiness):
+                    pending = check(None, target, readiness)
+                    self.assertEqual(pending["status"], "incomplete-native-proof")
+                    self.assertTrue(pending["removal_verified"])
+                    self.assertTrue(pending["repeat_verified"])
+                    self.assertTrue(pending["sentinels_preserved"])
+                    self.assertEqual(pending["public_skill_ready"], {
+                        "after-add": readiness[0] == "ready", "repeat-add": readiness[1] == "ready"})
+            ready = check(None, target)
+            self.assertEqual(ready["status"], "passed")
+            for actions in ((["finish setup"], None), (None, ["finish setup"]), ({"pending": True}, None)):
+                with self.subTest(target=target, actions=actions):
+                    pending = check(None, target, actions=actions)
+                    self.assertEqual(pending["status"], "incomplete-native-proof")
+                    self.assertTrue(pending["removal_verified"])
+        pending_with_residue = check("symlink", readiness=("needs_action", "needs_action"))
+        self.assertEqual(pending_with_residue["status"], "cleanup-failed")
+        self.assertFalse(pending_with_residue["removal_verified"])
 
 
     def test_copilot_settings_probe_redacts_values_and_keeps_refusals(self):
@@ -7016,6 +7692,7 @@ module.exports = {
     def test_qoder_foreign_skill_is_never_placed_in_uap_managed_bundle(self):
         audit = load_audit()
         item = {"name": "frontend-design", "source": "unused-fixture",
+                "repo": "example/skills", "folder": "frontend-design",
                 "skill_md_git_blob_sha1": "0" * 40}
         refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
                    "timeout": False, "_json": {"data": {"installations": []}}}
@@ -7491,6 +8168,44 @@ module.exports = {
             self.assertFalse(audit.codex_marketplace_source_in_case(
                 case / "home/.codex/plugins/missing", case))
             self.assertFalse(audit.codex_marketplace_source_in_case(Path("relative"), case))
+            # Reach main's actual creation seam with an owned lexical parent.
+            (root / "spelling").mkdir()
+            alias_parent = root / "spelling" / ".."
+            cli = root / "inert-cli"
+            cli.write_text("no native execution")
+            observed = []
+
+            def create_owned_root(*args, **kwargs):
+                parent = Path(kwargs["dir"])
+                self.assertEqual(parent, parent.resolve(strict=True),
+                                 "main selected a noncanonical TEMP parent")
+                return TemporaryDirectory(*args, **kwargs)
+
+            def capture_case(*args):
+                runroot = args[5]
+                self.assertEqual(runroot, runroot.resolve(strict=True),
+                                 "main handed a noncanonical root to the case")
+                self.assertEqual(runroot.parent, root)
+                before = runroot.lstat()
+                held = audit.CODEX_RUNTIME_AUDIT["_real_directory"](runroot)
+                self.assertTrue(os.path.samestat(before, held))
+                lexical = alias_parent / runroot.name
+                with self.assertRaisesRegex(ValueError, "audit directory is redirected"):
+                    audit.CODEX_RUNTIME_AUDIT["_real_directory"](lexical)
+                observed.append(runroot)
+                return {"status": "passed"}
+
+            with patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": "success"}), \
+                    patch.dict(audit.AGENT_BINARIES, {"codex": str(cli)}, clear=True), \
+                    patch("sys.argv", ["live-install-audit.py", "--cli", str(cli),
+                                       "--target", "chatgpt", "--kind", "plugin",
+                                       "--limit", "1", "--report-dir", str(root)]), \
+                    patch.object(audit, "published_audit_temp_parent", return_value=str(alias_parent)), \
+                    patch.object(audit, "version_evidence", return_value={"status": "reported"}), \
+                    patch.object(audit, "do_case", side_effect=capture_case), \
+                    patch.object(audit.tempfile, "TemporaryDirectory", side_effect=create_owned_root):
+                self.assertEqual(audit.main(), 0)
+            self.assertEqual(len(observed), 1)
             if os.name == "nt":
                 # Same on-disk directory; Go may use the Windows extended prefix.
                 extended = Path("\\\\?\\" + str(source))
@@ -7573,6 +8288,94 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 self.assertEqual(audit.qoder_native_plugin_state(
                     home, {"QODER_CONFIG_DIR": str(root / "other")},
                     root, "atlassian", "0.1.0")["status"], "unqualified-prerequisites")
+
+    def prepared_signed_package(self, target="kiro"):
+        pin = {"distribution": "777genius/atlassian", "repository": "777genius/universal-agent-plugins",
+               "path": "plugins/atlassian", "revision": "a" * 40, "sequence": 1,
+               "tree_digest": "sha256:" + "b" * 64, "manifest_digest": "sha256:" + "c" * 64}
+        revision = {"distribution_id": pin["distribution"], "resolved_revision": pin["revision"],
+                    "release_sequence": 1, "tree_digest": pin["tree_digest"],
+                    "manifest_digest": pin["manifest_digest"]}
+        binding = {"client_id": target, "scope": "user", "materialization": "materialized",
+                   "activation": "prepared", "verification": "package_validated",
+                   "policy": "allowed", "authentication": "not_checked", "package_revision": revision}
+        row = {"name": "atlassian", "installation_id": "same-prepared-installation",
+               "source": pin["repository"] + "/" + pin["path"], "clients": [binding],
+               "directory": {"product_id": "atlassian", "recorded_distribution": pin["distribution"],
+                             "recorded_revision": pin["revision"], "recorded_release_sequence": 1}}
+        return row, {"atlassian": pin}
+
+    def test_signed_prepared_package_requires_allowed_user_delivery_and_frozen_receipt(self):
+        audit = load_audit()
+        for target in ("kiro", "cursor"):
+            with self.subTest(target=target):
+                row, pins = self.prepared_signed_package(target)
+                def match():
+                    return audit.matching_installations(
+                        {"data": {"installations": [row]}}, "atlassian", target,
+                        "plugin", "atlassian", pins)
+                self.assertEqual(match(), [row])
+                binding = row["clients"][0]
+                for key, bad in (("scope", "project"), ("materialization", "pending"),
+                                 ("activation", "failed"), ("verification", "pending"),
+                                 ("policy", "blocked"), ("client_id", "other")):
+                    with self.subTest(key=key):
+                        row["clients"] = [dict(binding, **{key: bad})]
+                        self.assertEqual(match(), [])
+                row["clients"] = [dict(binding, package_revision={})]
+                self.assertEqual(match(), [])
+                row["clients"] = [binding]
+                pins["atlassian"]["manifest_digest"] = "sha256:" + "d" * 64
+                self.assertEqual(match(), [])
+                pins.clear()
+                self.assertEqual(match(), [])
+
+    def test_signed_prepared_package_runs_repeat_remove_without_native_pass(self):
+        audit = load_audit()
+        for mode in ("clean", "repeat-drift", "remove-residue", "foreign-change"):
+            with self.subTest(mode=mode), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                matched, pins = self.prepared_signed_package()
+                config = root / "plugin-00/home/.kiro/settings/mcp.json"
+                state = {"installed": False, "adds": 0}
+                operations = []
+                def fake_call(argv, _env, cwd, timeout=105):
+                    operation = argv[1]
+                    operations.append(operation)
+                    if operation == "add":
+                        state["adds"] += 1
+                        config.parent.mkdir(parents=True, exist_ok=True)
+                        config.write_text('{"mcpServers":{"atlassian":{"command":"inert"}}}')
+                        state["installed"] = True
+                        if state["adds"] == 2 and mode == "repeat-drift":
+                            config.write_text('{"mcpServers":{"atlassian":{"command":"changed"}}}')
+                    elif operation == "remove":
+                        if mode != "remove-residue":
+                            config.unlink()
+                        state["installed"] = False
+                        if mode == "foreign-change":
+                            (cwd / "foreign-untouched.txt").write_text("changed")
+                    data = ({"actions": [{"component_support": [
+                        {"name": "atlassian", "support": "native"}]}]} if operation == "add" else
+                            {"installations": [matched] if state["installed"] else []})
+                    return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "", "timeout": False,
+                            "_json": {"data": data}}
+                with patch.object(audit, "call", side_effect=fake_call):
+                    row = audit.do_case("/unused/agentplugins", "kiro", "plugin",
+                                        "atlassian", 0, root, {}, pins)
+                self.assertEqual(operations, ["add", "list", "add", "list", "remove", "list"])
+                self.assertTrue(row["prepared_binding"])
+                self.assertNotEqual(row["status"], "passed")
+                self.assertFalse(audit.expected_negative_coverage(row))
+                if mode == "clean":
+                    self.assertEqual(row["status"], "prepared-lifecycle-passed")
+                    self.assertTrue(row["repeat_verified"])
+                    self.assertTrue(row["removal_verified"])
+                    self.assertTrue(row["sentinels_preserved"])
+                    self.assertEqual(row["repeat_installation_ids"], [matched["installation_id"]])
+                    self.assertEqual(row["public_target_states"]["after-add"]["states"][0]["activation"], "prepared")
+                else:
+                    self.assertNotEqual(row["status"], "prepared-lifecycle-passed")
 
     def test_prepared_only_opencode_config_is_not_native_pass(self):
         # Real published 0.1.102 can write opencode.json while all components
@@ -7720,6 +8523,8 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
 
     def test_scoped_file_capture_reads_native_json_without_pipe_wait(self):
         audit = load_audit()
+        runner_owner, runner_name = ((audit, "_windows_file_call") if sys.platform == "win32"
+                                     else (audit.subprocess, "run"))
         with TemporaryDirectory() as scratch:
             result_json = {"schema_version": 1, "result": "success"}
             def completed(*_args, **kwargs):
@@ -7730,7 +8535,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 kwargs["stdout"].write(json.dumps(result_json).encode("utf-8"))
                 kwargs["stderr"].write(b"native child stderr")
                 return subprocess.CompletedProcess(["agentplugins"], 0)
-            with patch.object(audit.subprocess, "run", side_effect=completed):
+            with patch.object(runner_owner, runner_name, side_effect=completed):
                 actual = audit.call(["agentplugins", "add", "firebase"],
                                     {"TEMP": scratch}, scratch, timeout=7,
                                     capture_files=True)
@@ -7738,7 +8543,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             self.assertFalse(actual["timeout"])
             self.assertEqual(actual["_json"], result_json)
             self.assertEqual(actual["stderr_tail"], "native child stderr")
-            with patch.object(audit.subprocess, "run", side_effect=subprocess.TimeoutExpired(
+            with patch.object(runner_owner, runner_name, side_effect=subprocess.TimeoutExpired(
                     ["agentplugins", "add", "firebase"], 7)):
                 actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
                                     timeout=7, capture_files=True)
@@ -7747,7 +8552,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             def oversized(*_args, **kwargs):
                 kwargs["stdout"].write(b"x" * ((1 << 20) + 1))
                 return subprocess.CompletedProcess(["agentplugins"], 0)
-            with patch.object(audit.subprocess, "run", side_effect=oversized):
+            with patch.object(runner_owner, runner_name, side_effect=oversized):
                 actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
                                     capture_files=True)
             self.assertIsNone(actual["exit_code"])
@@ -7757,7 +8562,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 def invalid(*_args, **kwargs):
                     kwargs["stdout"].write(payload)
                     return subprocess.CompletedProcess(["agentplugins"], 0)
-                with patch.object(audit.subprocess, "run", side_effect=invalid):
+                with patch.object(runner_owner, runner_name, side_effect=invalid):
                     actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
                                         capture_files=True)
                 self.assertIsNone(actual["exit_code"])
@@ -7767,7 +8572,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
                 kwargs["stdout"].write(b'{"result":"failed"}')
                 kwargs["stderr"].write(b"provider refused immutable source")
                 return subprocess.CompletedProcess(["agentplugins"], 1)
-            with patch.object(audit.subprocess, "run", side_effect=rejected):
+            with patch.object(runner_owner, runner_name, side_effect=rejected):
                 actual = audit.call(["agentplugins"], {"TEMP": scratch}, scratch,
                                     capture_files=True)
             self.assertEqual(actual["exit_code"], 1)
@@ -7792,6 +8597,2036 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             self.assertEqual(audit.install_case_timeout("codex", "plugin", "firebase"), 105)
         with patch.object(audit.sys, "platform", "linux"):
             self.assertEqual(audit.install_case_timeout("claude", "plugin", "firebase"), 105)
+
+
+
+@unittest.skipUnless(sys.platform == "linux", "Linux cache retirement custody contract")
+class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
+    def fixture(self, root, audit):
+        import shutil
+        home, project = root / 'home', root / 'project'
+        profile = home / '.claude'
+        profile.mkdir(parents=True, exist_ok=True)
+        foreign = profile / 'foreign-neighbor.txt'
+        if not foreign.exists():
+            foreign.write_text('unmanaged native neighbor must survive\n')
+        before = audit.scoped_snapshot((profile,))
+        name, physical, market = 'skill-owned', 'skill-owned-physical', 'agentplugins-' + 'a' * 12
+        active = project / '.claude/skills' / physical
+        bundle = active / '.agentplugins-plugin'
+        payload = bundle / '.agentplugins-runtime/skills/owned-test/SKILL.md'
+        payload.parent.mkdir(parents=True)
+        payload.write_text('---\nname: owned-test\n---\n')
+        cache = profile / 'plugins/cache' / market / name / '0.0.0'
+        cache.parent.mkdir(parents=True)
+        shutil.copytree(bundle, cache)
+        revision = {'resolved_revision': 'a' * 40, 'tree_digest': 'sha256:' + 'b' * 64,
+                    'manifest_digest': 'sha256:' + 'c' * 64}
+        client = {'client_id': 'claude', 'scope': 'project', 'materialization': 'materialized',
+                  'activation': 'active', 'authentication': 'not_required', 'policy': 'allowed',
+                  'verification': 'installation_verified', 'package_revision': revision}
+        public = {'installation_id': 'owned-install', 'name': name, 'source': 'example/skills/skills/owned-test',
+                  'clients': [client]}
+        receipt = {'kind': 'claude_project_plugin_cache', 'object_id': 'claude-project-cache:' + name + '@' + market,
+                   'logical_name': name, 'path': str(bundle), 'source_relative': cache.relative_to(profile).as_posix(),
+                   'managed_digest': 'sha256:' + 'd' * 64, 'protection_class': 'managed'}
+        binding = dict(client, client_binding_id='owned-binding', target_locator=str(active),
+                       physical_artifact_id=physical, native_objects=[receipt])
+        record = {'installation_id': public['installation_id'], 'declared_name': name,
+                  'source': {'repository': 'example/skills', 'package_subpath': 'skills/owned-test',
+                             'resolved_revision': revision['resolved_revision'], 'tree_digest': revision['tree_digest']},
+                  'package': {'declared_name': name, 'manifest_digest': revision['manifest_digest']},
+                  'clients': {'owned-binding': binding}}
+        state = project / '.uap/state-v2.json'
+        state.parent.mkdir(parents=True)
+        state.write_text(json.dumps({'schema_version': 5, 'installations': [record]}))
+        key = name + '@' + market
+        installed = profile / 'plugins/installed_plugins.json'
+        installed.write_text(json.dumps({'version': 2, 'plugins': {key: [{'scope': 'project',
+            'projectPath': str(project), 'installPath': str(cache)}]}, 'retained': 'same'}))
+        markets = profile / 'plugins/known_marketplaces.json'
+        markets.write_text(json.dumps({market: {'source': {'source': 'directory', 'path': str(active)},
+                                               'installLocation': str(active)}, 'foreign': {'retained': True}}))
+        cleanup = {'schema_version': 1, 'result': 'success', 'outcome': 'completed', 'scope': 'project',
+                   'actions': [{'installation_id': public['installation_id'], 'binding_id': 'owned-binding',
+                                'client_id': 'claude', 'action': 'remove'}]}
+        added = {'readiness': 'ready', 'next_actions': [],
+                 'items': [{'targetId': 'claude', 'alias': 'owned-test', 'destinationPath': str(active)}]}
+        return dict(cleanup=cleanup, home=home, project=project, profile=profile, before=before, public=public, added=added,
+                    active=active, cache=cache, state=state, installed=installed, markets=markets, market=market, key=key)
+
+    def capture(self, audit, f):
+        def document(path):
+            text, error = audit.copilot_settings_read(path, f['home'].parent)
+            self.assertIsNone(error)
+            return json.loads(text, object_pairs_hook=audit._unique_json_object)
+        return audit.CLAUDE_RETIREMENT_AUDIT['CacheRetirement'](
+            f['home'].parent, f['home'], f['project'], f['public'], f['added'],
+            {'repo': 'example/skills', 'folder': 'owned-test'}, document,
+            audit.scoped_snapshot, f['before'],
+            lambda observed: audit.native_identity_residuals(
+                [f['profile']], 'owned-test', observed, 'claude'))
+
+    def retire(self, f, marker=True):
+        import shutil
+        quarantine = f['cache'].parent / ('.agentplugins-cache-retire-' + '1' * 32)
+        quarantine.mkdir(mode=0o700)
+        moved = quarantine / 'retired'
+        f['cache'].rename(moved)
+        if marker:
+            (moved / '.orphaned_at').write_text('1794880808341')
+        doc = json.loads(f['installed'].read_text()); del doc['plugins'][f['key']]
+        f['installed'].write_text(json.dumps(doc))
+        doc = json.loads(f['markets'].read_text()); del doc[f['market']]
+        f['markets'].write_text(json.dumps(doc))
+        shutil.rmtree(f['active'])
+        return moved
+
+    def residuals(self, audit, f):
+        return audit.native_identity_residuals([f['profile']], 'owned-test',
+                                               audit.snapshot((f['profile'],)), 'claude')
+
+    def test_exact_receipt_inode_bytes_and_optional_marker_are_checkpoint_only(self):
+        audit = load_audit()
+        for marker in (False, True):
+            with self.subTest(marker=marker), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                subject = self.capture(audit, f)
+                original_inode = f['cache'].stat().st_ino
+                self.retire(f, marker)
+                residuals = self.residuals(audit, f)
+                self.assertTrue(residuals)
+                proof = subject.finish(residuals, f['cleanup'])
+                self.assertEqual(proof['status'], 'verified-cache-retirement-at-checkpoint')
+                self.assertEqual(proof['cache_inode'], original_inode)
+                self.assertEqual(proof['orphaned_marker_present'], marker)
+                self.assertFalse(proof['writer_closure_claimed'])
+                self.assertEqual(subject.fds, [])
+                self.assertEqual(residuals, self.residuals(audit, f))
+
+    def test_fresh_snapshot_rescans_late_identity_and_unsafe_paths(self):
+        audit = load_audit()
+        for mutation in ('unrelated', 'identity-path', 'identity-content', 'symlink'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                subject = self.capture(audit, f)
+                self.retire(f)
+                residuals = self.residuals(audit, f)
+                self.assertTrue(residuals)
+                original = subject.snapshotter
+                def late_snapshot(roots):
+                    if mutation == 'identity-path':
+                        (f['profile'] / 'owned-test.json').write_text('{}')
+                    elif mutation == 'identity-content':
+                        (f['profile'] / 'late-config.json').write_text('{"name":"owned-test"}')
+                    elif mutation == 'symlink':
+                        (f['profile'] / 'late-link').symlink_to(f['state'])
+                    else:
+                        (f['profile'] / 'unrelated-new.txt').write_text('unrelated')
+                    return original(roots)
+                subject.snapshotter = late_snapshot
+                proof = subject.finish(residuals, f['cleanup'])
+                self.assertEqual(proof['status'],
+                                 'verified-cache-retirement-at-checkpoint' if mutation == 'unrelated'
+                                 else 'unresolved-cache-retirement')
+                if mutation == 'unrelated':
+                    self.assertFalse(proof['writer_closure_claimed'])
+                self.assertEqual(subject.fds, [])
+                self.assertTrue(all('late-' not in path and not path.endswith('/owned-test.json')
+                                    for path in residuals))
+
+    def test_wrong_or_missing_receipt_never_creates_an_empty_authority(self):
+        audit = load_audit()
+        for mutation in ('missing', 'duplicate', 'source', 'path', 'modified', 'logical-name', 'native-binding', 'preexisting'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                state = json.loads(f['state'].read_text()); record = state['installations'][0]
+                objects = record['clients']['owned-binding']['native_objects']
+                if mutation == 'missing': objects.clear()
+                elif mutation == 'duplicate': objects.append(dict(objects[0]))
+                elif mutation == 'source': record['source']['resolved_revision'] = 'e' * 40
+                elif mutation == 'path': objects[0]['path'] = str(f['project'] / 'foreign')
+                elif mutation == 'modified': objects[0]['user_modified'] = True
+                elif mutation == 'logical-name': objects[0]['logical_name'] = 'foreign'
+                elif mutation == 'native-binding':
+                    doc = json.loads(f['installed'].read_text());doc['plugins'][f['key']][0]['scope'] = 'user'
+                    f['installed'].write_text(json.dumps(doc))
+                else:
+                    f['before'] = audit.scoped_snapshot((f['profile'],))
+                f['state'].write_text(json.dumps(state))
+                with self.assertRaises((ValueError, KeyError)):
+                    self.capture(audit, f)
+
+    def test_ambiguous_unsafe_modified_or_extra_residue_keeps_negative(self):
+        audit = load_audit()
+        for mutation in ('ambiguous', 'private-mode', 'bytes', 'extra', 'symlink', 'marker',
+                         'registry', 'foreign', 'external-residual', 'cleanup-binding', 'new-marker-race'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                subject = self.capture(audit, f); moved = self.retire(f)
+                if mutation == 'ambiguous': (f['cache'].parent / ('.agentplugins-cache-retire-' + '2' * 32)).mkdir()
+                elif mutation == 'private-mode': moved.parent.chmod(0o755)
+                elif mutation == 'bytes': (moved / '.agentplugins-runtime/skills/owned-test/SKILL.md').write_text('changed')
+                elif mutation == 'extra': (moved / 'extra').write_text('unowned')
+                elif mutation == 'symlink': (moved / 'link').symlink_to(f['state'])
+                elif mutation == 'marker': (moved / '.orphaned_at').write_text('0000000000000')
+                elif mutation == 'registry': f['installed'].write_text('{"version":2,"plugins":{},"retained":"changed"}')
+                elif mutation == 'cleanup-binding': f['cleanup']['actions'][0]['binding_id'] = 'foreign'
+                elif mutation == 'foreign': (f['profile'] / 'foreign-neighbor.txt').write_text('changed')
+                residuals = self.residuals(audit, f)
+                if mutation == 'external-residual': residuals.append('.claude/other-owned-test.json')
+                if mutation == 'new-marker-race':
+                    # A post-read foreign mutation cannot be hidden by a matching inode.
+                    original = subject.snapshotter
+                    def mutate(roots):
+                        result = original(roots)
+                        (moved / 'late').write_text('unowned')
+                        return result
+                    subject.snapshotter = mutate
+                proof = subject.finish(residuals, f['cleanup'])
+                self.assertEqual(proof['status'], 'unresolved-cache-retirement')
+                self.assertEqual(subject.fds, [])
+
+    def test_retained_registry_boolean_to_integer_changes_are_not_preserved(self):
+        audit = load_audit()
+        for registry in ('installed', 'markets'):
+            with self.subTest(registry=registry), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                if registry == 'installed':
+                    document = json.loads(f['installed'].read_text())
+                    document['plugins']['foreign@other'] = [{'enabled': True}]
+                    f['installed'].write_text(json.dumps(document))
+                subject = self.capture(audit, f)
+                self.retire(f)
+                path = f[registry]
+                document = json.loads(path.read_text())
+                if registry == 'installed': document['plugins']['foreign@other'][0]['enabled'] = 1
+                else: document['foreign']['retained'] = 1
+                path.write_text(json.dumps(document))
+                proof = subject.finish(self.residuals(audit, f), f['cleanup'])
+                self.assertEqual(proof['status'], 'unresolved-cache-retirement')
+                self.assertEqual(subject.fds, [])
+
+    def test_snapshot_limits_and_hardlinks_are_refused(self):
+        audit = load_audit()
+        for mutation in ('file', 'total', 'count', 'depth', 'hardlink', 'git', 'lock', 'empty'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve(), audit)
+                globals_ = audit.CLAUDE_RETIREMENT_AUDIT['CacheRetirement'].__init__.__globals__
+                changes = {'MAX_FILE_BYTES': 1} if mutation == 'file' else {'MAX_TREE_BYTES': 1} if mutation == 'total' else {'MAX_FILES': 1} if mutation == 'count' else {'MAX_DEPTH': 1} if mutation == 'depth' else {}
+                if mutation == 'git': (f['cache'] / '.git').mkdir()
+                elif mutation == 'lock': (f['cache'] / '.uap-integrations.lock').write_text('unowned')
+                elif mutation == 'empty':
+                    import shutil
+                    shutil.rmtree(f['cache']);f['cache'].mkdir()
+                    bundle = f['active'] / '.agentplugins-plugin'
+                    shutil.rmtree(bundle);bundle.mkdir()
+                if mutation == 'hardlink':
+                    os.link(f['cache'] / '.agentplugins-runtime/skills/owned-test/SKILL.md',
+                            f['cache'] / 'hardlink')
+                with patch.dict(globals_, changes), self.assertRaises(ValueError):
+                    self.capture(audit, f)
+
+    def test_do_case_requires_every_old_gate_and_never_hides_raw_residuals(self):
+        audit = load_audit()
+        for mutation in (None, 'post-list', 'sentinel', 'outside',
+                         'reminted-source', 'source-neighbor', 'other-target'):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve(); f = {}; operations = []
+                def perform(argv, env, cwd, timeout=105, **kwargs):
+                    self.assertEqual(argv[0], '/inert/uap')
+                    operation = argv[2] if argv[1] == 'skills' else argv[1]
+                    operations.append(operation)
+                    if operation == 'add' and not f:
+                        f.update(self.fixture(root / 'skill-00', audit))
+                        (f['project'] / 'uap.toml').write_text('owned-test')
+                        (f['project'] / 'uap.lock').write_text('owned-test')
+                    elif operation == 'remove':
+                        self.retire(f)
+                        (f['project'] / 'uap.lock').unlink()
+                        if mutation == 'sentinel': (f['project'] / 'foreign-untouched.txt').write_text('changed')
+                        if mutation == 'outside': (f['profile'] / 'owned-test.json').write_text('owned-test')
+                    removed = 'remove' in operations
+                    retained = []
+                    if removed and mutation in ('reminted-source', 'source-neighbor', 'other-target'):
+                        entry = dict(f['public'], installation_id='reminted-id', name='renamed-generated-skill')
+                        if mutation == 'source-neighbor':
+                            entry['source'] += '-other'
+                        elif mutation == 'other-target':
+                            entry['clients'] = [dict(entry['clients'][0], client_id='codex')]
+                        retained.append(entry)
+                    return {'exit_code': 1 if removed and operation == 'list' and mutation == 'post-list' else 0,
+                            'stdout_tail': '', 'stderr_tail': '', 'timeout': False,
+                            '_json': f['added'] if operation == 'add' else f['cleanup'] if operation == 'remove' else
+                                     {'data': {'installations': retained if removed else [f['public']]}}}
+                with (patch.dict(audit.AGENT_BINARIES, {}, clear=True),
+                      patch.object(audit, 'call', side_effect=perform),
+                      patch.object(audit, 'matching_installations', side_effect=lambda *a: [f['public']]),
+                      patch.object(audit, 'matches_pinned_skill_bytes', return_value=True),
+                      patch.object(audit, 'locked_skill_is_pinned', side_effect=lambda *a: (f['project'] / 'uap.lock').exists())):
+                    item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
+                            'source': 'unused', 'skill_md_git_blob_sha1': '0' * 40}
+                    row = audit.do_case('/inert/uap', 'claude', 'skill', item, 0, root, {})
+                self.assertEqual(operations, ['add', 'list', 'add', 'list', 'remove', 'list'])
+                for phase in ("after-add", "repeat-add"):
+                    self.assertEqual(row["public_target_states"][phase]["selected_installations"], 1)
+                    self.assertEqual(row["public_target_states"][phase]["selected_bindings"], 1)
+                self.assertEqual(row["public_target_states"]["after-remove"]["selected_bindings"],
+                                 1 if mutation == 'reminted-source' else 0)
+                self.assertTrue(row['native_residuals'])
+                accepted = mutation in (None, 'source-neighbor', 'other-target')
+                self.assertEqual(row['status'], 'passed' if accepted else 'cleanup-failed')
+                if accepted:
+                    self.assertEqual(row['claude_cache_retirement']['status'],
+                                     'verified-cache-retirement-at-checkpoint')
+                else:
+                    self.assertFalse(row['removal_verified'])
+                    if mutation == 'reminted-source':
+                        self.assertIsNone(row.get('claude_cache_retirement'))
+
+
+class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
+    def run_case(self, mutation=None, system=False, kind="plugin"):
+        import sqlite3
+        from contextlib import closing
+        audit = load_audit()
+        source = "github:example/agent-plugin@" + "a" * 40
+        identity = "skill-creator" if kind == "skill" else "github" if system else "atlassian"
+        matched = [{"name": identity, "installation_id": "one",
+                    "clients": [{"client_id": "codex",
+                                 "scope": "project" if kind == "skill" else "user",
+                                 "materialization": "materialized", "activation": "active",
+                                 "authentication": "not_required", "policy": "allowed",
+                                 "verification": "installation_verified"}]}]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            case = root / (kind + "-00")
+            profile = case / "home/.codex"
+            database = case / "home/.local/state/codex-sqlite/state_5.sqlite"
+            commands, registered = [], [False]
+            system_relative = "skill-creator/scripts/generate_openai_yaml.py"
+            system_body = b'ACRONYMS = {\n    "github": "GitHub",\n}\n'
+            system_file = profile / "skills/.system" / system_relative
+            def write_system():
+                system_file.parent.mkdir(parents=True, exist_ok=True)
+                system_file.write_bytes(system_body)
+                (profile / "skills/.system/.codex-system-skills.marker").write_bytes(
+                    audit.CODEX_RUNTIME_AUDIT["SYSTEM_SKILL_MARKER"])
+            ambient = root / "ambient-profile"
+            ambient.mkdir()
+            (ambient / "foreign.txt").write_text("ambient untouched")
+            ambient_before = audit.scoped_snapshot((ambient,))
+            async def discover(binary, project, native_profile, environment, **kwargs):
+                self.assertEqual(native_profile, profile)
+                self.assertEqual(environment["CODEX_HOME"], str(profile))
+                self.assertEqual(kwargs, {"sqlite_baseline": True} if kind == "plugin" else {})
+                if kind == "plugin":
+                    installation_id = (profile / "installation_id").read_bytes()
+                    parsed = audit.uuid.UUID(installation_id.decode("ascii"))
+                    self.assertEqual(installation_id, str(parsed).encode("ascii"))
+                    self.assertEqual(parsed.version, 4)
+                    self.assertEqual(list((profile / "tmp/arg0").iterdir()), [])
+                    if os.name != "nt":
+                        self.assertEqual((profile / "installation_id").stat().st_mode & 0o777, 0o644)
+                        self.assertEqual((profile / "tmp/arg0").stat().st_mode & 0o777, 0o700)
+                if not database.exists():
+                    with closing(sqlite3.connect(database)) as connection:
+                        connection.execute("CREATE TABLE fixture_rows (value TEXT)")
+                        connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+                        connection.commit()
+                if mutation == "prebaseline-config":
+                    (profile / "config.toml").write_text('sqlite_home = "/foreign"\n')
+                elif mutation == "prebaseline-foreign":
+                    self.assertTrue((profile / "foreign-neighbor.txt").is_file())
+                    (profile / "foreign-neighbor.txt").write_text("changed")
+                elif mutation == "prebaseline-foreign-new":
+                    foreign = profile / "foreign-prebaseline-new.txt"
+                    self.assertFalse(foreign.exists())
+                    foreign.write_text("new foreign bytes")
+                elif mutation == "prebaseline-foreign-nested":
+                    foreign = profile / "foreign-prebaseline-directory"
+                    self.assertFalse(foreign.exists())
+                    foreign.mkdir()
+                    (foreign / "nested.txt").write_text("new foreign bytes")
+                elif mutation == "prebaseline-runtime-foreign":
+                    (database.parent / "foreign-prebaseline-new.txt").write_text("foreign SQLite neighbor")
+                elif mutation == "prebaseline-home-new":
+                    (case / "home/foreign-prebaseline-new.txt").write_text("new foreign bytes")
+                elif mutation == "prebaseline-managed":
+                    (case / "uap-data/foreign-managed.txt").write_text("changed")
+                elif mutation == "prebaseline-installation-id":
+                    (profile / "installation_id").write_text(str(audit.uuid.uuid4()))
+                elif mutation == "prebaseline-arg0-child":
+                    (profile / "tmp/arg0/foreign").write_text("unowned residue")
+                if system and system != "absent" and not system_file.exists():
+                    write_system()
+                skills = []
+                if kind == "skill":
+                    for name in ("foreign-neighbor", identity):
+                        path = project / ".agents/skills" / name / "SKILL.md"
+                        if path.is_file():
+                            skills.append({"name": name, "path": str(path), "enabled": True,
+                                           "scope": "repo", "pluginId": None})
+                return {"data": [{"cwd": str(project), "errors": [], "skills": skills}]}
+            def perform(argv, environment, cwd, timeout=105):
+                commands.append(list(argv))
+                self.assertNotIn("--disable", argv)
+                command = argv[1]
+                config = profile / "config.toml"
+                self.assertNotIn("features", audit.tomllib.loads(config.read_text()))
+                if command == "skills":
+                    selected = case / "project/.agents/skills" / identity / "SKILL.md"
+                    selected.parent.mkdir(parents=True, exist_ok=True)
+                    selected.write_text("---\nname: " + identity + "\n---\n")
+                    (case / "project/uap.toml").write_text("saved")
+                    (case / "project/uap.lock").write_text("pinned")
+                    registered[0] = True
+                    return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "", "timeout": False,
+                            "_json": {"schema_version": 1, "command": "skills add", "result": "success",
+                                      "status": "succeeded", "scope": "project", "next_actions": [],
+                                      "readiness": "needs_action" if mutation == "system-needs-action" else "ready",
+                                      "items": [{"alias": identity, "targetId": "codex", "status": "succeeded"}]}}
+                if command == "add":
+                    if not registered[0]:
+                        with config.open("a") as stream:
+                            stream.write(f'\n[plugins."{identity}@agentplugins-aaaaaaaaaaaa"]\nenabled = true\n')
+                    registered[0] = True
+                    if mutation == "sqlite-row":
+                        with closing(sqlite3.connect(database)) as connection:
+                            connection.execute("UPDATE fixture_rows SET value='changed'")
+                            connection.commit()
+                elif command == "remove":
+                    registered[0] = False
+                    if kind == "skill":
+                        selected = case / "project/.agents/skills" / identity / "SKILL.md"
+                        selected.unlink()
+                        selected.parent.rmdir()
+                        (case / "project/uap.lock").unlink()
+                    if mutation == "system-changed":
+                        system_file.write_bytes(system_body + b"# changed\n")
+                    elif mutation == "system-extra":
+                        (system_file.parent / "unknown.py").write_text("foreign")
+                    elif mutation == "system-swapped":
+                        replacement = system_file.with_suffix(".replacement")
+                        replacement.write_bytes(system_body)
+                        replacement.replace(system_file)
+                    elif mutation == "system-late-presence":
+                        write_system()
+                    elif mutation == "system-unrelated-identity":
+                        (profile / "foreign.json").write_text('{"name":"github"}')
+                    if mutation == "profile-wal":
+                        (profile / "state_5.sqlite-wal").write_bytes(b"x" * ((1 << 20) + 1))
+                return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                        "timeout": False, "_json": {"data": {"installations":
+                            matched if registered[0] else []}}}
+            def uninstall(*args):
+                commands.append(["/inert/codex", "native-uninstall"])
+                config = profile / "config.toml"
+                config.write_text(config.read_text().split("\n[plugins.", 1)[0] + "\n")
+                return {"completed": True, "native_plugin_absent": True,
+                        "native_marketplace_absent": True}
+            exchange_globals = audit.CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"].__init__.__globals__
+            manifest = {system_relative: (len(system_body), audit.hashlib.sha256(system_body).hexdigest())}
+            original_scan = audit.native_identity_residuals
+            def scan(*args, **kwargs):
+                result = original_scan(*args, **kwargs)
+                if mutation == "system-scan-swap":
+                    replacement = system_file.with_suffix(".replacement")
+                    replacement.write_bytes(system_body)
+                    replacement.replace(system_file)
+                return result
+            with (patch.dict(exchange_globals, {"_exchange": discover}),
+                  patch.dict(exchange_globals, {
+                      "SYSTEM_SKILL_FILES": manifest if system else exchange_globals["SYSTEM_SKILL_FILES"],
+                      "SYSTEM_SKILL_DIRECTORIES": frozenset(("skill-creator", "skill-creator/scripts"))
+                      if system else exchange_globals["SYSTEM_SKILL_DIRECTORIES"]}),
+                  patch.object(audit, "native_identity_residuals", side_effect=scan),
+                  patch.dict(audit.AGENT_BINARIES, {"codex": "/inert/codex"}, clear=True),
+                  patch.object(audit, "call", side_effect=perform),
+                  patch.object(audit, "matching_installations", return_value=matched),
+                  patch.object(audit, "locked_skill_is_pinned", return_value=True),
+                  patch.object(audit, "matches_pinned_skill_bytes", return_value=True),
+                  patch.object(audit, "uninstall_native_codex_plugin", side_effect=uninstall),
+                  patch.dict(os.environ, {"HOME": str(ambient), "USERPROFILE": str(ambient)})):
+                try:
+                    item = {"name": identity, "repo": "example/skills", "folder": identity,
+                            "source": source, "skill_md_git_blob_sha1": "b" * 40}
+                    return audit.do_case("/inert/uap", "codex", kind,
+                                         item if kind == "skill" else source, 0, root,
+                                         {source: identity}), commands
+                finally:
+                    if mutation and mutation.startswith("prebaseline-"):
+                        self.assertEqual(commands, [])
+                    self.assertEqual(audit.scoped_snapshot((ambient,)), ambient_before)
+
+    def test_plugin_baseline_and_every_command_checkpoint_preserve_raw_scanner(self):
+        row, commands = self.run_case()
+        self.assertEqual(row["status"], "passed")
+        proof = row["codex_plugin_sqlite_proof"]
+        self.assertEqual(proof["native_version"], "0.153.4")
+        self.assertTrue(proof["runtime_semantics_unchanged"])
+        self.assertEqual([observation["phase"] for observation in proof["observations"]],
+                         ["before-install"] + ["after-public-command"] * 4
+                         + ["after-native-uninstall"] + ["after-public-command"] * 2)
+        self.assertEqual([argv[1] for argv in commands],
+                         ["add", "list", "add", "list", "native-uninstall", "remove", "list"])
+        self.assertTrue(row["native_uninstall"]["completed"])
+        self.assertTrue(row["repeat_verified"])
+        self.assertTrue(row["removal_verified"])
+        self.assertTrue(row["sentinels_preserved"])
+        row, _ = self.run_case("profile-wal")
+        self.assertEqual(row["status"], "cleanup-failed")
+        self.assertIn(".codex/state_5.sqlite-wal: unscanned-too-large", row["native_residuals"])
+
+    def test_changed_rows_pin_and_prebaseline_foreign_authority_refuse(self):
+        with self.assertRaisesRegex(ValueError, "table contents changed"):
+            self.run_case("sqlite-row")
+        with self.assertRaisesRegex(ValueError, "config authority changed"):
+            self.run_case("prebaseline-config")
+        with self.assertRaisesRegex(ValueError, "unexpected member"):
+            self.run_case("prebaseline-runtime-foreign")
+        for mutation in ("prebaseline-foreign", "prebaseline-foreign-new",
+                         "prebaseline-foreign-nested", "prebaseline-home-new", "prebaseline-managed",
+                         "prebaseline-installation-id", "prebaseline-arg0-child"):
+            with self.subTest(mutation=mutation), self.assertRaisesRegex(
+                    ValueError, "changed protected fixture authority"):
+                self.run_case(mutation)
+
+
+    def test_pinned_system_github_literal_is_retained_only_with_complete_unchanged_proof(self):
+        row, _ = self.run_case(system=True)
+        residual = ".codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py"
+        self.assertEqual(row["native_residuals"], [residual])
+        self.assertEqual(row["status"], "passed")
+        self.assertTrue(row["removal_verified"])
+        proof = row["codex_system_skill_retention"]
+        self.assertEqual(proof["status"], "verified-unchanged-pinned-system-files-at-checkpoint")
+        self.assertEqual(set(proof["residuals"]), {residual})
+        self.assertFalse(proof["writer_closure_claimed"])
+        self.assertFalse(proof["atomic_snapshot_claimed"])
+        for mutation in ("system-changed", "system-extra", "system-swapped", "system-scan-swap"):
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                self.run_case(mutation, system=True)
+        with self.assertRaisesRegex(ValueError, "authority changed"):
+            self.run_case("system-late-presence", system="absent")
+        row, _ = self.run_case("system-unrelated-identity", system=True)
+        self.assertEqual(row["status"], "cleanup-failed")
+        self.assertIn(".codex/foreign.json", row["native_residuals"])
+        self.assertNotIn("codex_system_skill_retention", row)
+
+
+    def test_skill_builtin_retention_never_upgrades_public_needs_action(self):
+        row, _ = self.run_case(system=True, kind="skill")
+        self.assertEqual(row["status"], "passed")
+        self.assertTrue(row["removal_verified"])
+        self.assertTrue(row["native_residuals"])
+        self.assertIn("codex_system_skill_retention", row)
+        self.assertTrue(row["codex_public_add_ready"])
+        self.assertTrue(row["codex_public_repeat_ready"])
+        row, _ = self.run_case("system-needs-action", system=True, kind="skill")
+        self.assertEqual(row["status"], "incomplete-native-proof")
+        self.assertFalse(row["codex_public_add_ready"])
+        self.assertFalse(row["codex_public_repeat_ready"])
+        self.assertTrue(row["removal_verified"])
+        self.assertIn("codex_system_skill_retention", row)
+
+
+@unittest.skipUnless(sys.platform == "win32", "owned file capture requires Windows jobs")
+class WindowsOwnedFileCaptureContracts(unittest.TestCase):
+    def environment(self, root):
+        env = {key: value for key, value in os.environ.items()
+               if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR"}}
+        env.update(HOME=str(root), USERPROFILE=str(root), TEMP=str(root), TMP=str(root))
+        return env
+
+    def test_timeout_and_exited_launcher_reap_only_owned_descendants(self):
+        import ctypes as C
+        from ctypes import wintypes as W
+        from concurrent.futures import ThreadPoolExecutor
+        import time
+
+        api = C.WinDLL("kernel32", use_last_error=True)
+        api.OpenProcess.argtypes, api.OpenProcess.restype = [W.DWORD, W.BOOL, W.DWORD], W.HANDLE
+        api.WaitForSingleObject.argtypes, api.WaitForSingleObject.restype = [W.HANDLE, W.DWORD], W.DWORD
+        api.CloseHandle.argtypes, api.CloseHandle.restype = [W.HANDLE], W.BOOL
+        for exit_leader in (False, True):
+            with self.subTest(exit_leader=exit_leader), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                audit = load_audit()
+                gate, ready = root / "release-owned", root / "owned-ready"
+                ambient = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"],
+                                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                           stderr=subprocess.DEVNULL)
+                child = "import time; time.sleep(120)"
+                body = ("import json,os,subprocess,sys,time; from pathlib import Path; "
+                        f"child=subprocess.Popen([sys.executable,'-c',{child!r}],stdin=subprocess.DEVNULL); "
+                        f"pending=Path({str(root / 'owned-pids.pending')!r}); "
+                        "pending.write_text(json.dumps([os.getpid(),child.pid])); "
+                        f"pending.replace({str(root / 'owned-pids.json')!r}); "
+                        f"Path({str(ready)!r}).write_text('ready'); "
+                        "print('{\"result\":\"success\",\"private\":\"timeout-owned-bytes\"}',flush=True)\n"
+                        f"deadline=time.monotonic()+3\n"
+                        f"while not Path({str(gate)!r}).exists():\n"
+                        "    if time.monotonic() >= deadline: raise RuntimeError('inert owner gate expired')\n"
+                        "    time.sleep(.01)\n"
+                        + ("os._exit(0)\n" if exit_leader else "time.sleep(120)\n"))
+                handles = {}
+                try:
+                    with ThreadPoolExecutor(max_workers=1) as worker:
+                        future = worker.submit(audit.call, [sys.executable, "-c", body],
+                                               self.environment(root), root, timeout=3, capture_files=True)
+                        try:
+                            deadline = time.monotonic() + 3
+                            while not ready.exists():
+                                self.assertLess(time.monotonic(), deadline, "owned fixture startup deadline")
+                                self.assertFalse(future.done(), "owned fixture exited before its startup gate")
+                                time.sleep(.01)
+                            pids = json.loads((root / "owned-pids.json").read_text())
+                            self.assertEqual(len(pids), 2)
+                            for role, pid in zip(("launcher", "descendant"), pids):
+                                handle = api.OpenProcess(0x00100000, False, pid)
+                                self.assertTrue(handle, {"role": role, "winerror": C.get_last_error()})
+                                handles[role] = handle
+                                self.assertEqual(api.WaitForSingleObject(handle, 0), 258, {"role": role})
+                        finally:
+                            gate.write_text("release")
+                        result = future.result(timeout=13)
+                    waits = {role: int(api.WaitForSingleObject(handle, 0))
+                             for role, handle in handles.items()}
+                    refusal = result.get("stderr_tail") == "owned Windows command descendants remained after launcher exit"
+                    error = result.get("stderr_tail", "")
+                    token = error[10:].partition("]")[0] if error.startswith("[WinError ") else ""
+                    winerror = int(token) if token.isascii() and token.isdigit() and len(token) <= 10 else None
+                    winerror = winerror if winerror is None or winerror <= 0xffffffff else None
+                    facts = {"owned_waits": waits, "intended_refusal": refusal,
+                             "timeout": result["timeout"], "exit_code": result["exit_code"],
+                             "winerror": winerror}
+                    self.assertIsNone(result["exit_code"], facts)
+                    self.assertIsNone(result.get("_json"), facts)
+                    self.assertEqual(result["timeout"], not exit_leader, facts)
+                    if exit_leader:
+                        self.assertTrue(refusal, facts)
+                    else:
+                        self.assertIn("timeout-owned-bytes", result["stdout_tail"])
+                    self.assertEqual(waits, {"launcher": 0, "descendant": 0}, facts)
+                    self.assertIsNone(ambient.poll())
+                finally:
+                    try:
+                        gate.write_text("release")
+                    finally:
+                        failures = []
+                        for role, handle in handles.items():
+                            if not api.CloseHandle(handle):
+                                failures.append({"role": role, "winerror": C.get_last_error()})
+                        try:
+                            self.assertEqual(failures, [])
+                        finally:
+                            ambient.terminate()
+                            ambient.wait(timeout=5)
+
+    def test_assignment_refusal_does_not_release_command_gate(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            audit = load_audit()
+            attempted = []
+            def refused_job(process):
+                attempted.append(process)
+                raise OSError("inert assignment refusal")
+            marker = root / "must-not-start"
+            command = [sys.executable, "-c",
+                       f"from pathlib import Path; Path({str(marker)!r}).write_text('started')"]
+            with patch.object(audit, "run_path", return_value={"WindowsJob": refused_job}):
+                result = audit.call(command, self.environment(root), root, timeout=3, capture_files=True)
+            self.assertEqual(len(attempted), 1)
+            self.assertFalse(marker.exists())
+            self.assertIsNotNone(attempted[0].poll())
+            self.assertIsNone(result["exit_code"])
+            self.assertFalse(result["timeout"])
+
+    def test_owned_job_closer_refuses_unknown_members_generation_and_unsignaled_handles(self):
+        import ctypes as C
+        import time
+        from types import SimpleNamespace
+
+        class Accounting(C.Structure):
+            _fields_ = [("times", C.c_int64 * 4), ("faults", C.c_uint32),
+                        ("total", C.c_uint32), ("active", C.c_uint32), ("terminated", C.c_uint32)]
+        for mutation in ("clean", "capture-generation", "termination-generation", "after-wait-generation",
+                         "wait", "foreign", "open", "partial-open", "short-list", "oversized-list",
+                         "deadline", "terminate"):
+            with self.subTest(mutation=mutation):
+                audit = load_audit()
+                queries, terminated, closed, waited = [], [], [], []
+                def query(_job, kind, output, _size, _result):
+                    info = output._obj
+                    if kind == 1:
+                        queries.append(kind)
+                        threshold = {"capture-generation": 2, "termination-generation": 3,
+                                     "after-wait-generation": 4}.get(mutation, 100)
+                        info.total, info.active = (3 if len(queries) >= threshold else 2), 0
+                    else:
+                        self.assertEqual(kind, 3)
+                        info.assigned = 65 if mutation == "oversized-list" else 2 if mutation in (
+                            "short-list", "partial-open") else 1
+                        info.listed = 65 if mutation == "oversized-list" else 2 if mutation == "partial-open" else 1
+                        info.pids[0], info.pids[1] = 101, 102
+                    return 1
+                def opened(_rights, inherit, pid):
+                    self.assertEqual(_rights, 0x00101000)
+                    self.assertFalse(inherit)
+                    return 0 if mutation == "open" or mutation == "partial-open" and pid == 102 else pid + 100
+                def membership(handle, job, result):
+                    self.assertEqual((handle, job), (201, 100))
+                    result._obj.value = mutation != "foreign"
+                    return 1
+                def wait(handle, milliseconds):
+                    waited.append((handle, milliseconds))
+                    return 258 if mutation == "wait" else 0
+                def close(handle):
+                    closed.append(handle)
+                    return 1
+                def terminate(handle, code):
+                    terminated.append((handle, code))
+                    return 0 if mutation == "terminate" else 1
+                def check(value):
+                    if not value:
+                        raise OSError("inert API refusal")
+                api = SimpleNamespace(QueryInformationJobObject=query, OpenProcess=opened,
+                                      IsProcessInJob=membership, WaitForSingleObject=wait,
+                                      TerminateJobObject=terminate, CloseHandle=close)
+                job = SimpleNamespace(C=C, api=api, Accounting=Accounting, handle=100, check=check)
+                if mutation == "clean":
+                    self.assertTrue(audit._windows_file_close(job, time.monotonic() + 5))
+                else:
+                    expected_error = ("membership changed during capture" if mutation == "capture-generation"
+                                      else "membership changed during termination" if mutation in (
+                                          "termination-generation", "after-wait-generation")
+                                      else "did not signal exit" if mutation == "wait"
+                                      else "not in the owned Windows job" if mutation == "foreign"
+                                      else "member list is incomplete" if mutation in ("short-list", "oversized-list")
+                                      else "cleanup deadline" if mutation == "deadline"
+                                      else "inert API refusal")
+                    with self.assertRaisesRegex(OSError, expected_error):
+                        audit._windows_file_close(job, time.monotonic() + (-1 if mutation == "deadline" else 5))
+                self.assertEqual(terminated, [(100, 97)])
+                self.assertEqual(closed[-1], 100)
+                self.assertEqual(len(closed), len(set(closed)))
+                expected = [100] if mutation in ("open", "short-list", "oversized-list", "deadline") else [201, 100]
+                self.assertEqual(closed, expected)
+                self.assertTrue(all(0 <= milliseconds <= 5000 for _, milliseconds in waited))
+
+    def test_closed_success_keeps_exact_json_and_full_capture_uses_old_runner(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            command = [sys.executable, "-c", "print('{\"result\":\"success\"}')"]
+            result = audit.call(command, self.environment(root), root, timeout=5, capture_files=True)
+            self.assertEqual(result["_json"], {"result": "success"})
+            self.assertEqual(result["exit_code"], 0)
+            self.assertFalse(result["timeout"])
+            def completed(*_args, **kwargs):
+                kwargs["stdout"].write(b'{"result":"success"}')
+                return subprocess.CompletedProcess(command, 0)
+            with patch.object(audit, "_windows_file_call", side_effect=AssertionError("wrong runner")), \
+                    patch.object(audit.subprocess, "run", side_effect=completed):
+                result = audit.call(command, self.environment(root), root, timeout=5, capture_full=True)
+            self.assertEqual(result["stdout_full"], '{"result":"success"}')
+            self.assertEqual(result["exit_code"], 0)
+
+
+class GeminiFixtureClock:
+    """Synthetic command/journal UTC clock; filesystem custody stays real."""
+
+    def __init__(self):
+        self.value = datetime(2026, 11, 17, 12, 0, 0, tzinfo=timezone.utc)
+
+    def advance(self, milliseconds=1):
+        self.value += timedelta(milliseconds=milliseconds)
+        return self.value
+
+    def now(self, zone=timezone.utc):
+        if zone != timezone.utc:
+            raise AssertionError('fixture clock requires UTC')
+        return self.advance()
+
+
+@unittest.skipUnless(sys.platform in ("linux", "darwin"), "Linux/macOS descriptor custody contract")
+class GeminiEmptySessionRuntimeContracts(unittest.TestCase):
+    VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0"}
+
+    @contextmanager
+    def fixture(self):
+        audit = load_audit()
+        observer_type = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
+        clock = GeminiFixtureClock()
+        with TemporaryDirectory() as temporary, patch.dict(
+                observer_type.__init__.__globals__, {'_now': clock.now}):
+            root = Path(temporary).resolve()
+            home, project = root / 'home', root / 'Project'
+            profile = home / '.gemini'
+            chats = profile / 'tmp/project/chats'
+            project.mkdir()
+            chats.mkdir(parents=True)
+            registry_project = str(project).lower() if sys.platform == 'win32' else str(project)
+            (profile / 'projects.json').write_text(json.dumps({'projects': {registry_project: 'project'}}))
+            (chats.parent / '.project_root').write_text(registry_project)
+            old = chats / 'foreign-session.jsonl'
+            old.write_bytes(b'pre-existing conversation must stay byte-for-byte\n')
+            (profile / 'foreign-neighbor.txt').write_bytes(b'protected foreign profile file\n')
+            (profile / 'foreign-empty').mkdir()
+            before = audit.snapshot([profile])
+            observer = observer_type(home, project, before, self.VERSION,
+                                     profile_snapshot=audit.scoped_snapshot)
+            self.assertIsNone(observer.reason)
+            case = dict(audit=audit, observer=observer, home=home, project=project,
+                        profile=profile, chats=chats, old=old, before=before, clock=clock,
+                        phase_started=clock.now())
+            try:
+                yield case
+            finally:
+                observer.close()
+
+    def record(self, case, index, transform=None, *, startup=False):
+        now = case['clock'].now()
+        timestamp = now.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        value = {'sessionId': 'skills-list-session',
+                 'projectHash': hashlib.sha256(str(case['project']).encode()).hexdigest(),
+                 'startTime': timestamp, 'lastUpdated': timestamp}
+        body = json.dumps(value, separators=(',', ':')).encode() + b'\n'
+        if startup:
+            records = [json.loads(line) for line in GEMINI_STARTUP_RECORD_FIXTURE.splitlines()]
+            records[0] = {**value, 'kind': 'main'}
+            records[1]['timestamp'] = timestamp
+            records[2]['$set']['lastUpdated'] = timestamp
+            text = records[1]['content'][0]['text'].replace(
+                'My operating system is: linux', 'My operating system is: ' + sys.platform)
+            records[1]['content'][0]['text'] = text.replace(
+                '<PINNED_PROJECT_TEMP>', str(case['chats'].parent)).replace(
+                '<PINNED_PROJECT>', str(case['project']))
+            body = b''.join(json.dumps(record).encode() + b'\n' for record in records)
+        if transform:
+            body = transform(body)
+        name = f"session-{now:%Y-%m-%dT%H-%M}-{index}-skills-l.jsonl"
+        path = case['chats'] / name
+        path.write_bytes(body)
+        return path
+
+    def phase(self, case, label):
+        finished = case['clock'].now()
+        current = case['audit'].snapshot([case['profile']])
+        case['observer'].checkpoint(
+            label, current, interval=(case['phase_started'], finished))
+        case['phase_started'] = case['clock'].now()
+        return current
+
+    def test_metadata_only_checkpoints_receive_their_exact_command_intervals(self):
+        with self.fixture() as case:
+            validate = case['audit'].GEMINI_RUNTIME_AUDIT['_metadata']
+            observed = []
+            def capture(body, filename, project_hash, started, finished, diagnostic=None):
+                observed.append((started, finished))
+                return validate(body, filename, project_hash, started, finished, diagnostic)
+            intervals = []
+            for index, label in enumerate(
+                    ('after-public-repeat-add', 'after-public-repeat-list'), 1):
+                started = case['clock'].now()
+                self.record(case, index)
+                finished = case['clock'].now()
+                intervals.append((started, finished))
+                after = case['audit'].snapshot([case['profile']])
+                with patch.dict(validate.__globals__, {'_metadata': capture}):
+                    case['observer'].checkpoint(label, after, interval=(started, finished))
+                self.assertIsNone(case['observer'].reason)
+            self.assertEqual(observed, intervals)
+            self.assertTrue(case['observer'].finish(after))
+
+    def test_metadata_only_phase_boundaries_and_between_phase_records(self):
+        validate = load_audit().GEMINI_RUNTIME_AUDIT['_metadata']
+        base = datetime(2026, 11, 17, 12, 0, 0, tzinfo=timezone.utc)
+        for phase, previous_end, lower, upper in (('add', 10, 20, 30), ('list', 30, 40, 50)):
+            started = base + timedelta(milliseconds=lower, microseconds=999)
+            finished = base + timedelta(milliseconds=upper, microseconds=999)
+            for position, offset, accepted in (
+                    ('first-millisecond', lower, True), ('last-millisecond', upper, True),
+                    ('between-phases', previous_end + 1, False),
+                    ('before', lower - 1, False), ('after', upper + 1, False)):
+                with self.subTest(phase=phase, position=position):
+                    when = base + timedelta(milliseconds=offset)
+                    timestamp = when.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+                    body = json.dumps({'sessionId': 'skills-list-session', 'projectHash': 'a' * 64,
+                                       'startTime': timestamp, 'lastUpdated': timestamp}).encode() + b'\n'
+                    name = f'session-{when:%Y-%m-%dT%H-%M}-1-skills-l.jsonl'
+                    if accepted:
+                        validate(body, name, 'a' * 64, started, finished)
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'outside the repeat interval'):
+                            validate(body, name, 'a' * 64, started, finished)
+
+    def test_metadata_only_missing_overlapping_and_future_intervals_refuse(self):
+        for mutation in ('missing', 'overlap', 'future'):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                now = case['clock'].now()
+                interval = (None if mutation == 'missing' else
+                    (case['observer'].observed_at - timedelta(milliseconds=1), now)
+                    if mutation == 'overlap' else (now, now + timedelta(days=1)))
+                case['observer'].checkpoint('after-public-repeat-add', case['before'],
+                                            interval=interval)
+                self.assertEqual(case['observer'].reason,
+                    'Gemini startup command interval is invalid' if mutation == 'missing' else
+                    'Gemini startup command intervals overlap or are in the future')
+                self.assertFalse(case['observer'].finish(case['before']))
+                self.assertEqual(case['observer'].evidence()['phases'], [])
+
+    def test_os_error_reasons_are_redacted_before_failed_case_projection(self):
+        facts = {"phase": "after-public-repeat-add", "role": "new-chat",
+                 "operation": "record-framing", "bytes": 1234, "lf_count": 3,
+                 "final_lf": True, "record_shapes": [
+                     "metadata-fields", "user-text-fields", "last-updated-fields"]}
+        finite_reason = "Gemini startup environment framing differs"
+        for stage in ("constructor", "baseline", "checkpoint", "finish"):
+            for kind in ("missing", "custom", "finite"):
+                with self.subTest(stage=stage, kind=kind), self.fixture() as case:
+                    private_path = str(case["chats"] / "private-secret-session.jsonl")
+                    error = (FileNotFoundError(2, "No such file or directory", private_path)
+                             if kind == "missing" else OSError("custom filesystem detail " + private_path)
+                             if kind == "custom" else ValueError(finite_reason))
+                    subject = case["observer"]
+                    if stage == "constructor":
+                        with patch.object(type(subject), "_guard", side_effect=error):
+                            subject = type(subject)(
+                                case["home"], case["project"], case["before"], self.VERSION,
+                                profile_snapshot=case["audit"].scoped_snapshot)
+                    else:
+                        subject.failure_facts = dict(facts)
+                        with patch.object(subject, "_guard", side_effect=error):
+                            interval = (case["phase_started"], case['clock'].now())
+                            if stage == "baseline":
+                                subject.baseline(case["before"], interval=interval)
+                            elif stage == "checkpoint":
+                                subject.checkpoint("after-public-repeat-add", case["before"], interval=interval)
+                            else:
+                                self.assertFalse(subject.finish(case["before"]))
+                    try:
+                        self.assertFalse(subject.finish(case["before"]))
+                        proof = subject.evidence()
+                        observed = case["audit"].failed_case_diagnostics(
+                            {"gemini_runtime_proof": proof})["gemini_runtime_proof"]
+                        self.assertEqual(proof["reason"], finite_reason if kind == "finite" else "os-error")
+                        self.assertEqual(observed["reason"], proof["reason"])
+                        self.assertEqual(proof["status"], "unqualified")
+                        self.assertEqual(observed["status"], "unqualified")
+                        self.assertEqual(proof["phases"], [])
+                        self.assertEqual(observed["phases"], [])
+                        if stage != "constructor":
+                            self.assertEqual(proof["failure_facts"], facts)
+                            self.assertEqual(observed["failure_facts"],
+                                             dict(facts, record_shapes_truncated=False))
+                        self.assertNotIn(private_path, json.dumps(observed))
+                        self.assertNotIn("private-secret-session", json.dumps(observed))
+                    finally:
+                        subject.close()
+                        self.assertEqual(subject.parents, {})
+                        self.assertEqual(subject.leaves, {})
+
+    def test_incomplete_snapshots_refuse_at_every_observation(self):
+        markers = (('.gemini/denied-file', 'unreadable'),
+                   ('.gemini/denied/.walk-error', 'unreadable'),
+                   (r'.gemini\denied\.walk-error', '0' * 64))
+        stages = ('admission', 'baseline', 'after-public-repeat-add',
+                  'after-public-repeat-list', 'finish')
+        for stage in stages:
+            for path, digest in markers:
+                with self.subTest(stage=stage, path=path), self.fixture() as case:
+                    observer = case['observer']
+                    if stage in ('after-public-repeat-list', 'finish'):
+                        self.phase(case, 'after-public-repeat-add')
+                    if stage == 'finish':
+                        self.phase(case, 'after-public-repeat-list')
+                    snapshot = {**case['audit'].snapshot([case['profile']]), path: digest}
+                    if stage == 'admission':
+                        observer = case['audit'].GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit'](
+                            case['home'], case['project'], snapshot, self.VERSION,
+                            profile_snapshot=case['audit'].scoped_snapshot)
+                    try:
+                        if stage == 'baseline':
+                            now = case['clock'].now()
+                            observer.baseline(snapshot, interval=(now, now))
+                        elif stage.startswith('after-public-'):
+                            observer.checkpoint(stage, snapshot,
+                                interval=(case['phase_started'], case['clock'].now()))
+                        elif stage == 'finish':
+                            observer.finish(snapshot)
+                        self.assertEqual(observer.reason, 'Gemini runtime snapshot is incomplete')
+                        self.assertFalse(observer.finish(snapshot))
+                        self.assertEqual(observer.evidence()['status'], 'unqualified')
+                    finally:
+                        if stage == 'admission':
+                            observer.close()
+
+    def test_protected_profile_file_replacement_and_empty_directory_changes_refuse(self):
+        for stage in ('baseline', 'after-public-repeat-add', 'after-public-repeat-list', 'finish'):
+            for mutation in ('same-byte-file', 'new-empty', 'removed-empty', 'replaced-empty'):
+                with self.subTest(stage=stage, mutation=mutation), self.fixture() as case:
+                    observer = case['observer']
+                    if stage in ('after-public-repeat-list', 'finish'):
+                        self.phase(case, 'after-public-repeat-add')
+                    if stage == 'finish':
+                        self.phase(case, 'after-public-repeat-list')
+                    path = case['profile'] / ('foreign-neighbor.txt' if mutation == 'same-byte-file'
+                                              else 'foreign-empty')
+                    if mutation in ('same-byte-file', 'replaced-empty'):
+                        previous = path.lstat()
+                        body = path.read_bytes() if mutation == 'same-byte-file' else None
+                        path.rename(case['home'].parent / 'held-protected-entry')
+                        if body is None:
+                            path.mkdir()
+                        else:
+                            path.write_bytes(body)
+                            self.assertEqual(path.read_bytes(), body)
+                        self.assertFalse(os.path.samestat(previous, path.lstat()))
+                    elif mutation == 'new-empty':
+                        (case['profile'] / 'unrelated-empty').mkdir()
+                    else:
+                        path.rmdir()
+                    after = case['audit'].snapshot([case['profile']])
+                    # These mutations defeat content-only snapshots by construction.
+                    self.assertEqual(after, case['before'])
+                    if stage == 'baseline':
+                        now = case['clock'].now()
+                        observer.baseline(after, interval=(now, now))
+                    elif stage == 'finish':
+                        self.assertFalse(observer.finish(after))
+                    else:
+                        self.phase(case, stage)
+                    self.assertEqual(observer.reason, 'Gemini protected profile entries changed')
+                    self.assertFalse(observer.finish(after))
+                    self.assertEqual(observer.evidence()['status'], 'unqualified')
+
+    def test_six_empty_records_keep_raw_changes_and_exact_old_conversation(self):
+        with self.fixture() as case:
+            for index in range(1, 5):
+                self.record(case, index)
+            self.phase(case, 'after-public-repeat-add')
+            self.assertIsNone(case['observer'].reason)
+            for index in (5, 6):
+                self.record(case, index, lambda body: body[:-2] + b',"kind":"main"}\n')
+            after = self.phase(case, 'after-public-repeat-list')
+            self.assertTrue(case['observer'].finish(after))
+            self.assertNotEqual(case['before'], after)
+            evidence = case['observer'].evidence()
+            self.assertEqual(evidence['status'], 'metadata-only-new-records')
+            self.assertEqual(evidence['platform'], sys.platform)
+            for fd, _ in (*case['observer'].parents.values(), *case['observer'].leaves.values()):
+                self.assertFalse(os.get_inheritable(fd))
+            self.assertEqual(len(evidence['files']), 6)
+            self.assertFalse(evidence['producer_attribution'])
+            self.assertFalse(evidence['writer_closure'])
+            self.assertEqual(case['old'].read_bytes(), b'pre-existing conversation must stay byte-for-byte\n')
+
+    def test_conversation_foreign_duplicate_partial_and_unbounded_records_refuse(self):
+        changes = {
+            'message-record': lambda b: b + b'{"type":"user","content":"hello"}\n',
+            'messages-field': lambda b: b[:-2] + b',"messages":[]}\n',
+            'foreign-session': lambda b: b.replace(b'skills-list-session', b'conversation-session'),
+            'foreign-project': lambda b: b.replace(b'"projectHash":"', b'"projectHash":"foreign'),
+            'subagent': lambda b: b[:-2] + b',"kind":"subagent"}\n',
+            'null-kind': lambda b: b[:-2] + b',"kind":null}\n',
+            'nonfinite': lambda b: b[:-2] + b',"tokens":NaN}\n',
+            'duplicate': lambda b: b.replace(b'{', b'{"sessionId":"other",', 1),
+            'old-time': lambda b: json.dumps({**json.loads(b), 'startTime': '2000-01-01T00:00:00.000Z'}).encode() + b'\n',
+            'future-time': lambda b: json.dumps({**json.loads(b), 'lastUpdated': '2099-01-01T00:00:00.000Z'}).encode() + b'\n',
+            'partial': lambda b: b[:-1],
+            'blank-line': lambda b: b + b'\n',
+            'oversized': lambda b: b + b' ' * 4096,
+        }
+        for name, transform in changes.items():
+            with self.subTest(name=name), self.fixture() as case:
+                self.record(case, 1, transform)
+                after = self.phase(case, 'after-public-repeat-add')
+                self.assertFalse(case['observer'].finish(after))
+                self.assertEqual(case['observer'].evidence()['status'], 'unqualified')
+
+
+    def test_failure_facts_keep_multirecord_and_partial_private_payloads_unqualified(self):
+        private = b'{"type":"user","content":"private startup context"}\n{"$set":{"private":"value"}}\n'
+        for label, transform, count, final in (
+                ("partial", lambda body: body[:-1], 0, False),
+                ("multiple", lambda body: body + private, 3, True)):
+            with self.subTest(label=label), self.fixture() as case:
+                path = self.record(case, 1, transform)
+                metadata = case["audit"].GEMINI_RUNTIME_AUDIT["_metadata"]
+                parsed_sizes = []
+                original_json = metadata.__globals__["_json"]
+                def diagnostic_json(body):
+                    parsed_sizes.append(len(body))
+                    return original_json(body)
+                with patch.dict(metadata.__globals__, {"_json": diagnostic_json}):
+                    after = self.phase(case, "after-public-repeat-add")
+                self.assertEqual(len(parsed_sizes), 3 if label == "multiple" else 0)
+                self.assertTrue(all(size <= 4096 for size in parsed_sizes))
+                self.assertFalse(case["observer"].finish(after))
+                proof = case["observer"].evidence()
+                self.assertEqual(proof["status"], "unqualified")
+                self.assertEqual(proof["files"], [])
+                self.assertEqual(proof["phases"], [])
+                facts = proof["failure_facts"]
+                self.assertEqual(facts, {
+                    "phase": "after-public-repeat-add", "role": "new-chat",
+                    "operation": "record-framing", "bytes": path.stat().st_size,
+                    "lf_count": count, "final_lf": final,
+                    **({"record_shapes": ["metadata-fields", "other", "other"]}
+                       if label == "multiple" else {})})
+                encoded = json.dumps(facts)
+                self.assertNotIn("private", encoded)
+                self.assertNotIn(str(case["project"]), encoded)
+                self.assertNotIn(path.name, encoded)
+        with self.fixture() as case:
+            self.record(case, 1)
+            self.phase(case, "after-public-repeat-add")
+            self.assertNotIn("failure_facts", case["observer"].evidence())
+            case["old"].write_bytes(b"changed old private data")
+            after = self.phase(case, "after-public-repeat-list")
+            self.assertFalse(case["observer"].finish(after))
+            self.assertNotIn("failure_facts", case["observer"].evidence())
+
+    def test_three_line_shape_facts_never_accept_private_history_or_swallow_cancellation(self):
+        def records(body):
+            return body + json.dumps({
+                "id": "PRIVATE-ID", "timestamp": "PRIVATE-TIME", "type": "user",
+                "content": [{"text": "PRIVATE startup context\nPRIVATE second line"}],
+            }).encode() + b"\n" + b'{"$set":{"lastUpdated":"PRIVATE-TIME"}}\n'
+        with self.fixture() as case:
+            path = self.record(case, 1, records)
+            after = self.phase(case, "after-public-repeat-add")
+            self.assertFalse(case["observer"].finish(after))
+            proof = case["observer"].evidence()
+            self.assertEqual(proof["status"], "unqualified")
+            self.assertEqual(proof["reason"], "Gemini runtime is not one complete initial record")
+            self.assertEqual(proof["files"], [])
+            self.assertEqual(proof["phases"], [])
+            facts = proof["failure_facts"]
+            self.assertEqual(facts["record_shapes"],
+                             ["metadata-fields", "user-text-fields", "last-updated-fields"])
+            self.assertNotIn("PRIVATE", json.dumps(facts))
+            self.assertNotIn(str(case["project"]), json.dumps(facts))
+            self.assertNotIn(path.name, json.dumps(facts))
+        with self.fixture() as case:
+            self.record(case, 1, lambda body: body + b"PRIVATE malformed\n[]\n")
+            after = self.phase(case, "after-public-repeat-add")
+            self.assertFalse(case["observer"].finish(after))
+            self.assertEqual(case["observer"].evidence()["failure_facts"]["record_shapes"],
+                             ["metadata-fields", "json-refused", "other"])
+        for failure in (ValueError, KeyboardInterrupt):
+            with self.subTest(failure=failure), self.fixture() as case:
+                self.record(case, 1, records)
+                metadata = case["audit"].GEMINI_RUNTIME_AUDIT["_metadata"]
+                def broken(body):
+                    raise failure("PRIVATE helper failure")
+                with patch.dict(metadata.__globals__, {"_refused_record_shapes": broken}):
+                    if failure is KeyboardInterrupt:
+                        with self.assertRaises(KeyboardInterrupt):
+                            self.phase(case, "after-public-repeat-add")
+                    else:
+                        after = self.phase(case, "after-public-repeat-add")
+                        self.assertFalse(case["observer"].finish(after))
+                        self.assertEqual(case["observer"].evidence()["reason"],
+                                         "Gemini runtime is not one complete initial record")
+                        self.assertNotIn("record_shapes", case["observer"].evidence()["failure_facts"])
+
+    def test_file_admission_facts_distinguish_bounds_and_links_without_extra_open(self):
+        for mutation in ("zero", "oversized", "hardlink", "symlink"):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                path = self.record(case, 1)
+                if mutation == "zero":
+                    path.write_bytes(b"")
+                elif mutation == "oversized":
+                    path.write_bytes(b"private" * 600)
+                elif mutation == "hardlink":
+                    os.link(path, case["project"].parent / "private-linked-name")
+                else:
+                    path.unlink()
+                    path.symlink_to(case["old"].name)
+                after = case["audit"].snapshot([case["profile"]])
+                with patch.object(os, "open", side_effect=AssertionError("must refuse before open")) as opened:
+                    case["observer"].checkpoint("after-public-repeat-add", after,
+                        interval=(case["phase_started"], case['clock'].now()))
+                opened.assert_not_called()
+                self.assertFalse(case["observer"].finish(after))
+                proof = case["observer"].evidence()
+                self.assertEqual(proof["status"], "unqualified")
+                self.assertEqual(proof["files"], [])
+                self.assertEqual(proof["phases"], [])
+                facts = proof["failure_facts"]
+                self.assertEqual(facts["phase"], "after-public-repeat-add")
+                self.assertEqual(facts["role"], "new-chat")
+                self.assertEqual(facts["operation"], "file-admission")
+                self.assertEqual(facts["regular"], mutation != "symlink")
+                self.assertEqual(facts["single_link"], mutation != "hardlink")
+                self.assertEqual(facts["positive_size"], mutation != "zero")
+                self.assertEqual(facts["within_limit"], mutation != "oversized")
+                self.assertTrue(facts["descriptor_capacity"])
+                self.assertEqual(facts["bytes"], None if mutation == "oversized" else path.lstat().st_size)
+                for key in ("regular", "single_link", "positive_size", "within_limit", "descriptor_capacity"):
+                    self.assertIs(type(facts[key]), bool)
+                self.assertNotIn("private", json.dumps(facts))
+                self.assertNotIn(str(case["project"]), json.dumps(facts))
+
+        for mutation in ("missing", "nonstring", "grammar", "duplicate"):
+            with self.subTest(registry=mutation), self.fixture() as case:
+                case["observer"].close()
+                project = str(case["project"])
+                projects = {project: "project"}
+                if mutation == "missing": projects = {"private-foreign-key": "project"}
+                elif mutation == "nonstring": projects[project] = False
+                elif mutation == "grammar": projects[project] = "PRIVATE/value"
+                else: projects.update({"private-other": "project", "private-third": "project"})
+                (case["profile"] / "projects.json").write_text(json.dumps({"projects": projects}))
+                before = case["audit"].snapshot([case["profile"]])
+                observer = case["audit"].GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
+                    case["home"], case["project"], before, self.VERSION,
+                    profile_snapshot=case["audit"].scoped_snapshot)
+                self.assertEqual(observer.reason, "Gemini runtime registry does not bind the exact project")
+                self.assertFalse(observer.finish(before))
+                proof = observer.evidence()
+                self.assertEqual((proof["status"], proof["files"], proof["phases"]), ("unqualified", [], []))
+                facts = proof["failure_facts"]
+                self.assertEqual(facts, {
+                    "phase": "pre-repeat", "role": "registry", "operation": "project-binding",
+                    "exact_key_present": mutation != "missing",
+                    "slug_is_string": mutation not in ("missing", "nonstring"),
+                    "slug_matches_pattern": mutation == "duplicate",
+                    "slug_binding_count": 2 if mutation == "duplicate" else None})
+                for key in ("exact_key_present", "slug_is_string", "slug_matches_pattern"):
+                    self.assertIs(type(facts[key]), bool)
+                self.assertNotIn("private", json.dumps(facts).lower())
+                self.assertNotIn(project, json.dumps(facts))
+                self.assertEqual((observer.parents, observer.leaves), ({}, {}))
+
+    def test_old_and_observed_leaf_replacement_parent_alias_and_foreign_delta_refuse(self):
+        for mutation in ('old-replaced', 'new-replaced', 'new-deleted', 'parent-replaced',
+                         'parent-alias', 'registry-replaced', 'foreign-delta', 'hardlink', 'symlink'):
+            with self.subTest(mutation=mutation), self.fixture() as case:
+                new = self.record(case, 1)
+                self.phase(case, 'after-public-repeat-add')
+                self.assertIsNone(case['observer'].reason)
+                if mutation in ('old-replaced', 'new-replaced', 'registry-replaced'):
+                    path = (case['old'] if mutation == 'old-replaced' else new if
+                            mutation == 'new-replaced' else case['profile'] / 'projects.json')
+                    body = path.read_bytes()
+                    path.unlink()
+                    path.write_bytes(body)
+                elif mutation == 'new-deleted':
+                    new.unlink()
+                elif mutation in ('parent-replaced', 'parent-alias'):
+                    moved = case['chats'].with_name('old-chats')
+                    case['chats'].rename(moved)
+                    if mutation == 'parent-alias':
+                        case['chats'].symlink_to(moved, target_is_directory=True)
+                    else:
+                        case['chats'].mkdir()
+                elif mutation == 'foreign-delta':
+                    (case['profile'] / 'foreign-settings.json').write_text('{}')
+                elif mutation == 'hardlink':
+                    os.link(new, case['chats'] / 'another-link')
+                else:
+                    new.unlink()
+                    new.symlink_to(case['old'])
+                after = self.phase(case, 'after-public-repeat-list')
+                self.assertFalse(case['observer'].finish(after))
+
+    def test_record_count_phase_order_version_and_during_read_swap_refuse(self):
+        with self.fixture() as case:
+            for index in range(1, 18):
+                self.record(case, index)
+            after = self.phase(case, 'after-public-repeat-add')
+            self.assertFalse(case['observer'].finish(after))
+        with self.fixture() as case:
+            self.record(case, 1)
+            after = self.phase(case, 'after-public-repeat-list')
+            self.assertFalse(case['observer'].finish(after))
+        with self.fixture() as case:
+            check = case['audit'].GEMINI_RUNTIME_AUDIT['pinned_version']
+            for version in (None, {}, {**self.VERSION, 'value': '0.67.0'},
+                            {**self.VERSION, 'exit_code': False},
+                            {**self.VERSION, 'exit_code': 1}):
+                self.assertFalse(check(version))
+            with patch.object(os, 'supports_dir_fd', set()):
+                self.assertFalse(check(self.VERSION))
+            for flag in ('O_DIRECTORY', 'O_NOFOLLOW', 'O_CLOEXEC', 'O_NONBLOCK'):
+                with self.subTest(flag=flag), patch.object(os, flag, 0):
+                    self.assertFalse(check(self.VERSION))
+        with self.fixture() as case:
+            new = self.record(case, 1)
+            original_read = os.read
+            changed = []
+            def replace_during_read(fd, count):
+                body = original_read(fd, count)
+                # Snapshots also read descriptors; inject only after this file
+                # is held by the observer whose custody refusal is under test.
+                held = case['observer'].leaves.get(new)
+                if not changed and held is not None and fd == held[0]:
+                    original = new.read_bytes()
+                    new.unlink()
+                    new.write_bytes(original)
+                    changed.append(True)
+                return body
+            with (patch.object(os, 'open', wraps=os.open) as opened,
+                  patch.object(os, 'read', side_effect=replace_during_read)):
+                self.assertTrue(case['audit'].GEMINI_RUNTIME_AUDIT['pinned_version'](self.VERSION))
+                after = self.phase(case, 'after-public-repeat-add')
+            self.assertTrue(any(call.kwargs.get('dir_fd') is not None
+                                for call in opened.call_args_list))
+            self.assertEqual(changed, [True])
+            self.assertEqual(case['observer'].reason,
+                             'Gemini runtime previous file changed or replaced')
+            self.assertFalse(case['observer'].finish(after))
+
+
+    def test_public_repeat_gate_preserves_raw_delta_and_refuses_same_byte_parent_replacement(self):
+        for replaced, startup, failure in ((False, False, None), (True, False, None),
+                                            (False, True, None), (True, True, None),
+                                            (False, True, 'timeout'), (False, True, 'exit')):
+            with self.subTest(replaced=replaced, startup=startup, failure=failure), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                root = Path(temporary).resolve()
+                project = root / 'skill-00/project'
+                profile = root / 'skill-00/home/.gemini'
+                chats = profile / 'tmp/project/chats'
+                skill = project / '.gemini/skills/owned-test/SKILL.md'
+                item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
+                        'source': 'unused', 'skill_md_git_blob_sha1': '0' * 40}
+                matched = [{'installation_id': 'owned-id', 'name': 'owned-test',
+                            'clients': [{'client_id': 'gemini'}]}]
+                operations, held = [], []
+                real_observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
+                clock = GeminiFixtureClock()
+                def observe(*args, **kwargs):
+                    observer = real_observer(*args, **kwargs)
+                    held.extend(fd for fd, _ in (*observer.parents.values(), *observer.leaves.values()))
+                    return observer
+                def fake_call(argv, env, cwd, timeout=105):
+                    operation = ('native-list' if argv[0] == '/unused/gemini' else
+                                 argv[2] if argv[1] == 'skills' else argv[1])
+                    operations.append(operation)
+                    settings = profile / 'settings.json'
+                    self.assertEqual(settings.read_bytes(), b'{"context":{"includeDirectoryTree":false}}\n')
+                    self.assertEqual(cwd, project)
+                    if operation == 'native-list':
+                        self.assertEqual(argv, ['/unused/gemini', 'skills', 'list', '--all'])
+                        self.assertEqual(timeout, 30)
+                        self.assertEqual(env['GEMINI_CLI_HOME'], str(profile.parent))
+                        self.assertEqual((env['NO_COLOR'], env['TERM']), ('1', 'dumb'))
+                        self.assertFalse(set(env) & {'LANG', 'LC_ALL', 'TZ', 'HTTP_PROXY'})
+                        self.assertLessEqual(set(env), {
+                            'GEMINI_CLI_HOME', 'PATH', 'HOME', 'USERPROFILE', 'SYSTEMROOT',
+                            'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'GEMINI_RESTRICTED_MODE',
+                            'GEMINI_CLI_TRUST_WORKSPACE', 'NO_COLOR', 'TERM'})
+                    else:
+                        self.assertEqual(env['LC_ALL'], 'fr_FR.UTF-8')
+                        self.assertEqual(env['TZ'], 'Pacific/Auckland')
+                    if operation == 'add':
+                        skill.parent.mkdir(parents=True, exist_ok=True)
+                        skill.write_text('---\nname: owned-test\n---\n')
+                        (project / 'uap.toml').write_text('owned-test')
+                        (project / 'uap.lock').write_text('owned-test')
+                        if operations.count('add') == 1:
+                            chats.mkdir(parents=True)
+                            (profile / 'projects.json').write_text(json.dumps({'projects': {str(project): 'project'}}))
+                            (chats.parent / '.project_root').write_text(str(project))
+                        elif replaced:
+                            held = project.parent / 'held-old-chats'
+                            chats.rename(held)
+                            chats.mkdir()
+                            for previous in held.iterdir():
+                                (chats / previous.name).write_bytes(previous.read_bytes())
+                        else:
+                            self.record({'project': project, 'chats': chats, 'clock': clock}, 1, startup=startup)
+                    elif operation == 'native-list':
+                        self.record({'project': project, 'chats': chats, 'clock': clock}, 100, startup=startup)
+                        if failure:
+                            return {'exit_code': None if failure == 'timeout' else 7,
+                                    'stdout_tail': '', 'stderr_tail': '',
+                                    'timeout': failure == 'timeout', '_json': None}
+                    elif operation == 'list' and operations.count('list') == 2 and not replaced:
+                        self.record({'project': project, 'chats': chats, 'clock': clock}, 2, startup=startup)
+                    elif operation == 'remove':
+                        skill.unlink()
+                        skill.parent.rmdir()
+                        (project / 'uap.lock').unlink()
+                    response = {'data': {'installations': [] if 'remove' in operations else matched}}
+                    if operation == 'add':
+                        response.update(readiness='ready', next_actions=[])
+                    return {'exit_code': 0, 'stdout_tail': '', 'stderr_tail': '', 'timeout': False,
+                            '_json': response}
+                with (patch.dict(audit.AGENT_BINARIES, {'gemini': '/unused/gemini'}, clear=True),
+                      patch.dict(audit.GEMINI_RUNTIME_AUDIT, {'GeminiRepeatAudit': observe}),
+                      patch.dict(real_observer.__init__.__globals__, {'_now': clock.now}),
+                      patch.object(audit, 'datetime', clock),
+                      patch.dict(os.environ, {'LANG': 'de_DE.UTF-8', 'LC_ALL': 'fr_FR.UTF-8',
+                                              'TZ': 'Pacific/Auckland',
+                                              'HTTP_PROXY': 'http://proxy.invalid:8080'}),
+                      patch.object(audit, 'call', side_effect=fake_call),
+                      patch.object(audit, 'matching_installations', return_value=matched),
+                      patch.object(audit, 'locked_skill_is_pinned',
+                                   side_effect=lambda *args: (project / 'uap.lock').exists()),
+                      patch.object(audit, 'matches_pinned_skill_bytes', return_value=True)):
+                    row = audit.do_case('/unused/agentplugins', 'gemini', 'skill', item, 0, root, {},
+                                        client_version=self.VERSION)
+                self.assertEqual(operations, ['add', 'list', 'native-list', 'add', 'list', 'remove', 'list'])
+                self.assertTrue(row['removal_verified'])
+                self.assertTrue(row['sentinels_preserved'])
+                self.assertEqual(row['public_skill_ready'], {'after-add': True, 'repeat-add': True})
+                self.assertFalse(row['repeat_native_unchanged'])
+                self.assertEqual(row['repeat_native_runtime_only'], not replaced and not failure)
+                self.assertEqual(row['repeat_verified'], not replaced and not failure)
+                self.assertEqual(row['status'], 'repeat-add-unqualified' if replaced or failure else 'passed')
+                self.assertTrue(held)
+                for fd in held:
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+
+    def test_public_gemini_context_fixture_is_exclusive_and_preserved_before_each_call(self):
+        for changed in ('preexisting', 'bytes', 'same-byte-replacement', 'link'):
+            with self.subTest(changed=changed), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                root = Path(temporary).resolve()
+                profile = root / 'skill-00/home/.gemini'
+                settings = profile / 'settings.json'
+                original = b'{"context":{"includeDirectoryTree":false}}\n'
+                foreign = root / 'foreign-settings.json'
+                foreign.write_bytes(original)
+                if changed == 'preexisting':
+                    profile.mkdir(parents=True)
+                    settings.write_bytes(b'{"context":{"includeDirectoryTree":true}}\n')
+                calls = []
+
+                def call(argv, env, cwd, timeout=105):
+                    calls.append(argv)
+                    self.assertEqual(settings.read_bytes(), original)
+                    if changed == 'bytes':
+                        settings.write_bytes(b'{"context":{"includeDirectoryTree":true}}\n')
+                    elif changed == 'same-byte-replacement':
+                        settings.rename(root / 'held-context-settings.json')
+                        settings.write_bytes(original)
+                    elif changed == 'link':
+                        settings.unlink()
+                        settings.symlink_to(foreign)
+                    return {'exit_code': 0, 'stdout_tail': '', 'stderr_tail': '',
+                            'timeout': False, '_json': {}}
+
+                item = {'name': 'owned-test', 'repo': 'example/skills', 'folder': 'owned-test',
+                        'source': 'unused', 'skill_md_git_blob_sha1': '0' * 40}
+                with (patch.dict(audit.AGENT_BINARIES, {'gemini': '/unused/gemini'}, clear=True),
+                      patch.object(audit, 'call', side_effect=call)):
+                    if changed == 'preexisting':
+                        with self.assertRaises(FileExistsError):
+                            audit.do_case('/unused/agentplugins', 'gemini', 'skill', item, 0, root, {},
+                                          client_version=self.VERSION)
+                        self.assertEqual(calls, [])
+                        self.assertEqual(settings.read_bytes(),
+                                         b'{"context":{"includeDirectoryTree":true}}\n')
+                    else:
+                        with self.assertRaisesRegex(ValueError, 'Gemini audit context settings changed'):
+                            audit.do_case('/unused/agentplugins', 'gemini', 'skill', item, 0, root, {},
+                                          client_version=self.VERSION)
+                        self.assertEqual(len(calls), 1)
+                self.assertEqual(foreign.read_bytes(), original)
+
+
+
+
+# Native 0.66.0 three-record journal fixture; only private fixture paths replaced.
+GEMINI_STARTUP_RECORD_FIXTURE = '{"sessionId":"skills-list-session","projectHash":"6545b9ca63e68521b25565d8b8adfd1bc89c7d29202af280f0ac10aa6796099a","startTime":"2026-11-17T21:52:38.592Z","lastUpdated":"2026-11-17T21:52:38.592Z","kind":"main"}\n{"id":"d04923d38bb0f6017037e74183378ef4","timestamp":"2026-11-17T21:52:38.593Z","type":"user","content":[{"text":"<session_context>\\nThis is the Gemini CLI. We are setting up the context for our chat.\\nToday\'s date is Tuesday, November 17, 2026 (formatted according to the user\'s locale).\\nMy operating system is: linux\\nThe project\'s temporary directory is: <PINNED_PROJECT_TEMP>\\n- **Workspace Directories:**\\n  - <PINNED_PROJECT>\\n- **Directory Structure:**\\n\\nShowing up to 200 items (files + folders). Folders or files indicated with ... contain more items not shown, were ignored, or the display limit (200 items) was reached.\\n\\n<PINNED_PROJECT>/\\n├───.gemini/\\n│   └───skills/\\n│       └───native-list-probe/\\n│           └───SKILL.md\\n└───.git/...\\n\\n\\n</session_context>"}]}\n{"$set":{"lastUpdated":"2026-11-17T21:52:38.593Z"}}\n'
+GEMINI_STARTUP_AUDIT = load_audit()
+GEMINI_STARTUP_MODULE = GEMINI_STARTUP_AUDIT.GEMINI_RUNTIME_AUDIT
+gemini_startup_snapshot = GEMINI_STARTUP_AUDIT.snapshot
+GEMINI_STARTUP_VERSION = {"status": "reported", "exit_code": 0, "value": "0.66.0"}
+
+class GeminiStartupEnvironmentContracts(unittest.TestCase):
+    IDENTITY_REFUSAL = (
+        r'^Gemini (?:runtime previous file changed or replaced|Windows custody: '
+        r'(?:held file changed|held name changed|current name identity))$'
+    )
+
+    @contextmanager
+    def fixture(self, baseline_mutation=None):
+        clock = GeminiFixtureClock()
+        observer_type = GEMINI_STARTUP_MODULE['GeminiRepeatAudit']
+        with TemporaryDirectory() as temp, patch.dict(
+                observer_type.__init__.__globals__, {'_now': clock.now}):
+            root = Path(temp).resolve()
+            home = root / 'home'
+            project = root / 'project'
+            project.mkdir()
+            profile = home / '.gemini'
+            chats = profile / 'tmp/project/chats'
+            chats.mkdir(parents=True)
+            registry_project = str(project).lower() if sys.platform == 'win32' else str(project)
+            (profile / 'projects.json').write_text(json.dumps({'projects': {registry_project: 'project'}}))
+            (chats.parent / '.project_root').write_text(registry_project)
+            template = [json.loads(x) for x in GEMINI_STARTUP_RECORD_FIXTURE.splitlines()]
+            text = template[1]['content'][0]['text'].replace(
+                'My operating system is: linux', 'My operating system is: ' + sys.platform)
+            template[1]['content'][0]['text'] = text.replace('<PINNED_PROJECT_TEMP>', str(chats.parent)).replace('<PINNED_PROJECT>', str(project))
+            old = chats / 'foreign-before-list.jsonl'
+            old.write_bytes(b'foreign startup authority stays unchanged')
+            before = gemini_startup_snapshot([profile])
+            o = observer_type(home, project, before, GEMINI_STARTUP_VERSION,
+                              profile_snapshot=GEMINI_STARTUP_AUDIT.scoped_snapshot)
+            self.assertIsNone(o.reason)
+            start = clock.now()
+            c = dict(home=home, project=project, profile=profile, chats=chats,
+                     template=template, old=old, clock=clock)
+            p = self.write(c, 0, start + timedelta(milliseconds=1))
+            values = [json.loads(line) for line in p.read_bytes().splitlines()]
+            if baseline_mutation == 'id':
+                values[1]['id'] = 'f' * 32
+            elif baseline_mutation == 'frame':
+                values[1]['content'][0]['text'] = 'arbitrary user prompt'
+            elif baseline_mutation == 'project':
+                values[0]['projectHash'] = 'f' * 64
+            elif baseline_mutation == 'keys':
+                values[2]['$set']['other'] = 'x'
+            elif baseline_mutation == 'old-key':
+                old.write_bytes(b'changed foreign startup authority')
+            elif baseline_mutation == 'old-swap':
+                body = old.read_bytes()
+                old.rename(root / 'held-foreign-before-list.jsonl')
+                old.write_bytes(body)
+            body = b''.join(json.dumps(value).encode() + b'\n' for value in values)
+            if baseline_mutation == 'duplicate':
+                body = body.replace(b'{', b'{"sessionId":"other",', 1)
+            p.write_bytes(body)
+            finish = clock.advance(4)
+            observed = gemini_startup_snapshot([profile])
+            o.baseline(observed, interval=(start, finish))
+            c.update(observer=o, before=observed, start=start, finish=finish)
+            if baseline_mutation is None:
+                self.assertIsNone(o.reason)
+
+            try:
+                yield c
+            finally:
+                o.close()
+
+    def write(self, c, n, when, mutate=None):
+        v = json.loads(json.dumps(c['template']))
+        t = lambda dt: dt.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+        v[0].update(projectHash=hashlib.sha256(str(c['project']).encode()).hexdigest(), startTime=t(when), lastUpdated=t(when))
+        v[1]['timestamp'] = t(when + timedelta(milliseconds=1))
+        v[2]['$set']['lastUpdated'] = t(when + timedelta(milliseconds=2))
+        if mutate:
+            mutate(v)
+        b = b''.join((json.dumps(x, separators=(',', ':')).encode() + b'\n' for x in v))
+        p = c['chats'] / f'session-{when:%Y-%m-%dT%H-%M}-{n + 1}-skills-l.jsonl'
+        p.write_bytes(b)
+        return p
+
+    def phase(self, c, n, mutate=None, interval=True):
+        start = c['clock'].now()
+        p = self.write(c, n, start + timedelta(milliseconds=1), mutate)
+        finish = c['clock'].advance(4)
+        after = gemini_startup_snapshot([c['profile']])
+        c['observer'].checkpoint(('after-public-repeat-add', 'after-public-repeat-list')[n - 1], after, interval=(start, finish) if interval else None)
+        return (after, p)
+
+    def test_actual_startup_template_two_phases_and_old_bytes(self):
+        with self.fixture() as c:
+            old = c['old']
+            raw = old.read_bytes()
+            self.phase(c, 1)
+            after, _ = self.phase(c, 2)
+            self.assertTrue(c['observer'].finish(after))
+            self.assertEqual(old.read_bytes(), raw)
+            e = c['observer'].evidence()
+            self.assertFalse(e['producer_attribution'])
+            self.assertFalse(e['writer_closure'])
+            self.assertEqual([x['records'] for x in e['files']], [3, 3])
+
+    def test_startup_accepts_separate_ordered_millisecond_clock_reads(self):
+        when = datetime(2026, 11, 17, 12, 0, 0, tzinfo=timezone.utc)
+        validate = GEMINI_STARTUP_MODULE['_startup']
+        for separation in (0, 1):
+            with self.subTest(metadata_separation_ms=separation), self.fixture() as c:
+                def change(values):
+                    values[0]['lastUpdated'] = (
+                        when + timedelta(milliseconds=separation)
+                    ).isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+                path = self.write(c, 1, when, change)
+                project_hash = hashlib.sha256(str(c['project']).encode()).hexdigest()
+                for interval in ((when, when + timedelta(milliseconds=3)),
+                                 (when + timedelta(microseconds=999),
+                                  when + timedelta(milliseconds=2, microseconds=999))):
+                    self.assertEqual(validate(path.read_bytes(), path.name, project_hash,
+                                              interval, c['chats'].parent),
+                                     c['observer'].startup_template)
+
+    def test_startup_clock_order_window_and_precision_refuse(self):
+        when = datetime(2026, 11, 17, 12, 0, 0, tzinfo=timezone.utc)
+        stamp = lambda offset: (when + timedelta(milliseconds=offset)).isoformat(
+            timespec='milliseconds').replace('+00:00', 'Z')
+        changes = {
+            'metadata-order': lambda v: v[0].update(startTime=stamp(1), lastUpdated=stamp(0)),
+            'message-order': lambda v: v[0].update(lastUpdated=stamp(2)),
+            'update-order': lambda v: v[2]['$set'].update(lastUpdated=stamp(0)),
+            'before-window': lambda v: v[0].update(startTime=stamp(-1)),
+            'after-window': lambda v: v[2]['$set'].update(lastUpdated=stamp(3)),
+            'submillisecond': lambda v: v[0].update(
+                startTime=when.isoformat(timespec='microseconds').replace('+00:00', 'Z')),
+        }
+        for mutation, change in changes.items():
+            with self.subTest(mutation=mutation), self.fixture() as c:
+                path = self.write(c, 1, when, change)
+                interval = (when + timedelta(microseconds=999),
+                            when + timedelta(milliseconds=2, microseconds=999))
+                with self.assertRaisesRegex(ValueError, 'Gemini (runtime|startup) record time'):
+                    GEMINI_STARTUP_MODULE['_startup'](
+                        path.read_bytes(), path.name,
+                        hashlib.sha256(str(c['project']).encode()).hexdigest(),
+                        interval, c['chats'].parent)
+
+    def test_changed_template_identity_project_extra_keys_tools_and_times_refuse(self):
+        changes = {'text': lambda v: v[1]['content'][0].update(text=v[1]['content'][0]['text'] + 'x'), 'id': lambda v: v[1].update(id='f' * 32), 'project': lambda v: v[0].update(projectHash='f' * 64), 'keys': lambda v: v[1].update(model='x'), 'tool': lambda v: v[1]['content'].append({'functionCall': {}}), 'extra': lambda v: v.append({'type': 'user', 'content': 'hello'}), 'time': lambda v: v[2]['$set'].update(lastUpdated='2000-01-01T00:00:00.000Z')}
+        for name, change in changes.items():
+            with self.subTest(name=name), self.fixture() as c:
+                after, _ = self.phase(c, 1, change)
+                self.assertFalse(c['observer'].finish(after))
+                self.assertEqual(c['observer'].evidence()['files'], [])
+
+    def test_interval_absence_and_held_inode_replacement_refuse(self):
+        for mutation in ('interval', 'swap'):
+            with self.subTest(mutation=mutation), self.fixture() as c:
+                if mutation == 'swap':
+                    p = c['old']
+                    b = p.read_bytes()
+                    p.rename(c['home'].parent / 'held-foreign-before-list.jsonl')
+                    p.write_bytes(b)
+                    self.assertEqual(gemini_startup_snapshot([c['profile']]), c['before'])
+                after, _ = self.phase(c, 1, interval=mutation != 'interval')
+                reason = c['observer'].reason
+                if mutation == 'swap':
+                    self.assertRegex(reason or '', self.IDENTITY_REFUSAL)
+                else:
+                    self.assertEqual(reason, 'Gemini startup command interval is invalid')
+                self.assertEqual(c['observer'].phases, [])
+                self.assertFalse(c['observer'].finish(after))
+                self.assertEqual(c['observer'].reason, reason)
+
+    def test_duplicate_json_and_wrong_phase_window_refuse(self):
+        for mutation in ('duplicate', 'window'):
+            with self.subTest(mutation=mutation), self.fixture() as c:
+                start = c['clock'].now()
+                p = self.write(c, 1, c['start'] if mutation == 'window' else start)
+                if mutation == 'duplicate':
+                    p.write_bytes(p.read_bytes().replace(b'{', b'{"sessionId":"x",', 1))
+                after = gemini_startup_snapshot([c['profile']])
+                interval = (start, c['clock'].advance(4))
+                self.assertGreaterEqual(interval[0], c['finish'])
+                c['observer'].checkpoint('after-public-repeat-add', after, interval=interval)
+                self.assertFalse(c['observer'].finish(after))
+                self.assertEqual(c['observer'].reason,
+                    'Gemini runtime record time is outside the repeat interval'
+                    if mutation == 'window' else 'duplicate JSON member')
+
+    def test_startup_baseline_is_validated_and_previous_snapshot_preserved(self):
+        for mutation in ('id', 'frame', 'project', 'keys', 'duplicate', 'old-key'):
+            with self.subTest(mutation=mutation), self.fixture(mutation) as case:
+                self.assertIsNotNone(case['observer'].reason)
+                self.assertFalse(case['observer'].finish(case['before']))
+
+    def test_pre_first_list_same_byte_old_object_swap_refuses(self):
+        for replaced in (False, True):
+            with self.subTest(replaced=replaced), self.fixture('old-swap' if replaced else None) as case:
+                if replaced:
+                    self.assertEqual(case['old'].read_bytes(),
+                                     b'foreign startup authority stays unchanged')
+                    self.assertRegex(case['observer'].reason or '', self.IDENTITY_REFUSAL)
+                    self.assertFalse(case['observer'].finish(case['before']))
+                else:
+                    self.phase(case, 1)
+                    after, _ = self.phase(case, 2)
+                    self.assertTrue(case['observer'].finish(after))
+
+    def test_first_list_keeps_existing_pre_repeat_chat_bound(self):
+        with self.fixture() as case:
+            case['observer'].close()
+            for index in range(62):
+                (case['chats'] / f'old-{index}.jsonl').write_bytes(b'held old conversation')
+            before = gemini_startup_snapshot([case['profile']])
+            observer = GEMINI_STARTUP_MODULE['GeminiRepeatAudit'](
+                case['home'], case['project'], before, GEMINI_STARTUP_VERSION,
+                profile_snapshot=GEMINI_STARTUP_AUDIT.scoped_snapshot)
+            try:
+                self.assertIsNone(observer.reason)
+                started = case['clock'].now()
+                self.write(case, 200, started + timedelta(milliseconds=1))
+                observer.baseline(gemini_startup_snapshot([case['profile']]),
+                                  interval=(started, case['clock'].advance(4)))
+                self.assertEqual(observer.reason, 'Gemini pre-repeat chat count exceeds its bound')
+            finally:
+                observer.close()
+
+
+
+
+class LiveAuditNativeVersionRoutingTests(unittest.TestCase):
+    def test_catalog_entrypoint_passes_observed_version_to_gemini_skills_and_opencode(self):
+        from io import StringIO
+
+        for target, kind, forwarded in (("gemini", "skill", True),
+                                        ("gemini", "plugin", False),
+                                        ("opencode", "skill", True),
+                                        ("opencode", "plugin", True)):
+            with self.subTest(target=target, kind=kind), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                native_version = {"status": "reported", "exit_code": 0,
+                                  "value": "0.66.0" if target == "gemini" else "1.18.34"}
+                installer_version = {"status": "reported", "exit_code": 0, "value": "0.1.95"}
+                argv = ["live-install-audit.py", "--cli", sys.executable, "--target", target,
+                        "--kind", kind, "--limit", "1", "--report-dir", temporary]
+
+                def version(command, _env, _cwd):
+                    return native_version if command[-1] == "--version" else installer_version
+
+                with (patch.object(sys, "argv", argv),
+                      patch.object(sys, "stdout", StringIO()),
+                      patch.dict(audit.AGENT_BINARIES, {target: sys.executable}, clear=True),
+                      patch.object(audit, "vendor_bootstrap_attested", return_value=True),
+                      patch.object(audit, "version_evidence", side_effect=version) as probe,
+                      patch.object(audit, "do_case", return_value={"status": "passed"}) as case):
+                    self.assertEqual(audit.main(), 0)
+                self.assertEqual(probe.call_count, 2)
+                self.assertEqual(case.call_count, 1)
+                self.assertEqual(case.call_args.args[1:3], (target, kind))
+                self.assertEqual(case.call_args.kwargs,
+                                 {"client_version": native_version} if forwarded else {})
+                report = json.loads((Path(temporary) / f"{target}-{kind}.json").read_text())
+                self.assertEqual(report["client_version"], native_version)
+
+
+@unittest.skipUnless(os.name == "posix", "Copilot whole Skill descriptor audit")
+class CopilotWholeProjectSkillAuditContracts(unittest.TestCase):
+    def test_protected_snapshot_failure_retains_bounded_private_delta(self):
+        audit = load_audit()
+        before = {"../../private-path\n": "private-before", **{f"home/item-{i:02}": "private-before" for i in range(25)}}
+        after = {key: "private-after" for key in before}
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(AssertionError, "modified protected state") as caught:
+                audit.check_copilot_snapshot_unchanged(root / "home", root, before, after, "test", 2)
+        delta = caught.exception.copilot_snapshot_delta
+        self.assertEqual(delta["changed_key_count"], 26)
+        self.assertEqual(len(delta["items"]), 20)
+        self.assertEqual(delta["omitted_key_count"], 6)
+        self.assertNotIn("key", delta["items"][0])
+        self.assertTrue(all(item["before_present"] and item["after_present"] for item in delta["items"]))
+        for item in delta["items"]:
+            self.assertRegex(item["before_sha256"], r"^[0-9a-f]{64}$")
+        self.assertNotIn("private-", json.dumps(delta))
+        self.assertEqual(after, {key: "private-after" for key in before})
+
+    def exercise(self, *, ready=True, fault=None, preinitialized_git=False):
+        audit = load_audit()
+        body = b"---\nname: frontend-design\ndescription: Inert original Skill\n---\nOriginal body\n"
+        item = {"repo": "anthropics/skills", "ref": "a" * 40, "folder": "frontend-design",
+                "name": "frontend-design", "source": "https://github.com/anthropics/skills/tree/" + "a" * 40 + "/skills/frontend-design",
+                "skill_md_git_blob_sha1": hashlib.sha1(b"blob " + str(len(body)).encode() + b"\0" + body).hexdigest()}
+        installation_id = "11111111-1111-4111-8111-111111111111"
+        calls, probes, objects = [], [], {}
+        self.last_calls, self.last_probes = calls, probes
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            if fault == "git-preexisting" or preinitialized_git:
+                (root / "skill-00/project/.git").mkdir(parents=True)
+            def response(document):
+                text = json.dumps(document)
+                return {"exit_code": 0, "timeout": False, "stdout_tail": text,
+                        "stderr_tail": "", "_json": document}
+
+            def install(env, project):
+                self.assertTrue((project / ".git").is_dir(), "ordinary Copilot discovery requires the initialized Project Git root")
+                source_key = "github-skill:anthropics/skills:frontend-design:skills/frontend-design"
+                source_hash = hashlib.sha256(source_key.encode()).hexdigest()
+                declared = "skill-" + source_hash[:56]
+                if fault == "coherent-name": declared = "skill-" + "b" * 56
+                physical = declared[:51] + "-" + hashlib.sha256(installation_id.encode()).hexdigest()[:12]
+                if fault == "coherent-physical": physical = declared[:51] + "-" + "b" * 12
+                active = project / ".uap/managed/clients/copilot" / physical
+                active.mkdir(parents=True)
+                binding_id = "client_" + hashlib.sha256("\0".join((installation_id, "copilot", "project", str(active))).encode()).hexdigest()[:24]
+                if fault == "coherent-binding": binding_id = "client_" + "b" * 24
+                (active / "plugin.json").write_text(json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": declared}))
+                skill = active / "skills/frontend-design/SKILL.md"
+                skill.parent.mkdir(parents=True); skill.write_bytes(body)
+                (skill.parent / "resource.txt").write_text("original resource bytes")
+                home = Path(env["HOME"])
+                (home / ".copilot/logs").mkdir()
+                (home / ".copilot/config.json").write_text(json.dumps({"trustedFolders": [str(project)]}))
+                market = "agentplugins-" + hashlib.sha256(physical.encode()).hexdigest()[:12]
+                key = declared + "@" + market
+                settings = project / ".github/copilot/settings.local.json"
+                settings.parent.mkdir(parents=True)
+                settings.write_text(json.dumps({"foreign": 42, "extraKnownMarketplaces": {market: {"source": {"source": "directory", "path": active.relative_to(project).as_posix()}}}, "enabledPlugins": {key: True}}))
+                tree, manifest, raw, managed = ("sha256:" + value * 64 for value in "cdef")
+                revision = {"resolved_revision": item["ref"], "tree_digest": tree, "manifest_digest": manifest,
+                    "skill": {"name": item["name"], "requested_path": "skills/frontend-design", "resolved_path": "skills/frontend-design", "raw_tree_digest": raw, "normalizer": "agent-skill-package/v1"}}
+                client = {"client_id": "copilot", "scope": "project", "materialization": "materialized",
+                    "activation": "active" if ready else "prepared", "authentication": "not_required" if ready else "not_checked",
+                    "verification": "installation_verified", "policy": "allowed", "package_revision": {key: revision[key] for key in ("resolved_revision", "tree_digest", "manifest_digest")}, "affected_surfaces": ["copilot"]}
+                registration = {"Marketplace": market, "Plugin": declared, "Directory": active.relative_to(project).as_posix()}
+                digest = "sha256:" + hashlib.sha256(b"copilot-project-registration-v1\0" + json.dumps(registration, separators=(",", ":")).encode()).hexdigest()
+                binding = {**client, "package_revision": revision, "client_binding_id": binding_id, "physical_artifact_id": physical,
+                    "target_locator": str(active), "native_profile_root": str(project), "native_objects": [
+                        {"object_id": "package:copilot:" + physical, "kind": "managed_package_directory", "logical_name": declared, "path": str(active), "managed_digest": managed, "protection_class": "managed"},
+                        {"object_id": "copilot_project_plugin_registration:" + key, "kind": "copilot_project_plugin_registration", "logical_name": key, "path": str(settings), "managed_digest": digest, "protection_class": "managed"}],
+                    "receipts": [{"operation_id": "operation-owned", "sequence": 1, "mutation_type": "directory_swap", "client_binding_id": binding_id, "active_path": str(active), "after_digest": managed, "phase": "committed",
+                        "environment_authority": {"environment_id": "project-default", "alias": item["name"], "client_id": "copilot", "expected_action": "install", "source_key": source_key}}]}
+                source = {"stable_source_key": source_key, "source_binding_id": "src_" + source_hash[:24], "repository": item["repo"], "package_subpath": "skills/frontend-design", "resolved_revision": item["ref"], "tree_digest": tree}
+                record = {"installation_id": installation_id, "declared_name": declared, "origin_mode": "direct", "source": source,
+                    "package": {"format_id": "agent-plugins/1.0.0", "declared_name": declared, "manifest_digest": manifest, "inventory": {"skills": [item["name"]], "mcp_present": False}}, "clients": {binding_id: binding}}
+                state = {"schema_version": 5, "installations": [record], "environment_receipts": [{"receipt_id": "environment-owned", "environment_id": "project-default", "alias": item["name"], "client_id": "copilot", "installation_id": installation_id, "client_binding_id": binding_id, "source_key": source_key, "package_digest": tree, "desired_action": "install", "phase": "committed"}]}
+                lock = {"packages": [{"alias": item["name"], "targets": ["copilot"], "tree_digest": tree, "manifest_digest": manifest,
+                    "source": {"git": {"kind": "skill", "skill": item["name"], "repository": item["repo"], "commit": item["ref"], "resolved_skill_path": "skills/frontend-design", "raw_tree_digest": raw}}}]}
+                (project / "uap.toml").write_text("immutable portable manifest")
+                (project / "uap.lock").write_text(json.dumps(lock))
+                public = {"installation_id": installation_id, "name": declared, "source": "anthropics/skills/skills/frontend-design", "clients": [client]}
+                objects.update(binding_id=binding_id, active=active, skill=skill, settings=settings, key=key, market=market, state=state, public=public, project=project)
+                if fault and fault.startswith("private-fact-"): revision["skill"][fault[len("private-fact-"):]] = "foreign"
+                elif fault == "missing-private-skill": revision.pop("skill")
+                elif fault == "wrong-private-skill": revision["skill"]["normalizer"] = "foreign-normalizer"
+                elif fault == "wrong-public-revision": client["package_revision"]["tree_digest"] = "sha256:" + "b" * 64
+                elif fault == "private-skill-public": client["package_revision"]["skill"] = revision["skill"]
+                elif fault == "iid": state["installations"][0]["installation_id"] = "wrong"
+                elif fault == "binding": binding["client_binding_id"] = "wrong"
+                elif fault == "physical": binding["physical_artifact_id"] = "wrong"
+                elif fault == "source": source["resolved_revision"] = "b" * 40
+                elif fault == "receipt": binding["receipts"][0]["after_digest"] = "sha256:" + "0" * 64
+                elif fault == "scope": binding["scope"] = "user"
+                elif fault == "path": binding["target_locator"] = str(root / "unowned")
+                elif fault == "bytes": skill.write_bytes(b"different upstream bytes")
+                elif fault == "hardlink": os.link(skill, skill.with_name("linked"))
+                elif fault == "symlink":
+                    resource = skill.parent / "resource.txt"; saved = skill.parent / "saved.txt"
+                    resource.rename(saved); resource.symlink_to(saved)
+                elif fault == "state-link":
+                    state_path = project / ".uap/state-v2.json"; saved = project / "saved-state.json"
+                    saved.write_text(json.dumps(state)); state_path.symlink_to(saved)
+                if fault != "state-link": (project / ".uap/state-v2.json").write_text(json.dumps(state))
+
+            def call(argv, env, project, *_args, **_kwargs):
+                if argv[0] == audit.GIT_EXECUTABLE:
+                    self.assertEqual(argv[1:2], ["-c"])
+                    self.assertEqual(argv[-2:], ["init", "--quiet"])
+                    self.assertTrue(argv[2].startswith("core.hooksPath=" + str(project.parent)))
+                    self.assertEqual(env["GIT_CONFIG_NOSYSTEM"], "1")
+                    self.assertTrue(Path(env["GIT_CONFIG_GLOBAL"]).is_relative_to(project.parent))
+                    calls.append("git-init")
+                    if fault == "git-failure":
+                        return {"exit_code": 1, "timeout": False, "stdout_tail": "", "stderr_tail": "refused"}
+                    (project / ".git").mkdir()
+                    return response({"result": "success"})
+                if argv[1:3] == ["skills", "add"]:
+                    calls.append("repeat" if objects else "add")
+                    if not objects:
+                        install(env, project)
+                    elif fault == "repeat-receipt":
+                        import copy
+                        binding = objects["state"]["installations"][0]["clients"][objects["binding_id"]]
+                        receipt = copy.deepcopy(binding["receipts"][0])
+                        receipt.update(operation_id="unexpected-second-operation", sequence=2)
+                        binding["receipts"].append(receipt)
+                        (project / ".uap/state-v2.json").write_text(json.dumps(objects["state"]))
+                    elif fault == "ancestor":
+                        parent = objects["active"].parent
+                        saved = parent.with_name("saved-copilot-parent")
+                        parent.rename(saved); parent.mkdir()
+                        (saved / objects["active"].name).rename(objects["active"])
+                    elif fault in ("process-logs", "foreign-log"):
+                        logs = Path(env["HOME"]) / ".copilot/logs"
+                        for index in range(2):
+                            name = f"process-100-{index}.log" if fault == "process-logs" else f"foreign-{index}.log"
+                            (logs / name).write_text("bounded native process log")
+                    return response({"schema_version": 1, "scope": "project", "scope_selection_reason": "explicit",
+                        "command": "skills add", "result": "success", "readiness": "ready" if ready else "needs_action", "next_actions": [] if ready else [{"code": "verify_native"}]})
+                if argv[1] == "list":
+                    calls.append("list")
+                    return response({"schema_version": 1, "command": "list", "result": "success",
+                                     "data": {"installations": [] if objects.get("removed") else [objects["public"]]}})
+                self.assertEqual(argv[1], "remove"); self.assertEqual(argv[2], "frontend-design")
+                calls.append("remove")
+                import shutil
+                shutil.rmtree(objects["active"])
+                objects["settings"].write_text(json.dumps({"foreign": 42, "extraKnownMarketplaces": {}, "enabledPlugins": {}}))
+                (project / "uap.lock").write_text(json.dumps({"packages": []}))
+                if fault != "private-remains":
+                    objects["state"]["installations"][0]["clients"] = {}
+                    objects["state"]["environment_receipts"] = []
+                    (project / ".uap/state-v2.json").write_text(json.dumps(objects["state"]))
+                objects["removed"] = True
+                return response({"result": "success"})
+
+            def probe(argv, project, env, output, label, **kwargs):
+                self.assertTrue((project / ".git").is_dir())
+                self.assertEqual(kwargs["timeout"], 30); self.assertIs(kwargs["memory_only"], True)
+                self.assertTrue(0 < kwargs["limit"] <= 1 << 20)
+                self.assertEqual(env["COPILOT_HOME"], str(Path(env["HOME"]) / ".copilot"))
+                probes.append(label)
+                removed = objects.get("removed", False)
+                if argv[1] == "plugin":
+                    document = [] if removed else [{"name": objects["public"]["name"], "marketplace": objects["market"], "version": "0.0.0", "enabled": True, "source": "live", "installedFrom": str(objects["active"])}]
+                else:
+                    document = [] if removed else [{"name": item["name"], "description": "Inert original Skill", "source": "plugin", "path": str(objects["skill"].parent), "enabled": True}]
+                if fault == "catalog" and not removed: document = []
+                elif fault == "catalog-extra" and document: document[0]["unrecognized"] = True
+                elif fault == "catalog-duplicate" and document: document.append(dict(document[0]))
+                elif fault == "description" and document and argv[1] == "skill" and "repeat-add" in label:
+                    document[0]["description"] = "changed native metadata"
+                if fault == "late-mutation" and not removed: (objects["skill"].parent / "resource.txt").write_text("changed")
+                if fault == "probe-ancestor" and not removed:
+                    parent = objects["active"].parent
+                    saved = parent.with_name("saved-native-probe-parent")
+                    parent.rename(saved); parent.mkdir()
+                    (saved / objects["active"].name).rename(objects["active"])
+                stdout, stderr = json.dumps(document).encode(), b""
+                if fault == "stderr": stderr = b"unexpected native stderr"
+                elif fault == "utf8": stdout = b"\xff"
+                elif fault == "budget": stdout = b"[]" + b" " * ((1 << 20) - 2)
+                elif fault == "flood": stdout = b"x" * ((1 << 20) + 1)
+                record = {"argv": argv, "cwd": str(project), "exit": 0, "error": None, "stdout_bytes": len(stdout), "stderr_bytes": 0, "stdout_sha256": hashlib.sha256(stdout).hexdigest(), "stderr_sha256": hashlib.sha256(stderr).hexdigest()}
+                record["stderr_bytes"] = len(stderr)
+                if fault == "exit": record["exit"] = 7
+                elif fault == "timeout": record.update(exit=None, error="timeout")
+                return record, stdout, stderr
+            with patch.object(audit, "call", side_effect=call), patch.object(audit, "COPILOT_CATALOG_PROBE", side_effect=probe, create=True), patch.dict(audit.AGENT_BINARIES, {"copilot": "/inert/copilot"}):
+                row = audit.do_case("/inert/uap", "copilot", "skill", item, 0, root, {})
+            return row, calls, probes
+
+    def test_real_do_case_attributes_whole_skill_and_repeats_removes(self):
+        row, calls, probes = self.exercise()
+        self.assertEqual(row["status"], "passed", row)
+        self.assertRegex(row["skill_path"], r"^\.uap/managed/clients/copilot/skill-[a-f0-9]{45}-[a-f0-9]{12}/skills/frontend-design/SKILL.md$")
+        self.assertIn("repeat", calls); self.assertIn("remove", calls)
+        self.assertEqual(len(probes), 6)
+        self.assertEqual(row["public_skill_ready"], {"after-add": True, "repeat-add": True})
+        self.assertTrue(row["repeat_verified"] and row["removal_verified"] and row["sentinels_preserved"])
+
+    def test_retained_private_revision_has_source_defined_public_projection(self):
+        # Literal private fields retained by actual Copilot1.0.103 raw-add-proof;
+        # expected DTO is source-defined read_public.go, not an observed list
+        # for that same IID. Live1.0.105 independently retained the3-key shape.
+        private = {"skill": {"name": "benchmark-note", "requested_path": "tests/fixtures/uap_apm/skills/benchmark-note",
+            "resolved_path": "tests/fixtures/uap_apm/skills/benchmark-note", "raw_tree_digest": "sha256:218b77ecc0dc92b1c919b3a9df3839c662e0bae6b7f2f221fbcfea342b8d35cb", "normalizer": "agent-skill-package/v1"},
+            "resolved_revision": "b5d80336b53397be5bbb72c84f680e5885a6ac0d",
+            "tree_digest": "sha256:f008f7b7a0f079504a508fa9e184525c82445300fc7bebb052c2cb8c907fc302",
+            "manifest_digest": "sha256:c9bbd0b5bbb39d2ae168390ee53a28d4e825de8c0b5334dbc4a55e300b095ab0"}
+        expected = {"resolved_revision": "b5d80336b53397be5bbb72c84f680e5885a6ac0d",
+            "tree_digest": "sha256:f008f7b7a0f079504a508fa9e184525c82445300fc7bebb052c2cb8c907fc302",
+            "manifest_digest": "sha256:c9bbd0b5bbb39d2ae168390ee53a28d4e825de8c0b5334dbc4a55e300b095ab0"}
+        audit = load_audit()
+        self.assertEqual(audit.public_skill_revision(private), expected)
+        self.assertIn("skill", private)
+        for field, value in (("tree_digest", None), ("manifest_digest", False), ("release_sequence", True), ("resolved_revision", 42)):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                audit.public_skill_revision({**private, field: value})
+
+    def test_public_revision_projection_is_exact_and_private_provenance_stays_required(self):
+        row, calls, _ = self.exercise()
+        public = json.loads(row["list"]["stdout_tail"])["data"]["installations"][0]["clients"][0]["package_revision"]
+        private = row["copilot_project_skill_proof"]["owner"]["revision"]
+        self.assertEqual(set(public), {"resolved_revision", "tree_digest", "manifest_digest"})
+        self.assertIn("skill", private)
+        for fault in ("wrong-public-revision", "missing-private-skill", "wrong-private-skill", "private-skill-public",
+                      *("private-fact-" + key for key in ("name", "requested_path", "resolved_path", "raw_tree_digest", "normalizer"))):
+            with self.subTest(fault=fault):
+                refused, _, probes = self.exercise(fault=fault)
+                self.assertNotEqual(refused["status"], "passed")
+                self.assertIsNone(refused["skill_path"])
+                self.assertFalse(probes)
+
+    def test_unready_whole_skill_observes_lifecycle_but_never_native_pass(self):
+        row, calls, _ = self.exercise(ready=False)
+        self.assertEqual(row["status"], "incomplete-native-proof")
+        self.assertIn("repeat", calls); self.assertIn("remove", calls)
+        self.assertTrue(row["removal_verified"])
+        self.assertEqual(row["public_skill_ready"], {"after-add": False, "repeat-add": False})
+
+    def test_whole_skill_refuses_wrong_or_unsafe_owner_inputs(self):
+        for fault in ("iid", "binding", "physical", "source", "receipt", "scope", "path", "bytes", "hardlink", "symlink", "state-link", "coherent-name", "coherent-physical", "coherent-binding"):
+            with self.subTest(fault=fault):
+                row, calls, probes = self.exercise(fault=fault)
+                self.assertNotEqual(row["status"], "passed")
+                self.assertNotIn("repeat", calls); self.assertNotIn("remove", calls)
+                self.assertFalse(probes)
+
+    def test_whole_skill_native_mismatch_cannot_pass_and_raw_inputs_survive(self):
+        row, calls, probes = self.exercise(fault="catalog")
+        self.assertEqual(row["status"], "incomplete-native-proof")
+        self.assertIn("remove", calls)
+        captured = row["copilot_project_skill_proof"]["catalogs"]["after-add"]
+        self.assertEqual(captured[0]["stdout"], "[]")
+        self.assertEqual(captured[0]["exit"], 0)
+        self.assertEqual(len(probes), 6)
+
+    def test_whole_skill_late_resource_mutation_never_passes(self):
+        with self.assertRaises((RuntimeError, AssertionError)): self.exercise(fault="late-mutation")
+
+    def test_copilot_skill_git_prerequisite_refuses_existing_or_failed_init(self):
+        for fault in ("git-preexisting", "git-failure"):
+            with self.subTest(fault=fault), self.assertRaises(RuntimeError):
+                self.exercise(fault=fault)
+            self.assertNotIn("add", self.last_calls)
+            self.assertFalse(self.last_probes)
+
+    def test_whole_skill_noop_receipts_and_ancestor_identity_remain_strict(self):
+        row, calls, _ = self.exercise(fault="repeat-receipt")
+        self.assertNotEqual(row["status"], "passed")
+        self.assertFalse(row["repeat_verified"])
+        self.assertIn("remove", calls)
+        with self.assertRaises((RuntimeError, ValueError)):
+            self.exercise(fault="ancestor")
+
+    def test_whole_skill_only_exact_bounded_new_process_logs_qualify(self):
+        row, _, _ = self.exercise(fault="process-logs")
+        self.assertEqual(row["status"], "passed")
+        self.assertFalse(row["repeat_native_unchanged"])
+        self.assertTrue(row["repeat_native_runtime_only"])
+        with self.assertRaises(AssertionError): self.exercise(fault="foreign-log")
+
+    def test_whole_skill_catalog_schema_stderr_exit_and_metadata_never_qualify(self):
+        for fault in ("catalog-extra", "catalog-duplicate", "description", "stderr", "exit", "timeout", "utf8"):
+            with self.subTest(fault=fault):
+                row, calls, _ = self.exercise(fault=fault)
+                self.assertNotEqual(row["status"], "passed")
+                self.assertIn("remove", calls)
+                if fault == "utf8":
+                    import base64
+                    capture = row["copilot_project_skill_proof"]["catalogs"]["after-add"][0]
+                    self.assertEqual(base64.b64decode(capture["stdout_base64"]), b"\xff")
+
+    def test_whole_skill_native_capture_uses_one_aggregate_byte_budget(self):
+        for fault in ("budget", "flood"):
+            with self.subTest(fault=fault):
+                row, _, probes = self.exercise(fault=fault)
+                self.assertNotEqual(row["status"], "passed")
+                self.assertEqual(len(probes), 3)  # exhausted first probe never starts a second
+                for captures in row["copilot_project_skill_proof"]["catalogs"].values():
+                    self.assertLessEqual(sum(x["retained_stdout_bytes"] + x["retained_stderr_bytes"] for x in captures), 1 << 20)
+
+    def test_whole_skill_public_empty_list_cannot_hide_private_binding_after_remove(self):
+        row, calls, _ = self.exercise(fault="private-remains")
+        self.assertNotEqual(row["status"], "passed")
+        self.assertFalse(row["removal_verified"])
+        self.assertIn("remove", calls)
+
+    def test_whole_skill_native_probe_custody_failure_is_hard_and_keeps_raw_capture(self):
+        with self.assertRaises(RuntimeError) as caught:
+            self.exercise(fault="probe-ancestor")
+        self.assertNotIn("repeat", self.last_calls)
+        self.assertNotIn("remove", self.last_calls)
+        captures = caught.exception.copilot_project_skill_proof["catalogs"]["after-add"]
+        self.assertEqual(len(captures), 1)
+        self.assertEqual(captures[0]["exit"], 0)
+        self.assertIn("installedFrom", captures[0]["stdout"])
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ on:
       - '.github/workflows/pi-project-native.yml'
       - 'scripts/pi_project_native_e2e.py'
       - 'scripts/pi_project_components_native_e2e.py'
+      - 'scripts/test_pi_project_components_native_e2e.py'
       - 'scripts/pi_local_model_fixture.py'
       - 'install/integrationctl/agentplugins/clients/pi/**'
       - 'install/integrationctl/agentplugins/clients/shared/**'
@@ -30,6 +31,7 @@ on:
       - '.github/workflows/pi-project-native.yml'
       - 'scripts/pi_project_native_e2e.py'
       - 'scripts/pi_project_components_native_e2e.py'
+      - 'scripts/test_pi_project_components_native_e2e.py'
       - 'scripts/pi_local_model_fixture.py'
       - 'install/integrationctl/agentplugins/clients/pi/**'
       - 'install/integrationctl/agentplugins/clients/shared/**'
@@ -103,6 +105,7 @@ jobs:
           model = Path('scripts/pi_local_model_fixture.py').read_text(encoding='utf8')
           compile(model, 'scripts/pi_local_model_fixture.py', 'exec')
           PY
+          python3 -B -m unittest discover -s scripts -p test_pi_project_components_native_e2e.py -v
       - name: Run genuine pinned native Pi project trust and A/B lifecycle
         shell: bash
         env:

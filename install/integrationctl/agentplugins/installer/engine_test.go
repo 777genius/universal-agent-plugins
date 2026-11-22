@@ -4820,6 +4820,7 @@ func TestPrepareCopiesRequestAndPlan(t *testing.T) {
 		Operation: OpInstall, PackageRoot: pkg, ClientID: "codex", ClientConfigRoot: config,
 		ClientExecutable: probe, InstallationID: "00000000-0000-4000-8000-000000000046",
 		OperationID: "copy-request", RequiredComponents: []string{"mcp", "skills"},
+		ClientSurfaces: []domain.ClientSurface{{ID: "codex_cli", Detected: true, Evidence: "selected host observation"}},
 	}
 	prepared, err := eng.Prepare(ctx, req)
 	if err != nil {
@@ -4835,6 +4836,7 @@ func TestPrepareCopiesRequestAndPlan(t *testing.T) {
 	req.RequiredComponents[0] = "mutated"
 	req.PackageRoot = filepath.Join(base, "other")
 	req.ClientID = "claude"
+	req.ClientSurfaces[0] = domain.ClientSurface{ID: "foreign_surface"}
 	plan := prepared.Plan()
 	plan.TreeDigest = "tampered"
 	plan.RequiredMissing = []string{"x"}
@@ -4844,6 +4846,15 @@ func TestPrepareCopiesRequestAndPlan(t *testing.T) {
 	}
 	if prepared.req.RequiredComponents[0] != "mcp" {
 		t.Fatal("caller slice mutation changed prepared request")
+	}
+	for _, surfaces := range [][]domain.ClientSurface{prepared.req.ClientSurfaces, prepared.client.Surfaces, prepared.req.physical[domain.ClientCodex].Surfaces} {
+		if len(surfaces) != 1 || surfaces[0].ID != "codex_cli" || !surfaces[0].Detected || surfaces[0].Evidence != "selected host observation" {
+			t.Fatalf("caller mutation changed captured client surface evidence: %+v", surfaces)
+		}
+	}
+	body, err := json.Marshal(prepared.req)
+	if err != nil || bytes.Contains(body, []byte("codex_cli")) || bytes.Contains(body, []byte("selected host observation")) {
+		t.Fatalf("operational surface evidence escaped request JSON: %s %v", body, err)
 	}
 }
 

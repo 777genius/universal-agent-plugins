@@ -74,6 +74,27 @@ func TestDevinVersionEnvironmentPreservesOriginalHostAndLegacyAuthority(t *testi
 	}
 }
 
+func TestDevinVersionEnvironmentAdmitsXDGTreeBelowMissingLocal(t *testing.T) {
+	home := devinVersionTestHome(t)
+	executable := filepath.Join(home, "bin", "devin")
+	detector := testDetector(home, map[string]string{"devin": executable})
+	data, state := filepath.Join(home, ".local", "share"), filepath.Join(home, ".local", "state")
+	detector.Environment = map[string]string{"XDG_DATA_HOME": data, "XDG_STATE_HOME": state}
+	detector.ProbeVersionWithEnvironment = func(_ context.Context, _ string, env []string) (string, error) {
+		if !reflect.DeepEqual(env, []string{"HOME=" + home, "XDG_DATA_HOME=" + data, "XDG_STATE_HOME=" + state}) {
+			t.Fatalf("version probe lost original XDG authority: %v", env)
+		}
+		return "devin 3000.12.57\n", nil
+	}
+	rows, err := detector.DetectTargetsWithVersionProbe(context.Background(), []domain.ClientID{domain.ClientWindsurf})
+	if client := clientOf(rows, domain.ClientWindsurf); err != nil || client.DetectionError != nil || client.Version != "3000.12.57" {
+		t.Fatalf("missing ~/.local blocked the Devin version probe: %v %+v", err, client)
+	}
+	if _, err := os.Lstat(filepath.Join(home, ".local")); !os.IsNotExist(err) {
+		t.Fatal("version environment created the absent XDG tree")
+	}
+}
+
 func TestDevinVersionEnvironmentRequiresEnvironmentCapableProbe(t *testing.T) {
 	home := devinVersionTestHome(t)
 	detector := testDetector(home, map[string]string{"devin": filepath.Join(home, "devin")})
@@ -109,7 +130,7 @@ func TestDevinVersionEnvironmentWindowsKeysAreOriginalAndFinite(t *testing.T) {
 }
 
 func TestDevinVersionEnvironmentRejectsUnsafeOriginalFacts(t *testing.T) {
-	for _, kind := range []string{"missing-home", "relative-xdg", "unclean-xdg", "newline-xdg", "missing-parent", "file-xdg", "alias-xdg", "alias-home", "unsupported-platform"} {
+	for _, kind := range []string{"missing-home", "relative-xdg", "unclean-xdg", "newline-xdg", "dangling-alias-parent", "file-xdg", "alias-xdg", "alias-home", "unsupported-platform"} {
 		t.Run(kind, func(t *testing.T) {
 			home := devinVersionTestHome(t)
 			detector := testDetector(home, map[string]string{"devin": filepath.Join(home, "devin")})
@@ -123,8 +144,11 @@ func TestDevinVersionEnvironmentRejectsUnsafeOriginalFacts(t *testing.T) {
 				value += string(filepath.Separator)
 			case "newline-xdg":
 				value += "\nprivate"
-			case "missing-parent":
-				value = filepath.Join(home, "missing-parent", "xdg")
+			case "dangling-alias-parent":
+				if err := os.Symlink(filepath.Join(home, "absent"), filepath.Join(home, "local")); err != nil {
+					t.Skipf("symlink unavailable: %v", err)
+				}
+				value = filepath.Join(home, "local", "xdg")
 			case "file-xdg":
 				if err := os.WriteFile(value, []byte("foreign"), 0600); err != nil {
 					t.Fatal(err)

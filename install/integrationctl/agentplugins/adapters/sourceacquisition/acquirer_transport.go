@@ -5,12 +5,17 @@ package sourceacquisition
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
+
+// AcquisitionTempRoot reports the directory acquisitions stage their files in;
+// an empty value means the system temporary directory.
+func (acquirer Acquirer) AcquisitionTempRoot() string { return acquirer.TempRoot }
 
 func (acquirer Acquirer) AcquireGitHub(ctx context.Context, repository, revision, pluginSubpath string) (domain.PackageSnapshot, error) {
 	return acquirer.acquireGitHub(ctx, repository, revision, pluginSubpath, true)
@@ -71,6 +76,13 @@ func (acquirer Acquirer) AcquireLocal(ctx context.Context, sourceRoot string) (d
 	if err != nil {
 		return domain.PackageSnapshot{}, fmt.Errorf("resolve local package source failed")
 	}
+	// Name a mistyped source in the user's own words; later snapshot failures
+	// stay redacted because they can involve private staging paths.
+	if info, err := os.Lstat(absolute); os.IsNotExist(err) {
+		return domain.PackageSnapshot{}, fmt.Errorf("local package source %q was not found", sourceRoot)
+	} else if err == nil && !info.IsDir() {
+		return domain.PackageSnapshot{}, fmt.Errorf("local package source %q must be a directory, not a file or symbolic link", sourceRoot)
+	}
 	source := domain.SourceIdentity{RequestedSource: sourceRoot, CanonicalSource: filepath.Clean(absolute), SourceBindingHint: "direct-local"}
 	snapshot, err := acquirer.digester().Snapshot(ctx, absolute, source)
 	if err != nil {
@@ -86,6 +98,12 @@ func (acquirer Acquirer) acquireGit(ctx context.Context, url, repository, revisi
 
 func gitAcquisitionFailure(repository, revision, operation string) error {
 	return fmt.Errorf("acquire GitHub repository %q at revision %s: %s failed", repository, revision, operation)
+}
+
+// gitReadFailure is gitAcquisitionFailure for a remote read; it keeps the same
+// message and stays connect-class when cause is.
+func gitReadFailure(cause error, repository, revision, operation string) error {
+	return gitFailure(cause, gitAcquisitionFailure(repository, revision, operation).Error())
 }
 
 func publicTreeError(err error) string {

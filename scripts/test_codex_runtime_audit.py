@@ -18,7 +18,7 @@ import textwrap
 import time
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
 from runpy import run_path
 
 import codex_runtime_audit as audit
@@ -31,8 +31,8 @@ class RemotionTemporaryRootTest(unittest.TestCase):
         self.base = Path(self.temporary.name).resolve(strict=True)
         self.root = self.base / "owned"
         self.root.mkdir()
-        self.handoff = run_path(str(Path(__file__).with_name(
-            "remotion_windows_long_temp_e2e.py")))["physical_temp_root"]
+        self.script = run_path(str(Path(__file__).with_name("remotion_windows_long_temp_e2e.py")))
+        self.handoff = self.script["physical_temp_root"]
 
     def test_same_object_lexical_alias_uses_physical_root_before_baseline(self):
         # A real same-object lexical alias; this is not a Windows 8.3 proof.
@@ -80,10 +80,209 @@ class RemotionTemporaryRootTest(unittest.TestCase):
                             self.handoff(self.root)
                         resolve.assert_not_called()
 
+    def run_setup_failure(self, failed_handoff, replace=False, late_replace=False,
+                          native_case=None, expected_failure="TEMP setup"):
+        """Exercise real main/creation/retention, without running a native case."""
+        runner = self.base / "runner-temp"
+        default = self.base / "default-temp-with-a-longer-physical-spelling"
+        runner.mkdir()
+        default.mkdir()
+        cli = self.base / "inert-source-cli.exe"
+        cli.write_bytes(b"never executed by this setup-only unit fixture")
+        fixture = Path(__file__).resolve().parents[1] / "tests/live-install/fixtures.json"
+        fixture_bytes = fixture.read_bytes()
+        created, moved, late = [], [], []
+        calls = 0
+        capture_authority = self.script["temp_root_authority"]
+
+        def create(**options):
+            path = Path(tempfile.mkdtemp(prefix=options["prefix"], dir=options.get("dir", default)))
+            created.append(path)
+            return str(path)
+
+        def replace_root(path):
+            (path / "owned.txt").write_text("original owned content")
+            retained = path.with_name(path.name + "-moved-original")
+            path.rename(retained)
+            moved.append(retained)
+            path.mkdir()
+            (path / "foreign.txt").write_text("foreign replacement must survive")
+
+        def handoff(path, authority):
+            nonlocal calls
+            calls += 1
+            if calls != failed_handoff:
+                return self.handoff(path, authority)
+            if late_replace:
+                late.append(path)
+            if not replace:
+                raise ValueError("injected handoff refusal")
+            replace_root(path)
+            return self.handoff(path, authority)
+
+        def observe_authority(path):
+            observed = capture_authority(path)
+            if path in late:
+                late.remove(path)
+                replace_root(path)  # Swap after the final authority observation.
+            return observed
+
+        native = SimpleNamespace(
+            validate_fixtures=lambda _: None,
+            bounded_error_traceback=run_path(str(Path(__file__).with_name(
+                "live-install-audit.py")))["bounded_error_traceback"],
+            do_case=native_case or (lambda *args: self.fail("native case ran after TEMP setup failed")))
+        loader = SimpleNamespace(exec_module=lambda _: None)
+        imports = SimpleNamespace(util=SimpleNamespace(
+            spec_from_file_location=lambda *args: SimpleNamespace(loader=loader),
+            module_from_spec=lambda _: native))
+        environment = SimpleNamespace(name="nt", environ={
+            "RUNNER_TEMP": str(runner), "UAP_SOURCE_CLI": str(cli)})
+        git = SimpleNamespace(check_output=lambda *args, **kwargs:
+                              "inert-test-head" if kwargs.get("text") else fixture_bytes)
+        main = self.script["main"]
+        with patch.dict(main.__globals__, {
+                "os": environment, "subprocess": git, "importlib": imports,
+                "tempfile": SimpleNamespace(mkdtemp=create), "physical_temp_root": handoff,
+                "temp_root_authority": observe_authority}), patch.object(shutil, "rmtree") as remove, \
+                patch("builtins.print") as emitted:
+            with self.assertRaisesRegex(SystemExit, expected_failure):
+                main()
+            remove.assert_not_called()
+            self.emitted = [json.loads(call.args[0]) for call in emitted.call_args_list]
+        report = runner / "remotion-windows-source-longtemp.json"
+        self.assertTrue(report.is_file(), "TEMP setup failure lost its evidence")
+        return json.loads(report.read_text()), created, moved
+
+    def test_first_handoff_failure_reports_and_retains_unchanged_owned_root(self):
+        evidence, created, _ = self.run_setup_failure(1)
+        self.assertEqual(len(created), 1)
+        self.assertTrue(created[0].is_dir())
+        self.assertEqual(evidence["results"], {})
+        self.assertEqual(evidence["temp_roots"]["runner-temp"]["cleanup"], "retained-for-evidence")
+        self.assertEqual(evidence["temp_roots"]["runner-temp"]["created_root_chars"],
+                         len(str(created[0] / "skill-24")))
+        self.assertEqual(evidence["setup_error"]["error_type"], "ValueError")
+
+    def test_second_handoff_failure_reports_and_retains_both_owned_roots(self):
+        evidence, created, _ = self.run_setup_failure(2)
+        self.assertEqual(len(created), 2)
+        self.assertTrue(all(path.is_dir() for path in created))
+        self.assertEqual({row["cleanup"] for row in evidence["temp_roots"].values()},
+                         {"retained-for-evidence"})
+        self.assertEqual(evidence["temp_roots"]["runner-temp"]["root_chars"],
+                         len(str(created[0] / "skill-24")))
+        self.assertEqual(evidence["temp_roots"]["default-windows-temp"]["created_root_chars"],
+                         len(str(created[1] / "skill-24")))
+
+    def test_changed_root_is_retained_and_foreign_replacement_is_not_removed(self):
+        evidence, created, moved = self.run_setup_failure(2, replace=True)
+        self.assertTrue(created[0].is_dir(), "verified first root was not retained")
+        self.assertEqual((created[1] / "foreign.txt").read_text(), "foreign replacement must survive")
+        self.assertEqual((moved[0] / "owned.txt").read_text(), "original owned content")
+        retained = evidence["temp_roots"]["default-windows-temp"]
+        self.assertEqual(retained["cleanup"], "retained-unverified")
+        self.assertEqual(retained["created_path"], str(created[1]))
+        self.assertEqual(retained["cleanup_error_type"], "ValueError")
+
+    def test_late_swap_after_authority_observation_cannot_delete_foreign_bytes(self):
+        evidence, created, moved = self.run_setup_failure(2, late_replace=True)
+        self.assertTrue(all(path.is_dir() for path in created))
+        self.assertEqual((created[1] / "foreign.txt").read_text(), "foreign replacement must survive")
+        self.assertEqual((moved[0] / "owned.txt").read_text(), "original owned content")
+        self.assertEqual(evidence["temp_roots"]["default-windows-temp"]["cleanup"],
+                         "retained-for-evidence")
+
+    def test_native_timeout_keeps_exact_phase_note_in_log_and_report(self):
+        failure = TimeoutError()
+        failure.add_note("Codex native skill inventory phase='repeat-installed'; command=['inert', 'app-server']")
+        calls = []
+
+        def native_case(*args):
+            calls.append(args[5])
+            if len(calls) == 1:
+                return {"status": "passed", "codex_runtime_proof": {"inert": True}}
+            raise failure
+
+        evidence, created, _ = self.run_setup_failure(
+            0, native_case=native_case, expected_failure="default-windows-temp: TimeoutError")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(evidence["results"]["runner-temp"]["case"]["status"], "passed")
+        result = evidence["results"]["default-windows-temp"]
+        self.assertNotIn("case", result, "failed native execution must not invent a completed case")
+        self.assertEqual(result["stage"], "native-case")
+        self.assertEqual(result["error_type"], "TimeoutError")
+        self.assertEqual(result["error"], "TimeoutError()")
+        self.assertIn("native_case", result["error_traceback"])
+        self.assertIn("phase='repeat-installed'", result["error_traceback"])
+        self.assertEqual(len(self.emitted), 1)
+        self.assertEqual(self.emitted[0], {"case": "default-windows-temp", "status": "harness-error",
+                         **{key: result[key] for key in ("stage", "error_type", "error", "error_traceback")}})
+        self.assertTrue(all(path.is_dir() for path in created))
+        self.assertEqual({row["cleanup"] for row in evidence["temp_roots"].values()},
+                         {"retained-for-evidence"})
+
+    def test_native_error_and_traceback_are_bounded_without_passing_failed_case(self):
+        def native_case(*_):
+            error = ValueError("x" * 20000)
+            error.add_note("phase='repeat-installed'; " + "n" * 20000)
+            error.add_note("second diagnostic note")
+            raise error
+
+        evidence, _, _ = self.run_setup_failure(
+            0, native_case=native_case, expected_failure="runner-temp: ValueError; default-windows-temp: ValueError")
+        self.assertEqual(len(self.emitted), 2)
+        for label, result in evidence["results"].items():
+            self.assertEqual(result["stage"], "native-case")
+            self.assertEqual(len(result["error"]), 1800)
+            self.assertLessEqual(len(result["error_traceback"]), 8192)
+            self.assertIn("in native_case", result["error_traceback"])
+            self.assertIn("ValueError: ", result["error_traceback"])
+            self.assertIn("phase='repeat-installed'", result["error_traceback"])
+            self.assertIn("second diagnostic note", result["error_traceback"])
+            self.assertIn("traceback truncated", result["error_traceback"])
+            self.assertNotIn("case", result)
+            output = next(row for row in self.emitted if row["case"] == label)
+            self.assertEqual(output["status"], "harness-error")
+            self.assertEqual(output["error_traceback"], result["error_traceback"])
+
+    def test_missing_native_proof_keeps_returned_case_and_failure_stage(self):
+        evidence, _, _ = self.run_setup_failure(
+            0, native_case=lambda *_: {"status": "passed"},
+            expected_failure="runner-temp: RuntimeError; default-windows-temp: RuntimeError")
+        for result in evidence["results"].values():
+            self.assertEqual(result["case"], {"status": "passed"})
+            self.assertEqual(result["stage"], "native-proof")
+            self.assertIn("strict native Codex runtime proof is missing", result["error"])
+        self.assertTrue(all(row["status"] == "harness-error" for row in self.emitted))
+
 
 class RemotionRepeatNativePhaseTest(unittest.TestCase):
     def setUp(self):
         self.live = run_path(str(Path(__file__).with_name("live-install-audit.py")))
+
+    def test_bounded_traceback_keeps_all_eight_long_failure_frames(self):
+        following = None
+        for index in reversed(range(8)):
+            name = f"frame_{index}_" + "n" * 120
+            namespace = {"following": following}
+            statement = "raise ValueError('x' * 20000)" if index == 7 else "following()"
+            code = compile(f"def {name}():\n    {statement}\n",
+                           f"fixture-{index}-" + "f" * 600 + ".py", "exec")
+            exec(code, namespace)
+            following = namespace[name]
+        try:
+            following()
+        except ValueError as error:
+            detail = self.live["bounded_error_traceback"](error)
+        else:
+            self.fail("deep failure fixture did not raise")
+        self.assertLessEqual(len(detail), 8192)
+        self.assertEqual(detail.count("  File "), 8)
+        for index in range(8):
+            self.assertIn(f"in frame_{index}_", detail)
+        self.assertIn("ValueError: ", detail)
+        self.assertIn("traceback truncated", detail)
 
     def test_every_phase_keeps_the_original_snapshot_without_adopting_new_files(self):
         with tempfile.TemporaryDirectory(prefix="remotion-phases-inert-") as temporary:
@@ -417,6 +616,39 @@ class CodexRuntimeStateTest(unittest.TestCase):
     def check(self):
         return audit.runtime_state(self.runtime, self.scratch, self.baseline)
 
+    def test_file_refusal_facts_are_fixed_and_never_read_rejected_bodies(self):
+        private = self.root / "private-path-never-print"
+        private.write_bytes(b"private-body-never-print")
+        alias_parent = self.root / "alias"
+        alias_parent.mkdir()
+        linked = self.root / "linked"
+        os.link(private, linked)
+        cases = [(self.scratch, 0, "nonregular", False),
+                 (linked, 64, "multiple-links", True)]
+        single = self.root / "single"
+        single.write_bytes(private.read_bytes())
+        cases.extend([(single, 0, "out-of-bound", True),
+                      (alias_parent / ".." / single.name, 64, "noncanonical", True)])
+        for path, bound, reason, regular in cases:
+            with (self.subTest(reason=reason),
+                  patch.dict(audit._FILES, {"open_member": unittest.mock.Mock()}),
+                  patch.object(Path, "resolve", autospec=True, side_effect=Path.resolve) as resolve):
+                with self.assertRaises(ValueError) as caught:
+                    audit._regular_bytes(path, bound)
+                audit._FILES["open_member"].assert_not_called()
+                if reason != "noncanonical":
+                    resolve.assert_not_called()
+                prefix, raw = str(caught.exception).split("; ", 1)
+                self.assertEqual(prefix, "Codex audit file is not bounded, regular and exclusively linked")
+                facts = json.loads(raw)
+                self.assertEqual(set(facts), {"reason", "size", "bound", "nlink", "regular", "canonical"})
+                self.assertEqual(facts, {"reason": reason, "size": path.lstat().st_size,
+                                        "bound": bound, "nlink": path.lstat().st_nlink,
+                                        "regular": regular,
+                                        "canonical": False if reason == "noncanonical" else None})
+                self.assertNotIn(str(self.root), raw)
+                self.assertNotIn("private", raw)
+
     def test_wal_representation_changes_require_identical_full_logical_state(self):
         connection = sqlite3.connect(self.database)
         self.addCleanup(connection.close)
@@ -579,8 +811,111 @@ class CodexNativeQualificationTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.verify(no_foreign)
 
+    def test_same_name_unowned_skills_do_not_replace_owned_absence(self):
+        absent = copy.deepcopy(self.listing)
+        absent["data"][0]["skills"].pop(0)
+        snapshots = {}
+        for scope, root in (("system", self.project / "system/.system"),
+                            ("user", self.project / "other-user/skills"),
+                            ("repo", self.project / "other-project/.agents/skills")):
+            path = root / "selected/SKILL.md"
+            path.parent.mkdir(parents=True)
+            path.write_text("unchanged unowned Skill\n")
+            snapshots[path] = path.read_bytes()
+            absent["data"][0]["skills"].append({
+                "name": "selected", "path": str(path), "scope": scope,
+                "enabled": True, "pluginId": None})
+        self.selected.unlink()
+        self.selected.parent.rmdir()
+        for phase in ("before-install", "removed"):
+            with self.subTest(phase=phase):
+                if phase == "removed":
+                    self.selected.parent.mkdir()
+                    self.selected.write_text("owned Skill installed between observations\n")
+                    self.selected.unlink()
+                    self.selected.parent.rmdir()
+                self.verify(absent, False)
+                self.assertEqual({path: path.read_bytes() for path in snapshots}, snapshots)
+        # Distinct same-name rows do not replace or duplicate the owned identity.
+        with self.assertRaises(ValueError):
+            self.verify(absent, True)
+        self.selected.parent.mkdir()
+        self.selected.write_text("owned Skill installed beside unowned namesakes\n")
+        present = copy.deepcopy(absent)
+        present["data"][0]["skills"].append(copy.deepcopy(self.listing["data"][0]["skills"][0]))
+        self.verify(present, True)
+        self.assertEqual({path: path.read_bytes() for path in snapshots}, snapshots)
+        present["data"][0]["skills"].append(copy.deepcopy(present["data"][0]["skills"][-1]))
+        with self.assertRaises(ValueError):
+            self.verify(present, True)
+
+    def test_absence_rejects_owned_path_even_under_another_name_or_missing_file(self):
+        for exists in (True, False):
+            if not exists:
+                self.selected.unlink()
+                self.selected.parent.rmdir()
+            for name in ("selected", "renamed-owned"):
+                with self.subTest(exists=exists, name=name):
+                    listing = copy.deepcopy(self.listing)
+                    listing["data"][0]["skills"][0]["name"] = name
+                    with self.assertRaisesRegex(ValueError, "still natively discoverable"):
+                        self.verify(listing, False)
+
+    def test_absence_rejects_ambiguous_or_redirected_inventory_paths(self):
+        for value in (None, "relative/SKILL.md",
+                      str(self.selected.parent / ".." / self.selected.parent.name / "SKILL.md")):
+            with self.subTest(path=value):
+                listing = copy.deepcopy(self.listing)
+                listing["data"][0]["skills"][0]["path"] = value
+                with self.assertRaises(ValueError):
+                    self.verify(listing, False)
+        # Exercise both redirect kinds without requiring OS symlink privileges.
+        for method in ("is_symlink", "is_junction"):
+            with self.subTest(method=method):
+                original = Path.lstat
+                def redirected(path):
+                    info = original(path)
+                    if path != self.selected.parent:
+                        return info
+                    return SimpleNamespace(
+                        st_mode=(stat.S_IFLNK if method == "is_symlink" else info.st_mode),
+                        st_file_attributes=0 if method == "is_symlink" else 0x400)
+                with patch.object(Path, "lstat", redirected):
+                    with self.assertRaisesRegex(ValueError, "path is redirected"):
+                        self.verify(self.listing, False)
+
+    def test_absent_owned_windows_prefix_uses_anchor_identity_not_spelling(self):
+        # Model only filesystem lookup; use real Windows path parsing on every OS.
+        from pathlib import PureWindowsPath
+        project_info, root_info = self.project.lstat(), self.project.parent.lstat()
+        class InventoryPath(PureWindowsPath):
+            def lstat(path):
+                spelling = str(path).removeprefix("\\\\?\\")
+                if spelling == "C:\\project":
+                    return project_info
+                if spelling == "C:\\":
+                    return root_info
+                raise FileNotFoundError(spelling)
+        owned = "C:\\project\\.agents\\skills\\selected\\SKILL.md"
+        with patch.object(audit, "Path", InventoryPath):
+            self.assertTrue(audit._references_skill_path("\\\\?\\" + owned, owned))
+            self.assertTrue(audit._references_skill_path(owned, "\\\\?\\" + owned))
+            self.assertFalse(audit._references_skill_path(
+                "C:\\project\\other\\selected\\SKILL.md", owned))
+
+    @unittest.skipUnless(os.name == "nt", "Windows extended-length spelling")
+    def test_absent_owned_extended_length_path_is_still_rejected(self):
+        listing = copy.deepcopy(self.listing)
+        value = str(self.selected)
+        listing["data"][0]["skills"][0]["path"] = (
+            value if value.startswith("\\\\?\\") else "\\\\?\\" + value)
+        self.selected.unlink()
+        self.selected.parent.rmdir()
+        with self.assertRaisesRegex(ValueError, "still natively discoverable"):
+            self.verify(listing, False)
+
     def test_wrong_path_scope_enablement_and_duplicate_rows_fail(self):
-        for key, value in (("path", str(self.foreign)), ("scope", "user"), ("enabled", False), ("pluginId", "other@market")):
+        for key, value in (("name", "renamed-owned"), ("path", str(self.foreign)), ("scope", "user"), ("enabled", False), ("pluginId", "other@market")):
             with self.subTest(key=key):
                 listing = copy.deepcopy(self.listing)
                 listing["data"][0]["skills"][0][key] = value
@@ -694,6 +1029,38 @@ class CodexSkillProfileGuardTest(unittest.TestCase):
                             and row["runtime_integrity_verified"] and row["runtime_semantics_unchanged"]
                             and set(row["runtime_files_fully_read"]) == {"state_5.sqlite"}
                             for row in observations))
+
+    def test_exchange_failure_keeps_type_phase_command_and_profile(self):
+        baseline = copy.deepcopy(self.observer.baseline)
+        observations = copy.deepcopy(self.observer.observations)
+        for phase, present in (("before-install", False), ("installed", True),
+                               ("repeat-installed", True), ("removed", False)):
+            for failure_type in (TimeoutError, ValueError):
+                with self.subTest(phase=phase, failure_type=failure_type):
+                    if present:
+                        self.selected.parent.mkdir(exist_ok=True)
+                        self.selected.write_text("inert selected Skill\n", encoding="utf-8")
+                    elif self.selected.exists():
+                        self.selected.unlink()
+                    failure = failure_type()
+                    cause = RuntimeError("original exchange callsite")
+                    failure.__cause__ = cause
+                    self.exchange.side_effect = failure
+                    calls = self.exchange.call_count
+                    with self.assertRaises(failure_type) as caught:
+                        self.observer.checkpoint(phase, present)
+                    self.assertIs(caught.exception, failure)
+                    self.assertIs(caught.exception.__cause__, cause)
+                    self.assertEqual(repr(caught.exception), failure_type.__name__ + "()")
+                    notes = "\n".join(getattr(caught.exception, "__notes__", []))
+                    self.assertIn("phase=" + repr(phase), notes)
+                    self.assertIn("command=" + repr([sys.executable, "app-server"]), notes)
+                    self.assertEqual(self.exchange.call_count, calls + 1)
+                    self.assertEqual(self.observer.baseline, baseline)
+                    self.assertEqual(self.observer.observations, observations)
+                    self.assertEqual(self.observer.config.read_bytes(), self.original)
+                    self.assertEqual(self.foreign.read_text(encoding="utf-8"),
+                                     "independently owned fixture\n")
 
     def test_temporary_git_name_refusal_keeps_actual_checkpoint_and_baseline(self):
         rejected = self.profile / ".tmp" / "unqualified"
@@ -812,16 +1179,156 @@ def process_running(pid):
             api.CloseHandle(handle)
     try:
         status = Path(f"/proc/{pid}/stat")
-        if status.is_file() and status.read_text().rsplit(")", 1)[1].split()[0] in ("Z", "X"):
-            return False
+        try:
+            if status.is_file() and status.read_text().rsplit(")", 1)[1].split()[0] in ("Z", "X"):
+                return False
+        except FileNotFoundError:
+            pass  # The proc entry can disappear before the existing signal probe.
         os.kill(pid, 0)
         return True
     except ProcessLookupError:
         return False
 
 
+@unittest.skipUnless(sys.platform.startswith("linux"), "Linux proc diagnostic controls")
+class CodexGroupDiagnosticTest(unittest.TestCase):
+    def member(self, root, pid, parent, group, state, started=1234, comm="inert"):
+        directory = root / str(pid)
+        directory.mkdir()
+        fields = [state, str(parent), str(group), str(group)] + ["0"] * 15 + [str(started)]
+        (directory / "stat").write_bytes(
+            (str(pid) + " (" + comm + ") " + " ".join(fields) + "\n").encode())
+        return directory
+
+    def test_snapshot_retains_live_and_zombie_members_without_foreign_processes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.member(root, 101, 1, 42, "Z", 333, "inert ) ( name")
+            self.member(root, 102, 99, 42, "S", 444)
+            self.member(root, 103, 99, 90, "R")
+            with patch.object(audit, "_posix_group_active", return_value=True):
+                result = audit._posix_group_diagnostic(42, proc_root=root)
+            self.assertTrue(result["group_exists"])
+            self.assertTrue(result["diagnostic_only"])
+            self.assertTrue(result["scan_complete"])
+            self.assertEqual(result["unreadable"], 0)
+            self.assertEqual(result["members"], [
+                {"pid": 101, "ppid": 1, "pgid": 42, "sid": 42, "state": "Z", "start_ticks": 333},
+                {"pid": 102, "ppid": 99, "pgid": 42, "sid": 42, "state": "S", "start_ticks": 444}])
+
+    def test_truncated_snapshot_may_omit_live_members_without_closing_group(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.member(root, 101, 1, 42, "S")
+            with patch.object(audit, "_posix_group_active", return_value=True), \
+                    patch.object(audit.time, "monotonic", side_effect=[0.0, .25]):
+                result = audit._posix_group_diagnostic(42, proc_root=root)
+            self.assertTrue(result["group_exists"])
+            self.assertTrue(result["diagnostic_only"])
+            self.assertTrue(result["truncated"])
+            self.assertFalse(result["scan_complete"])
+            self.assertEqual(result["members"], [])
+
+    def test_recorded_pid_liveness_falls_back_when_proc_stat_disappears(self):
+        for outcome, expected in ((None, True), (ProcessLookupError(), False)):
+            with self.subTest(outcome=type(outcome).__name__), \
+                    patch.object(Path, "is_file", return_value=True), \
+                    patch.object(Path, "read_text", side_effect=FileNotFoundError()), \
+                    patch.object(os, "kill", side_effect=outcome) as probe:
+                self.assertEqual(process_running(42), expected)
+                probe.assert_called_once_with(42, 0)
+        with patch.object(Path, "is_file", return_value=True), \
+                patch.object(Path, "read_text", side_effect=FileNotFoundError()), \
+                patch.object(os, "kill", side_effect=PermissionError()) as probe:
+            with self.assertRaises(PermissionError):
+                process_running(42)
+            probe.assert_called_once_with(42, 0)
+
+    def test_recorded_pid_liveness_preserves_observed_proc_states(self):
+        for state, expected in (("Z", False), ("X", False), ("S", True)):
+            with self.subTest(state=state), \
+                    patch.object(Path, "is_file", return_value=True), \
+                    patch.object(Path, "read_text", return_value=f"42 (inert) {state} 0\n"), \
+                    patch.object(os, "kill") as probe:
+                self.assertEqual(process_running(42), expected)
+                if expected:
+                    probe.assert_called_once_with(42, 0)
+                else:
+                    probe.assert_not_called()
+
+    def test_member_count_file_bound_and_redirection_are_visible(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for pid in range(101, 110):
+                self.member(root, pid, 1, 42, "Z")
+            with patch.object(audit, "_posix_group_active", return_value=True):
+                result = audit._posix_group_diagnostic(42, proc_root=root)
+            self.assertEqual(len(result["members"]), 8)
+            self.assertTrue(result["truncated"])
+            self.assertFalse(result["scan_complete"])
+            self.assertTrue(result["group_exists"], "zombies must not count as a closed group")
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            oversized = self.member(root, 101, 1, 42, "S")
+            (oversized / "stat").write_bytes(b"x" * 4097)
+            redirected = self.member(root, 102, 1, 42, "S")
+            (redirected / "stat").unlink()
+            foreign = root / "foreign"
+            foreign.write_bytes(b"foreign diagnostic bytes\n")
+            (redirected / "stat").symlink_to(foreign)
+            with patch.object(audit, "_posix_group_active", return_value=True):
+                result = audit._posix_group_diagnostic(42, proc_root=root)
+            self.assertEqual(result["members"], [])
+            self.assertEqual(result["unreadable"], 2)
+            self.assertTrue(result["group_exists"])
+            self.assertEqual(foreign.read_bytes(), b"foreign diagnostic bytes\n")
+
+    def test_failure_notes_keep_original_exception_and_wire_digest_without_contents(self):
+        failure = TimeoutError()
+        cause = RuntimeError("original cause")
+        failure.__cause__ = cause
+        process = SimpleNamespace(pid=42, returncode=0)
+        private_profile = "/private/inert-codex-profile"
+        wire = (json.dumps({"id": 1, "result": {"codexHome": private_profile}}).encode()
+                + b"\n" + b"x" * 2048)
+        snapshot = {"pgid": 42, "group_exists": True, "members": [{"pid": 101, "state": "Z"}],
+                    "diagnostic_only": True}
+        with patch.object(audit, "_posix_group_diagnostic", return_value=snapshot):
+            audit._note_group_drain_failure(failure, process, "before-owned-cleanup", [wire])
+            audit._note_group_drain_failure(failure, process, "after-owned-cleanup")
+        self.assertEqual(repr(failure), "TimeoutError()")
+        self.assertIs(failure.__cause__, cause)
+        prefix = "Codex native group diagnostic: "
+        before, after = [json.loads(note.removeprefix(prefix)) for note in failure.__notes__]
+        self.assertTrue(all(len(note) < 3200 for note in failure.__notes__))
+        self.assertEqual(before["phase"], "group-drain")
+        self.assertEqual(before["rpc_stdout"], {
+            "bytes": len(wire), "messages": 1, "sha256": audit.hashlib.sha256(wire).hexdigest()})
+        for note in failure.__notes__:
+            self.assertNotIn(private_profile, note)
+            self.assertNotIn(private_profile.encode().hex(), note)
+        self.assertEqual(before["group"], snapshot)
+        self.assertEqual(after["when"], "after-owned-cleanup")
+        self.assertNotIn("rpc_stdout", after)
+
+    def test_diagnostic_failure_or_excess_does_not_replace_the_original_failure(self):
+        failure = TimeoutError()
+        process = SimpleNamespace(pid=42, returncode=0)
+        with patch.object(audit, "_posix_group_diagnostic", side_effect=RuntimeError("inert")):
+            audit._note_group_drain_failure(failure, process, "before-owned-cleanup")
+        self.assertEqual(repr(failure), "TimeoutError()")
+        self.assertIn("diagnostic unavailable: RuntimeError", failure.__notes__[-1])
+        with patch.object(audit, "_posix_group_diagnostic", return_value={"padding": "x" * 10000}):
+            audit._note_group_drain_failure(failure, process, "after-owned-cleanup")
+        note = failure.__notes__[-1]
+        self.assertLess(len(note), 3200)
+        detail = json.loads(note.removeprefix("Codex native group diagnostic: "))
+        self.assertTrue(detail["diagnostic_truncated"])
+        self.assertGreater(detail["bytes"], 3072)
+
+
 class CodexNativeProcessCleanupTest(unittest.TestCase):
-    def observed_exit(self, exit_code, stderr):
+    def observed_exit(self, exit_code, stderr, *, orphan=False):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             profile = root / "profile"
@@ -838,13 +1345,36 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
                 print(json.dumps({'id': second['id'], 'result': {'data': []}}), flush=True)
                 sys.stdin.read()
             """)
+            if orphan:
+                self.orphan_cleanup_complete = False
+                # This child has no capture pipes; only its owned process group
+                # keeps the otherwise successful exchange from completing.
+                script += textwrap.dedent("""
+                    import subprocess
+                    from pathlib import Path
+                    child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'],
+                        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    Path('owned-orphan-pid').write_text(str(child.pid))
+                """)
             script += f"sys.stderr.buffer.write(bytes.fromhex({stderr.hex()!r}))\n"
             script += f"sys.stderr.buffer.flush()\nraise SystemExit({exit_code})\n"
             (root / "app-server").write_text(script, encoding="utf-8")
             environment = {key: value for key, value in os.environ.items()
                            if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR"}}
             environment.update(HOME=str(root), USERPROFILE=str(root), CODEX_HOME=str(profile))
-            return asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment))
+            try:
+                return asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment))
+            finally:
+                # Keep the inert fixture bounded even if the observer regresses.
+                marker = root / "owned-orphan-pid"
+                if orphan and marker.exists():
+                    pid = int(marker.read_text())
+                    deadline = time.monotonic() + 3
+                    while process_running(pid) and time.monotonic() < deadline:
+                        time.sleep(.02)
+                    self.orphan_cleanup_complete = not process_running(pid)
+                    if not self.orphan_cleanup_complete:
+                        os.kill(pid, signal.SIGKILL)
 
     def test_nonzero_exit_still_refuses_with_observed_diagnostic(self):
         self.assertEqual(self.observed_exit(0, b""), {"data": []})
@@ -862,6 +1392,29 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
         self.assertNotIn("\x1b", message)
         self.assertNotIn("omitted-tail", message)
         self.assertLess(len(message), 4 * 2048 + 160)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "Linux proc group-drain evidence")
+    def test_group_drain_timeout_retains_observations_and_still_refuses(self):
+        with self.assertRaises(TimeoutError) as raised:
+            self.observed_exit(0, b"", orphan=True)
+        prefix = "Codex native group diagnostic: "
+        notes = [json.loads(note.removeprefix(prefix)) for note in raised.exception.__notes__
+                 if note.startswith(prefix)]
+        self.assertEqual([note["when"] for note in notes],
+                         ["before-owned-cleanup", "after-owned-cleanup"])
+        before, after = notes
+        self.assertEqual(before["phase"], "group-drain")
+        self.assertEqual(before["exit_code"], 0)
+        self.assertEqual(before["rpc_stdout"]["messages"], 2)
+        self.assertGreater(before["rpc_stdout"]["bytes"], 0)
+        self.assertEqual(len(before["rpc_stdout"]["sha256"]), 64)
+        self.assertTrue(before["group"]["group_exists"])
+        # A bounded host-wide proc sample may omit this live child. The controlled
+        # proc-root test separately requires exact live/zombie member reporting.
+        self.assertTrue(after["group"]["diagnostic_only"])
+        # A post-kill zombie is retained as a member, never promoted to closure.
+        # Check production cleanup before the fixture's independent safety kill.
+        self.assertTrue(self.orphan_cleanup_complete, "owned inert child survived observer cleanup")
 
     def test_exited_launcher_with_child_held_pipes_cannot_pass_or_leak(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -938,6 +1491,368 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False)
                     else:
                         os.kill(child_pid, signal.SIGKILL)
+
+
+class CodexPluginSQLiteAuditTest(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.case = Path(temporary.name).resolve()
+        self.home, self.project = self.case / 'home', self.case / 'project'
+        self.profile = self.home / '.codex'
+        for path in (self.home, self.project, self.case / 'tmp', self.profile):
+            path.mkdir()
+        self.database = self.home / '.local/state/codex-sqlite/state_5.sqlite'
+
+    async def discover(self, binary, project, profile, environment, **kwargs):
+        self.assertEqual(kwargs, {"sqlite_baseline": True})
+        self.assertEqual(environment['CODEX_HOME'], str(self.profile))
+        self.assertEqual(self.profile.joinpath('config.toml').read_bytes(),
+                         audit._sqlite_config(str(self.database.parent)))
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute('CREATE TABLE fixture_rows (value TEXT)')
+            connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+            connection.commit()
+        return {'data': [{'cwd': str(project), 'errors': [], 'skills': []}]}
+
+    def create(self):
+        with patch.object(audit, '_exchange', side_effect=self.discover):
+            return audit.CodexPluginSQLiteAudit(Path(sys.executable), self.case,
+                                               self.home, self.project, {})
+
+    def test_non_bmp_parent_round_trips_native_sqlite_config(self):
+        self.case = self.case / 'unicode-\U0001f600'
+        self.case.mkdir()
+        self.home, self.project = self.case / 'home', self.case / 'project'
+        self.profile = self.home / '.codex'
+        for path in (self.home, self.project, self.case / 'tmp', self.profile):
+            path.mkdir()
+        self.database = self.home / '.local/state/codex-sqlite/state_5.sqlite'
+        observer = self.create()
+        self.assertEqual(audit.tomllib.loads(observer.config.read_text(encoding='utf-8')),
+                         {'sqlite_home': str(observer.runtime)})
+        observer.guard()
+        observer.checkpoint('unicode-pin')
+        self.assertEqual([row['phase'] for row in observer.evidence()['observations']],
+                         ['before-install', 'unicode-pin'])
+
+    def test_wal_representation_preserves_semantics_but_changed_row_refuses(self):
+        observer = self.create()
+        # Public plugin configuration changes are admitted only with the exact pin intact.
+        with observer.config.open('a') as stream:
+            stream.write('\n[plugins."owned@agentplugins-aaaaaaaaaaaa"]\nenabled = true\n')
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute('PRAGMA journal_mode=WAL')
+            connection.execute('PRAGMA wal_autocheckpoint=0')
+            for _ in range(300):
+                connection.execute("UPDATE fixture_rows SET value='temporary'")
+                connection.execute("UPDATE fixture_rows SET value='stable'")
+                connection.commit()
+            self.assertGreater(Path(str(self.database) + '-wal').stat().st_size, 1 << 20)
+            observer.checkpoint('after-public-repeat')
+            connection.execute("UPDATE fixture_rows SET value='changed'")
+            connection.commit()
+            with self.assertRaisesRegex(ValueError, 'table contents changed'):
+                observer.checkpoint('changed-row')
+        self.assertEqual(len(observer.observations), 2)
+        self.assertEqual(observer.evidence()['native_version'], '0.153.4')
+
+    def test_missing_baseline_pin_redirection_and_unexpected_runtime_member_refuse(self):
+        with patch.object(audit, '_exchange', return_value=
+                {'data': [{'cwd': str(self.project), 'skills': []}]}):
+            with self.assertRaisesRegex(ValueError, 'member count'):
+                audit.CodexPluginSQLiteAudit(Path(sys.executable), self.case,
+                                             self.home, self.project, {})
+        # A failed prebaseline constructor is not reusable or silently reset.
+        with self.assertRaises(FileExistsError):
+            self.create()
+
+    def test_primary_database_identity_cannot_be_replaced_with_identical_bytes(self):
+        observer = self.create()
+        body = self.database.read_bytes()
+        held = self.database.with_name('held-primary')
+        self.database.rename(held)
+        self.database.write_bytes(body)
+        with self.assertRaisesRegex(ValueError, 'primary database identity changed'):
+            observer.checkpoint('identical-primary-replacement')
+
+    def test_config_and_runtime_authority_changes_refuse(self):
+        observer = self.create()
+        original = observer.config.read_bytes()
+        observer.config.write_text('sqlite_home = "/foreign"\n')
+        with self.assertRaisesRegex(ValueError, 'config authority changed'):
+            observer.checkpoint('redirected-pin')
+        observer.config.write_bytes(original)
+        foreign = observer.runtime / 'foreign.sqlite'
+        foreign.write_text('not a runtime member')
+        with self.assertRaisesRegex(ValueError, 'unexpected member'):
+            observer.checkpoint('foreign-member')
+        foreign.unlink()
+        held = observer.runtime.with_name('held-runtime')
+        observer.runtime.rename(held)
+        observer.runtime.mkdir()
+        with self.assertRaisesRegex(ValueError, 'authority root changed'):
+            observer.checkpoint('replaced-root')
+
+
+class CodexSQLiteBaselineStartupTest(unittest.TestCase):
+    def test_only_sqlite_baseline_adds_process_local_feature_override(self):
+        binary, project = Path('/inert/codex'), Path('/inert/project')
+        environment = {'CODEX_HOME': '/inert/profile'}
+        for windows in (False, True):
+            for baseline in (False, True):
+                with self.subTest(windows=windows, baseline=baseline):
+                    events, owner, job = [], object(), object()
+                    stdin = SimpleNamespace(write=lambda value: events.append(('gate', value)),
+                                            drain=AsyncMock())
+                    process = SimpleNamespace(stdin=stdin, _transport=SimpleNamespace(
+                        get_extra_info=lambda key: owner))
+                    def assign(observed):
+                        self.assertIs(observed, owner)
+                        events.append(('job', observed))
+                        return job
+                    create = AsyncMock(return_value=process)
+                    with (patch.object(audit, 'os', SimpleNamespace(name='nt' if windows else 'posix')),
+                          patch.object(audit.asyncio, 'create_subprocess_exec', create),
+                          patch.object(audit.subprocess, 'CREATE_NEW_PROCESS_GROUP', 512, create=True),
+                          patch.object(audit, 'run_path', return_value={'WindowsJob': assign})):
+                        observed = asyncio.run(audit._start_native(
+                            binary, project, environment, sqlite_baseline=baseline))
+                    expected = ([sys.executable, str(Path(audit.__file__).resolve()),
+                                 '--windows-native-start', str(binary)]
+                                + (['--sqlite-baseline'] if baseline else []) if windows else
+                                [str(binary)] + (['--disable', 'plugins'] if baseline else [])
+                                + ['app-server'])
+                    self.assertEqual(list(create.await_args.args), expected)
+                    self.assertEqual(create.await_args.kwargs['env'], environment)
+                    self.assertEqual(observed, (process, job if windows else None))
+                    self.assertEqual(events, [('job', owner), ('gate', b'!')] if windows else [])
+
+    def test_windows_bootstrap_accepts_only_fixed_baseline_intent_after_ownership_gate(self):
+        for baseline in (False, True):
+            argv = ['observer', '--windows-native-start', '/inert/codex']
+            if baseline:
+                argv.append('--sqlite-baseline')
+            with (patch.object(audit, 'os', SimpleNamespace(name='nt', read=Mock(return_value=b'!'))),
+                  patch.object(audit.subprocess, 'call', return_value=0) as call):
+                self.assertEqual(audit._windows_native_start(argv), 0)
+                self.assertEqual(call.call_args.args[0], ['/inert/codex']
+                                 + (['--disable', 'plugins'] if baseline else []) + ['app-server'])
+            with (patch.object(audit, 'os', SimpleNamespace(name='nt', read=Mock(return_value=b'?'))),
+                  patch.object(audit.subprocess, 'call') as call):
+                with self.assertRaisesRegex(SystemExit, 'ownership was not established'):
+                    audit._windows_native_start(argv)
+                call.assert_not_called()
+        for extra in (['--disable', 'plugins'], ['--sqlite-baseline', '--other'], ['--other']):
+            with (patch.object(audit, 'os', SimpleNamespace(name='nt', read=Mock())) as owned_os,
+                  patch.object(audit.subprocess, 'call') as call):
+                with self.assertRaisesRegex(SystemExit, 'private Windows'):
+                    audit._windows_native_start(['observer', '--windows-native-start', 'codex', *extra])
+                owned_os.read.assert_not_called()
+                call.assert_not_called()
+
+
+class CodexSystemSkillInitializationTest(unittest.TestCase):
+    def fixture(self, home):
+        profile = home / ".codex"
+        root = profile / "skills/.system"
+        root.mkdir(parents=True)
+        bodies = {"skill-creator/SKILL.md": b"owned inert builtin\n",
+                  "skill-creator/references/example.txt": b"owned resource\n"}
+        manifest = {"files": [
+            {"path": path, "size": len(body), "sha256": audit.hashlib.sha256(body).hexdigest()}
+            for path, body in bodies.items()],
+            "directories": [{"path": "skill-creator"}, {"path": "skill-creator/references"}]}
+        marker = b"123abc\n"
+        for name, body in {**bodies, ".codex-system-skills.marker": marker}.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(body)
+        return profile, root, manifest, marker
+
+    def test_absent_cache_admits_nothing_and_complete_cache_has_exact_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary).resolve()
+            profile = home / ".codex"
+            profile.mkdir()
+            self.assertEqual(audit.system_skill_initialization(profile), ({}, (), {}))
+            profile, root, manifest, marker = self.fixture(home)
+            foreign = profile / "skills/foreign-neighbor.txt"
+            foreign.write_bytes(b"foreign untouched")
+            with patch.object(audit, "SYSTEM_SKILL_FILES", {
+                    row["path"]: (row["size"], row["sha256"]) for row in manifest["files"]}), patch.object(
+                    audit, "SYSTEM_SKILL_DIRECTORIES", {row["path"] for row in manifest["directories"]}), patch.object(
+                    audit, "SYSTEM_SKILL_MARKER", marker):
+                files, directories, metadata = audit.system_skill_initialization(profile)
+            self.assertEqual(set(files), {root / row["path"] for row in manifest["files"]}
+                             | {root / ".codex-system-skills.marker"})
+            self.assertEqual(set(directories), {profile / "skills", root}
+                             | {root / row["path"] for row in manifest["directories"]})
+            self.assertEqual(set(metadata), set(files) | set(directories))
+            self.assertNotIn(foreign, metadata)
+            self.assertEqual(foreign.read_bytes(), b"foreign untouched")
+
+    def test_platform_bundle_pins_accept_only_exact_embedded_line_endings_and_marker(self):
+        name = "imagegen/agents/openai.yaml"
+        lf = b'interface:\n  display_name: "Image Gen"\n  short_description: "Generate or edit images for websites, games, and more"\n  icon_small: "./assets/imagegen-small.svg"\n  icon_large: "./assets/imagegen.png"\n  default_prompt: "Use $imagegen to make or edit an image for this project."\n'
+        selected = (audit.SYSTEM_SKILL_FILES_WINDOWS, audit.SYSTEM_SKILL_MARKER_WINDOWS) if os.name == "nt" else (
+            audit.SYSTEM_SKILL_FILES_LF, audit.SYSTEM_SKILL_MARKER_LF)
+        self.assertEqual((audit.SYSTEM_SKILL_FILES, audit.SYSTEM_SKILL_MARKER), selected)
+        self.assertEqual(set(audit.SYSTEM_SKILL_FILES_WINDOWS), set(audit.SYSTEM_SKILL_FILES_LF))
+        self.assertEqual(len(audit.SYSTEM_SKILL_FILES_WINDOWS), 59)
+        for windows in (False, True):
+            files = audit.SYSTEM_SKILL_FILES_WINDOWS if windows else audit.SYSTEM_SKILL_FILES_LF
+            marker = audit.SYSTEM_SKILL_MARKER_WINDOWS if windows else audit.SYSTEM_SKILL_MARKER_LF
+            body = lf.replace(b"\n", b"\r\n") if windows else lf
+            self.assertEqual(files[name], (len(body), audit.hashlib.sha256(body).hexdigest()))
+            for mutation in (None, "other-line-endings", "other-marker"):
+                with self.subTest(windows=windows, mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                    profile = Path(temporary).resolve() / ".codex"
+                    root = profile / "skills/.system"
+                    path = root / name
+                    path.parent.mkdir(parents=True)
+                    path.write_bytes((lf if windows else lf.replace(b"\n", b"\r\n"))
+                                     if mutation == "other-line-endings" else body)
+                    alternate = audit.SYSTEM_SKILL_MARKER_LF if windows else audit.SYSTEM_SKILL_MARKER_WINDOWS
+                    (root / ".codex-system-skills.marker").write_bytes(
+                        alternate if mutation == "other-marker" else marker)
+                    with patch.object(audit, "SYSTEM_SKILL_FILES", {name: files[name]}), patch.object(
+                            audit, "SYSTEM_SKILL_DIRECTORIES", {"imagegen", "imagegen/agents"}), patch.object(
+                            audit, "SYSTEM_SKILL_MARKER", marker):
+                        if mutation is None:
+                            verified, _, _ = audit.system_skill_initialization(profile)
+                            self.assertEqual(verified[path], files[name][1])
+                        else:
+                            with self.assertRaises(ValueError):
+                                audit.system_skill_initialization(profile)
+
+    def test_partial_extra_changed_marker_and_file_aliases_refuse(self):
+        mutations = ("partial", "extra", "bytes", "marker", "symlink", "hardlink", "directory-link")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary).resolve()
+                profile, root, manifest, marker = self.fixture(home)
+                selected = root / "skill-creator/SKILL.md"
+                if mutation == "partial":
+                    selected.unlink()
+                elif mutation == "extra":
+                    (root / "foreign.txt").write_bytes(b"foreign")
+                elif mutation == "bytes":
+                    selected.write_bytes(b"changed")
+                elif mutation == "marker":
+                    (root / ".codex-system-skills.marker").write_bytes(b"wrong\n")
+                elif mutation == "hardlink":
+                    os.link(selected, home / "foreign-link")
+                elif mutation == "symlink":
+                    selected.unlink()
+                    try:
+                        selected.symlink_to(home / "foreign")
+                    except OSError as error:
+                        if os.name == "nt":
+                            self.skipTest(f"Windows symlink privilege unavailable: {error}")
+                        raise
+                    (home / "foreign").write_bytes(b"owned inert builtin\n")
+                else:
+                    directory = root / "skill-creator/references"
+                    directory.rename(home / "foreign-directory")
+                    try:
+                        directory.symlink_to(home / "foreign-directory", target_is_directory=True)
+                    except OSError as error:
+                        if os.name == "nt":
+                            self.skipTest(f"Windows symlink privilege unavailable: {error}")
+                        raise
+                with patch.object(audit, "SYSTEM_SKILL_FILES", {
+                    row["path"]: (row["size"], row["sha256"]) for row in manifest["files"]}), patch.object(
+                    audit, "SYSTEM_SKILL_DIRECTORIES", {row["path"] for row in manifest["directories"]}), patch.object(
+                        audit, "SYSTEM_SKILL_MARKER", marker), self.assertRaises((OSError, ValueError)):
+                    audit.system_skill_initialization(profile)
+
+    def test_member_and_total_byte_budgets_refuse(self):
+        for count, size in ((1, 65537), (9, 65536)):
+            with self.subTest(count=count, size=size), tempfile.TemporaryDirectory() as temporary:
+                profile = Path(temporary).resolve() / ".codex"
+                root = profile / "skills/.system"
+                (root / "builtin").mkdir(parents=True)
+                body = b"x" * size
+                digest = audit.hashlib.sha256(body).hexdigest()
+                files = {f"builtin/file-{index}": (size, digest) for index in range(count)}
+                for name in files:
+                    (root / name).write_bytes(body)
+                (root / ".codex-system-skills.marker").write_bytes(audit.SYSTEM_SKILL_MARKER)
+                with patch.object(audit, "SYSTEM_SKILL_FILES", files), patch.object(
+                        audit, "SYSTEM_SKILL_DIRECTORIES", {"builtin"}), self.assertRaises(ValueError):
+                    audit.system_skill_initialization(profile)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            profile, root, manifest, marker = self.fixture(Path(temporary).resolve())
+            clock = [0.0]
+            original = audit._regular_bytes
+            def late_final_read(path, limit):
+                body = original(path, limit)
+                if path.name == ".codex-system-skills.marker":
+                    clock[0] = 6.0
+                return body
+            with patch.object(audit, "SYSTEM_SKILL_FILES", {
+                    row["path"]: (row["size"], row["sha256"]) for row in manifest["files"]}), patch.object(
+                    audit, "SYSTEM_SKILL_DIRECTORIES", {row["path"] for row in manifest["directories"]}), patch.object(
+                    audit, "SYSTEM_SKILL_MARKER", marker), patch.object(
+                    audit.time, "monotonic", side_effect=lambda: clock[0]), patch.object(
+                    audit, "_regular_bytes", side_effect=late_final_read), self.assertRaisesRegex(
+                        ValueError, "exceeded its deadline"):
+                audit.system_skill_initialization(profile)
+
+    def test_mixed_builtin_and_temporary_initialization_refuses_curated_cache(self):
+        for mutation in (None, "plugins-clone-Ab12Cd", "plugins", "plugins.sha", "nonempty-lock"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                profile, root, manifest, marker = self.fixture(Path(temporary).resolve())
+                staging = profile / ".tmp"
+                git = staging / "git-Ab12Cd"
+                (git / "objects").mkdir(parents=True)
+                (git / "refs").mkdir()
+                (git / "HEAD").write_bytes(audit.TEMPORARY_GIT_HEAD)
+                lock = staging / "plugins.sync.lock"
+                lock.write_bytes(b"")
+                if mutation == "nonempty-lock":
+                    lock.write_bytes(b"foreign")
+                elif mutation:
+                    (staging / mutation).mkdir()
+                with patch.object(audit, "SYSTEM_SKILL_FILES", {
+                    row["path"]: (row["size"], row["sha256"]) for row in manifest["files"]}), patch.object(
+                    audit, "SYSTEM_SKILL_DIRECTORIES", {row["path"] for row in manifest["directories"]}), patch.object(
+                    audit, "SYSTEM_SKILL_MARKER", marker):
+                    if mutation:
+                        with self.assertRaises(ValueError):
+                            audit.plugin_initialization(profile)
+                    else:
+                        files, directories, metadata = audit.plugin_initialization(profile)
+                        self.assertEqual(files[git / "HEAD"],
+                                         audit.hashlib.sha256(audit.TEMPORARY_GIT_HEAD).hexdigest())
+                        self.assertEqual(files[lock], audit.hashlib.sha256(b"").hexdigest())
+                        self.assertIn(root / "skill-creator/SKILL.md", files)
+                        self.assertTrue({staging, git, git / "objects", git / "refs"} <= set(directories))
+                        self.assertEqual(set(metadata), set(files) | set(directories))
+
+    def test_same_bytes_replacement_after_read_refuses(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary).resolve()
+            profile, root, manifest, marker = self.fixture(home)
+            selected = root / "skill-creator/SKILL.md"
+            original = audit._regular_bytes
+            replaced = False
+            def replace_after_read(path, limit):
+                nonlocal replaced
+                body = original(path, limit)
+                if path == selected and not replaced:
+                    replaced = True
+                    path.rename(home / "held-original")
+                    path.write_bytes(body)
+                return body
+            with patch.object(audit, "SYSTEM_SKILL_FILES", {
+                    row["path"]: (row["size"], row["sha256"]) for row in manifest["files"]}), patch.object(
+                    audit, "SYSTEM_SKILL_DIRECTORIES", {row["path"] for row in manifest["directories"]}), patch.object(
+                    audit, "SYSTEM_SKILL_MARKER", marker), patch.object(
+                        audit, "_regular_bytes", side_effect=replace_after_read), self.assertRaises(ValueError):
+                audit.system_skill_initialization(profile)
 
 
 if __name__ == "__main__":

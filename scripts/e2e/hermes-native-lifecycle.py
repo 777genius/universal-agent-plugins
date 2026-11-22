@@ -52,9 +52,9 @@ class Lifecycle:
                                + error.read_text(encoding="utf-8", errors="replace"))
         return output
 
-    def run_uap(self, stage, *args):
+    def run_uap(self, stage, *args, env=None):
         return self.capture([self.uap, *args, "--target", "hermes", "--yes",
-                             "--format", "json"], stage + "-uap.json")
+                             "--format", "json"], stage + "-uap.json", env=env)
 
     def observe(self, stage, cwd, marker, project_count, trusted=False):
         # Observe the profile a bare `hermes` resolves, never an assumed file.
@@ -79,18 +79,33 @@ class Lifecycle:
                 "native Hermes trust list is not a list of paths")
         return {Path(item).resolve() for item in value}
 
-    def require_trust_report(self, output, granted, reason=""):
+    def require_trust_report(self, output, granted, reason="", expected_roots=None):
         data = json.loads(output.read_text(encoding="utf-8"))["data"]
         if "targets" in data:
             data = data["targets"][0]["output"]
-        actions = "\n".join((data["result"].get("activation") or {}).get("user_actions") or [])
+        activation = data["result"].get("activation") or {}
+        actions = "\n".join(activation.get("user_actions") or [])
         # Public JSON stays path-free; the exact command is human output only.
         require(str(self.root) not in actions and str(self.root.resolve()) not in actions,
                 "public Hermes trust guidance contains a host path")
         if granted:
             require("Hermes now trusts this project's Git repository root" in actions,
                     "explicit Project add did not report verified Hermes trust")
-        else:
+        if granted:
+            # Discovery completion retains the durable trust disclosure and
+            # independently verifies every expected native Git root.
+            require(data.get("readiness") == "ready"
+                    and activation.get("activation") == "active"
+                    and activation.get("authentication") == "not_required"
+                    and activation.get("policy") == "allowed"
+                    and activation.get("verification") == "installation_verified"
+                    and activation.get("activation_attested", False) is False
+                    and activation.get("authentication_attested", False) is False
+                    and isinstance(expected_roots, set) and bool(expected_roots),
+                    "completed Project add lacks exact native readiness")
+            require(self.trusted_roots(output.stem + "-completed-trust") == expected_roots,
+                    "completed Project add changed the expected native trusted Git roots")
+        elif not granted:
             require("UAP did not change Hermes project trust: " + reason in actions
                     and "run `hermes skills trust` inside it" in actions,
                     "Project lifecycle did not report why trust was unchanged and how to grant it")
@@ -136,10 +151,12 @@ class Lifecycle:
                            "description: Retained foreign Skill in a disposable profile.\n"
                            "---\nDo not change this foreign Skill.\n", encoding="utf-8")
         shutil.copyfile(foreign, self.root / "foreign-skill.md")
-        self.config.write_text("model: offline-native-smoke\nmcp_servers:\n"
-                               "  foreign:\n    command: echo\n    args: [foreign]\n",
-                               encoding="utf-8")
-        self.config.chmod(0o600)
+        # Seed an exact LF fixture on every host: Windows text writes translate
+        # these author-controlled newlines to CRLF, invalidating the strict
+        # native MCP preimage check without changing any product behavior.
+        self.config.write_bytes(b"model: offline-native-smoke\nmcp_servers:\n"
+                                b"  foreign:\n    command: echo\n    args: [foreign]\n")
+        # Keep the umask-derived mode Hermes' own installer leaves (0644).
         self.capture([*self.hermes, "--version"], "native-version.txt")
         self.native_home = self.resolved_home("native")
         require(self.native_home == self.profile.resolve(),
@@ -162,6 +179,49 @@ class Lifecycle:
         # Refuse unexpected additional contents rather than deleting a whole tree.
         skill.unlink()
         skill.parent.rmdir()
+
+    def fresh_user_lifecycle(self):
+        # A new user has no config.yaml or previous UAP binding. Preserve the
+        # existing selected profile while checking native discovery in this one.
+        fresh = self.root / "fresh-user-home"
+        source = self.root / "fresh-user-src"
+        shutil.copytree(self.user_source, source)
+        manifest = source / "plugin.json"
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload["name"] = "hermes-uap-native-fresh"
+        manifest.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+        env = dict(os.environ, HERMES_HOME=str(fresh))
+        original = self.config.read_bytes()
+        require(not fresh.exists(), "fresh native profile must not be seeded")
+        self.run_uap("fresh-user-add", "add", source, "--scope", "user", "--no-save", env=env)
+        skill = self.skill("user", fresh)
+        require(skill.is_file() and (fresh / "config.yaml").is_file(),
+                "automatic installation did not create fresh Hermes Skills and MCP config")
+        listing = self.capture([*self.hermes, "skills", "list", "--source", "local", "--enabled-only"],
+                               "fresh-user-skills.txt", env=env)
+        require("native-smoke-user" in listing.read_text(encoding="utf-8"),
+                "real Hermes did not discover a Skill installed into a new profile")
+        mcp = self.capture([*self.hermes, "mcp", "list"], "fresh-user-mcp.txt", env=env)
+        require("uap-native-test-server" in mcp.read_text(encoding="utf-8"),
+                "real Hermes did not discover MCP installed into a new profile")
+        self.capture([*self.hermes, "mcp", "test", "uap-native-test-server"],
+                     "fresh-user-mcp-test.txt", env=env)
+        self.run_uap("fresh-user-remove", "remove", "hermes-uap-native-fresh",
+                     "--scope", "user", env=env)
+        config = fresh / "config.yaml"
+        require(not skill.exists() and
+                (not config.exists() or
+                 "uap-native-test-server" not in config.read_text(encoding="utf-8")),
+                "fresh-profile uninstall left UAP-managed native entries")
+        remaining_skills = self.capture([*self.hermes, "skills", "list", "--source", "local", "--enabled-only"],
+                                        "fresh-removed-skills.txt", env=env)
+        remaining_mcp = self.capture([*self.hermes, "mcp", "list"],
+                                     "fresh-removed-mcp.txt", env=env)
+        require("native-smoke-user" not in remaining_skills.read_text(encoding="utf-8") and
+                "uap-native-test-server" not in remaining_mcp.read_text(encoding="utf-8"),
+                "native Hermes still discovers a removed profile Skill or MCP")
+        require(self.config.read_bytes() == original,
+                "fresh-profile lifecycle changed the pre-existing Hermes profile")
 
     def user_lifecycle(self):
         self.run_uap("user-add", "add", self.user_source, "--scope", "user", "--no-save")
@@ -190,13 +250,15 @@ class Lifecycle:
     def project_lifecycle(self):
         servers = self.hermes_json("project-before", "mcp_servers")
         require(not self.trusted_roots("project-before"), "disposable profile already trusts a project")
+        expected_roots = set()
         for label, project in (("a", self.project_a), ("b", self.project_b)):
             output = self.run_uap("project-" + label + "-add", "add", self.project_source,
                                   "--scope", "project", "--project-root", project, "--no-save")
-            self.require_trust_report(output, granted=True)
+            expected_roots.add(project.resolve())
+            self.require_trust_report(output, granted=True, expected_roots=expected_roots)
         output = self.run_uap("project-a-repeat", "add", self.project_source, "--scope", "project",
                               "--project-root", self.project_a, "--no-save")
-        self.require_trust_report(output, granted=True)
+        self.require_trust_report(output, granted=True, expected_roots=expected_roots)
         for label, project in (("a", self.project_a), ("b", self.project_b)):
             self.observe("project-" + label + "-add", project, "UAP_NATIVE_USER_V2", 1, True)
         # The user revokes A. Update and repair must not grant it again.
@@ -302,10 +364,11 @@ def main():
     with tempfile.TemporaryDirectory(prefix="hermes-uap-native-", dir=os.environ["RUNNER_TEMP"]) as tmp:
         suite = Lifecycle(Path(tmp))
         suite.prepare()
+        suite.fresh_user_lifecycle()
         suite.user_lifecycle()
         suite.project_lifecycle()
         suite.remove_user()
-    print("Hermes native User lifecycle, Project A/B isolation and trust boundary passed.", flush=True)
+    print("Hermes native fresh-profile/User lifecycle, Project A/B isolation and trust boundary passed.", flush=True)
 
 
 if __name__ == "__main__":

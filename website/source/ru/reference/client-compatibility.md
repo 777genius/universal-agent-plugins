@@ -11,6 +11,36 @@ localeDisposition: "current-translation"
 
 # Матрица проверок клиентов UAP
 
+## Поддерживаемые агенты {#supported-agents}
+
+UAP устанавливает или подготавливает пакеты для этих агентов. Передайте значение
+`--target`, чтобы выбрать агентов явно, или не указывайте `--target` и выберите
+из агентов, найденных на компьютере.
+
+| Агент | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop), `chatgptweb` (Web) |
+
+Поддержка пользовательской и проектной областей, способ настройки и шаги после
+установки различаются у разных агентов; см. [таблицу поддержки агентов](https://universal-agent-plugins.com/ru/#agent-support).
+Поддержка агента не означает, что в нём работает каждый пакет, компонент,
+версия или область установки.
+
 ## Текущий выпуск и область результатов
 
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest),
@@ -53,11 +83,15 @@ localeDisposition: "current-translation"
 
 ## Hermes и Antigravity: поддержка в выпущенном CLI {#hermes-antigravity-source}
 
-Нативный CLI **0.1.108** опубликован 2026-11-13 и включает Hermes и Antigravity. Проверка выпуска и продвижение завершились успешно; допуск пакетов подписанного Directory проверяется отдельно. Это не означает публикацию npm 0.1.108, аутентификацию у провайдера или автоматическую активацию.
+Нативный CLI **0.1.110** включает Hermes и Antigravity. UAP автоматически настраивает поддерживаемые компоненты; выполните оставшиеся действия из результата для вашего клиента. Допуск пакетов подписанного Directory проверяется отдельно. Установка не подтверждает аутентификацию у провайдера или активацию исполнения.
 
-[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+[0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) · source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`.
 
-**Исторические данные жизненного цикла (2026-11-10):**
+Project MCP Hermes имеет статус **Prepared** только для отдельного дистрибутива Hermes, манифест сборки которого проверен UAP, с явно подтверждённым проектным сеансом UAP. Обычный запуск Hermes не выбирает эту конфигурацию MCP. Hermes, установленный из исходного кода, не поддерживает Project MCP: используйте User MCP или только Project Skills. Это требование к самому Hermes не запрещает установку плагинов из Git. Для Project Skills по-прежнему нужны доверие и новый сеанс. Датированные наблюдения ниже сохраняют исторические границы.
+
+**Исторические данные жизненного цикла (2026-11-10–13):**
+
+[0.1.108 (2026-11-13)](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
 
 **Hermes 0.23.0:** Skills пользователя и принадлежащие UAP настройки MCP stdio/Streamable HTTP; в проекте — только Skills. Project MCP отклоняется без перенаправления в настройки пользователя. Linux x64, macOS arm64 и нативная Windows x64 прошли первое и повторное добавление, обновление, восстановление, удаление, обнаружение Skills в недоверенном проекте и изоляцию A/B: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Четыре локальных HTTP-обмена `initialize`/`tools/list` на каждой ОС подтверждают соединение и обнаружение инструментов, но не `tools/call`, работу модели, аутентификацию или доверенное выполнение в проекте. SSE и хуки не поддерживаются. Переносимые команды проецируются в Skills; команды только для явного вызова исключаются, если клиент не может обеспечить это ограничение.
 

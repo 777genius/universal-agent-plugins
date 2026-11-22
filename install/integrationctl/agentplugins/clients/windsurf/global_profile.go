@@ -56,7 +56,7 @@ func requireSelectedDevinGlobal(client domain.DetectedClient) (string, error) {
 		return "", &ports.VerificationError{Kind: ports.VerificationIndeterminate,
 			Err: fmt.Errorf("devin Global configuration requires an observed exact version before verification or mutation")}
 	}
-	if client.Version != "3000.11.205" && client.Version != "3000.12.57" {
+	if !supportedDevinNativeVersion(client.Version) {
 		return "", fmt.Errorf("devin Global configuration requires observed exact version 3000.11.205 or 3000.12.57")
 	}
 	return root, nil

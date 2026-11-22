@@ -5,7 +5,7 @@ MCP configuration. User skills remain prepared as before. Detection ordering,
 Devin/Windsurf coexistence selection and cloud configuration are unchanged.
 
 The project lane requires the explicitly selected primary `devin`/`devin.exe`
-with host-observed normalized exact version `3000.11.205`. Other/unknown versions
+with host-observed normalized exact version `3000.11.205` or `3000.12.57`. Other/unknown versions
 and a primary legacy Windsurf executable refuse before native effects. The
 optional SDK `Request.ClientVersion` carries the embedding host's observation;
 SDK Discover/Prepare and this adapter perform no version probe. This assertion

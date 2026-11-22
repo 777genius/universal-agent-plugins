@@ -4,12 +4,16 @@ import type { InstallScope } from '~/types/registry';
 import { useInstallPreferencesStore } from '~/stores/installPreferences';
 import { skillClients } from '~/data/skillClients';
 import {
+  SKILL_AGENT_TARGET_PLACEHOLDER,
+  skillAgentCommands,
   skillDetailIdAvailable,
   skillIdentityFromId,
   skillMatchesSelection,
   skillInstallCommand,
+  skillListCommand,
   skillNeedsManualSelection,
   skillPublisherUrl,
+  skillRemoveCommand,
   skillRepositoryUrl,
 } from '~/utils/skillsCatalog';
 
@@ -103,7 +107,23 @@ const activeTab = ref<'command' | 'prompt'>('command');
 const command = computed(() =>
   skill.value ? skillInstallCommand(skill.value, chooseInTerminal.value ? undefined : targets.value, scope.value) : undefined,
 );
-const prompt = computed(() => t('registryUi.skills.detail.promptText', { command: command.value ?? '' }));
+const removeCommand = computed(() =>
+  skill.value ? skillRemoveCommand(skill.value, chooseInTerminal.value ? undefined : targets.value, scope.value) : undefined,
+);
+const listCommand = computed(() => skillListCommand(scope.value));
+const prompt = computed(() => {
+  const agent = skill.value
+    ? skillAgentCommands(skill.value, chooseInTerminal.value ? undefined : targets.value, scope.value)
+    : undefined;
+  if (!agent) return '';
+  const text = t('registryUi.skills.detail.promptText', { preview: agent.preview, apply: agent.apply });
+  return agent.needsTarget
+    ? text + '\n' + t('registryUi.skills.detail.promptTargetNote', {
+      placeholder: SKILL_AGENT_TARGET_PLACEHOLDER,
+      agents: allowedTargets.join(', '),
+    })
+    : text;
+});
 const options = computed(() =>
   skillClients.map((client) => ({
     value: client.id,
@@ -167,13 +187,18 @@ usePageSeo(
   <div class="registry-surface skills-detail">
     <PageBackground />
     <div class="container skills-detail__container">
-      <nav class="skills-detail__breadcrumbs" :aria-label="t('registryUi.skills.detail.breadcrumb')">
-        <NuxtLink :to="localePath({ path: '/plugins/', query: { tab: 'skills' } })">
-          {{ t('registryUi.skills.skills') }}
-        </NuxtLink>
-        <span aria-hidden="true">/</span>
-        <span>{{ skill?.title ?? t('registryUi.skills.detail.skill') }}</span>
-      </nav>
+      <DetailBreadcrumbs
+        :back-to="localePath({ path: '/plugins/', query: { tab: 'skills' } })"
+        :back-label="t('registryUi.skills.detail.backToSkills')"
+        :label="t('registryUi.skills.detail.breadcrumb')"
+        :parents="[
+          {
+            label: t('registryUi.skills.skills'),
+            to: localePath({ path: '/plugins/', query: { tab: 'skills' } }),
+          },
+        ]"
+        :current="skill?.title ?? t('registryUi.skills.detail.skill')"
+      />
 
       <div v-if="isBusy" class="skills-detail__panel" role="status">
         {{ t('registryUi.skills.loading') }}
@@ -259,6 +284,22 @@ usePageSeo(
                   {{ t('registryUi.skills.manualSkillSelection') }}
                 </p>
                 <NativeCliCheckbox />
+                <template v-if="activeTab === 'command'">
+                  <CommandSnippet
+                    v-if="removeCommand"
+                    :command="removeCommand"
+                    :label="t('registryUi.skills.detail.remove')"
+                    kind="remove"
+                  />
+                  <CommandSnippet
+                    v-else-if="listCommand"
+                    :command="listCommand"
+                    :label="t('registryUi.skills.detail.savedName')"
+                  />
+                  <p class="skills-detail__hint">
+                    {{ t(removeCommand ? 'registryUi.skills.detail.removeHint' : 'registryUi.skills.detail.removeByListedName') }}
+                  </p>
+                </template>
               </div>
             </template>
             <p v-else class="skills-detail__hint">

@@ -19,6 +19,12 @@ type GitTree struct {
 type TreeEntry struct{ Path, Mode, Type, Object string }
 
 func (a Acquirer) OpenGitHubTree(ctx context.Context, repository, revision string) (*GitTree, error) {
+	return withGitConnectRetry(ctx, func(ctx context.Context) (*GitTree, error) {
+		return a.openGitHubTreeOnce(ctx, repository, revision)
+	})
+}
+
+func (a Acquirer) openGitHubTreeOnce(ctx context.Context, repository, revision string) (*GitTree, error) {
 	if !repositoryPattern.MatchString(repository) || !fullSHA.MatchString(revision) {
 		return nil, fmt.Errorf("immutable GitHub tree requires owner/repo and full lowercase commit SHA")
 	}
@@ -29,7 +35,7 @@ func (a Acquirer) OpenGitHubTree(ctx context.Context, repository, revision strin
 	t := &GitTree{root: root, repository: repository, revision: revision, runner: a.runner()}
 	fail := func(operation string) (*GitTree, error) {
 		_ = t.Close()
-		return nil, gitAcquisitionFailure(repository, revision, operation)
+		return nil, gitReadFailure(err, repository, revision, operation)
 	}
 	url := "https://github.com/" + repository + ".git"
 	if a.URLForRepo != nil {

@@ -16,11 +16,13 @@ on:
       - 'assets/**'
   workflow_dispatch:
 
-# Replace ordinary PR/push CI; isolate manual and scheduled invocations.
-# Release validation also accepts checks from the associated merged PR head.
+# Release evidence: only a newer push to the same pull request supersedes a
+# run. Each push and manual run gets a group of its own, so a later merge
+# neither cancels nor replaces the release checks of an earlier merge commit.
+# Release validation also accepts the merged PR head's checks.
 concurrency:
-  group: polyglot-smoke-${{ github.event_name }}-${{ github.event.pull_request.number || github.event_name == 'push' && github.ref || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+  group: polyglot-smoke-${{ github.event_name }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   source-acquisition-smoke:

@@ -1,6 +1,6 @@
 # Google Antigravity native plugins
 
-Published [native CLI 0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) (2026-11-13, source `8c3cfa28e332c533b0cc0845739c0275730a4285`) includes Hermes and Antigravity; [qualification](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) and [promotion](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) succeeded. Signed Directory package eligibility remains separate: client capability does not authorize a package target. Package-manager channels may lag; this is not an npm 0.1.108 publication claim.
+Published [CLI 0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) (source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`) includes Antigravity User and Project plugin preparation and supported User inventory readback. Follow the remaining sign-in, folder trust and IDE activation steps. Signed Directory package eligibility remains separate; installation does not establish vendor authentication or IDE activation.
 
 **Source tracking:** PR #815. Native CLI tests do not establish model authentication or Antigravity IDE activation.
 
@@ -54,9 +54,9 @@ import registry, so it cannot establish Project activation. Vendor enable and
 disable also write shared configuration and remain outside ordinary UAP
 installation consent. UAP removes only the directory it owns.
 
-### Source addition: automatic User inventory readback
+### Released User inventory readback
 
-The current source adds read-only inventory to confirmed User repeat, update
+CLI 0.1.110 includes read-only inventory for confirmed User repeat, update
 and intact repair. It uses the original detected profile and the exact
 `agy 1.5.3` executable. A supported existing native configuration allows UAP to
 report whether its exact physical package is enabled or disabled. An initial
@@ -69,7 +69,7 @@ Disabled plugins remain disabled. Preview does not run the native commands,
 and Project installation and SDK requests without independently observed native
 profile provenance keep their existing file-only behavior. Unknown native
 versions, ambiguous inventory or changed config/executable identity are refused.
-This source addition is separate from the published release described above.
+This observation is included in CLI 0.1.110; it does not widen Project or IDE runtime qualification.
 
 **Merge qualification:** Require passing pinned `agy plugin validate --strict`,
 separate disposable vendor CLI import/list/uninstall, UAP User and Project

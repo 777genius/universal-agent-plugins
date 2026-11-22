@@ -274,6 +274,7 @@ img {
   margin-bottom: 32px;
 }
 .section-heading h2 {
+  white-space: pre-line;
   margin-bottom: 14px;
 }
 .section-heading > p:last-child {
@@ -373,22 +374,17 @@ img {
 .hero__plugin-count {
   font-variant-numeric: tabular-nums;
 }
-.hero__install {
+// The demo video's box; HeroAgentField measures it to centre the orbit behind it.
+.hero__visual {
   position: relative;
-  isolation: isolate;
-}
-
-.demo-showcase {
-  // Do not trap the fixed fullscreen fallback beneath the sticky header.
-  position: relative;
-  width: min(calc(100% - 32px), 1600px);
-  margin: 0 auto;
-  padding: clamp(16px, 2.4vw, 36px) 0 clamp(40px, 5vw, 84px);
+  min-width: 0;
 }
 .hero-demo-video {
   width: 100%;
+  max-width: 800px;
+  margin-inline: auto;
   container-type: inline-size;
-  margin: 0;
+  margin-block: 0;
   aspect-ratio: 16 / 9;
   position: relative;
   z-index: 2;
@@ -498,6 +494,24 @@ img {
   padding: clamp(16px, 2.3cqw, 34px);
   border-radius: 50%;
   background: rgba(4, 7, 15, 0.82);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hero-demo-video__launch svg,
+  .hero-demo-video__launch span {
+    transition: transform 220ms ease;
+  }
+  .hero-demo-video:hover .hero-demo-video__launch svg,
+  .hero-demo-video:focus-within .hero-demo-video__launch svg {
+    transform: scale(1.08);
+  }
+  .hero-demo-video:hover .hero-demo-video__launch span,
+  .hero-demo-video:focus-within .hero-demo-video__launch span {
+    transform: translateY(3px);
+  }
+}
+.hero-demo-video__launch:focus-visible {
+  outline: 3px solid var(--cyan);
+  outline-offset: -5px;
 }
 .hero-demo-video__close {
   position: absolute;
@@ -804,6 +818,9 @@ img {
   stroke-linejoin: round;
 }
 .command-snippet button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   border: 0;
   padding: 4px 7px;
   color: #a999ff;
@@ -827,8 +844,8 @@ img {
   padding-block: 12px 14px;
   font-size: 0.7rem;
   line-height: 1.45;
-  white-space: pre;
-  overflow-wrap: normal;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .command-snippet--inline {
   display: grid;
@@ -859,28 +876,67 @@ img {
 }
 
 .client-section {
-  padding-block: 17px 15px;
-  background: color-mix(in srgb, var(--surface-solid) 48%, transparent);
+  padding-block: clamp(28px, 4vw, 44px);
+  // Dense enough that the hero orbit behind it never reads as extra agent tiles.
+  background: color-mix(in srgb, var(--surface-solid) 86%, transparent);
+}
+// Install steps first, then the agents; the columns stack below 981px. The
+// install column is slightly wider so the one-line command fits in every locale.
+.client-section__inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(28px, 4vw, 56px);
+}
+.hero-quick-start {
+  position: relative;
+  min-width: 0;
+}
+.client-section__agents {
+  min-width: 0;
   text-align: center;
 }
-.client-section__inner > p:first-child {
-  margin-bottom: 10px;
+// Outranks the generic .registry-surface h2 size: this heading is an eyebrow label.
+.client-section .client-section__title {
+  margin: 0 0 10px;
   color: var(--subtle);
   font-size: 0.62rem;
   font-weight: 750;
+  line-height: 1.4;
   letter-spacing: 0.15em;
   text-transform: uppercase;
 }
+// As many agents per row as fit. 80px keeps the longest one-word status
+// (ru "Поддерживается", about 68px) on one line; names wrap inside the tile.
+// Wrapping flex rows center an incomplete last row. The container queries
+// pick the column count repeat(auto-fill, minmax(80px, 1fr)) would use, so
+// every tile keeps the same width.
+$client-tile-min: 80px;
+$client-tile-gap: 4px;
 .client-strip {
   margin: 0;
   padding: 0;
-  display: grid;
-  grid-template-columns: repeat(var(--client-strip-columns, 13), minmax(0, 1fr));
-  gap: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: $client-tile-gap;
   list-style: none;
+  container-type: inline-size;
 }
 .client-strip li {
+  --client-strip-columns: 2;
   min-width: 0;
+  flex: 0 0
+    calc(
+      (100% - (var(--client-strip-columns) - 1) * #{$client-tile-gap}) / var(--client-strip-columns)
+    );
+}
+@for $columns from 3 through 14 {
+  @container (min-width: #{$columns * ($client-tile-min + $client-tile-gap) - $client-tile-gap}) {
+    .client-strip li {
+      --client-strip-columns: #{$columns};
+    }
+  }
 }
 
 .client-strip li > a {
@@ -933,12 +989,14 @@ img {
   color: var(--subtle);
   font-size: 0.48rem;
   font-weight: 750;
+  overflow-wrap: anywhere;
 }
 .client-section__note {
   max-width: 820px;
   margin: 9px auto 0;
   color: var(--subtle);
   font-size: 0.62rem;
+  text-wrap: balance;
 }
 
 .how {
@@ -1188,7 +1246,7 @@ img {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .catalog-controls--plugins > .search-field {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
   .catalog-controls--plugins .catalog-filter-pair {
     display: contents;
@@ -2063,7 +2121,8 @@ img {
 .plugin-card__identity-copy {
   min-width: 0;
 }
-.plugin-card h3 {
+.plugin-card h3,
+.registry-surface .skill-card h3 {
   margin: 0;
   overflow: hidden;
   font-size: 1rem;
@@ -2989,7 +3048,10 @@ img {
   background: color-mix(in srgb, var(--primary-bright) 8%, transparent);
   font-size: 1.25rem;
   font-weight: 650;
-  transition: transform 300ms ease, border-color 300ms ease, background 300ms ease;
+  transition:
+    transform 300ms ease,
+    border-color 300ms ease,
+    background 300ms ease;
 }
 .registry-faq__chevron {
   flex: none;
@@ -2999,7 +3061,9 @@ img {
   border: 1px solid var(--line);
   border-radius: 50%;
   color: var(--cyan);
-  transition: transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1), background 260ms ease;
+  transition:
+    transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background 260ms ease;
 }
 .registry-faq__trigger:hover .registry-faq__mark,
 .registry-faq__trigger:focus-visible .registry-faq__mark,
@@ -3134,12 +3198,16 @@ img {
   .hero__actions {
     justify-content: center;
   }
-  .hero__demo {
+  .hero__visual {
     width: min(100%, 610px);
     margin: 0 auto;
   }
-  .client-strip {
-    grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  .client-section__inner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hero-quick-start {
+    width: min(100%, 610px);
+    margin-inline: auto;
   }
   .plugin-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3250,15 +3318,6 @@ img {
   }
   .hero-targets__grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .client-strip {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .client-strip li {
-    grid-column: auto;
-  }
-  .client-strip li:last-child {
-    grid-column: 2;
   }
   .client-strip li > a {
     min-height: 66px;
@@ -3435,4 +3494,114 @@ img {
   .catalog-filter-pair {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.app-multiselect__content--inline {
+  width: 100%;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  container-type: inline-size;
+  gap: 10px;
+}
+.app-multiselect__content--inline .app-multiselect__options {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.app-multiselect__content--inline .app-multiselect__heading {
+  padding-inline: 0;
+}
+.app-multiselect__content--inline .app-multiselect__separator {
+  margin-block: 2px;
+}
+.app-multiselect__content--inline .app-multiselect__item:disabled {
+  opacity: 0.45;
+}
+.app-multiselect__check {
+  border: 1px solid var(--line-strong);
+  background: transparent;
+}
+.app-multiselect__auto-symbol svg {
+  width: 22px;
+  height: 22px;
+  stroke: currentcolor;
+}
+@container (max-width: 600px) {
+  .app-multiselect__content--inline .app-multiselect__options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (max-width: 340px) {
+  .app-multiselect__content--inline .app-multiselect__options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.hero {
+  min-height: 540px;
+  padding-bottom: 16px;
+}
+.hero-demo-video img {
+  transition:
+    transform 0.35s ease,
+    filter 0.35s ease;
+}
+.hero-demo-video__launch svg {
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease;
+}
+.hero-demo-video:has(.hero-demo-video__launch):hover img {
+  transform: scale(1.09);
+  filter: blur(0);
+}
+.hero-demo-video__launch:hover svg {
+  transform: scale(1.15);
+  box-shadow: 0 0 38px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-demo-video img,
+  .hero-demo-video__launch svg {
+    transition: none;
+  }
+}
+
+.app-multiselect__content--inline .search-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.app-multiselect__content--inline .search-field:focus-within {
+  outline: none;
+  border-color: var(--primary-bright);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+.app-multiselect__content--inline .search-field input {
+  min-width: 0;
+  width: 100%;
+  padding: 9px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+.app-multiselect__content--inline .search-field input:focus-visible {
+  outline: none;
+}
+.app-multiselect__content--inline .search-field__icon {
+  position: static;
+  flex: none;
+  transform: none;
+  translate: none;
 }

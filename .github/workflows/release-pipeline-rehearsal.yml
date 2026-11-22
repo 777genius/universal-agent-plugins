@@ -2,10 +2,13 @@ name: Release pipeline rehearsal
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.github/workflows/agentplugins-release.yml'
       - '.github/workflows/agentplugins-platform-proof.yml'
       - '.github/workflows/agentplugins-npm-publish.yml'
+      - '.github/workflows/hermes-native-e2e.yml'
+      - '.github/workflows/antigravity-native-e2e.yml'
       - '.github/workflows/release-pipeline-rehearsal.yml'
       - 'scripts/*agentplugins*draft*.py'
       - 'scripts/*agentplugins*npm_artifact.py'
@@ -25,6 +28,7 @@ concurrency:
 
 jobs:
   rehearsal:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

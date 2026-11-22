@@ -61,9 +61,13 @@ type Request struct {
 	ClientID             string
 	ClientConfigRoot     string
 	ClientExecutable     string
+	// ClientSurfaces holds actual host detections, never inferred authority.
+	ClientSurfaces []domain.ClientSurface `json:"-"`
 	// ClientNativeConfigRoot preserves an independently observed User profile
-	// for a single target opting into UserNativeRegistryLayout. It never replaces
-	// ClientConfigRoot or supplies a profile from persisted state.
+	// for a single target opting into UserNativeRegistryLayout, including read-only
+	// User-policy observation during Project delivery. It never selects a User
+	// write target for a Project operation, replaces ClientConfigRoot, or supplies
+	// a profile from persisted state.
 	ClientNativeConfigRoot string `json:"-"`
 	// ClientVersion is host-observed evidence for the selected executable.
 	// It is operational input, never portable package or diagnostic metadata.

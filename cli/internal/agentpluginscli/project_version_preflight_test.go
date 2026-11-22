@@ -10,6 +10,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statev2"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/copilot"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/kimi"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/windsurf"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -156,15 +157,13 @@ func TestProjectLifecycleVersionProbeEligibility(t *testing.T) {
 	tests := []struct {
 		name   string
 		scope  domain.InstallScope
-		dryRun bool
 		target domain.ClientID
 		change func(*domain.DetectedClient)
 	}{
-		{"user scope", domain.ScopeUser, false, domain.ClientKimi, nil},
-		{"dry run", domain.ScopeProject, true, domain.ClientKimi, nil},
-		{"unselected", domain.ScopeProject, false, domain.ClientGemini, nil},
-		{"known version", domain.ScopeProject, false, domain.ClientKimi, func(c *domain.DetectedClient) { c.Version = "2.3.1" }},
-		{"no executable", domain.ScopeProject, false, domain.ClientKimi, func(c *domain.DetectedClient) { c.ExecutablePath = "" }},
+		{"user scope", domain.ScopeUser, domain.ClientKimi, nil},
+		{"unselected", domain.ScopeProject, domain.ClientGemini, nil},
+		{"known version", domain.ScopeProject, domain.ClientKimi, func(c *domain.DetectedClient) { c.Version = "2.3.1" }},
+		{"no executable", domain.ScopeProject, domain.ClientKimi, func(c *domain.DetectedClient) { c.ExecutablePath = "" }},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -174,13 +173,26 @@ func TestProjectLifecycleVersionProbeEligibility(t *testing.T) {
 			}
 			detector := &projectVersionDetector{err: errors.New("must not probe")}
 			detected := map[domain.ClientID]domain.DetectedClient{domain.ClientKimi: client}
-			if err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: test.scope, Detector: detector}, &options{dryRun: test.dryRun}, []domain.ClientID{test.target}, detected); err != nil {
+			if err := ensureSelectedProjectVersions(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: test.scope, Detector: detector}, &options{}, []domain.ClientID{test.target}, detected); err != nil {
 				t.Fatal(err)
 			}
 			if len(detector.targets) != 0 || detector.broadCalls != 0 || !reflect.DeepEqual(detected[domain.ClientKimi], client) {
 				t.Fatalf("ineligible operation probed or changed discovery: %+v", detector)
 			}
 		})
+	}
+}
+
+// add --dry-run must admit a version-gated target exactly as the real add does,
+// through the same targeted read-only version probe.
+func TestProjectLifecycleDryRunObservesVersionLikeInstall(t *testing.T) {
+	client := projectVersionClient()
+	probed := client
+	probed.Version = "2.5.2"
+	detector := &projectVersionDetector{clients: []domain.DetectedClient{client}, probed: []domain.DetectedClient{probed}}
+	selected, _, err := preflightProjectLifecycleTargets(context.Background(), App{ClientRegistry: projectVersionRegistry(t), Scope: domain.ScopeProject, Detector: detector}, &options{dryRun: true}, []domain.ClientID{domain.ClientKimi}, nil, false)
+	if err != nil || len(selected) != 1 || selected[0].Version != "2.5.2" || detector.broadCalls != 0 {
+		t.Fatalf("dry run did not observe the version a real add observes: %v %+v", err, selected)
 	}
 }
 
@@ -330,5 +342,43 @@ func TestUserDevinSavedDependencyMutationProbesExactSelectedVersion(t *testing.T
 	if adapter.detected[domain.ClientWindsurf].Version != "3000.11.205" ||
 		!reflect.DeepEqual(detector.targets, [][]domain.ClientID{{domain.ClientWindsurf}}) || detector.broadCalls != 0 {
 		t.Fatal("user dependency mutation did not observe exact selected Devin version")
+	}
+}
+
+func TestCopilotOptionalVersionProbeNeverBlocksLegacyProjectDelivery(t *testing.T) {
+	registry, err := clients.NewRegistry(copilot.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := domain.DetectedClient{
+		ClientID: domain.ClientCopilot, Status: domain.DetectionDetected,
+		ExecutablePath: projectVersionFixturePath("bin", "copilot"), ConfigRoot: projectVersionFixturePath("profile", ".copilot"),
+	}
+	for _, tc := range []struct {
+		name          string
+		probeErr      error
+		probedVersion string
+		wantVersion   string
+	}{
+		{name: "failed", probeErr: errors.New("native version probe failed")},
+		{name: "empty", probedVersion: ""},
+		{name: "observed", probedVersion: "1.0.103", wantVersion: "1.0.103"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			observed := original
+			observed.Version = tc.probedVersion
+			detector := &projectVersionDetector{err: tc.probeErr, probed: []domain.DetectedClient{observed}}
+			detected := map[domain.ClientID]domain.DetectedClient{domain.ClientCopilot: original}
+			if err := ensureSelectedProjectVersions(t.Context(), App{ClientRegistry: registry, Scope: domain.ScopeProject, Detector: detector},
+				&options{}, []domain.ClientID{domain.ClientCopilot}, detected); err != nil {
+				t.Fatalf("optional Copilot version blocked existing project installer: %v", err)
+			}
+			if got := detected[domain.ClientCopilot].Version; got != tc.wantVersion {
+				t.Fatalf("version=%q want=%q", got, tc.wantVersion)
+			}
+			if len(detector.targets) != 1 || !reflect.DeepEqual(detector.targets[0], []domain.ClientID{domain.ClientCopilot}) {
+				t.Fatalf("unexpected native probes: %+v", detector.targets)
+			}
+		})
 	}
 }

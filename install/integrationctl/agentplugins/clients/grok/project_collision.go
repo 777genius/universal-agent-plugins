@@ -85,10 +85,11 @@ func (scanner *projectFileScanner) scanRoot(root string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		if name != scanner.plan.DeclaredName {
+		if shared.FoldJSONKey(name) != shared.FoldJSONKey(scanner.plan.DeclaredName) {
 			continue
 		}
-		if scanner.owned && path == scanner.plan.ActivePath {
+		// A case-folded alias at the owned path is still a collision.
+		if scanner.owned && name == scanner.plan.DeclaredName && path == scanner.plan.ActivePath {
 			scanner.expected = true
 			continue
 		}
@@ -173,11 +174,13 @@ func projectDirectoryEntries(path string, beforeOpen func()) ([]os.DirEntry, err
 }
 
 func (scanner *projectFileScanner) selectedSkillName(name string) bool {
-	if name == scanner.plan.DeclaredName {
+	folded := shared.FoldJSONKey(name)
+	if folded == shared.FoldJSONKey(scanner.plan.DeclaredName) {
 		return true
 	}
 	for _, component := range scanner.plan.Components {
-		if component.Kind == domain.ComponentSkill && component.Support != domain.SupportUnsupported && component.Name == name {
+		if component.Kind == domain.ComponentSkill && component.Support != domain.SupportUnsupported &&
+			folded == shared.FoldJSONKey(component.Name) {
 			return true
 		}
 	}

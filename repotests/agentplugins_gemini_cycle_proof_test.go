@@ -207,12 +207,14 @@ func geminiCycleBindingIdentity(r *geminiCycleRecipe, i domain.Installation) (do
 	id := domain.ComputeClientBindingID(i.InstallationID, "gemini", r.scopeName(), active)
 	b, ok := i.Clients[id]
 	profile := r.Profile
-	activation := domain.ActivationPrepared
+	// Project completion earned this exact tuple by observing the selected
+	// owned Skill and local MCP; staging or a failed observation is not success.
+	authentication := domain.AuthenticationNotRequired
 	if r.Scope == "user" {
-		activation = domain.ActivationActive
+		authentication = domain.AuthenticationNotChecked
 	}
 	revision := &domain.ClientPackageRevision{Version: "1.0.0", TreeDigest: r.Digest, ManifestDigest: "sha256:" + geminiCycleSHA(r.Authored["plugin.json"])}
-	if !ok || b.InstallIntent != domain.InstallIntentAutomatic || !b.SelectedDelivery.IsZero() || b.ProfileAuthority != nil || b.ProfileNamespace != "" || b.LocalEntryObservation != nil || b.PendingNativeIntent != nil || b.NativeActivationAttempt != "" || b.ClientBindingID != id || b.ClientID != "gemini" || b.Scope != r.scopeName() || b.NativeProfileRoot != profile || b.TargetLocator != active || b.PhysicalArtifact != physical || b.Materialization != domain.MaterializationMaterialized || b.Activation != activation || b.Verification != domain.VerificationInstalled || b.Authentication != domain.AuthenticationNotChecked || b.Policy != domain.PolicyAllowed || !reflect.DeepEqual(b.AffectedSurfaces, []string{"gemini"}) || !reflect.DeepEqual(b.PackageRevision, revision) {
+	if !ok || b.InstallIntent != domain.InstallIntentAutomatic || !b.SelectedDelivery.IsZero() || b.ProfileAuthority != nil || b.ProfileNamespace != "" || b.LocalEntryObservation != nil || b.PendingNativeIntent != nil || b.NativeActivationAttempt != "" || b.ClientBindingID != id || b.ClientID != "gemini" || b.Scope != r.scopeName() || b.NativeProfileRoot != profile || b.TargetLocator != active || b.PhysicalArtifact != physical || b.Materialization != domain.MaterializationMaterialized || b.Activation != domain.ActivationActive || b.Verification != domain.VerificationInstalled || b.Authentication != authentication || b.Policy != domain.PolicyAllowed || !reflect.DeepEqual(b.AffectedSurfaces, []string{"gemini"}) || !reflect.DeepEqual(b.PackageRevision, revision) {
 		return b, fmt.Errorf("Gemini exact binding/materialization/revision authority")
 	}
 	return b, nil

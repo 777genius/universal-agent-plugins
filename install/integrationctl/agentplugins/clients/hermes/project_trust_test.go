@@ -34,12 +34,14 @@ type fakeHermesCLI struct {
 	noSave, dropPrior        bool
 	unclosedTrust            bool
 	calls                    [][]string
+	environments             [][]string
 }
 
 func (cli *fakeHermesCLI) Run(_ context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
 	cli.mu.Lock()
 	defer cli.mu.Unlock()
 	cli.calls = append(cli.calls, slices.Clone(command.Argv))
+	cli.environments = append(cli.environments, slices.Clone(command.Env))
 	result := legacyports.CommandResult{CleanupComplete: true}
 	reply := func(value any) {
 		body, _ := json.Marshal(value)
@@ -150,7 +152,7 @@ func newHermesTrustFixture(t *testing.T) *hermesTrustFixture {
 			}
 			return f.cli.git, nil
 		},
-		environ: []string{"HOME=" + f.home, "USERPROFILE=" + f.home, "PATH=/usr/bin", "HERMES_MANAGED_DIR=" + f.managed, "FORCE_COLOR=1"},
+		environ: []string{"HOME=" + f.home, "USERPROFILE=" + f.home, "HERMES_HOME=" + f.profile, "PATH=/usr/bin", "HERMES_MANAGED_DIR=" + f.managed, "FORCE_COLOR=1"},
 	}
 	return f
 }
@@ -371,6 +373,11 @@ func TestHermesProjectTrustCanonicalizesSymlinkedProject(t *testing.T) {
 	if err := os.Symlink(f.project, alias); err != nil {
 		t.Skip("symlinks unavailable:", err)
 	}
+	profileAlias := filepath.Join(filepath.Dir(f.profile), "profile-alias")
+	if err := os.Symlink(f.profile, profileAlias); err != nil {
+		t.Fatal(err)
+	}
+	f.grant.environ = append(f.grant.environ, "HERMES_HOME="+profileAlias)
 	f.grant.project = alias
 	report, err := f.grant.run(context.Background())
 	if err != nil || !report.granted || report.root != f.project || !slices.Contains(f.cli.entries(), f.project) || slices.Contains(f.cli.entries(), alias) {
@@ -397,6 +404,7 @@ func TestHermesProjectTrustCaseInsensitiveProjectSelection(t *testing.T) {
 
 func hermesTrustActivation(t *testing.T, root string, cli *fakeHermesCLI, profile string) (domain.ActivationRequest, clients.Env) {
 	t.Helper()
+	t.Setenv("HERMES_HOME", profile)
 	fixture := newHermesSkillFixture(t, root, domain.ScopeProject)
 	plan := fixture.plan
 	plan.InstallIntent = domain.InstallIntentAutomatic
@@ -415,7 +423,7 @@ func TestHermesConfirmedProjectActivationGrantsTrustOnlyOutsideVerification(t *t
 	request, env := hermesTrustActivation(t, f.project, f.cli, f.profile)
 	plan := request.Plan
 	plan.UserActions = nil
-	if err := New().RefinePlan(context.Background(), clients.PlanInput{}, &plan); err != nil || len(f.cli.calls) != 0 ||
+	if err := New().RefinePlan(context.Background(), clients.PlanInput{ProjectTrustConsent: true}, &plan); err != nil || len(f.cli.calls) != 0 ||
 		!strings.Contains(strings.Join(plan.UserActions, "\n"), "trust this whole Git repository root") {
 		t.Fatalf("planning ran native trust or omitted the disclosure: %v %v %v", plan.UserActions, err, f.cli.calls)
 	}
@@ -451,6 +459,28 @@ func TestHermesConfirmedProjectActivationGrantsTrustOnlyOutsideVerification(t *t
 	mismatch, err := New().Activate(context.Background(), env, request)
 	if err != nil || len(f.cli.calls) != calls || !strings.Contains(mismatch.UserActions[len(mismatch.UserActions)-1], "recorded Hermes profile differs") {
 		t.Fatalf("a different recorded profile was not reported accurately: %v %v", mismatch.UserActions, err)
+	}
+}
+
+func TestHermesProjectPlanDisclosureFollowsTrustConsent(t *testing.T) {
+	t.Parallel()
+	for _, consent := range []bool{false, true} {
+		plan := domain.DeliveryPlan{Scope: domain.ScopeProject, Status: domain.PlanReady,
+			NativeRegistryRoot: filepath.Join(t.TempDir(), ".hermes"),
+			Components: []domain.ComponentDecision{
+				{Kind: domain.ComponentSkill, Name: "docs", Support: domain.SupportNative},
+				{Kind: domain.ComponentMCPServer, Name: "docs", Support: domain.SupportNative},
+			}}
+		if err := New().RefinePlan(t.Context(), clients.PlanInput{ProjectTrustConsent: consent}, &plan); err != nil {
+			t.Fatal(err)
+		}
+		actions := strings.Join(plan.UserActions, "\n")
+		if strings.Contains(actions, "A confirmed explicit add asks") != consent ||
+			strings.Contains(actions, "This operation does not change Hermes project trust") == consent ||
+			!strings.Contains(actions, "qualified bundled client") || !strings.Contains(actions, "quarantines") ||
+			strings.Contains(actions, "repair and dependency sync never grant trust") {
+			t.Fatalf("consent=%v has inaccurate or incomplete guidance: %s", consent, actions)
+		}
 	}
 }
 

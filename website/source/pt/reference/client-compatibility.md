@@ -12,13 +12,43 @@ translationRequired: false
 
 # Evidências de compatibilidade dos clientes UAP {#uap-client-compatibility-evidence}
 
+## Agentes compatíveis {#supported-agents}
+
+O UAP instala ou prepara pacotes para estes agentes. Informe o valor de `--target`
+para escolher agentes explicitamente ou omita `--target` para escolher entre os
+agentes detectados no seu computador.
+
+| Agente | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt` (Desktop), `chatgptweb` (Web) |
+
+O suporte aos escopos de usuário e de projeto, a configuração e as etapas que
+restam após a instalação variam conforme o agente; consulte a
+[tabela de suporte a agentes](https://universal-agent-plugins.com/pt/#agent-support). O suporte a um agente não significa que
+todo pacote, componente, versão ou escopo funcione nele.
+
 ## Versão atual e escopo {#current-release-and-scope}
 
 A [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest),
 versão nativa publicada, adiciona uma API local de
 gerenciamento com processo controlado pelo aplicativo, descoberta de clientes
-e perfis sem alterações e um provedor de extensões nativas do Pi no escopo de
-usuário. Consulte [gerenciamento local](../use/manage#local-management-api).
+e perfis sem alterações e extensões nativas do Pi, Skills e MCP stdio/Streamable HTTP
+nos escopos de usuário e de projeto elegível. Consulte [gerenciamento local](../use/manage#local-management-api).
 Canais de gerenciadores de pacotes podem demorar para receber a atualização;
 confira `agentplugins version`.
 
@@ -55,11 +85,15 @@ nem uma afirmação de prontidão universal para produção.
 
 ## Hermes e Antigravity: suporte na CLI publicada {#hermes-antigravity-source}
 
-O CLI nativo **0.1.108** foi publicado em 2026-11-13 e inclui Hermes e Antigravity. A verificação da versão e a promoção foram concluídas com sucesso; a elegibilidade dos pacotes no Directory assinado continua independente. Isso não afirma publicação npm 0.1.108, autenticação do provedor ou ativação automática.
+O CLI nativo **0.1.110** inclui Hermes e Antigravity. O UAP configura automaticamente os componentes compatíveis; conclua as ações restantes indicadas para seu cliente. A elegibilidade dos pacotes no Directory assinado continua independente. A instalação não comprova autenticação do provedor nem ativação em execução.
 
-[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+[0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) · source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`.
 
-**Evidência histórica do ciclo de vida (2026-11-10):**
+Project MCP do Hermes fica **Prepared** apenas com uma distribuição independente do próprio Hermes cujo manifesto de pacote o UAP verifica, seguida de uma sessão de projeto UAP explicitamente confirmada. A inicialização comum do Hermes não seleciona essa configuração MCP. O Hermes instalado a partir de seu código-fonte não pode usar Project MCP; use User MCP ou apenas Project Skills. Esse requisito do host não restringe a instalação de plugins do Git. Project Skills ainda exige confiança e uma nova sessão. As observações datadas abaixo mantêm seu alcance histórico.
+
+**Evidência histórica do ciclo de vida (2026-11-10–13):**
+
+[0.1.108 (2026-11-13)](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
 
 **Hermes 0.23.0:** Skills do usuário e configuração MCP stdio/Streamable HTTP pertencente ao UAP; em projetos, apenas Skills. Project MCP é recusado sem redirecionamento para a configuração do usuário. Linux x64, macOS arm64 e Windows x64 nativo passaram pela primeira adição e repetição, atualização, reparo, remoção, descoberta em projeto sem confiança e isolamento A/B: [42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862), UAP `a50c8a245f1c273efb3d171f4c54ed540475336a`. Quatro trocas HTTP de loopback `initialize`/`tools/list` por sistema comprovam conexão e descoberta de ferramentas; não comprovam `tools/call`, uso de modelos, autenticação ou execução em projeto confiável. SSE e hooks não são compatíveis. Comandos portáteis são projetados como Skills; comandos de invocação exclusivamente explícita são retidos quando o cliente não consegue impor essa restrição.
 

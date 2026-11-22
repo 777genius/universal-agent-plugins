@@ -317,6 +317,16 @@ class ProducerPermissionTests(unittest.TestCase):
             self.assertIn(guard, validate)
         self.assertIn("needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof]",
                       self.job("verified-draft"))
+        # Promotion is dispatched once every proof passed, in parallel with
+        # verified-draft; the tag-keyed concurrency group holds it until the
+        # qualification run completes, and reuse authenticates that run.
+        dispatch = self.job("dispatch-promotion")
+        self.assertIn("if: ${{ inputs.publish_release != true && inputs.auto_publish == true }}", dispatch)
+        self.assertIn("needs: [validate, stage-draft, platform-proof, hermes-native-proof, antigravity-native-proof]\n",
+                      dispatch)
+        self.assertIn("    permissions:\n      actions: write\n    steps:", dispatch)
+        self.assertIn("concurrency:\n  group: agentplugins-release-${{ inputs.tag }}\n  cancel-in-progress: false\n",
+                      self.workflow)
         promote = self.job("promote-release")
         self.assertIn("if: ${{ inputs.publish_release == true }}", promote)
         self.assertIn("needs: [validate, reuse-verified-draft]", promote)
@@ -328,7 +338,9 @@ class ProducerPermissionTests(unittest.TestCase):
             self.assertEqual(self.job(name).count("--require-hermes-antigravity"), 1)
         for client in ("hermes", "antigravity"):
             native = self.job(client + "-native-proof")
-            self.assertIn("needs: [validate, stage-draft, platform-proof]", native)
+            # Native client proofs consume only the staged artifact and digest,
+            # so they run beside platform-proof; verified-draft still waits for all.
+            self.assertIn("needs: [validate, stage-draft]\n", native)
             self.assertIn(f"uses: ./.github/workflows/{client}-native-e2e.yml", native)
             self.assertIn("release_assets_artifact: ${{ needs.stage-draft.outputs.assets_artifact }}", native)
             self.assertIn("expected_checksums_sha256: ${{ needs.stage-draft.outputs.asset_set_digest }}", native)

@@ -7,7 +7,7 @@ import { publishedLocales, localeMetadata } from '../data/i18n.ts';
 import { productRoutes } from '../data/routes.ts';
 import { clientLandingPages } from '../data/clients.ts';
 import { expandLocalizedRoutes, normalizeAppBase } from '../utils/localizedRoutes.ts';
-import { pageRouteSeo, productRootUrl } from '../utils/seo.ts';
+import { pageRouteSeo, productRootUrl, SOCIAL_PREVIEW_PATH } from '../utils/seo.ts';
 import { parseDirectoryData } from '../utils/registry.ts';
 import { projectRegistry } from '../utils/registryProjection.ts';
 
@@ -27,7 +27,7 @@ export function checkPageSchemaUrls(graphs, route, siteUrl, base) {
     assert.equal(software['@id'], `${root}#software`);
     assert.equal(software.url, root);
     assert.equal(software.publisher?.['@id'], `${root}#organization`);
-    assert.equal(software.screenshot, `${root}og-image.png?v=20261106`);
+    assert.equal(software.screenshot, `${root}${SOCIAL_PREVIEW_PATH}`);
     if (route.family === 'home') assert.equal(node('FAQPage')['@id'], `${canonical}#faq`);
   }
   if (route.family === 'plugin') {

@@ -56,5 +56,8 @@ func (session *applySession) completeExistingPreparedSetup(current domain.Client
 		return true, repair.result, nil
 	}
 	result, err := repair.reapplyIntactNative(delivery)
+	// The completion attempt may only re-verify the existing setup. With no
+	// native effect and no lifecycle change, this repeat changed nothing.
+	result.NoChange = err == nil && !result.Mutated
 	return true, result, err
 }

@@ -8,6 +8,7 @@
       "Authentication": "",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": null,
       "LocalEntryObservation": null,
       "NativeEffect": "",
@@ -26,6 +27,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": [
         "open ChatGPT Plugins and install demo from the prepared marketplace at \u003croot\u003e/managed/clients/chatgpt/demo-0123456789ab, then confirm it is enabled in a new chat"
       ],
@@ -55,6 +57,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": [
         "verify with `\u003croot\u003e/bin/claude plugin list --json`"
       ],
@@ -77,6 +80,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": null,
       "LocalEntryObservation": null,
       "NativeEffect": "unchanged",
@@ -104,6 +108,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": [
         "the `\u003croot\u003e/bin/codex plugin list --json` output contract was not recognized; inspect demo manually"
       ],
@@ -132,6 +137,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": [
         "the `\u003croot\u003e/bin/copilot plugin list` output contract was not recognized; inspect demo manually"
       ],
@@ -154,6 +160,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": [
         "open Cursor and verify the plugin from \u003croot\u003e/cursor/config/plugins/local/demo-0123456789ab is visible and enabled"
       ],
@@ -176,6 +183,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": null,
       "LocalEntryObservation": null,
       "NativeEffect": "unchanged",
@@ -203,6 +211,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": null,
       "LocalEntryObservation": null,
       "NativeEffect": "",
@@ -223,6 +232,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": null,
       "LocalEntryObservation": null,
       "NativeEffect": "unchanged",
@@ -243,6 +253,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": true,
+      "CompletedUserActions": null,
       "LocalActions": [
         "enable the managed plugin in Kimi Code"
       ],
@@ -274,6 +285,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": true,
+      "CompletedUserActions": null,
       "LocalActions": [
         "rerun structured Kiro ACP verification with `\u003croot\u003e/bin/kiro acp --agent-engine v3 --auth-method cli`"
       ],
@@ -296,6 +308,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": null,
       "LocalEntryObservation": null,
       "NativeEffect": "unchanged",
@@ -318,6 +331,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": null,
       "LocalEntryObservation": null,
       "NativeEffect": "unchanged",
@@ -368,6 +382,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": null,
       "LocalEntryObservation": null,
       "NativeEffect": "",
@@ -394,6 +409,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": [
         "the `\u003croot\u003e/bin/vscode plugin list` output contract was not recognized; inspect demo manually"
       ],
@@ -416,6 +432,7 @@
       "Authentication": "not_checked",
       "AuthenticationAttested": false,
       "AuthoritativeObservation": false,
+      "CompletedUserActions": null,
       "LocalActions": [
         "Windsurf: import MCP servers from \u003croot\u003e/managed/clients/windsurf/demo-0123456789ab/mcp.json; Devin cloud-synced configuration is never changed automatically"
       ],

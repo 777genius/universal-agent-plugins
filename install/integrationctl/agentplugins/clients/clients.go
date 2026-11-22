@@ -17,6 +17,8 @@
 package clients
 
 import (
+	"context"
+	"net/http"
 	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
@@ -45,10 +47,16 @@ type Env struct {
 	LookupExecutable    func(string) (string, error)
 	OpenCodeTransitions ports.OpenCodeTransitionRecorder
 	Runner              ports.CommandRunner
-	NativeConfig        nativeconfig.Kernel
-	Paths               ports.PathPolicy
-	Launcher            StdioLauncherDeliverer
-	Now                 func() time.Time
+	// NativeHTTP is an explicitly injected transport for a supervised native
+	// client's literal loopback API. Adapters bind the origin and response limits.
+	NativeHTTP             http.RoundTripper
+	NativeConfig           nativeconfig.Kernel
+	ParseSkill             func(context.Context, string, []byte) (domain.Skill, error)
+	DecodeSkillFrontmatter func(context.Context, []byte) (map[string]any, []byte, error)
+	Snapshots              ports.DirectorySnapshots
+	Paths                  ports.PathPolicy
+	Launcher               StdioLauncherDeliverer
+	Now                    func() time.Time
 }
 
 // StdioLauncherDeliverer copies the managed stdio launcher into a staged tree.

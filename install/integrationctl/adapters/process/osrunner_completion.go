@@ -24,6 +24,7 @@ func (OS) RunDuplexToCompletion(ctx context.Context, command ports.Command, exch
 	pipes := defaultDuplexPipeFactory
 	pipes.closure = &duplexClosureProof{}
 	pipes.exitGrace = time.Until(deadline)
+	pipes.finishExchangeOnExit = true
 	var settlementErr error
 	pipes.containment = func(cmd *exec.Cmd) (duplexCommandContainment, error) {
 		// Linux settles owned helpers inside the supervisor after the native

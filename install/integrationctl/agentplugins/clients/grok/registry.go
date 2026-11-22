@@ -50,10 +50,15 @@ func parseList(body []byte) ([]pluginEntry, error) {
 	seen := make(map[string]bool, len(values))
 	for _, value := range values {
 		entry, err := parseEntry(value)
-		if err != nil || seen[entry.Name] {
+		if err != nil {
 			return nil, errUnknownList
 		}
-		seen[entry.Name] = true
+		if seen[shared.FoldJSONKey(entry.Name)] {
+			// Conflicting native identity is known negative evidence, never
+			// an unknown JSON format eligible for manual attestation.
+			return nil, fmt.Errorf("%w: duplicate Grok plugin identity %q", shared.ErrRecognizedNegativeEvidence, entry.Name)
+		}
+		seen[shared.FoldJSONKey(entry.Name)] = true
 		entries = append(entries, entry)
 	}
 	return entries, nil
@@ -61,6 +66,8 @@ func parseList(body []byte) ([]pluginEntry, error) {
 
 // Keep exact native field spelling and types. Optional identity fields may be
 // absent in older listings, but null or differently cased values are not proof.
+// The one exception is version: Grok 1.0.70 lists a package that declares no
+// version (every raw Skill wrapper) as "version": null, the same as absent.
 func parseEntry(value any) (pluginEntry, error) {
 	object, ok := value.(map[string]any)
 	if !ok {
@@ -73,6 +80,9 @@ func parseEntry(value any) (pluginEntry, error) {
 				continue
 			}
 			text, valid := value.(string)
+			if key == "version" && value == nil {
+				valid = true
+			}
 			if key != field || !valid {
 				return pluginEntry{}, errUnknownList
 			}
@@ -88,15 +98,16 @@ func parseEntry(value any) (pluginEntry, error) {
 
 func findEntry(entries []pluginEntry, name string) (pluginEntry, bool) {
 	for _, entry := range entries {
-		if entry.Name == name {
+		if shared.FoldJSONKey(entry.Name) == shared.FoldJSONKey(name) {
+			// Folded aliases are collision candidates, never absence proof.
 			return entry, true
 		}
 	}
 	return pluginEntry{}, false
 }
 
-func expectedEntry(entry pluginEntry, activePath string) bool {
-	return strings.TrimSpace(entry.Source) != "" && strings.TrimSpace(activePath) != "" && shared.SameCleanPath(entry.Source, activePath)
+func expectedEntry(entry pluginEntry, name, activePath string) bool {
+	return entry.Name == name && strings.TrimSpace(entry.Source) != "" && strings.TrimSpace(activePath) != "" && shared.SameCleanPath(entry.Source, activePath)
 }
 
 func listPlugins(ctx context.Context, env clients.Env, executable string) ([]pluginEntry, error) {
@@ -160,7 +171,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 	if !found {
 		return clients.RegistryClear, nil
 	}
-	if managed != nil && expectedEntry(entry, plan.ActivePath) {
+	if managed != nil && expectedEntry(entry, plan.DeclaredName, plan.ActivePath) {
 		return clients.RegistryExpected, nil
 	}
 	return clients.RegistryCollision, nil

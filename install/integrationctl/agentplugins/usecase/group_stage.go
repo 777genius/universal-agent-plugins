@@ -2,47 +2,66 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func (session *groupSession) cleanupStaged() {
+// cleanupStaged discards this operation's staged packages and newly created
+// plugin data. It reports what it could not remove, so a caller never treats a
+// failed attempt as clean while leftovers remain.
+func (session *groupSession) cleanupStaged() error {
+	var failures []error
 	for index, target := range session.planned {
 		if session.service.directoryRecoveryPending(fmt.Sprintf("%s-%03d", session.groupID, index+1)) {
 			continue
 		}
 		if target.delivery.StagingPath != "" {
-			_ = session.service.Stager.Discard(context.Background(), target.delivery)
+			if err := session.service.Stager.Discard(context.Background(), target.delivery); err != nil {
+				failures = append(failures, fmt.Errorf("discard staged package for %s: %w", target.input.Client.ClientID, err))
+			}
 		}
 		if target.dataCreated {
-			_ = session.service.PluginData.PurgeData(context.Background(), target.dataReceipt)
+			if err := session.service.PluginData.PurgeData(context.Background(), target.dataReceipt); err != nil {
+				failures = append(failures, fmt.Errorf("purge new plugin data for %s: %w", target.input.Client.ClientID, err))
+			}
 		}
 	}
+	return errors.Join(failures...)
+}
+
+// failTargetStaging cleans up after a target's own staging failure. The
+// failure is attributed to the target only when cleanup left nothing behind.
+func (session *groupSession) failTargetStaging(err error, target plannedGroupTarget) error {
+	if cleanupErr := session.cleanupStaged(); cleanupErr != nil {
+		return errors.Join(err, cleanupErr)
+	}
+	return session.attributeTarget(err, session.plannedClients(target)...)
 }
 
 func (session *groupSession) stageGroupDeliveries() error {
 	for targetIndex := range session.planned {
 		target := &session.planned[targetIndex]
 		if err := session.reportGroupProgress(*target, GroupProgressPreparing); err != nil {
-			session.cleanupStaged()
+			_ = session.cleanupStaged()
 			return err
 		}
 		if target.noChange {
 			if target.managed != nil && session.existing {
 				installation := session.state.Installations[session.installationIndex]
 				if err := session.service.prepareExistingRuntime(session.ctx, target.input.Envelope, target.plan, installation, *target.managed); err != nil {
-					session.cleanupStaged()
-					return fmt.Errorf("prepare installed MCP runtime for %s: %w", target.input.Client.ClientID, err)
+					return session.failTargetStaging(fmt.Errorf("prepare installed MCP runtime for %s: %w", target.input.Client.ClientID, err), *target)
 				}
 			}
 			continue
 		}
 		if err := session.stageOneGroupDelivery(targetIndex, target); err != nil {
-			session.cleanupStaged()
-			return err
+			return session.failTargetStaging(err, *target)
 		}
 	}
 	if err := session.requireRecordedRepairProjections(); err != nil {
-		session.cleanupStaged()
+		_ = session.cleanupStaged()
 		return err
 	}
 	return nil
@@ -152,4 +171,13 @@ func (session *groupSession) reobserveRecoveringTarget(target plannedGroupTarget
 		return fmt.Errorf("staged reconstruction for %s does not match the recorded package digest", target.input.Client.ClientID)
 	}
 	return nil
+}
+
+// plannedClients lists the selected clients that share one planned delivery.
+func (session *groupSession) plannedClients(target plannedGroupTarget) []domain.ClientID {
+	clients := make([]domain.ClientID, 0, len(target.resultIndexes))
+	for _, index := range target.resultIndexes {
+		clients = append(clients, session.input.Targets[index].Client.ClientID)
+	}
+	return clients
 }

@@ -5,10 +5,10 @@ import { hydrated, navigate, offline, projections, registryFixture } from './i18
 test.describe.configure({ mode: 'parallel' });
 
 const commands = {
-  project: ['npx -y universal-agent-plugins install marketing-kit --scope project', 'npx -y universal-agent-plugins install --scope project'],
-  global: ['npx -y universal-agent-plugins install marketing-kit', 'npx -y universal-agent-plugins deps import --install'],
+  project: ['npx -y universal-agent-plugins@latest install marketing-kit --scope project', 'npx -y universal-agent-plugins@latest install --scope project'],
+  global: ['npx -y universal-agent-plugins@latest install marketing-kit', 'npx -y universal-agent-plugins@latest deps import --install'],
 } as const;
-const exportCommand = 'npx -y universal-agent-plugins deps export';
+const exportCommand = 'npx -y universal-agent-plugins@latest deps export';
 const manifest = `schema_version = 1
 
 [dependencies]
@@ -79,6 +79,7 @@ for (const theme of ['dark', 'light'] as const) {
             output: parseFloat(getComputedStyle(element.querySelector('.registry-restore__package')!).fontSize),
           }));
           expect(fonts.output).toBeLessThan(fonts.command);
+          expect(fonts.command).toBeGreaterThanOrEqual(width <= 300 ? 10 : 11);
           for (const part of await screen.locator('.registry-restore__package > *').all()) {
             await expect(part).toHaveCSS('color', 'rgb(164, 166, 173)');
             await expect(part).toHaveCSS('font-weight', '400');
@@ -88,6 +89,7 @@ for (const theme of ['dark', 'light'] as const) {
         if (mode === 'global') await expect(section.locator('.registry-restore__export code')).toHaveText(exportCommand);
         const copyButtons = section.locator('.registry-restore__screen .registry-restore__copy');
         await expect(copyButtons).toHaveCount(2);
+        await expect(copyButtons.locator('svg[aria-hidden="true"] path')).toHaveCount(2);
         if (locale === 'en') {
           await expect(copyButtons.first()).toHaveAccessibleName(/Copy command: My computer/);
           await expect(copyButtons.last()).toHaveAccessibleName(/Copy command: Teammate.s computer/);

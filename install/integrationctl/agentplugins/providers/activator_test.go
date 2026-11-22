@@ -127,7 +127,7 @@ func TestActivatorUpdateRecoversMissingMarketplaceAndPlugin(t *testing.T) {
 	runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
 		joined := strings.Join(command.Argv, " ")
 		if strings.Contains(joined, "marketplace update") || strings.Contains(joined, "plugin update") {
-			return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("missing")}
+			return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("missing"), CleanupComplete: true}
 		}
 		if strings.HasSuffix(joined, "plugin list") {
 			return legacyports.CommandResult{Stdout: []byte("Installed plugins:\n  • demo@agentplugins-8f97b00da374 (v1.0.0)")}
@@ -145,10 +145,11 @@ func TestActivatorUpdateRecoversMissingMarketplaceAndPlugin(t *testing.T) {
 		t.Fatalf("outcome = %+v", outcome)
 	}
 	marketplace := shared.ManagedMarketplaceName(request.Plan.PhysicalArtifactID)
+	// Copilot loads directory marketplaces live; `plugin update` proves
+	// nothing about enablement, so the Copilot lane always installs.
 	want := [][]string{
 		{"/test/bin/copilot", "plugin", "marketplace", "update", marketplace},
 		{"/test/bin/copilot", "plugin", "marketplace", "add", request.Delivery.ActivePath},
-		{"/test/bin/copilot", "plugin", "update", "demo@" + marketplace},
 		{"/test/bin/copilot", "plugin", "install", "demo@" + marketplace},
 		{"/test/bin/copilot", "plugin", "list"},
 	}
@@ -744,7 +745,7 @@ func TestActivatorCleansNewMarketplaceWhenPluginInstallFails(t *testing.T) {
 	t.Parallel()
 	runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
 		if strings.Contains(strings.Join(command.Argv, " "), "plugin install") {
-			return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("install failed")}
+			return legacyports.CommandResult{ExitCode: 1, Stderr: []byte("install failed"), CleanupComplete: true}
 		}
 		return legacyports.CommandResult{}
 	}}
@@ -1036,9 +1037,9 @@ func TestDeactivatorTreatsAlreadyAbsentNativeObjectsAsRemoved(t *testing.T) {
 	t.Parallel()
 	runner := &recordingRunner{run: func(command legacyports.Command) legacyports.CommandResult {
 		if strings.Contains(strings.Join(command.Argv, " "), "marketplace remove") {
-			return legacyports.CommandResult{ExitCode: 1, Stderr: []byte(`Marketplace "demo" is not registered`)}
+			return legacyports.CommandResult{ExitCode: 1, Stderr: []byte(`Marketplace "demo" is not registered`), CleanupComplete: true}
 		}
-		return legacyports.CommandResult{ExitCode: 1, Stderr: []byte(`Plugin "demo" is not installed`)}
+		return legacyports.CommandResult{ExitCode: 1, Stderr: []byte(`Plugin "demo" is not installed`), CleanupComplete: true}
 	}}
 	outcome, err := testActivator(Activator{Runner: runner}).Deactivate(context.Background(), domain.DeactivationRequest{
 		Client: domain.DetectedClient{ClientID: domain.ClientVSCode}, DeclaredName: "demo",

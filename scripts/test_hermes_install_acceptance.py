@@ -1,11 +1,17 @@
 """Inert regressions for the builder-only native acceptance boundary."""
 import base64
+import hashlib
+import io
 from contextlib import ExitStack
+from contextlib import redirect_stdout
 import json
 import os
+import runpy
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+import types
 import unittest
 from unittest.mock import patch
 
@@ -92,6 +98,222 @@ class BuilderCleanupAcceptance(unittest.TestCase):
                 changed[index] = 'unreviewed'
                 self.assertFalse(acceptance.reviewed_windows_builder(changed))
             self.assertFalse(acceptance.reviewed_windows_builder(argv + ['extra']))
+
+
+class HermesTrustReportCompletionAcceptance(unittest.TestCase):
+    def test_completed_guidance_requires_exact_public_state_and_native_roots(self):
+        lifecycle = runpy.run_path(str(Path(__file__).parent / "e2e" / "hermes-native-lifecycle.py"))["Lifecycle"]
+        mutations = ("", "grouped", "prepared", "prepared-pending", "unverified", "unknown-auth", "blocked",
+                     "activation-attested", "authentication-attested", "missing-disclosure",
+                     "not-ready", "empty-expected",
+                     "missing-expected", "missing-selected", "lost-prior", "extra-root",
+                     "invalid-native", "native-read-failed")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                prior, selected = root / "prior-project", root / "selected-project"
+                activation = {"activation": "active", "authentication": "not_required",
+                              "policy": "allowed", "verification": "installation_verified",
+                              "user_actions": ["Hermes now trusts this project's Git repository root"]}
+                data = {"readiness": "ready", "result": {"activation": activation}}
+                expected, roots = {prior, selected}, [str(prior), str(selected)]
+                if mutation in ("prepared", "prepared-pending"):
+                    activation["activation"] = "prepared"
+                    if mutation == "prepared-pending":
+                        data["readiness"] = "needs_action"
+                        data["next_actions"] = [{"code": "verify_native", "actor": "native_client"}]
+                elif mutation == "unverified":
+                    activation["verification"] = "package_validated"
+                elif mutation == "unknown-auth":
+                    activation["authentication"] = "not_checked"
+                elif mutation == "blocked":
+                    activation["policy"] = "blocked"
+                elif mutation in ("activation-attested", "authentication-attested"):
+                    activation[mutation.replace("-", "_")] = True
+                elif mutation == "missing-disclosure":
+                    activation["user_actions"] = []
+                elif mutation == "not-ready":
+                    del data["readiness"]
+                elif mutation == "empty-expected":
+                    expected = set()
+                elif mutation == "missing-expected":
+                    expected = None
+                elif mutation == "missing-selected":
+                    roots = [str(prior)]
+                elif mutation == "lost-prior":
+                    roots = [str(selected)]
+                elif mutation == "extra-root":
+                    roots.append(str(root / "foreign"))
+                elif mutation == "invalid-native":
+                    roots = {"unknown": True}
+                document = {"data": {"targets": [{"output": data}]} if mutation == "grouped" else data}
+                output, native = root / "project-add.json", root / "native-roots.json"
+                output.write_text(json.dumps(document), encoding="utf-8")
+                native.write_text(json.dumps(roots), encoding="utf-8")
+                suite = lifecycle.__new__(lifecycle)
+                suite.root, suite.hermes = root, ["selected-hermes"]
+                # Inert unit output only. The actual fixture still invokes its
+                # existing genuine config collector, never an attestation flag.
+                with patch.object(suite, "capture", return_value=native) as capture:
+                    if mutation == "native-read-failed":
+                        capture.side_effect = RuntimeError("native readback failed")
+                    if mutation in ("", "grouped"):
+                        suite.require_trust_report(output, granted=True, expected_roots=expected)
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            suite.require_trust_report(output, granted=True, expected_roots=expected)
+                    if capture.called:
+                        self.assertEqual(capture.call_count, 1)
+                        self.assertEqual(capture.call_args.args[0],
+                                         ["selected-hermes", "config", "get", "--json",
+                                          "skills.trusted_project_dirs"])
+                    if mutation in ("", "grouped", "missing-selected", "lost-prior",
+                                    "extra-root", "invalid-native", "native-read-failed"):
+                        self.assertTrue(capture.called)
+
+    def test_prepared_grant_is_rejected_and_refused_guidance_keeps_its_boundary(self):
+        lifecycle = runpy.run_path(str(Path(__file__).parent / "e2e" / "hermes-native-lifecycle.py"))["Lifecycle"]
+        granted = "Hermes now trusts this project's Git repository root"
+        refused = "UAP did not change Hermes project trust: maintenance; run `hermes skills trust` inside it"
+        for grant, actions, accepted in ((True, [granted], False),
+                                         (False, [refused], True),
+                                         (False, [], False)):
+            with self.subTest(granted=grant, actions=actions), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                output = root / "project-add.json"
+                output.write_text(json.dumps({"data": {"readiness": "ready", "result": {"activation": {
+                    "activation": "prepared", "authentication": "not_required", "policy": "allowed",
+                    "verification": "installation_verified", "user_actions": actions}}}}), encoding="utf-8")
+                suite = lifecycle.__new__(lifecycle)
+                suite.root, suite.hermes = root, ["selected-hermes"]
+                with patch.object(suite, "capture") as capture:
+                    if accepted:
+                        suite.require_trust_report(output, granted=grant, reason="maintenance")
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            suite.require_trust_report(output, granted=grant, reason="maintenance")
+                    capture.assert_not_called()
+
+
+class HermesSkillCatalogReadAcceptance(unittest.TestCase):
+    def test_digest_is_from_the_catalog_read_and_not_a_later_file_version(self):
+        source = (Path(__file__).parent.parent / "install/integrationctl/agentplugins/clients/hermes/skill_observation.go").read_text()
+        observation = source.split("const hermesSkillObservation = `", 1)[1].split("`", 1)[0]
+        original = b"---\nname: owned\ndescription: Owned metadata.\n---\nOriginal.\n"
+        substituted = original.replace(b"Original.", b"Substituted.")
+        for mode in ("stable", "aba", "cached", "repeated", "oversized", "bom-crlf"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve()
+                skill = root / "skills" / "owned" / "SKILL.md"
+                skill.parent.mkdir(parents=True)
+                raw = b"\xef\xbb\xbf" + original.replace(b"\n", b"\r\n") if mode == "bom-crlf" else original
+                skill.write_bytes(raw)
+                native = types.ModuleType("tools.skills_tool")
+                native.__file__ = str(root / "tools" / "skills_tool.py")
+                native.get_hermes_home = lambda: root
+                reader = lambda path: path.read_text(encoding="utf-8-sig", errors="replace")
+                native._read_skill_text = reader
+
+                def catalog():
+                    # Inert reader-boundary fixture; this is not native runtime proof.
+                    if mode == "aba":
+                        skill.write_bytes(substituted)
+                    elif mode == "oversized":
+                        skill.write_bytes(b"x" * ((1 << 20) + 1))
+                    if mode != "cached":
+                        native._read_skill_text(skill)
+                    if mode == "repeated":
+                        native._read_skill_text(skill)
+                    skill.write_bytes(raw)
+                    return [{"load_name": "owned", "status": "unique", "path": skill, "tier": 1}]
+
+                native._skill_catalog = catalog
+                tools_module = types.ModuleType("tools")
+                tools_module.skills_tool = native
+                utils = types.ModuleType("agent.skill_utils")
+                utils.find_project_root = lambda: None
+                utils.is_project_root_trusted = lambda path: False
+                modules = {"tools": tools_module, "tools.skills_tool": native,
+                           "agent": types.ModuleType("agent"), "agent.skill_utils": utils}
+                stdout = io.StringIO()
+                argv = ["observer", json.dumps({"owned": str(skill)}), str(root)]
+                with patch.dict(sys.modules, modules), patch.object(sys, "argv", argv), redirect_stdout(stdout):
+                    exec(compile(observation, "hermes-production-observer", "exec"), {})
+                rows = json.loads(stdout.getvalue())["skills"]
+                self.assertIs(native._read_skill_text, reader)
+                self.assertEqual(skill.read_bytes(), raw)
+                if mode in ("cached", "repeated", "oversized"):
+                    self.assertEqual(rows, [])
+                else:
+                    observed = substituted if mode == "aba" else original
+                    self.assertEqual(rows[0]["digest"], hashlib.sha256(observed).hexdigest())
+                    self.assertEqual(rows[0]["digest"] == hashlib.sha256(original).hexdigest(), mode != "aba")
+
+
+class HermesSkillBootstrapArgvAcceptance(unittest.TestCase):
+    def test_actual_bootstrap_preserves_inline_code_arguments_and_child_status(self):
+        source = (Path(__file__).parent.parent / "install/integrationctl/agentplugins/clients/hermes/skill_observation.go").read_text()
+        bootstrap = source.split("const hermesSkillBootstrap = `", 1)[1].split("`", 1)[0]
+        with tempfile.TemporaryDirectory(prefix="hermes argv ") as directory:
+            root = Path(directory).resolve() / "source with spaces"
+            package = root / "hermes_cli"
+            package.mkdir(parents=True)
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            # Only the installation-bound command factory is inert. Execute
+            # the actual production bridge with the host's ordinary argv rules.
+            (package / "_launchers.py").write_text(
+                "def runtime_command(root, args=(), *, python, code):\n"
+                "    return [str(python), '-I', '-c', code, *args]\n", encoding="utf-8")
+            selection = json.dumps({"docs": 'C:\\native path\\quote "docs"\\SKILL.md'})
+            code = ("import json, sys\n"
+                    "print(json.dumps(sys.argv[1:]))\n"
+                    "raise SystemExit(int(sys.argv[3]))\n")
+            for status in (0, 7):
+                with self.subTest(status=status):
+                    arguments = [selection, str(root), str(status)]
+                    child = subprocess.run(
+                        [sys.executable, "-I", "-c", bootstrap, str(root), code, *arguments],
+                        capture_output=True, timeout=10, check=False)
+                    self.assertEqual(child.returncode, status)
+                    self.assertEqual(child.stderr, b"")
+                    self.assertEqual(json.loads(child.stdout), arguments)
+
+
+class HermesNativeConfigLineEndingContract(unittest.TestCase):
+    def test_disposable_profile_seeds_lf_with_windows_text_translation(self):
+        # Simulate Windows' implicit write_text LF -> CRLF conversion on every
+        # host. Only the test-owned config fixture is translated; the public
+        # installer and its strict, byte-bound observations remain untouched.
+        fixture = runpy.run_path(
+            str(Path(__file__).parent / "e2e/hermes-native-lifecycle.py"),
+            run_name="hermes_native_fixture_contract")
+        Lifecycle = fixture["Lifecycle"]
+        write_text = Path.write_text
+        with tempfile.TemporaryDirectory(prefix="hermes-lf-fixture-") as temporary:
+            root = Path(temporary)
+            profile = root / "profile"
+
+            def windows_text_write(path, content, *args, **kwargs):
+                if path == profile / "config.yaml" and kwargs.get("newline") is None:
+                    return path.write_bytes(content.replace("\n", "\r\n").encode("utf-8"))
+                return write_text(path, content, *args, **kwargs)
+
+            with patch.dict(os.environ, {
+                "HERMES_HOME": str(profile),
+                "HERMES_NATIVE_EVIDENCE": str(root / "evidence"),
+                "UAP_BIN": "inert-uap-not-executed",
+                "HERMES_BIN": "inert-hermes-not-executed",
+                "HERMES_NATIVE_RUNTIME_COMMAND_FILE": "",
+                "HERMES_NATIVE_MCP_URL": "http://127.0.0.1:1/inert",
+            }), patch.object(Path, "write_text", new=windows_text_write), \
+                patch.object(subprocess, "run", return_value=subprocess.CompletedProcess([], 0)), \
+                patch.object(Lifecycle, "capture", return_value=None), \
+                patch.object(Lifecycle, "resolved_home", return_value=profile.resolve()):
+                Lifecycle(root).prepare()
+
+            self.assertEqual((profile / "config.yaml").read_bytes(),
+                             b"model: offline-native-smoke\nmcp_servers:\n"
+                             b"  foreign:\n    command: echo\n    args: [foreign]\n")
 
 
 if __name__ == '__main__':

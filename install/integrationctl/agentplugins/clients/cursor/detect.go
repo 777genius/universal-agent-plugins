@@ -37,7 +37,7 @@ func (adapter *Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	editor := host.LookPath("cursor")
 	surfaces := []domain.ClientSurface{
 		host.ResolvedBinarySurface("cursor_editor", editor),
-		host.BinarySurface("cursor_agent", "cursor-agent"),
+		host.BinarySurface(domain.CursorAgentSurfaceID, "cursor-agent"),
 		host.DirectorySurface("cursor_config", configRoot),
 	}
 	if host.GOOS() == "darwin" {
@@ -49,12 +49,28 @@ func (adapter *Adapter) DetectSurfaces(host clients.Host) clients.Detection {
 	}
 	selection := []string{"cursor_editor", "cursor_desktop"}
 	if adapter.projectComponents {
-		selection = append(selection, "cursor_agent")
+		selection = append(selection, domain.CursorAgentSurfaceID)
 	}
 	return clients.Detection{
 		ConfigRoot:          configRoot,
 		ExecutablePath:      editor,
 		Surfaces:            surfaces,
 		SelectionSurfaceIDs: selection,
+		NotDetectedHint:     adapter.agentOnlyHint(surfaces),
 	}
+}
+
+// agentOnlyHint explains why cursor-agent alone does not select Cursor for
+// user scope: it installs for the Cursor editor, while the agent CLI selects
+// Cursor for project scope only.
+func (adapter *Adapter) agentOnlyHint(surfaces []domain.ClientSurface) string {
+	if adapter.projectComponents {
+		return ""
+	}
+	for _, surface := range surfaces {
+		if surface.ID == domain.CursorAgentSurfaceID && surface.Detected {
+			return "Cursor user scope installs for the Cursor editor, but only cursor-agent was found. Use --scope project to install project skills and MCP servers for cursor-agent"
+		}
+	}
+	return ""
 }

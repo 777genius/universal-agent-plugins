@@ -1,12 +1,7 @@
 name: VS Code Local native argv
 
+# VS Code plugin-platform support is frozen; keep manual diagnostics only.
 on:
-  pull_request:
-    paths:
-      - 'install/integrationctl/agentplugins/vscodelocalhooks/**'
-      - 'install/integrationctl/agentplugins/go.mod'
-      - 'install/integrationctl/agentplugins/go.sum'
-      - '.github/workflows/vscode-local-native.yml'
   workflow_dispatch:
     inputs:
       os:

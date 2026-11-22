@@ -49,7 +49,7 @@ func preflightSelectedTargets(ctx context.Context, app App, targets []domain.Cli
 			ok = true
 		}
 		if !ok || (client.Status != domain.DetectionDetected && !plansWithoutHostPresence(target)) {
-			return nil, nil, fmt.Errorf("target %q was not detected; no target was changed", target)
+			return nil, nil, fmt.Errorf("target %q was not detected; no target was changed%s", target, undetectedTargetHint(client))
 		}
 		detected[target] = client
 		selected = append(selected, client)
@@ -87,6 +87,15 @@ func preflightInstalledBindings(bindingTargets []domain.ClientID, detected map[d
 		selected = append(selected, client)
 	}
 	return selected, nil
+}
+
+// undetectedTargetHint appends the client's own advice for a target that only
+// another scope can select.
+func undetectedTargetHint(client domain.DetectedClient) string {
+	if client.NotDetectedHint == "" {
+		return ""
+	}
+	return "; " + client.NotDetectedHint
 }
 
 func selectedDetectionError(target domain.ClientID, detected map[domain.ClientID]domain.DetectedClient) error {

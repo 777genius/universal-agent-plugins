@@ -13,7 +13,7 @@ func (session *groupSession) applyGroupKernel() error {
 	for _, target := range session.planned {
 		if session.service.ClientPreparation != nil {
 			if err := session.service.ClientPreparation.RevalidateClient(session.ctx, target.input.Client, target.plan); err != nil {
-				return fmt.Errorf("prepared host changed before group commit: %w", err)
+				return fmt.Errorf("revalidate the prepared host before group commit: %w", err)
 			}
 		}
 	}

@@ -39,8 +39,8 @@ for (const width of [1440, 390]) {
     const card = page.locator('[data-install-source="i18n-state-00"]').first();
     await expect(card.locator('.plugin-card__source-label')).toHaveCount(0);
     await card.locator('.plugin-card__install-toggle').click();
-    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(
-      'npx -y universal-agent-plugins add i18n-state-00',
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(
+      'npx -y universal-agent-plugins@latest add i18n-state-00',
     );
     // Switching from terminal detection selects only one initial agent.
     await targets(page, card, ['Cursor']);
@@ -51,7 +51,9 @@ for (const width of [1440, 390]) {
     await expect(card.locator('.plugin-card__source-label')).toContainText(
       'Agents: 1 automatic setup · 1 need follow-up',
     );
-    await expect(card.locator('.plugin-card__install .command-snippet code')).toContainText('--target codex,cursor');
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toContainText('--target "codex,cursor"');
+
+    await page.keyboard.press('Escape');
 
     await card.locator('.plugin-card__title-link').click();
     const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
@@ -68,9 +70,9 @@ for (const width of [1440, 390]) {
     await expect(managed.locator('.plugin-detail__client')).toHaveText(['Cursor']);
     await expect(prepared.locator('.plugin-detail__client')).toHaveText(['Codex CLI', 'ChatGPT Desktop']);
     await expect(detail.locator('.plugin-detail__client').filter({ hasText: 'Kiro' })).toHaveCount(0);
-    await expect(detail.locator('.install-outcome')).toContainText('Cursor');
-    await expect(detail.locator('.install-outcome')).toContainText('Codex CLI');
-    await expect(detail.locator('.install-command-row .command-snippet--add code')).toContainText('--target codex,cursor');
+    await expect(detail.getByRole('checkbox', { name: /^Cursor(?:\s|$)/ })).toBeChecked();
+    await expect(detail.getByRole('checkbox', { name: /^Codex CLI(?:\s|$)/ })).toBeChecked();
+    await expect(detail.locator('.install-command-row .command-snippet--add code')).toContainText('--target "codex,cursor"');
     expect(errors).toEqual([]);
   });
 }
@@ -84,6 +86,7 @@ test('expired Directory disables both catalog and standalone install promises', 
   const card = page.locator('[data-install-source="i18n-state-00"]').first();
   await expect(card.locator('.plugin-card__ribbon')).toHaveText('temporarily paused');
   await expect(card.locator('.plugin-card__install-toggle')).toHaveCount(0);
+  await page.keyboard.press('Escape');
   await card.locator('.plugin-card__title-link').click();
   const detail = page.locator('.plugin-detail[data-install-source="i18n-state-00"]');
   await expect(detail.locator('.plugin-detail__status')).toHaveText('temporarily paused');
@@ -94,7 +97,7 @@ test('expired Directory disables both catalog and standalone install promises', 
 });
 
 for (const width of [1440, 390]) {
-  test('plugin agent picker is a full-width select at ' + width + 'px', async ({ page }) => {
+  test('plugin agent grid searches without losing selection at ' + width + 'px', async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     const errors = await offline(page);
     await projections(page, eligibleFixture());
@@ -102,28 +105,33 @@ for (const width of [1440, 390]) {
     const card = page.locator('[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
 
-    const trigger = card.locator('.app-multiselect__trigger');
-    const row = card.locator('.plugin-card__install');
-    const triggerBox = (await trigger.boundingBox())!;
-    const rowBox = (await row.boundingBox())!;
-    expect(triggerBox.width).toBeGreaterThanOrEqual(rowBox.width - 2);
-
-    await trigger.click();
-    const popup = page.locator('.app-multiselect__content--wide');
-    await expect(popup).toBeVisible();
-    const popupBox = (await popup.boundingBox())!;
-    expect(Math.abs(popupBox.width - triggerBox.width)).toBeLessThanOrEqual(3);
-    expect(
-      await popup.locator('.app-multiselect__options').evaluate(
-        (node) => getComputedStyle(node).gridTemplateColumns.split(' ').length,
-      ),
-    ).toBe(1);
-    const chatgpt = page.getByRole('checkbox', { name: /^ChatGPT Web(?:\s|$)/ });
-    await expect(chatgpt).toBeDisabled();
-    await expect(chatgpt).toContainText('No verified ChatGPT Web app binding for this plugin.');
-    await page.getByRole('checkbox', { name: /^Codex(?:\s|$)/ }).click();
-    await expect(card.locator('.plugin-card__install .command-snippet--add code')).toContainText('--target codex');
-    await page.keyboard.press('Escape');
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.locator('.app-multiselect__trigger')).toHaveCount(0);
+    const grid = dialog.locator('.app-multiselect__content--inline');
+    await expect(grid).toBeVisible();
+    const gridBox = (await grid.boundingBox())!;
+    const rowBox = (await dialog.locator('.plugin-card__install').boundingBox())!;
+    expect(Math.abs(gridBox.width - rowBox.width)).toBeLessThanOrEqual(3);
+    expect(await grid.locator('.app-multiselect__options').evaluate(
+      (node) => getComputedStyle(node).gridTemplateColumns.split(' ').length,
+    )).toBe(width < 600 ? 2 : 3);
+    await expect(dialog.getByRole('checkbox', { name: /^ChatGPT Web(?:\s|$)/ })).toHaveCount(0);
+    const search = grid.getByRole('searchbox');
+    await search.fill('cOdEx');
+    await expect(grid.getByRole('checkbox')).toHaveCount(1);
+    const codex = grid.getByRole('checkbox', { name: /^Codex(?:\s|$)/ });
+    await codex.click();
+    await expect(codex).toBeChecked();
+    await expect(grid.locator('.app-multiselect__heading > span')).toHaveText('1 selected');
+    await expect(dialog.locator('.install-dialog__footer .command-snippet--add code')).toContainText('--target codex');
+    await search.fill('no-such-agent');
+    await expect(grid.getByRole('checkbox')).toHaveCount(0);
+    await expect(grid.locator('.app-multiselect__heading > span')).toHaveText('1 selected');
+    await search.fill('');
+    await expect(codex).toBeChecked();
+    await codex.click();
+    await expect(grid.locator('.app-multiselect__auto')).toHaveAttribute('aria-pressed', 'true');
+    await expect(dialog.locator('.command-snippet--add code')).not.toContainText('--target');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
   });
@@ -157,7 +165,7 @@ test('plugin detail uses readable theme tokens and aligned mobile breadcrumbs', 
     await page.setViewportSize({ width, height: 900 });
     const breadcrumbs = detail.locator('.plugin-detail__hero-topbar .breadcrumbs');
     const centerDelta = await detail.locator('.plugin-detail__hero-topbar').evaluate((bar) => {
-      const back = bar.querySelector('.plugin-detail__back-cta')!.getBoundingClientRect();
+      const back = bar.querySelector('.detail-navigation__back')!.getBoundingClientRect();
       const crumb = bar.querySelector('.breadcrumbs')!.getBoundingClientRect();
       return Math.abs(back.top + back.height / 2 - (crumb.top + crumb.height / 2));
     });

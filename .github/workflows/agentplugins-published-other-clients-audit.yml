@@ -1,13 +1,8 @@
 name: Published npm stable additional native clients audit
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - '.github/workflows/agentplugins-published-other-clients-audit.yml'
-      - '.github/workflows/agentplugins-published-version.yml'
-      - 'scripts/live-install-audit.py'
-      - 'scripts/test_live_install_audit_components.py'
+  # Public npm bytes are qualified after a successful trusted publication,
+  # weekly, or by explicit manual dispatch. PRs use current-source native E2E.
   workflow_run:
     workflows: ['Agentplugins NPM Publish']
     types: [completed]
@@ -23,10 +18,11 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: published-other-clients-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: published-other-clients-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   resolve-release:
@@ -34,6 +30,7 @@ jobs:
     uses: ./.github/workflows/agentplugins-published-version.yml
     with:
       version: ${{ inputs.version }}
+      require_trusted_publish: true
 
   published-additional-clients:
     needs: resolve-release

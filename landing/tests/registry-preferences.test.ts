@@ -92,7 +92,7 @@ function card(props = packageProps()) {
   return setup(
     'RegistryPluginCard',
     { defineProps: () => props, withDefaults: (value: unknown) => value },
-    'targets, autoDetect, scope, projectAvailable, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall, deliverySummary, updateScope',
+    'targets, autoDetect, scope, projectAvailable, installExpanded, command, updateTargets, updateAutoDetect, showAuthentication, authentication, toggleInstall: selection.toggleInstall, deliverySummary, updateScope',
   );
 }
 
@@ -160,11 +160,11 @@ test('Desktop has its own picker command, shares Codex backend, and keeps Web se
   assert.match(instance.state.command.value, /--target chatgpt$/);
   assert.equal(instance.state.deliverySummary.value.includes('1 automatic setup'), true);
   instance.state.updateTargets(['chatgpt', 'codex']);
-  assert.deepEqual(Array.from(instance.state.targets.value), ['codex']);
-  assert.match(instance.state.command.value, /--target codex$/);
-  instance.state.updateTargets(['codex', 'chatgpt']);
-  assert.deepEqual(Array.from(instance.state.targets.value), ['chatgpt']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['chatgpt', 'codex']);
   assert.match(instance.state.command.value, /--target chatgpt$/);
+  instance.state.updateTargets(['codex', 'chatgpt']);
+  assert.deepEqual(Array.from(instance.state.targets.value), ['codex', 'chatgpt']);
+  assert.match(instance.state.command.value, /--target codex$/);
   instance.stop();
   assert.deepEqual(cliInstallTargets(['chatgptweb', 'chatgpt']), ['chatgptweb', 'chatgpt']);
   assert.equal(canonicalInstallTarget('chatgptweb'), 'chatgpt');
@@ -191,7 +191,7 @@ test('explicit card delivery summary follows the winning scoped release rather t
   instance.state.updateAutoDetect(false);
   instance.state.updateScope('project');
   assert.equal(instance.state.deliverySummary.value, '', 'entering project restores CLI-side detection');
-  assert.equal(instance.state.command.value, 'npx -y universal-agent-plugins add gitlab --scope project');
+  assert.equal(instance.state.command.value, 'npx -y universal-agent-plugins@latest add gitlab --scope project');
   instance.state.updateAutoDetect(false);
   assert.equal(instance.state.deliverySummary.value, 'Agents: 0 automatic setup · 1 need follow-up');
   assert.match(instance.state.command.value, /--target codex --scope project$/);
@@ -205,7 +205,7 @@ test('expired community card and detail produce pinned commands with compatible 
   setActivePinia(createPinia());
   const data = signedDiscoveryFixture({ generated: '2000-01-01T00:00:00Z', expires: '2000-01-02T00:00:00Z' });
   const plugin = discoveryPlugin(data.snapshot.records[0]!, data.snapshot);
-  const expected = `npx -y universal-agent-plugins add github:test/plugin-00000@${'a'.repeat(40)}`;
+  const expected = `npx -y universal-agent-plugins@latest add github:test/plugin-00000@${'a'.repeat(40)}`;
   const instance = card(packageProps(plugin));
   assert.equal(instance.state.command.value, expected);
   instance.state.updateTargets(['codex']);
@@ -245,7 +245,7 @@ test('catalog SSR defaults do not populate install preferences; valid manual sel
   const remount = card();
   assert.deepEqual(Array.from(remount.state.targets.value), ['codex']);
   assert.equal(remount.state.autoDetect.value, false);
-  assert.equal(remount.state.installExpanded.value, true);
+  assert.equal(remount.state.installExpanded.value, false);
   assert.equal(remount.state.command.value, command);
   remount.stop();
 });
@@ -551,12 +551,12 @@ test('saved Marketing Kit Project selection keeps explicit user intent without c
   assert.equal(instance.state.scope.value, 'project');
   assert.equal(instance.state.projectAvailable.value, true);
   assert.equal(instance.state.command.value,
-    'npx -y universal-agent-plugins add marketing-kit --target cursor --scope project');
+    'npx -y universal-agent-plugins@latest add marketing-kit --target cursor --scope project');
   instance.state.updateScope('user');
   assert.equal(instance.state.scope.value, 'user');
   assert.equal(instance.state.autoDetect.value, false, 'explicit manual Cursor intent is preserved');
   assert.equal(instance.state.command.value,
-    'npx -y universal-agent-plugins add marketing-kit --target cursor');
+    'npx -y universal-agent-plugins@latest add marketing-kit --target cursor');
   instance.stop();
 });
 
@@ -580,7 +580,7 @@ test('Marketing Kit project unlocks from signed project policy without hardcoded
   instance.state.updateScope('project');
   assert.equal(instance.state.autoDetect.value, true);
   assert.equal(instance.state.command.value,
-    'npx -y universal-agent-plugins add marketing-kit --scope project');
+    'npx -y universal-agent-plugins@latest add marketing-kit --scope project');
   assert.doesNotMatch(instance.state.command.value, /--target cursor/);
   instance.stop();
 });

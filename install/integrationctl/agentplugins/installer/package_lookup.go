@@ -2,6 +2,7 @@ package installer
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -12,15 +13,21 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 	if !e.SupportsClient(req.ClientID) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: client %q is not registered for this installer", ErrUnsupported, req.ClientID)
 	}
-	if (req.ClientConfigRoot == "" && e.scope() != domain.ScopeProject) || (req.ClientConfigRoot != "" && !validRoot(req.ClientConfigRoot)) {
+	// A User lane with a separate selected native root (current Devin Global)
+	// may legitimately have no legacy profile root; the opted-in native root
+	// itself is validated below.
+	if (req.ClientConfigRoot == "" && e.scope() != domain.ScopeProject && req.ClientNativeConfigRoot == "") || (req.ClientConfigRoot != "" && !validRoot(req.ClientConfigRoot)) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientConfigRoot must be an explicit absolute clean path", ErrInvalidRequest)
 	}
-	if (req.ClientExecutable != "" && !validRoot(req.ClientExecutable)) || (req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "") {
+	if req.ClientExecutable != "" && !validRoot(req.ClientExecutable) {
 		return domain.DetectedClient{}, fmt.Errorf("%w: ClientExecutable must be an explicit absolute clean path", ErrInvalidRequest)
+	}
+	if req.Operation == OpInstall && requiresExecutable(e.cfg.Registry, id, e.scope()) && req.ClientExecutable == "" {
+		return domain.DetectedClient{}, missingExecutableError(ErrInvalidRequest, id)
 	}
 	if req.ClientNativeConfigRoot != "" {
 		_, opted := clients.As[clients.UserNativeRegistryLayout](e.cfg.Registry, id)
-		if e.scope() != domain.ScopeUser || !opted || !validRoot(req.ClientNativeConfigRoot) {
+		if !opted || !validRoot(req.ClientNativeConfigRoot) {
 			return domain.DetectedClient{}, fmt.Errorf("%w: ClientNativeConfigRoot requires an explicit absolute clean User root and an opted-in adapter", ErrInvalidRequest)
 		}
 	}
@@ -32,7 +39,7 @@ func (e *Engine) detectedClient(req Request) (domain.DetectedClient, error) {
 			return domain.DetectedClient{}, fmt.Errorf("%w: invalid client profile: %w", ErrInvalidRequest, err)
 		}
 	}
-	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, NativeConfigRoot: req.ClientNativeConfigRoot, ExecutablePath: req.ClientExecutable, Version: req.ClientVersion}, nil
+	return domain.DetectedClient{ClientID: id, Status: domain.DetectionDetected, ConfigRoot: root, NativeConfigRoot: req.ClientNativeConfigRoot, ExecutablePath: req.ClientExecutable, Version: req.ClientVersion, Surfaces: slices.Clone(req.ClientSurfaces)}, nil
 }
 
 func missingRequired(envelope domain.PackageEnvelope, required []string) []string {

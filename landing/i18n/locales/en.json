@@ -376,7 +376,7 @@
         "nextStep": "What you do after installing"
       },
       "scrollHint": "Scroll sideways to see every column.",
-      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. Installing never signs you in or grants trust. Availability depends on the plugin and client version. Baseline: native CLI 0.1.108. npm publication is separate and may lag. Agent support does not guarantee a compatible signed catalog release for every plugin and scope.",
+      "note": "Automatic = UAP installs the supported components; Guided = follow client prompts; Prepared = files are ready but need activation; Manual = complete setup in the app. After confirmation, UAP completes supported native setup and reports remaining trust, sign-in or reload steps. Availability depends on the plugin and client version. Baseline: native CLI 0.1.115. npm publication is separate and may lag. Agent support does not guarantee a compatible signed catalog release for every plugin and scope.",
       "details": "Check compatibility details",
       "capabilities": {
         "pluginsSkillsMcp": "Plugins, Skills, MCP",
@@ -388,6 +388,7 @@
         "personalAppSetup": "Personal app setup",
         "skillsOnly": "Skills only",
         "skillsMcpPrepared": "Skills, MCP (prepared)",
+        "pluginsSkillsMcpPrepared": "Plugins, Skills, MCP (prepared)",
         "notSupported": "Not supported"
       },
       "setup": {
@@ -408,27 +409,28 @@
         "windsurf": "Open or restart Devin in the selected project; review access.",
         "kimi": "Run /reload or /new and review MCP permissions.",
         "cline": "Select the project MCP settings path and reload Cline.",
-        "kiro": "Sign in, approve access, and restart Kiro if prompted.",
-        "grok": "Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP.",
+        "kiro": "The CLI configures supported Skills and MCP automatically; sign in, approve access, and restart if prompted.",
+        "grok": "Open the selected project in Grok, review trust, and follow any remaining enablement or reload steps; verify Skills and MCP.",
         "vscode": "Open and trust the folder; review and enable MCP servers.",
         "chatgpt": "Desktop: local install via Codex CLI; Web: connect or install in ChatGPT.",
-        "hermes": "Restart Hermes, trust the selected Git project, and verify Skills and User MCP; Project MCP is unsupported.",
+        "hermes": "Restart Hermes and trust the project; Project MCP requires a verified standalone Hermes bundle and an explicitly confirmed UAP project session.",
         "antigravity": "Open or reload Antigravity; review trust and verify the prepared plugin is discovered and enabled in the selected scope."
       }
     },
     "dependencies": {
       "eyebrow": "Dependencies, connected",
-      "title": "Two plugins. One shared dependency.",
+      "title": "Two plugins\nOne shared dependency",
       "description": "Install a plugin with its dependencies. Shared dependencies at the same compatible version are installed once.",
       "demoPackage": "Demonstration package",
       "installed": "Installed",
       "alreadyInstalled": "Already installed",
-      "shared": "shared",
+      "shared": "Shared by both plugins",
       "caption": "Illustrative packages and dependency graph. Playwright is shared by both packages; Context7 is already installed.",
-      "graphDescription": "marketing-kit depends on Playwright, HubSpot and Notion. Web Design Kit depends on the same Playwright package, Figma and Context7. All packages are installed; Context7 was already installed."
+      "graphDescription": "Example versions: marketing-kit v{marketingVersion} and Web Design Kit v{designVersion} both reuse one Playwright bridge dependency at v{playwrightVersion}. Marketing Kit also uses HubSpot and Notion; Web Design Kit uses Figma and Context7.",
+      "exampleVersions": "Example versions"
     },
     "restore": {
-      "title": "Same plugin versions. Across your team.",
+      "title": "Same plugin versions\nAcross your team",
       "guide": "Guide",
       "from": "My computer",
       "to": "Teammate's computer",
@@ -465,11 +467,54 @@
       "sourceDescription": "See where packages come from and whether a catalog listing has been reviewed before you install.",
       "standardDescription": "Use an Agent Plugins 1.0 {manifest} package—no separate UAP-specific plugin format."
     },
-    "builtWith": {
-      "title": "Already built with UAP",
-      "agentNotificationsDescription": "Desktop notifications, sounds, and click-to-focus for AI coding agents.",
-      "viewRepository": "View on GitHub",
-      "buildWithSdk": "Build with the SDK"
+    "sdk": {
+      "title": "Build universal plugins",
+      "tagline": "Create once. Connect your agents.",
+      "intro": "Build plugins with the UAP SDK and CLI, or bring plugin and Skill management into your own app.",
+      "featuresLabel": "SDK and CLI capabilities",
+      "features": {
+        "detect": {
+          "title": "Detect installed agents",
+          "description": "The CLI finds the supported agents on a machine, so one command reaches all of them."
+        },
+        "install": {
+          "title": "Install for selected agents",
+          "description": "Pick exact agents, and UAP prepares the native format each one supports."
+        },
+        "cli": {
+          "title": "Plugin management CLI",
+          "description": "Install, update, repair, and remove plugins with one terminal command."
+        },
+        "hooks": {
+          "title": "Typed hooks",
+          "description": "Handle native agent hook events with typed Go handlers."
+        }
+      },
+      "apps": {
+        "eyebrow": "For app builders",
+        "badge": "Integration preview",
+        "title": "Add plugin management to your app",
+        "description": "The TypeScript Management SDK lets a desktop or Node.js app discover agents and install, update, or remove plugins and Skills through the UAP engine.",
+        "guide": "TypeScript Management SDK guide",
+        "diagramLabel": "Illustration: your app asks the UAP Management SDK to install the marketing-kit plugin, and the SDK installs it for Codex, Claude Code, and Gemini CLI.",
+        "yourApp": "Your app",
+        "tag": "Plugins + Skills",
+        "kind": "Plugin",
+        "install": "Install",
+        "update": "Update",
+        "remove": "Remove",
+        "installing": "Installing…",
+        "installed": "Installed",
+        "caption": "Build plugins. Power your app."
+      },
+      "showcase": {
+        "eyebrow": "Built with UAP",
+        "description": "Cross-platform smart notifications. Desktop alerts, sounds, click-to-focus, and webhooks.",
+        "builtOn": "Built on the UAP SDK: typed agent hooks and the UAP installer.",
+        "repository": "View on GitHub",
+        "stars": "{stars} GitHub stars"
+      },
+      "guides": "Explore the SDK guides"
     },
     "faq": {
       "eyebrow": "FAQ",
@@ -523,7 +568,7 @@
       "notAvailableForPlugin": "Not available for this plugin",
       "title": "One plugin",
       "subtitle": "All your agents",
-      "intro": "Install, update, repair, and remove Agent Plugins 1.0 across supported AI agents with one command. Let the CLI detect installed agents, or choose exactly where the plugin goes.",
+      "intro": "Install, update, repair, and remove Agent Plugins 1.0 / Agent Skills across supported AI agents with one command. Let the CLI detect installed agents, or choose exactly where to install.",
       "github": "Open GitHub",
       "choose": "Choose agents",
       "chooseHint": "One, many, or auto-detect",
@@ -531,7 +576,7 @@
       "terminal": "In your terminal",
       "refreshNotice": "Plugin data is refreshing. Try again shortly.",
       "otherMethods": "Other installation methods",
-      "supportedFormats": "Supported formats",
+      "supportedFormats": "Standards",
       "watchDemo": "Watch demo",
       "demoVideoTitle": "Universal Agent Plugins install demo",
       "supportedClients": "Supported clients",
@@ -605,6 +650,7 @@
       "empty": "No matching categories"
     },
     "multi": {
+      "search": "Search agents…",
       "agents": "{count} agent | {count} agents",
       "selected": "{count} selected",
       "auto": "Auto-detect",
@@ -612,10 +658,11 @@
       "automaticHelp": "The CLI checks installed local agents and lets you confirm compatible targets. ChatGPT Desktop is local; ChatGPT Web setup finishes inside ChatGPT.",
       "manualHelp": "Select the agents to install into. At least one must stay selected.",
       "summary": "{label}: {summary}",
-      "manualHelpWithAuto": "Select the agents to install into. Clear the last selection to choose in the terminal."
+      "manualHelpWithAuto": "Select the agents to install into. Clear the last selection to choose in the terminal.",
+      "more": "+{count} more"
     },
     "command": {
-      "terminal": "Terminal",
+      "terminal": "Your terminal",
       "copiedLabel": "Command copied",
       "copyLabel": "Copy command",
       "copied": "Copied",
@@ -811,17 +858,18 @@
       "chatgptFinish": "Open ChatGPT, select {name} in Apps or Plugins, connect it, and start a new chat. Availability depends on your account and workspace.",
       "expectedFallback": "Expected source fallback: {source}.",
       "dependencySaving": {
-        "saved": "Saved for your user account in uap.toml and uap.lock. Locate them with npx -y universal-agent-plugins deps status. Remove affects all saved targets.",
+        "saved": "Saved for your user account in uap.toml and uap.lock. Locate them with {command}. Remove affects all saved targets.",
         "noSave": "This target selection uses --no-save and does not record a dependency.",
         "local": "Local packages are not saved as portable dependencies.",
         "discovery": "Discovery selectors are not saved as dependencies.",
         "chatgpt": "ChatGPT preparation does not save a dependency.",
-        "projectSaved": "Saved in this project’s uap.toml and uap.lock. Check with npx -y universal-agent-plugins deps status --scope project from this folder. Remove affects all saved targets in this project."
+        "projectSaved": "Saved in this project’s uap.toml and uap.lock. Check with {command} from this folder. Remove affects all saved targets in this project."
       },
       "scope": {
         "label": "Install for",
         "user": "This computer",
         "project": "This project",
+        "projectLocationHint": "The project is the folder where you run the terminal command. Run it from your project root.",
         "projectHint": "Run these commands from your project folder. Your agent may ask you to trust or activate the project.",
         "projectUnavailable": "Project installation is not available for this package.",
         "marketingKitProjectUnavailable": "Marketing Kit is not yet available for Project: its required Notion, HubSpot and Playwright dependencies must each qualify for Project installation.",
@@ -854,7 +902,13 @@
       "guidedChatgptSetup": "Guided ChatGPT Web setup; finish connecting inside ChatGPT.",
       "catalogReleasePending": "This plugin has not been published for {agent} yet.",
       "useComputerScope": "For this plugin, choose This computer.",
-      "unsupportedPluginComponents": "{agent} does not support all components of this plugin."
+      "unsupportedPluginComponents": "{agent} does not support all components of this plugin.",
+      "dialogDescription": "Choose agents and an installation scope, then run the command in your terminal.",
+      "closeDialog": "Close installation",
+      "pinnedSourceShort": "Install via Git",
+      "desktopSourceShort": "Local desktop connection",
+      "webSetupShort": "Guided web setup",
+      "selectionRoutesUnavailable": "Your agent choices are kept. This combination has no common installation source in the selected scope. Adjust the agents or scope to get an installation command."
     },
     "authentication": {
       "not_required": "No account required",
@@ -909,7 +963,7 @@
       },
       "cursor": {
         "note": "Native Agent Plugin package",
-        "status": "Supported",
+        "status": "Prepared by CLI",
         "intro": "Install Agent Plugins 1.0 into Cursor projects without translating each plugin by hand. The CLI plans the native package before changing files.",
         "delivery": "The CLI prepares supported Cursor plugin, skill and MCP components for the selected scope. The add command defaults to user scope; select project scope explicitly for add.",
         "activation": "Reload Cursor when requested, then verify that the plugin is discovered."
@@ -918,7 +972,7 @@
         "note": "Managed native plugin",
         "status": "Supported",
         "intro": "Install Agent Plugins 1.0 through GitHub Copilot CLI using its native plugin workflow and the same lifecycle command used for other agents.",
-        "delivery": "The CLI uses the supported Copilot plugin layout and verifies the resulting install state.",
+        "delivery": "The CLI uses the supported Copilot plugin layout and verifies the resulting install state. In project scope with stable Copilot CLI 1.0.81 or later, a compatible package is registered as a native project plugin.",
         "activation": "Restart or reload the client only when the native Copilot workflow asks for it."
       },
       "vscode": {
@@ -932,8 +986,8 @@
         "note": "Managed skills and MCP configuration",
         "status": "Supported",
         "intro": "Install Agent Plugins 1.0 for Kiro from the same portable package used by other AI agents.",
-        "delivery": "The CLI installs its owned Kiro skills and MCP entries while preserving unrelated global configuration.",
-        "activation": "Complete the printed OAuth or restart step. macOS and Windows preparation does not claim automatic runtime verification."
+        "delivery": "The CLI automatically installs owned Skills and MCP configuration for supported Kiro CLI versions, preserving unrelated settings. MCP requires the complete supported CLI distribution and writable configuration.",
+        "activation": "Sign in, approve access, and restart if prompted. Explicit preparation remains Prepared; installed files do not prove native loading, authentication, or live MCP execution."
       },
       "claude": {
         "note": "Managed MCP configuration",
@@ -961,21 +1015,21 @@
         "status": "Supported",
         "intro": "Install compatible Agent Plugins 1.0 for Cline without rebuilding the MCP configuration for every plugin.",
         "delivery": "The CLI prepares and tracks the supported Cline MCP configuration.",
-        "activation": "Reload Cline when requested and complete provider authentication outside the plugin package."
+        "activation": "Reload Cline and complete provider authentication. Project MCP requires the explicitly selected managed session and its CLINE_MCP_SETTINGS_PATH; ordinary startup does not select that configuration."
       },
       "windsurf": {
-        "note": "Prepared package; manual activation required",
-        "status": "Prepared by CLI",
-        "intro": "Prepare Agent Plugins 1.0 for Windsurf with one CLI command, then finish the client-specific activation step explicitly.",
-        "delivery": "The CLI validates and prepares the compatible Windsurf package without claiming automatic activation.",
-        "activation": "Follow the exact manual activation path printed after preparation."
+        "note": "Managed skills and MCP configuration",
+        "status": "Supported",
+        "intro": "Install Agent Plugins 1.0 Skills and MCP servers for Windsurf / Devin with one CLI command.",
+        "delivery": "The CLI writes owned Skills and MCP configuration for Devin versions 3000.11.205 or 3000.12.57 in User and Project scope. Preparation does not prove discovery, trust, sign-in, or live execution.",
+        "activation": "Open or restart Devin in the selected project and review access. UAP checks installed Skills with the Devin CLI; verify MCP servers in Devin."
       },
       "grok": {
         "note": "Native skills and MCP plugin; CLI verification",
         "status": "Supported",
         "intro": "Install portable Agent Plugins 1.0 skills and MCP servers for Grok Build from the same CLI used for other clients.",
         "delivery": "The CLI writes a native .grok-plugin manifest in Grok's user plugin directory and manages registration with the Grok CLI when available.",
-        "activation": "Reload Grok Build after installation. If the Grok CLI is unavailable, install it and rerun the update command for native verification."
+        "activation": "On Linux with Grok Build 1.0.70, UAP can enable the exact Project plugin while preserving existing trust and disabled preferences. Review trust separately; other hosts and versions follow the printed setup steps, then reload and verify."
       },
       "kimi": {
         "note": "Managed user plugin with skills and MCP",
@@ -992,11 +1046,11 @@
         "activation": "Reload Qoder plugins or restart Qoder after installation. Runtime MCP connections and provider authentication still need confirmation in Qoder."
       },
       "hermes": {
-        "note": "User Skills/MCP and Project Skills; Project MCP is unsupported",
+        "note": "User Skills/MCP; Project Skills and prepared MCP",
         "status": "Supported",
-        "intro": "Install native Hermes Agent Skills for your user or a selected Git project, plus user-scoped MCP servers, without changing unrelated settings.",
-        "delivery": "UAP manages owned Skills directories and exact User MCP entries in config.yaml. Project installation never modifies User MCP configuration.",
-        "activation": "Restart Hermes to reload the integration. Review project trust before using Project Skills; runtime discovery and authentication still need confirmation."
+        "intro": "Install native Hermes Agent Skills and MCP servers for your user or a selected Git project. Project MCP requires a verified standalone Hermes host bundle.",
+        "delivery": "UAP manages owned Skills and exact User MCP entries in config.yaml. Project MCP uses an explicitly confirmed managed project session. Project installation never modifies User MCP configuration.",
+        "activation": "Start a fresh Hermes session and review repository trust. Project MCP runs through the confirmed UAP project session; ordinary Hermes startup does not select it. Authentication and live MCP execution still need confirmation."
       },
       "antigravity": {
         "note": "Native User/Project plugins; activation requires verification",

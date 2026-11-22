@@ -100,7 +100,7 @@ func TestCopilotUserLiveBuiltinExactObservationAndOwnership(t *testing.T) {
 	if copilotUserLiveExpectedMarketplace(r.Plan.PhysicalArtifactID) != "agentplugins-b73014d8eb6c" {
 		t.Fatal("independent fixed marketplace identity changed")
 	}
-	if len(copilotUserLiveBuiltinPrefix) != 56 || fmt.Sprintf("%x", sha256.Sum256([]byte(copilotUserLiveBuiltinPrefix))) != "e83a8da5c004a1bfd6aa6645aacbe882ff506bf311b6a6c8c34833533e25caa2" {
+	if len(copilot103BuiltinSection) != 56 || fmt.Sprintf("%x", sha256.Sum256([]byte(copilot103BuiltinSection))) != "e83a8da5c004a1bfd6aa6645aacbe882ff506bf311b6a6c8c34833533e25caa2" {
 		t.Fatal("independently authored fixed measured prefix changed")
 	}
 	if !copilotUserLiveActivation(body, nil, r) {
@@ -172,10 +172,9 @@ func copilotUserLiveAlteredDocuments(t *testing.T, request domain.ActivationRequ
 	foreign := filepath.Join(parent, "foreign", leaf)
 	unclean := parent + string(filepath.Separator) + "." + string(filepath.Separator) + leaf
 	return map[string]string{
-		"builtin-enabled":       strings.ReplaceAll(body, "[disabled]", "[enabled]"),
-		"builtin-unknown":       strings.ReplaceAll(body, "browser-use", "other-builtin"),
-		"builtin-version":       strings.ReplaceAll(body, "v0.0.4", "v0.0.5"),
 		"builtin-state-missing": strings.ReplaceAll(body, " [disabled]", ""),
+		"builtin-state-unknown": strings.ReplaceAll(body, "[disabled]", "[pending]"),
+		"builtin-trailing":      strings.TrimPrefix(body, copilot103BuiltinSection) + copilot103BuiltinSection,
 		"live-disabled":         strings.ReplaceAll(body, "(enabled)", "(disabled)"),
 		"live-unknown-status":   strings.ReplaceAll(body, "(enabled)", "(pending)"),
 		"live-version":          strings.ReplaceAll(body, "v1.2.3", "v1.2.4"),
@@ -199,6 +198,38 @@ func copilotUserLiveAlteredDocuments(t *testing.T, request domain.ActivationRequ
 		"nul":                   body + "\x00",
 		"oversized":             body + strings.Repeat("x", 8<<10),
 		"empty":                 "",
+	}
+}
+
+// Builtin names, versions, count and enablement change with Copilot releases
+// and never carry a managed marketplace identity.
+func TestCopilotUserLiveBuiltinAcceptsReleaseBuiltinVariants(t *testing.T) {
+	r := copilotUserLiveRequest(t)
+	body := string(copilotUserLiveDocument(r))
+	for name, variant := range map[string]string{
+		"1.0.112":         strings.Replace(body, copilot103BuiltinSection, copilot112BuiltinSection, 1),
+		"builtin-enabled": strings.ReplaceAll(body, "[disabled]", "[enabled]"),
+		"builtin-other":   strings.ReplaceAll(body, "browser-use", "other-builtin"),
+		"builtin-version": strings.ReplaceAll(body, "v0.0.4", "v0.0.5"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !copilotUserLiveActivation([]byte(variant), nil, r) {
+				t.Fatal("release builtin variant refused")
+			}
+			managed := &domain.ClientBinding{ClientID: "copilot", Scope: "user", PhysicalArtifact: r.Plan.PhysicalArtifactID, TargetLocator: r.Plan.ActivePath}
+			runner := &copilotUserLiveRunner{t: t, steps: []copilotUserLiveStep{copilotUserLiveListStep(r, []byte(variant), true)}}
+			finding, err := shared.InspectCopilotRegistryWithListingRecognition(context.Background(), clients.Env{Runner: runner}, r.Plan, managed, recognizeCopilotUserRegistry)
+			if err != nil || finding != clients.RegistryExpected || runner.calls != 1 {
+				t.Fatalf("finding=%v err=%v calls=%d", finding, err, runner.calls)
+			}
+		})
+	}
+	for _, name := range []string{"computer-use", "Computer-Use"} {
+		same := copilotUserLiveRequest(t)
+		same.DeclaredName, same.Plan.DeclaredName = name, name
+		if copilotUserLiveActivation([]byte(strings.Replace(string(copilotUserLiveDocument(same)), copilot103BuiltinSection, copilot112BuiltinSection, 1)), nil, same) {
+			t.Fatal("declared name equal to a listed builtin admitted", name)
+		}
 	}
 }
 

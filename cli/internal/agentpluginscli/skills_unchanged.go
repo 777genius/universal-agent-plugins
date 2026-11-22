@@ -37,6 +37,11 @@ func (p *PreparedSkillsBatch) observeUnchangedSkills(ctx context.Context) (map[s
 		if !eligible {
 			continue
 		}
+		// Read-only Skills completion needs the same exact selected version as
+		// first installation; ordinary unchanged dependencies remain unprobed.
+		if err := ensureSelectedProjectVersions(ctx, p.app, adapter.opts, []domain.ClientID{domain.ClientID(action.ClientID)}, adapter.detected); err != nil {
+			return nil, err
+		}
 		// Repair preparation may hydrate a legacy executable inventory. Keep
 		// that observation separate from the retained, already reviewed plan.
 		pin := *action.Package

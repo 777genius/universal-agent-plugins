@@ -575,6 +575,125 @@ class KimiCollectorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             kimi._installed_skills({"skills": [expected]}, [])
 
+    def test_stable_workflow_requires_exact_public_ready_without_claiming_raw_shutdown(self):
+        import sys
+        import textwrap
+        workflow = Path(__file__).parents[1] / ".github/workflows/kimi-stable-project-native-e2e.yml"
+        source = workflow.read_text().split("<<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        program = compile(textwrap.dedent(source), str(workflow), "exec")
+        keys = ("skill_bytes_match lock_written lock_contains_identity lock_exact_source_pinned "
+                "listed_identity repeat_verified repeat_native_unchanged repeat_lock_unchanged "
+                "removal_verified sentinels_preserved post_list_schema_valid").split()
+        observed = {"status": "observed", "selected_installations": 1, "selected_bindings": 1,
+                    "invalid_rows": 0, "truncated": False,
+                    "states": [{"materialization": "materialized", "activation": "active",
+                                "authentication": "not_required", "policy": "allowed",
+                                "verification": "installation_verified"}]}
+        row = {**dict.fromkeys(keys, True), "status": "passed", "post_remove_identity_registered": False,
+               "public_skill_ready": {"after-add": True, "repeat-add": True},
+               "public_target_states": {"after-add": copy.deepcopy(observed), "repeat-add": copy.deepcopy(observed)}}
+        report = {"pr_head_sha": "source-head", "passed": 30, "verified_negative_coverage": 0,
+                  "cases_attempted": 30, "full_coverage": True, "source_selection_complete": True,
+                  "client_version": {"status": "reported", "value": "2.5.2"}, "results": [copy.deepcopy(row) for _ in range(30)]}
+        for failure in (None, "prepared", "pending", "ambiguous", "numeric-ready", "bool-installations", "bool-bindings", "bool-invalid", "null-states", "float-passed", "float-cases", "bool-negative"):
+            value = copy.deepcopy(report)
+            if failure == "prepared":
+                value["results"][0]["public_target_states"]["after-add"]["states"][0]["activation"] = "prepared"
+            if failure == "pending":
+                value["results"][0]["public_skill_ready"]["repeat-add"] = False
+            if failure == "ambiguous":
+                value["results"][0]["public_target_states"]["repeat-add"]["selected_bindings"] = 2
+            if failure == "numeric-ready":
+                value["results"][0]["public_skill_ready"]["repeat-add"] = 1
+            if failure in ("bool-installations", "bool-bindings", "bool-invalid"):
+                field = {"bool-installations": "selected_installations", "bool-bindings": "selected_bindings", "bool-invalid": "invalid_rows"}[failure]
+                value["results"][0]["public_target_states"]["repeat-add"][field] = failure != "bool-invalid"
+            if failure == "null-states": value["results"][0]["public_target_states"] = None
+            if failure in ("float-passed", "float-cases", "bool-negative"):
+                field = {"float-passed": "passed", "float-cases": "cases_attempted", "bool-negative": "verified_negative_coverage"}[failure]
+                value[field] = False if failure == "bool-negative" else float(value[field])
+            if failure is not None:
+                self.assertEqual(value["results"][1:], report["results"][1:])
+            if failure in ("ambiguous", "bool-installations", "bool-bindings", "bool-invalid"):
+                self.assertEqual(value["results"][0]["public_target_states"]["after-add"], observed)
+            with self.subTest(failure=failure), patch.object(sys, "argv", ["audit", "inert-report", "source-head"]), \
+                    patch.object(Path, "read_text", return_value=json.dumps(value)), contextlib.redirect_stdout(io.StringIO()):
+                if failure is None:
+                    exec(program, {"__name__": "__main__"})
+                else:
+                    with self.assertRaises(SystemExit):
+                        exec(program, {"__name__": "__main__"})
+
+    def test_raw_installed_observer_reaches_outside_inventory_and_shutdown(self):
+        for selected in ([], ["frontend-design"]):
+            with self.subTest(selected=selected), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                calls, shutdown = [], []
+                scopes = (*kimi.WORKSPACES, "user")
+                ctx = SimpleNamespace(root=root, projects={scope: root / scope for scope in scopes}, summary={"commands": []})
+                def http(label, method, path, token=None, json_body=None, timeout=5):
+                    calls.append(label)
+                    self.assertEqual(token, "inert-bearer")
+                    if label == "meta":
+                        data = {"server_version": kimi.VERSION, "dangerous_bypass_auth": False,
+                                "backend": "v2", "server_id": "inert", "started_at": "2026-11-19T00:00:00Z",
+                                "open_in_apps": [], "capabilities": dict.fromkeys(
+                                    ("websocket", "file_upload", "fs_query", "mcp", "tasks", "terminal"), True)}
+                    elif label.startswith("workspace-"):
+                        scope = next(scope for scope in scopes if str(ctx.projects[scope]) == json_body["root"])
+                        data = {**json_body, "id": "wd_project_" + format(scopes.index(scope) + 1, "012x"),
+                                "created_at": "2026-11-19T00:00:00Z", "last_opened_at": "2026-11-19T00:00:00Z", "session_count": 0}
+                    elif label.startswith("trust-before-"):
+                        data = {"trusted": label.rsplit("-", 1)[1] in ("a", "b")}
+                    elif label.startswith("skills-"): data = {"skills": []}
+                    elif label.startswith("mcp-"): data = []
+                    elif label == "shutdown": data = {"ok": True}
+                    else: self.fail("unexpected native API request: " + label)
+                    return 200, json.dumps({"code": 0, "msg": "success", "request_id": "inert", "data": data}).encode()
+                service = SimpleNamespace(http=http, remaining=lambda: 50, mark_shutdown=lambda: shutdown.append(True))
+                def run(label, argv, observe, **kwargs):
+                    self.assertEqual(label, "kimi-raw-empty")
+                    return observe(service)
+                ctx.service = run
+                request = {"stage": "raw-empty", "setup_trust": False,
+                           "skills": {scope: [] for scope in kimi.WORKSPACES},
+                           "servers": {scope: [] for scope in kimi.WORKSPACES}, "selected_skill_names": selected}
+                with patch.object(kimi, "_ready", return_value="inert-bearer"):
+                    observed = kimi.observe_installed(ctx, request)
+                self.assertEqual(shutdown, [True])
+                self.assertEqual(calls[-1], "shutdown")
+                self.assertEqual("workspace-outside" in calls, bool(selected))
+                self.assertEqual("skills-outside" in calls, bool(selected))
+                self.assertEqual(set(observed["skill_names"]), set(scopes if selected else kimi.WORKSPACES))
+
+    def test_raw_receipt_selected_names_are_bounded_before_native_service(self):
+        for names in (None, "frontend-design", ["frontend-design"] * 2,
+                      ["A"], ["../escape"], ["x" * 65], [str(i) for i in range(33)]):
+            with self.subTest(names=names), self.assertRaises(ValueError):
+                kimi.observe_installed(object(), {
+                    "stage": "raw-empty", "setup_trust": False,
+                    "skills": {scope: [] for scope in kimi.WORKSPACES},
+                    "servers": {scope: [] for scope in kimi.WORKSPACES},
+                    "selected_skill_names": names,
+                })
+
+    def test_receipt_selected_raw_skill_is_checked_in_every_scope_and_after_removal(self):
+        selected = {"name": "frontend-design", "description": "Original published description",
+                    "path": "/owned/A/.kimi-code/skills/frontend-design/SKILL.md", "source": "project"}
+        foreign = {"name": "foreign-preserve", "description": "Keep", "path": "/owned/foreign/SKILL.md", "source": "user"}
+        self.assertEqual(kimi._installed_skills({"skills": [foreign, selected]}, [selected], ["frontend-design"]), ["frontend-design"])
+        # The same response must fail an empty B/C/User or post-removal
+        # expectation; the raw name is not silently filtered by the old prefix.
+        with self.assertRaises(ValueError):
+            kimi._installed_skills({"skills": [selected]}, [], ["frontend-design"])
+        for changed in ({**selected, "path": "/owned/B/SKILL.md"},
+                        {**selected, "source": "user"}, {**selected, "description": "Other"}):
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                kimi._installed_skills({"skills": [changed]}, [selected], ["frontend-design"])
+        with self.assertRaises(ValueError):
+            kimi._installed_skills({"skills": [selected, selected]}, [selected], ["frontend-design"])
+        self.assertEqual(kimi._installed_skills({"skills": [foreign]}, [], ["frontend-design"]), [])
+
     def test_installed_plugin_qualified_user_and_direct_project_names_remain_distinct(self):
         user = {"name": "uap-kimi-native-user:uap-kimi-native-user", "description": "Kimi installed user-one",
                 "path": "/owned/home/plugins/managed/user/skills/uap-kimi-native-user/SKILL.md", "source": "extra"}

@@ -18,7 +18,7 @@ const directorySiteSkill = "context7-mcp"
 
 // directorySiteBindings checks actual saved Directory origin and two distinct
 // installed native profile receipts. An arbitrary local bundle is not sufficient.
-func directorySiteBindings(t *testing.T, path, codexHome, claudeHome string) map[string]domain.ClientBinding {
+func directorySiteBindings(t *testing.T, path, codexHome, claudeHome string) (string, map[string]domain.ClientBinding) {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -65,7 +65,7 @@ func directorySiteBindings(t *testing.T, path, codexHome, claudeHome string) map
 	if len(bindings) != 2 {
 		t.Fatalf("missing Codex or Claude Directory binding: %+v", bindings)
 	}
-	return bindings
+	return install.InstallationID, bindings
 }
 
 // directorySiteCodexInventory asks the genuine pinned Codex CLI and its
@@ -109,14 +109,25 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 			t.Fatalf("%s altered foreign user Skill bytes", stage)
 		}
 	}
-	// This is the Directory card's exact add command. The shared runner
-	// requests JSON output to avoid interactive prompts on the CI host.
+	// The current Linux lane chooses the same two agents through the ordinary
+	// terminal route. Released clients and other platforms keep the JSON route.
 	args := []string{"add", directorySitePlugin, "--target", "codex,claude"}
-	result, err := commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-add", args...)
-	if err != nil || result["result"] != "success" {
-		t.Fatalf("site Directory command failed: %v %+v", err, result)
+	terminalInstall := os.Getenv("AGENTPLUGINS_NATIVE_BROWSER_LIVE") == "1"
+	var result map[string]any
+	var err error
+	var terminalInstallationID string
+	if terminalInstall {
+		terminalInstallationID = nativeTerminalDirectoryPluginInstall(t, f, env, installer)
+	} else {
+		result, err = commandsRunInstaller(t, f.Root, f.Project, env, installer, "site-add", args...)
+		if err != nil || result["result"] != "success" {
+			t.Fatalf("site Directory command failed: %v %+v", err, result)
+		}
 	}
-	bindings := directorySiteBindings(t, statePath, f.CodexHome, claudeHome)
+	installationID, bindings := directorySiteBindings(t, statePath, f.CodexHome, claudeHome)
+	if terminalInstall && terminalInstallationID != installationID {
+		t.Fatal("visible Directory installation ID does not match saved native ownership")
+	}
 	for client, binding := range bindings {
 		nativeRequireContained(t, f.Root, binding.TargetLocator)
 		if _, err := os.Stat(binding.TargetLocator); err != nil {
@@ -243,5 +254,29 @@ func TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle(t *testing.T) {
 	var removed domain.StateFileV2
 	if err := json.Unmarshal(stateBytes, &removed); err != nil || len(removed.EnvironmentReceipts) != 0 {
 		t.Fatalf("Directory remove retained ownership receipts: %+v %v", removed.EnvironmentReceipts, err)
+	}
+	if terminalInstall {
+		nativeJSON(t, filepath.Join(f.Root, "native-terminal-plugin-lifecycle.json"), map[string]any{
+			"status":                    "passed",
+			"surface":                   "terminal",
+			"scope":                     "user",
+			"plugin":                    directorySitePlugin,
+			"installation_id":           installationID,
+			"distribution":              directorySiteDistribution,
+			"revision":                  directorySiteRevision,
+			"ui_report_sha256":          nativeSHA(t, filepath.Join(f.Root, "native-terminal-plugin.json")),
+			"installer_sha256":          nativeSHA(t, installer),
+			"codex_sha256":              nativeSHA(t, codexBin),
+			"claude_sha256":             nativeSHA(t, claudeBin),
+			"selected_targets":          []string{"claude", "codex"},
+			"native_inventory_verified": true,
+			"repeat_unchanged":          true,
+			"repair_verified":           true,
+			"native_removal_verified":   true,
+			"foreign_preserved":         true,
+			"model_request":             false,
+			"authentication_verified":   false,
+			"mcp_readiness_verified":    false,
+		})
 	}
 }

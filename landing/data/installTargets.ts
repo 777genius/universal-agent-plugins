@@ -35,19 +35,19 @@ export function canonicalInstallTargets(targets: readonly InstallTargetID[]): Cl
   return [...new Set(targets.map(canonicalInstallTarget))];
 }
 
-// Desktop and Codex display as separate choices but share one native backend.
-// When both appear in a picker change, preserve the newly selected option.
-export function reconcileLocalChatGPTTargets(next: InstallTargetID[], previous: readonly InstallTargetID[]): InstallTargetID[] {
-  if (!next.includes('codex') || !next.includes('chatgpt')) return next;
-  const added = next.find((id) =>
-    (id === 'codex' || id === 'chatgpt') && !previous.includes(id),
-  );
-  const keep = added ?? (previous.includes('chatgpt') ? 'chatgpt' : 'codex');
-  return next.filter((id) => id !== (keep === 'codex' ? 'chatgpt' : 'codex'));
+// Selection describes user intent. Shared execution is deduplicated separately.
+export function reconcileLocalChatGPTTargets(next: InstallTargetID[], _previous: readonly InstallTargetID[]): InstallTargetID[] {
+  return [...new Set(next)];
 }
 
 // Keep visible surface names in commands. The CLI maps them to canonical
 // signed target IDs at the --target flag boundary.
 export function cliInstallTargets(targets: readonly InstallTargetID[]): string[] {
-  return [...targets];
+  const canonical = new Set<ClientID>();
+  return targets.filter((target) => {
+    const client = canonicalInstallTarget(target);
+    if (canonical.has(client)) return false;
+    canonical.add(client);
+    return true;
+  });
 }

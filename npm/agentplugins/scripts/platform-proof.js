@@ -23,6 +23,28 @@ function run(command, args, options) {
   return result.stdout;
 }
 
+// Standard-first authoring reads package sources through the packageview
+// adapter, which has native source support on Linux, Windows and Apple Silicon
+// only. On Intel macOS the published binary must fail closed with
+// platform_unavailable instead of writing a package.
+const AUTHORING_UNSUPPORTED_TARGETS = new Set(["darwin-amd64"]);
+
+function runAllowFailure(command, args, options) {
+  const result = spawnSync(command, args, { ...options, encoding: "utf8" });
+  if (result.error) fail(`${command} ${args.join(" ")} could not start: ${result.error.message}`);
+  return { status: result.status, stdout: result.stdout || "", stderr: result.stderr || "" };
+}
+
+function assertAuthoringUnsupported(status, output) {
+  const data = output?.data;
+  if (status !== 1 || output?.schema_version !== 1 || output.command !== "author.init" ||
+      output.result !== "failure" || data?.error?.code !== "platform_unavailable" ||
+      data.committed !== false || data.effects?.committed !== false ||
+      !Array.isArray(data.affected_paths) || data.affected_paths.length !== 0) {
+    fail("unsupported authoring platform did not fail closed with platform_unavailable");
+  }
+}
+
 function jsonCommand(command, args, options) {
   const body = run(command, args, options);
   try {
@@ -65,6 +87,12 @@ function mkdir(directory) {
   fs.mkdirSync(directory, { recursive: true });
 }
 
+// macOS TMPDIR may traverse /var -> /private/var. Scaffold correctly refuses
+// symlink ancestors, so make the disposable proof parent physically canonical.
+function createProofRoot(tempDirectory = os.tmpdir()) {
+  return fs.mkdtempSync(path.join(fs.realpathSync(tempDirectory), "agentplugins-platform-proof-"));
+}
+
 function npmInvocation(args, platform = process.platform, execPath = process.execPath) {
   if (platform !== "win32") return { command: "npm", args };
   const npmCLI = path.win32.join(path.win32.dirname(execPath), "node_modules", "npm", "bin", "npm-cli.js");
@@ -74,6 +102,16 @@ function npmInvocation(args, platform = process.platform, execPath = process.exe
 function installedShimInvocation(project, args, platform = process.platform) {
   const shim = path.join(project, "node_modules", ".bin", platform === "win32" ? "agentplugins.cmd" : "agentplugins");
   return { command: shim, args, shell: platform === "win32" };
+}
+
+// Windows npm creates a .cmd shim; shell mode must preserve each argument as
+// one token. Do not permit cmd metacharacters or expansion in a proof command.
+function windowsShimArgs(invocation) {
+  if (!invocation.shell) return invocation.args;
+  return invocation.args.map((value) => {
+    if (/[\r\n"%!^&|<>]/.test(value)) fail("unsafe Windows npm shim argument");
+    return /[\s()]/.test(value) ? `"${value}"` : value;
+  });
 }
 
 function assertInstalledShimInvocation(invocation, project, platform = process.platform) {
@@ -200,7 +238,7 @@ function main() {
     fail(`runner architecture mismatch: expected ${expectedTarget}, got ${actualTarget}`);
   }
 
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agentplugins-platform-proof-"));
+  const root = createProofRoot();
   const project = path.join(root, "project");
   const home = path.join(root, "home");
   const cursor = path.join(home, ".cursor");
@@ -289,13 +327,13 @@ function main() {
   const invoke = (args) => {
     const invocation = installedShimInvocation(project, args);
     assertInstalledShimInvocation(invocation, project);
-    return run(invocation.command, invocation.args, { ...commandOptions, shell: invocation.shell });
+    return run(invocation.command, windowsShimArgs(invocation), { ...commandOptions, shell: invocation.shell });
   };
   const privateRoots = [root, process.env.GITHUB_WORKSPACE, process.env.RUNNER_TEMP];
   const invokeJSON = (args) => {
     const invocation = installedShimInvocation(project, [...args, "--format", "json"]);
     assertInstalledShimInvocation(invocation, project);
-    const output = jsonCommand(invocation.command, invocation.args, { ...commandOptions, shell: invocation.shell });
+    const output = jsonCommand(invocation.command, windowsShimArgs(invocation), { ...commandOptions, shell: invocation.shell });
     assertPublicJSONPathFree(output, `agentplugins ${args[0]} JSON`, privateRoots);
     return output;
   };
@@ -324,6 +362,45 @@ function main() {
   const dryRun = invokeJSON(["add", synthetic, "--target", "cursor", "--dry-run"]);
   if (dryRun.schema_version !== 1 || dryRun.command !== "add" || dryRun.data.dry_run !== true) {
     fail("synthetic add dry-run contract failed");
+  }
+  // The exact published binary must also expose standard-first authoring on
+  // every qualified platform. This is an isolated filesystem journey, not a
+  // synthetic command stub. Unsupported platforms must fail closed instead.
+  const authored = path.join(root, "authored-package");
+  const authoringSupported = !AUTHORING_UNSUPPORTED_TARGETS.has(expectedTarget);
+  const authorInitArgs = ["author", "init", authored, "--template", "skill",
+    "--name", "platform-proof-author", "--description", "Proof of published package authoring"];
+  let authoringProof = true;
+  if (authoringSupported) {
+    const authorInit = invokeJSON(authorInitArgs);
+    if (authorInit?.command !== "author.init" || authorInit.result !== "success") {
+      fail("published binary did not initialize a standard plugin");
+    }
+    const authoredManifest = JSON.parse(fs.readFileSync(path.join(authored, "plugin.json"), "utf8"));
+    if (authoredManifest.name !== "platform-proof-author") {
+      fail("author initialized a package with incorrect identity");
+    }
+    const authorValidate = invokeJSON(["author", "validate", authored]);
+    if (authorValidate?.command !== "author.validate" || authorValidate.result !== "success") {
+      fail("published binary did not validate the authored package");
+    }
+  } else {
+    const invocation = installedShimInvocation(project, [...authorInitArgs, "--format", "json"]);
+    assertInstalledShimInvocation(invocation, project);
+    const attempt = runAllowFailure(invocation.command, windowsShimArgs(invocation),
+      { ...commandOptions, shell: invocation.shell });
+    let output;
+    try {
+      output = JSON.parse(attempt.stdout);
+    } catch (error) {
+      fail(`unsupported authoring platform did not return JSON: ${attempt.stdout}${attempt.stderr}\n${error.message}`);
+    }
+    assertPublicJSONPathFree(output, "agentplugins author init JSON", privateRoots);
+    assertAuthoringUnsupported(attempt.status, output);
+    if (fs.existsSync(authored) || fs.readdirSync(root).some((name) => name.startsWith("authored-package") || name.startsWith(".authoring-"))) {
+      fail("unsupported authoring platform left package output behind");
+    }
+    authoringProof = "platform_unavailable_fail_closed";
   }
   if (fs.existsSync(path.join(state, "state-v2.json"))) fail("dry-run wrote lifecycle state");
   if (fs.readdirSync(cursor).join(",") !== "platform-proof-marker") fail("dry-run changed the synthetic client root");
@@ -371,6 +448,7 @@ function main() {
       version: true,
       list: true,
       doctor_read_only: true,
+      authoring_init_validate: authoringProof,
       public_catalog_search: true,
       synthetic_add_dry_run: true,
       warm_cache: true,
@@ -394,16 +472,20 @@ if (require.main === module) {
 }
 
 module.exports = {
+  AUTHORING_UNSUPPORTED_TARGETS,
   assertAssetManifest,
+  assertAuthoringUnsupported,
   assertContext7Search,
   assertInstalledShimInvocation,
   assertPublicJSONPathFree,
   assertSyntheticInfo,
+  createProofRoot,
   frozenReleaseAsset,
   installedShimInvocation,
   lifecycleCommands,
   lifecycleResult,
   npmInvocation,
   parseBootstrapMode,
-  parseLifecycle
+  parseLifecycle,
+  windowsShimArgs
 };

@@ -19,8 +19,6 @@ import (
 	"testing"
 	"time"
 
-	"gopkg.in/yaml.v3"
-
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/atomicfile"
 	processadapter "github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
@@ -38,6 +36,7 @@ type hermesColdInputs struct {
 	ctx                                  context.Context
 	protected                            map[string]map[string]string
 	dataIdentities                       map[string]os.FileInfo
+	trustProfiles                        map[string]*hermesColdProfile
 	commands                             []map[string]any
 }
 
@@ -214,6 +213,9 @@ func (input *hermesColdInputs) verifyInstaller(t *testing.T) {
 
 func (input *hermesColdInputs) isolate(t *testing.T) {
 	t.Helper()
+	// The bundled launcher caches Python bytecode under XDG_CACHE_HOME.
+	// Disable that incidental write before capturing the retained OS home.
+	t.Setenv("PYTHONDONTWRITEBYTECODE", "1")
 	input.osHome = os.Getenv("HOME")
 	input.temporary = (&projectJourneyTransport{tempRoot: input.root}).temporary(t)
 	for _, key := range []string{"TMPDIR", "TEMP", "TMP"} {
@@ -241,6 +243,10 @@ func (input *hermesColdInputs) isolate(t *testing.T) {
 	for _, key := range []string{"HERMES_HOME", "HERMES_REAL_HOME", "HERMES_DATA_DIR_SUFFIX"} {
 		t.Setenv(key, "")
 	}
+	// The user's own Hermes (which runs the confirmed trust command with this
+	// environment) caches Python bytecode under XDG_CACHE_HOME. That cache is
+	// Hermes' own and not an installer change, so keep it out of the fixture.
+	t.Setenv("PYTHONDONTWRITEBYTECODE", "1")
 	input.protected = map[string]map[string]string{
 		input.osHome:    securityFixtureTree(t, input.osHome),
 		input.temporary: securityFixtureTree(t, input.temporary),
@@ -257,13 +263,15 @@ func newHermesColdJourney(t *testing.T, input *hermesColdInputs, transport *proj
 	for _, path := range []string{user, filepath.Join(journey.a, ".hermes"), filepath.Join(journey.b, ".hermes")} {
 		projectJourneyWrite(t, filepath.Join(path, "skills", "foreign", "SKILL.md"), "retained foreign Hermes skill\n")
 	}
-	projectJourneyWrite(t, filepath.Join(user, "config.yaml"), "theme: retained-selected-user\n")
+	// The pinned Hermes config schema is 52. Seed it before taking the original
+	// snapshot; native migration must not introduce settings during trust.
+	projectJourneyWrite(t, filepath.Join(user, "config.yaml"), "theme: retained-selected-user\nmcp_servers: {}\n_config_version: 52\n")
 	// The user's own Hermes and UAP's detection read the same environment, so a
 	// real user's Hermes selects the detected profile; keep that true here.
 	t.Setenv("HERMES_HOME", user)
 	projectJourneyWrite(t, filepath.Join(journey.a, ".hermes", "foreign.txt"), "project-a-foreign\n")
 	journey.app = configureHermesColdJourney(input.ctx, t, journey.app, user, input.bundle)
-	input.protected[user] = securityFixtureTree(t, user)
+	input.rememberProfile(t, user)
 	input.protected[journey.b] = securityFixtureTree(t, journey.b)
 	for _, path := range []string{filepath.Join(journey.a, ".git"), filepath.Join(journey.a, ".hermes", "foreign.txt"),
 		filepath.Join(journey.a, ".hermes", "skills", "foreign", "SKILL.md")} {
@@ -302,35 +310,11 @@ func configureHermesColdJourney(ctx context.Context, t *testing.T, app agentplug
 	return app
 }
 
-// acceptProjectTrust checks what a confirmed explicit add may change in the
-// selected Hermes profile: exactly one recorded trust entry for the project's
-// Git root. Real Hermes also initializes its profile on first use, so the
-// profile baseline is renewed afterwards; the retained setting must survive and
-// the native default profile and every other authority keep their baselines.
 func (input *hermesColdInputs) acceptProjectTrust(t *testing.T, journey projectJourney) {
 	t.Helper()
-	user := filepath.Join(journey.home, ".hermes")
-	body, err := os.ReadFile(filepath.Join(user, "config.yaml"))
-	if err != nil {
-		t.Fatal("selected Hermes profile configuration is unreadable", err)
+	if err := input.adoptProjectTrust(filepath.Join(journey.home, ".hermes"), journey.a); err != nil {
+		t.Fatal("confirmed project trust changed a retained selected-profile authority", err)
 	}
-	var config struct {
-		Theme  string `yaml:"theme"`
-		Skills struct {
-			Trusted []string `yaml:"trusted_project_dirs"`
-		} `yaml:"skills"`
-	}
-	if err := yaml.Unmarshal(body, &config); err != nil || config.Theme != "retained-selected-user" {
-		t.Fatal("confirmed project trust lost a retained selected-profile setting", err)
-	}
-	project, err := os.Stat(journey.a)
-	if err != nil || len(config.Skills.Trusted) != 1 {
-		t.Fatalf("Hermes did not record exactly one trusted project root: %v / %v", config.Skills.Trusted, err)
-	}
-	if recorded, statErr := os.Stat(config.Skills.Trusted[0]); statErr != nil || !os.SameFile(project, recorded) {
-		t.Fatalf("Hermes trusted a different root than the installed project: %v", config.Skills.Trusted)
-	}
-	input.protected[user] = securityFixtureTree(t, user)
 }
 
 func (input *hermesColdInputs) unchanged(t *testing.T) {

@@ -22,22 +22,21 @@ class FakeContext:
     def probe(self, label, arguments, project="a", extra_env=None, timeout=30):
         self.calls.append((label, arguments, project, extra_env, timeout))
         _, _, usage, required = next(probe for probe in devin.PROBES if probe[0] == label)
-        body = b"devin 3000.11.205 (6dea39440ae3)\n" if usage is None else help_body(usage, required)
+        body = b"devin 3000.12.57 (96542e930752)\n" if usage is None else help_body(usage, required)
         return self.replacement.get(label, ({"exit": 0, "error": None}, body, b""))
 
 
 class DevinCollectorTests(unittest.TestCase):
     def test_exact_current_harness_archive_and_executable_are_pinned(self):
         self.assertEqual(devin.CLIENT, "windsurf")
-        self.assertEqual(devin.VERSION, "3000.11.205")
+        self.assertEqual(devin.VERSION, "3000.12.57")
         self.assertEqual(devin.ACQUISITION, {
-            "url": "https://static.devin.ai/cli/3000.11.205/"
-                   "devin-3000.11.205-x86_64-unknown-linux.tar.gz",
-            "integrity": "sha256:2e65c8b93682258fc91f5e4cead92e3698338cebf1b31dbc32a3201cb63705c4",
-            "expected_bytes": 73_679_375, "max_bytes": 96 << 20,
-            "max_expanded_bytes": 256 << 20, "format": "tar.gz", "entrypoint": "bin/devin",
+            "url": "https://registry.npmjs.org/devin/-/devin-3000.12.57-linux-x64.tgz",
+            "integrity": "sha512-SZhb9rrYghHvOh0PRpZT1GpNPMMo+7P9VH6t6ZNMrBmyVX3x3XflPvCv8yomx/i7vnvf64bdFR++cRRg/c8mLQ==",
+            "expected_bytes": 74_021_748, "max_bytes": 96 << 20,
+            "max_expanded_bytes": 256 << 20, "format": "tar.gz", "entrypoint": "package/bin/devin",
             "runtime": "native",
-            "binary_sha256": "642c82e32cb3dec90cf5ab01975520b425307872c7a650c9fb5b0653f37681f4",
+            "binary_sha256": "3f3fb99f472d92f7852be3775ac2b66b5d60baf26f3441b02d54c56b160bc30d",
         })
 
     def test_only_previous_help_forms_run_and_no_scope_or_runtime_case_passes(self):
@@ -74,9 +73,10 @@ class DevinCollectorTests(unittest.TestCase):
             self.assertEqual(ctx.calls[-1][0], "devin-mcp-add-help")
 
     def test_wrong_harness_version_build_and_prerelease_stop_before_help(self):
-        for body in (b"windsurf 3000.11.205 (6dea39440ae3)\n",
-                     b"devin 3000.11.205 (other)\n", b"devin 3000.11.20 (6dea39440ae3)\n",
-                     b"devin 3000.11.205-alpha (6dea39440ae3)\n", b"devin 3000.11.205\n"):
+        for body in (b"windsurf 3000.12.57 (96542e930752)\n",
+                     b"devin 3000.12.57 (other)\n", b"devin 3000.12.5 (96542e930752)\n",
+                     b"devin 3000.12.57-alpha (96542e930752)\n", b"devin 3000.12.57\n",
+                     b"devin 3000.11.205 (6dea39440ae3)\n"):
             with self.subTest(body=body):
                 ctx = FakeContext({"devin-version": ({"exit": 0, "error": None}, body, b"")})
                 with self.assertRaisesRegex(ValueError, "harness/version/build"):

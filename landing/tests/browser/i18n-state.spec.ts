@@ -46,17 +46,15 @@ for (const locale of ['ru', 'uk'] as const) {
     await targets(page, panel, selectedNames);
     await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor,claude,gemini,opencode');
     await expect(panel.locator('.install-panel__notice').filter({ hasText: 'uap.toml' })).toHaveText(
-      wording('en')('registryUi.install.dependencySaving.saved'),
+      wording('en')('registryUi.install.dependencySaving.saved', { command: 'npx -y universal-agent-plugins@latest deps status' }),
     );
     await navigate(page, '/plugins/i18n-state-00/', locale);
     await expect(panel.getByRole('heading', { name: wording(locale)('registryUi.install.useWithYourAgent'), exact: true })).toBeVisible();
     await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor,claude,gemini,opencode');
     await expect(panel.locator('.install-panel__notice').filter({ hasText: 'uap.toml' })).toHaveText(
-      wording(locale)('registryUi.install.dependencySaving.saved'),
+      wording(locale)('registryUi.install.dependencySaving.saved', { command: 'npx -y universal-agent-plugins@latest deps status' }),
     );
-    await panel.locator('.app-multiselect__trigger').click();
     for (const name of selectedNames) await expect(page.getByRole('checkbox', { name: new RegExp(`^${name}\\s`) })).toBeChecked();
-    await page.keyboard.press('Escape');
     await automatic(page, panel, locale);
     await exactCommands(page, panel, 'i18n-state-00');
     await navigate(page, '/plugins/i18n-state-00/');
@@ -109,23 +107,21 @@ for (const locale of locales) {
     const t = wording(locale);
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
     await card.getByRole('button', { name: t('registryUi.card.installName', { name: 'I18n State 00' }), exact: true }).click();
-    await expect(card.locator('.plugin-card__auth')).toHaveCount(0);
+    await expect(page.getByRole('dialog').locator('.plugin-card__auth')).toHaveCount(0);
     await targets(page, card, ['Codex']);
-    await expect(card.locator('.plugin-card__install .command-snippet code')).toContainText('--target codex');
-    await expect(card.locator('.plugin-card__auth')).toHaveCount(0);
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toContainText('--target codex');
+    await expect(page.getByRole('dialog').locator('.plugin-card__auth')).toHaveCount(0);
     await targets(page, card, ['Cursor']);
-    await expect(card.locator('.plugin-card__auth')).toHaveText(t('registryUi.authenticationIndicator.varies'));
+    await expect(page.getByRole('dialog').locator('.plugin-card__auth')).toHaveText(t('registryUi.authenticationIndicator.varies'));
     await targets(page, card, ['Codex']);
-    await expect(card.locator('.plugin-card__auth')).toHaveText(t('registryUi.authenticationIndicator.required'));
-    await expect(card.locator('.plugin-card__install .command-snippet code')).toContainText('--target cursor');
-    await card.locator('.app-multiselect__trigger').click();
+    await expect(page.getByRole('dialog').locator('.plugin-card__auth')).toHaveText(t('registryUi.authenticationIndicator.required'));
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toContainText('--target cursor');
     const auto = page.locator('.app-multiselect__auto');
     await expect(auto).toContainText(t('registryUi.card.allInstalledAgentsRecommended'));
     await auto.click();
-    await page.keyboard.press('Escape');
-    await expect(card.locator('.plugin-card__auth')).toHaveCount(0);
-    await card.locator('.plugin-card__install .command-snippet').getByRole('button').click();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('npx -y universal-agent-plugins add i18n-state-00');
+    await expect(page.getByRole('dialog').locator('.plugin-card__auth')).toHaveCount(0);
+    await page.getByRole('dialog').locator('.install-dialog__footer .command-snippet').getByRole('button').click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('npx -y universal-agent-plugins@latest add i18n-state-00');
     expect(errors).toEqual([]);
   });
 }
@@ -143,7 +139,7 @@ for (const [theme, width] of [['light', 280], ['dark', 800]] as const) {
     await expect(page.locator('.v-application')).toHaveClass(new RegExp(`(?:^| )v-theme--${theme}(?: |$)`));
     const panel = page.locator('.install-panel');
     await expect(panel.getByRole('heading', { name: t('registryUi.install.useWithYourAgent'), exact: true })).toBeVisible();
-    const trigger = panel.locator('.app-multiselect__trigger');
+    const trigger = panel.getByRole('checkbox', { name: /^Codex\s/ });
     await trigger.scrollIntoViewIfNeeded();
     const box = await trigger.boundingBox();
     expect(box).not.toBeNull();
@@ -152,8 +148,7 @@ for (const [theme, width] of [['light', 280], ['dark', 800]] as const) {
     await trigger.focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('group', { name: t('registryUi.install.chooseTargetAgents'), exact: true })).toBeVisible();
-    await page.getByRole('checkbox', { name: /^Codex\s/ }).click();
-    await page.keyboard.press('Escape');
+    await expect(trigger).toBeChecked();
     await expect(trigger).toBeFocused();
     await exactCommands(page, panel, 'i18n-state-00', 'codex');
     expect(errors).toEqual([]);
@@ -187,7 +182,7 @@ test('manual download channel beats delayed detection and locale remount', async
     await expect(npm).toHaveAttribute('aria-selected', 'true');
     const commands = await page.locator('.download-section__command code').allTextContents();
     expect(commands.length).toBeGreaterThan(0);
-    expect(commands.join('\n')).toContain('npx -y universal-agent-plugins add');
+    expect(commands.join('\n')).toContain('npx -y universal-agent-plugins@latest add');
     gate.release();
     // Detection must complete, but it must not overwrite the explicit npm choice.
     const linuxRecommendation = page.locator('.download-section__install-tab').filter({ hasText: downloadChannelTitle('en', 'script') });

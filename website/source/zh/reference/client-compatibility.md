@@ -11,6 +11,31 @@ localeDisposition: "current-translation"
 
 # UAP 客户端兼容性证据
 
+## 支持的智能体 {#supported-agents}
+
+UAP 为以下智能体安装或准备软件包。使用 `--target` 的值可显式选择智能体；省略 `--target` 时，可从本机检测到的智能体中选择。
+
+| 智能体 | `--target` |
+| --- | --- |
+| Claude Code | `claude` |
+| Codex CLI | `codex` |
+| OpenCode | `opencode` |
+| Cursor | `cursor` |
+| GitHub Copilot CLI | `copilot` |
+| Gemini CLI | `gemini` |
+| Qoder | `qoder` |
+| Pi | `pi` |
+| Windsurf / Devin | `windsurf` |
+| Kimi Code | `kimi` |
+| Cline | `cline` |
+| Kiro | `kiro` |
+| Grok Build | `grok` |
+| Hermes Agent | `hermes` |
+| Google Antigravity | `antigravity` |
+| ChatGPT | `chatgpt`（桌面版）、`chatgptweb`（网页版） |
+
+各智能体对用户范围和项目范围的支持、设置方式以及安装后仍需完成的步骤各不相同，请参阅[智能体支持表](https://universal-agent-plugins.com/zh/#agent-support)。支持某个智能体并不意味着每个软件包、组件、版本或范围都能在其中使用。
+
 ## 当前版本与范围
 
 [CLI](https://github.com/777genius/universal-agent-plugins/releases/latest)是当前发布的原生 CLI，新增由宿主管理生命周期的本地管理 API、只读客户端和配置目录发现，以及适用于用户与符合条件项目范围的 Pi 扩展、Skills 和 stdio/Streamable HTTP MCP。请参阅[本地管理](../use/manage#local-management-api)。各分发渠道的版本可能滞后，请先用 `agentplugins version` 确认。
@@ -35,11 +60,15 @@ UAP 是独立社区工具；这些是维护者进行的有限观察，不是厂�
 
 ## Hermes 与 Antigravity：已发布的 CLI 支持 {#hermes-antigravity-source}
 
-原生 CLI **0.1.108** 已于 2026-11-13 发布，包含 Hermes 和 Antigravity。发布验证和推广均已成功；签名 Directory 中各包的目标资格仍须单独核实。这不代表 npm 0.1.108 已发布、供应商身份验证已通过或客户端已自动激活。
+原生 CLI **0.1.110** 包含 Hermes 和 Antigravity。UAP 会自动配置受支持的组件；请完成客户端安装结果中列出的后续操作。签名 Directory 中各包的目标资格仍须单独核实。安装不代表供应商身份验证已通过或运行时已激活。
 
-[0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
+[0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110) · source `1b7d2db803dd5eea2d632d8f4e149b4d7bb4a48e`.
 
-**历史生命周期证据 (2026-11-10):**
+Hermes Project MCP 仅在使用 UAP 已验证其捆绑清单的独立 Hermes 主程序发行版，并明确确认 UAP 项目会话后，才可作为 **Prepared** 配置使用。普通 Hermes 启动不会选择此 MCP 配置。从源码安装的 Hermes 主程序无法使用 Project MCP；请使用 User MCP 或仅安装 Project Skills。此主程序要求不限制从 Git 安装插件。Project Skills 仍需要信任和新会话。以下带日期的观察保留其历史范围。
+
+**历史生命周期证据 (2026-11-10–13):**
+
+[0.1.108 (2026-11-13)](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108) · [43337036671](https://github.com/777genius/universal-agent-plugins/actions/runs/43337036671) · [43454712919](https://github.com/777genius/universal-agent-plugins/actions/runs/43454712919) · source `8c3cfa28e332c533b0cc0845739c0275730a4285`.
 
 **Hermes 0.23.0：**支持用户范围的 Skills 及由 UAP 管理的 stdio/Streamable HTTP MCP 配置；项目范围仅支持 Skills。项目 MCP 会被拒绝，不会转而修改用户配置。Linux x64、macOS arm64 和原生 Windows x64 均通过首次及重复添加、更新、修复、移除、未授信项目中的发现和 A/B 隔离测试：[42813277862](https://github.com/777genius/universal-agent-plugins/actions/runs/42813277862)，UAP 提交为 `a50c8a245f1c273efb3d171f4c54ed540475336a`。每个操作系统上的四次回环 HTTP `initialize`/`tools/list` 交互证明了连接和工具发现，并未证明 `tools/call`、模型使用、身份验证或受信任的项目执行。不支持 SSE 和钩子。可移植命令映射为 Skills；若客户端无法强制显式调用，则不交付仅允许显式调用的命令。
 

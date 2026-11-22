@@ -9,19 +9,61 @@ const test = require("node:test");
 
 const script = path.resolve(__dirname, "..", "scripts", "platform-proof.js");
 const {
+  AUTHORING_UNSUPPORTED_TARGETS,
   assertAssetManifest,
+  assertAuthoringUnsupported,
   assertContext7Search,
   assertInstalledShimInvocation,
   assertPublicJSONPathFree,
   assertSyntheticInfo,
+  createProofRoot,
   frozenReleaseAsset,
   installedShimInvocation,
   lifecycleCommands,
   lifecycleResult,
   npmInvocation,
   parseBootstrapMode,
-  parseLifecycle
+  parseLifecycle,
+  windowsShimArgs
 } = require(script);
+
+test("platform proof resolves symlinked temporary parents before author init", (t) => {
+  const parent = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "agentplugins-proof-parent-"));
+  t.after(() => fs.rmSync(parent, { recursive: true, force: true }));
+  const actual = path.join(parent, "actual");
+  const alias = path.join(parent, "alias");
+  fs.mkdirSync(actual);
+  try {
+    fs.symlinkSync(actual, alias, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    if (process.platform === "win32" && ["EPERM", "EACCES", "ENOTSUP"].includes(error.code)) {
+      t.skip("Windows runner does not allow creating junction fixtures");
+      return;
+    }
+    throw error;
+  }
+  const created = createProofRoot(alias);
+  assert.equal(path.dirname(created), fs.realpathSync(actual));
+  assert.equal(created, fs.realpathSync(created));
+  assert.equal(fs.statSync(created).isDirectory(), true);
+});
+
+test("Windows npm shim retains spaced authoring arguments and rejects cmd expansion", () => {
+  const destination = "C:\\Users\\Test Runner\\AppData\\Local\\Temp\\authored-package";
+  const argv = ["author", "init", destination, "--description", "Proof of published package authoring", "--format", "json"];
+  assert.deepEqual(windowsShimArgs({ shell: true, args: argv }), [
+    "author", "init", '"' + destination + '"', "--description",
+    '"Proof of published package authoring"', "--format", "json"
+  ]);
+  assert.deepEqual(windowsShimArgs({ shell: false, args: argv }), argv);
+  // CMD treats parentheses as grouping characters even without spaces.
+  const groupedPath = "C:\\build(1)\\authored";
+  assert.deepEqual(windowsShimArgs({ shell: true, args: ["author", "init", groupedPath] }),
+    ["author", "init", '"' + groupedPath + '"']);
+  for (const unsafe of ["a&whoami", "%PATH%", 'literal"quote', "value|exit", "value^escape", "line\nbreak"]) {
+    assert.throws(() => windowsShimArgs({ shell: true, args: [unsafe] }), /unsafe Windows npm shim argument/);
+  }
+});
 
 test("platform proof binds assets.json producer commit in staged and public modes", () => {
   const version = "1.2.3";
@@ -260,4 +302,34 @@ test("platform proof binds the local binary to the frozen release manifest and n
     () => frozenReleaseAsset(root, commit, version, target, { ...pinned, sha256: "0".repeat(64) }),
     /manifest does not match/
   );
+});
+
+test("platform proof requires authoring to fail closed only on unsupported Intel macOS", () => {
+  assert.deepEqual([...AUTHORING_UNSUPPORTED_TARGETS], ["darwin-amd64"]);
+  // Shape captured from the real darwin-amd64 release binary (run 44577050350).
+  const closed = {
+    schema_version: 1,
+    command: "author.init",
+    result: "failure",
+    data: {
+      committed: false,
+      affected_paths: [],
+      error: { code: "platform_unavailable", action: "Check the exact package root, local filesystem support and private scratch access." },
+      effects: { attempted: true, committed: false }
+    }
+  };
+  const mutate = (change) => structuredClone(Object.assign(structuredClone(closed), change(structuredClone(closed))));
+  assert.doesNotThrow(() => assertAuthoringUnsupported(1, closed));
+  assert.throws(() => assertAuthoringUnsupported(0, closed), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(2, closed), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(null, closed), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(1, mutate(() => ({ result: "success" }))), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(1, mutate((c) => ({ data: { ...c.data, committed: true } }))), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(1, mutate((c) => ({ data: { ...c.data, effects: { committed: true } } }))), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(1, mutate((c) => ({ data: { ...c.data, affected_paths: ["x"] } }))), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(1, mutate((c) => ({ data: { ...c.data, error: { code: "root_unreadable" } } }))), /fail closed/);
+  // The old top-level layout must not be accepted.
+  assert.throws(() => assertAuthoringUnsupported(1, { command: "author.init", result: "failure",
+    committed: false, error: { code: "platform_unavailable" } }), /fail closed/);
+  assert.throws(() => assertAuthoringUnsupported(1, undefined), /fail closed/);
 });

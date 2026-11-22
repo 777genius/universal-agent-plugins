@@ -44,8 +44,23 @@ class ProjectEnvelopeTests(unittest.TestCase):
                     self.assertEqual(archive.read(member), (source / member.filename).read_bytes())
             self.assertLess(destination.stat().st_size, artifacts.LIMIT)
 
+    def test_pure_skill_ownership_is_retained_in_actual_flat_archive(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            source = self.fixture(root)
+            proof = json.dumps({"installation_id": "fixture-installation", "binding": {"client_id": "opencode"},
+                                "stable": {"owned": "sha256:" + "a" * 64}, "foreign": {}}).encode()
+            (source / "pure-skill-ownership.json").write_bytes(proof)
+            destination = root / "upload.zip"
+            self.assertTrue(artifacts.write_archive(source, destination))
+            with zipfile.ZipFile(destination) as archive:
+                self.assertEqual(set(archive.namelist()), {"opencode-project-evidence.json", "one.stdout.log",
+                                                         "one.stderr.log", "pure-skill-ownership.json"})
+                self.assertEqual(archive.read("pure-skill-ownership.json"), proof)
+                self.assertTrue(json.loads(archive.read("opencode-project-evidence.json"))["success"])
+
     def test_refused_source_yields_only_false_failure_record(self):
-        for kind in ("directory", "symlink", "hardlink", "oversize", "added-name", "added-log", "changed-stream"):
+        for kind in ("directory", "symlink", "hardlink", "oversize", "added-name", "added-log", "added-json", "changed-stream"):
             with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temp:
                 root = Path(temp).resolve()
                 source = self.fixture(root)
@@ -57,6 +72,7 @@ class ProjectEnvelopeTests(unittest.TestCase):
                 elif kind == "oversize": (source / "large.log").write_bytes(b"x" * ((1 << 20) + 1))
                 elif kind == "added-name": (source / "not-evidence.bin").write_bytes(b"refused")
                 elif kind == "added-log": (source / "unrecorded.log").write_bytes(b"refused")
+                elif kind == "added-json": (source / "pure-skill-ownership-extra.json").write_bytes(b"{}")
                 else: (source / "one.stdout.log").write_bytes(b"changed")
                 destination = root / "upload.zip"
                 self.assertFalse(artifacts.write_archive(source, destination))

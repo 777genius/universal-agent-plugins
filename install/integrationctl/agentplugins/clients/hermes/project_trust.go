@@ -75,7 +75,7 @@ func hermesTrustApplies(req domain.ActivationRequest) bool {
 // either reports verified trust or the manual command for the user to run.
 // Only an explicit add carries consent; update, repair and dependency sync
 // must not override a user's `hermes skills untrust`.
-func completeHermesProjectTrust(ctx context.Context, env clients.Env, req domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, error) {
+func completeHermesProjectTrust(ctx context.Context, env clients.Env, req domain.ActivationRequest, outcome domain.ActivationOutcome) (domain.ActivationOutcome, hermesTrustReport, error) {
 	project := req.Plan.TargetContext.ProjectRoot
 	report := hermesTrustReport{root: project, reason: "UAP grants it only during an explicit add, so update, repair and dependency sync never override `hermes skills untrust`"}
 	var err error
@@ -103,7 +103,7 @@ func completeHermesProjectTrust(ctx context.Context, env clients.Env, req domain
 	if err != nil && domain.IsUnclosedClientProbe(err) {
 		outcome.NativeEffect = domain.NativeEffectUncertain
 	}
-	return outcome, err
+	return outcome, report, err
 }
 
 // actions keeps public JSON path-free. Host paths and the exact command go to
@@ -182,6 +182,19 @@ func (grant hermesTrustGrant) run(ctx context.Context) (hermesTrustReport, error
 		return refuse("the Hermes CLI executable was not detected exactly")
 	}
 	values := hermesEnvironmentValues(grant.environ)
+	// Even config path can initialize a native home. Bind the inherited profile
+	// before running any command or taking the selected configuration lock.
+	home := hermesHome(values)
+	if home == "" {
+		return refuse("the home directory cannot be determined, so Hermes trust could cover it")
+	}
+	profile, err := selectedProfileRoot(clients.NewHost(clients.HostProbes{HomeDir: home, GOOS: runtime.GOOS, Environment: values}))
+	if err == nil {
+		profile, err = New().ResolveProfileRoot(profile)
+	}
+	if err != nil || profile != grant.profile {
+		return refuse("the user's Hermes environment selects a different or unavailable profile")
+	}
 	if reason := hermesTrustPolicyRefusal(grant.profile, grant.project, values); reason != "" {
 		return refuse(reason)
 	}

@@ -359,7 +359,7 @@
         "nextStep": "Después de instalar"
       },
       "scrollHint": "Desplázate horizontalmente para ver todas las columnas.",
-      "note": "Automática: UAP instala los componentes compatibles. Guiada: sigue las indicaciones del agente. Preparada: activa los archivos preparados. Manual: termina la configuración en la aplicación. La instalación no inicia sesión ni concede confianza. La disponibilidad depende del complemento y de la versión del agente. Referencia: CLI nativo 0.1.108. La publicación en npm es independiente y puede demorarse. Admitir un agente no garantiza una versión firmada del catálogo compatible con cada plugin y ámbito.",
+      "note": "Automática: UAP instala los componentes compatibles. Guiada: sigue las indicaciones del agente. Preparada: activa los archivos preparados. Manual: termina la configuración en la aplicación. Tras la confirmación, UAP completa la configuración nativa compatible e indica los pasos de confianza, inicio de sesión o recarga pendientes. La disponibilidad depende del complemento y de la versión del agente. Referencia: CLI nativo 0.1.115. La publicación en npm es independiente y puede demorarse. Admitir un agente no garantiza una versión firmada del catálogo compatible con cada plugin y ámbito.",
       "details": "Ver detalles de compatibilidad",
       "capabilities": {
         "pluginsSkillsMcp": "Complementos, habilidades, MCP",
@@ -371,6 +371,7 @@
         "personalAppSetup": "Configuración de aplicación personal",
         "skillsOnly": "Solo habilidades",
         "skillsMcpPrepared": "Habilidades, MCP (preparado)",
+        "pluginsSkillsMcpPrepared": "Complementos, habilidades, MCP (preparado)",
         "notSupported": "No compatible"
       },
       "setup": {
@@ -391,27 +392,28 @@
         "windsurf": "Abre o reinicia Devin en el proyecto seleccionado y revisa los permisos.",
         "kimi": "Ejecuta /reload o /new y revisa los permisos MCP.",
         "cline": "Selecciona la ruta de ajustes MCP del proyecto y recarga Cline.",
-        "kiro": "Inicia sesión, autoriza el acceso y reinicia Kiro si se solicita.",
-        "grok": "Abre el proyecto en Grok, habilita el plugin y concédele confianza; recarga y verifica las Skills y MCP.",
+        "kiro": "La CLI configura automáticamente los Skills y MCP compatibles; inicia sesión, autoriza el acceso y reinicia si se solicita.",
+        "grok": "Abre el proyecto elegido en Grok, revisa la confianza y completa los pasos pendientes de activación o reinicio; verifica los Skills y MCP.",
         "vscode": "Abre la carpeta, confía en ella y revisa y activa los servidores MCP.",
         "chatgpt": "Escritorio: instalación local mediante Codex CLI; Web: conecta o instala la aplicación en ChatGPT.",
-        "hermes": "Reinicia Hermes, confía en el proyecto Git seleccionado y verifica Skills y MCP de usuario; MCP de proyecto no está disponible.",
+        "hermes": "Reinicia Hermes y confía en el proyecto; el MCP de proyecto requiere un paquete autónomo verificado de Hermes y una sesión de proyecto UAP confirmada explícitamente.",
         "antigravity": "Abre o recarga Antigravity; revisa la confianza y verifica que el plugin preparado se detecte y esté habilitado en el ámbito seleccionado."
       }
     },
     "dependencies": {
       "eyebrow": "Dependencias conectadas",
-      "title": "Dos plugins. Una dependencia compartida.",
+      "title": "Dos plugins\nUna dependencia compartida",
       "description": "Instala un plugin con sus dependencias. Las dependencias compartidas de la misma versión compatible se instalan una sola vez.",
       "demoPackage": "Paquete de demostración",
       "installed": "Instalado",
       "alreadyInstalled": "Ya instalado",
-      "shared": "compartida",
+      "shared": "Compartida por ambos plugins",
       "caption": "Paquetes y grafo ilustrativos. Ambos paquetes comparten Playwright; Context7 ya está instalado.",
-      "graphDescription": "marketing-kit depende de Playwright, HubSpot y Notion. Web Design Kit depende del mismo paquete Playwright, Figma y Context7. Todos los paquetes están instalados; Context7 ya estaba instalado."
+      "graphDescription": "Versiones de ejemplo: marketing-kit v{marketingVersion} y Web Design Kit v{designVersion} reutilizan una única dependencia puente de Playwright v{playwrightVersion}. Marketing Kit también usa HubSpot y Notion; Web Design Kit usa Figma y Context7.",
+      "exampleVersions": "Versiones de ejemplo"
     },
     "restore": {
-      "title": "Las mismas versiones. Para todo el equipo.",
+      "title": "Las mismas versiones\nPara todo el equipo",
       "guide": "Guía",
       "from": "Mi ordenador",
       "to": "Ordenador de mi compañero",
@@ -448,11 +450,54 @@
       "sourceDescription": "Consulta de dónde viene cada paquete y si su ficha del catálogo ha sido revisada antes de instalarlo.",
       "standardDescription": "Usa un paquete Agent Plugins 1.0 con {manifest}, sin crear un formato exclusivo para UAP."
     },
-    "builtWith": {
-      "title": "Ya creado con UAP",
-      "agentNotificationsDescription": "Notificaciones de escritorio, sonidos y enfoque de la ventana con un clic para agentes de programación con IA.",
-      "viewRepository": "Ver en GitHub",
-      "buildWithSdk": "Construye con el SDK"
+    "sdk": {
+      "title": "Crea complementos universales",
+      "tagline": "Créalo una vez. Conecta tus agentes.",
+      "intro": "Crea complementos con el SDK y la CLI de UAP, o integra la gestión de complementos y Skills en tu propia app.",
+      "featuresLabel": "Capacidades del SDK y la CLI",
+      "features": {
+        "detect": {
+          "title": "Detecta los agentes instalados",
+          "description": "La CLI encuentra los agentes compatibles en el equipo, así que un solo comando llega a todos."
+        },
+        "install": {
+          "title": "Instala en los agentes elegidos",
+          "description": "Elige agentes concretos y UAP prepara el formato nativo que admite cada uno."
+        },
+        "cli": {
+          "title": "CLI de gestión de complementos",
+          "description": "Instala, actualiza, repara y elimina complementos con un solo comando de terminal."
+        },
+        "hooks": {
+          "title": "Hooks tipados",
+          "description": "Gestiona los eventos de hooks nativos de los agentes con controladores tipados en Go."
+        }
+      },
+      "apps": {
+        "eyebrow": "Para creadores de apps",
+        "badge": "Vista previa de integración",
+        "title": "Añade la gestión de complementos a tu app",
+        "description": "El TypeScript Management SDK permite que una app de escritorio o de Node.js descubra agentes e instale, actualice o elimine complementos y Skills mediante el motor de UAP.",
+        "guide": "Guía del TypeScript Management SDK",
+        "diagramLabel": "Ilustración: tu app pide al UAP Management SDK que instale el complemento marketing-kit, y el SDK lo instala para Codex, Claude Code y Gemini CLI.",
+        "yourApp": "Tu app",
+        "tag": "Complementos + Skills",
+        "kind": "Complemento",
+        "install": "Instalar",
+        "update": "Actualizar",
+        "remove": "Eliminar",
+        "installing": "Instalando…",
+        "installed": "Instalado",
+        "caption": "Crea complementos. Potencia tu app."
+      },
+      "showcase": {
+        "eyebrow": "Creado con UAP",
+        "description": "Notificaciones inteligentes multiplataforma. Alertas de escritorio, sonidos, clic para enfocar y webhooks.",
+        "builtOn": "Creado sobre el SDK de UAP: hooks de agente tipados y el instalador de UAP.",
+        "repository": "Ver en GitHub",
+        "stars": "{stars} estrellas en GitHub"
+      },
+      "guides": "Explora las guías del SDK"
     },
     "faq": {
       "eyebrow": "Preguntas frecuentes",
@@ -506,7 +551,7 @@
       "notAvailableForPlugin": "No disponible para este complemento",
       "title": "Un complemento",
       "subtitle": "Todos tus agentes",
-      "intro": "Instala, actualiza, repara y elimina paquetes Agent Plugins 1.0 en los agentes de IA compatibles con un solo comando. Deja que la CLI detecte los agentes instalados o elige los destinos.",
+      "intro": "Instala, actualiza, repara y elimina Agent Plugins 1.0 / Agent Skills en los agentes de IA compatibles con un solo comando. Deja que la CLI detecte los agentes instalados o elige los destinos.",
       "github": "Abrir GitHub",
       "choose": "Elige agentes",
       "chooseHint": "Uno, muchos o detección automática",
@@ -514,7 +559,7 @@
       "terminal": "en tu terminal",
       "refreshNotice": "Los datos de los plugins se están actualizando. Vuelve a intentarlo en unos instantes.",
       "otherMethods": "Otros métodos de instalación",
-      "supportedFormats": "Formatos compatibles",
+      "supportedFormats": "Estándares",
       "watchDemo": "Ver demostración",
       "demoVideoTitle": "Demostración de instalación de Universal Agent Plugins",
       "supportedClients": "Clientes compatibles",
@@ -588,6 +633,7 @@
       "empty": "No hay categorías coincidentes"
     },
     "multi": {
+      "search": "Buscar agentes…",
       "agents": "{count} agente | {count} agentes",
       "selected": "{count} seleccionado",
       "auto": "Detección automática",
@@ -595,10 +641,11 @@
       "automaticHelp": "La CLI comprueba los agentes locales instalados y permite confirmar destinos compatibles. ChatGPT Desktop es local; la configuración de ChatGPT Web se completa dentro de ChatGPT.",
       "manualHelp": "Selecciona los agentes donde instalar. Debe quedar al menos uno seleccionado.",
       "summary": "{label}: {summary}",
-      "manualHelpWithAuto": "Selecciona los agentes donde instalar. Borra la última selección para elegir en la terminal."
+      "manualHelpWithAuto": "Selecciona los agentes donde instalar. Borra la última selección para elegir en la terminal.",
+      "more": "+{count} más"
     },
     "command": {
-      "terminal": "En la terminal",
+      "terminal": "Tu terminal",
       "copiedLabel": "Comando copiado",
       "copyLabel": "Copiar comando",
       "copied": "Copiado",
@@ -794,17 +841,18 @@
       "chatgptFinish": "Abre ChatGPT, selecciona {name} en Apps o Plugins, conéctalo e inicia un chat nuevo. La disponibilidad depende de tu cuenta y espacio de trabajo.",
       "expectedFallback": "Fuente alternativa prevista: {source}.",
       "dependencySaving": {
-        "saved": "Se guarda para tu cuenta de usuario en uap.toml y uap.lock. Consulta sus rutas con npx -y universal-agent-plugins deps status. La eliminación afecta a todos los destinos guardados.",
+        "saved": "Se guarda para tu cuenta de usuario en uap.toml y uap.lock. Consulta sus rutas con {command}. La eliminación afecta a todos los destinos guardados.",
         "noSave": "Esta selección usa --no-save y no registra una dependencia.",
         "local": "Los paquetes locales no se guardan como dependencias portátiles.",
         "discovery": "Los selectores discovery no se guardan como dependencias.",
         "chatgpt": "La preparación de ChatGPT no guarda una dependencia.",
-        "projectSaved": "Se guarda en uap.toml y uap.lock de este proyecto. Compruébalo con npx -y universal-agent-plugins deps status --scope project desde esta carpeta. La eliminación afecta a todos los agentes guardados de este proyecto."
+        "projectSaved": "Se guarda en uap.toml y uap.lock de este proyecto. Compruébalo con {command} desde esta carpeta. La eliminación afecta a todos los agentes guardados de este proyecto."
       },
       "scope": {
         "label": "Instalar para",
         "user": "Este ordenador",
         "project": "Este proyecto",
+        "projectLocationHint": "El proyecto es la carpeta desde la que ejecutas el comando en la terminal. Ejecútalo desde la raíz del proyecto.",
         "projectHint": "Ejecuta estos comandos desde la carpeta del proyecto. Tu agente puede pedirte que confíes en el proyecto o lo actives.",
         "projectUnavailable": "La instalación en un proyecto no está disponible para este paquete.",
         "marketingKitProjectUnavailable": "Marketing Kit todavía no está disponible para Project: cada dependencia obligatoria (Notion, HubSpot y Playwright) debe ser compatible con la instalación en Project.",
@@ -837,7 +885,13 @@
       "guidedChatgptSetup": "Configuración guiada de ChatGPT Web; termina la conexión dentro de ChatGPT.",
       "catalogReleasePending": "Este plugin aún no se ha publicado para {agent}.",
       "useComputerScope": "Para este plugin, elige Este ordenador.",
-      "unsupportedPluginComponents": "{agent} no admite todos los componentes de este plugin."
+      "unsupportedPluginComponents": "{agent} no admite todos los componentes de este plugin.",
+      "dialogDescription": "Elige los agentes y el ámbito de instalación, y ejecuta el comando en tu terminal.",
+      "closeDialog": "Cerrar instalación",
+      "pinnedSourceShort": "Instalar desde Git",
+      "desktopSourceShort": "Conexión local de Desktop",
+      "webSetupShort": "Configuración Web guiada",
+      "selectionRoutesUnavailable": "Se conservan los agentes seleccionados. Esta combinación no tiene un origen de instalación común en el ámbito elegido. Cambia los agentes o el ámbito para obtener un comando de instalación."
     },
     "authentication": {
       "not_required": "No se requiere cuenta",
@@ -892,7 +946,7 @@
       },
       "cursor": {
         "note": "Paquete de complemento de agente nativo",
-        "status": "Compatible",
+        "status": "Preparado por CLI",
         "intro": "Instala Agent Plugins 1.0 en proyectos de Cursor sin traducir cada complemento a mano. La CLI planifica el paquete nativo antes de cambiar los archivos.",
         "delivery": "La CLI prepara los componentes de plugin, skills y MCP compatibles con Cursor en el ámbito elegido. El comando add usa el ámbito de usuario por defecto; el ámbito de proyecto debe elegirse explícitamente para add.",
         "activation": "Recarga Cursor cuando se solicite y comprueba que se detecte el plugin."
@@ -901,7 +955,7 @@
         "note": "Complemento nativo administrado",
         "status": "Compatible",
         "intro": "Instala Agent Plugins 1.0 a través de GitHub Copilot CLI usando su flujo de trabajo de complemento nativo y el mismo comando de ciclo de vida usado para otros agentes.",
-        "delivery": "La CLI utiliza el diseño del complemento Copilot compatible y verifica el estado de instalación resultante.",
+        "delivery": "La CLI utiliza el diseño del complemento Copilot compatible y verifica el estado de instalación resultante. En el ámbito de proyecto, con una versión estable de Copilot CLI 1.0.81 o posterior, un paquete compatible se registra como plugin nativo del proyecto.",
         "activation": "Reinicia o recarga el cliente solo cuando el proceso nativo de Copilot lo solicite."
       },
       "vscode": {
@@ -915,8 +969,8 @@
         "note": "Skills y configuración MCP gestionadas",
         "status": "Compatible",
         "intro": "Instala Agent Plugins 1.0 para Kiro desde el mismo paquete portátil utilizado por otros agentes de IA.",
-        "delivery": "La CLI instala las Skills y entradas MCP de Kiro que gestiona, sin alterar la configuración global ajena.",
-        "activation": "Completa el paso de OAuth o reinicio indicado. La preparación en macOS y Windows no implica que se haya verificado automáticamente la ejecución."
+        "delivery": "La CLI instala automáticamente sus Skills y la configuración MCP para versiones compatibles de Kiro CLI, conservando otros ajustes. MCP requiere la distribución CLI completa compatible y una configuración con permiso de escritura.",
+        "activation": "Inicia sesión, autoriza el acceso y reinicia si se solicita. La preparación explícita sigue como Prepared; los archivos instalados no prueban carga nativa, autenticación ni ejecución real de MCP."
       },
       "claude": {
         "note": "Configuración de MCP administrada",
@@ -944,21 +998,21 @@
         "status": "Compatible",
         "intro": "Instala Agent Plugins 1.0 compatibles para Cline sin reconstruir la configuración de MCP para cada complemento.",
         "delivery": "La CLI prepara y realiza un seguimiento de la configuración de Cline MCP compatible.",
-        "activation": "Recarga Cline cuando se solicite y completa la autenticación del proveedor fuera del paquete del plugin."
+        "activation": "Recarga Cline y autentícate con el proveedor. El MCP de proyecto requiere la sesión gestionada elegida explícitamente y su CLINE_MCP_SETTINGS_PATH; el inicio normal no selecciona esa configuración."
       },
       "windsurf": {
-        "note": "Paquete preparado; Se requiere activación manual",
-        "status": "Preparado por CLI",
-        "intro": "Prepara Agent Plugins 1.0 para Windsurf con un comando de la CLI y después completa el paso de activación específico del cliente.",
-        "delivery": "La CLI valida y prepara el paquete de Windsurf compatible sin reclamar la activación automática.",
-        "activation": "Sigue la ruta de activación manual exacta impresa después de la preparación."
+        "note": "Skills y configuración MCP gestionadas",
+        "status": "Compatible",
+        "intro": "Instala Skills y servidores MCP de Agent Plugins 1.0 para Windsurf / Devin con un solo comando de la CLI.",
+        "delivery": "La CLI escribe sus Skills y la configuración MCP para Devin 3000.11.205 o 3000.12.57 en los ámbitos de usuario y de proyecto. La preparación no prueba descubrimiento, confianza, inicio de sesión ni ejecución real.",
+        "activation": "Abre o reinicia Devin en el proyecto seleccionado y revisa el acceso. UAP comprueba los Skills instalados con la CLI de Devin; verifica los servidores MCP en Devin."
       },
       "grok": {
         "note": "Plugin nativo de Skills y MCP; verificación mediante CLI",
         "status": "Compatible",
         "intro": "Instala Skills y servidores MCP portátiles de Agent Plugins 1.0 para Grok Build con la misma CLI que usas para otros clientes.",
         "delivery": "La CLI escribe un manifiesto nativo .grok-plugin en el directorio de plugins del usuario de Grok y gestiona el registro mediante Grok CLI cuando está disponible.",
-        "activation": "Recarga Grok Build después de instalar. Si Grok CLI no está disponible, instálala y vuelve a ejecutar el comando de actualización para realizar la verificación nativa."
+        "activation": "En Linux con Grok Build 1.0.70, UAP puede activar el plugin de proyecto exacto conservando la confianza y las desactivaciones existentes. Revisa la confianza por separado; en otros entornos sigue los pasos indicados, recarga y verifica."
       },
       "kimi": {
         "note": "Plugin de usuario gestionado con Skills y MCP",
@@ -975,11 +1029,11 @@
         "activation": "Recarga los plugins de Qoder o reinicia Qoder después de instalar. Las conexiones MCP y la autenticación del proveedor todavía deben confirmarse en Qoder."
       },
       "hermes": {
-        "note": "Skills y MCP de usuario; Skills de proyecto sin MCP de proyecto",
+        "note": "Skills/MCP de usuario; Skills y MCP preparado de proyecto",
         "status": "Compatible",
-        "intro": "Instala Skills nativas de Hermes Agent para tu usuario o un proyecto Git seleccionado, además de servidores MCP de usuario, sin alterar configuraciones ajenas.",
-        "delivery": "UAP administra los directorios Skills que le pertenecen y las entradas MCP concretas de config.yaml del usuario. Una instalación de proyecto nunca modifica el MCP de usuario.",
-        "activation": "Reinicia Hermes para recargar la integración. Comprueba la confianza del repositorio antes de usar Skills de proyecto; el descubrimiento y la autenticación requieren verificación aparte."
+        "intro": "Instala Skills y servidores MCP nativos de Hermes Agent para tu usuario o un proyecto Git elegido. El MCP de proyecto requiere un paquete autónomo verificado del cliente Hermes.",
+        "delivery": "UAP gestiona sus Skills y las entradas exactas de MCP de usuario en config.yaml. El MCP de proyecto usa una sesión gestionada confirmada explícitamente. La instalación de proyecto nunca modifica el MCP de usuario.",
+        "activation": "Inicia una sesión nueva de Hermes y revisa la confianza del repositorio. El MCP de proyecto usa la sesión UAP confirmada; el inicio normal de Hermes no la selecciona. Verifica también la autenticación y la ejecución real de MCP."
       },
       "antigravity": {
         "note": "Plugins nativos de usuario y proyecto; verificar activación",

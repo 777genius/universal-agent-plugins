@@ -64,11 +64,15 @@ for (const width of [1440, 390, 320]) {
       (element) => element.getBoundingClientRect().top + window.scrollY,
     );
     const before = (await demo.boundingBox())!;
+    const copy = (await page.locator('.hero__copy').boundingBox())!;
     const supported = (await page.locator('.client-section').boundingBox())!;
-    expect(before.y).toBeGreaterThanOrEqual(supported.y + supported.height - 1);
-    expect(before.width).toBeGreaterThanOrEqual(Math.min(width - 32, 1600) - 4);
-    await expect(page.locator('.hero__demo .hero-demo-video')).toHaveCount(0);
-    await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+    // The demo is the hero's second column: beside the copy when wide, below it on phones.
+    if (width >= 1024) expect(before.x).toBeGreaterThanOrEqual(copy.x + copy.width - 1);
+    else expect(before.y).toBeGreaterThanOrEqual(copy.y + copy.height - 1);
+    expect(before.y + before.height).toBeLessThanOrEqual(supported.y + 1);
+    expect(before.width).toBeGreaterThanOrEqual(Math.min(width - 28, 500) - 4);
+    expect(before.width).toBeLessThanOrEqual(800);
+    await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
     const overlay = await button.evaluate((element) => {
       const video = element.closest('.hero-demo-video')!.getBoundingClientRect();
       const label = element.querySelector('span')!.getBoundingClientRect();
@@ -96,10 +100,10 @@ for (const width of [1440, 390, 320]) {
     )).toBe(true);
     await expect(frame).toHaveAttribute(
       'src',
-      /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=true&no-muted-pref=true&preload=auto$/,
+      /^https:\/\/player\.mux\.com\/[a-zA-Z0-9]+\?autoplay=any&no-muted-pref=true&preload=auto$/,
     );
     await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
-      .getAttribute('data-autoplay')).toBe('true');
+      .getAttribute('data-autoplay')).toBe('any');
     await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
       .getAttribute('data-muted')).toBe('');
     await expect.poll(() => page.frameLocator('.hero-demo-video iframe').locator('body')
@@ -130,6 +134,29 @@ for (const width of [1440, 390, 320]) {
   });
 }
 
+for (const width of [1440, 390]) {
+  test(`native fullscreen exit restores the poster at ${width}px`, async ({ page }) => {
+    await setSignedMirrorTestTime(page);
+    await page.route('https://player.mux.com/**', route =>
+      route.fulfill({ contentType: 'text/html', body: fakePlayer }),
+    );
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto('./');
+    await hydrated(page);
+    const demo = page.locator('.hero-demo-video');
+    const launch = demo.getByRole('button', { name: 'Watch demo' });
+    await launch.click();
+    await expect.poll(() => demo.evaluate(element => document.fullscreenElement === element)).toBe(true);
+    await expect(demo.locator('iframe')).toBeVisible();
+    await page.evaluate(() => document.exitFullscreen());
+    await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+    await expect(demo.locator('iframe')).toHaveCount(0);
+    await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
+    await expect(launch).toBeVisible();
+    await expect(launch).toBeFocused();
+  });
+}
+
 test('denied fullscreen still launches a viewport-filling autoplay player on one click', async ({ page }) => {
   await setSignedMirrorTestTime(page);
   await page.route('https://player.mux.com/**', (route) =>
@@ -145,7 +172,7 @@ test('denied fullscreen still launches a viewport-filling autoplay player on one
   await demo.getByRole('button', { name: 'Watch demo' }).click();
   const frame = demo.locator('iframe');
   await expect(frame).toBeVisible();
-  await expect(frame).toHaveAttribute('src', /\?autoplay=true&no-muted-pref=true&preload=auto$/);
+  await expect(frame).toHaveAttribute('src', /\?autoplay=any&no-muted-pref=true&preload=auto$/);
   await expect(demo).toHaveClass(/hero-demo-video--fallback/);
   // The site root isolates stacking contexts; the fallback must escape to <body>.
   await expect.poll(() => demo.evaluate((el) => el.parentElement === document.body)).toBe(true);
@@ -164,14 +191,14 @@ test('denied fullscreen still launches a viewport-filling autoplay player on one
   })).toBe(true);
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden');
   await page.keyboard.press('Escape');
-  await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+  await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeFocused();
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
   await demo.getByRole('button', { name: 'Watch demo' }).click();
   await expect(demo).toHaveClass(/hero-demo-video--fallback/);
   await demo.getByRole('button', { name: 'Close demo' }).click();
-  await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+  await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeVisible();
   await expect(demo.getByRole('button', { name: 'Watch demo' })).toBeFocused();
 });
@@ -192,7 +219,7 @@ test('missing Fullscreen API uses an accessible fullscreen overlay', async ({ pa
   await expect.poll(() => demo.evaluate((el) => el.parentElement === document.body)).toBe(true);
   await expect(demo.locator('iframe')).toBeVisible();
   await demo.getByRole('button', { name: 'Close demo' }).click();
-  await expect(page.locator('.demo-showcase .hero-demo-video')).toHaveCount(1);
+  await expect(page.locator('.hero__visual .hero-demo-video')).toHaveCount(1);
   await expect(demo.locator('iframe')).toHaveCount(0);
 });
 
@@ -237,4 +264,29 @@ test('owner-uploaded Mux film actually plays on desktop and mobile', async ({ pa
     if (directory) await page.screenshot({ path: resolve(directory, `hero-video-playing-${width}.png`) });
     await video.evaluate((element: HTMLVideoElement) => element.pause());
   }
+});
+
+
+test('whole demo poster hover and keyboard focus animate the invitation without starting playback', async ({ page }) => {
+  await setSignedMirrorTestTime(page);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('./');
+  await hydrated(page);
+  const demo = page.locator('.hero-demo-video');
+  const launch = demo.locator('.hero-demo-video__launch');
+  const icon = launch.locator('svg');
+  await demo.hover({ position: { x: 12, y: 12 } });
+  await expect(icon).not.toHaveCSS('transform', 'none');
+  await expect(demo.locator('iframe:not(.hero-demo-video__preload)')).toHaveCount(0);
+  await page.mouse.move(0, 0);
+  await launch.focus();
+  await expect(icon).not.toHaveCSS('transform', 'none');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(icon).toHaveCSS('transform', 'none');
+  // The shared reduced-motion rule caps transitions at 0.01ms.
+  const durations = await icon.evaluate((element) =>
+    getComputedStyle(element).transitionDuration.split(',').map((value) =>
+      parseFloat(value) / (value.trim().endsWith('ms') ? 1000 : 1)),
+  );
+  expect(durations.every((duration) => duration <= 0.00001)).toBe(true);
 });

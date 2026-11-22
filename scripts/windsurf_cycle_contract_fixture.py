@@ -13,7 +13,7 @@ def wire(raw):
 
 
 def build():
-    p={"root":"/owned","home":"/owned/home","a":"/owned/project","b":"/owned/project-b","outside":"/owned/outside","client":"/pinned/client/bin/devin","installer":"/held/agentplugins","git":"/usr/bin/git","nonce":"1"*32,"tool_pins":{"installer":cycle.sha(b"installer"),"probe":cycle.sha(b"probe")}}
+    p={"root":"/owned","home":"/owned/home","a":"/owned/project","b":"/owned/project-b","outside":"/owned/outside","client":"/pinned/client/package/bin/devin","installer":"/held/agentplugins","git":"/usr/bin/git","nonce":"1"*32,"tool_pins":{"installer":cycle.sha(b"installer"),"probe":cycle.sha(b"probe")}}
     order=list(cycle.STAGES)
     commands,proofs,probes=[],[],[]
     held,trees,profiles,cache={}, {}, {}, {}
@@ -185,20 +185,20 @@ def build():
                     if removed:data_out.update(data_retained=True,plugin_data_preserved=True)
                 if stage in ("add-user","add-a","add-b","repeat-add-a"):data_out["security"]={**assessment,"evidence_source":"cache" if stage=="repeat-add-a" else "local_scan"}
                 out=cycle.compact({"schema_version":1,"command":verb,"result":"success","data":data_out});err=cycle.progress(stage)
-        elif stage=="version":out=b"devin 3000.11.205 (6dea39440ae3)\n"
+        elif stage=="version":out=b"devin 3000.12.57 (96542e930752)\n"
         elif not stage.startswith("git-"):
             if stage=="damaged-a-skills":addproof("missing-owned-a-skill",{"scope":"a","path":cycle.profile(p,"a")+"/skills/"+cycle.NAME,"skill_sha256":cycle.sha(cycle.authored(p,"a","1.1.0")[1]),"started_at":when(index-1,".9"),"ended_at":when(index-1,".95")})
             out=native_body(p,held,stage)
         commands.append({"stage":stage,"value":{"argv":argv,"cwd":cwd,"exit":1 if stage=="repeat-remove-a" else 0,"error":False,"deadline":False,"elapsed_ms":800,"started_at":start,"ended_at":end,"cleanup":cycle.CLEANUP,"stdout":wire(out),"stderr":wire(err)}})
         probes.append({"stage":stage,"value":{"events":wire(b"")}})
-    result={"acquisition":{},"activation":"prepared","attempt_stage":"final-b-mcp","capture_mode":cycle.MODE,"capture_review_required":False,"client":"windsurf","component_layout":{k:v for k,v in p.items() if k not in ("nonce","tool_pins")},"elapsed_ms":44000,"fixture_authored_updater_config":False,"qualification":{key:key in cycle.FLAGS[:2] for key in cycle.FLAGS},"real_model_qualified":False,"runtime_attempt_complete":True,"scanner":{},"source_identity":{"installer_base_commit":"a"*40,"installer_tree":"b"*40,"installer_source_state":"committed","installer_patch_sha256":[]},"test_failed":False,"vendor_authentication_qualified":False,"version":"3000.11.205","qualification_scope":cycle.SCOPE,"cycle_command_stages":order,"cycle_proof_stages":[v["stage"] for v in proofs],"cycle_observed_complete":True,"cycle_nonce":p["nonce"],"cycle_tool_pins":p["tool_pins"]}
+    result={"acquisition":{},"activation":"prepared","attempt_stage":"final-b-mcp","capture_mode":cycle.MODE,"capture_review_required":False,"client":"windsurf","component_layout":{k:v for k,v in p.items() if k not in ("nonce","tool_pins")},"elapsed_ms":44000,"fixture_authored_updater_config":False,"qualification":{key:key in cycle.FLAGS[:2] for key in cycle.FLAGS},"real_model_qualified":False,"runtime_attempt_complete":True,"scanner":{},"source_identity":{"installer_base_commit":"a"*40,"installer_tree":"b"*40,"installer_source_state":"committed","installer_patch_sha256":[]},"test_failed":False,"vendor_authentication_qualified":False,"version":"3000.12.57","qualification_scope":cycle.SCOPE,"cycle_command_stages":order,"cycle_proof_stages":[v["stage"] for v in proofs],"cycle_observed_complete":True,"cycle_nonce":p["nonce"],"cycle_tool_pins":p["tool_pins"]}
     return commands,proofs,probes,result
 
 
 def native_body(p,held,stage):
     s=cycle.scope(stage);selected=held.get(s);owned=selected is not None and not selected["removed"] and stage!="damaged-a-skills"
     if stage.endswith("-skills"):
-        rows=[cycle.skillrow("foreign-user","Harmless foreign marker","Windsurf",cycle.profile(p,"user")+"/skills/foreign-user"),cycle.skillrow("devin-cli","Look up Devin CLI documentation (skills, extensibility, configuration, commands, models, troubleshooting)","Builtin","/pinned/client/share/devin",("model",)),cycle.skillrow("declarative-repo-setup","Generate and verify a working environment.yaml (Devin snapshot-setup blueprint) for a repo","Builtin",""),cycle.skillrow("upload-secrets","Securely upload local secrets (dotenv files, env vars, API keys) to the Devin Cloud secrets manager — values never enter the conversation","Builtin","")]
+        rows=[cycle.skillrow("foreign-user","Harmless foreign marker","Windsurf",cycle.profile(p,"user")+"/skills/foreign-user"),cycle.skillrow("devin-cli","Look up Devin CLI documentation (skills, extensibility, configuration, commands, models, troubleshooting)","Builtin","/pinned/client/package/share/devin",("model",)),cycle.skillrow("declarative-repo-setup","Generate and verify a working environment.yaml (Devin snapshot-setup blueprint) for a repo","Builtin",""),cycle.skillrow("upload-secrets","Securely upload local secrets (dotenv files, env vars, API keys) to the Devin Cloud secrets manager — values never enter the conversation","Builtin","")]
         if s!="user":rows.append(cycle.skillrow("foreign-"+s,"Harmless foreign marker","Devin",cycle.profile(p,s)+"/skills/foreign-"+s))
         if owned and s!="user":rows.append(cycle.skillrow(cycle.NAME,selected["revision"],"Devin",cycle.profile(p,s)+"/skills/"+cycle.NAME))
         return cycle.compact(rows)

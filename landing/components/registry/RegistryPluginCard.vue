@@ -4,11 +4,7 @@
 -->
 <script setup lang="ts">
 import { usePluginInstallSelection } from '~/composables/usePluginInstallSelection';
-import {
-  installTargets,
-  canonicalInstallTargets,
-  cliInstallTargets,
-} from '~/data/installTargets';
+import { installTargets, canonicalInstallTargets, cliInstallTargets } from '~/data/installTargets';
 import type { RegistryDiagnostic, RegistryPlugin } from '~/types/registry';
 import { githubSourceUrl, reachableTargetPolicies, vendorInstallSource } from '~/utils/registry';
 import { authenticationIndicator } from '~/utils/authentication';
@@ -46,14 +42,14 @@ const {
   updateTargets,
   updateAutoDetect,
   updateScope,
-  toggleInstall,
 } = selection;
 const deliverySummary = computed(() => {
   if (autoDetect.value) return '';
   const canonical = canonicalInstallTargets(targets.value);
-  const delivery = selection.resolution.value.distribution?.targets
-    .filter((target) => canonical.includes(target.client))
-    .map((target) => target.delivery) ?? [];
+  const delivery =
+    selection.resolution.value.distribution?.targets
+      .filter((target) => canonical.includes(target.client))
+      .map((target) => target.delivery) ?? [];
   const managed = delivery.filter((mode) => mode === 'managed').length;
   const prepared = delivery.filter(
     (mode) => mode === 'prepared' || mode === 'manual_activation',
@@ -61,7 +57,6 @@ const deliverySummary = computed(() => {
   if (managed + prepared !== canonical.length || !delivery.length) return '';
   return t('registryUi.card.deliverySummary', { managed: n(managed), prepared: n(prepared) });
 });
-const installPanelId = `plugin-install-${props.plugin.install_source.replace(/[^a-z0-9_-]+/gi, '-')}`;
 function diagnosticText(
   diagnostic: RegistryDiagnostic | undefined,
   original: string | undefined,
@@ -78,7 +73,7 @@ function diagnosticText(
 }
 const resolution = selection.resolution;
 const selectedDistribution = computed(() =>
-  (isDiscovered.value || current.value) ? resolution.value.distribution : undefined,
+  isDiscovered.value || current.value ? resolution.value.distribution : undefined,
 );
 const canChooseInstall = computed(
   () =>
@@ -88,31 +83,42 @@ const canChooseInstall = computed(
 );
 const canInstall = computed(
   () =>
-    (scope.value !== 'project' || !autoDetect.value || Boolean(projectAutomatic.value?.resolution.distribution)) &&
+    (scope.value !== 'project' ||
+      !autoDetect.value ||
+      Boolean(projectAutomatic.value?.resolution.distribution)) &&
     ((pinnedSourceSelected.value && current.value && props.plugin.installable) ||
       (isDiscovered.value
         ? props.plugin.installable &&
           props.plugin.discovery?.availability !== 'unavailable' &&
-          (autoDetect.value || (Boolean(selectedDistribution.value) || guidedWebSelected.value))
+          (autoDetect.value || Boolean(selectedDistribution.value) || guidedWebSelected.value)
         : current.value &&
-          (autoDetect.value ? props.plugin.installable : (Boolean(selectedDistribution.value) || guidedWebSelected.value)))),
+          (autoDetect.value
+            ? props.plugin.installable
+            : Boolean(selectedDistribution.value) || guidedWebSelected.value))),
 );
 const command = computed(() =>
   canInstall.value
     ? (pinnedSourceSelected.value
         ? pinnedSourceCommands.value!
         : scope.value === 'project'
-          ? projectCatalogCommands(props.plugin, autoDetect.value ? undefined : canonicalInstallTargets(targets.value))
-          : pluginCommands(props.plugin, autoDetect.value ? undefined : cliInstallTargets(targets.value))
+          ? projectCatalogCommands(
+              props.plugin,
+              autoDetect.value ? undefined : canonicalInstallTargets(targets.value),
+            )
+          : pluginCommands(
+              props.plugin,
+              autoDetect.value ? undefined : cliInstallTargets(targets.value),
+            )
       ).add
     : '',
 );
-const showDesktopGuide = computed(() =>
-  scope.value === 'user' &&
-  !autoDetect.value &&
-  targets.value.includes('chatgpt') &&
-  canChooseInstall.value &&
-  Boolean(targetDistributions.value.get('chatgpt')),
+const showDesktopGuide = computed(
+  () =>
+    scope.value === 'user' &&
+    !autoDetect.value &&
+    targets.value.includes('chatgpt') &&
+    canChooseInstall.value &&
+    Boolean(targetDistributions.value.get('chatgpt')),
 );
 const vendorInstall = computed(() => vendorInstallSource(props.plugin));
 const vendorAvailable = computed(() => Boolean(vendorInstall.value && current.value));
@@ -129,11 +135,15 @@ const targetOptions = computed(() =>
     icon: asset(`client-icons/${client.icon}`),
     // Keep invalid explicitly saved selections visible for recovery, but an
     // auto-detected project must never make a stale Cursor placeholder selectable.
-    disabled: !targetAvailability.value.get(client.id) &&
+    disabled:
+      !targetAvailability.value.get(client.id) &&
       (autoDetect.value || !targets.value.includes(client.id)),
     description: (() => {
       const hint = pluginTargetDescription(props.plugin, client, {
-        scope: scope.value, published: published.value, expired: expired.value, current: current.value,
+        scope: scope.value,
+        published: published.value,
+        expired: expired.value,
+        current: current.value,
       });
       return t(hint.key, hint.params);
     })(),
@@ -166,14 +176,17 @@ const assessedRevisionMatches = computed(() => {
   if (!pinnedSourceSelected.value) return true;
   const selected = pinnedReleaseSource.value;
   const assessed = props.plugin.source;
-  return Boolean(selected &&
+  return Boolean(
+    selected &&
     selected.repository === assessed.repository &&
     selected.revision === assessed.revision &&
     selected.path === assessed.path &&
-    selected.tree_sha256 === assessed.tree_sha256);
+    selected.tree_sha256 === assessed.tree_sha256,
+  );
 });
 const provenanceURL = computed(() => {
-  const source = pinnedReleaseSource.value ?? selectedDistribution.value?.source ?? props.plugin.source;
+  const source =
+    pinnedReleaseSource.value ?? selectedDistribution.value?.source ?? props.plugin.source;
   if (!source?.revision) return '';
   const suffix = source.path ? `/${source.path}` : '';
   return `https://github.com/${source.repository}/tree/${source.revision}${suffix}`;
@@ -202,7 +215,6 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
 
 <template>
   <CatalogCard
-    :expanded="installExpanded"
     :data-trust="isDiscovered ? 'community' : 'reviewed'"
     :data-install-source="plugin.install_source"
   >
@@ -335,17 +347,105 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
         {{ t('registryUi.install.vendorInstallerHeading') }}
       </p>
       <div class="plugin-card__actions">
-        <button
+        <InstallDialog
           v-if="canChooseInstall"
-          type="button"
-          class="plugin-card__install-toggle"
-          :aria-controls="installPanelId"
-          :aria-expanded="installExpanded"
-          :aria-label="t('registryUi.card.installName', { name: plugin.display_name })"
-          @click="toggleInstall"
+          v-model:open="installExpanded"
+          :title="t('registryUi.card.installName', { name: plugin.display_name })"
+          :source="plugin.source.repository"
+          :source-url="sourceUrl(plugin)"
+          :icon="iconURL"
         >
-          {{ t('registryUi.card.install') }}
-        </button>
+          <template #trigger>
+            <button
+              type="button"
+              class="plugin-card__install-toggle"
+              :aria-label="t('registryUi.card.installName', { name: plugin.display_name })"
+            >
+              {{ t('registryUi.card.install') }}
+            </button>
+          </template>
+          <div class="plugin-card__install-panel">
+            <p v-if="!autoDetect && selectedDistribution" class="plugin-card__author">
+              {{ t('registryUi.card.publisher', { publisher: selectedDistribution.publisher }) }} ·
+              <a
+                :href="isDiscovered ? provenanceURL : githubSourceUrl(plugin, selectedDistribution)"
+                target="_blank"
+                rel="noreferrer"
+                >{{ t('registryUi.card.viewSource') }}
+                <span class="sr-only">{{
+                  t('registryUi.card.forPlugin', { name: plugin.name })
+                }}</span></a
+              >
+            </p>
+            <p
+              v-if="!autoDetect && resolution.fallback_reason && current"
+              class="plugin-card__author"
+            >
+              {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
+            </p>
+            <p v-if="showAuthentication" class="plugin-card__auth">{{ authentication.label }}</p>
+            <InstallScopeSelect
+              :model-value="scope"
+              :project-available="projectAvailable"
+              @update:model-value="updateScope"
+            />
+            <InstallOutcome
+              v-if="!autoDetect && selectedDistribution"
+              :distribution="selectedDistribution"
+              :targets="targets"
+              :scope="scope"
+            />
+            <div class="plugin-card__install">
+              <AppMultiSelect
+                v-if="targets.length"
+                :model-value="targets"
+                :auto-selected="autoDetect"
+                :auto-option="autoOption"
+                :label="t('registryUi.card.chooseClients', { name: plugin.display_name })"
+                :options="targetOptions"
+                full-width
+                @update:auto-selected="updateAutoDetect"
+                @update:model-value="updateTargets"
+              />
+              <p
+                v-if="pinnedSourceSelected && canInstall"
+                class="plugin-card__author"
+                role="status"
+              >
+                {{ t('registryUi.install.pinnedCatalogSource') }}
+                <template v-if="pinnedRepairLimitation">
+                  {{ t(pinnedRepairLimitation.key, pinnedRepairLimitation.params) }}
+                </template>
+                <a :href="provenanceURL" target="_blank" rel="noreferrer">
+                  {{ t('registryUi.card.viewSource') }}
+                </a>
+              </p>
+              <p v-if="!canInstall" class="plugin-card__unavailable" role="status">
+                {{
+                  t(
+                    targets.length > 1
+                      ? 'registryUi.install.selectionRoutesUnavailable'
+                      : 'registryUi.install.scope.selectionUnavailable',
+                  )
+                }}
+              </p>
+            </div>
+            <p v-if="guidedWebSelected && canInstall" class="plugin-card__author" role="status">
+              {{ t('registryUi.install.guidedChatgptSetup') }}
+            </p>
+            <ChatGPTDesktopGuide v-if="showDesktopGuide" />
+          </div>
+          <template v-if="canInstall" #footer>
+            <CommandSnippet
+              v-if="canInstall"
+              :label="t('registryUi.card.add')"
+              kind="add"
+              :command="command"
+              compact
+            />
+            <NativeCliCheckbox v-if="canInstall" />
+          </template>
+        </InstallDialog>
         <a
           v-else-if="vendorInstall"
           class="plugin-card__vendor-install"
@@ -365,81 +465,6 @@ function alternativeDetailURL(alternative: RegistryPlugin) {
         }}</span>
         <AuthenticationIndicator :indicator="authentication" />
       </div>
-      <Transition name="plugin-install">
-        <div
-          v-if="installExpanded && canChooseInstall"
-          :id="installPanelId"
-          class="plugin-card__install-panel"
-        >
-          <p v-if="!autoDetect && selectedDistribution" class="plugin-card__author">
-            {{ t('registryUi.card.publisher', { publisher: selectedDistribution.publisher }) }} ·
-            <a
-              :href="isDiscovered ? provenanceURL : githubSourceUrl(plugin, selectedDistribution)"
-              target="_blank"
-              rel="noreferrer"
-              >{{ t('registryUi.card.viewSource') }}
-              <span class="sr-only">{{
-                t('registryUi.card.forPlugin', { name: plugin.name })
-              }}</span></a
-            >
-          </p>
-          <p
-            v-if="!autoDetect && resolution.fallback_reason && current"
-            class="plugin-card__author"
-          >
-            {{ diagnosticText(resolution.fallback_diagnostic, resolution.fallback_reason) }}
-          </p>
-          <p v-if="showAuthentication" class="plugin-card__auth">{{ authentication.label }}</p>
-          <InstallScopeSelect
-            :model-value="scope"
-            :project-available="projectAvailable"
-            @update:model-value="updateScope"
-          />
-          <InstallOutcome
-            v-if="!autoDetect && selectedDistribution"
-            :distribution="selectedDistribution"
-            :targets="targets"
-            :scope="scope"
-          />
-          <div class="plugin-card__install">
-            <AppMultiSelect
-              v-if="targets.length"
-              :model-value="targets"
-              :auto-selected="autoDetect"
-              :auto-option="autoOption"
-              :label="t('registryUi.card.chooseClients', { name: plugin.display_name })"
-              :options="targetOptions"
-              full-width
-              @update:auto-selected="updateAutoDetect"
-              @update:model-value="updateTargets"
-            />
-            <p v-if="pinnedSourceSelected && canInstall" class="plugin-card__author" role="status">
-              {{ t('registryUi.install.pinnedCatalogSource') }}
-              <template v-if="pinnedRepairLimitation">
-                {{ t(pinnedRepairLimitation.key, pinnedRepairLimitation.params) }}
-              </template>
-              <a :href="provenanceURL" target="_blank" rel="noreferrer">
-                {{ t('registryUi.card.viewSource') }}
-              </a>
-            </p>
-            <CommandSnippet
-              v-if="canInstall"
-              :label="t('registryUi.card.add')"
-              kind="add"
-              :command="command"
-              compact
-            />
-            <NativeCliCheckbox v-if="canInstall" />
-            <p v-else class="plugin-card__unavailable" role="status">
-              {{ t('registryUi.install.scope.selectionUnavailable') }}
-            </p>
-          </div>
-          <p v-if="guidedWebSelected && canInstall" class="plugin-card__author" role="status">
-            {{ t('registryUi.install.guidedChatgptSetup') }}
-          </p>
-          <ChatGPTDesktopGuide v-if="showDesktopGuide" />
-        </div>
-      </Transition>
     </div>
   </CatalogCard>
 </template>

@@ -31,6 +31,10 @@ type Detection struct {
 	// detected surface counts. Claude is the only client that needs it today: a
 	// configuration directory stays evidence, but only the CLI selects it.
 	SelectionSurfaceIDs []string
+	// NotDetectedHint explains, for a client that has evidence but is not
+	// selectable in this scope, what the user can do instead. It is shown only
+	// when the client ends up not detected.
+	NotDetectedHint string
 }
 
 // Host is the probing environment handed to an adapter. The surface
@@ -74,6 +78,14 @@ type ProfileResolver interface {
 	ResolveProfileRoot(root string) (string, error)
 }
 
+// UserExecutableOptional opts a client whose User lane only writes a prepared
+// package out of the generic CLI-registry executable requirement. The adapter
+// must never start, probe or register through the client in that lane, so an
+// application-only installation (no launcher on PATH) remains installable.
+type UserExecutableOptional interface {
+	UserScopeRunsNoClient() bool
+}
+
 // VersionProbeEnvironment pins a native version probe to the selected profile.
 // The detector still controls the isolated cwd, timeout and output limit.
 type VersionProbeEnvironment interface {
@@ -92,6 +104,13 @@ type DisposableVersionProbeProfile interface {
 // the caller retains selection, execution and version-admission authority.
 type ProjectVersionRequirement interface {
 	RequiresProjectVersion(client domain.DetectedClient) bool
+}
+
+// BestEffortProjectVersionProbe is for clients where an observed native
+// version unlocks an optional capability. A missing or failed probe must not
+// break the preexisting version-independent project delivery path.
+type BestEffortProjectVersionProbe interface {
+	ProjectVersionProbeBestEffort() bool
 }
 
 // UserVersionRequirement is a narrowly selected user-scope version gate.

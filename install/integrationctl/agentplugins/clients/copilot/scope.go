@@ -43,6 +43,9 @@ func (*Adapter) CheckPlanPrecondition(in clients.PlanInput, plan *domain.Deliver
 		_, err := copilotProjectRoot(in.Client, plan.TargetContext, plan.NativeRegistryRoot)
 		return err
 	}
+	if in.PreviousBindingRecorded {
+		return requireRecordedUserProfile(in.PreviousNativeProfileRoot, in.Client.ConfigRoot)
+	}
 	return nil
 }
 
@@ -81,4 +84,18 @@ func copilotProjectRoot(client domain.DetectedClient, target domain.TargetContex
 		}
 	}
 	return selected.ProjectRoot, nil
+}
+
+// requireRecordedUserProfile refuses planning for an owned user binding
+// from a different Copilot profile than the one it was installed into (for
+// example after COPILOT_HOME was unset). Otherwise an update registered a
+// second, untracked copy in the newly selected profile that remove could not
+// clean, and a repeat add downgraded the tracked activation after listing the
+// wrong profile. Legacy bindings without a recorded profile keep the old
+// admission.
+func requireRecordedUserProfile(recordedRoot, selectedRoot string) error {
+	if recordedRoot == "" || recordedRoot == selectedRoot {
+		return nil
+	}
+	return fmt.Errorf("copilot plugin is installed in a different user profile than the selected one; set COPILOT_HOME to the profile used at install and retry")
 }

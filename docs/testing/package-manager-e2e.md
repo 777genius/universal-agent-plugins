@@ -222,25 +222,40 @@ The [Native Installer](../../.github/workflows/agentplugins-native-install.yml)
 workflow installs the **current public stable** native binary from its official
 release on the six OS targets above. A single
 [version resolver](../../.github/workflows/agentplugins-published-version.yml)
-first binds the GitHub public non-prerelease tag to the exact npm version.
+requires an exact matching public, non-prerelease GitHub tag and published npm
+version. The ordinary source-PR and Native Installer unpinned smoke selects
+npm's stable `latest` and verifies the matching public GitHub tag. This is
+historical npm-stable smoke, not current-release certification. Published-npm
+weekly and unpinned manual audits fail closed unless GitHub's latest public
+Release and npm `latest` agree. Explicit manual checks of an older version
+remain diagnostics, not release certificates. After a genuine trusted
+publisher run, E2E additionally requires its exact tag to equal both latest
+versions. A newer GitHub-only Release cannot be certified while npm approval
+is pending.
 This version is *not* the source-built package-manager executable.
 
 The [Windows published native-client E2E](../../.github/workflows/agentplugins-published-windows-audit.yml)
 and [macOS ARM64 published native-client E2E](../../.github/workflows/agentplugins-published-macos-audit.yml)
 reuse `scripts/live-install-audit.py`, real pinned vendor CLIs and independent
-immutable source/lock/native/cleanup proof. Draft PRs run a 5-agent × 2-source
-smoke; ready PRs also cover Cline, Kimi, Qoder and Pi project Skills with
-2 sources each. A relevant merge to `main` exercises all **30 immutable
-sources**, including Git-pinned packages, for each eligible native lane; weekly
-runs use 20 sources and manual dispatch allows 2, 20 or 30. Original case JSON
-is uploaded on both PASS and failure. Unsupported Pi generic plugins are
-not a qualifying lane.
+immutable source/lock/native/cleanup proof. These published-npm matrices run
+**only after a successful trusted npm publication with public verification**,
+on their weekly schedule, or by explicit manual dispatch; they do **not**
+run on ordinary source PRs or pushes. The postpublish Windows/macOS lanes
+exercise all **30 immutable sources**, including Git-pinned packages, for
+each eligible native client; weekly runs use 20 sources and manual dispatch
+allows 2, 20 or 30. Original case JSON is uploaded on both PASS and failure.
+Unsupported Pi generic plugins are not a qualifying lane. Current-source
+PR qualification remains in Required, Package Manager E2E and native/runtime
+contract workflows; passing those is not evidence of published npm bytes.
 
 The two [Linux published-release catalogs](../../.github/workflows/agentplugins-published-catalog-audit.yml)
 ([additional clients](../../.github/workflows/agentplugins-published-other-clients-audit.yml))
 retain their own real-client source counts and expected negative outcomes.
-Published client qualification also runs after a successful npm publisher
-workflow and periodically on the selected current stable public release.
+Published client qualification is attached to the triggering trusted-publish
+run's exact stable release tag and requires both the npm publish job and
+public provenance/lifecycle verification to succeed. A prepare-only or
+cancelled publisher is not a qualifying release. Weekly and manually
+dispatched runs independently check the selected current public stable version.
 GitHub runners on secondary architectures validate the *installer and source
 package-manager*; they do **not** automatically prove a real vendor's native
 MCP activation. The separate [Native Client Runtime](../../.github/workflows/agentplugins-native-clients.yml)

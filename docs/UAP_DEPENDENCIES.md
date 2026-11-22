@@ -62,9 +62,13 @@ The standard `plugin.json` format is unchanged; raw skill files are not imported
 Git dependencies use exactly one of `commit` and `ref`; omitting both records
 the repository default branch intent. Registry tables retain exact directory
 `release` selection. A string under `[dependencies]` selects a Directory package
-by its key, using an exact stable version (`"1.2.3"`) or caret range (`"^1.2"`
-or `"^1.2.3"`). Short names resolve through the signed Directory. Prefix `v`,
-prereleases, build suffixes and other range operators are unsupported.
+by its key, using a canonical SemVer exact version (`"1.2.3"`), a caret range
+(`"^1.2"`), tilde (`"~1.2"`), comparators (`">=1.2 <2"`), wildcards/partial
+versions (`"1.2.x"`) or OR ranges (`"^1 || ^2"`). Short names resolve
+through the signed Directory. Package version candidates must use canonical
+SemVer without the prefix `v`. Prereleases require an explicit matching
+selector; build metadata is ignored for constraint equality, while exact
+release bytes remain pinned in `uap.lock` by digest.
 
 Caret lower bounds are inclusive and upper bounds exclusive: `^1.2` ends at
 `2.0.0`, `^0.2` / `^0.2.3` at `0.3.0`, `^0.0` at `0.1.0`, and `^0.0.3` at
@@ -93,14 +97,15 @@ Only the selected root assigns `[targets]`. Each dependency inherits the union
 of its consumers' targets, including any direct assignments of its own. One
 canonical source has one version across the environment.
 
-**Current development source (not yet released):** ordinary resolution first tries
+**Release baseline: [CLI 0.1.110](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.110).** Ordinary resolution first tries
 compatible existing pins. For a Registry node without a usable pin, it prefers the
 highest eligible stable version, then the highest signed release sequence at that
 version. The complete graph and every required target must remain compatible;
 a conflicting or ineligible candidate can fall back to a lower one. Transport,
 authenticity and integrity failures remain errors, not permission to try other
 bytes. This is candidate ordering, not a global maximum-version optimization.
-Existing released versions used lowest-compatible fresh ordering. See the
+The older lowest-compatible fresh ordering is historical and does not describe
+CLI 0.1.110. See the
 [accepted decision and implementation plan](plans/fresh-highest-compatible-20261030.md).
 
 An exact semantic version such as `1.2.3` can have multiple publication sequences:
@@ -118,8 +123,15 @@ Both files still contribute to the immutable package tree digest when present.
 `plugin.json` remains authoritative for standard identity and components;
 `uap.toml` is a UAP manager contract, not an Agent Plugins 1.0 component.
 Project-scoped installation uses this same manifest and lock contract through
-the qualified project adapters. `[dev-dependencies]` remains unsupported and is
-rejected as an unknown field.
+the qualified project adapters. A root `[dev-dependencies]` section declares
+**local development-only roots**, with exactly the same source grammar and
+explicit `[targets]` assignments as normal roots. They are resolved and locked
+with ordinary roots but excluded from the transitive requirements exported to
+consumers of this package. Repeated aliases or source identities across the two
+sections are rejected before installation. Changing classification changes the
+normalized intent digest, invalidating a stale `--locked` restore; the lock
+format remains v1. A source package may list dev requirements for its own use,
+but consumers follow only its ordinary `[dependencies]` closure.
 
 `uap.lock` remains version 1 and is the sole dependency lock. Each node records
 its exact `version` and immediate `required_by` consumers/selectors, with no

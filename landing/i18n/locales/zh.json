@@ -359,7 +359,7 @@
         "nextStep": "安装后操作"
       },
       "scrollHint": "横向滚动以查看所有列。",
-      "note": "自动：UAP 安装受支持的组件。引导：按智能体提示完成操作。已准备：激活准备好的文件。手动：在应用中完成设置。安装不会替您登录或授予信任权限。可用性取决于插件及智能体版本。 基准版本：原生 CLI 0.1.108。npm 单独发布，可能有所延迟。支持某个代理并不保证每个插件和安装范围都有兼容的已签名目录版本。",
+      "note": "自动：UAP 安装受支持的组件。引导：按智能体提示完成操作。已准备：激活准备好的文件。手动：在应用中完成设置。经确认后，UAP 会完成受支持的原生设置，并提示剩余的信任、登录或重新加载步骤。可用性取决于插件及智能体版本。 基准版本：原生 CLI 0.1.115。npm 单独发布，可能有所延迟。支持某个代理并不保证每个插件和安装范围都有兼容的已签名目录版本。",
       "details": "查看兼容性详情",
       "capabilities": {
         "pluginsSkillsMcp": "插件、技能、MCP",
@@ -371,6 +371,7 @@
         "personalAppSetup": "个人应用设置",
         "skillsOnly": "仅技能",
         "skillsMcpPrepared": "技能、MCP（已准备）",
+        "pluginsSkillsMcpPrepared": "插件、技能、MCP（已准备）",
         "notSupported": "不支持"
       },
       "setup": {
@@ -391,27 +392,28 @@
         "windsurf": "在所选项目中打开或重启 Devin，并检查访问权限。",
         "kimi": "运行 /reload 或 /new，并检查 MCP 权限。",
         "cline": "选择项目 MCP 设置路径，然后重新加载 Cline。",
-        "kiro": "登录、批准访问，并在提示时重启 Kiro。",
-        "grok": "在 Grok 中打开所选项目，启用并信任插件，重新加载后验证技能和 MCP。",
+        "kiro": "CLI 会自动配置受支持的 Skills 和 MCP；请登录、批准访问，并在提示时重启。",
+        "grok": "在 Grok 中打开所选项目，检查信任设置，完成剩余的启用或重启步骤，并验证 Skills 和 MCP。",
         "vscode": "打开并信任文件夹；检查并启用 MCP 服务器。",
         "chatgpt": "桌面端：通过 Codex CLI 在本地安装；网页版：在 ChatGPT 中连接或安装应用。",
-        "hermes": "重启 Hermes，信任选定的 Git 项目，并验证 Skills 和用户 MCP；不支持项目 MCP。",
+        "hermes": "重启 Hermes 并信任项目；项目 MCP 需要经过验证的 Hermes 独立发行包，以及明确确认的 UAP 项目会话。",
         "antigravity": "打开或重新加载 Antigravity；检查信任设置，并确认已准备的插件在所选范围内被发现并启用。"
       }
     },
     "dependencies": {
       "eyebrow": "相互连接的依赖",
-      "title": "两个插件，共享一个依赖。",
+      "title": "两个插件\n共享一个依赖",
       "description": "安装插件及其依赖。版本相同且兼容的共享依赖只安装一次。",
       "demoPackage": "演示软件包",
       "installed": "已安装",
       "alreadyInstalled": "此前已安装",
-      "shared": "共享",
+      "shared": "两个插件共用",
       "caption": "软件包和依赖图仅作示例。两个软件包共享 Playwright；Context7 此前已安装。",
-      "graphDescription": "marketing-kit 依赖 Playwright、HubSpot 和 Notion。Web Design Kit 依赖同一个 Playwright 软件包、Figma 和 Context7。所有软件包均已安装；Context7 此前已安装。"
+      "graphDescription": "示例版本：marketing-kit v{marketingVersion} 和 Web Design Kit v{designVersion} 共用一个 Playwright 桥接依赖 v{playwrightVersion}。Marketing Kit 还使用 HubSpot 和 Notion，Web Design Kit 还使用 Figma 和 Context7。",
+      "exampleVersions": "示例版本"
     },
     "restore": {
-      "title": "相同的插件版本，整个团队共享。",
+      "title": "相同的插件版本\n整个团队共享",
       "guide": "指南",
       "from": "我的电脑",
       "to": "队友的电脑",
@@ -448,11 +450,54 @@
       "sourceDescription": "安装前可查看插件包来源，以及目录条目是否经过审核。",
       "standardDescription": "使用包含 {manifest} 的 Agent Plugins 1.0 插件包，无需另建 UAP 专用插件格式。"
     },
-    "builtWith": {
-      "title": "已使用 UAP 构建",
-      "agentNotificationsDescription": "为 AI 编程代理提供桌面通知、声音提醒和点击切换到对应窗口。",
-      "viewRepository": "在 GitHub 上查看",
-      "buildWithSdk": "使用 SDK 构建"
+    "sdk": {
+      "title": "构建通用插件",
+      "tagline": "一次创建，连接你的所有智能体。",
+      "intro": "使用 UAP SDK 和 CLI 构建插件，或将插件与 Skills 管理集成到你自己的应用中。",
+      "featuresLabel": "SDK 与 CLI 功能",
+      "features": {
+        "detect": {
+          "title": "检测已安装的智能体",
+          "description": "CLI 会找出本机上受支持的智能体，一条命令即可覆盖全部。"
+        },
+        "install": {
+          "title": "为选定的智能体安装",
+          "description": "选择具体的智能体，UAP 会准备每个智能体支持的原生格式。"
+        },
+        "cli": {
+          "title": "插件管理 CLI",
+          "description": "用一条终端命令安装、更新、修复和移除插件。"
+        },
+        "hooks": {
+          "title": "类型化钩子",
+          "description": "使用类型化的 Go 处理程序处理智能体的原生钩子事件。"
+        }
+      },
+      "apps": {
+        "eyebrow": "面向应用开发者",
+        "badge": "集成预览",
+        "title": "为你的应用添加插件管理",
+        "description": "借助 TypeScript Management SDK，桌面或 Node.js 应用可以发现智能体，并通过 UAP 引擎安装、更新或移除插件和 Skills。",
+        "guide": "TypeScript Management SDK 指南",
+        "diagramLabel": "示意图：你的应用请求 UAP Management SDK 安装 marketing-kit 插件，SDK 将其安装到 Codex、Claude Code 和 Gemini CLI。",
+        "yourApp": "你的应用",
+        "tag": "插件 + Skills",
+        "kind": "插件",
+        "install": "安装",
+        "update": "更新",
+        "remove": "移除",
+        "installing": "正在安装…",
+        "installed": "已安装",
+        "caption": "构建插件，赋能你的应用。"
+      },
+      "showcase": {
+        "eyebrow": "基于 UAP 构建",
+        "description": "跨平台智能通知。桌面提醒、提示音、点击聚焦窗口和 Webhook。",
+        "builtOn": "基于 UAP SDK 构建：类型化的智能体钩子和 UAP 安装器。",
+        "repository": "在 GitHub 上查看",
+        "stars": "{stars} 个 GitHub 星标"
+      },
+      "guides": "浏览 SDK 指南"
     },
     "faq": {
       "eyebrow": "常见问题解答",
@@ -506,7 +551,7 @@
       "notAvailableForPlugin": "不适用于该插件",
       "title": "一个插件",
       "subtitle": "适用于你的 AI 客户端",
-      "intro": "用一条命令，在受支持的 AI 客户端中安装、更新、修复和移除 Agent Plugins 1.0 软件包。可以让 CLI 检测已安装的客户端，也可以明确选择安装目标。",
+      "intro": "用一条命令，在受支持的 AI 客户端中安装、更新、修复和移除 Agent Plugins 1.0 / Agent Skills。可以让 CLI 检测已安装的客户端，也可以明确选择安装目标。",
       "github": "打开 GitHub",
       "choose": "选择客户端",
       "chooseHint": "选择一个、多个或自动检测",
@@ -514,7 +559,7 @@
       "terminal": "在您的终端中",
       "refreshNotice": "插件数据正在更新，请稍后重试。",
       "otherMethods": "其他安装方式",
-      "supportedFormats": "支持的格式",
+      "supportedFormats": "标准",
       "watchDemo": "观看演示",
       "demoVideoTitle": "Universal Agent Plugins 安装演示",
       "supportedClients": "支持的客户端",
@@ -588,6 +633,7 @@
       "empty": "没有匹配的类别"
     },
     "multi": {
+      "search": "搜索代理…",
       "agents": "{count} 个客户端 | {count} 个客户端",
       "selected": "已选 {count} 项",
       "auto": "自动检测",
@@ -595,10 +641,11 @@
       "automaticHelp": "CLI 会检查已安装的本地智能体，并让你确认兼容的目标。ChatGPT Desktop 在本地运行；ChatGPT Web 的设置需在 ChatGPT 内完成。",
       "manualHelp": "选择要安装到的智能体。必须保留至少一个选项。",
       "summary": "{label}：{summary}",
-      "manualHelpWithAuto": "选择要安装到的智能体。清除最后一个选项，即可在终端中选择。"
+      "manualHelpWithAuto": "选择要安装到的智能体。清除最后一个选项，即可在终端中选择。",
+      "more": "另有 {count} 项"
     },
     "command": {
-      "terminal": "终端",
+      "terminal": "你的终端",
       "copiedLabel": "命令已复制",
       "copyLabel": "复制命令",
       "copied": "已复制",
@@ -794,17 +841,18 @@
       "chatgptFinish": "打开 ChatGPT，在 Apps 或 Plugins 中选择 {name}，完成连接后开始新聊天。可用性取决于你的账户和工作区。",
       "expectedFallback": "预期的源回退：{source}。",
       "dependencySaving": {
-        "saved": "保存在当前用户的 uap.toml 和 uap.lock 中。运行 npx -y universal-agent-plugins deps status 查看文件路径。移除操作会影响所有已保存的目标。",
+        "saved": "保存在当前用户的 uap.toml 和 uap.lock 中。运行 {command} 查看文件路径。移除操作会影响所有已保存的目标。",
         "noSave": "此目标选择使用 --no-save，不会记录依赖。",
         "local": "本地包不会保存为可移植依赖。",
         "discovery": "discovery 选择器不会保存为依赖。",
         "chatgpt": "ChatGPT 准备操作不会保存依赖。",
-        "projectSaved": "已保存到此项目的 uap.toml 和 uap.lock。在此文件夹中运行 npx -y universal-agent-plugins deps status --scope project 即可检查。移除操作会影响此项目中所有已保存的代理目标。"
+        "projectSaved": "已保存到此项目的 uap.toml 和 uap.lock。在此文件夹中运行 {command} 即可检查。移除操作会影响此项目中所有已保存的代理目标。"
       },
       "scope": {
         "label": "安装范围",
         "user": "这台电脑",
         "project": "此项目",
+        "projectLocationHint": "项目是运行终端命令时所在的文件夹。请在目标项目的根目录中运行命令。",
         "projectHint": "请在项目文件夹中运行这些命令。代理可能会要求您信任或激活该项目。",
         "projectUnavailable": "此软件包不支持项目安装。",
         "marketingKitProjectUnavailable": "Marketing Kit 暂不能安装到项目：必需的 Notion、HubSpot 和 Playwright 依赖需要分别支持 Project 范围安装。",
@@ -837,7 +885,13 @@
       "guidedChatgptSetup": "引导式 ChatGPT Web 设置；请在 ChatGPT 内完成连接。",
       "catalogReleasePending": "此插件尚未发布适用于 {agent} 的版本。",
       "useComputerScope": "请为此插件选择“这台电脑”。",
-      "unsupportedPluginComponents": "{agent} 不支持此插件的所有组件。"
+      "unsupportedPluginComponents": "{agent} 不支持此插件的所有组件。",
+      "dialogDescription": "选择智能体和安装范围，然后在终端中运行命令。",
+      "closeDialog": "关闭安装",
+      "pinnedSourceShort": "通过 Git 安装",
+      "desktopSourceShort": "本地桌面连接",
+      "webSetupShort": "引导式 Web 设置",
+      "selectionRoutesUnavailable": "已保留所选智能体。此组合在所选范围内没有共同的安装来源。请调整智能体或范围以获取安装命令。"
     },
     "authentication": {
       "not_required": "无需帐户",
@@ -892,7 +946,7 @@
       },
       "cursor": {
         "note": "原生 Agent Plugin 软件包",
-        "status": "支持",
+        "status": "已由 CLI 准备",
         "intro": "将 Agent Plugins 1.0 安装到 Cursor 项目中，无需逐个手动转换插件。CLI 会在修改文件前规划原生软件包。",
         "delivery": "CLI 按所选范围准备 Cursor 支持的插件、 Skill 和 MCP 组件。add 默认使用用户范围；通过 add 安装到项目时需要显式选择项目范围。",
         "activation": "按提示重新加载 Cursor，然后确认插件已被发现。"
@@ -901,7 +955,7 @@
         "note": "托管的原生插件",
         "status": "支持",
         "intro": "通过 GitHub Copilot CLI 的原生插件流程安装 Agent Plugins 1.0，并使用与其他客户端相同的生命周期命令。",
-        "delivery": "CLI 使用受支持的 Copilot 插件布局并验证最终的安装状态。",
+        "delivery": "CLI 使用受支持的 Copilot 插件布局并验证最终的安装状态。在项目范围内，若使用 Copilot CLI 1.0.81 或更高的稳定版本，兼容的软件包会注册为原生项目插件。",
         "activation": "仅在 Copilot 原生流程要求时重启或重新加载客户端。"
       },
       "vscode": {
@@ -915,8 +969,8 @@
         "note": "托管 Skills 与 MCP 配置",
         "status": "支持",
         "intro": "使用与其他 AI 客户端相同的可移植软件包，为 Kiro 安装 Agent Plugins 1.0。",
-        "delivery": "CLI 会安装其管理的 Kiro Skills 和 MCP 条目，同时保留其他全局配置。",
-        "activation": "按提示完成 OAuth 或重启步骤。在 macOS 和 Windows 上完成准备，不代表已自动验证运行结果。"
+        "delivery": "CLI 会为受支持的 Kiro CLI 版本自动安装其拥有的 Skills 和 MCP 配置，并保留其他设置。MCP 需要完整且受支持的 CLI 发行包和可写配置。",
+        "activation": "请登录、批准访问，并在提示时重启。显式准备仍为 Prepared 状态；安装文件不能证明原生加载、认证或实际 MCP 执行。"
       },
       "claude": {
         "note": "托管 MCP 配置",
@@ -944,21 +998,21 @@
         "status": "支持",
         "intro": "为 Cline 安装兼容的 Agent Plugins 1.0，无需为每个插件重新创建 MCP 配置。",
         "delivery": "CLI 准备并跟踪支持的 Cline MCP 配置。",
-        "activation": "根据请求重新加载 Cline，并在插件包外部完成提供者身份验证。"
+        "activation": "重新加载 Cline 并完成提供商认证。项目 MCP 需要明确选择的受管会话及其 CLINE_MCP_SETTINGS_PATH；普通启动不会选择该配置。"
       },
       "windsurf": {
-        "note": "软件包已准备；需要手动激活",
-        "status": "由 CLI 准备",
-        "intro": "用一条 CLI 命令为 Windsurf 准备 Agent Plugins 1.0，然后明确完成客户端要求的激活步骤。",
-        "delivery": "CLI 会验证并准备兼容的 Windsurf 软件包，但不声称已自动激活。",
-        "activation": "按照准备后打印的确切手动激活路径进行操作。"
+        "note": "托管 Skills 与 MCP 配置",
+        "status": "支持",
+        "intro": "用一条 CLI 命令为 Windsurf / Devin 安装 Agent Plugins 1.0 的 Skills 和 MCP 服务器。",
+        "delivery": "CLI 可在用户和项目范围内为 Devin 3000.11.205 或 3000.12.57 写入其拥有的 Skills 和 MCP 配置。准备不代表发现、信任、登录或实际执行已验证。",
+        "activation": "在所选项目中打开或重启 Devin，并检查访问权限。UAP 会通过 Devin CLI 检查已安装的 Skills；请在 Devin 中验证 MCP 服务器。"
       },
       "grok": {
         "note": "原生 Skills 与 MCP 插件；CLI 验证",
         "status": "支持",
         "intro": "使用与其他客户端相同的 CLI，为 Grok Build 安装可移植的 Agent Plugins 1.0 Skills 和 MCP 服务器。",
         "delivery": "CLI 会在 Grok 的用户插件目录写入原生 .grok-plugin 清单，并在 Grok CLI 可用时通过它管理注册。",
-        "activation": "安装后重新加载 Grok Build。如果 Grok CLI 不可用，请先安装它，再重新运行更新命令完成原生验证。"
+        "activation": "在 Linux 上使用 Grok Build 1.0.70 时，UAP 可以启用精确的项目插件，并保留现有信任和禁用偏好。请单独检查信任；其他平台和版本应按输出步骤操作，然后重新加载并验证。"
       },
       "kimi": {
         "note": "包含 Skills 和 MCP 的托管用户插件",
@@ -975,11 +1029,11 @@
         "activation": "安装后重新加载 Qoder 插件或重启 Qoder。MCP 运行时连接和服务提供方的身份验证仍需在 Qoder 中确认。"
       },
       "hermes": {
-        "note": "用户级 Skills/MCP 和项目级 Skills；不支持项目级 MCP",
+        "note": "用户 Skills/MCP；项目 Skills 和已准备的 MCP",
         "status": "支持",
-        "intro": "为当前用户或选定的 Git 项目安装 Hermes Agent 原生 Skills，并配置用户级 MCP 服务器，同时保留其他设置。",
-        "delivery": "UAP 管理自身安装的 Skills 目录和用户 config.yaml 中的特定 MCP 条目。项目安装不会修改用户级 MCP 配置。",
-        "activation": "重启 Hermes 以重新加载集成。使用项目 Skills 前请确认仓库信任；运行时发现和身份认证仍需单独验证。"
+        "intro": "为用户或所选 Git 项目安装 Hermes Agent 原生 Skills 和 MCP 服务器。项目 MCP 需要经过验证的 Hermes 客户端独立发行包。",
+        "delivery": "UAP 管理其拥有的 Skills 和 config.yaml 中精确的用户 MCP 条目。项目 MCP 使用明确确认的受管项目会话。项目安装不会修改用户 MCP 配置。",
+        "activation": "启动新的 Hermes 会话并检查仓库信任。项目 MCP 通过已确认的 UAP 项目会话运行；普通 Hermes 启动不会选择该会话。仍需确认认证和实际 MCP 执行。"
       },
       "antigravity": {
         "note": "原生用户/项目插件；需验证激活状态",

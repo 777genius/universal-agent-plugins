@@ -23,6 +23,8 @@ func (e *SkillsSelectionError) Error() string { return "selected skill could not
 func (e *SkillsSelectionError) Unwrap() error { return e.Cause }
 
 func (candidate *skillsBatchCandidate) selectSkills(ctx context.Context, app App, selections []SkillsSelection, targets []string) error {
+	prefetch := candidate.prefetchRawSkills(ctx, app, selections)
+	defer prefetch.close()
 	seen := map[string]bool{}
 	for _, selection := range selections {
 		requirement, err := skillSelectionRequirement(candidate.requirements, selection)
@@ -34,26 +36,55 @@ func (candidate *skillsBatchCandidate) selectSkills(ctx context.Context, app App
 			return &SkillsSelectionError{CandidateID: selection.CandidateID, Cause: errors.New("duplicate selected skill")}
 		}
 		seen[key] = true
-		if err = candidate.selectSkill(ctx, app, selection, requirement, targets); err != nil {
+		if err = candidate.selectSkill(ctx, app, selection, requirement, targets, prefetch); err != nil {
 			return &SkillsSelectionError{CandidateID: selection.CandidateID, Cause: err}
 		}
 	}
 	return nil
 }
 
-func (candidate *skillsBatchCandidate) selectSkill(ctx context.Context, app App, selection SkillsSelection, req environment.Requirement, targets []string) error {
+// prefetchRawSkills starts the fresh GitHub Skill fetches that selectSkill will
+// request, with exactly the arguments resolveSkill passes for a new selection.
+// Selections that keep a saved requirement or fail validation are not fetched.
+func (candidate *skillsBatchCandidate) prefetchRawSkills(ctx context.Context, app App, selections []SkillsSelection) *rawSkillPrefetch {
+	acquirer, err := app.rawSkillAcquirer()
+	if err != nil {
+		return nil
+	}
+	keys := []rawSkillKey{}
+	for _, selection := range selections {
+		req, err := skillSelectionRequirement(candidate.requirements, selection)
+		if err != nil || req.Git == nil {
+			continue
+		}
+		// resolveSkill rejects this selection before downloading; do not either.
+		if skillDirectoryMismatch(req.Git.Skill, req.Git.Path) {
+			continue
+		}
+		if old, ok := candidate.requirements.Dependencies[req.Alias]; ok && mustSourceKey(old) == mustSourceKey(req) {
+			continue
+		}
+		keys = append(keys, rawSkillKey{repository: req.Git.Repository, commit: selection.Commit, path: req.Git.Path})
+	}
+	if len(keys) < 2 {
+		return nil
+	}
+	return startRawSkillPrefetch(ctx, acquirer, keys, app.prefetchGuard())
+}
+
+func (candidate *skillsBatchCandidate) selectSkill(ctx context.Context, app App, selection SkillsSelection, req environment.Requirement, targets []string, prefetch *rawSkillPrefetch) error {
 	alias := req.Alias
 	// Re-add preserves its prior selector and pin; normal saved update refreshes it.
 	if old, ok := candidate.requirements.Dependencies[alias]; ok && mustSourceKey(old) == mustSourceKey(req) {
 		req = old
 	} else {
-		resolver := dependencyResolver{app: app, requirements: candidate.requirements, dryRun: true}
+		resolver := dependencyResolver{app: app, requirements: candidate.requirements, dryRun: true, rawSkills: prefetch}
 		var pin environment.LockedPackage
 		var err error
 		if req.Web != nil {
 			pin, err = resolver.resolveWebSkill(ctx, req, targets)
 		} else {
-			pin, err = resolver.resolveSkill(ctx, req, targets, nil, selection.Commit, "", "")
+			pin, err = resolver.resolveSkill(ctx, req, targets, nil, selection.Commit, "", "", nil)
 		}
 		if err != nil {
 			return err

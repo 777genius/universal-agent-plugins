@@ -148,8 +148,8 @@ export async function projections(page: Page, index: RegistryIndex) {
   await page.route('**/_payload.json*', (route) => route.fulfill({ status: 404, body: '' }));
 }
 
-// Read the built artifact independently of the production command formatter.
-export async function pinnedContext7Example(page: Page, client: ClientID) {
+// Read signed grants and immutable source bytes independently of the production resolver/formatter.
+export async function context7InstallExample(page: Page, client: ClientID) {
   const response = await page.request.get(`./api/registry/client/${client}`);
   expect(response.status()).toBe(200);
   const index = await response.json() as RegistryIndex;
@@ -165,18 +165,54 @@ export async function pinnedContext7Example(page: Page, client: ClientID) {
   expect(source.repository).toBe('upstash/context7');
   expect(source.revision).toMatch(/^[0-9a-f]{40}$/);
   expect(source.path).toBe('plugins/agent-plugins/context7');
-  const selector = `github:${source.repository}@${source.revision}//${source.path}`;
+  expect(source.tree_sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
+  expect(source.manifest_sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
+  // A signed alternative can support this client even when the declared
+  // upstream default cannot. In that case the CLI selects the signed release;
+  // the exact Git route is only the existing fallback when no grant exists.
+  const signed = plugin!.distributions.some((candidate) => candidate.status === 'active' &&
+    candidate.releases.some((item) => item.release_status === 'active' && item.selectable &&
+      item.meets_minimum_capabilities && !item.blocking_clients.includes(client) &&
+      (candidate.kind !== 'upstream' || item.materialized_clients.includes(client)) &&
+      item.targets.some((target) => target.client === client && target.scopes.includes('user') &&
+        target.canonical_closure?.eligible !== false && !target.app_binding)));
+  if (!signed) {
+    expect(plugin!.distributions.some((candidate) => candidate.releases.some((item) =>
+      item.blocking_clients.includes(client) || item.targets.some((target) =>
+        target.client === client || target.canonical_closure !== undefined)))).toBe(false);
+    expect(release!.components.every((component) => ['mcp', 'skills'].includes(component))).toBe(true);
+  }
+  const selector = signed ? 'context7' : `github:${source.repository}@${source.revision}//${source.path}`;
   return {
     selector,
-    command: `npx -y universal-agent-plugins@0.1.108 add ${selector} --target ${client}`,
+    pinned: !signed,
+    command: `npx -y universal-agent-plugins@${signed ? 'latest' : '0.1.115'} add ${selector} --target ${client}`,
   };
 }
 
-export async function targets(page: Page, scope: Locator, names: string[]) {
-  const trigger = scope.locator('.app-multiselect__trigger');
-  await expect(trigger).toHaveAttribute('data-hydrated', 'true');
+export async function openCardInstall(page: Page, card: Locator) {
+  const trigger = card.locator('.plugin-card__install-toggle');
+  await trigger.click({ trial: true });
   await trigger.click();
   await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('dialog')).toBeVisible();
+}
+
+export async function targets(page: Page, scope: Locator, names: string[]) {
+  const isCard = await scope.evaluate(element => element.classList.contains('plugin-card'));
+  if (isCard && !await page.getByRole('dialog').isVisible())
+    await openCardInstall(page, scope);
+  if (!isCard && await page.locator('.install-dialog').isVisible())
+    await page.keyboard.press('Escape');
+  const trigger = (isCard ? page.getByRole('dialog') : scope).locator('.app-multiselect__trigger');
+  const compact = await trigger.count() > 0;
+  if (compact) {
+    await expect(trigger).toHaveAttribute('data-hydrated', 'true');
+    await trigger.click();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  } else {
+    await expect((isCard ? page.getByRole('dialog') : scope).locator('.app-multiselect__content--inline')).toBeVisible();
+  }
   for (const name of names) {
     const checkbox = page.getByRole('checkbox', { name: new RegExp(`^${name}(?:\\s|$)`) });
     const checked = await checkbox.isChecked();
@@ -186,17 +222,21 @@ export async function targets(page: Page, scope: Locator, names: string[]) {
     await checkbox.click();
     await expect(checkbox).toBeChecked({ checked: !checked });
   }
-  await page.keyboard.press('Escape');
-  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  if (compact) {
+    await page.keyboard.press('Escape');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  }
 }
 
 export async function automatic(page: Page, scope: Locator, locale: PublishedLocale) {
-  await scope.locator('.app-multiselect__trigger').click();
+  const trigger = scope.locator('.app-multiselect__trigger');
+  const compact = await trigger.count() > 0;
+  if (compact) await trigger.click();
   const auto = page.locator('.app-multiselect__auto');
   await expect(auto).toContainText(wording(locale)('registryUi.install.allInstalledAgentsRecommended'));
   await auto.click();
   await expect(auto).toHaveAttribute('aria-pressed', 'true');
-  await page.keyboard.press('Escape');
+  if (compact) await page.keyboard.press('Escape');
 }
 
 export async function exactCommands(page: Page, scope: Locator, name: string, target = '') {
@@ -206,8 +246,8 @@ export async function exactCommands(page: Page, scope: Locator, name: string, ta
         ? '.install-command-row .command-snippet--add'
         : `.command-stack > .command-snippet--${verb}`,
     );
-    const targetFlag = target && (verb === 'add' || verb === 'repair') ? ` --target ${target}` : '';
-    const expected = `npx -y universal-agent-plugins ${verb} ${name}${targetFlag}`;
+    const targetFlag = target && (verb === 'add' || verb === 'repair') ? ` --target ${target.includes(',') ? `"${target}"` : target}` : '';
+    const expected = `npx -y universal-agent-plugins@latest ${verb} ${name}${targetFlag}`;
     await expect(snippet.locator('code')).toHaveText(expected);
     await snippet.getByRole('button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(expected);

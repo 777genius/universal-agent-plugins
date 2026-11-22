@@ -23,7 +23,7 @@ function desktopFixture(withCodex: boolean) {
   return index;
 }
 
-const desktopCommand = 'npx -y universal-agent-plugins add i18n-state-00 --target chatgpt';
+const desktopCommand = 'npx -y universal-agent-plugins@latest add i18n-state-00 --target chatgpt';
 
 for (const width of [1440, 390]) {
   test('ChatGPT Desktop is a distinct selectable target with one copyable command at ' + width + 'px', async ({ page }) => {
@@ -33,20 +33,18 @@ for (const width of [1440, 390]) {
     await navigate(page, '/', 'en', '?q=i18n-state-00');
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
-    await expect(card.locator('.desktop-guide')).toHaveCount(0);
-    await card.locator('.app-multiselect__trigger').click();
-    await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toBeDisabled();
+    await expect(page.getByRole('dialog').locator('.desktop-guide')).toHaveCount(0);
+    await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toHaveCount(0);
     await page.getByRole('checkbox', { name: /^ChatGPT Desktop/ }).click();
-    await page.keyboard.press('Escape');
-    await expect(card.locator('.plugin-card__install .command-snippet code')).toHaveText(desktopCommand);
-    const guide = card.locator('.desktop-guide');
+    await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code')).toHaveText(desktopCommand);
+    const guide = page.getByRole('dialog').locator('.desktop-guide');
     await expect(guide).toBeVisible();
     await guide.locator('summary').click();
     await expect(guide).toContainText('does not prove Desktop runtime');
     await expect(guide).toContainText('ChatGPT web connection');
     await expect(guide.locator('.command-snippet')).toHaveCount(0);
 
-    await card.locator('.plugin-card__install .command-snippet button').click();
+    await page.getByRole('dialog').locator('.install-dialog__footer .command-snippet button').click();
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(desktopCommand);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(errors).toEqual([]);
@@ -59,11 +57,11 @@ test('Desktop and Web are both disabled when neither signed target is compatible
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
   await card.locator('.plugin-card__install-toggle').click();
-  await card.locator('.app-multiselect__trigger').click();
   await expect(page.getByRole('checkbox', { name: /^ChatGPT Desktop/ })).toBeDisabled();
-  await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toBeDisabled();
+  await expect(page.getByRole('checkbox', { name: /^ChatGPT Web/ })).toHaveCount(0);
+  await expect(page.getByRole('dialog').locator('.desktop-guide')).toHaveCount(0);
+
   await page.keyboard.press('Escape');
-  await expect(card.locator('.desktop-guide')).toHaveCount(0);
 
   await card.locator('.plugin-card__title-link').click();
   await expect(page.locator('.install-panel .desktop-guide')).toHaveCount(0);
@@ -77,9 +75,7 @@ test('detail page uses the same Desktop target in both themes', async ({ page })
   await page.locator('.plugin-card[data-install-source="i18n-state-00"] .plugin-card__title-link').first().click();
   const panel = page.locator('.install-panel');
   await expect(panel.locator('.desktop-guide')).toHaveCount(0);
-  await panel.locator('.app-multiselect__trigger').click();
   await page.getByRole('checkbox', { name: /^ChatGPT Desktop/ }).click();
-  await page.keyboard.press('Escape');
   const guide = panel.locator('.desktop-guide');
   await expect(guide).toBeVisible();
   await expect(panel.locator('.install-command-row .command-snippet code')).toHaveText(desktopCommand);
@@ -112,7 +108,7 @@ for (const width of [1440, 390]) {
     const errors = await offline(page);
     await projections(page, signedMixedSurfaceFixture());
     await navigate(page, '/', 'en', '?q=i18n-state-00');
-    const hero = page.locator('.hero__demo');
+    const hero = page.locator('.hero-quick-start');
     await hero.locator('.app-multiselect__trigger').click();
     await page.getByRole('checkbox', { name: /^ChatGPT Desktop/ }).click();
     await page.keyboard.press('Escape');
@@ -125,17 +121,15 @@ for (const width of [1440, 390]) {
     await expect(hero.locator('.install-panel__notice')).toBeVisible();
     const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]').first();
     await card.locator('.plugin-card__install-toggle').click();
-    await card.locator('.app-multiselect__trigger').click();
     const desktop = page.getByRole('checkbox', { name: /^ChatGPT Desktop/ });
     const web = page.getByRole('checkbox', { name: /^ChatGPT Web/ });
     await expect(desktop).toBeEnabled();
     await expect(web).toBeEnabled();
     await desktop.click();
     await web.click();
-    await page.keyboard.press('Escape');
-    const snippet = card.locator('.plugin-card__install .command-snippet');
+    const snippet = page.getByRole('dialog').locator('.install-dialog__footer .command-snippet');
     const code = snippet.locator('code');
-    await expect(code).toHaveText(/--target (chatgpt,chatgptweb|chatgptweb,chatgpt) --no-save$/);
+    await expect(code).toHaveText(/--target "(chatgpt,chatgptweb|chatgptweb,chatgpt)" --no-save$/);
     const command = (await code.textContent())?.trim() ?? '';
     expect(command.match(/\bchatgpt\b/g)).toHaveLength(1);
     expect(command.match(/chatgptweb/g)).toHaveLength(1);
@@ -143,14 +137,15 @@ for (const width of [1440, 390]) {
     await snippet.locator('button').click();
     // Compact snippets visually wrap before --target, but copy the executable one-line command.
     await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(command.replace(/\s+/g, ' '));
-    await expect(card.locator('.desktop-guide')).toBeVisible();
+    await expect(page.getByRole('dialog').locator('.desktop-guide')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.keyboard.press('Escape');
     await card.locator('.plugin-card__title-link').click();
     const panel = page.locator('.install-panel');
     await expect(panel.locator('.command-snippet')).toHaveCount(4);
     for (const action of ['update', 'repair', 'remove'])
       await expect(panel.locator(`.command-snippet--${action} code`))
-        .toHaveText(new RegExp(`${action} i18n-state-00 --target (chatgpt,chatgptweb|chatgptweb,chatgpt)$`));
+        .toHaveText(new RegExp(`${action} i18n-state-00 --target "(chatgpt,chatgptweb|chatgptweb,chatgpt)"$`));
     expect(errors).toEqual([]);
   });
 }

@@ -15,6 +15,8 @@ type duplexPipeFactory struct {
 	// exit of native helpers. Strict duplex protocols retain their short grace.
 	exitGrace time.Duration
 	closure   *duplexClosureProof
+	// Finite completion may validate EOF after the native leader exits.
+	finishExchangeOnExit bool
 }
 
 func (pipes duplexPipeFactory) exitTimeout() time.Duration {

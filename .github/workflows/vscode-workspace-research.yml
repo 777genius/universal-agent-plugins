@@ -1,14 +1,6 @@
 name: VS Code Untrusted Workspace Research
+# VS Code plugin-platform support is frozen; keep manual diagnostics only.
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/vscode-workspace-research.yml'
-      - 'scripts/research-vscode-workspace.py'
-      - 'scripts/test_vscode_workspace_research.py'
-      - 'scripts/vscode-workspace-observer/**'
-      - 'install/integrationctl/agentplugins/research/vscodeworkspace/**'
-      - 'scripts/research-vscode-native.py'
-      - 'scripts/native_client_research.py'
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,5 +1,6 @@
 import { publishedLocales, localeMetadata } from '../../data/i18n';
 import { clientLandingPages } from '../../data/clients';
+import { SOCIAL_PREVIEW_PATH } from '../../utils/seo';
 import { expect as baseExpect, test } from '@playwright/test';
 
 // Allow the page's async hydration and smooth anchors to settle on busy CI hosts.
@@ -98,7 +99,7 @@ test('homepage installs with auto-detection and exposes the full directory', asy
   await expect(page.getByRole('heading', { name: 'One plugin All your agents' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Install the Context7 plugin' })).toBeVisible();
   await expect(page.locator('.command-snippet').first()).toContainText(
-    'npx -y universal-agent-plugins add context7',
+    'npx -y universal-agent-plugins@latest add context7',
   );
   await expect(page.locator('.command-snippet').first()).not.toContainText('--target');
   await expect(page.getByText('Supported clients')).toBeVisible();
@@ -435,15 +436,15 @@ test('homepage publishes canonical social metadata and complete product schema',
   );
   await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
     'content',
-    'https://777genius.github.io/universal-agent-plugins/og-image.png?v=20261106',
+    `https://777genius.github.io/universal-agent-plugins/${SOCIAL_PREVIEW_PATH}`,
   );
   await expect(page.locator('meta[property="og:image:secure_url"]')).toHaveAttribute(
     'content',
-    'https://777genius.github.io/universal-agent-plugins/og-image.png?v=20261106',
+    `https://777genius.github.io/universal-agent-plugins/${SOCIAL_PREVIEW_PATH}`,
   );
   await expect(page.locator('meta[property="og:image:width"]')).toHaveAttribute('content', '1200');
   await expect(page.locator('meta[property="og:image:height"]')).toHaveAttribute('content', '630');
-  const card = await page.request.get('og-image.png?v=20261106');
+  const card = await page.request.get(SOCIAL_PREVIEW_PATH);
   expect(card.status()).toBe(200);
   const bytes = await card.body();
   expect(bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))).toBe(true);
@@ -452,8 +453,7 @@ test('homepage publishes canonical social metadata and complete product schema',
   const source = await page.request.get('og-image.svg');
   expect(source.status()).toBe(200);
   const art = await source.text();
-  expect(art).toContain('Claude Code');
-  expect(art).toContain('Copilot CLI');
+  for (const client of clientLandingPages) expect(art).toContain(client.name);
   await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute(
     'content',
     'summary_large_image',
@@ -498,7 +498,7 @@ test('supported client links open crawlable client-specific landing pages', asyn
     'https://777genius.github.io/universal-agent-plugins/agents/codex/',
   );
   await expect(page.locator('.command-snippet')).toContainText(
-    'npx -y universal-agent-plugins add context7 --target codex',
+    'npx -y universal-agent-plugins@latest add context7 --target codex',
   );
   const graph = await parseJsonLd(page);
   expect(graph.map((item) => item['@type'])).toEqual(
@@ -707,14 +707,14 @@ test('directory filters and reviewed detail keep terminal agent choice as the de
   await expect(page).toHaveURL(/\/plugins\/gitlab\/?$/, { timeout: 15_000 });
   await expect(page.getByRole('heading', { name: 'GitLab', exact: true })).toBeVisible();
   await expect(
-    page.getByRole('button', {
-      name: 'Choose target agents: Choose agents in terminal',
+    page.getByRole('group', {
+      name: 'Choose target agents',
       exact: true,
     }),
   ).toBeVisible();
   await expect(page.getByRole('link', { name: 'Run with npx' })).toBeVisible();
   await expect(page.locator('.command-snippet').first()).toContainText(
-    'npx -y universal-agent-plugins add',
+    'npx -y universal-agent-plugins@latest add',
   );
   await expect(page.locator('.command-snippet').first()).not.toContainText('--target');
 });
@@ -805,7 +805,7 @@ test('sitemap lists only live canonical pages and unstable routes stay out of th
   await expect(page.getByRole('heading', { name: 'Use plugins', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Build plugins', exact: true })).toBeVisible();
   await expect(page.locator('#use-plugins code')).toHaveText(
-    'npx -y universal-agent-plugins add context7',
+    'npx -y universal-agent-plugins@latest add context7',
   );
   await expect(page.locator('#build-plugins')).toContainText(
     'latest stable CLI',
@@ -847,14 +847,6 @@ test('the authoring frontdoor distinguishes the released installer from source a
   await expect(page.locator('#historical-v1')).toHaveCount(0);
 });
 
-test('the built-with showcase stays hidden while its product is temporarily unlisted', async ({
-  page,
-}) => {
-  await page.goto('./');
-
-  await expect(page.locator('#built-with-uap')).toHaveCount(0);
-});
-
 test('an unsupported localized route is never selected for browser-language visitors', async ({
   browser,
   baseURL,
@@ -888,8 +880,8 @@ test('download page recommends the detected OS path and preserves the npx altern
   await expect(page.locator('.download-section__command code')).toContainText('install.sh | sh');
 
   await tabs.filter({ hasText: 'npx' }).click();
-  await expect(page.locator('.download-section__command code')).toHaveText('npx -y universal-agent-plugins add context7');
-  await expect(page.getByText('npx -y universal-agent-plugins version')).toHaveCount(0);
+  await expect(page.locator('.download-section__command code')).toHaveText('npx -y universal-agent-plugins@latest add context7');
+  await expect(page.getByText('npx -y universal-agent-plugins@latest version')).toHaveCount(0);
 
   await context.close();
 });

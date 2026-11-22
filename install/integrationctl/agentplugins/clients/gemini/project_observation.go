@@ -45,18 +45,15 @@ func observeGeminiProjectComponents(ctx context.Context, env clients.Env, reques
 	if len(conditions) != 0 {
 		return false, nil
 	}
-	if len(skills) > 0 {
-		result, probeErr := runGeminiInventory(ctx, env, request, "skills", "list", "--all")
-		if probeErr != nil {
-			return false, probeErr
-		}
-		if !geminiSkillsListed(result.Stdout, request.Plan.NativeRegistryRoot, skills) || !geminiSkillMetadataMatches(ctx, env.NativeConfig, result.Stdout) {
-			return false, nil
-		}
-	}
 	expected, local := geminiExpectedMCPConnections(env, request)
 	if !local {
 		return false, nil
+	}
+	if pending, err := reviewGeminiMissingTrust(env, request, expected, outcome); pending || err != nil {
+		return false, err
+	}
+	if observed, err := observeGeminiProjectSkills(ctx, env, request, skills); err != nil || !observed {
+		return false, err
 	}
 	if request.VerifyOnly && len(expected) > 0 {
 		if err := VerifyGeminiNativeObjects(request.Plan.NativeRegistryRoot, request.Delivery.NativeObjects, false, env.NativeConfig); err != nil {
@@ -68,7 +65,18 @@ func observeGeminiProjectComponents(ctx context.Context, env clients.Env, reques
 	if observed, probeErr := observeGeminiProjectMCP(ctx, env, request, expected); probeErr != nil || !observed {
 		return false, probeErr
 	}
-	return VerifyGeminiNativeObjects(request.Plan.NativeRegistryRoot, request.Delivery.NativeObjects, false, env.NativeConfig) == nil, nil
+	return verifyGeminiProjectObservation(env.NativeConfig, request)
+}
+
+func observeGeminiProjectSkills(ctx context.Context, env clients.Env, request domain.ActivationRequest, skills []domain.ComponentDecision) (bool, error) {
+	if len(skills) == 0 {
+		return true, nil
+	}
+	result, err := runGeminiInventory(ctx, env, request, "skills", "list", "--all")
+	if err != nil {
+		return false, err
+	}
+	return geminiSkillsListed(result.Stdout, request.Plan.NativeRegistryRoot, skills) && geminiSkillMetadataMatches(ctx, env.NativeConfig, result.Stdout), nil
 }
 
 func runGeminiInventory(ctx context.Context, env clients.Env, request domain.ActivationRequest, args ...string) (legacyports.CommandResult, error) {
@@ -169,4 +177,14 @@ func geminiSkillMetadataMatches(ctx context.Context, kernel nativeconfig.Kernel,
 		}
 	}
 	return true
+}
+
+// A fresh native listing cannot override restrictions or a shadow alias created
+// while the probe ran. Recheck them before accepting the final owned-byte proof.
+func verifyGeminiProjectObservation(kernel nativeconfig.Kernel, request domain.ActivationRequest) (bool, error) {
+	conditions, err := geminiProjectConditions(kernel, request)
+	if err != nil || len(conditions) != 0 {
+		return false, err
+	}
+	return VerifyGeminiNativeObjects(request.Plan.NativeRegistryRoot, request.Delivery.NativeObjects, false, kernel) == nil, nil
 }

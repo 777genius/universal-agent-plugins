@@ -86,7 +86,8 @@ func (p *PreparedSkillsBatch) check(ctx context.Context) error {
 	if err := p.checkInputs(); err != nil {
 		return err
 	}
-	actions, detected, paths, err := prepareSkillsBindings(ctx, p.preview, p.request.requirements, p.request.lock, p.request.aliases, p.request.prepared, p.request.targets)
+	warnings := skillsInitialReviewWarnings(p.request.lock, p.request.aliases, p.request.targets)
+	actions, detected, paths, err := prepareSkillsBindings(ctx, p.preview, p.request.requirements, p.request.lock, p.request.aliases, p.request.prepared, p.request.targets, &warnings)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrSkillsPlanStale, err)
 	}
@@ -95,11 +96,11 @@ func (p *PreparedSkillsBatch) check(ctx context.Context) error {
 			return ErrSkillsPlanStale
 		}
 		old, current := p.request.detected[domain.ClientID(action.ClientID)], detected[domain.ClientID(action.ClientID)]
-		if old.ConfigRoot != current.ConfigRoot || old.ExecutablePath != current.ExecutablePath {
+		if old.ConfigRoot != current.ConfigRoot || old.ExecutablePath != current.ExecutablePath || !reflect.DeepEqual(old.Surfaces, current.Surfaces) {
 			return ErrSkillsPlanStale
 		}
 	}
-	if !reflect.DeepEqual(actions, p.request.prepared) {
+	if !reflect.DeepEqual(actions, p.request.prepared) || !reflect.DeepEqual(warnings, p.warnings) {
 		return ErrSkillsPlanStale
 	}
 	return nil
@@ -125,7 +126,7 @@ func (p *PreparedSkillsBatch) ApplyWithProgress(ctx context.Context, progress fu
 		return result, err
 	}
 	p.applied = true
-	adapter := &dependencyInstaller{app: p.app, opts: p.app.skillsOptions(), detected: p.request.detected, beforeApply: p.checkInputs}
+	adapter := &dependencyInstaller{app: p.app, opts: p.app.skillsOptions(), detected: p.request.detected, beforeApply: p.checkInputs, trustAliases: append([]string(nil), p.request.aliases...)}
 	adapter.onPrepare = func(action environment.PreparedBinding) {
 		emitSkillsProgress(progress, SkillsProgress{Alias: action.Alias, ClientID: action.ClientID, Action: string(action.Action), Phase: "preparing"})
 	}

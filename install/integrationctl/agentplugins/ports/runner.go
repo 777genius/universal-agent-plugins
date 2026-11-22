@@ -8,6 +8,12 @@ import (
 	legacyports "github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
+// Command exposes the existing process DTO without duplicating its definition.
+type Command = legacyports.Command
+
+// CommandResult preserves the existing runner result contract for adapters.
+type CommandResult = legacyports.CommandResult
+
 // CommandRunner executes one client command. Command and CommandResult stay in
 // install/integrationctl/ports: they are plain data with no behavior, and
 // duplicating them into domain would create a second source of truth and a
@@ -21,6 +27,15 @@ type CommandRunner interface {
 // observation is never based on descendant sampling.
 type TreeCommandRunner interface {
 	RunWithTreeExitGrace(context.Context, legacyports.Command, time.Duration) (legacyports.CommandResult, error)
+}
+
+// SurvivingCommandCensus is an opt-in capability for recovery after an earlier
+// invocation was killed before it reaped its commands. It lists live processes
+// of the current user, except this process and its ancestors, that such a
+// command could have left running. A runner whose containment ends every
+// command together with its owner reports none.
+type SurvivingCommandCensus interface {
+	SurvivingCommands(context.Context) ([]legacyports.LiveProcess, error)
 }
 
 // DuplexCommandRunner is an opt-in capability for protocols that must write to

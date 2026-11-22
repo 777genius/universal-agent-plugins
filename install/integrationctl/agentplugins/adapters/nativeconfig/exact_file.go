@@ -63,6 +63,13 @@ func (kernel Kernel) BeginExactFile(path string) (*ExactFile, error) {
 	return kernel.beginExactFile(path, false)
 }
 
+// BeginExactFileBounded uses the same exact writer lease and CAS as
+// BeginExactFile, but captures the original through a bounded no-follow read.
+// It refuses unknown backends instead of falling back to unbounded FileIO.
+func (kernel Kernel) BeginExactFileBounded(path string, limit int64) (*ExactFile, error) {
+	return kernel.beginExactFileWithLimit(path, false, &limit)
+}
+
 // BeginPlainExactFile retains the existing writer lock and ExactFile lifecycle.
 // Only the default Darwin arm64 OS backend can authorize changed mutation.
 // Unsupported metadata/platforms and custom IO still allow locked planning.
@@ -71,6 +78,15 @@ func (kernel Kernel) BeginPlainExactFile(path string) (*ExactFile, error) {
 }
 
 func (kernel Kernel) beginExactFile(path string, plain bool) (*ExactFile, error) {
+	return kernel.beginExactFileWithLimit(path, plain, nil)
+}
+
+func (kernel Kernel) beginExactFileWithLimit(path string, plain bool, limit *int64) (*ExactFile, error) {
+	if limit != nil {
+		if err := kernel.RequireBoundedRead(); err != nil {
+			return nil, err
+		}
+	}
 	if err := kernel.RequireFileIO(); err != nil {
 		return nil, err
 	}
@@ -92,6 +108,8 @@ func (kernel Kernel) beginExactFile(path string, plain bool) (*ExactFile, error)
 	var snapshot FileSnapshot
 	if plain {
 		guard, snapshot, err = kernel.capturePlainExactFile(path)
+	} else if limit != nil {
+		snapshot, err = kernel.ReadExactFileBounded(path, *limit)
 	} else {
 		snapshot, err = kernel.ReadExactFile(path)
 	}

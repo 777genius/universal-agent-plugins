@@ -9,7 +9,7 @@
         "brew": {
           "title": "Homebrew",
           "description": "واجهة سطر أوامر أصلية مكتوبة بلغة Go لنظامي macOS وLinux. لا يلزم وجود Node.js.",
-          "note": "موصى بها للتثبيت الدائم مع ترقيات Homebrew التلقائية."
+          "note": "موصى بها للتثبيت الدائم، مع إدارة الترقيات عبر Homebrew."
         },
         "npm": {
           "title": "npx · Node.js 22+",

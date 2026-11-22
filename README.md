@@ -1,22 +1,4 @@
-<img width="2172" height="724" alt="Universal Agent Plugins — 1,500+ plugins, supporting Agent Plugins 1.0 and the Agent Skills standard" src="assets/readme-banner.svg" />
-
-<p align="center">
-    <img src="landing/public/client-icons/openai.svg" width="32" height="32" alt="Codex and ChatGPT" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/cursor.svg" width="32" height="32" alt="Cursor" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/github-copilot.svg" width="32" height="32" alt="GitHub Copilot CLI" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/kiro.svg" width="32" height="32" alt="Kiro" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/claude.svg" width="32" height="32" alt="Claude Code" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/gemini.svg" width="32" height="32" alt="Gemini CLI" />&nbsp;&nbsp;
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="32" height="32" alt="OpenCode" /></picture>&nbsp;&nbsp;
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="32" height="32" alt="Cline" /></picture>&nbsp;&nbsp;
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="32" height="32" alt="Windsurf" /></picture>&nbsp;&nbsp;
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="32" height="32" alt="Grok Build" /></picture>&nbsp;&nbsp;
-    <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="32" height="32" alt="Kimi Code" /></picture>&nbsp;&nbsp;
-    <img src="landing/public/client-icons/qoder.svg" width="32" height="32" alt="Qoder" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/hermes.webp" width="32" height="32" alt="Hermes Agent" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/antigravity.svg" width="32" height="32" alt="Google Antigravity" />&nbsp;&nbsp;
-    <img src="landing/public/client-icons/pi.svg" width="32" height="32" alt="Pi" />
-</p>
+<img width="2172" height="948" alt="Universal Agent Plugins — 1,500+ plugins, supporting Codex, ChatGPT, Cursor, Copilot, Kiro, Claude, Gemini, OpenCode, Cline, Windsurf, Grok, Kimi, Qoder, Hermes, Antigravity and Pi" src="assets/readme-banner.svg" />
 
 [![Required](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/777genius/universal-agent-plugins/actions/workflows/ci.yml)
 [![Codecov](https://codecov.io/gh/777genius/universal-agent-plugins/graph/badge.svg)](https://codecov.io/gh/777genius/universal-agent-plugins)
@@ -61,6 +43,8 @@ setup on another computer or with your team.
 - [Build plugins](#build-plugins)
 - [Contributing](#contributing)
 - [License](#license)
+
+**Build plugins:** [authoring guide](website/source/en/build/index.md) · [package layout](website/source/en/build/layout.md) · [validate package](website/source/en/build/checks.md). Source-built `agentplugins author` supports scaffolding and diagnostics, but **native CLI 0.1.110 does not ship it yet**. Standard-first bundle export and marketplace publication are not part of the current `author` command.
 
 ## Use plugins
 
@@ -145,7 +129,9 @@ For AI-agent / headless installation, see the [agent-first CLI guide](docs/AGENT
 | Multiple agents | `add --target codex,claude` with separate outcomes and any remaining activation steps. |
 | Standalone Skills | `skills add` with a browser picker or explicit `--skill` selections; see [Skills installation](https://universal-agent-plugins.com/docs/en/use/install.html#install-agent-skills). |
 | Sources outside the registry | Reviewed local package directories, Git/SSH sources and complete ZIP/TAR archives; see [source formats](docs/DIRECT_PACKAGE_SOURCES.md). |
-| Team/project reproducibility | Commit `uap.toml` and `uap.lock`, then run `install --locked --scope project`. |
+| Team/project reproducibility | Commit `uap.toml` and `uap.lock`, then run `install --locked --scope project`; see [dependency environments](docs/UAP_DEPENDENCIES.md). |
+| Package creation and checks | [Authoring guide](website/source/en/build/index.md) for source-build templates, validation and compatibility checks (not in 0.1.110 native CLI). |
+| Development-only roots | `[dev-dependencies]` in `uap.toml` with explicit targets, omitted from consumers; requires a release containing this feature. |
 | Moving a user setup | `deps export` and `deps import --install`; no credentials or live data are exported. |
 | Maintenance | `doctor`, `outdated`, `update --dry-run`, `repair --dry-run`, explicit remove and scope flags. |
 | Application integration | [Go Installer](https://universal-agent-plugins.com/docs/en/sdk/go-installer.html) or [TypeScript Management SDK](https://universal-agent-plugins.com/docs/en/sdk/typescript-management.html). |
@@ -282,17 +268,17 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 | <img src="landing/public/client-icons/claude.svg" width="24" height="24" alt="" align="middle"> **Claude Code** | Plugins, Skills, MCP | Skills, MCP | Automatic | Trust the workspace and reload Claude Code if prompted. |
 | <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **Codex CLI** | Skills, MCP | Skills, MCP | Automatic | Open a new session; approve project MCP access if prompted. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/opencode-dark.svg"><img src="landing/public/client-icons/opencode.svg" width="24" height="24" alt="" align="middle"></picture> **OpenCode** | Skills, MCP | Skills, MCP | Automatic | Start a new session and review effective project settings. |
-| <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> **Cursor** | Plugins, Skills, MCP | Skills, MCP | Automatic | Reload Cursor; enable plugins or MCP servers if requested. |
-| <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> **GitHub Copilot CLI** | Plugins, Skills, MCP | Skills, MCP | Automatic | Restart Copilot CLI if requested. |
+| <img src="landing/public/client-icons/cursor.svg" width="24" height="24" alt="" align="middle"> **Cursor** | Plugins, Skills, MCP | Skills, MCP | Prepared | Reload Cursor; enable plugins or MCP servers if requested. |
+| <img src="landing/public/client-icons/github-copilot.svg" width="24" height="24" alt="" align="middle"> **GitHub Copilot CLI** | Plugins, Skills, MCP | Plugins, Skills, MCP (prepared) | Automatic | Restart Copilot CLI if requested. |
 | <img src="landing/public/client-icons/gemini.svg" width="24" height="24" alt="" align="middle"> **Gemini CLI** | Skills, MCP | Skills, MCP | Automatic | Reload Gemini CLI and approve tool access if prompted. |
 | <img src="landing/public/client-icons/qoder.svg" width="24" height="24" alt="" align="middle"> **Qoder** | Plugins, Skills, MCP, hooks | Skills, MCP | Automatic | Restart Qoder and review MCP permissions. |
 | <img src="landing/public/client-icons/pi.svg" width="24" height="24" alt="" align="middle"> **Pi** | Extensions, Skills, MCP | Extensions, Skills, MCP | Automatic | Trust the project and reload Pi resources. |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> **Windsurf / Devin** | Skills, MCP | Skills, MCP | Guided | Open or restart Devin in the selected project; review access. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/windsurf-dark.svg"><img src="landing/public/client-icons/windsurf.svg" width="24" height="24" alt="" align="middle"></picture> **Windsurf / Devin** | Skills, MCP | Skills, MCP | Automatic | Open or restart Devin in the selected project; review access. |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/kimi-dark.svg"><img src="landing/public/client-icons/kimi.svg" width="24" height="24" alt="" align="middle"></picture> **Kimi Code** | Skills, MCP | Skills, MCP | Automatic | Run /reload or /new and review MCP permissions. |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> **Cline** | Skills, MCP | Skills, MCP | Guided | Select the project MCP settings path and reload Cline. |
-| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> **Kiro** | Skills, MCP | Skills, MCP | Guided | Sign in, approve access, and restart Kiro if prompted. |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> **Grok Build** | Skills, MCP | Skills, MCP (prepared) | Guided | Open the selected project in Grok; enable and trust the plugin, reload, then verify Skills and MCP. |
-| <img src="landing/public/client-icons/hermes.webp" width="24" height="24" alt="" align="middle"> **Hermes Agent** | Skills, MCP | Skills only | Guided | Restart Hermes, trust the selected Git project, and verify Skills and User MCP; Project MCP is unsupported. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/cline-dark.svg"><img src="landing/public/client-icons/cline.svg" width="24" height="24" alt="" align="middle"></picture> **Cline** | Skills, MCP | Skills, MCP (prepared) | Automatic | Select the project MCP settings path and reload Cline. |
+| <img src="landing/public/client-icons/kiro.svg" width="24" height="24" alt="" align="middle"> **Kiro** | Skills, MCP | Skills, MCP | Guided | The CLI configures supported Skills and MCP automatically; sign in, approve access, and restart if prompted. |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="assets/client-icons/grok-dark.svg"><img src="landing/public/client-icons/grok.svg" width="24" height="24" alt="" align="middle"></picture> **Grok Build** | Skills, MCP | Skills, MCP (prepared) | Automatic | Open the selected project in Grok, review trust, and follow any remaining enablement or reload steps; verify Skills and MCP. |
+| <img src="landing/public/client-icons/hermes.webp" width="24" height="24" alt="" align="middle"> **Hermes Agent** | Skills, MCP | Skills, MCP (prepared) | Automatic | Restart Hermes and trust the project; Project MCP requires a verified standalone Hermes bundle and an explicitly confirmed UAP project session. |
 | <img src="landing/public/client-icons/antigravity.svg" width="24" height="24" alt="" align="middle"> **Google Antigravity** | Plugins, Skills, MCP | Plugins, Skills, MCP | Prepared | Open or reload Antigravity; review trust and verify the prepared plugin is discovered and enabled in the selected scope. |
 | <img src="landing/public/client-icons/openai.svg" width="24" height="24" alt="" align="middle"> **ChatGPT** | Desktop local plugins; Web connected apps | Not supported | Guided | Desktop: local install via Codex CLI; Web: connect or install in ChatGPT. |
 
@@ -300,10 +286,10 @@ workspace. Agents may still ask you to trust the project, sign in, or restart.
 
 **Setup terms:** Automatic = UAP installs supported components; Guided = follow
 client prompts; Prepared = files are ready but need activation; Manual = complete
-setup in the app. UAP never signs you in or grants workspace trust. This matrix
-describes the released installer capabilities of [native CLI 0.1.108](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.108). Hermes and Antigravity
-are included; signed Directory packages still need an eligible target. Native
-release qualification does not prove agent activation or npm publication.
+setup in the app. After confirmation, UAP completes supported native setup and
+reports remaining trust, sign-in or reload steps. This matrix
+describes the released installer capabilities of [native CLI 0.1.115](https://github.com/777genius/universal-agent-plugins/releases/tag/agentplugins-v0.1.115)
+for every agent above; signed Directory packages still need an eligible target. Installation does not prove native runtime activation or vendor authentication.
 
 See the [compatibility reference](https://universal-agent-plugins.com/docs/en/reference/client-compatibility.html)
 for tested versions, platforms, and setup steps.
@@ -319,14 +305,28 @@ activation and native E2E limits, see the
 [project compatibility matrix](docs/PROJECT_CLIENT_SUPPORT.md).
 
 Hermes supports User Skills and stdio/Streamable HTTP MCP, plus Project Skills
-at the selected Git root. Project MCP is unsupported. Antigravity prepares owned
+at the selected Git root. Project MCP is prepared only with a verified standalone
+Hermes host bundle and an explicitly confirmed UAP project session; ordinary
+startup does not select it. A Hermes host installed from source supports User MCP
+or Project Skills only; this does not restrict plugin Git sources.
+Antigravity prepares owned
 User/Project native plugins with Skills and supported MCP; verify discovery,
 trust and enablement in the IDE. Preparation does not prove IDE activation.
 For both clients, ordinary portable commands project to Skills; explicit-only
 commands are withheld because these hosts cannot enforce explicit invocation.
 
 Grok Build, Kimi Code, and Qoder support stdio and Streamable HTTP MCP in user
-scope. Qoder also preserves native hooks, commands, and bundled binaries.
+scope. Grok Project plugin enablement is opt-in on Linux with Grok 1.0.70 and
+preserves an existing disabled preference. Devin User and Project delivery
+require 3000.11.205 or 3000.12.57. For GitHub Copilot CLI stable 1.0.81 or later,
+or prerelease 1.0.81-N with N of 8 or higher, UAP registers a compatible Agent
+Plugins 1.0 package as a native project plugin in `.github/copilot/settings.local.json`.
+It keeps loose project Skills and MCP for new installs on an older or unobserved
+version, packages with commands, an app, invalid components, bundled stdio executables or
+`PLUGIN_DATA` launchers, and existing loose installations. UAP reports the
+registration as Prepared; start a new Copilot CLI session to load it. Cline Project
+MCP requires an explicitly selected managed session/settings path. Qoder also
+preserves native hooks, commands, and bundled binaries.
 See [portable commands](docs/UAP_COMMANDS.md) for command delivery and limits.
 
 For guided Context7 setup in ChatGPT and Kiro:

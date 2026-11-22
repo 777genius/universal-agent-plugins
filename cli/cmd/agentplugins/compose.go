@@ -135,7 +135,7 @@ func newScopedAgentpluginsCLIApp(home, cacheRoot, projectRoot string, directoryC
 		OperationsDir: filepath.Join(dataRoot, "operations-v2"), PluginDataBase: filepath.Join(dataRoot, "plugin-data"),
 		ManagedRoot: filepath.Join(dataRoot, "managed"), TempRoot: filepath.Join(dataRoot, "installer-tmp"),
 		HelperExecutable: helperExecutable, HelperVersion: version, Registry: clientRegistry, Runner: runner,
-		EnableNativeObserver: true, LookupExecutable: exec.LookPath,
+		EnableNativeObserver: true, LookupExecutable: exec.LookPath, NativeHTTP: nativeLoopbackTransport(),
 	})
 	if err != nil {
 		return agentpluginscli.App{}, err
@@ -177,7 +177,7 @@ func newAgentpluginsLifecycle(home, dataRoot string, v2Store statev2.Store, path
 	return usecase.Service{
 		ClientPreparation: providers.NewOpenCodeClientPreparation(clientRegistry),
 		StateStore:        v2Store, Paths: paths, Planner: planner, Targets: planner, Stager: stager,
-		Activator: providers.Activator{ProjectRoots: projectRoots, UserHome: home, NativeTransitions: transitions, OpenCodeTransitions: legacyTransitions, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel, LookupExecutable: exec.LookPath, Concurrent: true},
+		Activator: providers.Activator{ProjectRoots: projectRoots, UserHome: home, NativeTransitions: transitions, OpenCodeTransitions: legacyTransitions, Runner: runner, NativeHTTP: nativeLoopbackTransport(), Registry: clientRegistry, NativeConfig: &nativeKernel, LookupExecutable: exec.LookPath, Concurrent: true},
 		Lock:      mutationLock, Kernel: directoryKernel,
 		NativeObserver:     providers.NativeIdentityObserver{ProjectRoots: projectRoots, Stager: stager, Runner: runner, Registry: clientRegistry, NativeConfig: &nativeKernel},
 		NamespacePreflight: providers.OpenCodeNamespacePreflight{Kernel: nativeKernel},
@@ -234,7 +234,7 @@ func assembleAgentpluginsApp(home, dataRoot, cacheRoot string, v2Store statev2.S
 		},
 		SecurityEvaluatorForDryRun: func(root string) ports.PackageSecurityEvaluator {
 			return securityscan.Evaluator{
-				Scanner: securityscan.ReleaseScanner{Root: filepath.Join(root, "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
+				Scanner: securityscan.ReleaseScanner{Root: filepath.Join(root, "lintai"), ReadOnlyRoot: filepath.Join(cacheRoot, "security", "lintai"), HTTPClient: lintaiReleaseHTTPClient()},
 				Cache:   nil, Requirement: securityscan.DefaultRequirement(),
 			}
 		},
