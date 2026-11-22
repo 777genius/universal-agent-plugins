@@ -614,6 +614,183 @@ class RefusalTests(unittest.TestCase):
             audit.checked_dependency_refusal(output, self.selected)
 
 
+class RuntimeLineageDiagnosticTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.selected = {**case(), "expected": "dependency-refusal", "name": "marketing-kit",
+                         "distribution": "777genius/marketing-kit"}
+        self.path = self.root / "project/.uap/state-v2.json"
+        self.path.parent.mkdir(parents=True)
+
+    def make_state(self):
+        source = self.selected["source"]
+        records = [{"origin_mode": "direct", "declared_name": "marketing-kit",
+                    "source": {"repository": source["repository"], "package_subpath": source["path"],
+                               "resolved_revision": source["revision"], "private": "secret-source"}}]
+        for name, distribution in (("notion", "777genius/notion"), ("hubspot-crm", "777genius/hubspot-crm"),
+                                   ("playwright", "777genius/playwright-bridge")):
+            records.append({"origin_mode": "directory", "declared_name": name,
+                            "directory": {"distribution_id": distribution, "snapshot_schema": 1,
+                                          "snapshot_sequence": 49, "snapshot_digest": "sha256:" + "a" * 64,
+                                          "private": "/secret/private/path"}})
+        return {"schema_version": 5, "installations": records}
+
+    def write_state(self, state):
+        self.path.write_text(json.dumps(state), encoding="utf-8")
+
+    def observe(self):
+        return audit.declared_runtime_lineage(self.root, self.selected)
+
+    def test_only_unverified_allowlisted_facts_are_returned(self):
+        self.write_state(self.make_state())
+        result = self.observe()
+        self.assertEqual(result["status"], "unresolved")
+        self.assertEqual(result["reason"], "unverified_local_state")
+        self.assertTrue(result["declared_only"])
+        self.assertEqual(len(result["records"]), 4)
+        self.assertTrue(all(record["expected_identity_match"] for record in result["records"]))
+        self.assertEqual(result["records"][1]["snapshot_sequence"], 49)
+        self.assertEqual(result["records"][1]["snapshot_digest"], "sha256:" + "a" * 64)
+        self.assertNotIn("secret", json.dumps(result))
+        self.assertNotIn(str(self.root), json.dumps(result))
+        self.assertNotIn(self.selected["source"]["repository"], json.dumps(result))
+
+    def test_missing_malformed_duplicate_and_oversize_are_unresolved(self):
+        self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
+        for body in ('{', '{"schema_version":5,"installations":[],"installations":[]}',
+                     '{"schema_version":5,"installations":[{"directory":{"x":1,"x":2}}]}',
+                     '{"schema_version":5,"installations":[],"ignored":NaN}',
+                     '{"schema_version":5,"installations":[],"ignored":{"nested":Infinity}}',
+                     '{"schema_version":5,"installations":[],"ignored":[-Infinity]}',
+                     '{"schema_version":5,"installations":' + ' ' * (1 << 20) + '[]}'):
+            with self.subTest(prefix=body[:50]):
+                self.path.write_text(body, encoding="utf-8")
+                self.assertEqual(self.observe(), {"status": "unresolved", "reason": "state_unavailable_or_invalid"})
+
+    def test_symlink_and_hardlink_state_are_unresolved(self):
+        outside = self.root / "outside-state.json"
+        outside.write_text(json.dumps(self.make_state()), encoding="utf-8")
+        try:
+            self.path.symlink_to(outside)
+        except OSError as error:
+            self.skipTest(str(error))
+        self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
+        self.path.unlink()
+        try:
+            os.link(outside, self.path)
+        except OSError as error:
+            self.skipTest(str(error))
+        self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
+
+    @unittest.skipUnless(os.open in os.supports_dir_fd and hasattr(os, "O_DIRECTORY")
+                         and hasattr(os, "O_NOFOLLOW"), "held directory descriptors unavailable")
+    def test_swapped_ancestor_is_not_read_or_disclosed(self):
+        self.write_state(self.make_state())
+        with tempfile.TemporaryDirectory() as foreign:
+            foreign_dir = Path(foreign)
+            other = self.make_state()
+            other["installations"][1]["directory"]["snapshot_sequence"] = 987654
+            (foreign_dir / "state-v2.json").write_text(json.dumps(other), encoding="utf-8")
+            original_open = os.open
+            swapped = []
+            def intercepted(name, *args, **kwargs):
+                if name == ".uap" and kwargs.get("dir_fd") is not None and not swapped:
+                    self.path.parent.rename(self.root / "project/original-uap")
+                    self.path.parent.symlink_to(foreign_dir, target_is_directory=True)
+                    swapped.append(True)
+                return original_open(name, *args, **kwargs)
+            with mock.patch.object(audit.live.os, "open", side_effect=intercepted) as hooked:
+                with mock.patch.object(audit.live.os, "supports_dir_fd", {hooked}):
+                    result = self.observe()
+            self.assertTrue(swapped)
+            self.assertEqual(result, {"status": "unresolved", "reason": "state_unavailable_or_invalid"})
+            self.assertNotIn("987654", json.dumps(result))
+            self.assertNotIn(foreign, json.dumps(result))
+
+    def test_bounded_unknown_and_mismatched_identities_are_redacted(self):
+        value = self.make_state()
+        value["installations"][0]["source"]["repository"] = "secret-foreign"
+        value["installations"][1]["directory"]["distribution_id"] = "/secret/foreign"
+        value["installations"] += [copy.deepcopy(value["installations"][2]) for _ in range(9)]
+        self.write_state(value)
+        result = self.observe()
+        self.assertEqual(len(result["records"]), 8)
+        self.assertEqual(result["total_installations"], 13)
+        self.assertTrue(result["truncated"])
+        self.assertFalse(result["records"][0]["expected_identity_match"])
+        self.assertEqual(result["records"][1]["distribution_id"], "<other>")
+        self.assertFalse(result["records"][1]["expected_identity_match"])
+        self.assertNotIn("secret", json.dumps(result))
+
+    def test_invalid_snapshot_fields_are_unresolved(self):
+        for field, replacement in (("snapshot_digest", "sha256:secret"), ("snapshot_sequence", True),
+                                   ("snapshot_sequence", 1 << 64), ("snapshot_schema", 7)):
+            value = self.make_state()
+            value["installations"][1]["directory"][field] = replacement
+            self.write_state(value)
+            with self.subTest(field=field, replacement=replacement):
+                self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
+
+    def test_state_changed_after_held_read_is_unresolved(self):
+        self.write_state(self.make_state())
+        original_read = audit.live.copilot_settings_read
+        def changed(path, root):
+            result = original_read(path, root)
+            path.write_text('{"schema_version":5,"installations":[]}', encoding="utf-8")
+            return result
+        with mock.patch.object(audit.live, "copilot_settings_read", side_effect=changed):
+            self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
+
+    def test_user_scope_reads_only_the_case_owned_user_state(self):
+        self.write_state(self.make_state())
+        user = {**self.selected, "scope": "user"}
+        self.assertEqual(audit.declared_runtime_lineage(self.root, user)["reason"],
+                         "state_unavailable_or_invalid")
+        path = self.root / "uap-data/state-v2.json"
+        path.parent.mkdir()
+        path.write_text(json.dumps(self.make_state()), encoding="utf-8")
+        self.assertEqual(audit.declared_runtime_lineage(self.root, user)["reason"], "unverified_local_state")
+
+    def test_successful_add_includes_unresolved_lineage_and_stays_failed(self):
+        root = self.root / "case"
+        state = self.make_state()
+        def fake_add(*args, **kwargs):
+            path = root / "project/.uap/state-v2.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(state), encoding="utf-8")
+            return {"exit_code": 0, "timeout": False, "_json": {"result": "success"},
+                    "stdout_tail": "", "stderr_tail": ""}
+        with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+             mock.patch.object(audit.live, "call", side_effect=fake_add):
+            receipt = audit.run_case(Path("/test-only-cli"), self.selected, root, None)
+        self.assertEqual(receipt["status"], "failed")
+        self.assertIn("inconclusive", receipt["reason"])
+        self.assertEqual(receipt["declared_runtime_lineage"]["status"], "unresolved")
+        self.assertEqual(len(receipt["declared_runtime_lineage"]["records"]), 4)
+        self.assertFalse(receipt["runtime_qualified"])
+
+    def test_scope_mismatch_reason_is_not_masked_by_lineage(self):
+        root = self.root / "case"
+        before = {"directories": {"metadata:0:foreign": (1, 2, 3, 4)}, "files": {}}
+        after = {"directories": {"metadata:0:foreign": (1, 2, 3, 5)}, "files": {}}
+        def fake_add(*args, **kwargs):
+            path = root / "project/.uap/state-v2.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(self.make_state()), encoding="utf-8")
+            return {"exit_code": 0, "timeout": False, "_json": {"result": "success"},
+                    "stdout_tail": "", "stderr_tail": ""}
+        with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+             mock.patch.object(audit.live, "call", side_effect=fake_add), \
+             mock.patch.object(audit, "protected_scope_snapshot", side_effect=[before, after]):
+            receipt = audit.run_case(Path("/test-only-cli"), self.selected, root, None)
+        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["reason"], "add changed the other scope")
+        self.assertIn("protected_scope_changes", receipt)
+        self.assertEqual(receipt["declared_runtime_lineage"]["status"], "unresolved")
+
+
 class ProtectedScopeDiagnosticTests(unittest.TestCase):
     def test_bounded_paths_redact_values_and_distinguish_metadata(self):
         with tempfile.TemporaryDirectory() as temporary:

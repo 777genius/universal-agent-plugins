@@ -256,6 +256,70 @@ def read_saved_record(path):
         os.close(fd)
 
 
+def declared_runtime_lineage(root, case):
+    """Bounded, untrusted state hints; this never establishes signed provenance."""
+    unresolved = {"status": "unresolved", "reason": "state_unavailable_or_invalid"}
+    def reject_constant(_):
+        raise ValueError("non-finite JSON number")
+    try:
+        require(case.get("scope") in ("user", "project"), "unknown scope")
+        path = root / ("uap-data" if case["scope"] == "user" else "project/.uap") / "state-v2.json"
+        before = path.lstat()
+        # This existing reader holds every POSIX ancestor by no-follow dirfd;
+        # on Windows it verifies the opened handle's final path. Unsupported
+        # platforms fail closed rather than falling back to pathname reads.
+        body, status = live.copilot_settings_read(path, root)
+        require(status is None and isinstance(body, str), "state unavailable")
+        after = path.lstat()
+        require(os.path.samestat(before, after) and before.st_mode == after.st_mode
+                and before.st_nlink == after.st_nlink == 1 and before.st_size == after.st_size
+                and before.st_mtime_ns == after.st_mtime_ns and before.st_ctime_ns == after.st_ctime_ns,
+                "state changed while observed")
+        state = json.loads(body, object_pairs_hook=live._unique_json_object, parse_constant=reject_constant)
+        require(isinstance(state, dict) and type(state.get("schema_version")) is int
+                and state["schema_version"] == 5 and isinstance(state.get("installations"), list), "invalid state")
+        records = state["installations"]
+        children = {"777genius/notion": "notion", "777genius/hubspot-crm": "hubspot-crm",
+                    "777genius/playwright-bridge": "playwright"}
+        entries = []
+        for record in records[:8]:
+            require(isinstance(record, dict), "invalid installation")
+            origin = record.get("origin_mode")
+            require(origin in ("direct", "directory"), "unknown origin")
+            directory = record.get("directory")
+            if origin == "direct":
+                require(directory is None and isinstance(record.get("source"), dict), "invalid direct source")
+                source, expected = record["source"], case["source"]
+                match = (record.get("declared_name") == "marketing-kit"
+                         and source.get("repository") == expected["repository"]
+                         and source.get("package_subpath") == expected["path"]
+                         and source.get("resolved_revision") == expected["revision"])
+                entries.append({"origin_mode": "direct", "distribution_id": None,
+                                "snapshot_schema": None, "snapshot_sequence": None,
+                                "snapshot_digest": None, "expected_identity_match": match,
+                                "identity_basis": "direct_source_coordinates"})
+                continue
+            require(isinstance(directory, dict), "missing directory origin")
+            distribution = directory.get("distribution_id")
+            schema, sequence, snapshot_digest = (directory.get("snapshot_schema"),
+                directory.get("snapshot_sequence"), directory.get("snapshot_digest"))
+            require(isinstance(distribution, str) and type(schema) is int and schema in (1, 2)
+                    and type(sequence) is int and 0 < sequence < 1 << 64
+                    and isinstance(snapshot_digest, str)
+                    and re.fullmatch(r"sha256:[0-9a-f]{64}", snapshot_digest), "invalid snapshot identity")
+            known = distribution if distribution in {*children, "777genius/marketing-kit"} else "<other>"
+            entries.append({"origin_mode": "directory", "distribution_id": known,
+                            "snapshot_schema": schema, "snapshot_sequence": sequence,
+                            "snapshot_digest": snapshot_digest,
+                            "expected_identity_match": distribution in children
+                                and record.get("declared_name") == children[distribution],
+                            "identity_basis": "distribution_id_and_declared_name"})
+        return {"status": "unresolved", "reason": "unverified_local_state", "declared_only": True,
+                "total_installations": len(records), "truncated": len(records) > 8, "records": entries}
+    except Exception:
+        return unresolved
+
+
 def protected_saved_record(path):
     body, before = read_saved_record(path)
     if before is None:
@@ -659,6 +723,11 @@ def run_case(binary, case, root, executable):
                    "activation_qualified": False, "runtime_qualified": False}
         if scope_changes is not None:
             outcome["protected_scope_changes"] = scope_changes
+        if (case.get("expected") == "dependency-refusal" and case.get("name") == "marketing-kit"
+                and trace and trace[0].get("operation") == "add"
+                and type(trace[0].get("exit_code")) is int and trace[0]["exit_code"] == 0
+                and trace[0].get("timeout") is False):
+            outcome["declared_runtime_lineage"] = declared_runtime_lineage(root, case)
         return outcome
 
 
