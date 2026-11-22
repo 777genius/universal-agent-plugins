@@ -13,7 +13,7 @@ import stat
 import subprocess
 import tempfile
 
-FIXTURE_SHA256 = "7399eaed15b3eb0981a6be12082dd8825529e896a59ea125b9500a666c21112e"
+FIXTURE_SHA256 = "e22cb3b5b23e74a9e03b55e24a684ab93038f89cf18e28fd5d9755175754c0d9"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
 
 def temp_root_authority(path):

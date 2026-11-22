@@ -79,7 +79,19 @@ test('Hermes logo is a valid WebP and README uses it consistently', () => {
   const bytes = readFileSync(new URL(`../public/client-icons/${icon}`, import.meta.url));
   assert.equal(bytes.toString('ascii', 0, 4), 'RIFF');
   assert.equal(bytes.toString('ascii', 8, 12), 'WEBP');
-  assert.equal(readme.split('landing/public/client-icons/hermes.webp').length - 1, 2);
+  const table = readme
+    .split('<!-- AGENT_SUPPORT_MATRIX_START -->')[1]!
+    .split('<!-- AGENT_SUPPORT_MATRIX_END -->')[0]!;
+  assert.equal(table.split('landing/public/client-icons/hermes.webp').length - 1, 1);
+  // The separate logo strip moved into the unified banner; keep both uses checked.
+  assert.match(readme, /<img\b[^>]*src="assets\/readme-banner\.svg"[^>]*>/);
+  const banner = readFileSync(new URL('../../assets/readme-banner.svg', import.meta.url), 'utf8');
+  const bannerImages = banner.match(/<image\b[^>]*>/g) ?? [];
+  const embeddedHermes = `href="data:image/webp;base64,${bytes.toString('base64')}"`;
+  assert.ok(
+    bannerImages.some((tag) => tag.includes(embeddedHermes)),
+    'The README banner must embed the canonical Hermes WebP',
+  );
   assert.ok(!readme.includes('hermes.svg'));
   assert.ok(!readme.includes('The static website initially shows'));
 });

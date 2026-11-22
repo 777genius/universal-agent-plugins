@@ -20,7 +20,7 @@ from test_live_install_audit_env import load_audit
 class GrokProfileWiringTests(unittest.TestCase):
     def lifecycle(self, *, pretrusted=True, ready=True, native_verified=True,
                   mutate_repeat=False, remint=False, duplicate_public=False, nonfinite_public=None,
-                  real_verifier=False):
+                  real_verifier=False, restore_repeat_skill=False):
         audit = load_audit()
         body = b"---\nname: source-skill\ndescription: unit fixture\n---\nInert bytes.\n"
         item = {"repo": "example/skills", "folder": "source-skill", "name": "source-skill",
@@ -122,6 +122,8 @@ class GrokProfileWiringTests(unittest.TestCase):
                             "tree_digest": revision["tree_digest"], "manifest_digest": revision["manifest_digest"]}]}))
                     elif mutate_repeat:
                         (bundle / "unexpected.txt").write_text("repeat mutation")
+                    elif restore_repeat_skill:
+                        skill.write_bytes(body + b"repeat add changed the selected Skill\n")
                     state["installed"] = True
                     value = {"schema_version": 1, "command": "skills add", "result": "success", "scope": "project",
                              "status": "succeeded", "readiness": "ready" if ready else "needs_action",
@@ -142,6 +144,8 @@ class GrokProfileWiringTests(unittest.TestCase):
                     state["installed"] = False
                     value = {"result": "success"}
                 elif argv[1] == "list":
+                    if state["installed"] and state["adds"] == 2 and restore_repeat_skill:
+                        skill.write_bytes(body)
                     entries = [node] if state["installed"] else []
                     if not state["installed"] and remint:
                         entries = [{**node, "name": "renamed", "installation_id": "reminted"}]
@@ -215,6 +219,15 @@ class GrokProfileWiringTests(unittest.TestCase):
         self.assertEqual(events, ["git"])
         runtime.finish.assert_not_called()
         self.assertNotIn("grok_pretrusted_native_proof", result)
+
+    def test_cold_repeat_list_cannot_hide_a_repeat_add_skill_rewrite(self):
+        result, events, runtime = self.lifecycle(pretrusted=False, ready=False, restore_repeat_skill=True)
+        self.assertFalse(result["repeat_project_unchanged"])
+        self.assertFalse(result["repeat_verified"])
+        self.assertEqual(result["status"], "repeat-add-unqualified")
+        self.assertTrue(result["removal_verified"])
+        self.assertEqual(events, ["git"])
+        runtime.finish.assert_not_called()
 
     def test_native_ready_and_cleanup_are_all_required(self):
         for change in ({"ready": False}, {"native_verified": False}, {"native_verified": None},

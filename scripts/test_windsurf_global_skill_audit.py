@@ -1,5 +1,6 @@
 """Hermetic unit/inert-transport regressions; these are never native evidence."""
 import copy
+import errno
 import hashlib
 import importlib.util
 import json
@@ -230,7 +231,10 @@ class InertPublicAndNative:
             if self.mode == "remove-source-cache-deleted":
                 shutil.rmtree(self.source_cache)
             if self.mode != "native-residue": shutil.rmtree(self.native)
-            shutil.rmtree(self.managed)
+            if self.mode == "remove-managed-renamed":
+                self.managed.rename(self.managed.with_name(self.managed.name + "-retained"))
+            else:
+                shutil.rmtree(self.managed)
             removed_state = copy.deepcopy(self.state)
             removed_state["installations"][0].update(clients={}, data_retained=True)
             atomic(self.data / "state-v2.json", packed(removed_state))
@@ -314,7 +318,7 @@ class WindsurfGlobalSkillAuditTests(unittest.TestCase):
             with mock.patch.dict(cls.__init__.__globals__, {"BINARY_SHA": hashed(transport.binary.read_bytes()),
                     "CASES": {**proof.CASES, ITEM: transport.expected_pin}}), \
                     mock.patch.dict(audit.WINDSURF_GLOBAL_AUDIT, {"WindsurfGlobalSkillAudit": real_factory}), \
-                    mock.patch.dict(audit.AGENT_BINARIES, {"windsurf": str(transport.binary)}), \
+                    mock.patch.dict(audit.AGENT_BINARIES, {"devin": str(transport.binary)}, clear=True), \
                     mock.patch.object(audit, "call", side_effect=transport.call), \
                     mock.patch.dict(audit.NATIVE_RESEARCH, {"run_probe": transport.run_probe}):
                 result = audit.do_case("/inert/uap", "windsurf", "plugin", ITEM, 26, root / "cases", {ITEM: "elements-of-style"},
@@ -356,6 +360,8 @@ class WindsurfGlobalSkillAuditTests(unittest.TestCase):
             with self.subTest(mode=mode), self.assertRaises(ValueError) as caught:
                 self.run_case(mode)
             self.assertFalse(caught.exception.audit_evidence["native_discovery_verified"])
+            if mode == "coherent-subset":
+                self.assertIn("complete immutable source set", str(caught.exception))
         # The reviewed former counterexample coherently substituted a new Skill
         # in all projected receipts while leaving production source pins intact.
         # Its complete set is now closed independently even under an inert pin.
@@ -394,6 +400,67 @@ class WindsurfGlobalSkillAuditTests(unittest.TestCase):
                      "repeat-source-cache-replacement", "repeat-source-cache-bytes", "remove-source-cache-deleted"):
             with self.subTest(mode=mode), self.assertRaises(ValueError):
                 self.run_case(mode)
+
+    def test_renamed_original_managed_package_cannot_qualify_removal(self):
+        with self.assertRaisesRegex(ValueError, "original managed package remains linked") as caught:
+            self.run_case("remove-managed-renamed")
+        self.assertFalse(caught.exception.audit_evidence["native_discovery_verified"])
+        self.assertNotIn(("native", "remove"), self.transport.events)
+        self.assertTrue(self.transport.verifier.closed)
+
+    def test_later_custody_refusal_clears_prior_finished_evidence(self):
+        cls = audit.WINDSURF_GLOBAL_AUDIT["WindsurfGlobalSkillAudit"]
+        finish, guard = cls.finish, cls.guard
+        for final_check in (finish, guard):
+            with self.subTest(final_check=final_check.__name__):
+                def finish_then_replace(verifier):
+                    self.assertTrue(finish(verifier))
+                    self.assertTrue(verifier.evidence()["native_discovery_verified"])
+                    foreign = verifier.home / "foreign-untouched.txt"
+                    atomic(foreign, foreign.read_bytes())
+                    return final_check(verifier)
+                # Both checks are real; replace only the fixture between them.
+                with mock.patch.object(cls, "finish", finish_then_replace), \
+                        self.assertRaises(ValueError) as caught:
+                    self.run_case()
+                self.assertFalse(caught.exception.audit_evidence["native_discovery_verified"])
+                self.assertFalse(self.transport.verifier.evidence()["native_discovery_verified"])
+                self.assertTrue(self.transport.verifier.closed)
+
+    def test_rejected_file_hold_closes_duplicate_and_keeps_prior_owner(self):
+        with tempfile.TemporaryDirectory(prefix="windsurf-hold-unit-") as temporary:
+            root = Path(temporary).resolve(strict=True)
+            path = root / "authority.json"
+            write(path, b'{"owned":true}\n')
+            directory = proof.custody.open_directory(root)
+            previous = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            duplicates = []
+            try:
+                body, fact = proof.read_file(directory, path.name)
+                verifier = object.__new__(proof.WindsurfGlobalSkillAudit)
+                verifier.case, verifier.dirs = root, {root: (directory, proof.facts(os.fstat(directory)))}
+                verifier.files, verifier.retired = {path.name: (previous, body, fact)}, []
+                duplicate = os.dup
+                def replace_after_duplicate(fd):
+                    held = duplicate(fd)
+                    duplicates.append(held)
+                    atomic(path, body)
+                    return held
+                with mock.patch.object(proof.os, "dup", side_effect=replace_after_duplicate), \
+                        self.assertRaisesRegex(ValueError, "member changed during bounded read"):
+                    verifier._hold(path.name)
+                self.assertEqual(verifier.files[path.name], (previous, body, fact))
+                self.assertEqual(verifier.retired, [])
+                self.assertEqual(len(duplicates), 1)
+                with self.assertRaises(OSError) as caught:
+                    os.fstat(duplicates[0])
+                self.assertEqual(caught.exception.errno, errno.EBADF)
+            finally:
+                for fd in [directory, previous, *duplicates]:
+                    try:
+                        os.close(fd)
+                    except OSError:
+                        pass
 
     def test_fresh_target_list_rejects_every_reminted_registration(self):
         for mode in ("post-remint-uuid", "post-remint-name", "post-remint-source"):

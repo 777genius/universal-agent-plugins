@@ -312,14 +312,15 @@ jobs:
           PY
           # No ambient CI credentials or native profile overrides reach vendor --version.
           probe_home="$(mktemp -d "$RUNNER_TEMP/vendor-probe.XXXXXX")"
-          audit_vendor_env=()
+          # Bash 3.2 with nounset rejects empty arrays; keep this required flag here.
+          audit_vendor_env=(DO_NOT_TRACK=1)
           if [[ "$TARGET" == grok && "$PROJECT_PROFILE" == owner-pretrusted ]]; then
             audit_vendor_env+=(GROK_DISABLE_AUTOUPDATER=1)
           fi
           env -i PATH="$PATH" HOME="$probe_home" USERPROFILE="$probe_home" \
             XDG_CONFIG_HOME="$probe_home/config" XDG_CACHE_HOME="$probe_home/cache" \
             XDG_DATA_HOME="$probe_home/data" TMPDIR="$probe_home" \
-            LANG="${LANG:-C.UTF-8}" CI=true DO_NOT_TRACK=1 \
+            LANG="${LANG:-C.UTF-8}" CI=true \
             "${audit_vendor_env[@]}" \
             python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
             | tee "$RUNNER_TEMP/vendor-proof/version.txt"

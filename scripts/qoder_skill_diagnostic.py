@@ -216,7 +216,10 @@ class QoderSkillDiagnostic:
                             raise ValueError("Qoder diagnostic member changed during read")
                     finally:
                         os.close(fd)
+        before = self._identity(os.fstat(self.case_fd))
         walk(self.case_fd, "", 0)
+        if self._identity(os.fstat(self.case_fd)) != before:
+            raise ValueError("Qoder diagnostic root changed during capture")
         return frame
 
     def observe(self, phase):

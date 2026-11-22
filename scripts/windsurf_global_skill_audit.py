@@ -369,6 +369,7 @@ class WindsurfGlobalSkillAudit:
         self.observations, self.reasons, self.transitions = [], [], []
         self.closed = self.finished = self.removing = False
         self.owner = self.probe_frame = self.managed_frame = self.source_frame = None
+        self.managed_fd = None
         self.bound_list = set()
         self.guard_count = 0
         try:
@@ -475,15 +476,22 @@ class WindsurfGlobalSkillAudit:
 
     def _hold(self, relative):
         body, fact = read_file(self.dirs[self.case][0], relative)
-        with member(self.dirs[self.case][0], relative) as fd:
-            require(facts(os.fstat(fd)) == {k: v for k, v in fact.items() if k != "sha256"}, "file changed before descriptor hold")
-            held = os.dup(fd)
+        held = None
+        try:
+            with member(self.dirs[self.case][0], relative) as fd:
+                require(facts(os.fstat(fd)) == {k: v for k, v in fact.items() if k != "sha256"}, "file changed before descriptor hold")
+                held = os.dup(fd)
+        except BaseException:
+            if held is not None:
+                os.close(held)
+            raise
         if relative in self.files:
             self.retired.append(self.files[relative][0])
         self.files[relative] = (held, body, fact)
         return body, fact
 
     def _failure(self, reason):
+        self.finished = False
         if reason not in self.reasons:
             self.reasons.append(reason[:240])
 
@@ -700,8 +708,8 @@ class WindsurfGlobalSkillAudit:
                     text = description(read_file(cached_fd, "SKILL.md")[0], name)
                 native_rows[name] = skill_row(name, text, "Devin", self.skills / name)
             # Keep the original directory inode alive across its later removal.
-            held = os.dup(managed_fd)
-            self.retired.append(held)
+            self.managed_fd = os.dup(managed_fd)
+            self.retired.append(self.managed_fd)
         qualified = (binding.get("install_intent", "") == "" and binding.get("activation") == "active"
                      and binding.get("authentication") == "not_required")
         if not qualified:
@@ -801,6 +809,8 @@ class WindsurfGlobalSkillAudit:
                     and item.get("clients") == {} and item.get("data_retained") is True
                     and same(item.get("source"), self.owner["source"]) and same(item.get("package"), self.owner["package"]), "removed saved state reminted or retained an active owner")
         require(not os.path.lexists(self.data / self.owner["managed_relative"]), "removed managed package remains")
+        require(self.managed_fd is not None and os.fstat(self.managed_fd).st_nlink == 0,
+                "original managed package remains linked")
         self.home_current = self._home_transition(())
         for filename in ("state-v2.json", "uap.lock", "uap.toml"):
             self._hold("uap-data/" + filename)
@@ -871,6 +881,7 @@ class WindsurfGlobalSkillAudit:
             return False
 
     def finish(self):
+        self.finished = False
         self.guard()
         self.finished = (not self.reasons and self.removing and self.probe_frame is None
                          and self.bound_list == {"add", "repeat", "remove"}

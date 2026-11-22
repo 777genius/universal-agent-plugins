@@ -10,7 +10,7 @@ import base64
 import hashlib
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import secrets
 import shutil
@@ -33,6 +33,7 @@ UNIT = re.compile(r"uap-kiro-acp-boundary-[0-9a-f]{32}\.service\Z")
 SERVICE_ENV = frozenset("PATH LANG GITHUB_ACTIONS RUNNER_ENVIRONMENT AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED UAP_KIRO_BOUNDARY_CAPTURE UAP_KIRO_BOUNDARY_IDENTITY UAP_KIRO_BOUNDARY_RUNTIME".split())
 QUALIFICATION = {name: False for name in shared.QUALIFICATION_CASES}
 MARKER = b"UAP_KIRO_ACP_BOUNDARY="
+SERVICE_CLEANUP_RESERVE = 20.0
 
 
 def source_identity(ctx, label):
@@ -168,11 +169,14 @@ def service(ctx, tests, env):
         system[path] = (shared.artifacts.identity(info), hashlib.sha256(body).hexdigest())
     held = {p: shared.artifacts.identity(p.lstat()) for p in ctx.identities}
 
-    def unchanged():
+    def system_unchanged():
         for path, (identity, digest) in system.items():
             if (shared.artifacts.identity(path.lstat()) != identity
                     or hashlib.sha256(ordinary_bytes(path, 32 << 20, owners=(0,))).hexdigest() != digest):
                 raise ValueError("system executable changed")
+
+    def unchanged():
+        system_unchanged()
         shared.verify_files(ctx.identities, ctx.budget)
         if any(shared.artifacts.identity(p.lstat()) != identity for p, identity in held.items()):
             raise ValueError("immutable input identity changed")
@@ -180,11 +184,12 @@ def service(ctx, tests, env):
     system_env = {"PATH": "/usr/bin:/bin", "LANG": "C", "SYSTEMD_PAGER": "cat", "SYSTEMD_COLORS": "0"}
     unit = "uap-kiro-acp-boundary-" + secrets.token_hex(16) + ".service"
 
-    def query(label):
-        unchanged()
+    def query(label, *, cleanup=False):
+        check = system_unchanged if cleanup else unchanged
+        check()
         row, stdout, stderr = ctx.command(label, ["/usr/bin/systemctl", "--no-pager", "--no-ask-password", "show",
                     "--property=LoadState,ActiveState,ControlGroup", unit], ctx.root, system_env, 2)
-        unchanged()
+        check()
         if type(row["exit"]) is not int or row["exit"] != 0 or stderr:
             raise ValueError("owned unit query failed")
         return unit_state(stdout, unit)
@@ -203,38 +208,54 @@ def service(ctx, tests, env):
     argv = service_argv(tests, env, ctx.root, unit, uid, gid, origin)
     result, problem = None, None
     previous = ctx.budget
-    with shared.Budget(min(previous.check(), 180)) as budget:
-        ctx.budget = budget
-        try:
-            unchanged()
-            result = ctx.command("kiro-boundary-service", argv, ctx.root, system_env,
-                                 165 - (time.monotonic_ns() - origin) / 1e9)
-        except Exception as error:
-            problem = error
-        finally:
+    try:
+        # Both the outer deadline and the original unit clock remain binding.
+        seconds = min(previous.check(), 180 - (time.monotonic_ns() - origin) / 1e9)
+        with shared.Budget(seconds) as budget:
+            ctx.budget = budget
             try:
-                state = query("kiro-unit-after")
-                receipt["closed"] = state["ActiveState"] in ("inactive", "failed") and cgroup_empty(unit, uid)
-                receipt["after"] = state
+                unchanged()
+                transport = min(165 - (time.monotonic_ns() - origin) / 1e9,
+                                budget.check() - SERVICE_CLEANUP_RESERVE)
+                if transport <= 0:
+                    raise ValueError("original service budget cannot reserve cleanup")
+                receipt.update(cleanup_reserve_seconds=SERVICE_CLEANUP_RESERVE,
+                               transport_timeout_seconds=transport)
+                result = ctx.command("kiro-boundary-service", argv, ctx.root, system_env, transport)
             except Exception as error:
-                problem = problem or error
-            if not receipt["closed"]:
-                receipt["forced_stop"] = True
+                problem = error
+            finally:
                 try:
-                    unchanged()
-                    ctx.command("kiro-unit-stop", ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "--no-ask-password",
-                                "--no-block", "stop", unit], ctx.root, system_env, 1)
-                    if not cgroup_empty(unit, uid):
-                        receipt["forced_kill"] = True
-                        ctx.command("kiro-unit-kill", ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "--no-ask-password",
-                                    "kill", "--kill-whom=all", "--signal=SIGKILL", unit], ctx.root, system_env, 1)
-                    state = query("kiro-unit-final")
+                    # Cleanup authority is the registered unit and frozen system
+                    # tools. A broken input receipt must not prevent its stop.
+                    state = query("kiro-unit-after", cleanup=True)
                     receipt["closed"] = state["ActiveState"] in ("inactive", "failed") and cgroup_empty(unit, uid)
-                    receipt["final"] = state
+                    receipt["after"] = state
                 except Exception as error:
                     problem = problem or error
-            unchanged()
-    ctx.budget = previous
+                if not receipt["closed"]:
+                    receipt["forced_stop"] = True
+                    try:
+                        system_unchanged()
+                        ctx.command("kiro-unit-stop", ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "--no-ask-password",
+                                    "--no-block", "stop", unit], ctx.root, system_env, 1)
+                        system_unchanged()
+                        if not cgroup_empty(unit, uid):
+                            receipt["forced_kill"] = True
+                            ctx.command("kiro-unit-kill", ["/usr/bin/sudo", "-n", "/usr/bin/systemctl", "--no-ask-password",
+                                        "kill", "--kill-whom=all", "--signal=SIGKILL", unit], ctx.root, system_env, 1)
+                            system_unchanged()
+                        state = query("kiro-unit-final", cleanup=True)
+                        receipt["closed"] = state["ActiveState"] in ("inactive", "failed") and cgroup_empty(unit, uid)
+                        receipt["final"] = state
+                    except Exception as error:
+                        problem = problem or error
+                try:
+                    unchanged()
+                except Exception as error:
+                    problem = problem or error
+    finally:
+        ctx.budget = previous
     receipt["elapsed_ns"] = time.monotonic_ns() - origin
     if (not receipt["closed"] or receipt["forced_stop"] or receipt["forced_kill"]
             or receipt["elapsed_ns"] >= 180_000_000_000):
@@ -242,6 +263,82 @@ def service(ctx, tests, env):
     if problem is not None:
         raise problem
     return result
+
+
+def admit_complete_exchange(report, identity, sent, received):
+    """Join the fixed helper exchange to its consumed ACP prefix, not read-ahead."""
+    helper = identity.get("helper")
+    if not isinstance(helper, str) or not PurePosixPath(helper).is_absolute():
+        raise ValueError("complete exchange requires its helper-bound runtime")
+    cwd = str(PurePosixPath(helper).parent.parent / "runtime/acp/cwd")
+    if report.get("cwd") != cwd:
+        raise ValueError("complete exchange cwd differs from owned runtime")
+    count = report["observed_records"]
+    # Scanner may already have read more bytes when the terminal record is
+    # consumed. Only these count LF-terminated records claim interpretation.
+    prefix = received.split(b"\n", count)
+    if len(prefix) != count + 1:
+        raise ValueError("complete exchange lacks its observed record prefix")
+    phase, stop, expected_id = "initialize", None, 0
+    for body in prefix[:-1]:
+        if stop is not None or len(body) + 1 > 64 << 10:
+            raise ValueError("observed records continue after stop or exceed scanner bound")
+        row = strict_json(body)
+        numbers = json.loads(body, parse_int=lambda value: ("integer", value),
+                             parse_float=lambda value: ("fraction", value))
+        if (not isinstance(row, dict) or row.get("jsonrpc") != "2.0"
+                or not set(row) <= {"jsonrpc", "id", "method", "params", "result", "error"}):
+            raise ValueError("malformed complete ACP envelope")
+        if "method" in row:
+            if not isinstance(row["method"], str) or not row["method"] or "result" in row or "error" in row:
+                raise ValueError("malformed complete ACP server message")
+            if "id" in row:
+                stop = phase + "-server-request-unanswered"
+            continue
+        if (type(row.get("id")) is not int or row["id"] != expected_id
+                or numbers.get("id") != ("integer", str(expected_id)) or row.get("params") is not None):
+            raise ValueError("complete ACP response identity differs")
+        if ("result" in row) == ("error" in row):
+            raise ValueError("complete ACP response requires one result or error")
+        if "error" in row:
+            error = row["error"]
+            if (not isinstance(error, dict) or type(error.get("code")) is not int
+                    or not -(1 << 63) <= error["code"] < 1 << 63
+                    or not isinstance(error.get("message"), str) or not error["message"]):
+                raise ValueError("complete ACP server error differs")
+            stop = phase + "-server-error"
+            continue
+        result = row["result"]
+        if not isinstance(result, dict):
+            raise ValueError("complete ACP result must be an object")
+        if phase == "initialize":
+            if type(result.get("protocolVersion")) is int and result["protocolVersion"] == 1:
+                phase, expected_id = "session-new", 1
+            else:
+                stop = "initialize-result-unrecognized"
+        else:
+            stop = "session-new-result-observed"
+    if stop is None or report.get("phase") != phase or report.get("stop_reason") != stop:
+        raise ValueError("complete ACP phase or stop differs from observed prefix")
+    initialize = {"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+        "protocolVersion": 1, "clientCapabilities": {}, "clientInfo": {"name": "agentplugins", "version": "1"}}}
+    expected = [initialize]
+    if phase == "session-new":
+        expected.append({"jsonrpc": "2.0", "id": 1, "method": "session/new",
+                         "params": {"cwd": cwd, "mcpServers": []}})
+    lines = sent.split(b"\n")
+    if len(lines) != len(expected) + 1 or lines[-1] != b"":
+        raise ValueError("complete ACP fixed request count differs")
+    for index, (body, want) in enumerate(zip(lines[:-1], expected)):
+        request = strict_json(body)
+        numbers = json.loads(body, parse_int=lambda value: ("integer", value),
+                             parse_float=lambda value: ("fraction", value))
+        if (not isinstance(request, dict) or request != want
+                or type(request.get("id")) is not int
+                or numbers.get("id") != ("integer", str(index))
+                or (index == 0 and (type(request.get("params", {}).get("protocolVersion")) is not int
+                    or numbers["params"].get("protocolVersion") != ("integer", "1")))):
+            raise ValueError("complete ACP request differs from fixed diagnostic exchange")
 
 
 def admit_report(stdout, identity, service_receipt):
@@ -268,10 +365,12 @@ def admit_report(stdout, identity, service_receipt):
             or delegation.get("no_new_privileges") is not True
             or delegation.get("membership") != "0::/system.slice/" + service_receipt["unit"] + "\n"):
         raise ValueError("actual ordinary delegated membership differs")
+    streams = {}
     for field, limit in (("stdin", 4096), ("stdout", 128 << 10)):
         body = base64.b64decode(report.get(field, ""), validate=True)
         if len(body) > limit or report.get(field + "_sha256") != hashlib.sha256(body).hexdigest():
             raise ValueError("bounded observed stream identity differs")
+        streams[field] = body
     if type(report.get("capture_complete")) is not bool:
         raise ValueError("exact diagnostic result required")
     if report["capture_complete"] and (report.get("duplex_capability") is not True
@@ -281,6 +380,8 @@ def admit_report(stdout, identity, service_receipt):
             or report.get("stop_reason") not in ("initialize-server-error", "initialize-server-request-unanswered",
                 "initialize-result-unrecognized", "session-new-server-error", "session-new-server-request-unanswered", "session-new-result-observed")):
         raise ValueError("complete diagnostic requires exact production argv and planned shutdown")
+    if report["capture_complete"]:
+        admit_complete_exchange(report, identity, streams["stdin"], streams["stdout"])
     return report
 
 

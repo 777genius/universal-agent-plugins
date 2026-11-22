@@ -465,39 +465,47 @@ def publish(summary, ctx, output):
     """Admission failures retain only a fixed, bounded failure receipt."""
     destination = output / "upload"
     destination.mkdir(mode=0o700)
-    pending = destination / "research.zip"
+    staging = Path(tempfile.mkdtemp(prefix="research-pending-", dir=output))
+    pending = staging / "research.zip"
     try:
-        bodies = evidence(summary, ctx.captures if ctx else {}, ctx.secrets if ctx else [])
-        artifacts.write_zip(pending, bodies)
-    except (ValueError, KeyError, TypeError, UnicodeError, OSError, zipfile.BadZipFile) as error:
-        summary["collection_complete"] = False
-        summary["artifact_admission_failed"] = True
-        pending.unlink(missing_ok=True)
-        failure = {"collection_complete": False, "artifact_admission_failed": True,
-                   "qualification": {name: False for name in QUALIFICATION_CASES}}
-        # Only closed codes, counts and validated source identities survive a
-        # refused artifact. Never copy exception text or native observations.
-        reasons = {"evidence member exceeds one-MiB bound": "member_size",
-                   "evidence aggregate refused": "aggregate_size",
-                   "capture receipt differs": "capture_identity",
-                   "HTTP capture receipt differs": "http_capture_identity",
-                   "extra private capture refused": "capture_inventory",
-                   "private token or unsafe evidence member refused": "private_or_unsafe_member"}
-        failure["admission_reason"] = reasons.get(str(error), "admission_refused")
-        for key in ("source_commit", "source_tree"):
-            if isinstance(summary.get(key), str) and re.fullmatch(r"[0-9a-f]{40}", summary[key]):
-                failure[key] = summary[key]
-        if summary.get("client") in CLIENTS:
-            failure["client"] = summary["client"]
-        if summary.get("phase") in PHASE_CASES:
-            failure["phase"] = summary["phase"]
-        failure["command_count"] = len(summary.get("commands", []))
-        failure["captured_member_count"] = len(ctx.captures) if ctx else 0
         try:
-            failure["summary_bytes"] = len(json.dumps(summary, sort_keys=True, indent=2).encode()) + 1
-        except (ValueError, TypeError):
-            failure["summary_bytes"] = None
-        artifacts.write_zip(pending, {"research.json": json.dumps(failure).encode()})
+            bodies = evidence(summary, ctx.captures if ctx else {}, ctx.secrets if ctx else [])
+            artifacts.write_zip(pending, bodies)
+        except (ValueError, KeyError, TypeError, UnicodeError, OSError, zipfile.BadZipFile) as error:
+            summary["collection_complete"] = False
+            summary["artifact_admission_failed"] = True
+            pending.unlink(missing_ok=True)
+            failure = {"collection_complete": False, "artifact_admission_failed": True,
+                       "qualification": {name: False for name in QUALIFICATION_CASES}}
+            # Only closed codes, counts and validated source identities survive a
+            # refused artifact. Never copy exception text or native observations.
+            reasons = {"evidence member exceeds one-MiB bound": "member_size",
+                       "evidence aggregate refused": "aggregate_size",
+                       "capture receipt differs": "capture_identity",
+                       "HTTP capture receipt differs": "http_capture_identity",
+                       "extra private capture refused": "capture_inventory",
+                       "private token or unsafe evidence member refused": "private_or_unsafe_member"}
+            failure["admission_reason"] = reasons.get(str(error), "admission_refused")
+            for key in ("source_commit", "source_tree"):
+                if isinstance(summary.get(key), str) and re.fullmatch(r"[0-9a-f]{40}", summary[key]):
+                    failure[key] = summary[key]
+            if summary.get("client") in CLIENTS:
+                failure["client"] = summary["client"]
+            if summary.get("phase") in PHASE_CASES:
+                failure["phase"] = summary["phase"]
+            failure["command_count"] = len(summary.get("commands", []))
+            failure["captured_member_count"] = len(ctx.captures) if ctx else 0
+            try:
+                failure["summary_bytes"] = len(json.dumps(summary, sort_keys=True, indent=2).encode()) + 1
+            except (ValueError, TypeError):
+                failure["summary_bytes"] = None
+            artifacts.write_zip(pending, {"research.json": json.dumps(failure).encode()})
+        # Publish the closed ZIP atomically without replacing an existing file.
+        # The upload admission sees one link after our private link is removed.
+        os.link(pending, destination / "research.zip", follow_symlinks=False)
+    finally:
+        pending.unlink(missing_ok=True)
+        staging.rmdir()
 
 
 def run(client, phase, output):

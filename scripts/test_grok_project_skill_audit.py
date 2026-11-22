@@ -144,7 +144,7 @@ class Fixture:
 def fixture(start=True):
     with tempfile.TemporaryDirectory(prefix="grok-pretrusted-unit-") as temporary, \
             patch.object(audit, "BINARY_SHA256", hashlib.sha256(INERT_BINARY).hexdigest()):
-        value, verifier = Fixture(Path(temporary)), None
+        value, verifier = Fixture(Path(temporary).resolve(strict=True)), None
         try:
             if start:
                 verifier = value.start()

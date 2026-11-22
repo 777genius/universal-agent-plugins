@@ -256,7 +256,8 @@ func kiroBoundaryProfile(t *testing.T, root, label, binary string) (string, []st
 	if err := os.Mkdir(profile, 0700); err != nil {
 		t.Fatal(err)
 	}
-	env := []string{"PATH=" + filepath.Dir(binary) + ":/usr/bin:/bin", "LANG=C.UTF-8", "TERM=dumb", "NO_COLOR=1"}
+	env := make([]string, 0, 11)
+	env = append(env, "PATH="+filepath.Dir(binary)+":/usr/bin:/bin", "LANG=C.UTF-8", "TERM=dumb", "NO_COLOR=1")
 	for key, name := range map[string]string{"HOME": "home", "XDG_CONFIG_HOME": "config", "XDG_CACHE_HOME": "cache", "XDG_DATA_HOME": "data", "XDG_STATE_HOME": "state", "XDG_RUNTIME_DIR": "xdg-runtime", "TMPDIR": "tmp"} {
 		path := filepath.Join(profile, name)
 		if err := os.Mkdir(path, 0700); err != nil {

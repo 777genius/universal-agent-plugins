@@ -9,10 +9,12 @@ import (
 	"testing"
 )
 
+const kimiProjectRepeatAddProgress = "Resolving and validating one Agent Plugin package for every selected target...\n"
+
 // Only the already-installed single-target add has the public direct result.
 // Its authority remains the first independently validated receipt, never the
 // installation or physical identity returned by this later no-change command.
-func kimiProjectRepeatAddOutcome(label, scope string, mutated bool, args []string, value map[string]any, p *kimiProjectNativePackage) (bool, error) {
+func kimiProjectRepeatAddOutcome(label, scope string, mutated bool, args []string, value map[string]any, stderr []byte, p *kimiProjectNativePackage) (bool, error) {
 	if label != "repeat-add-a" {
 		return false, nil
 	}
@@ -52,6 +54,9 @@ func kimiProjectRepeatAddOutcome(label, scope string, mutated bool, args []strin
 			return refuse()
 		}
 	}
+	if string(stderr) != kimiProjectRepeatAddProgress {
+		return refuse()
+	}
 	return true, nil
 }
 
@@ -71,14 +76,14 @@ func kimiProjectRepeatAddContract(t *testing.T) (map[string]any, *kimiProjectNat
 
 func TestKimiProjectRepeatAddRequiresHeldDirectNoChange(t *testing.T) {
 	value, p := kimiProjectRepeatAddContract(t)
-	if handled, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, []string{"add", p.Source, "--no-save"}, value, p); !handled || err != nil {
+	if handled, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, []string{"add", p.Source, "--no-save"}, value, []byte(kimiProjectRepeatAddProgress), p); !handled || err != nil {
 		t.Fatalf("held direct repeated add refused: %v", err)
 	}
 	if _, err := commandsTargetOutcome(value); err == nil {
 		t.Fatal("shared array-only contract unexpectedly accepts direct result")
 	}
 	for _, label := range []string{"add-a", "add-b", "add-user", "unchanged-update-a", "intact-repair-a", "update-a", "missing-repair-a", "remove-a"} {
-		if handled, err := kimiProjectRepeatAddOutcome(label, "a", false, []string{"add", p.Source, "--no-save"}, value, p); handled || err != nil {
+		if handled, err := kimiProjectRepeatAddOutcome(label, "a", false, []string{"add", p.Source, "--no-save"}, value, []byte(kimiProjectRepeatAddProgress), p); handled || err != nil {
 			t.Fatalf("unrelated stage %s selected direct-result branch", label)
 		}
 	}
@@ -101,7 +106,7 @@ func TestKimiProjectRepeatAddRefusesIdentityShapeAndMutationChanges(t *testing.T
 			} else {
 				parent[key] = replacement
 			}
-			if handled, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, []string{"add", p.Source, "--no-save"}, value, p); !handled || err == nil {
+			if handled, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, []string{"add", p.Source, "--no-save"}, value, []byte(kimiProjectRepeatAddProgress), p); !handled || err == nil {
 				t.Fatalf("changed repeated-add field %v accepted", path)
 			}
 		}
@@ -112,30 +117,61 @@ func TestKimiProjectRepeatAddRefusesAmbiguityAndAuthority(t *testing.T) {
 	for _, targets := range []any{nil, []any{}, []any{map[string]any{"target": "kimi"}}} {
 		value, p := kimiProjectRepeatAddContract(t)
 		value["data"].(map[string]any)["targets"] = targets
-		if _, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, []string{"add", p.Source, "--no-save"}, value, p); err == nil {
+		if _, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, []string{"add", p.Source, "--no-save"}, value, []byte(kimiProjectRepeatAddProgress), p); err == nil {
 			t.Fatal("ambiguous direct/group result accepted")
 		}
 	}
 	for _, mutate := range []func(*kimiProjectNativePackage){func(p *kimiProjectNativePackage) { p.Proof = nil }, func(p *kimiProjectNativePackage) { p.Proof.stable = nil }, func(p *kimiProjectNativePackage) { p.Proof.stable.installation = "replacement" }, func(p *kimiProjectNativePackage) { p.Proof.stable.artifact = "replacement" }} {
 		value, p := kimiProjectRepeatAddContract(t)
 		mutate(p)
-		if _, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, []string{"add", p.Source, "--no-save"}, value, p); err == nil {
+		if _, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, []string{"add", p.Source, "--no-save"}, value, []byte(kimiProjectRepeatAddProgress), p); err == nil {
 			t.Fatal("missing or rebound first receipt accepted")
 		}
 	}
 	for _, args := range [][]string{nil, {"update", "/held/source", "--no-save"}, {"add", "/other/source", "--no-save"}, {"add", "/held/source"}, {"add", "/held/source", "--no-save", "--dry-run"}} {
 		value, p := kimiProjectRepeatAddContract(t)
-		if _, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, args, value, p); err == nil {
+		if _, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, args, value, []byte(kimiProjectRepeatAddProgress), p); err == nil {
 			t.Fatal("different repeated-add command accepted")
 		}
 	}
 	value, p := kimiProjectRepeatAddContract(t)
 	for _, scope := range []string{"user", "b", "c", ""} {
-		if _, err := kimiProjectRepeatAddOutcome("repeat-add-a", scope, false, []string{"add", p.Source, "--no-save"}, value, p); err == nil {
+		if _, err := kimiProjectRepeatAddOutcome("repeat-add-a", scope, false, []string{"add", p.Source, "--no-save"}, value, []byte(kimiProjectRepeatAddProgress), p); err == nil {
 			t.Fatal("different repeated-add scope accepted")
 		}
 	}
-	if _, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", true, []string{"add", p.Source, "--no-save"}, value, p); err == nil {
+	if _, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", true, []string{"add", p.Source, "--no-save"}, value, []byte(kimiProjectRepeatAddProgress), p); err == nil {
 		t.Fatal("mutating repeated-add stage accepted")
+	}
+}
+
+func TestKimiProjectRepeatAddRequiresExactResolverDiagnostics(t *testing.T) {
+	// State the retained public protocol independently of the helper constant.
+	const progress = "Resolving and validating one Agent Plugin package for every selected target...\n"
+	value, p := kimiProjectRepeatAddContract(t)
+	args := []string{"add", p.Source, "--no-save"}
+	if handled, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, args, value, []byte(progress), p); !handled || err != nil {
+		t.Fatalf("exact resolver-only no-change diagnostics refused: %v", err)
+	}
+	for name, stderr := range map[string][]byte{
+		"missing":             nil,
+		"missing-newline":     []byte(progress[:len(progress)-1]),
+		"crlf":                []byte(progress[:len(progress)-1] + "\r\n"),
+		"extra-newline":       []byte(progress + "\n"),
+		"leading-space":       []byte(" " + progress),
+		"changed-stage":       []byte("Resolving and validating one updated Agent Plugin package for every selected target...\n"),
+		"duplicate-progress":  []byte(progress + progress),
+		"transactional-apply": []byte(progress + "Applying transactional client package...\n"),
+		"install-progress":    []byte(progress + "Installing held-package for 1 selected clients...\n"),
+		"warning-prefix":      []byte("warning: unexpected diagnostic\n" + progress),
+		"warning-suffix":      []byte(progress + "warning: unexpected diagnostic\n"),
+		"truncated-stream":    []byte(progress + "stderr bytes omitted"),
+		"embedded-nul":        []byte(progress + "\x00"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if handled, err := kimiProjectRepeatAddOutcome("repeat-add-a", "a", false, args, value, stderr, p); !handled || err == nil {
+				t.Fatalf("changed no-change diagnostics accepted: %q", stderr)
+			}
+		})
 	}
 }

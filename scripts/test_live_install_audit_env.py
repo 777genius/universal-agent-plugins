@@ -26,6 +26,62 @@ def load_audit():
     return module
 
 
+class LiveAuditImportBoundaryTests(unittest.TestCase):
+    def check_cold_file_import(self, outcome):
+        source = Path(__file__).resolve().parent / "live-install-audit.py"
+        program = textwrap.dedent('''
+            import importlib.util
+            import os
+            from pathlib import Path
+            import sys
+            from unittest.mock import patch
+
+            source = Path(sys.argv[1]).resolve()
+            path_object, before_path = sys.path, sys.path[:]
+            before_env = dict(os.environ)
+            assert str(source.parent) not in sys.path
+            spec = importlib.util.spec_from_file_location("cold_live_audit", source)
+            audit = importlib.util.module_from_spec(spec)
+            with patch("subprocess.Popen", side_effect=AssertionError("import started a child")) as child:
+                if sys.argv[2] == "helper-error":
+                    def fail_helper(path):
+                        assert Path(path).parent == source.parent
+                        assert sys.path[0] == str(source.parent)
+                        raise RuntimeError("inert helper failure")
+
+                    with patch("runpy.run_path", side_effect=fail_helper):
+                        try:
+                            spec.loader.exec_module(audit)
+                        except RuntimeError as error:
+                            assert str(error) == "inert helper failure"
+                        else:
+                            raise AssertionError("helper failure was swallowed")
+                else:
+                    spec.loader.exec_module(audit)
+                    assert Path(audit.GROK_PROJECT_AUDIT["__file__"]).resolve() == source.with_name(
+                        "grok_project_skill_audit.py")
+                    for name in ("native_client_project_artifacts", "project_native_runtime"):
+                        assert Path(sys.modules[name].__file__).resolve() == source.with_name(name + ".py")
+                child.assert_not_called()
+            assert sys.path is path_object
+            assert sys.path == before_path
+            assert dict(os.environ) == before_env
+        ''')
+        environment = dict(os.environ)
+        environment.pop("PYTHONPATH", None)
+        with TemporaryDirectory() as working_directory:
+            result = subprocess.run(
+                [sys.executable, "-I", "-B", "-c", program, str(source), outcome],
+                cwd=working_directory, env=environment, capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_cold_file_import_restores_path_without_starting_children(self):
+        self.check_cold_file_import("success")
+
+    def test_cold_file_import_restores_path_after_helper_failure(self):
+        self.check_cold_file_import("helper-error")
+
+
 @unittest.skipUnless(sys.platform == "linux" and platform.machine() == "x86_64",
                      "Qoder diagnostic transport is Linux x86_64 only")
 class QoderSkillDiagnosticTests(unittest.TestCase):
@@ -156,8 +212,25 @@ class QoderSkillDiagnosticTests(unittest.TestCase):
             overrides = {"PINS": pins, "ARCHIVE_SHA256": hashlib.sha256(b"inert unit archive only").hexdigest()}
             if budget:
                 overrides["FILE_LIMIT"] = 8
+            scandir = os.scandir
+            @contextmanager
+            def mutate_after_scan(directory):
+                with scandir(directory) as entries:
+                    yield entries
+                if (mutation == "post-frame-root-create" and isinstance(directory, int)
+                        and state["native"] == ["before"] and not state.get("root_changed")):
+                    held, named = os.fstat(directory), case.stat()
+                    if (held.st_dev, held.st_ino) == (named.st_dev, named.st_ino):
+                        (case / "late-root-entry").write_bytes(b"created after root enumeration\n")
+                        state["root_changed"] = True
+            diagnostic = audit.QODER_SKILL_DIAGNOSTIC["QoderSkillDiagnostic"]
+            frame = diagnostic._frame
+            def frame_with_mutation(verifier):
+                with patch.object(os, "scandir", side_effect=mutate_after_scan):
+                    return frame(verifier)
             with patch.dict(globals_, overrides), patch.object(audit, "call", side_effect=public), \
-                    patch.dict(audit.NATIVE_RESEARCH, {"run_probe": probe}):
+                    patch.dict(audit.NATIVE_RESEARCH, {"run_probe": probe}), \
+                    patch.object(diagnostic, "_frame", frame_with_mutation):
                 try:
                     row = audit.do_case("/unused/agentplugins", "qoder", "skill", item, 0, runroot, {},
                                         client_version=version or {"status": "reported", "value": "1.1.81", "exit_code": 0})
@@ -266,6 +339,20 @@ class QoderSkillDiagnosticTests(unittest.TestCase):
         self.assertTrue(all(o["status"] == "unqualified-budget" and not o["capture_complete"]
                             for o in proof["observations"]))
 
+    def test_case_root_changed_after_post_probe_enumeration_is_refused(self):
+        row, state = self.run_case("post-frame-root-create")
+        self.assertTrue(state["root_changed"])
+        self.assertIn("error", row)
+        proof = row["qoder_skill_diagnostic"]
+        self.assert_unqualified(proof)
+        observation = proof["observations"][-1]
+        self.assertEqual(observation["status"], "unqualified-custody")
+        self.assertIn("root changed during capture", observation["reason"])
+        self.assertIn("stdout_base64", observation)
+        self.assertNotIn("case_changes", observation)
+        self.assertEqual(state["native"], ["before"])
+        self.assertEqual(state["add_count"], 0)
+
 
 class CopilotProjectSkillRegistrationTests(unittest.TestCase):
     """Inert public transport exercises the real audit; never native evidence."""
@@ -344,6 +431,8 @@ class CopilotProjectSkillRegistrationTests(unittest.TestCase):
                         settings.write_text(json.dumps(document), encoding="utf-8")
                     elif mutation == "repeat-managed-file":
                         (active / "foreign-created-on-repeat").write_text("not runtime state", encoding="utf-8")
+                    elif mutation == "repeat-restored-skill":
+                        skill.write_bytes(body + b"repeat add changed the selected Skill\n")
                     result.update(command="skills add", status="succeeded", scope="project", readiness=readiness[int(repeated)],
                                   items=[{"alias": item["name"], "candidateId": "sha256:" + "f" * 64,
                                           "targetId": "copilot", "status": "unchanged" if repeated else "succeeded",
@@ -392,7 +481,11 @@ class CopilotProjectSkillRegistrationTests(unittest.TestCase):
                             '{"skills":{"frontend-design":{}}}', encoding="utf-8")
                 elif argv[1] == "list":
                     entries = [json.loads(json.dumps(binding))] if state["installed"] else []
+                    if state["installed"] and state["add_count"] == 1 and mutation == "first-list-skill":
+                        skill.write_bytes(body + b"first list changed the selected Skill\n")
                     if state["installed"] and state["add_count"] == 2:
+                        if mutation == "repeat-restored-skill":
+                            skill.write_bytes(body)
                         if mutation == "repeat-uuid":
                             entries[0]["installation_id"] = "1" * 8 + "-1111-1111-1111-" + "1" * 12
                         elif mutation == "repeat-source":
@@ -438,7 +531,7 @@ class CopilotProjectSkillRegistrationTests(unittest.TestCase):
                 self.assertTrue(result["removal_verified"])
                 self.assertTrue(result["repeat_verified"])
                 self.assertTrue(result["repeat_project_unchanged"])
-                self.assertTrue(result["skill_path"].startswith(".uap/managed/clients/copilot/"))
+                self.assertEqual(Path(result["skill_path"]).parts[:4], (".uap", "managed", "clients", "copilot"))
                 proof = result["copilot_project_skill_registration"]
                 self.assertEqual([proof[key] for key in ("added", "repeated", "removed")], [True] * 3)
                 self.assertEqual(proof["public_ready"], {"add": True, "repeat": True})
@@ -452,6 +545,19 @@ class CopilotProjectSkillRegistrationTests(unittest.TestCase):
                 self.assertEqual(captures["after-remove"]["status"], "observed")
                 self.assertFalse(any(key.startswith("_") for capture in captures.values() for key in capture))
                 self.assertEqual(state["calls"], ["skills", "list", "skills", "list", "remove", "list"])
+
+    def test_first_list_cannot_replace_the_pinned_skill_bytes(self):
+        result, _ = self.run_case("first-list-skill")
+        self.assertFalse(result["skill_bytes_match"])
+        self.assertNotEqual(result["status"], "passed")
+
+    def test_repeat_list_cannot_hide_a_repeat_add_skill_rewrite(self):
+        result, state = self.run_case("repeat-restored-skill")
+        self.assertFalse(result["repeat_project_unchanged"])
+        self.assertFalse(result["repeat_verified"])
+        self.assertEqual(result["status"], "repeat-add-unqualified")
+        self.assertTrue(result["removal_verified"])
+        self.assertEqual(state["calls"], ["skills", "list", "skills", "list", "remove", "list"])
 
     def test_retained_partial_disabled_or_reminted_registration_rejects_cleanup(self):
         for mutation in ("retained-pair", "marketplace-half", "enabled-half", "disabled-pair", "reminted-registration",
@@ -10643,7 +10749,7 @@ class LiveAuditKiroNativeEvidenceTests(unittest.TestCase):
         audit = load_audit()
         component = {"name": "unit-plugin", "kind": "mcp_server", "support": "native"}
         supported = {"data": {"actions": [{"client_id": "kiro", "component_support": [component]}]}}
-        variants = [(supported, "passed")]
+        variants = [(supported, "package-installed-native-unqualified")]
         for components in ([{**component, "kind": "skill"}],
                            [component, {**component, "name": "unit-skill", "kind": "skill"}],
                            [{**component, "support": "prepared"}],
@@ -11195,6 +11301,40 @@ class PiPluginNativeQualificationTests(unittest.TestCase):
 
 
 class LiveAuditNativeVersionRoutingTests(unittest.TestCase):
+    def test_windsurf_version_and_catalog_case_share_the_selected_devin_binary(self):
+        from io import StringIO
+
+        for extra_alias in (False, True):
+            with self.subTest(extra_alias=extra_alias), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                document = json.loads(audit.FIXTURES.read_text())
+                source = next(iter(audit.WINDSURF_GLOBAL_AUDIT["CASES"]))
+                selected = document["plugin_aliases"].index(source)
+                document["plugin_aliases"][0], document["plugin_aliases"][selected] = (
+                    document["plugin_aliases"][selected], document["plugin_aliases"][0])
+                fixture = Path(temporary) / "fixtures.json"
+                fixture.write_text(json.dumps(document))
+                binary = str(Path(temporary) / "selected-devin")
+                binaries = {"devin": binary}
+                if extra_alias:
+                    binaries["windsurf"] = str(Path(temporary) / "other-windsurf")
+                native_version = {"status": "reported", "exit_code": 0,
+                                  "value": "devin 3000.12.57 (96542e930752)"}
+                argv = ["live-install-audit.py", "--cli", sys.executable, "--target", "windsurf",
+                        "--kind", "plugin", "--limit", "1", "--report-dir", temporary]
+                with (patch.object(sys, "argv", argv), patch.object(sys, "stdout", StringIO()),
+                      patch.object(audit, "FIXTURES", fixture),
+                      patch.dict(audit.AGENT_BINARIES, binaries, clear=True),
+                      patch.object(audit, "vendor_bootstrap_attested", return_value=True),
+                      patch.object(audit, "version_evidence", return_value=native_version) as probe,
+                      patch.object(audit, "do_case", return_value={"status": "passed"}) as case):
+                    self.assertEqual(audit.main(), 0)
+                self.assertEqual(probe.call_args.args[0], [binary, "--version"])
+                self.assertEqual(case.call_args.kwargs,
+                                 {"client_version": native_version, "client_binary": binary})
+                report = json.loads((Path(temporary) / "windsurf-plugin.json").read_text())
+                self.assertEqual(report["client_binary"], binary)
+
     def test_catalog_entrypoint_passes_observed_versions_only_to_relevant_cases(self):
         from io import StringIO
 

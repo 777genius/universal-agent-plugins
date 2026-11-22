@@ -381,6 +381,45 @@ class HistoricalModeTest(unittest.TestCase):
             unexpected.write_text('{"foreign":true}')
             self.assertNotEqual(before, live.snapshot([profile]))  # mutated list
 
+    def test_historical_refusal_detects_empty_directories_at_each_child_phase(self):
+        from types import SimpleNamespace
+
+        for mutation in (None, "add", "list", "add-restored-by-list"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temp:
+                live = self.load_live()
+                root = Path(temp).resolve()
+                empty = root / "plugin-00/home/.codex/plugins"
+
+                def child(argv, _env, _cwd, _timeout=105, **_kwargs):
+                    if argv[1] == "add":
+                        if mutation in ("add", "add-restored-by-list"):
+                            empty.mkdir()
+                        result = {"result": "error"}
+                    else:
+                        self.assertEqual(argv[1], "list")
+                        if mutation == "list":
+                            empty.mkdir()
+                        elif mutation == "add-restored-by-list":
+                            empty.rmdir()
+                        result = {"data": {"installations": []}}
+                    return {"exit_code": 1 if argv[1] == "add" else 0,
+                            "stdout_tail": "", "stderr_tail": "signed Directory snapshot has expired",
+                            "timeout": False, "_json": result}
+
+                with (patch.dict(live.AGENT_BINARIES, {}, clear=True),
+                      patch.dict(live.HISTORICAL_CODEX, {"PublishedBaseline":
+                          lambda *_args: SimpleNamespace(after_command=lambda: None, proof={})}),
+                      patch.object(live, "call", side_effect=child) as transport):
+                    result = live.do_case("/inert/npm-launcher", "codex", "plugin", "context7", 0,
+                                          root, {}, historical_baseline=True)
+                self.assertEqual(transport.call_count, 2)
+                self.assertEqual(result["historical_native_unchanged"], {
+                    "after-add": mutation not in ("add", "add-restored-by-list"),
+                    "after-list": mutation not in ("add", "list"),
+                    "final": mutation not in ("add", "list")})
+                self.assertFalse(result["removal_verified"])
+                self.assertNotEqual(result["status"], "passed")
+
     def test_source_version_string_cannot_qualify_historical_mode_or_native_ready(self):
         live = self.load_live()
         with tempfile.TemporaryDirectory() as temporary:

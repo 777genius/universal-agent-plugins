@@ -13,6 +13,7 @@ on:
       - 'scripts/native_client_research.py'
       - 'scripts/native_client_project_artifacts.py'
       - 'install/integrationctl/adapters/process/**'
+      - 'install/integrationctl/ports/**'
       - 'install/integrationctl/agentplugins/clients/kiro/acp*.go'
   workflow_dispatch:
 permissions:
@@ -41,6 +42,7 @@ jobs:
       - name: Verify inert capture contracts
         run: |
           python3 -m unittest discover -s scripts -p 'test_kiro_acp_boundary_capture.py'
+          python3 -m unittest discover -s scripts -p 'test_project_native_research.py'
           go test -p=1 ./repotests -run '^TestKiroBoundaryInert' -count=1 -timeout=60s
       - name: Capture only initialize and empty session/new under unchanged process containment
         env:
