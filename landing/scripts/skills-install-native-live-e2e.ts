@@ -45,10 +45,13 @@ const fixtures = [
 ] as const;
 type Evidence = { id: string; source: string; skill: string; command: string; exit_code: number | null;
   installed: boolean; lock_written: boolean; native_skill_present: boolean; resources: number;
-  stdout_tail: string; stderr_tail: string; error: string | null };
+  stdout_tail: string; stderr_tail: string; error: string | null;
+  lifecycle?: Record<string, unknown> };
 const report = {
   checked_at: new Date().toISOString(), production_cli: published ? 'npx -y universal-agent-plugins@latest' : binary,
   profile: 'isolated temporary project',
+  command_origin: 'repository DTO model and command generator; not captured from deployed site',
+  version_attribution: 'Separate version observations do not prove which binary each @latest operation executed',
   live_network: true, results: [] as Evidence[],
 };
 const runRoot = mkdtempSync(join(tmpdir(), 'uap-live-skills-'));
@@ -76,6 +79,32 @@ function countSkills(root: string): number {
   }
   return count;
 }
+function commandEvidence(output: ReturnType<typeof spawnSync>) {
+  return { exit_code: output.status, error: output.error?.message || null,
+    stdout: String(output.stdout || ''), stderr: String(output.stderr || '') };
+}
+type CLIOutput = {
+  schema_version: number; command: string; result: string; status: string; readiness: string;
+  items: { status: string; targetId: string; alias: string }[];
+  data: {
+    version: string; name: string; source: string; installation_id: string;
+    installations: { installation_id: string }[];
+    clients: {
+      client_id: string;
+      package_revision?: { tree_digest: string; manifest_digest: string; resolved_revision?: string };
+      native_discovery_reconciled?: boolean; native_discovery_evidence?: unknown;
+    }[];
+  };
+};
+function completeJSON(output: ReturnType<typeof spawnSync>, command: string): CLIOutput {
+  assert.ifError(output.error);
+  assert.equal(output.status, 0, command + ' failed');
+  const value = JSON.parse(String(output.stdout));
+  assert.equal(value.schema_version, 1);
+  assert.equal(value.command, command);
+  assert.equal(value.result, 'success');
+  return value;
+}
 const selected = published
   ? fixtures.filter(fixture => [
       'https://github.com/anthropics/skills/tree/main/skills/frontend-design',
@@ -90,7 +119,8 @@ try {
     const config = join(sourceDir, 'config');
     const data = join(sourceDir, 'data');
     const cache = join(sourceDir, 'cache');
-    for (const path of [project, home, config, data, cache]) mkdirSync(path, { recursive: true });
+    const temp = join(sourceDir, 'tmp');
+    for (const path of [project, home, config, data, cache, temp]) mkdirSync(path, { recursive: true });
     // A genuine installed Codex CLI must discover its own isolated profile.
     // Never reuse the runner's real user configuration or credentials.
     mkdirSync(join(home, '.codex'), { recursive: true });
@@ -105,7 +135,17 @@ try {
     const env = { ...process.env, HOME: home, USERPROFILE: home, CODEX_HOME: join(home, '.codex'),
       XDG_CONFIG_HOME: config, XDG_DATA_HOME: data, XDG_CACHE_HOME: cache, GIT_CONFIG_NOSYSTEM: '1',
       GIT_CONFIG_GLOBAL: join(config, 'gitconfig'), GIT_TERMINAL_PROMPT: '0',
+      TMPDIR: temp, TMP: temp, TEMP: temp, npm_config_cache: join(cache, 'npm'),
       GCM_INTERACTIVE: 'never', CI: 'true', DO_NOT_TRACK: '1' };
+    const foreign = join(project, '.agents', 'skills', 'foreign-sentinel', 'SKILL.md');
+    mkdirSync(join(project, '.agents', 'skills', 'foreign-sentinel'), { recursive: true });
+    writeFileSync(foreign, 'foreign Skill sentinel\n');
+    const projectSentinel = join(project, 'foreign.txt');
+    writeFileSync(projectSentinel, 'foreign project sentinel\n');
+    const invoke = (args: string[]) => spawnSync(published ? 'npx' : binary,
+      published ? ['-y', 'universal-agent-plugins@latest', ...args] : args,
+      { env, cwd: project, encoding: 'utf8', timeout: 120_000, maxBuffer: 1024 * 1024 * 2 });
+    const versionBefore = invoke(['version', '--format', 'json']);
     const args = ['skills', 'add', fixture.source, '--skill', fixture.skill, '--target', 'codex',
       '--scope', 'project', '--project-root', project, '--no-ui', '--yes', '--format', 'json'];
     const output = spawnSync(published ? 'npx' : binary,
@@ -125,6 +165,14 @@ try {
       stderr_tail: (output.stderr || '').slice(-1600),
       error: output.error?.message || null,
     };
+    evidence.lifecycle = { version_before: commandEvidence(versionBefore), add: commandEvidence(output), removed: false };
+    try {
+      const observed = completeJSON(versionBefore, 'version').data.version;
+      assert.ok(typeof observed === 'string' && observed.length > 0);
+      evidence.lifecycle.observed_version_before = observed;
+    } catch (error) {
+      failures.push('CLI version observation failed before ' + fixture.id + ': ' + String(error));
+    }
     report.results.push(evidence);
     console.log(JSON.stringify(evidence));
     if (knownUnavailable) {
@@ -139,8 +187,128 @@ try {
     } else if (!evidence.installed) {
       failures.push('Native public Skill install failed for ' + fixture.id);
     }
-    if (lockWritten && !readFileSync(join(project, 'uap.lock'), 'utf8').includes(fixture.skill)) {
-      failures.push('Lock does not preserve selected Skill for ' + fixture.id);
+    if (!knownUnavailable && output.status === 0) {
+      try {
+        const added = completeJSON(output, 'skills add');
+        assert.equal(added.status, 'succeeded');
+        evidence.lifecycle.readiness = added.readiness;
+        evidence.lifecycle.native_qualified = false;
+        assert.equal(added.items?.length, 1);
+        assert.equal(added.items[0].status, 'succeeded');
+        assert.equal(added.items[0].targetId, 'codex');
+        const lock = JSON.parse(readFileSync(join(project, 'uap.lock'), 'utf8'));
+        assert.equal(lock.lock_version, 1);
+        assert.equal(lock.packages?.length, 1);
+        const pin = lock.packages[0];
+        assert.equal(pin.alias, fixture.skill);
+        assert.equal(added.items[0].alias, pin.alias);
+        assert.deepEqual(pin.targets, ['codex']);
+        let expectedSource: string;
+        let expectedRevision: string | undefined;
+        const sha256 = /^sha256:[a-f0-9]{64}$/;
+        if (fixture.source.includes('github.com') || fixture.source.includes('githubusercontent.com')) {
+          const git = pin.source?.git;
+          assert.equal(git?.repository, 'anthropics/skills');
+          assert.equal(git.kind, 'skill');
+          assert.equal(git.skill, fixture.skill);
+          assert.equal(git.path, 'skills/frontend-design');
+          assert.equal(git.resolved_skill_path, 'skills/frontend-design');
+          assert.match(git.commit, /^[a-f0-9]{40}$/);
+          assert.match(git.raw_tree_digest, sha256);
+          assert.equal(git.normalizer, 'agent-skill-package/v1');
+          assert.equal(pin.source_key, 'github-skill:anthropics/skills:' + fixture.skill + ':skills/frontend-design');
+          expectedSource = 'anthropics/skills/skills/frontend-design';
+          expectedRevision = git.commit;
+        } else {
+          const web = pin.source?.web;
+          assert.equal(web?.url, fixture.source);
+          assert.equal(web.skill, fixture.skill);
+          assert.equal(pin.source_key, 'https-skill:' + fixture.source + ':' + fixture.skill);
+          assert.match(web.raw_tree_digest, sha256);
+          assert.match(web.index_sha256, /^[a-f0-9]{64}$/);
+          assert.equal(new URL(web.index_url).origin, new URL(fixture.source).origin);
+          assert.equal(web.normalizer, 'agent-skill-package/v1');
+          assert.ok(Array.isArray(web.files) && web.files.some((file: { path: string }) => file.path === 'SKILL.md'));
+          for (const file of web.files) {
+            assert.match(file.sha256, /^[a-f0-9]{64}$/);
+            assert.equal(new URL(file.url).origin, new URL(fixture.source).origin);
+          }
+          expectedSource = fixture.source;
+          // Public info exposes only immutable 40-hex Git revisions. HTTPS
+          // provenance remains in the verified lock, not a fabricated info field.
+          expectedRevision = undefined;
+        }
+        assert.match(pin.tree_digest, /^sha256:[a-f0-9]{64}$/);
+        assert.match(pin.manifest_digest, /^sha256:[a-f0-9]{64}$/);
+        const common = ['--target', 'codex', '--scope', 'project', '--project-root', project, '--format', 'json'];
+        const infoOutput = invoke(['info', pin.alias, ...common]);
+        evidence.lifecycle.info = commandEvidence(infoOutput);
+        const info = completeJSON(infoOutput, 'info').data;
+        assert.equal(info.name, pin.alias);
+        assert.equal(info.source, expectedSource);
+        assert.ok(typeof info.installation_id === 'string' && info.installation_id.length > 0);
+        assert.equal(info.clients?.length, 1);
+        const client = info.clients[0];
+        assert.equal(client.client_id, 'codex');
+        assert.equal(client.package_revision?.tree_digest, pin.tree_digest);
+        assert.equal(client.package_revision?.manifest_digest, pin.manifest_digest);
+        assert.equal(client.package_revision?.resolved_revision, expectedRevision);
+        // CLI-reported reconciliation is not an independently observed Codex session.
+        evidence.lifecycle.native_qualified = false;
+        evidence.lifecycle.reported_native_discovery_reconciled = client.native_discovery_reconciled ?? null;
+        evidence.lifecycle.native_discovery = client.native_discovery_evidence || null;
+        evidence.lifecycle.locked_identity = pin;
+        evidence.lifecycle.installation_id = info.installation_id;
+        const removedOutput = invoke(['remove', info.installation_id, ...common, '--yes']);
+        evidence.lifecycle.remove = commandEvidence(removedOutput);
+        assert.ifError(removedOutput.error);
+        assert.equal(removedOutput.status, 0);
+        // Saved dependencies use the existing raw lifecycle result contract.
+        const removed = JSON.parse(String(removedOutput.stdout));
+        assert.equal(removed.schema_version, 1);
+        assert.equal(removed.command, 'agentplugins remove');
+        assert.equal(removed.result, 'success');
+        assert.equal(removed.outcome, 'completed');
+        assert.equal(existsSync(join(nativeSkillsRoot, fixture.skill)), false, 'Selected native Skill remains');
+        const remaining = completeJSON(invoke(['list', '--scope', 'project', '--project-root', project, '--format', 'json']), 'list').data.installations;
+        assert.ok(Array.isArray(remaining));
+        assert.equal(remaining.some((entry: { installation_id: string }) => entry.installation_id === info.installation_id), false, 'Managed installation remains');
+        if (existsSync(join(project, 'uap.lock'))) {
+          const after = JSON.parse(readFileSync(join(project, 'uap.lock'), 'utf8'));
+          assert.ok(Array.isArray(after.packages));
+          assert.equal(after.packages.some((entry: { alias: string }) => entry.alias === pin.alias), false, 'Selected lock identity remains');
+        }
+        const statusOutput = invoke(['deps', 'status', '--scope', 'project', '--project-root', project, '--format', 'json']);
+        evidence.lifecycle.saved_environment = commandEvidence(statusOutput);
+        assert.ifError(statusOutput.error);
+        assert.equal(statusOutput.status, 0);
+        // deps status uses the canonical Go manifest parser and verifies the
+        // manifest digest against the remaining lock; no second TOML parser.
+        const status = JSON.parse(String(statusOutput.stdout));
+        assert.ok(Array.isArray(status.facts));
+        assert.equal((status.diagnostics || []).length, 0, 'Saved requirement/lock agreement is invalid');
+        assert.match(status.manifest_digest, /^sha256:[a-f0-9]{64}$/);
+        assert.equal(status.manifest_digest, status.lock_digest);
+        assert.equal(status.pending_recovery, false);
+        assert.equal(status.facts.some((fact: { alias?: string }) => fact.alias === pin.alias), false);
+        assert.equal(readFileSync(foreign, 'utf8'), 'foreign Skill sentinel\n');
+        assert.equal(readFileSync(projectSentinel, 'utf8'), 'foreign project sentinel\n');
+        evidence.lifecycle.removed = true;
+      } catch (error) {
+        evidence.lifecycle.error = error instanceof Error ? error.message : String(error);
+        failures.push('Native Skill lifecycle failed for ' + fixture.id + ': ' + evidence.lifecycle.error);
+      }
+    }
+    const versionAfter = invoke(['version', '--format', 'json']);
+    evidence.lifecycle.version_after = commandEvidence(versionAfter);
+    try {
+      const observed = completeJSON(versionAfter, 'version').data.version;
+      assert.ok(typeof observed === 'string' && observed.length > 0);
+      evidence.lifecycle.observed_version_after = observed;
+      evidence.lifecycle.version_observations_match = observed === evidence.lifecycle.observed_version_before;
+      assert.equal(evidence.lifecycle.version_observations_match, true, 'Version changed during lifecycle');
+    } catch (error) {
+      failures.push('CLI version observation failed after ' + fixture.id + ': ' + String(error));
     }
   }
   // Preserve all seven independent live source results, even when the first
