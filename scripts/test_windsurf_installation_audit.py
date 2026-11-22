@@ -148,6 +148,26 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 "fixture_sha256": self.fixture_hash, "fixture_count": 30, "cases_attempted": 30,
                 "full_coverage": True, "source_selection_complete": True, "passed": 0, "results": rows}
 
+    def test_image_drift_diagnostic_is_fail_closed_and_never_leaks_names(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            row = self.row(0)
+            sequence = self.sequence(observer, row)
+            secret = observer.global_root / "secret-personal-value-not-for-logs.txt"
+            for index, (argv, outcome) in enumerate(sequence):
+                if index == 1:
+                    secret.write_text("PRIVATE-TOKEN-MUST-NOT-LEAK")
+                if index == 4:
+                    secret.unlink()
+                observer.observe(argv, outcome)
+            with self.assertRaisesRegex(ValueError, "native-image drift") as context:
+                observer.finish(row, row["source"], 0, self.fixtures)
+            diagnostic = str(context.exception)
+            self.assertIn("add/list", diagnostic)
+            self.assertIn("file_added=1", diagnostic)
+            self.assertNotIn("secret-personal", diagnostic)
+            self.assertNotIn("PRIVATE-TOKEN", diagnostic)
+
     def test_old_report_without_actual_global_custody_never_qualifies(self):
         self.assertFalse(summary(self.report([self.row(i) for i in range(30)]), self.fixtures,
                                  fixture_sha256=self.fixture_hash)["installation_acceptance_passed"])

@@ -681,6 +681,43 @@ def check_copilot_snapshot_unchanged(home, case_root, before, after, stage, log_
     if after != before:
         raise AssertionError(stage + ": native query modified protected state")
 
+def copilot_skill_repeat_log_only(before, after, home, case_root):
+    """Admit only empty, new, owned process logs from the Copilot Skills repeat probe.
+
+    The ordinary native snapshot still protects every preexisting file by hash.
+    This cannot qualify changed metadata/configuration, nonempty logs or links.
+    """
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return False
+    if any(after.get(key) != value for key, value in before.items()):
+        return False
+    created = set(after) - set(before)
+    if not 1 <= len(created) <= 2:
+        return False
+    try:
+        home_info = home.lstat()
+        for folder in (home / ".copilot", home / ".copilot" / "logs"):
+            info = folder.lstat()
+            if (not stat.S_ISDIR(info.st_mode) or info.st_uid != home_info.st_uid
+                    or stat.S_IMODE(info.st_mode) & 0o022
+                    or not path_inside_case(folder, case_root)):
+                return False
+        for relative in created:
+            if re.fullmatch(r"\.copilot/logs/process-[0-9]+-[0-9]+\.log", relative) is None:
+                return False
+            path = home / relative
+            info = path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or info.st_uid != home_info.st_uid or info.st_size != 0
+                    or stat.S_IMODE(info.st_mode) & 0o022
+                    or after[relative] != hashlib.sha256(b"").hexdigest()
+                    or not path_inside_case(path, case_root)):
+                return False
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def exact_native_identity(text, identity):
     """Recognize an identity token in native data, never a URL substring."""
     expected = identity.casefold()
@@ -3093,6 +3130,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     before_repeat_native, after_repeat_native, before_repeat_runtime)
             elif gemini_runtime is not None:
                 repeat_native_runtime_only = gemini_repeat_valid
+            elif copilot_skill_case:
+                repeat_native_runtime_only = copilot_skill_repeat_log_only(
+                    before_repeat_native, after_repeat_native, home, case_root)
             elif kimi_log_case:
                 kimi_repeat_log_proof = kimi_repeat_log_append(
                     kimi_log_before, kimi_log_after, kimi_log_listed, added_json, repeat_add_json, repeat_add,

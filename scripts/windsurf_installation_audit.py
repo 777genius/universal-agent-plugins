@@ -40,6 +40,36 @@ def digest(value, limit=4 << 20):
     return hashlib.sha256(encoded(value, limit)).hexdigest()
 
 
+def image_drift_counts(before, after):
+    """Bounded counts by key class; never print native paths or values."""
+    def category(key):
+        if key.startswith("metadata:"):
+            return "metadata"
+        if key.startswith("directory:"):
+            return "directory"
+        if key.startswith("root-kind:"):
+            return "root"
+        if key.startswith(("link:", "root-link:")):
+            return "link"
+        return "file"
+
+    differences = {}
+    for status, entries in (
+            ("added", set(after) - set(before)),
+            ("removed", set(before) - set(after)),
+            ("changed", {key for key in set(before) & set(after) if before[key] != after[key]})):
+        for key in entries:
+            label = category(key) + "_" + status
+            differences[label] = differences.get(label, 0) + 1
+    return ",".join(f"{key}={differences[key]}" for key in sorted(differences)) or "none"
+
+
+def require_same_image(before, after, phase):
+    if before != after:
+        raise ValueError("Devin Global native-image drift " + phase + ": "
+                         + image_drift_counts(before, after))
+
+
 def image_fact(image):
     return {"sha256": digest(image), "entries": len(image)}
 
@@ -208,9 +238,15 @@ class WindsurfInstallationAudit:
                     "listed_identity", "repeat_verified", "repeat_native_unchanged", "repeat_lock_unchanged",
                     "removal_verified", "post_list_schema_valid"))
                 and row.get("post_removal_leftovers") == [])
-        require(self.observations[0][2] == self.observations[1][2]
-                == self.observations[2][2] == self.observations[3][2]
-                and self.observations[4][2] == self.observations[5][2] == self.initial)
+        frames = [entry[2] for entry in self.observations]
+        for phase, before, after in (
+                ("add/list", frames[0], frames[1]),
+                ("add/repeat-add", frames[0], frames[2]),
+                ("add/repeat-list", frames[0], frames[3]),
+                ("remove/list", frames[4], frames[5]),
+                ("remove/initial", self.initial, frames[4]),
+                ("post-remove/initial", self.initial, frames[5])):
+            require_same_image(before, after, phase)
         documents = [document(outcome, operation) for (_, outcome, _), operation in
                      zip(self.observations, ("add", "list", "add", "list", "remove", "list"))]
         prior = None

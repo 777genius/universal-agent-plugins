@@ -1551,9 +1551,15 @@ def current_vscode_boundary_kind(policy):
             or policy.get("closure") != FIXED_SIGNED_CLOSURE):
         raise AssertionError("current VS Code boundary requires authenticated positive policy")
     targets = policy.get("root_target_compatibility")
-    if targets == managed:
+    # The published, authenticated Directory may list these three additional
+    # managed roots. Accept only the two observed, exact target sets; never
+    # infer saved VS Code authority from arbitrary new targets.
+    extended = {**managed, **{client: {"scopes": ["user"], "delivery": "managed"}
+                              for client in ("hermes", "antigravity", "pi")}}
+    if targets in (managed, extended):
         return "signed_grant_refusal"
-    if targets == {**managed, "vscode": {"scopes": ["user"], "delivery": "prepared"}}:
+    prepared_vscode = {"vscode": {"scopes": ["user"], "delivery": "prepared"}}
+    if targets in ({**managed, **prepared_vscode}, {**extended, **prepared_vscode}):
         return "saved_management_capability"
     raise AssertionError("current VS Code boundary has unqualified signed target shape")
 

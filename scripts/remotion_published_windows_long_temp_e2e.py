@@ -8,6 +8,8 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
+import traceback
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,6 +17,19 @@ import tempfile
 
 FIXTURE_SHA256 = "e22cb3b5b23e74a9e03b55e24a684ab93038f89cf18e28fd5d9755175754c0d9"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
+
+
+def sanitized_failure_site(error, repo):
+    """Report only source basename, line and function; never exception text."""
+    scripts = (repo / "scripts").resolve()
+    for frame in reversed(traceback.extract_tb(error.__traceback__)):
+        filename = Path(frame.filename)
+        if (filename.parent.resolve() == scripts
+                and re.fullmatch(r"[A-Za-z0-9_-]{1,80}\.py", filename.name)
+                and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,79}", frame.name)
+                and type(frame.lineno) is int and 0 < frame.lineno < 100000):
+            return {"file": filename.name, "line": frame.lineno, "function": frame.name}
+    return {"file": "unqualified", "line": 0, "function": "unqualified"}
 
 
 def main():
@@ -84,7 +99,8 @@ def main():
             except Exception as error:
                 failures.append(f"{label}: {type(error).__name__}")
                 evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
-                                              "error_type": type(error).__name__}
+                                              "error_type": type(error).__name__,
+                                              "source_site": sanitized_failure_site(error, repo)}
     finally:
         report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
         for root in (short, long):

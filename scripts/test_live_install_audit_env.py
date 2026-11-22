@@ -32,6 +32,77 @@ def load_audit():
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
 
+    def test_copilot_skill_repeat_only_owns_empty_new_process_logs(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            home = case / "home"
+            logs = home / ".copilot" / "logs"
+            logs.mkdir(parents=True, mode=0o700)
+            roots = [home / ".copilot", home / ".config" / "copilot"]
+            before = audit.snapshot(roots)
+            first = logs / "process-123-456.log"
+            second = logs / "process-789-101.log"
+            first.write_bytes(b"")
+            after = audit.snapshot(roots)
+            self.assertTrue(audit.copilot_skill_repeat_log_only(before, after, home, case))
+            second.write_bytes(b"")
+            self.assertTrue(audit.copilot_skill_repeat_log_only(
+                before, audit.snapshot(roots), home, case))
+            (logs / "process-222-333.log").write_bytes(b"")
+            self.assertFalse(audit.copilot_skill_repeat_log_only(
+                before, audit.snapshot(roots), home, case))
+            (logs / "process-222-333.log").unlink()
+            first.write_bytes(b"changed")
+            self.assertFalse(audit.copilot_skill_repeat_log_only(
+                before, audit.snapshot(roots), home, case))
+            first.write_bytes(b"")
+            second.unlink()
+            first.unlink()
+            link = logs / "process-123-456.log"
+            link.symlink_to(case)
+            self.assertFalse(audit.copilot_skill_repeat_log_only(
+                before, audit.snapshot(roots), home, case))
+
+    def test_marketing_current_vscode_boundary_accepts_only_exact_signed_sets(self):
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        classify = runner["current_vscode_boundary_kind"]
+        managed = {client: {"scopes": ["user"], "delivery": "managed"}
+                   for client in ("codex", "cursor", "copilot", "claude", "gemini", "opencode")}
+        extra = {client: {"scopes": ["user"], "delivery": "managed"}
+                 for client in ("hermes", "antigravity", "pi")}
+        vscode = {"vscode": {"scopes": ["user"], "delivery": "prepared"}}
+        policy = {"source_mode": "production_default", "snapshot_sequence": 49,
+                  "snapshot_digest": "sha256:" + "a" * 64,
+                  "closure": runner["FIXED_SIGNED_CLOSURE"]}
+        for roots, result in ((managed, "signed_grant_refusal"),
+                              ({**managed, **extra}, "signed_grant_refusal"),
+                              ({**managed, **vscode}, "saved_management_capability"),
+                              ({**managed, **extra, **vscode}, "saved_management_capability")):
+            self.assertEqual(classify({**policy, "root_target_compatibility": roots}), result)
+        for invalid in ({**managed, **extra, "vscode": {"scopes": ["user"], "delivery": "managed"}},
+                        {**managed, "hermes": {"scopes": ["project"], "delivery": "managed"}},
+                        {**managed, **extra, "other": {"scopes": ["user"], "delivery": "managed"}}):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(
+                    AssertionError, "unqualified signed target shape"):
+                classify({**policy, "root_target_compatibility": invalid})
+
+    def test_remotion_diagnostic_has_only_sanitized_source_coordinates(self):
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "remotion_published_windows_long_temp_e2e.py"))
+        try:
+            raise ValueError("private-value-never-in-report")
+        except ValueError as error:
+            site = runner["sanitized_failure_site"](error, Path(__file__).resolve().parents[1])
+        self.assertEqual(site["file"], "test_live_install_audit_env.py")
+        self.assertIsInstance(site["line"], int)
+        self.assertNotIn("private-value-never-in-report", str(site))
+        self.assertNotIn(str(Path(__file__).resolve().parents[1]), str(site))
+        self.assertEqual(runner["sanitized_failure_site"](
+            ValueError("other-secret"), Path(__file__).resolve().parents[1])["file"], "unqualified")
+
+
     def test_gemini_repeat_snapshot_tracks_ordinary_empty_directory_deltas(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:
